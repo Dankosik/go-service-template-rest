@@ -21,6 +21,7 @@
 - Prefer small packages with a clear responsibility.
 - Keep the exported surface area as small as possible.
 - Use `internal/` for implementation details that should not become public API.
+- Keep dependency wiring explicit in the composition root (`cmd/<service>/main.go`) and pass dependencies via constructors/functions.
 - Avoid hidden runtime magic: no dependency wiring through global mutable singletons or side-effect-heavy `init()` flows.
 
 #### Naming
@@ -37,7 +38,41 @@
 - Pass values by value unless mutation, shared state, or large-copy cost makes a pointer the better semantic choice.
 - Do not use pointers to basic values or to interfaces just to avoid copying.
 - Keep zero values useful when practical.
+- Prefer composition over inheritance-style designs; do not simulate deep inheritance hierarchies through embedding.
 - Introduce extension points only for proven needs. Do not pre-build abstractions for hypothetical scenarios.
+- Type selection defaults:
+  - Use concrete types by default for internal code and single-implementation flows.
+  - Use interfaces when the consumer needs runtime-substitutable behavior or multiple implementations behind a boundary.
+  - Use function types for narrow behavior injection (strategy/callback) when one operation is enough and a full interface adds noise.
+  - Use generics for reusable algorithms/data structures where logic is identical across types; avoid generics for DI/runtime polymorphism and introduce them only after repeated concrete use cases.
+
+#### SOLID/KISS/DRY/YAGNI in Go
+- Apply SOLID as pragmatic heuristics, not as mandatory OOP layering.
+- SRP: split by axis of change and responsibility (usually package/component level), not by class-like ceremony.
+- OCP: use strategic extension points only where change is likely; a clear `switch` is often better than plugin architecture.
+- LSP: interface implementations must preserve behavioral contracts (especially error semantics), not only method signatures.
+- ISP: keep interfaces narrow and consumer-owned; avoid fat shared interfaces.
+- DIP: high-level code depends on consumer-side abstractions; wiring stays explicit in composition root.
+- KISS: choose the simplest explicit design that satisfies current requirements and is easy to read in incidents.
+- DRY: remove duplicated knowledge, not merely similar-looking code; if intent may diverge, keep code separate.
+- YAGNI: do not add extension points, frameworks, or generic layers before real usage proves need.
+- Avoid Java-style overengineering: no interface-per-struct, no `service/manager/factory` chains without distinct responsibilities, no abstract-factory/service-locator scaffolding by default.
+
+#### Classical patterns in Go
+- Prefer these patterns when they reduce complexity:
+  - Adapter via small wrappers or function adapters (for example, `HandlerFunc`-style adaptation).
+  - Decorator via explicit composition/middleware chains for cross-cutting concerns.
+  - Strategy via function types or tiny consumer-owned interfaces when behavior must be swapped.
+  - Factory as simple `New(...)` constructors with explicit dependency wiring.
+  - State via explicit state enum + `switch` for finite workflows.
+- Use with caution:
+  - Functional options for APIs that evolve over time; avoid if they hide lifecycle/validation or reduce clarity.
+  - Builder-style flows only for truly complex initialization; prefer config structs/constructors otherwise.
+- Usually harmful in Go service code:
+  - Singleton/global service objects as dependency management.
+  - Abstract Factory / Service Locator scaffolding without proven multi-implementation need.
+  - Visitor-style hierarchies and inheritance-heavy pattern ports from Java/C#.
+  - Over-embedded pseudo-inheritance that obscures behavior and ownership.
 
 #### Control flow
 - Use early returns to keep the happy path minimally indented.
