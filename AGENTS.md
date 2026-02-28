@@ -137,13 +137,6 @@
 - Prefer algorithmic and structural improvements over micro-optimizations.
 - Reach for profiling and tracing before rewriting code for performance.
 
-#### Output expectations for LLM-generated changes
-- Return code that is as close to compile-ready as possible.
-- Include imports that match the code.
-- Do not leave obvious unused variables or dead imports.
-- If a design choice is non-obvious, briefly justify it in Go terms.
-- If the task touches a specialized area such as concurrency, public APIs, profiling, modules, or testing strategy, load the matching optional instruction file.
-
 ## Project Structure & Module Organization
 - Detailed project structure, module boundaries, and folder rationale are documented in:
   - `docs/project-structure-and-module-organization.md`
