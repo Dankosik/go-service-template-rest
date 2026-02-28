@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: go-service-template-rest
+  version: 0.1.0
+tags:
+  - name: system
+  - name: app
+paths:
+  /api/v1/ping:
+    get:
+      tags: [app]
+      summary: Ping endpoint
+      operationId: ping
+      responses:
+        "200":
+          description: pong
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: pong
+  /health/live:
+    get:
+      tags: [system]
+      summary: Liveness probe
+      operationId: healthLive
+      responses:
+        "200":
+          description: ok
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+  /health/ready:
+    get:
+      tags: [system]
+      summary: Readiness probe
+      operationId: healthReady
+      responses:
+        "200":
+          description: ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+        "503":
+          description: not ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: not ready
+  /metrics:
+    get:
+      tags: [system]
+      summary: Prometheus metrics
+      operationId: metrics
+      responses:
+        "200":
+          description: metrics output
+          content:
+            text/plain:
+              schema:
+                type: string

@@ -1,0 +1,167 @@
+# Repository Guidelines
+
+### Go core instructions
+
+#### Mission
+- Write idiomatic, production-grade Go that looks natural to experienced Go developers and works well with the Go toolchain.
+- Prefer clarity, predictability, explicit control flow, and small stable APIs over clever abstractions.
+
+#### Default posture
+- Prefer the standard library unless a third-party dependency is clearly justified or explicitly requested.
+- Produce code that is naturally compatible with `gofmt` and `goimports`.
+- Prefer simple, readable code over framework-heavy or over-engineered solutions.
+- Use real package names, functions, and APIs. Do not invent libraries or nonexistent standard library features.
+- When several solutions are possible, choose the one that a typical Go code reviewer would call straightforward and idiomatic.
+
+#### Formatting and structure
+- Assume `gofmt` is non-negotiable. Do not fight its output.
+- Keep files, packages, and functions focused.
+- Avoid dumping unrelated helpers into `util`, `utils`, `common`, or `misc`.
+- Prefer small packages with a clear responsibility.
+- Keep the exported surface area as small as possible.
+- Use `internal/` for implementation details that should not become public API.
+
+#### Naming
+- Use short, clear, lowercase package names.
+- Avoid package names with underscores, mixed caps, or vague catch-all meanings.
+- Avoid stutter in client code. Names should read well as `pkg.Identifier`.
+- Use Go-style initialisms consistently: `ID`, `URL`, `HTTP`, `JSON`, `API`.
+- Use short, consistent receiver names, usually one or two letters.
+- Name booleans so they read like facts or questions, such as `isReady`, `hasNext`, or `enabled`.
+
+#### API design
+- Prefer concrete types unless an interface is clearly needed.
+- Define small interfaces on the consumer side, not preemptively on the implementation side for mocking.
+- Pass values by value unless mutation, shared state, or large-copy cost makes a pointer the better semantic choice.
+- Do not use pointers to basic values or to interfaces just to avoid copying.
+- Keep zero values useful when practical.
+
+#### Control flow
+- Use early returns to keep the happy path minimally indented.
+- Avoid unnecessary `else` blocks after `return`.
+- Keep functions short enough that the main path is easy to follow.
+- Prefer explicit code over clever chaining or hidden control flow.
+
+#### Errors
+- Treat errors as values and handle them explicitly.
+- Return errors for ordinary failures; reserve `panic` for programmer mistakes or truly impossible states.
+- Add context to errors so the caller can understand what operation failed.
+- When the caller may need the original cause, wrap with `%w`.
+- Use `errors.Is` and `errors.As` instead of string comparisons.
+- Write error strings in lowercase and without trailing punctuation.
+
+#### Context
+- When a function needs cancellation, deadlines, or request scope, accept `ctx context.Context` as the first parameter.
+- Do not store `context.Context` inside structs.
+- Do not pass a nil context. Use `context.TODO()` if no better context exists.
+- If you create a derived context with cancel, timeout, or deadline, ensure the cancel function is called.
+
+#### Slices, maps, and data handling
+- Prefer nil slices over empty slices when both mean "no values" and no API contract requires otherwise.
+- Do not make nil versus empty slice semantics meaningful unless an external contract requires it.
+- Protect shared mutable maps with synchronization or ownership confinement.
+- Be clear about ownership and mutation of passed-in data.
+
+#### Concurrency baseline
+- Never start a goroutine without a clear shutdown or completion path.
+- Use channels for communication and coordination when they express ownership transfer naturally.
+- Use mutexes to protect truly shared mutable state when channels would be awkward.
+- Propagate cancellation through context.
+
+#### Documentation
+- Add doc comments for exported packages, types, functions, methods, constants, and variables.
+- Write doc comments as complete sentences.
+- Start the comment with the identifier name.
+- Make examples minimal, accurate, and executable when possible.
+
+#### Testing and quality baseline
+- Write tests for nontrivial logic.
+- Prefer table-driven tests when many cases share one structure.
+- Use the standard `testing` package by default.
+- Before finalizing nontrivial code, expect the equivalent of:
+  - `gofmt` or `goimports`
+  - `go test`
+  - `go vet`
+- Add `-race`, `staticcheck`, `golangci-lint`, and `govulncheck` when the task or environment calls for stronger validation.
+
+#### Performance baseline
+- Do not optimize blindly.
+- Measure first, then optimize the proven hot path.
+- Prefer algorithmic and structural improvements over micro-optimizations.
+- Reach for profiling and tracing before rewriting code for performance.
+
+#### Output expectations for LLM-generated changes
+- Return code that is as close to compile-ready as possible.
+- Include imports that match the code.
+- Do not leave obvious unused variables or dead imports.
+- If a design choice is non-obvious, briefly justify it in Go terms.
+- If the task touches a specialized area such as concurrency, public APIs, profiling, modules, or testing strategy, load the matching optional instruction file.
+
+## Project Structure & Module Organization
+- Detailed project structure, module boundaries, and folder rationale are documented in:
+  - `docs/project-structure-and-module-organization.md`
+
+## Build, Test, and Development Commands
+- Detailed command reference for build, test, OpenAPI workflow, and local development is documented in:
+  - `docs/build-test-and-development-commands.md`
+
+## Coding Style & Naming Conventions
+- Follow standard Go style: tabs (via `gofmt`), lower-case package names, short receiver names.
+- Keep module boundaries: business logic in `internal/app`, transport details in `internal/infra/http`.
+- Name tests and files by behavior: `service_test.go`, `router_test.go`, `TestServiceReadyFail`.
+- Prefer explicit constructor functions (`New`) and small interfaces in `internal/domain`.
+
+## Testing Guidelines
+- Framework: Go `testing` package with table/subtests where useful.
+- Run `make test` before every push; add tests for any changed behavior and edge cases.
+- HTTP behavior should be tested at router/handler level (`httptest`); keep integration scenarios in `test/`.
+- No fixed coverage gate is configured; maintain or improve coverage in touched packages.
+
+## Security & Configuration Tips
+- Never commit real secrets; use `.env` derived from `env/.env.example`.
+- Validate config-driven behavior locally (especially `POSTGRES_DSN`, HTTP timeouts, and log level).
+- Ensure security checks remain green in CI (`govulncheck`, `gosec`, Trivy).
+
+## Go Dynamic Instructions
+
+### Source and scope
+- Optional instruction files are stored in `docs/llm/go-instructions/` and must be loaded dynamically per task.
+
+### Dynamic loading policy
+- Always apply the core section in this file for any Go task.
+- Load optional files only when the task clearly requires them.
+- If files overlap, the more specific file is the decisive rule for that topic.
+- Load the smallest set of optional files that fully covers the task.
+- Do not load all optional files by default.
+
+### Optional files and when to load
+- `docs/llm/go-instructions/10-go-errors-and-context.md`
+  - Load when: designing or revising error contracts, adding wrap/unwrap behavior, handling failures across HTTP/RPC/DB/files, or implementing context deadlines/cancellation.
+  - Strong signals: `%w`, `errors.Is`, `errors.As`, sentinel or typed errors, timeout/cancel semantics, request-scoped context flow.
+  - Skip when: task is pure local logic with trivial error handling and no meaningful context semantics.
+- `docs/llm/go-instructions/20-go-concurrency.md`
+  - Load when: code introduces or changes goroutines, channels, mutexes, wait groups, `errgroup`, worker pools, pipelines, fan-out/fan-in, or shutdown coordination.
+  - Strong signals: race risk, goroutine leak risk, blocked channel operations, deadlock symptoms, bounded concurrency requirements.
+  - Skip when: code remains single-threaded and has no synchronization or lifecycle concerns.
+- `docs/llm/go-instructions/30-go-project-layout-and-modules.md`
+  - Load when: creating/scaffolding services, moving packages, changing `cmd`/`internal` boundaries, adjusting `go.mod`, or resolving import/package dependency direction.
+  - Strong signals: new module decisions, import cycles, package ownership ambiguity, generated-code placement.
+  - Skip when: change is a small local edit inside an already stable structure.
+- `docs/llm/go-instructions/40-go-testing-and-quality.md`
+  - Load when: behavior changes require test coverage, CI quality checks are being updated, or task includes race/fuzz/bench/lint validation.
+  - Strong signals: flaky tests, missing edge-case tests, deterministic test strategy, `go test`/`go vet`/lint workflow updates.
+  - Skip when: task is documentation-only with no runtime behavior impact.
+- `docs/llm/go-instructions/50-go-public-api-and-docs.md`
+  - Load when: touching exported identifiers, library/public packages, compatibility guarantees, doc comments, or examples for external consumers.
+  - Strong signals: API contract stability questions, public naming decisions, semantic versioning impact, package-level docs updates.
+  - Skip when: all touched code is strictly internal and no exported surface changes.
+- `docs/llm/go-instructions/60-go-performance-and-profiling.md`
+  - Load when: task targets latency/throughput/CPU/memory/allocations/lock contention improvements or requires benchmark/profile-based investigation.
+  - Strong signals: `pprof`, traces, benchmark comparisons, hot path identification, allocation pressure analysis.
+  - Skip when: no explicit performance goal or measured bottleneck exists.
+- `docs/llm/go-instructions/70-go-review-checklist.md`
+  - Load when: task is code review, audit, idiomaticity cleanup, or bug/risk/regression analysis of existing Go code.
+  - Strong signals: PR review framing, "find issues" requests, maintainability/correctness checklist pass.
+  - Skip when: task is pure greenfield implementation without review/audit intent.
+
+If one task spans multiple domains, load all matching optional files, but keep the set minimal.
