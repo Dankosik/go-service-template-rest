@@ -12,6 +12,7 @@
 - Prefer simple, readable code over framework-heavy or over-engineered solutions.
 - Use real package names, functions, and APIs. Do not invent libraries or nonexistent standard library features.
 - When several solutions are possible, choose the one that a typical Go code reviewer would call straightforward and idiomatic.
+- Prefer compatibility-first changes: keep behavior/API backward compatible by default, prefer additive evolution, and document migration/rollout for unavoidable breaking changes.
 
 #### Formatting and structure
 - Assume `gofmt` is non-negotiable. Do not fight its output.
@@ -20,6 +21,7 @@
 - Prefer small packages with a clear responsibility.
 - Keep the exported surface area as small as possible.
 - Use `internal/` for implementation details that should not become public API.
+- Avoid hidden runtime magic: no dependency wiring through global mutable singletons or side-effect-heavy `init()` flows.
 
 #### Naming
 - Use short, clear, lowercase package names.
@@ -35,6 +37,7 @@
 - Pass values by value unless mutation, shared state, or large-copy cost makes a pointer the better semantic choice.
 - Do not use pointers to basic values or to interfaces just to avoid copying.
 - Keep zero values useful when practical.
+- Introduce extension points only for proven needs. Do not pre-build abstractions for hypothetical scenarios.
 
 #### Control flow
 - Use early returns to keep the happy path minimally indented.
@@ -55,6 +58,7 @@
 - Do not store `context.Context` inside structs.
 - Do not pass a nil context. Use `context.TODO()` if no better context exists.
 - If you create a derived context with cancel, timeout, or deadline, ensure the cancel function is called.
+- In request flows, propagate the incoming request context instead of replacing it with `context.Background()`.
 
 #### Slices, maps, and data handling
 - Prefer nil slices over empty slices when both mean "no values" and no API contract requires otherwise.
@@ -83,6 +87,14 @@
   - `go test`
   - `go vet`
 - Add `-race`, `staticcheck`, `golangci-lint`, and `govulncheck` when the task or environment calls for stronger validation.
+
+#### Production readiness gates
+- For behavior-changing work, production readiness requires all of: tests, observability, security controls, and graceful failure behavior.
+- Observability baseline: structured logs for critical paths, metrics with bounded cardinality, and trace-context propagation across service boundaries when relevant.
+- Security baseline: explicit input validation, authorization at object/action boundaries, parameterized data access, and no secret leakage in logs/errors/traces.
+- Graceful failure baseline: explicit timeout/cancel/shutdown behavior, bounded and idempotency-aware retries, and no partial side effects without recovery strategy.
+- Risky or incompatible changes require a rollback-safe rollout plan.
+- If any mandatory gate above is unmet, the change is not ready to merge.
 
 #### Performance baseline
 - Do not optimize blindly.
@@ -122,10 +134,20 @@
 - Validate config-driven behavior locally (especially `POSTGRES_DSN`, HTTP timeouts, and log level).
 - Ensure security checks remain green in CI (`govulncheck`, `gosec`, Trivy).
 
+## API, Data, and Platform Guardrails
+- Keep API contract and implementation in sync; avoid silent contract drift.
+- Avoid undocumented breaking API behavior changes.
+- Bound request payload sizes and define idempotency expectations for retryable operations.
+- Keep transaction boundaries explicit in application/use-case orchestration.
+- Avoid implicit retries that can duplicate side effects.
+- Outbound HTTP/RPC clients must use explicit timeouts; avoid default infinite-timeout clients in production flows.
+- Do not expose debug/profiling endpoints publicly by default.
+
 ## Go Dynamic Instructions
 
 ### Source and scope
 - Optional instruction files are stored in `docs/llm/go-instructions/` and must be loaded dynamically per task.
+- Architecture instruction files are stored in `docs/llm/architecture/` and must be loaded dynamically when architecture decomposition is in scope.
 
 ### Dynamic loading policy
 - Always apply the core section in this file for any Go task.
@@ -163,5 +185,9 @@
   - Load when: task is code review, audit, idiomaticity cleanup, or bug/risk/regression analysis of existing Go code.
   - Strong signals: PR review framing, "find issues" requests, maintainability/correctness checklist pass.
   - Skip when: task is pure greenfield implementation without review/audit intent.
+- `docs/llm/architecture/10-service-boundaries-and-decomposition.md`
+  - Load when: defining or changing service boundaries, decomposing by bounded contexts, deciding new service vs module in an existing service, or reviewing ownership/transaction boundaries.
+  - Strong signals: microservice split/merge discussions, distributed monolith symptoms, shared database proposals, shared domain logic proposals, unclear team/data ownership.
+  - Skip when: task is a local implementation detail that does not change service/module boundaries.
 
 If one task spans multiple domains, load all matching optional files, but keep the set minimal.
