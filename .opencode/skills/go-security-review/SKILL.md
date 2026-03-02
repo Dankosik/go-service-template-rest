@@ -28,12 +28,164 @@ Out of scope:
 - performing primary-domain idiomatic/style, architecture integrity, performance proof, concurrency mechanics, DB/cache correctness, reliability policy, QA strategy, or domain-invariant review
 - blocking PRs with preference-only comments without concrete security impact
 
+## Hard Skills
+### Security Review Core Instructions
+
+#### Mission
+- Protect merge safety by surfacing exploitable vulnerabilities and security-contract regressions in changed code before `Gate G4`.
+- Keep security review evidence-based, threat-specific, and bounded to Phase 4 reviewer ownership.
+- Convert each confirmed security risk into minimal safe fix guidance aligned with approved spec intent.
+
+#### Default Posture
+- Treat external and internal inputs as untrusted unless approved spec explicitly narrows trust.
+- Prefer fail-closed and deny-by-default behavior for identity, authorization, and side-effecting operations.
+- Treat missing limits, missing timeout budgets, and missing tenant/object checks as defects until proven safe.
+- Prefer boundary-first controls and explicit runtime enforcement over best-effort hardening after side effects.
+- Keep security ownership strict; hand off primary non-security root causes while preserving security impact notes.
+
+#### Spec-First Review Competency
+- Enforce `docs/spec-first-workflow.md` Phase 4 constraints:
+  - domain-scoped findings only;
+  - exact `file:line` references;
+  - practical fix path;
+  - explicit `Spec Reopen` for spec-intent conflicts.
+- Treat open `critical/high` security findings as merge blockers for `Gate G4`.
+- Never redefine approved security behavior implicitly through review comments.
+- Map each finding to approved obligations (prefer `SEC-*`, then explicit clauses in `50/55/70/90`).
+
+#### Trust Boundary And Input Validation Competency
+- Require boundary-first validation before business logic.
+- Require strict JSON discipline on mutable endpoints:
+  - size limit before decode;
+  - `DisallowUnknownFields`;
+  - reject trailing tokens.
+- Require allowlist validation for enums, ranges, formats, sortable/filterable fields, and state transitions.
+- Reject blacklist-only validation and validation that starts after side effects.
+- Require explicit limits for headers, URI/query, body, multipart, and filter complexity.
+
+#### AuthN, AuthZ, And Tenant Isolation Competency
+- Keep authentication and authorization findings separate.
+- Require complete AuthN validation before business logic (token/cert validity, issuer/audience/lifetime/alg checks where applicable).
+- Require fail-closed authorization and object-level checks on resource-by-ID flows.
+- Require caller-vs-subject separation in identity context for mixed service/end-user flows.
+- Require tenant scope enforcement across service logic, repositories, caches, and async handlers.
+- Treat missing tenant binding, implicit superuser paths, or default-allow behavior as high-risk defects.
+
+#### Injection And Query Safety Competency
+- Require SQL/NoSQL parameterization for values and allowlisted dynamic identifiers.
+- Reject raw client JSON filters mapped directly into datastore operators.
+- Reject command execution with shell expansion or user-influenced command strings.
+- Require template-safe rendering (`html/template` for HTML) and no unsafe escaping bypass without explicit review.
+- Treat user-influenced query/command/path construction without allowlist controls as exploitable until disproven.
+
+#### Outbound Security And SSRF Competency
+- Require explicit outbound timeout budgets and context propagation.
+- Require SSRF policy when outbound target is user-influenced:
+  - scheme/host/port allowlists;
+  - private/loopback/link-local/multicast blocking after DNS resolution;
+  - redirect target re-check.
+- Reject security-sensitive use of `http.Get`/`http.DefaultClient` and implicit infinite timeouts.
+- Require egress-policy assumptions to be explicit; code-only SSRF controls are insufficient defense-in-depth.
+
+#### Filesystem, Path, And Upload Competency
+- Require root-constrained file access for user-influenced paths (`os.OpenInRoot` or equivalent safe boundary).
+- Reject trust in client filenames/paths as storage keys.
+- Require upload controls:
+  - body size limits before parse;
+  - streaming over full-memory buffering;
+  - extension allowlist plus content sniffing;
+  - storage isolation outside webroot.
+- Require explicit scan/publish gating when malware/content validation is part of contract.
+
+#### Secrets, Error Disclosure, And Telemetry Competency
+- Require sanitized client-facing errors; no stack traces, SQL text, topology, tokens, or secrets in responses.
+- Require redaction discipline in logs/traces/metrics:
+  - never emit credentials, raw authorization headers, DSNs, or unrestricted PII payloads.
+- Require correlation fields (`request_id`/`correlation_id`) for incident triage but never as auth/authz input.
+- Require debug/admin endpoint isolation from public ingress and explicit kill-switch policy for pprof/expvar.
+- Treat telemetry or diagnostics paths that leak sensitive data as security findings, not observability-only notes.
+
+#### Abuse Resistance And Resource Control Competency
+- Require explicit timeouts, bounded concurrency, queue bounds, and rate-limit semantics on expensive/security-sensitive paths.
+- Require retry classification aligned with idempotency policy; reject retries for auth/validation/conflict/not-found classes.
+- Require overload semantics (`429` vs `503`) to be explicit and safe for caller behavior.
+- Flag fail-open fallback where dependency class is `critical_fail_closed` (authz, payments, hard validation).
+- Treat unbounded memory (`io.ReadAll` on untrusted streams), unbounded retries, or unbounded fan-out as abuse-risk defects.
+
+#### Async Identity And Distributed Security Competency
+- Require no raw bearer token propagation in async messages.
+- Require signed/verified identity envelope or equivalent authenticity checks for async processing.
+- Require dedup/idempotency and durable ack ordering (ack only after durable side effects).
+- Require stable correlation through retries and DLQ transitions for forensic traceability.
+- Flag hidden dual-write consistency patterns that bypass security controls or auditability.
+
+#### Data, Cache, And Migration Security Competency
+- Require least-privilege DB access and no sensitive interpolated SQL logging.
+- Require tenant-safe cache keys including tenant/scope/version dimensions when response varies by auth context.
+- Reject caching secrets or private per-user responses in shared keys.
+- Require migration/backfill plans to preserve tenant boundaries, PII lifecycle, and rollback realism.
+- Flag data-evolution changes that can break deletion, retention, or audit guarantees as security-impacting issues.
+
+#### Delivery And Runtime Hardening Competency
+- Require merge-safety evidence for security-sensitive changes through repository-aligned checks:
+  - `go test ./...`;
+  - `go test -race ./...` when concurrency-sensitive;
+  - `go vet ./...`;
+  - `govulncheck ./...`;
+  - `gosec ./...` where configured.
+- For container/runtime-surface changes, require non-root runtime, minimal image profile, and no TLS trust bypass.
+- Treat downgraded or bypassed blocking security gates as review blockers unless explicitly approved and time-bounded.
+
+#### Security Test Traceability Competency
+- Require mapping findings to negative-path obligations in `70-test-plan.md`.
+- For changed security-critical paths, require at least one realistic abuse/failure scenario per affected axis.
+- Mandatory categories when applicable:
+  - wrong tenant or object ownership;
+  - insufficient scope/role;
+  - malformed or oversized input;
+  - forged or invalid token/signature;
+  - retry/idempotency conflict;
+  - SSRF, path traversal, or injection attempts.
+- Treat missing negative-path coverage for high-risk changed paths as finding-worthy or residual-risk-worthy.
+
+#### Evidence Threshold And Severity Calibration Competency
+- Every finding must include:
+  - exact `file:line`;
+  - security axis context;
+  - violated control/contract reference;
+  - realistic attacker preconditions;
+  - affected trust boundary/data asset;
+  - smallest safe corrective action.
+- Severity is assigned by exploitability, blast radius, and merge safety:
+  - `critical`: confirmed exploitable high-impact vulnerability;
+  - `high`: strong evidence of significant security contract breach likely to cause incident;
+  - `medium`: meaningful bounded weakness;
+  - `low`: local hardening improvement.
+- Reject generic best-practice comments without concrete exploit or contract impact.
+
+#### Assumption And Uncertainty Discipline
+- Mark unknown critical facts as bounded `[assumption]`.
+- If required artifacts are missing, mark `[assumption: missing-spec-artifacts]` and reduce certainty.
+- Any unresolved assumption affecting merge safety must be surfaced in `Residual Risks` or escalated via `Spec Reopen`.
+- Unknowns are explicit risk statements, not closure.
+
+#### Review Blockers For This Skill
+- Missing trust-boundary validation or missing strict parsing/size limits on untrusted inputs.
+- Broken or absent AuthN/AuthZ/tenant/object-level enforcement in changed paths.
+- Exploitable injection, SSRF, path traversal, or unsafe upload handling patterns.
+- Secret/PII leakage in responses, logs, traces, metrics, or debug endpoints.
+- Unbounded resource-abuse vectors (timeouts/retries/concurrency/queue/memory) on security-sensitive operations.
+- Security-critical async/dedup/ack-order defects that permit replay or inconsistent side effects.
+- Missing or weakened security gates (`govulncheck`, `gosec`, container hardening) for changed risk surface.
+- Spec-conflicting security correction path without explicit `Spec Reopen`.
+
 ## Working Rules
 1. Confirm the task is code review and identify changed security-sensitive scope.
 2. Map changed files/functions to one or more security review axes. If no security-sensitive surface is present, return `No security findings.` with `Residual Risks` explaining why the scope is security-neutral.
 3. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 4. Load context using this skill's dynamic loading rules.
-5. Evaluate changed code in this order:
+5. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
+6. Evaluate changed code in this order:
    - `Trust Boundary And Input Validation`
    - `AuthN/AuthZ And Tenant Isolation`
    - `Injection And Query Safety`
@@ -42,14 +194,14 @@ Out of scope:
    - `Secrets And Sensitive Data Handling`
    - `Abuse Resistance And Resource Controls`
    - `Security Test Traceability`
-6. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer `SEC-*` decisions or explicit clauses in `50/60/70/90`).
-7. For each finding, make impact concrete with attacker preconditions, affected asset/boundary, and expected security consequence.
-8. Classify severity by exploitability, blast radius, and merge safety impact (`critical/high/medium/low`).
-9. Provide the smallest safe corrective action for each finding.
-10. Keep comments strictly in security-review domain and hand off deep cross-domain risks to the corresponding reviewer role.
-11. If safe resolution requires changing approved spec intent, create `Spec Reopen` in `reviews/<feature-id>/code-review-log.md`.
-12. Do not edit spec files during code review.
-13. If no findings exist, state this explicitly and include residual security risks.
+7. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer `SEC-*` decisions or explicit clauses in `50/55/60/70/90`).
+8. For each finding, make impact concrete with attacker preconditions, affected asset/boundary, and expected security consequence.
+9. Classify severity by exploitability, blast radius, and merge safety impact (`critical/high/medium/low`).
+10. Provide the smallest safe corrective action for each finding.
+11. Keep comments strictly in security-review domain and hand off deep cross-domain risks to the corresponding reviewer role.
+12. If safe resolution requires changing approved spec intent, create `Spec Reopen` in `reviews/<feature-id>/code-review-log.md`.
+13. Do not edit spec files during code review.
+14. If no findings exist, state this explicitly and include residual security risks.
 
 ## Output Expectations
 - Findings-first output ordered by severity.

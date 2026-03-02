@@ -194,7 +194,7 @@ Out of scope:
    - `Secrets And Sensitive Data Handling`
    - `Abuse Resistance And Resource Controls`
    - `Security Test Traceability`
-7. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer `SEC-*` decisions or explicit clauses in `50/60/70/90`).
+7. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer `SEC-*` decisions or explicit clauses in `50/55/60/70/90`).
 8. For each finding, make impact concrete with attacker preconditions, affected asset/boundary, and expected security consequence.
 9. Classify severity by exploitability, blast radius, and merge safety impact (`critical/high/medium/low`).
 10. Provide the smallest safe corrective action for each finding.
