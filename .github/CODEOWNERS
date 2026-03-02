@@ -1,0 +1,8 @@
+# Default owner for all repository files.
+* @Dankosik
+
+# Critical areas requiring explicit ownership.
+/api/ @Dankosik
+/internal/ @Dankosik
+/.github/workflows/ @Dankosik
+/env/migrations/ @Dankosik

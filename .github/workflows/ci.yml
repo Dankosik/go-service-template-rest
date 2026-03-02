@@ -36,6 +36,9 @@ jobs:
       - name: Verify module integrity
         run: make mod-check
 
+      - name: Verify required repository guardrails
+        run: make guardrails-check
+
       - name: Verify formatting drift
         run: make fmt-check
 
@@ -102,10 +105,13 @@ jobs:
         run: make openapi-generate
 
       - name: Detect OpenAPI codegen drift
-        run: git diff --exit-code -- internal/api
+        run: make openapi-drift-check
 
       - name: Compile generated OpenAPI package
         run: go test ./internal/api
+
+      - name: Verify OpenAPI runtime contract
+        run: make openapi-runtime-contract-check
 
       - name: Validate OpenAPI schema
         run: make openapi-validate

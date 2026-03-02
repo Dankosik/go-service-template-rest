@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+strict_mode=0
+if [[ "${1:-}" == "--strict" ]]; then
+	strict_mode=1
+	shift
+fi
+
+if [[ $# -ne 0 ]]; then
+	echo "usage: $0 [--strict]"
+	exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT_DIR"
+
+required_failures=0
+optional_failures=0
+
+ok() {
+	echo "[OK] $1"
+}
+
+fail_required() {
+	echo "[MISSING][required] $1"
+	required_failures=$((required_failures + 1))
+}
+
+fail_optional() {
+	echo "[MISSING][optional] $1"
+	optional_failures=$((optional_failures + 1))
+}
+
+version_ge() {
+	local current="$1"
+	local minimum="$2"
+	[[ "$(printf '%s\n%s\n' "$minimum" "$current" | sort -V | head -n 1)" == "$minimum" ]]
+}
+
+normalize_go_version() {
+	local raw="$1"
+	raw="${raw#go}"
+	raw="${raw%%[^0-9.]*}"
+	printf '%s' "$raw"
+}
+
+check_cmd_required() {
+	local cmd="$1"
+	local hint="$2"
+	if command -v "$cmd" >/dev/null 2>&1; then
+		ok "$cmd found: $(command -v "$cmd")"
+	else
+		fail_required "$cmd not found. $hint"
+	fi
+}
+
+check_cmd_optional() {
+	local cmd="$1"
+	local hint="$2"
+	if command -v "$cmd" >/dev/null 2>&1; then
+		ok "$cmd found: $(command -v "$cmd")"
+	else
+		fail_optional "$cmd not found. $hint"
+	fi
+}
+
+echo "Running local environment checks from $ROOT_DIR"
+
+check_cmd_required "make" "Install GNU Make from your package manager."
+check_cmd_required "git" "Install Git from https://git-scm.com/downloads."
+check_cmd_required "go" "Install Go from https://go.dev/dl/."
+
+required_go_raw="$(awk '/^go /{print $2; exit}' go.mod)"
+required_go="$(normalize_go_version "$required_go_raw")"
+if command -v go >/dev/null 2>&1; then
+	current_go_raw="$(go env GOVERSION 2>/dev/null || true)"
+	if [[ -z "$current_go_raw" ]]; then
+		current_go_raw="$(go version | awk '{print $3}')"
+	fi
+	current_go="$(normalize_go_version "$current_go_raw")"
+	if [[ -z "$current_go" ]]; then
+		fail_required "cannot parse local Go version"
+	elif version_ge "$current_go" "$required_go"; then
+		ok "Go version $current_go satisfies go.mod requirement >= $required_go"
+	else
+		fail_required "Go version $current_go is lower than required $required_go"
+	fi
+fi
+
+check_cmd_required "node" "Install Node.js LTS from https://nodejs.org/."
+check_cmd_required "npx" "npx should be bundled with Node.js/npm installation."
+
+check_cmd_optional "golangci-lint" "Run 'make setup' to install pinned golangci-lint."
+if command -v golangci-lint >/dev/null 2>&1; then
+	ok "golangci-lint version: $(golangci-lint version 2>/dev/null | head -n 1)"
+fi
+
+check_cmd_optional "docker" "Install Docker Desktop/Engine to run compose, integration tests, and container build."
+if command -v docker >/dev/null 2>&1; then
+	if docker info >/dev/null 2>&1; then
+		ok "docker daemon is reachable"
+	else
+		fail_optional "docker daemon is not reachable. Start Docker Desktop/Engine."
+	fi
+fi
+
+echo "----"
+echo "doctor summary: required_failures=$required_failures optional_failures=$optional_failures"
+
+if ((required_failures > 0)); then
+	exit 1
+fi
+
+if ((strict_mode == 1 && optional_failures > 0)); then
+	exit 1
+fi
+
+if ((optional_failures > 0)); then
+	echo "doctor completed with optional warnings"
+fi

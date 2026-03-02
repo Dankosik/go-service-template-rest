@@ -159,8 +159,9 @@ jobs:
       - name: OpenAPI contract checks
         run: |
           make openapi-generate
-          git diff --exit-code -- internal/api
+          make openapi-drift-check
           go test ./internal/api
+          make openapi-runtime-contract-check
           make openapi-validate
           make openapi-lint
 

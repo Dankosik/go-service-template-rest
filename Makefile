@@ -5,11 +5,23 @@ REDOCLY_CLI_VERSION := 2.20.0
 KIN_OPENAPI_VALIDATE_VERSION := v0.133.0
 OASDIFF_VERSION := v1.11.10
 MIGRATE_VERSION := v4.19.0
+GOLANGCI_LINT_VERSION := v2.10.1
 DOCS_DRIFT_SCRIPT := scripts/ci/docs-drift-check.sh
+GUARDRAILS_CHECK_SCRIPT := scripts/ci/required-guardrails-check.sh
 
-.PHONY: tidy fmt test test-race test-cover test-integration lint run build docker-build compose-up compose-down vendor \
-	openapi-generate openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check docs-drift-check migration-validate
+.PHONY: setup doctor init-module tidy fmt test test-race test-cover test-integration lint run build docker-build compose-up compose-down vendor \
+	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
+	mod-check fmt-check docs-drift-check guardrails-check migration-validate
+
+setup:
+	./scripts/dev/setup.sh "$(GOLANGCI_LINT_VERSION)"
+
+doctor:
+	./scripts/dev/doctor.sh
+
+init-module:
+	@test -n "$(MODULE)" || (echo "MODULE is required, example: MODULE=github.com/acme/my-service"; exit 1)
+	./scripts/init-module.sh "$(MODULE)"
 
 tidy:
 	go mod tidy
@@ -45,6 +57,19 @@ lint:
 openapi-generate:
 	go generate ./internal/api
 
+openapi-drift-check:
+	@git diff --quiet -- internal/api || (echo "tracked openapi codegen drift detected in internal/api"; git diff -- internal/api; exit 1)
+	@untracked="$$(git ls-files --others --exclude-standard -- internal/api)"; \
+	if [ -n "$$untracked" ]; then \
+		echo "untracked openapi artifacts detected in internal/api"; \
+		echo "$$untracked"; \
+		echo "run 'make openapi-generate' and commit updated generated files"; \
+		exit 1; \
+	fi
+
+openapi-runtime-contract-check:
+	go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1
+
 openapi-lint:
 	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint $(OPENAPI_FILE)
 
@@ -55,12 +80,15 @@ openapi-breaking:
 	@test -n "$(BASE_OPENAPI)" || (echo "BASE_OPENAPI is required"; exit 1)
 	go run github.com/oasdiff/oasdiff@$(OASDIFF_VERSION) breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
 
-openapi-check: openapi-generate openapi-lint openapi-validate
+openapi-check: openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate
 
 docs-drift-check:
 	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)
 	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required"; exit 1)
 	$(DOCS_DRIFT_SCRIPT) "$(BASE_REF)" "$(HEAD_REF)"
+
+guardrails-check:
+	$(GUARDRAILS_CHECK_SCRIPT)
 
 migration-validate:
 	@test -n "$(MIGRATION_DSN)" || (echo "MIGRATION_DSN is required"; exit 1)

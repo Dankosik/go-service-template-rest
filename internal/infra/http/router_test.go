@@ -1,10 +1,13 @@
 package httpx
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
@@ -65,4 +68,106 @@ func TestRouterEndpoints(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
 		}
 	})
+}
+
+func TestRouterAddsRequestIDHeader(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, telemetry.New())
+
+	t.Run("generates request id when header is absent", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+		resp := httptest.NewRecorder()
+
+		h.ServeHTTP(resp, req)
+
+		if got := resp.Header().Get(requestIDHeader); got == "" {
+			t.Fatalf("%s header is empty", requestIDHeader)
+		}
+	})
+
+	t.Run("echoes inbound request id", func(t *testing.T) {
+		const wantRequestID = "demo-123"
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+		req.Header.Set(requestIDHeader, wantRequestID)
+		resp := httptest.NewRecorder()
+
+		h.ServeHTTP(resp, req)
+
+		if got := resp.Header().Get(requestIDHeader); got != wantRequestID {
+			t.Fatalf("%s = %q, want %q", requestIDHeader, got, wantRequestID)
+		}
+	})
+}
+
+func TestAccessLogIncludesCorrelationFields(t *testing.T) {
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, nil)
+
+	const (
+		requestID = "demo-123"
+		traceID   = "4bf92f3577b34da6a3ce929d0e0e4736"
+		spanID    = "00f067aa0ba902b7"
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	req.Header.Set(requestIDHeader, requestID)
+	req.Header.Set("traceparent", "00-"+traceID+"-"+spanID+"-01")
+	resp := httptest.NewRecorder()
+	h.ServeHTTP(resp, req)
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		t.Fatalf("expected access log line")
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &event); err != nil {
+		t.Fatalf("unmarshal access log: %v", err)
+	}
+
+	if got := event["request_id"]; got != requestID {
+		t.Fatalf("request_id = %v, want %q", got, requestID)
+	}
+	if got := event["trace_id"]; got != traceID {
+		t.Fatalf("trace_id = %v, want %q", got, traceID)
+	}
+	if got := event["span_id"]; got != spanID {
+		t.Fatalf("span_id = %v, want %q", got, spanID)
+	}
+}
+
+func TestMetricsExposeDurationHistogram(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, telemetry.New())
+
+	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	pingResp := httptest.NewRecorder()
+	h.ServeHTTP(pingResp, pingReq)
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsResp := httptest.NewRecorder()
+	h.ServeHTTP(metricsResp, metricsReq)
+
+	if metricsResp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", metricsResp.Code, http.StatusOK)
+	}
+
+	body := metricsResp.Body.String()
+	if !strings.Contains(body, "http_request_duration_seconds_bucket") {
+		t.Fatalf("metrics output does not contain duration histogram buckets")
+	}
+	if !strings.Contains(body, `method="GET",route="GET /api/v1/ping",status_code="200"`) {
+		t.Fatalf("metrics output does not contain expected duration histogram labels for ping endpoint")
+	}
 }

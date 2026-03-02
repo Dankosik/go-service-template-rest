@@ -16,9 +16,37 @@ Commands in this document come from:
 - `golangci-lint` installed for `make lint`
 - Node/npm available for OpenAPI lint (`npx @redocly/cli`)
 
+Bootstrap shortcut for beginners:
+- `make setup` to install pinned `golangci-lint`, prepare `.env`, download Go modules, and run `make doctor` checks.
+
 ## Command Groups
 
+### Bootstrap and environment checks
+
+- `make setup`
+  - Runs: `./scripts/dev/setup.sh <golangci-lint-version>`
+  - Purpose: first-run bootstrap for local environment.
+  - Includes:
+    - install pinned `golangci-lint`,
+    - create `.env` from `env/.env.example` when missing,
+    - `go mod download`,
+    - `make doctor`.
+
+- `make doctor`
+  - Runs: `./scripts/dev/doctor.sh`
+  - Purpose: check local machine readiness and show missing tooling.
+  - Checks:
+    - required: `make`, `git`, `go`, Go version vs `go.mod`, `node`, `npx`
+    - optional: `golangci-lint`, Docker CLI/daemon
+
 ### Dependency and module maintenance
+
+- `make init-module MODULE=<module_path>`
+  - Runs: `./scripts/init-module.sh <module_path>`
+  - Purpose: one-shot bootstrap after clone; updates `go.mod`, internal Go imports, and proto `go_package` module prefix.
+  - Includes: `go mod tidy` at the end.
+  - Example:
+    - `make init-module MODULE=github.com/acme/my-service`
 
 - `make tidy`
   - Runs: `go mod tidy`
@@ -90,6 +118,18 @@ Commands in this document come from:
   - Source spec: `api/openapi/service.yaml`
   - Generation config: `internal/api/oapi-codegen.yaml`
 
+- `make openapi-drift-check`
+  - Runs:
+    - `git diff -- internal/api` (tracked drift)
+    - `git ls-files --others --exclude-standard -- internal/api` (untracked artifacts)
+  - Purpose: fail if generated OpenAPI artifacts are not in the expected git state.
+  - Use when: after `make openapi-generate` and in CI contract gates.
+
+- `make openapi-runtime-contract-check`
+  - Runs: `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1`
+  - Purpose: verify that HTTP runtime behavior is still aligned with OpenAPI strict handler contract.
+  - Use when: after changing `api/openapi/service.yaml` or runtime handler wiring.
+
 - `make openapi-lint`
   - Runs: `npx @redocly/cli@2.20.0 lint api/openapi/service.yaml`
   - Purpose: OpenAPI style/rule validation.
@@ -109,11 +149,25 @@ Commands in this document come from:
 - `make openapi-check`
   - Composite target:
     - `openapi-generate`
+    - `openapi-drift-check`
+    - `openapi-runtime-contract-check`
     - `openapi-lint`
     - `openapi-validate`
   - Purpose: run the full contract check in one command.
 
 ### CI policy helper checks
+
+- `make guardrails-check`
+  - Runs: `scripts/ci/required-guardrails-check.sh`
+  - Purpose: enforce mandatory repository process files.
+  - Required files:
+    - `.editorconfig`
+    - `.gitattributes`
+    - `.github/CODEOWNERS`
+    - `.github/pull_request_template.md`
+    - `CONTRIBUTING.md`
+    - `SECURITY.md`
+    - `LICENSE`
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `scripts/ci/docs-drift-check.sh`
@@ -165,6 +219,13 @@ Commands in this document come from:
 
 ## Recommended Local Workflows
 
+### First run after clone
+
+1. `make setup`
+2. `make init-module MODULE=github.com/<your-org>/<your-service>`
+3. `make mod-check`
+4. `make test`
+
 ### Feature implementation (typical)
 
 1. `make fmt`
@@ -187,9 +248,9 @@ Commands in this document come from:
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make fmt-check` + `make docs-drift-check` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make fmt-check` + `make docs-drift-check` -> `repo-integrity`
 - `make lint` -> `lint`
-- `make openapi-generate` + `git diff --exit-code -- internal/api` + `make openapi-validate` + `make openapi-lint` -> `openapi-contract`
+- `make openapi-generate` + `make openapi-drift-check` + `make openapi-runtime-contract-check` + `make openapi-validate` + `make openapi-lint` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
 - `make test` -> `test`
 - `make test-race` -> `test-race`

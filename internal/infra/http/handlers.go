@@ -2,11 +2,15 @@ package httpx
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
 type Handlers struct {
@@ -14,37 +18,61 @@ type Handlers struct {
 	Ping   *ping.Service
 }
 
-func (h Handlers) Live(w http.ResponseWriter, _ *http.Request) {
-	writeText(w, http.StatusOK, "ok")
+type strictHandlers struct {
+	health  *health.Service
+	ping    *ping.Service
+	metrics *telemetry.Metrics
 }
 
-func (h Handlers) Ready(w http.ResponseWriter, r *http.Request) {
+const readinessTimeout = 2 * time.Second
+
+var _ api.StrictServerInterface = (*strictHandlers)(nil)
+
+func newStrictHandlers(h Handlers, metrics *telemetry.Metrics) strictHandlers {
 	if h.Health == nil {
-		writeText(w, http.StatusOK, "ok")
-		return
+		h.Health = health.New()
+	}
+	if h.Ping == nil {
+		h.Ping = ping.New()
+	}
+	if metrics == nil {
+		metrics = telemetry.New()
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	return strictHandlers{
+		health:  h.Health,
+		ping:    h.Ping,
+		metrics: metrics,
+	}
+}
+
+func (h strictHandlers) Ping(_ context.Context, _ api.PingRequestObject) (api.PingResponseObject, error) {
+	return api.Ping200TextResponse(h.ping.Pong()), nil
+}
+
+func (h strictHandlers) HealthLive(_ context.Context, _ api.HealthLiveRequestObject) (api.HealthLiveResponseObject, error) {
+	return api.HealthLive200TextResponse("ok"), nil
+}
+
+func (h strictHandlers) HealthReady(ctx context.Context, _ api.HealthReadyRequestObject) (api.HealthReadyResponseObject, error) {
+	readyCtx, cancel := context.WithTimeout(ctx, readinessTimeout)
 	defer cancel()
 
-	if err := h.Health.Ready(ctx); err != nil {
-		http.Error(w, "not ready", http.StatusServiceUnavailable)
-		return
+	if err := h.health.Ready(readyCtx); err != nil {
+		return api.HealthReady503TextResponse("not ready"), nil
 	}
 
-	writeText(w, http.StatusOK, "ok")
+	return api.HealthReady200TextResponse("ok"), nil
 }
 
-func (h Handlers) Pong(w http.ResponseWriter, _ *http.Request) {
-	if h.Ping == nil {
-		http.Error(w, "ping service is not configured", http.StatusInternalServerError)
-		return
+func (h strictHandlers) Metrics(ctx context.Context, _ api.MetricsRequestObject) (api.MetricsResponseObject, error) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil).WithContext(ctx)
+	resp := httptest.NewRecorder()
+	h.metrics.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		return nil, fmt.Errorf("metrics handler returned status %d", resp.Code)
 	}
-	writeText(w, http.StatusOK, h.Ping.Pong())
-}
 
-func writeText(w http.ResponseWriter, status int, body string) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(body))
+	return api.Metrics200TextResponse(resp.Body.String()), nil
 }

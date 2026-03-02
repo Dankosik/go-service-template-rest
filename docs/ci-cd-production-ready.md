@@ -27,6 +27,7 @@ Required status checks from `.github/workflows/ci.yml`:
 Notes:
 - `openapi-breaking` runs only for pull requests and should also be required if API compatibility is mandatory.
 - `migration-validate` is conditional and returns a successful skip when no migration files changed.
+- `repo-integrity` includes required guardrails check (`make guardrails-check`) and should not be downgraded to optional.
 
 ## Pull Request Policy
 
@@ -34,6 +35,17 @@ Notes:
 - Dismiss stale approvals when new commits are pushed.
 - Require conversation resolution before merge.
 - Disable direct pushes to `main`.
+- Require review from Code Owners.
+
+## Repository Guardrails (must exist in default branch)
+
+- `.editorconfig`
+- `.gitattributes`
+- `.github/CODEOWNERS`
+- `.github/pull_request_template.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `LICENSE`
 
 ## Release and Artifact Trust
 

@@ -62,7 +62,7 @@ Use this order for merge decisions.
 - Run `go test ./internal/api`.
 - Run `make openapi-validate`.
 - Run `make openapi-lint`.
-- Run `git diff --exit-code -- internal/api`.
+- Run `make openapi-drift-check` (tracked + untracked codegen artifacts).
 - On PR, run `BASE_OPENAPI=<base-spec> make openapi-breaking`.
 - Fail on any validation/lint/breaking/codegen drift signal.
 
@@ -125,7 +125,7 @@ fi
 ### Codegen drift (mandatory)
 - Run generation in CI: `make openapi-generate`.
 - Immediately verify no uncommitted changes in generated files:
-  - `git diff --exit-code -- internal/api`.
+  - `make openapi-drift-check`.
 - Compile generated package:
   - `go test ./internal/api`.
 - Fail merge if generation changes files not included in PR.

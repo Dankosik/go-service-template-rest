@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("APP_ENV", "")
@@ -24,6 +27,15 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("Addr = %q, want :8080", cfg.HTTP.Addr)
 	}
+	if cfg.HTTP.ReadTimeout != 5*time.Second {
+		t.Fatalf("ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
+	}
+	if cfg.HTTP.WriteTimeout != 10*time.Second {
+		t.Fatalf("WriteTimeout = %s, want 10s", cfg.HTTP.WriteTimeout)
+	}
+	if cfg.Postgres.DSN != "" {
+		t.Fatalf("Postgres.DSN = %q, want empty by default", cfg.Postgres.DSN)
+	}
 }
 
 func TestLoadInvalidDuration(t *testing.T) {
@@ -41,5 +53,34 @@ func TestLoadInvalidLogLevel(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatalf("Load() expected error for invalid log level")
+	}
+}
+
+func TestLoadHTTPTimeoutOverrides(t *testing.T) {
+	t.Setenv("HTTP_READ_TIMEOUT", "12s")
+	t.Setenv("HTTP_WRITE_TIMEOUT", "18s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.HTTP.ReadTimeout != 12*time.Second {
+		t.Fatalf("ReadTimeout = %s, want 12s", cfg.HTTP.ReadTimeout)
+	}
+	if cfg.HTTP.WriteTimeout != 18*time.Second {
+		t.Fatalf("WriteTimeout = %s, want 18s", cfg.HTTP.WriteTimeout)
+	}
+}
+
+func TestLoadPostgresDSNOverride(t *testing.T) {
+	want := "postgres://app:app@localhost:5432/app?sslmode=disable"
+	t.Setenv("POSTGRES_DSN", want)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Postgres.DSN != want {
+		t.Fatalf("Postgres.DSN = %q, want %q", cfg.Postgres.DSN, want)
 	}
 }
