@@ -175,7 +175,11 @@
 
 ### Source and scope
 - Optional instruction files are stored in `docs/llm/go-instructions/` and must be loaded dynamically per task.
+- API instruction files are stored in `docs/llm/api/` and must be loaded dynamically for REST API contract and endpoint design tasks.
 - Architecture instruction files are stored in `docs/llm/architecture/` and must be loaded dynamically when architecture decomposition is in scope.
+- Data modeling instruction files are stored in `docs/llm/data/` and must be loaded dynamically for SQL/data modeling, datastore decision tasks (NoSQL/columnar), schema evolution/migrations/data reliability tasks, and caching strategy/consistency/observability tasks.
+- Security instruction files are stored in `docs/llm/security/` and must be loaded dynamically for secure coding standards, threat-class controls, and security review criteria in Go services.
+- Operability instruction files are stored in `docs/llm/operability/` and must be loaded dynamically for observability baselines, telemetry contracts (logs/metrics/traces), correlation IDs, and instrumentation review criteria.
 
 ### Dynamic loading policy
 - Always apply the core section in this file for any Go task.
@@ -213,9 +217,69 @@
   - Load when: task is code review, audit, idiomaticity cleanup, or bug/risk/regression analysis of existing Go code.
   - Strong signals: PR review framing, "find issues" requests, maintainability/correctness checklist pass.
   - Skip when: task is pure greenfield implementation without review/audit intent.
+- `docs/llm/security/10-secure-coding.md`
+  - Load when: implementing or reviewing security-sensitive flows including input validation, output encoding, injection prevention, SSRF controls, path traversal defense, deserialization boundaries, file upload handling, command execution policy, and `unsafe` usage.
+  - Strong signals: untrusted input handling, outbound URL fetches, filesystem access with user-influenced paths, template rendering, OS command invocation, or requests for secure-by-default patterns/review gates.
+  - Skip when: task is documentation-only or a pure internal refactor with no trust-boundary or runtime security behavior impact.
+- `docs/llm/operability/10-observability-baseline.md`
+  - Load when: defining or reviewing observability baseline requirements including structured logs, RED metrics, trace propagation, correlation IDs, and OpenTelemetry instrumentation defaults across API, clients, DB, workers, and jobs.
+  - Strong signals: missing request/message correlation, unclear telemetry naming conventions, high-cardinality metrics concerns, instrumentation consistency gaps, or requests to standardize observability review gates.
+  - Skip when: task is local code refactoring with no observability behavior, telemetry contract, or instrumentation impact.
+- `docs/llm/operability/20-sli-slo-alerting-and-runbooks.md`
+  - Load when: defining or reviewing default SLI/SLO targets for API/workers/async consumers, error budget policy, burn-rate alerting, paging vs ticket routing, dashboard hierarchy, runbook standards, or release/degradation gates tied to budget consumption.
+  - Strong signals: requests to set SLI/SLO defaults, tune burn-rate alerts, formalize paging policy, connect release decisions to budget state, define service readiness/incident triage signals, or remove noisy non-actionable alerts.
+  - Skip when: task only changes local telemetry instrumentation and does not change SLO/alerting policy, error budget decisions, or runbook/operational readiness rules.
+- `docs/llm/operability/30-debuggability-telemetry-cost-and-async-observability.md`
+  - Load when: defining or reviewing production diagnostics (`/livez`/`/readyz`/`/startupz`, admin/debug endpoints, pprof, crash diagnostics), telemetry cost controls (sampling, histogram strategy, log-volume/cardinality limits, retention, privacy/redaction), or async observability contracts across queues/retries/DLQ/lag/batches/reconciliation jobs.
+  - Strong signals: requests for safe debug instrumentation, probe/shutdown diagnostics policy, incident-mode telemetry escalation with TTL, preventing telemetry explosion, broker-specific lag/DLQ visibility, or trace/log/metric correlation across async workflows.
+  - Skip when: task is a local change with no impact on diagnostics endpoints, telemetry cost policy, sampling/retention strategy, or async observability behavior.
+- `docs/llm/api/10-rest-api-design.md`
+  - Load when: designing or reviewing REST/JSON resource modeling, URI conventions, status codes, pagination/filtering, PATCH/PUT semantics, bulk operations, idempotency, ETags, long-running operations, async acknowledgement, or API error/consistency semantics.
+  - Strong signals: endpoint naming debates, ambiguous HTTP method semantics, retry-safety and `Idempotency-Key` decisions, `202 Accepted` + operation resource patterns, and standardization of `application/problem+json`.
+  - Skip when: task changes only internal implementation details and does not alter REST API contract behavior.
+- `docs/llm/api/30-api-cross-cutting-concerns.md`
+  - Load when: designing or reviewing API cross-cutting behavior including request validation/normalization, input size limits, auth/tenant context propagation, idempotency and retry semantics, rate limiting, file uploads, webhooks/callbacks, and async operation semantics.
+  - Strong signals: requirements for middleware/interceptor responsibilities vs contract-level requirements, `Idempotency-Key`/`request_id` rules, `X-Request-ID`/trace propagation, `429`/`Retry-After`, upload constraints, webhook signature/replay/dedup semantics, and `202` + operation status patterns.
+  - Skip when: task is purely internal refactoring with no API boundary behavior or contract-level cross-cutting impact.
 - `docs/llm/architecture/10-service-boundaries-and-decomposition.md`
   - Load when: defining or changing service boundaries, decomposing by bounded contexts, deciding new service vs module in an existing service, or reviewing ownership/transaction boundaries.
   - Strong signals: microservice split/merge discussions, distributed monolith symptoms, shared database proposals, shared domain logic proposals, unclear team/data ownership.
   - Skip when: task is a local implementation detail that does not change service/module boundaries.
+- `docs/llm/architecture/20-sync-communication-and-api-style.md`
+  - Load when: defining or reviewing synchronous service communication defaults, choosing REST vs gRPC/Connect, setting timeout/deadline/retry/idempotency/error/pagination rules, or designing gateway/BFF/client ownership boundaries.
+  - Strong signals: request-reply design, internal vs external API contract decisions, sync-hop policy, anti-pattern analysis (chatty services, unknown retry semantics, no deadlines, cascading synchronous chains).
+  - Skip when: task does not change communication style, API interaction contracts, or synchronous reliability rules.
+- `docs/llm/architecture/30-event-driven-and-async-workflows.md`
+  - Load when: defining or reviewing event-driven interactions, broker-based processing, producer/consumer contracts, outbox/inbox, delivery semantics, retries/DLQ/deduplication, or background workflows.
+  - Strong signals: events vs commands, pub/sub vs queues, schema evolution in messages, ordering/replay assumptions, async idempotency requirements, and async observability requirements.
+  - Skip when: task is fully synchronous and does not introduce or modify messaging or async workflow behavior.
+- `docs/llm/architecture/40-distributed-consistency-and-sagas.md`
+  - Load when: defining or reviewing cross-service consistency in multi-step business flows, saga orchestration/choreography, compensation, idempotency key policies, reconciliation jobs, or read-model consistency.
+  - Strong signals: eventual consistency contracts, cross-service invariants, 2PC/dual-write discussions, saga step/state design, race-condition controls, and projection staleness budgets.
+  - Skip when: task stays within one local transaction boundary and does not change inter-service consistency semantics.
+- `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md`
+  - Load when: defining or reviewing resilience baselines (timeouts, retries, jitter, backpressure, load shedding, circuit breakers, bulkheads), graceful startup/shutdown, fallback/degradation behavior, or safe system evolution and rollouts.
+  - Strong signals: cascading-failure risks, dependency-failure policies, overload behavior, graceful degradation requirements, canary/blue-green/strangler planning, feature-flag rollout controls, and rollback-safety gates tied to SLO/error-budget.
+  - Skip when: task is a local code change that does not alter resilience controls, degradation behavior, or rollout strategy.
+- `docs/llm/data/10-sql-modeling-and-oltp.md`
+  - Load when: designing or reviewing SQL schema for CRUD/business OLTP workloads in microservices, including constraints, indexes, transaction boundaries, and data lifecycle policy.
+  - Strong signals: service-owned schema, normalization vs denormalization, keys/indexes/constraints, soft delete, audit fields, optimistic locking, pagination, temporal data, multi-tenant modeling.
+  - Skip when: task is non-SQL, OLAP/reporting-only, or does not change data modeling decisions.
+- `docs/llm/data/20-sql-access-from-go.md`
+  - Load when: implementing or reviewing SQL access code in Go, choosing `pgx`/`database/sql`/`sqlc`, or defining transaction/pooling/query-discipline rules.
+  - Strong signals: repository/DAL changes, context and DB timeouts, connection pool settings, batching/bulk writes, null/scanning handling, SQL injection/N+1/chatty query risks, observability of queries.
+  - Skip when: task is schema-only modeling without runtime Go SQL access changes.
+- `docs/llm/data/30-nosql-and-columnar-decision-guide.md`
+  - Load when: choosing datastore class for a service/workload (SQL OLTP vs NoSQL vs columnar/analytical), or reviewing access-pattern fit, partitioning, consistency trade-offs, hot partitions, and retention strategy.
+  - Strong signals: document/key-value/wide-column/time-series selection, OLTP vs OLAP decision, read-model/analytical-store introduction, async ingestion, retention/downsampling, operational readiness for new engine.
+  - Skip when: datastore class is fixed and task is a local implementation detail without data-architecture decision impact.
+- `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`
+  - Load when: designing or reviewing zero-downtime migrations, expand-contract rollout sequence, backfills/reindexing/data verification, rollback limitations, or data reliability controls (backup/restore drills, retention, archival, PII deletion, DR basics).
+  - Strong signals: mixed-version rollout risks, destructive migration concerns, schema/code compatibility windows, outbox vs dual-write decisions during migration, PITR/restore drill requirements, and migration review checklists.
+  - Skip when: task has no schema evolution, migration execution, or data lifecycle/reliability impact.
+- `docs/llm/data/50-caching-strategy.md`
+  - Load when: deciding whether to add cache, choosing local vs distributed vs hybrid cache, or designing/reviewing cache patterns (`cache-aside`, `read-through`, `write-through`, `stale-while-revalidate`), TTL/jitter, stampede protection, and fallback behavior.
+  - Strong signals: read bottleneck/hot-key analysis, staleness and consistency trade-offs, key design/tenant isolation concerns, cache serialization/memory guardrails, cache observability metrics, and cache correctness/reliability testing requirements.
+  - Skip when: task is a local refactor with no cache behavior change, no read-path bottleneck, and no cache boundary/topology decision.
 
 If one task spans multiple domains, load all matching optional files, but keep the set minimal.
