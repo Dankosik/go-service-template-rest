@@ -180,6 +180,8 @@
 - Data modeling instruction files are stored in `docs/llm/data/` and must be loaded dynamically for SQL/data modeling, datastore decision tasks (NoSQL/columnar), schema evolution/migrations/data reliability tasks, and caching strategy/consistency/observability tasks.
 - Security instruction files are stored in `docs/llm/security/` and must be loaded dynamically for secure coding standards, threat-class controls, and security review criteria in Go services.
 - Operability instruction files are stored in `docs/llm/operability/` and must be loaded dynamically for observability baselines, telemetry contracts (logs/metrics/traces), correlation IDs, and instrumentation review criteria.
+- Delivery instruction files are stored in `docs/llm/delivery/` and must be loaded dynamically for CI/CD baseline design, quality gates, merge/release blocking rules, and drift/compatibility enforcement (`docs`, `codegen`, `migrations`, API contracts).
+- Platform instruction files are stored in `docs/llm/platform/` and must be loaded dynamically for containerization standards, Dockerfile defaults, runtime hardening baseline, and image build/release rules for Go services.
 
 ### Dynamic loading policy
 - Always apply the core section in this file for any Go task.
@@ -233,6 +235,14 @@
   - Load when: defining or reviewing production diagnostics (`/livez`/`/readyz`/`/startupz`, admin/debug endpoints, pprof, crash diagnostics), telemetry cost controls (sampling, histogram strategy, log-volume/cardinality limits, retention, privacy/redaction), or async observability contracts across queues/retries/DLQ/lag/batches/reconciliation jobs.
   - Strong signals: requests for safe debug instrumentation, probe/shutdown diagnostics policy, incident-mode telemetry escalation with TTL, preventing telemetry explosion, broker-specific lag/DLQ visibility, or trace/log/metric correlation across async workflows.
   - Skip when: task is a local change with no impact on diagnostics endpoints, telemetry cost policy, sampling/retention strategy, or async observability behavior.
+- `docs/llm/delivery/10-ci-quality-gates.md`
+  - Load when: defining or reviewing CI/CD quality gates, merge/release blocking criteria, gate ordering, fast-path vs full/nightly/release pipelines, or policy for docs/codegen/migration/contract drift checks.
+  - Strong signals: required status checks design, branch protection rules, `govulncheck`/`gosec`/Trivy gating, code generation drift failures, migration validation requirements, and contract compatibility enforcement.
+  - Skip when: task is purely local code implementation with no CI/CD, release pipeline, or delivery-governance impact.
+- `docs/llm/platform/10-containerization-and-dockerfile.md`
+  - Load when: creating or reviewing Dockerfiles for Go services, selecting static vs dynamic linking model, choosing runtime image (distroless/minimal), or setting container runtime hardening defaults.
+  - Strong signals: multi-stage build rules, non-root runtime policy, CA/tzdata requirements, startup/entrypoint signal handling, reproducible image builds, and image size vs operability trade-off decisions.
+  - Skip when: task has no container image, Dockerfile, runtime container hardening, or image build/release behavior impact.
 - `docs/llm/api/10-rest-api-design.md`
   - Load when: designing or reviewing REST/JSON resource modeling, URI conventions, status codes, pagination/filtering, PATCH/PUT semantics, bulk operations, idempotency, ETags, long-running operations, async acknowledgement, or API error/consistency semantics.
   - Strong signals: endpoint naming debates, ambiguous HTTP method semantics, retry-safety and `Idempotency-Key` decisions, `202 Accepted` + operation resource patterns, and standardization of `application/problem+json`.
