@@ -4,15 +4,27 @@ OPENAPI_FILE := api/openapi/service.yaml
 REDOCLY_CLI_VERSION := 2.20.0
 KIN_OPENAPI_VALIDATE_VERSION := v0.133.0
 OASDIFF_VERSION := v1.11.10
+MIGRATE_VERSION := v4.19.0
+DOCS_DRIFT_SCRIPT := scripts/ci/docs-drift-check.sh
 
 .PHONY: tidy fmt test test-race test-cover test-integration lint run build docker-build compose-up compose-down vendor \
-	openapi-generate openapi-lint openapi-validate openapi-breaking openapi-check
+	openapi-generate openapi-lint openapi-validate openapi-breaking openapi-check \
+	mod-check fmt-check docs-drift-check migration-validate
 
 tidy:
 	go mod tidy
 
 fmt:
 	gofmt -w $(shell find . -type f -name '*.go' -not -path './vendor/*')
+
+mod-check:
+	GOFLAGS= go mod tidy -diff
+	go mod verify
+	git diff --exit-code -- go.mod go.sum
+
+fmt-check:
+	$(MAKE) fmt
+	git diff --exit-code
 
 test:
 	go test ./...
@@ -44,6 +56,17 @@ openapi-breaking:
 	go run github.com/oasdiff/oasdiff@$(OASDIFF_VERSION) breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
 
 openapi-check: openapi-generate openapi-lint openapi-validate
+
+docs-drift-check:
+	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)
+	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required"; exit 1)
+	$(DOCS_DRIFT_SCRIPT) "$(BASE_REF)" "$(HEAD_REF)"
+
+migration-validate:
+	@test -n "$(MIGRATION_DSN)" || (echo "MIGRATION_DSN is required"; exit 1)
+	go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up
+	go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" down 1
+	go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up 1
 
 run:
 	go run ./cmd/$(SERVICE_NAME)

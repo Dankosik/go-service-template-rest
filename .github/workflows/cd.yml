@@ -1,0 +1,268 @@
+name: cd
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: cd-${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  GOFLAGS: -mod=readonly
+  GOLANGCI_LINT_VERSION: v2.10.1
+  GOVULNCHECK_VERSION: v1.1.4
+  GOSEC_VERSION: v2.24.6
+
+jobs:
+  publish-main:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Prepare image metadata
+        id: meta
+        run: |
+          IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
+          SHORT_SHA="$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-12)"
+
+          echo "image_repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
+          echo "tag_main=main" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "primary_image=${IMAGE_REPO}:main" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=sbom-main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build image
+        run: |
+          docker build \
+            -f build/docker/Dockerfile \
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}" \
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
+            .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          image-ref: ${{ steps.meta.outputs.primary_image }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          image-ref: ${{ steps.meta.outputs.primary_image }}
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Push image tags
+        run: |
+          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
+          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}"
+
+      - name: Resolve pushed digest
+        id: digest
+        run: |
+          DIGEST="$(docker image inspect "${{ steps.meta.outputs.primary_image }}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+          test -n "${DIGEST}"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.25.x"
+          cache: true
+
+      - name: Install cosign
+        run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
+
+      - name: Sign container image (keyless)
+        env:
+          COSIGN_YES: "true"
+        run: |
+          "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.meta.outputs.image_repo }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          push-to-registry: true
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: sbom.cdx.json
+          if-no-files-found: error
+
+  release-preflight:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "20.19.0"
+
+      - name: Verify module integrity
+        run: make mod-check
+
+      - name: Verify formatting drift
+        run: make fmt-check
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=3m
+
+      - name: Unit tests
+        run: make test
+
+      - name: Race detector
+        run: make test-race
+
+      - name: Integration tests
+        run: make test-integration
+
+      - name: OpenAPI contract checks
+        run: |
+          make openapi-generate
+          git diff --exit-code -- internal/api
+          go test ./internal/api
+          make openapi-validate
+          make openapi-lint
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: Run gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
+          "$(go env GOPATH)/bin/gosec" ./...
+
+  publish-release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: release-preflight
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare image metadata
+        id: meta
+        run: |
+          IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
+          VERSION_TAG="${GITHUB_REF_NAME}"
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-12)"
+
+          echo "image_repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
+          echo "tag_version=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag_latest=latest" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "primary_image=${IMAGE_REPO}:${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=sbom-${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build image
+        run: |
+          docker build \
+            -f build/docker/Dockerfile \
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_version }}" \
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_latest }}" \
+            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
+            .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          image-ref: ${{ steps.meta.outputs.primary_image }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          image-ref: ${{ steps.meta.outputs.primary_image }}
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Push image tags
+        run: |
+          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_version }}"
+          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_latest }}"
+          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}"
+
+      - name: Resolve pushed digest
+        id: digest
+        run: |
+          DIGEST="$(docker image inspect "${{ steps.meta.outputs.primary_image }}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+          test -n "${DIGEST}"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.25.x"
+          cache: true
+
+      - name: Install cosign
+        run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
+
+      - name: Sign container image (keyless)
+        env:
+          COSIGN_YES: "true"
+        run: |
+          "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.meta.outputs.image_repo }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          push-to-registry: true
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: sbom.cdx.json
+          if-no-files-found: error

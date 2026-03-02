@@ -31,7 +31,9 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 - optional Postgres readiness probe (via `POSTGRES_DSN`)
 - OpenAPI workflow: codegen (`oapi-codegen`) + lint + validate + breaking check
 - Docker multi-stage + distroless runtime
-- CI: unit tests + race detector + coverage artifact + integration tests + lint + OpenAPI gates + security gates
+- CI: integrity gates (mod/fmt/docs drift), tests (unit/race/coverage/integration), OpenAPI contract gates, migration validation, security gates
+- nightly reliability workflow with repeated test runs and full security/contract checks
+- CD: GHCR image publishing with Trivy scan, CycloneDX SBOM, cosign keyless signing, and provenance attestation
 - Dependabot for `gomod` and GitHub Actions
 
 ## Structure
@@ -91,6 +93,8 @@ make docker-build
 
 ```bash
 make fmt
+make mod-check
+make fmt-check
 make test
 make test-race
 make test-cover
@@ -99,6 +103,8 @@ make lint
 make openapi-generate
 make openapi-lint
 make openapi-validate
+make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
+make migration-validate MIGRATION_DSN=<postgres_dsn>
 make build
 make run
 make docker-build
@@ -145,18 +151,37 @@ The generation entrypoint is in `internal/api/doc.go` (`go:generate`), and the c
 ## Migrations
 
 SQL migrations are stored in `env/migrations`.
-The migration tool (`migrate`/`goose`/`atlas`/`tern`) is chosen at the team level.
+CI migration rehearsal command:
+
+```bash
+make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'
+```
 
 ## CI Quality Gates
 
 Workflow `.github/workflows/ci.yml` includes:
 
+- `repo-integrity`: `go mod tidy -diff`, `go mod verify`, format drift check, docs drift check
+- `lint`: `golangci-lint`
+- `openapi-contract`: generate + codegen drift check + validate + lint OpenAPI
+- `openapi-breaking` (PR): check breaking changes between base and current OpenAPI spec
 - `test`: `go test ./...`
 - `test-race`: `go test -race ./...`
 - `test-coverage`: `go test -covermode=atomic -coverprofile=coverage.out ./...` + publish `coverage.out` as an artifact
 - `test-integration`: `go test -tags=integration ./test/...`
-- `lint`: `golangci-lint`
-- `openapi-contract`: generate + validate + lint OpenAPI
-- `openapi-breaking` (PR): check breaking changes between base and current OpenAPI spec
+- `migration-validate` (conditional): rehearses SQL migrations on ephemeral Postgres when `env/migrations/**` changes
 - `go-security`: `govulncheck` and `gosec`
 - `container-security`: Trivy scan for the Docker image
+
+Nightly reliability workflow `.github/workflows/nightly.yml` runs extended checks (repeat test runs, race/integration, OpenAPI, security, and container scan).
+
+## CD Pipeline
+
+Workflow `.github/workflows/cd.yml` includes:
+
+- `publish-main`: after successful `ci` on `main`, builds and pushes GHCR image tags `main` and `sha-*`, scans with Trivy, uploads CycloneDX SBOM, signs image (cosign keyless), and publishes provenance attestation.
+- `release-preflight`: on `v*` tag push, reruns quality and security gates before artifact publish.
+- `publish-release`: on `v*` tag push, runs after `release-preflight`, then builds and pushes `v*`, `latest`, and `sha-*` tags with the same security/supply-chain controls.
+
+Repository-level enforcement checklist:
+- `docs/ci-cd-production-ready.md`

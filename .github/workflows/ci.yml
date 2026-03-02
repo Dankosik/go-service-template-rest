@@ -3,20 +3,29 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
+  GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
   GOVULNCHECK_VERSION: v1.1.4
   GOSEC_VERSION: v2.24.6
 
 jobs:
-  test:
+  repo-integrity:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -24,60 +33,38 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Unit tests
-        run: make test
+      - name: Verify module integrity
+        run: make mod-check
 
-  test-race:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Verify formatting drift
+        run: make fmt-check
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - name: Verify docs drift policy
+        run: |
+          case "${{ github.event_name }}" in
+            pull_request)
+              BASE_REF="${{ github.event.pull_request.base.sha }}"
+              ;;
+            push)
+              BASE_REF="${{ github.event.before }}"
+              ;;
+            *)
+              echo "event does not provide stable base ref, skipping docs drift check"
+              exit 0
+              ;;
+          esac
 
-      - name: Race detector
-        run: make test-race
+          if [ -z "${BASE_REF}" ] || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ]; then
+            echo "base ref is unavailable, skipping docs drift check"
+            exit 0
+          fi
 
-  test-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Coverage
-        run: make test-cover
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: coverage-report
-          path: coverage.out
-          if-no-files-found: error
-
-  test-integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Integration tests
-        run: make test-integration
+          make docs-drift-check BASE_REF="${BASE_REF}" HEAD_REF="${{ github.sha }}"
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: repo-integrity
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -95,6 +82,8 @@ jobs:
 
   openapi-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: repo-integrity
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -112,6 +101,9 @@ jobs:
       - name: Generate OpenAPI Go bindings
         run: make openapi-generate
 
+      - name: Detect OpenAPI codegen drift
+        run: git diff --exit-code -- internal/api
+
       - name: Compile generated OpenAPI package
         run: go test ./internal/api
 
@@ -124,6 +116,10 @@ jobs:
   openapi-breaking:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - repo-integrity
+      - openapi-contract
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -149,8 +145,148 @@ jobs:
         if: env.BASE_SPEC_FOUND == 'true'
         run: BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking
 
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: repo-integrity
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Unit tests
+        run: make test
+
+  test-race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: repo-integrity
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Race detector
+        run: make test-race
+
+  test-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: repo-integrity
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Coverage
+        run: make test-cover
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: coverage-report
+          path: coverage.out
+          if-no-files-found: error
+
+  test-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: repo-integrity
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Integration tests
+        run: make test-integration
+
+  migration-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: repo-integrity
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Detect migration changes
+        id: migration_changes
+        run: |
+          case "${{ github.event_name }}" in
+            pull_request)
+              BASE_REF="${{ github.event.pull_request.base.sha }}"
+              ;;
+            push)
+              BASE_REF="${{ github.event.before }}"
+              ;;
+            *)
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          if [ -z "${BASE_REF}" ] || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --name-only "${BASE_REF}" "${{ github.sha }}" | grep -Eq '^env/migrations/'; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Go
+        if: steps.migration_changes.outputs.should_run == 'true'
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate migrations on ephemeral Postgres
+        if: steps.migration_changes.outputs.should_run == 'true'
+        run: |
+          make migration-validate \
+            MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'
+
+      - name: Skip migration validation
+        if: steps.migration_changes.outputs.should_run != 'true'
+        run: echo "no migration files changed"
+
   go-security:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: repo-integrity
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -172,6 +308,8 @@ jobs:
 
   container-security:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: repo-integrity
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 

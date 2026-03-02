@@ -1,0 +1,90 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "20 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+  GOLANGCI_LINT_VERSION: v2.10.1
+  GOVULNCHECK_VERSION: v1.1.4
+  GOSEC_VERSION: v2.24.6
+
+jobs:
+  reliability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "20.19.0"
+
+      - name: Verify module integrity
+        run: make mod-check
+
+      - name: Verify formatting drift
+        run: make fmt-check
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=3m
+
+      - name: Flake detection run
+        run: go test -count=5 ./...
+
+      - name: Race detector
+        run: make test-race
+
+      - name: Integration tests
+        run: make test-integration
+
+      - name: OpenAPI contract checks
+        run: |
+          make openapi-generate
+          git diff --exit-code -- internal/api
+          go test ./internal/api
+          make openapi-validate
+          make openapi-lint
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: Run gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
+          "$(go env GOPATH)/bin/gosec" ./...
+
+      - name: Build container image
+        run: docker build -f build/docker/Dockerfile -t service:nightly .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          image-ref: service:nightly
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

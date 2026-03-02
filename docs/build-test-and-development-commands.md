@@ -25,6 +25,14 @@ Commands in this document come from:
   - Purpose: clean and sync `go.mod`/`go.sum` with actual imports.
   - Use when: after adding/removing dependencies.
 
+- `make mod-check`
+  - Runs:
+    - `go mod tidy -diff`
+    - `go mod verify`
+    - `git diff --exit-code -- go.mod go.sum`
+  - Purpose: enforce deterministic module integrity without local drift.
+  - Use when: before push and in CI merge-gates.
+
 - `make vendor`
   - Runs: `go mod vendor`
   - Purpose: populate `vendor/` with module dependencies.
@@ -36,6 +44,13 @@ Commands in this document come from:
   - Runs `gofmt` on all Go files except `vendor/`.
   - Purpose: enforce canonical Go formatting.
   - Use when: before commits/PRs and after large edits.
+
+- `make fmt-check`
+  - Runs:
+    - `make fmt`
+    - `git diff --exit-code`
+  - Purpose: fail if formatting would change tracked Go sources.
+  - Use when: CI gate or pre-push validation.
 
 - `make lint`
   - Runs: `golangci-lint run`
@@ -98,6 +113,30 @@ Commands in this document come from:
     - `openapi-validate`
   - Purpose: run the full contract check in one command.
 
+### CI policy helper checks
+
+- `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
+  - Runs: `scripts/ci/docs-drift-check.sh`
+  - Purpose: enforce docs updates when behavior/contract/CI-sensitive paths change.
+  - Trigger paths include:
+    - `api/openapi/service.yaml`
+    - `env/migrations/**`
+    - `Makefile`
+    - `.github/workflows/**`
+    - `cmd/**`
+    - `internal/app/**`
+    - `internal/infra/http/**`
+  - Required docs paths:
+    - `docs/**` or `README.md`
+
+- `make migration-validate MIGRATION_DSN=<postgres_dsn>`
+  - Runs `golang-migrate` against `env/migrations`:
+    - apply all up migrations
+    - run `down 1`
+    - run `up 1`
+  - Purpose: validate migration chain on ephemeral Postgres in CI.
+  - Use when: migration SQL changed (`env/migrations/**`).
+
 ### Run and build
 
 - `make run`
@@ -148,11 +187,28 @@ Commands in this document come from:
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make test` -> unit tests
-- `make test-race` -> race detector
-- `make test-cover` -> coverage job
-- `make test-integration` -> integration job
-- `make lint` -> lint job
-- `make openapi-check` -> openapi contract job
+- `make mod-check` + `make fmt-check` + `make docs-drift-check` -> `repo-integrity`
+- `make lint` -> `lint`
+- `make openapi-generate` + `git diff --exit-code -- internal/api` + `make openapi-validate` + `make openapi-lint` -> `openapi-contract`
+- `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
+- `make test` -> `test`
+- `make test-race` -> `test-race`
+- `make test-cover` -> `test-coverage`
+- `make test-integration` -> `test-integration`
+- `make migration-validate` -> `migration-validate` (only when migrations changed)
+- `govulncheck`, `gosec`, Trivy image scan -> `go-security`, `container-security`
 
-Security jobs (`govulncheck`, `gosec`, Trivy) run in CI and are not wrapped by dedicated make targets in this repository.
+Nightly workflow: `.github/workflows/nightly.yml`
+- Adds heavier reliability checks:
+  - `go test -count=5 ./...`
+  - `make test-race`
+  - `make test-integration`
+  - full OpenAPI/security/container checks
+
+CD workflow: `.github/workflows/cd.yml`
+- `publish-main`: after successful `ci` on `main`, builds/scans/signs/publishes image to GHCR with `main` and `sha-*` tags.
+- `release-preflight`: on tag `v*`, reruns quality and security gates before publish.
+- `publish-release`: on tag `v*`, runs only after `release-preflight`, then builds/scans/signs/publishes `v*`, `latest`, and `sha-*` tags, uploads CycloneDX SBOM, and pushes provenance attestation.
+
+Repository settings checklist for hard enforcement:
+- `docs/ci-cd-production-ready.md`
