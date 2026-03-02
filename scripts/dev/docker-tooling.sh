@@ -6,6 +6,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GO_IMAGE="${GO_IMAGE:-golang:1.25.7-bookworm}"
 NODE_IMAGE="${NODE_IMAGE:-node:20.19.0-bookworm}"
 GOLANGCI_LINT_IMAGE="${GOLANGCI_LINT_IMAGE:-golangci/golangci-lint:v2.10.1}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17}"
+MIGRATE_IMAGE="${MIGRATE_IMAGE:-migrate/migrate:v4.19.0}"
+TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.65.0}"
 REDOCLY_CLI_VERSION="${REDOCLY_CLI_VERSION:-2.20.0}"
 KIN_OPENAPI_VALIDATE_VERSION="${KIN_OPENAPI_VALIDATE_VERSION:-v0.133.0}"
 GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
@@ -35,6 +38,11 @@ usage() {
 	echo "  openapi-validate"
 	echo "  openapi-check"
 	echo "  go-security"
+	echo "  guardrails-check"
+	echo "  skills-check"
+	echo "  docs-drift-check <base-ref> <head-ref>"
+	echo "  migration-validate"
+	echo "  container-security"
 	echo "  ci"
 }
 
@@ -128,6 +136,91 @@ openapi_drift_check() {
 	fi
 }
 
+wait_for_postgres() {
+	local container_name="$1"
+	local attempts=60
+
+	for _ in $(seq 1 "${attempts}"); do
+		if docker exec "${container_name}" pg_isready -U app -d app >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+	done
+
+	echo "postgres container did not become ready in time"
+	return 1
+}
+
+run_migration_validate() {
+	ensure_docker
+
+	local network_name="go-service-template-migration-${host_uid}-$$"
+	local postgres_container="go-service-template-postgres-${host_uid}-$$"
+	local migration_dsn="postgres://app:app@${postgres_container}:5432/app?sslmode=disable"
+
+	cleanup_migration() {
+		docker rm -f "${postgres_container}" >/dev/null 2>&1 || true
+		docker network rm "${network_name}" >/dev/null 2>&1 || true
+	}
+	trap cleanup_migration EXIT
+
+	docker network create "${network_name}" >/dev/null
+	docker run \
+		-d \
+		--name "${postgres_container}" \
+		--network "${network_name}" \
+		-e POSTGRES_DB=app \
+		-e POSTGRES_USER=app \
+		-e POSTGRES_PASSWORD=app \
+		"${POSTGRES_IMAGE}" >/dev/null
+
+	wait_for_postgres "${postgres_container}"
+
+	docker run \
+		--rm \
+		--network "${network_name}" \
+		-v "${ROOT_DIR}/env/migrations:/migrations:ro" \
+		"${MIGRATE_IMAGE}" \
+		-path /migrations \
+		-database "${migration_dsn}" up
+
+	docker run \
+		--rm \
+		--network "${network_name}" \
+		-v "${ROOT_DIR}/env/migrations:/migrations:ro" \
+		"${MIGRATE_IMAGE}" \
+		-path /migrations \
+		-database "${migration_dsn}" down 1
+
+	docker run \
+		--rm \
+		--network "${network_name}" \
+		-v "${ROOT_DIR}/env/migrations:/migrations:ro" \
+		"${MIGRATE_IMAGE}" \
+		-path /migrations \
+		-database "${migration_dsn}" up 1
+}
+
+run_container_security_scan() {
+	ensure_docker
+
+	if [[ ! -S /var/run/docker.sock ]]; then
+		echo "docker socket is unavailable; container scan cannot run in docker mode"
+		exit 1
+	fi
+
+	docker build -f "${ROOT_DIR}/build/docker/Dockerfile" -t service:ci "${ROOT_DIR}"
+	docker run \
+		--rm \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		"${TRIVY_IMAGE}" image \
+		--severity HIGH,CRITICAL \
+		--ignore-unfixed \
+		--exit-code 1 \
+		--format table \
+		service:ci
+}
+
 cmd="${1:-}"
 if [[ -z "${cmd}" ]]; then
 	usage
@@ -144,6 +237,9 @@ pull-images)
 	docker pull "${GO_IMAGE}"
 	docker pull "${NODE_IMAGE}"
 	docker pull "${GOLANGCI_LINT_IMAGE}"
+	docker pull "${POSTGRES_IMAGE}"
+	docker pull "${MIGRATE_IMAGE}"
+	docker pull "${TRIVY_IMAGE}"
 	;;
 init-module)
 	module_path="${1:-}"
@@ -221,15 +317,47 @@ openapi-check)
 go-security)
 	run_go "go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} && \"\$(go env GOPATH)/bin/govulncheck\" ./... && go install github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} && \"\$(go env GOPATH)/bin/gosec\" -exclude-generated ./..."
 	;;
+guardrails-check)
+	"${ROOT_DIR}/scripts/ci/required-guardrails-check.sh"
+	;;
+skills-check)
+	"${ROOT_DIR}/scripts/dev/sync-skills.sh" --check
+	;;
+docs-drift-check)
+	base_ref="${1:-}"
+	head_ref="${2:-}"
+	if [[ -z "${base_ref}" || -z "${head_ref}" ]]; then
+		echo "docs-drift-check requires <base-ref> <head-ref>"
+		exit 1
+	fi
+	"${ROOT_DIR}/scripts/ci/docs-drift-check.sh" "${base_ref}" "${head_ref}"
+	;;
+migration-validate)
+	run_migration_validate
+	;;
+container-security)
+	run_container_security_scan
+	;;
 ci)
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
+	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
+	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" test
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
+	REQUIRE_DOCKER=1 "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security
+	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" migration-validate
+	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" container-security
+
+	if [[ -n "${BASE_REF:-}" && -n "${HEAD_REF:-}" ]]; then
+		"${ROOT_DIR}/scripts/dev/docker-tooling.sh" docs-drift-check "${BASE_REF}" "${HEAD_REF}"
+	else
+		echo "BASE_REF/HEAD_REF are not set, skipping docs drift check in docker-ci"
+	fi
 	;;
 *)
 	echo "unknown command: ${cmd}"

@@ -14,6 +14,8 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   └── skills/
 ├── .gemini/
 │   └── skills/
+├── .opencode/
+│   └── skills/
 ├── .github/
 │   ├── CODEOWNERS
 │   ├── dependabot.yml
@@ -101,8 +103,11 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   ├── gen.sh
 │   └── init-module.sh
 ├── skills/
-│   └── go-architect-spec/
-│       └── SKILL.md
+│   ├── api-contract-designer-spec/
+│   │   └── SKILL.md
+│   ├── go-architect-spec/
+│   │   └── SKILL.md
+│   └── ... (other skill packs)
 ├── test/
 │   ├── README.md
 │   └── postgres_integration_test.go
@@ -176,10 +181,10 @@ Engineering documentation (including LLM instructions and this document).
 Why: development rules and structure should be explicit and versioned, not scattered in code comments.
 
 ### `skills/`
-Reserved directory (not used for runnable skills).  
-Why: runnable skills are stored in provider runtime directories; docs stay in `docs/skills/`.
+Canonical source of runnable `SKILL.md` definitions.  
+Why: this directory is the single source for skill content, which is mirrored to provider runtime directories via `make skills-sync`.
 
-### `.agents/skills`, `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`
+### `.agents/skills`, `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`, `.opencode/skills`
 Provider runtime skill directories (`SKILL.md` files are stored here).  
 Why: these are the locations where agent tools actually load and execute skills.
 

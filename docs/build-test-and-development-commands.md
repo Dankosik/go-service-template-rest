@@ -59,14 +59,16 @@ Bootstrap shortcuts:
   - Includes:
     - create `.env` from `env/.env.example` when missing,
     - `go mod download`,
-    - `make doctor-native`.
+    - `make doctor-native`,
+    - `make skills-sync`.
 
 - `make setup-docker`
   - Runs: `./scripts/dev/setup.sh --docker`
   - Includes:
     - create `.env` from `env/.env.example` when missing,
     - pull pinned tool images,
-    - `make doctor-docker`.
+    - `make doctor-docker`,
+    - `make skills-sync`.
 
 - `make doctor`
   - Runs: `./scripts/dev/doctor.sh --mode auto`
@@ -213,16 +215,37 @@ Bootstrap shortcuts:
 - `make docker-go-security`
   - Runs `govulncheck` and `gosec` through Docker tooling container.
 
+- `make docker-guardrails-check`
+  - Runs required repository guardrails check in Docker mode wrapper.
+
+- `make docker-skills-check`
+  - Runs skill mirror consistency check.
+
+- `make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
+  - Runs docs drift policy check through Docker mode wrapper.
+
+- `make docker-migration-validate`
+  - Runs migration rehearsal (`up`, `down 1`, `up 1`) on ephemeral Docker Postgres.
+
+- `make docker-container-security`
+  - Builds `service:ci` image and runs Trivy scan (`HIGH,CRITICAL`).
+
 - `make docker-ci`
-  - Zero-setup composite check:
+  - Zero-setup composite check (closest local equivalent to CI gates):
     - `mod-check`
+    - `guardrails-check`
+    - `skills-check`
     - `fmt-check`
     - `lint`
     - `test`
     - `test-race`
     - `test-cover`
+    - `test-integration` (`REQUIRE_DOCKER=1`)
     - `openapi-check`
     - `go-security`
+    - `migration-validate`
+    - `container-security`
+  - If `BASE_REF` and `HEAD_REF` are provided, also runs docs drift check.
 
 ### CI policy helper checks
 
@@ -238,22 +261,23 @@ Bootstrap shortcuts:
     - run `down 1`
     - run `up 1`
 
-### Skills distribution and sync (legacy utilities)
+### Skills distribution and sync
 
 - `make skills-sync`
   - Runs: `scripts/dev/sync-skills.sh`
-  - Purpose: sync provider-specific skill directories from `skills/` (legacy flow).
+  - Purpose: sync provider-specific skill directories from canonical source `skills/`.
   - Mirrors:
     - `.agents/skills/`
     - `.claude/skills/`
     - `.gemini/skills/`
     - `.github/skills/`
     - `.cursor/skills/`
-  - Note: current writing policy stores runnable skills directly in runtime directories, while `docs/skills/` stores only documentation.
+    - `.opencode/skills/`
+  - Note: `docs/skills/` stores documentation only.
 
 - `make skills-check`
   - Runs: `scripts/dev/sync-skills.sh --check`
-  - Purpose: validate legacy mirror sync with `skills/`.
+  - Purpose: validate mirror sync with source `skills/`.
 
 ### Run and build
 
@@ -287,7 +311,8 @@ Bootstrap shortcuts:
 2. `make init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@your-org/your-team`
 3. `make gh-protect BRANCH=main`
 4. `make mod-check`
-5. `make test`
+5. `make skills-check`
+6. `make test`
 
 ### First run after clone (zero-setup)
 
@@ -317,7 +342,7 @@ Bootstrap shortcuts:
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make fmt-check` + `make docs-drift-check` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make skills-check` + `make fmt-check` + `make docs-drift-check` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
@@ -329,8 +354,8 @@ Local commands map directly to CI jobs:
 - `govulncheck`, `gosec -exclude-generated`, Trivy image scan -> `go-security`, `container-security`
 
 Zero-setup wrappers:
-- `make docker-ci` approximates CI checks without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-go-security`, and `make docker-test-*` mirror native commands.
+- `make docker-ci` runs a near-parity local CI baseline without local Go/Node installs.
+- `make docker-openapi-check`, `make docker-go-security`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:

@@ -36,7 +36,7 @@ Required status checks from `.github/workflows/ci.yml`:
 Notes:
 - `openapi-breaking` runs only for pull requests and should also be required if API compatibility is mandatory.
 - `migration-validate` is conditional and returns a successful skip when no migration files changed.
-- `repo-integrity` includes required guardrails check (`make guardrails-check`) and should not be downgraded to optional.
+- `repo-integrity` includes required guardrails check (`make guardrails-check`) and skills mirror check (`make skills-check`), and should not be downgraded to optional.
 - `go-security` runs `govulncheck` plus `gosec -exclude-generated` to avoid false positives from codegen artifacts.
 - integration jobs run with `REQUIRE_DOCKER=1` to fail fast if Docker is unavailable in CI runners.
 

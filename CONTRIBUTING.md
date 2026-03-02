@@ -31,6 +31,7 @@ make gh-protect BRANCH=main
 
 ```bash
 make fmt-check
+make skills-check
 make lint
 make test
 make openapi-check

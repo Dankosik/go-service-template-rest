@@ -109,6 +109,8 @@ make test && make lint && make openapi-check
 make docker-ci
 ```
 
+`make docker-ci` runs integration tests, migration rehearsal, and container security scan in addition to core checks.
+
 5. Run the service:
 
 ```bash
@@ -119,7 +121,7 @@ make docker-run
 ```
 
 By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
-`make setup` creates `.env` from `env/.env.example` automatically if missing.
+`make setup` creates `.env` from `env/.env.example` automatically if missing and syncs agent skill mirrors.
 `make run` auto-loads `.env` (if present) before starting the service.
 
 6. Optional: enable local Postgres readiness probe:
@@ -173,6 +175,11 @@ make openapi-lint
 make openapi-validate
 make docker-openapi-check
 make docker-go-security
+make docker-guardrails-check
+make docker-skills-check
+make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
+make docker-migration-validate
+make docker-container-security
 make docker-ci
 make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
 make migration-validate MIGRATION_DSN=<postgres_dsn>
@@ -188,7 +195,9 @@ make docker-run
 
 The repository keeps skills in git for clone-and-use workflows across multiple agent tools.
 
-- runnable directories: `.agents/skills/`, `.claude/skills/`, `.gemini/skills/`, `.github/skills/`, `.cursor/skills/`
+- canonical source directory: `skills/`
+
+- runnable directories: `.agents/skills/`, `.claude/skills/`, `.gemini/skills/`, `.github/skills/`, `.cursor/skills/`, `.opencode/skills/`
 - documentation-only directory: `docs/skills/` (guides/specifications, no runnable `SKILL.md`)
 
 Details and provider matrix:

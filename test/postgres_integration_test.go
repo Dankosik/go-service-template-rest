@@ -64,7 +64,7 @@ func runPostgresContainer(ctx context.Context) (container *tcpostgres.PostgresCo
 
 	container, err = tcpostgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		"postgres:17-alpine",
 		tcpostgres.WithDatabase("app"),
 		tcpostgres.WithUsername("app"),
 		tcpostgres.WithPassword("app"),

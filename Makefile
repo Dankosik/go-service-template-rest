@@ -16,7 +16,8 @@ SKILLS_SYNC_SCRIPT := scripts/dev/sync-skills.sh
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
 	setup-native setup-docker doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-ci
+	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-ci \
+	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security
 
 setup:
 	./scripts/dev/setup.sh
@@ -151,6 +152,23 @@ skills-check:
 
 docker-go-security:
 	$(DOCKER_TOOLING_SCRIPT) go-security
+
+docker-guardrails-check:
+	$(DOCKER_TOOLING_SCRIPT) guardrails-check
+
+docker-skills-check:
+	$(DOCKER_TOOLING_SCRIPT) skills-check
+
+docker-docs-drift-check:
+	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)
+	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required"; exit 1)
+	$(DOCKER_TOOLING_SCRIPT) docs-drift-check "$(BASE_REF)" "$(HEAD_REF)"
+
+docker-migration-validate:
+	$(DOCKER_TOOLING_SCRIPT) migration-validate
+
+docker-container-security:
+	$(DOCKER_TOOLING_SCRIPT) container-security
 
 docker-ci:
 	$(DOCKER_TOOLING_SCRIPT) ci

@@ -1,6 +1,7 @@
 bin/
 coverage.out
 .env
+.cache/
 .idea/
 .vscode/
 .DS_Store

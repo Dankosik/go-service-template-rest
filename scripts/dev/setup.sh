@@ -50,6 +50,11 @@ ensure_env_file() {
 	fi
 }
 
+sync_skills_mirrors() {
+	echo "Syncing agent skills mirrors..."
+	"${ROOT_DIR}/scripts/dev/sync-skills.sh" --sync
+}
+
 setup_native() {
 	if ! command -v go >/dev/null 2>&1; then
 		echo "go is required for native setup. install Go from https://go.dev/dl/"
@@ -65,6 +70,8 @@ setup_native() {
 
 	echo "Running environment doctor (native mode)..."
 	"${ROOT_DIR}/scripts/dev/doctor.sh" --mode native || return 1
+
+	sync_skills_mirrors || return 1
 
 	echo "Setup complete (native mode)."
 	echo "Next steps:"
@@ -87,6 +94,8 @@ setup_docker() {
 	ensure_env_file
 	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" pull-images || return 1
 	"${ROOT_DIR}/scripts/dev/doctor.sh" --mode docker || return 1
+
+	sync_skills_mirrors || return 1
 
 	echo "Setup complete (docker mode)."
 	echo "Next steps:"
