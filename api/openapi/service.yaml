@@ -2,6 +2,10 @@ openapi: 3.0.3
 info:
   title: go-service-template-rest
   version: 0.1.0
+servers:
+  - url: http://localhost:8080
+    description: local development
+security: []
 tags:
   - name: system
   - name: app
