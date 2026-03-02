@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	Env      string
+	Version  string
 	HTTP     HTTPConfig
 	Log      LogConfig
 	OTel     OTelConfig
@@ -44,7 +45,8 @@ type PostgresConfig struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		Env: "local",
+		Env:     "local",
+		Version: "dev",
 		HTTP: HTTPConfig{
 			Addr:              ":8080",
 			ShutdownTimeout:   10 * time.Second,
@@ -52,7 +54,7 @@ func Load() (Config, error) {
 			ReadTimeout:       5 * time.Second,
 			WriteTimeout:      10 * time.Second,
 			IdleTimeout:       60 * time.Second,
-			MaxHeaderBytes:    1 << 20,
+			MaxHeaderBytes:    16 << 10,
 			MaxBodyBytes:      1 << 20,
 		},
 		Log: LogConfig{
@@ -67,6 +69,9 @@ func Load() (Config, error) {
 
 	if v, ok := lookupNonEmpty("APP_ENV"); ok {
 		cfg.Env = v
+	}
+	if v, ok := lookupNonEmpty("APP_VERSION"); ok {
+		cfg.Version = v
 	}
 	if v, ok := lookupNonEmpty("HTTP_ADDR"); ok {
 		cfg.HTTP.Addr = v

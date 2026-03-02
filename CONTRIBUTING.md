@@ -8,21 +8,34 @@ This repository is a Go REST service template optimized for beginners and AI-ass
 
 ```bash
 make setup
+# or explicit modes:
+make setup-native
+make setup-docker
 ```
 
 2. Initialize module path once after clone:
 
 ```bash
-make init-module MODULE=github.com/your-org/your-service
+make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+# zero-setup alternative:
+make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
 ```
 
-3. Run baseline checks before opening a PR:
+3. Apply required branch protection/status checks (repo admin):
+
+```bash
+make gh-protect BRANCH=main
+```
+
+4. Run baseline checks before opening a PR:
 
 ```bash
 make fmt-check
 make lint
 make test
 make openapi-check
+# zero-setup equivalent:
+make docker-ci
 ```
 
 If your change is concurrency- or integration-sensitive, also run:

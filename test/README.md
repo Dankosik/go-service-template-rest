@@ -8,6 +8,8 @@ Run locally:
 
 ```bash
 make test-integration
+# zero-setup mode:
+make docker-test-integration
 ```
 
 Local behavior:

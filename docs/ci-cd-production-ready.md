@@ -12,6 +12,15 @@ Enable branch protection for `main` with:
 - Do not allow force pushes.
 - Do not allow deletions.
 
+Automation shortcut for cloned repositories:
+
+```bash
+make gh-protect BRANCH=main
+```
+
+This command configures branch protection via GitHub API (requires `gh` auth and admin permissions).
+Before running it, ensure `.github/CODEOWNERS` does not contain the template placeholder (`@your-org/your-team`).
+
 Required status checks from `.github/workflows/ci.yml`:
 - `repo-integrity`
 - `lint`

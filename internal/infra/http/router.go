@@ -24,19 +24,40 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		},
 	})
 
+	otelMiddleware := otelhttp.NewMiddleware(
+		"http.server",
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			if r != nil && r.Pattern != "" {
+				return r.Pattern
+			}
+			if r != nil && r.Method != "" {
+				return r.Method + " <unmatched>"
+			}
+			return operation
+		}),
+	)
+
+	apiHandler := api.HandlerWithOptions(server, api.StdHTTPServerOptions{
+		Middlewares: []api.MiddlewareFunc{otelMiddleware},
+	})
+
+	// Serve /metrics directly to avoid buffering the full metrics payload in memory.
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", otelMiddleware(strict.metrics.Handler()))
+	mux.Handle("/", apiHandler)
+
 	maxBodyBytes := cfg.MaxBodyBytes
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
 
-	handler := api.Handler(server)
+	var handler http.Handler = mux
 	handler = Recover(log, handler)
 	handler = RequestFramingGuard(handler)
 	handler = RequestBodyLimit(maxBodyBytes, handler)
 	handler = AccessLog(log, strict.metrics, handler)
 	handler = SecurityHeaders(handler)
 	handler = RequestCorrelation(handler)
-	handler = otelhttp.NewHandler(handler, "http.server")
 
 	return handler
 }

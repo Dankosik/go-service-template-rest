@@ -1,8 +1,9 @@
-# Default owner for all repository files.
-* @Dankosik
+# Replace @your-org/your-team before enabling "Require review from Code Owners".
+# Example: * @acme/backend-platform
+* @your-org/your-team
 
 # Critical areas requiring explicit ownership.
-/api/ @Dankosik
-/internal/ @Dankosik
-/.github/workflows/ @Dankosik
-/env/migrations/ @Dankosik
+/api/ @your-org/your-team
+/internal/ @your-org/your-team
+/.github/workflows/ @your-org/your-team
+/env/migrations/ @your-org/your-team

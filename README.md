@@ -33,6 +33,7 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 - `GET /health/live`, `GET /health/ready`, `GET /api/v1/ping`, `GET /metrics`
 - baseline HTTP timeouts and graceful shutdown
 - optional Postgres readiness probe (via `POSTGRES_DSN`)
+- portable Agent Skills in git (`skills/` as source + provider mirrors for Codex/Claude/Cursor/Gemini/Copilot)
 - OpenAPI workflow: codegen (`oapi-codegen`) + lint + validate + breaking check
 - Docker multi-stage + distroless runtime (image digests pinned)
 - repository guardrails: `.editorconfig`, `.gitattributes`, `CODEOWNERS`, PR template, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`
@@ -50,6 +51,7 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 ├── cmd/
 ├── internal/
 ├── env/
+├── skills/
 ├── scripts/
 ├── test/
 ├── .github/workflows/
@@ -58,50 +60,75 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 └── README.md
 ```
 
+## Setup Modes
+
+This template supports two onboarding modes:
+
+- native mode: local `go` + `node` toolchain, regular `make <target>`.
+- zero-setup docker mode: host requires only `git` + running `docker`; run checks with `make docker-<target>`.
+
+`make setup` auto-selects mode:
+- if local `go` exists -> native bootstrap;
+- otherwise, if Docker exists -> zero-setup bootstrap.
+- if native bootstrap fails and Docker is available -> fallback to zero-setup bootstrap.
+
 ## Quick Start
 
-1. Bootstrap local tools and run environment checks:
+1. Bootstrap environment:
 
 ```bash
 make setup
 ```
 
-2. Initialize module path once after clone:
+Use explicit mode selection if needed:
 
 ```bash
-make init-module MODULE=github.com/your-org/your-service
+make setup-native
+make setup-docker
 ```
 
-3. Copy the env template and adjust values if needed:
+2. Initialize module path once after clone (and set your CODEOWNERS team):
 
 ```bash
-cp env/.env.example .env
+make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+# zero-setup alternative:
+make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
 ```
 
-4. Run the service:
+3. Apply branch protection and required checks (repo admin required):
 
 ```bash
-set -a
-source .env
-set +a
-go run ./cmd/service
+make gh-protect BRANCH=main
+```
+
+4. Run baseline validation:
+
+```bash
+make test && make lint && make openapi-check
+# zero-setup alternative:
+make docker-ci
+```
+
+5. Run the service:
+
+```bash
+make run
+# zero-setup alternative:
+make docker-build
+make docker-run
 ```
 
 By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
+`make setup` creates `.env` from `env/.env.example` automatically if missing.
+`make run` auto-loads `.env` (if present) before starting the service.
 
-5. Optional: enable local Postgres readiness probe:
+6. Optional: enable local Postgres readiness probe:
 
 ```bash
 make compose-up
 ```
 
 Set `POSTGRES_DSN` in `.env`, then restart the service.
-
-If Go is not installed locally, you can build the container:
-
-```bash
-make docker-build
-```
 
 ## Endpoints
 
@@ -117,25 +144,55 @@ make docker-build
 ```bash
 make fmt
 make setup
+make setup-native
+make setup-docker
 make doctor
-make init-module MODULE=github.com/your-org/your-service
+make doctor-native
+make doctor-docker
+make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make gh-protect BRANCH=main
 make mod-check
+make docker-mod-check
 make guardrails-check
 make fmt-check
+make docker-fmt
+make docker-fmt-check
 make test
+make docker-test
 make test-race
+make docker-test-race
 make test-cover
+make docker-test-cover
 make test-integration
+make docker-test-integration
 make lint
+make docker-lint
 make openapi-generate
 make openapi-lint
 make openapi-validate
+make docker-openapi-check
+make docker-go-security
+make docker-ci
 make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
 make migration-validate MIGRATION_DSN=<postgres_dsn>
+make skills-sync
+make skills-check
 make build
 make run
 make docker-build
+make docker-run
 ```
+
+## Portable Agent Skills
+
+The repository keeps skills in git for clone-and-use workflows across multiple agent tools.
+
+- runnable directories: `.agents/skills/`, `.claude/skills/`, `.gemini/skills/`, `.github/skills/`, `.cursor/skills/`
+- documentation-only directory: `docs/skills/` (guides/specifications, no runnable `SKILL.md`)
+
+Details and provider matrix:
+- `docs/skills/portable-agent-skills.md`
 
 Check OpenAPI breaking changes locally:
 
@@ -152,6 +209,7 @@ BASE_OPENAPI=/path/to/base-service.yaml make openapi-breaking
 See `env/.env.example`:
 
 - `APP_ENV`
+- `APP_VERSION`
 - `HTTP_ADDR`
 - `HTTP_SHUTDOWN_TIMEOUT`
 - `HTTP_READ_HEADER_TIMEOUT`
@@ -177,6 +235,7 @@ Default HTTP timeout profile for this template:
 - `HTTP_WRITE_TIMEOUT=10s`
 - `HTTP_IDLE_TIMEOUT=60s`
 - `HTTP_SHUTDOWN_TIMEOUT=10s`
+- `HTTP_MAX_HEADER_BYTES=16384`
 - `HTTP_MAX_BODY_BYTES=1048576`
 
 These values are safe defaults for typical JSON APIs. If you add streaming/long-running responses, tune timeouts explicitly for that path or use a dedicated server profile.
@@ -235,3 +294,9 @@ Workflow `.github/workflows/cd.yml` includes:
 
 Repository-level enforcement checklist:
 - `docs/ci-cd-production-ready.md`
+
+To apply branch protection automatically for a cloned repository, run:
+
+```bash
+make gh-protect BRANCH=main
+```

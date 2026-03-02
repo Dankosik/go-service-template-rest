@@ -16,6 +16,7 @@ import (
 
 type TracingConfig struct {
 	ServiceName      string
+	ServiceVersion   string
 	DeploymentEnv    string
 	TracesSampler    string
 	TracesSamplerArg float64
@@ -25,6 +26,10 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	serviceName := strings.TrimSpace(cfg.ServiceName)
 	if serviceName == "" {
 		serviceName = "service"
+	}
+	serviceVersion := strings.TrimSpace(cfg.ServiceVersion)
+	if serviceVersion == "" {
+		serviceVersion = "dev"
 	}
 	deploymentEnv := strings.TrimSpace(cfg.DeploymentEnv)
 	if deploymentEnv == "" {
@@ -41,6 +46,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		resource.WithFromEnv(),
 		resource.WithAttributes(
 			attribute.String("service.name", serviceName),
+			attribute.String("service.version", serviceVersion),
 			attribute.String("deployment.environment.name", deploymentEnv),
 		),
 	)

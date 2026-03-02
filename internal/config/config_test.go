@@ -7,6 +7,7 @@ import (
 
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("APP_ENV", "")
+	t.Setenv("APP_VERSION", "")
 	t.Setenv("HTTP_ADDR", "")
 	t.Setenv("HTTP_SHUTDOWN_TIMEOUT", "")
 	t.Setenv("HTTP_READ_HEADER_TIMEOUT", "")
@@ -29,8 +30,14 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Env != "local" {
 		t.Fatalf("Env = %q, want local", cfg.Env)
 	}
+	if cfg.Version != "dev" {
+		t.Fatalf("Version = %q, want dev", cfg.Version)
+	}
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("Addr = %q, want :8080", cfg.HTTP.Addr)
+	}
+	if cfg.HTTP.MaxHeaderBytes != 16<<10 {
+		t.Fatalf("MaxHeaderBytes = %d, want %d", cfg.HTTP.MaxHeaderBytes, 16<<10)
 	}
 	if cfg.HTTP.ReadTimeout != 5*time.Second {
 		t.Fatalf("ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
@@ -116,6 +123,30 @@ func TestLoadHTTPBodyLimitOverride(t *testing.T) {
 	}
 	if cfg.HTTP.MaxBodyBytes != 2048 {
 		t.Fatalf("MaxBodyBytes = %d, want 2048", cfg.HTTP.MaxBodyBytes)
+	}
+}
+
+func TestLoadHTTPHeaderLimitOverride(t *testing.T) {
+	t.Setenv("HTTP_MAX_HEADER_BYTES", "32768")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.HTTP.MaxHeaderBytes != 32768 {
+		t.Fatalf("MaxHeaderBytes = %d, want 32768", cfg.HTTP.MaxHeaderBytes)
+	}
+}
+
+func TestLoadVersionOverride(t *testing.T) {
+	t.Setenv("APP_VERSION", "1.2.3")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Version != "1.2.3" {
+		t.Fatalf("Version = %q, want %q", cfg.Version, "1.2.3")
 	}
 }
 

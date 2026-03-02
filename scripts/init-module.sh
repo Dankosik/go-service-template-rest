@@ -3,11 +3,13 @@ set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
 	echo "usage: $0 <module-path>"
-	echo "example: $0 github.com/acme/my-service"
+	echo "example: CODEOWNER=@acme/backend-team $0 github.com/acme/my-service"
 	exit 1
 fi
 
 new_module="$1"
+codeowner="${CODEOWNER:-}"
+codeowner_placeholder="@your-org/your-team"
 
 if [[ "$new_module" =~ [[:space:]] ]]; then
 	echo "module path must not contain spaces"
@@ -30,12 +32,29 @@ if [[ -z "$current_module" ]]; then
 	exit 1
 fi
 
+replace_all_in_file() {
+	local file="$1"
+	local old="$2"
+	local new="$3"
+	local tmp_file
+
+	tmp_file="$(mktemp)"
+	awk -v old="$old" -v new="$new" '{
+		line = $0
+		while ((idx = index(line, old)) != 0) {
+			line = substr(line, 1, idx - 1) new substr(line, idx + length(old))
+		}
+		print line
+	}' "$file" >"${tmp_file}"
+	cat "${tmp_file}" >"${file}"
+	rm -f "${tmp_file}"
+}
+
 if [[ "$new_module" == "$current_module" ]]; then
 	echo "module path is already set to $new_module"
-	exit 0
+else
+	go mod edit -module "$new_module"
 fi
-
-go mod edit -module "$new_module"
 
 files=()
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -51,14 +70,29 @@ fi
 for file in "${files[@]}"; do
 	[[ -f "$file" ]] || continue
 	if grep -Fq "$current_module" "$file"; then
-		CURRENT_MODULE="$current_module" NEW_MODULE="$new_module" \
-			perl -i -pe 's/\Q$ENV{CURRENT_MODULE}\E/$ENV{NEW_MODULE}/g' "$file"
+		replace_all_in_file "$file" "$current_module" "$new_module"
 	fi
 done
+
+if [[ -n "$codeowner" ]]; then
+	if [[ "${codeowner}" != @* ]]; then
+		echo "CODEOWNER must start with '@' (for example @acme/backend-team)"
+		exit 1
+	fi
+	if [[ -f ".github/CODEOWNERS" ]] && grep -Fq "${codeowner_placeholder}" ".github/CODEOWNERS"; then
+		replace_all_in_file ".github/CODEOWNERS" "${codeowner_placeholder}" "${codeowner}"
+	fi
+elif [[ -f ".github/CODEOWNERS" ]] && grep -Fq "${codeowner_placeholder}" ".github/CODEOWNERS"; then
+	echo "warning: .github/CODEOWNERS still contains template placeholder ${codeowner_placeholder}"
+	echo "         update CODEOWNERS before enabling required code owner reviews"
+fi
 
 go mod tidy
 
 echo "module path updated:"
 echo "  old: $current_module"
 echo "  new: $new_module"
+if [[ -n "$codeowner" ]]; then
+	echo "  codeowner: ${codeowner}"
+fi
 echo "next step: run 'go test ./...'"

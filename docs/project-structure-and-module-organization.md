@@ -6,10 +6,19 @@ This document explains the `go-service-template-rest` repository layout: what is
 
 ```text
 .
+├── .agents/
+│   └── skills/
+├── .claude/
+│   └── skills/
+├── .cursor/
+│   └── skills/
+├── .gemini/
+│   └── skills/
 ├── .github/
 │   ├── CODEOWNERS
 │   ├── dependabot.yml
 │   ├── pull_request_template.md
+│   ├── skills/
 │   └── workflows/
 │       ├── cd.yml
 │       ├── ci.yml
@@ -85,10 +94,15 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   │   ├── docs-drift-check.sh
 │   │   └── required-guardrails-check.sh
 │   ├── dev/
+│   │   ├── configure-branch-protection.sh
 │   │   ├── doctor.sh
+│   │   ├── sync-skills.sh
 │   │   └── setup.sh
 │   ├── gen.sh
 │   └── init-module.sh
+├── skills/
+│   └── go-architect-spec/
+│       └── SKILL.md
 ├── test/
 │   ├── README.md
 │   └── postgres_integration_test.go
@@ -160,6 +174,14 @@ Why: standard commands for local work and CI without repeating long command line
 ### `docs/`
 Engineering documentation (including LLM instructions and this document).  
 Why: development rules and structure should be explicit and versioned, not scattered in code comments.
+
+### `skills/`
+Reserved directory (not used for runnable skills).  
+Why: runnable skills are stored in provider runtime directories; docs stay in `docs/skills/`.
+
+### `.agents/skills`, `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`
+Provider runtime skill directories (`SKILL.md` files are stored here).  
+Why: these are the locations where agent tools actually load and execute skills.
 
 ### `.github/`
 CI workflow and dependency update automation (Dependabot).  

@@ -35,6 +35,11 @@ func run() (runErr error) {
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.Log.Level}))
+	log = log.With(
+		"service.name", cfg.OTel.ServiceName,
+		"service.version", cfg.Version,
+		"deployment.environment.name", cfg.Env,
+	)
 	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -42,6 +47,7 @@ func run() (runErr error) {
 
 	tracingShutdown, err := telemetry.SetupTracing(ctx, telemetry.TracingConfig{
 		ServiceName:      cfg.OTel.ServiceName,
+		ServiceVersion:   cfg.Version,
 		DeploymentEnv:    cfg.Env,
 		TracesSampler:    cfg.OTel.TracesSampler,
 		TracesSamplerArg: cfg.OTel.TracesSamplerArg,

@@ -8,231 +8,295 @@ Commands in this document come from:
 - `Makefile` (primary interface)
 - `go` toolchain commands used by make targets
 - Docker and compose commands used for local environment
+- Docker-based zero-setup wrapper script (`scripts/dev/docker-tooling.sh`)
 
 ## Prerequisites
 
-- Go toolchain installed (version from `go.mod`)
-- Perl installed (used by `scripts/init-module.sh`)
-- Docker daemon running (required for `compose` and integration scenarios)
-- `golangci-lint` installed for `make lint`
-- Node/npm available for OpenAPI lint (`npx @redocly/cli`)
+This template supports two onboarding modes.
 
-Bootstrap shortcut for beginners:
-- `make setup` to install pinned `golangci-lint`, prepare `.env`, download Go modules, and run `make doctor` checks.
+### Native mode
+
+Required:
+- Go toolchain installed (version from `go.mod`)
+- Node/npm (`npx`) for OpenAPI lint
+- GNU Make
+- Git
+
+Optional:
+- Docker daemon (for integration tests, compose, container build/run)
+- GitHub CLI (`gh`) for `make gh-protect`
+
+### Zero-setup docker mode
+
+Required:
+- Git
+- Docker CLI + running Docker daemon
+
+Optional:
+- GNU Make (convenience wrapper; commands can be called via scripts directly)
+- local Go/Node toolchain (not required in this mode)
+- GitHub CLI (`gh`) for `make gh-protect`
+
+Bootstrap shortcuts:
+- `make setup` (auto-select mode)
+- `make setup-native`
+- `make setup-docker`
 
 ## Command Groups
 
 ### Bootstrap and environment checks
 
 - `make setup`
-  - Runs: `./scripts/dev/setup.sh <golangci-lint-version>`
-  - Purpose: first-run bootstrap for local environment.
+  - Runs: `./scripts/dev/setup.sh`
+  - Purpose: first-run bootstrap with mode auto-detection.
+  - Mode choice:
+    - prefers native mode when local `go` exists;
+    - falls back to docker mode when local `go` is absent and Docker is available.
+    - if native bootstrap fails and Docker is available, switches to docker bootstrap.
+
+- `make setup-native`
+  - Runs: `./scripts/dev/setup.sh --native`
   - Includes:
-    - install pinned `golangci-lint`,
     - create `.env` from `env/.env.example` when missing,
     - `go mod download`,
-    - `make doctor`.
+    - `make doctor-native`.
+
+- `make setup-docker`
+  - Runs: `./scripts/dev/setup.sh --docker`
+  - Includes:
+    - create `.env` from `env/.env.example` when missing,
+    - pull pinned tool images,
+    - `make doctor-docker`.
 
 - `make doctor`
-  - Runs: `./scripts/dev/doctor.sh`
-  - Purpose: check local machine readiness and show missing tooling.
-  - Checks:
-    - required: `make`, `git`, `go`, Go version vs `go.mod`, `node`, `npx`
-    - optional: `golangci-lint`, Docker CLI/daemon
+  - Runs: `./scripts/dev/doctor.sh --mode auto`
+  - Purpose: check local readiness for the selected mode.
+
+- `make doctor-native`
+  - Runs: `./scripts/dev/doctor.sh --mode native`
+  - Highlights:
+    - validates local Go/Node prerequisites;
+    - validates Go version against `go.mod`;
+    - performs Go coverage compile sanity check.
+
+- `make doctor-docker`
+  - Runs: `./scripts/dev/doctor.sh --mode docker`
+  - Highlights:
+    - validates `git`, `docker`, and Docker daemon reachability;
+    - confirms zero-setup path is available.
+
+- `make docker-pull-tools`
+  - Runs: `scripts/dev/docker-tooling.sh pull-images`
+  - Purpose: pre-pull Docker images used by zero-setup commands.
 
 ### Dependency and module maintenance
 
-- `make init-module MODULE=<module_path>`
+- `make init-module MODULE=<module_path> [CODEOWNER=@org/team]`
   - Runs: `./scripts/init-module.sh <module_path>`
-  - Purpose: one-shot bootstrap after clone; updates `go.mod`, internal Go imports, and proto `go_package` module prefix.
+  - Purpose: one-shot bootstrap after clone; updates `go.mod`, internal Go imports, proto `go_package` module prefix, and optionally replaces CODEOWNERS placeholder.
   - Includes: `go mod tidy` at the end.
-  - Example:
-    - `make init-module MODULE=github.com/acme/my-service`
+  - Note: script no longer requires Perl.
+
+- `make docker-init-module MODULE=<module_path> [CODEOWNER=@org/team]`
+  - Runs in Docker tooling container with the same behavior as `make init-module`.
+
+- `make gh-protect BRANCH=<branch>`
+  - Runs: `./scripts/dev/configure-branch-protection.sh <branch>`
+  - Purpose: apply required branch protection and CI status checks for production usage.
+  - Notes:
+    - `.github/CODEOWNERS` must not contain template placeholder (`@your-org/your-team`);
+    - requires `gh auth login`;
+    - requires admin/maintainer permissions.
 
 - `make tidy`
   - Runs: `go mod tidy`
-  - Purpose: clean and sync `go.mod`/`go.sum` with actual imports.
-  - Use when: after adding/removing dependencies.
 
 - `make mod-check`
   - Runs:
     - `go mod tidy -diff`
     - `go mod verify`
     - `git diff --exit-code -- go.mod go.sum`
-  - Purpose: enforce deterministic module integrity without local drift.
-  - Use when: before push and in CI merge-gates.
+
+- `make docker-mod-check`
+  - Docker equivalent of `make mod-check`.
 
 - `make vendor`
   - Runs: `go mod vendor`
-  - Purpose: populate `vendor/` with module dependencies.
-  - Use when: your delivery process requires vendored dependencies.
 
 ### Formatting and static quality
 
 - `make fmt`
   - Runs `gofmt` on all Go files except `vendor/`.
-  - Purpose: enforce canonical Go formatting.
-  - Use when: before commits/PRs and after large edits.
+
+- `make docker-fmt`
+  - Docker equivalent of `make fmt`.
 
 - `make fmt-check`
-  - Runs:
-    - `make fmt`
-    - `git diff --exit-code`
-  - Purpose: fail if formatting would change tracked Go sources.
-  - Use when: CI gate or pre-push validation.
+  - Runs `make fmt` + `git diff --exit-code`.
+
+- `make docker-fmt-check`
+  - Docker equivalent of `make fmt-check`.
 
 - `make lint`
-  - Runs: `golangci-lint run`
-  - Purpose: static checks (including `govet`, `staticcheck`, `errcheck`, `bodyclose`, `sqlclosecheck`, `errorlint`, `contextcheck` per config).
-  - Use when: before pushing and to reproduce CI lint failures.
+  - Runs: `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> run --timeout=3m`
+
+- `make docker-lint`
+  - Docker equivalent of `make lint`.
 
 ### Unit and integration testing
 
 - `make test`
   - Runs: `go test ./...`
-  - Purpose: execute default package test suite.
-  - Use when: baseline local verification.
+
+- `make docker-test`
+  - Docker equivalent of `make test`.
 
 - `make test-race`
   - Runs: `go test -race ./...`
-  - Purpose: detect data races and concurrency issues.
-  - Use when: touching goroutines/channels/shared mutable state.
+
+- `make docker-test-race`
+  - Docker equivalent of `make test-race`.
 
 - `make test-cover`
   - Runs:
     - `go test -covermode=atomic -coverprofile=coverage.out ./...`
     - `go tool cover -func=coverage.out`
-  - Purpose: produce coverage report and summary.
-  - Use when: validating coverage impact of changes.
+
+- `make docker-test-cover`
+  - Docker equivalent of `make test-cover`.
 
 - `make test-integration`
   - Runs: `go test -tags=integration ./test/...`
-  - Purpose: execute integration tests under `test/`.
-  - Use when: validating DB/container-dependent behavior.
-  - Notes:
-    - local mode skips tests when Docker daemon is unavailable;
-    - CI uses `REQUIRE_DOCKER=1` and fails if Docker is unavailable.
+  - Local behavior:
+    - skips when Docker daemon is unavailable.
+  - CI behavior:
+    - `REQUIRE_DOCKER=1` enforces failure when Docker is unavailable.
+
+- `make docker-test-integration`
+  - Docker tooling equivalent of integration tests.
+  - Uses Docker socket passthrough when available.
 
 ### OpenAPI and API contract workflow
 
 - `make openapi-generate`
   - Runs: `go generate ./internal/api`
-  - Purpose: regenerate Go artifacts from OpenAPI spec.
-  - Source spec: `api/openapi/service.yaml`
-  - Generation config: `internal/api/oapi-codegen.yaml`
 
 - `make openapi-drift-check`
-  - Runs:
-    - `git diff -- internal/api` (tracked drift)
-    - `git ls-files --others --exclude-standard -- internal/api` (untracked artifacts)
-  - Purpose: fail if generated OpenAPI artifacts are not in the expected git state.
-  - Use when: after `make openapi-generate` and in CI contract gates.
+  - Checks tracked and untracked codegen drift in `internal/api`.
 
 - `make openapi-runtime-contract-check`
   - Runs: `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1`
-  - Purpose: verify that HTTP runtime behavior is still aligned with OpenAPI strict handler contract.
-  - Use when: after changing `api/openapi/service.yaml` or runtime handler wiring.
 
 - `make openapi-lint`
-  - Runs: `npx @redocly/cli@2.20.0 lint api/openapi/service.yaml`
-  - Purpose: OpenAPI style/rule validation.
+  - Runs: `npx @redocly/cli@2.20.0 lint --config .redocly.yaml api/openapi/service.yaml`
 
 - `make openapi-validate`
   - Runs: `kin-openapi validate` against `api/openapi/service.yaml`
-  - Purpose: schema-level OpenAPI correctness check.
 
 - `make openapi-breaking`
-  - Runs `oasdiff breaking` against:
-    - `BASE_OPENAPI` (required environment variable)
-    - current `api/openapi/service.yaml`
-  - Purpose: detect breaking API changes.
-  - Example:
-    - `BASE_OPENAPI=/path/to/base-service.yaml make openapi-breaking`
+  - Runs `oasdiff breaking` against `BASE_OPENAPI` and current spec.
 
 - `make openapi-check`
   - Composite target:
     - `openapi-generate`
     - `openapi-drift-check`
+    - `go test ./internal/api`
     - `openapi-runtime-contract-check`
     - `openapi-lint`
     - `openapi-validate`
-  - Purpose: run the full contract check in one command.
+
+- `make docker-openapi-check`
+  - Docker equivalent of `make openapi-check`.
+
+### Security and CI-like local checks
+
+- `make docker-go-security`
+  - Runs `govulncheck` and `gosec` through Docker tooling container.
+
+- `make docker-ci`
+  - Zero-setup composite check:
+    - `mod-check`
+    - `fmt-check`
+    - `lint`
+    - `test`
+    - `test-race`
+    - `test-cover`
+    - `openapi-check`
+    - `go-security`
 
 ### CI policy helper checks
 
 - `make guardrails-check`
   - Runs: `scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce mandatory repository process files.
-  - Required files:
-    - `.editorconfig`
-    - `.gitattributes`
-    - `.github/CODEOWNERS`
-    - `.github/pull_request_template.md`
-    - `CONTRIBUTING.md`
-    - `SECURITY.md`
-    - `LICENSE`
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `scripts/ci/docs-drift-check.sh`
-  - Purpose: enforce docs updates when behavior/contract/CI-sensitive paths change.
-  - Trigger paths include:
-    - `api/openapi/service.yaml`
-    - `env/migrations/**`
-    - `Makefile`
-    - `.github/workflows/**`
-    - `cmd/**`
-    - `internal/app/**`
-    - `internal/config/**`
-    - `internal/infra/http/**`
-    - `internal/infra/postgres/**`
-    - `internal/infra/telemetry/**`
-  - Required docs paths:
-    - `docs/**` or `README.md`
 
 - `make migration-validate MIGRATION_DSN=<postgres_dsn>`
   - Runs `golang-migrate` against `env/migrations`:
     - apply all up migrations
     - run `down 1`
     - run `up 1`
-  - Purpose: validate migration chain on ephemeral Postgres in CI.
-  - Use when: migration SQL changed (`env/migrations/**`).
+
+### Skills distribution and sync (legacy utilities)
+
+- `make skills-sync`
+  - Runs: `scripts/dev/sync-skills.sh`
+  - Purpose: sync provider-specific skill directories from `skills/` (legacy flow).
+  - Mirrors:
+    - `.agents/skills/`
+    - `.claude/skills/`
+    - `.gemini/skills/`
+    - `.github/skills/`
+    - `.cursor/skills/`
+  - Note: current writing policy stores runnable skills directly in runtime directories, while `docs/skills/` stores only documentation.
+
+- `make skills-check`
+  - Runs: `scripts/dev/sync-skills.sh --check`
+  - Purpose: validate legacy mirror sync with `skills/`.
 
 ### Run and build
 
 - `make run`
-  - Runs: `go run ./cmd/service`
-  - Purpose: start the service locally without building a binary.
+  - Runs: `go run ./cmd/service` with `.env` auto-loaded when the file exists.
 
 - `make build`
   - Builds static binary:
     - output: `bin/service`
     - flags: `CGO_ENABLED=0`, `-trimpath`, `-ldflags='-s -w'`
-  - Purpose: produce a lightweight local artifact.
 
 ### Container and local environment
 
 - `make docker-build`
   - Runs: `docker build -f build/docker/Dockerfile -t service:local .`
-  - Purpose: build local container image.
+
+- `make docker-run`
+  - Runs: `docker run --rm -p 8080:8080 --env-file .env service:local`
 
 - `make compose-up`
   - Runs: `docker compose -f env/docker-compose.yml up -d`
-  - Purpose: start local infrastructure (for example Postgres).
 
 - `make compose-down`
   - Runs: `docker compose -f env/docker-compose.yml down -v`
-  - Purpose: stop and remove local infrastructure volumes.
 
 ## Recommended Local Workflows
 
-### First run after clone
+### First run after clone (native)
 
-1. `make setup`
-2. `make init-module MODULE=github.com/<your-org>/<your-service>`
-3. `make mod-check`
-4. `make test`
+1. `make setup-native`
+2. `make init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@your-org/your-team`
+3. `make gh-protect BRANCH=main`
+4. `make mod-check`
+5. `make test`
 
-### Feature implementation (typical)
+### First run after clone (zero-setup)
+
+1. `make setup-docker`
+2. `make docker-init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@your-org/your-team`
+3. `make gh-protect BRANCH=main`
+4. `make docker-ci`
+
+### Feature implementation (native)
 
 1. `make fmt`
 2. `make test`
@@ -240,14 +304,13 @@ Bootstrap shortcut for beginners:
 4. If API contract changed: `make openapi-check`
 5. If integration behavior changed: `make test-integration`
 
-### Before opening a PR
+### Feature implementation (zero-setup)
 
-1. `make fmt`
-2. `make lint`
-3. `make test`
-4. `make test-race`
-5. `make openapi-check`
-6. `make test-integration` (if relevant to your change)
+1. `make docker-fmt-check`
+2. `make docker-test`
+3. `make docker-lint`
+4. If API contract changed: `make docker-openapi-check`
+5. If integration behavior changed: `make docker-test-integration`
 
 ## CI Mapping
 
@@ -256,7 +319,7 @@ Main CI workflow: `.github/workflows/ci.yml`
 Local commands map directly to CI jobs:
 - `make mod-check` + `make guardrails-check` + `make fmt-check` + `make docs-drift-check` -> `repo-integrity`
 - `make lint` -> `lint`
-- `make openapi-generate` + `make openapi-drift-check` + `make openapi-runtime-contract-check` + `make openapi-validate` + `make openapi-lint` -> `openapi-contract`
+- `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
 - `make test` -> `test`
 - `make test-race` -> `test-race`
@@ -264,6 +327,10 @@ Local commands map directly to CI jobs:
 - `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
 - `make migration-validate` -> `migration-validate` (only when migrations changed)
 - `govulncheck`, `gosec -exclude-generated`, Trivy image scan -> `go-security`, `container-security`
+
+Zero-setup wrappers:
+- `make docker-ci` approximates CI checks without local Go/Node installs.
+- `make docker-openapi-check`, `make docker-go-security`, and `make docker-test-*` mirror native commands.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:
