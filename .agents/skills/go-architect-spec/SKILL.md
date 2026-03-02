@@ -28,14 +28,16 @@ Out of scope:
 - benchmark or profile plans and performance tuning details
 
 ## Working Rules
-1. Load context using the dynamic loading rules in this file and stop loading when coverage is sufficient.
-2. Frame the architecture problem: constraints, ownership boundaries, and non-negotiables.
-3. For each non-trivial decision, evaluate at least two options and select one explicitly.
-4. Record trade-offs and cross-domain impact (API, data, security, operability) for each selected option.
-5. Mark missing critical facts as `[assumption]` and keep assumptions bounded.
-6. Produce the required deliverables in the required structure.
-7. Check internal consistency: no conflicts and no hidden architectural decisions deferred to coding.
-8. Keep focus on architecture expertise and do not turn the output into workflow management notes.
+1. Determine current `docs/spec-first-workflow.md` phase and pass goal before drafting decisions. Keep decision scope aligned to that phase.
+2. Load context using the dynamic loading rules in this file and stop loading when coverage is sufficient.
+3. Frame the architecture problem: constraints, ownership boundaries, and non-negotiables.
+4. For each non-trivial decision, evaluate at least two options and select one explicitly.
+5. Record trade-offs and cross-domain impact (API, data, security, operability) for each selected option.
+6. Mark missing critical facts as `[assumption]` and keep assumptions bounded.
+7. If an uncertainty blocks a decision, record it in `80-open-questions.md` with owner, unblock condition, and next step.
+8. Produce the required deliverables in the required structure.
+9. Check internal consistency: no conflicts and no hidden architectural decisions deferred to coding.
+10. Keep focus on architecture expertise and do not turn the output into workflow management notes.
 
 ## Architectural Decision Protocol
 For every non-trivial architectural decision, document:
@@ -49,10 +51,17 @@ For every non-trivial architectural decision, document:
 
 ## Output Expectations
 - Response format: architecture specification package with these artifacts.
-- `20-architecture.md`: context and constraints, boundaries and ownership, dependency rules, interaction style, consistency choices, architecture risks and trade-offs.
-- `60-implementation-plan.md`: architecture-safe implementation sequence with no hidden "decision later".
-- `80-open-questions.md`: architecture-only uncertainties and blockers.
-- `90-signoff.md`: final architecture decisions, rationale, risk notes, and reopen criteria.
+- Minimum artifacts per pass:
+  - `20-architecture.md`: context and constraints, boundaries and ownership, dependency rules, interaction style, consistency choices, architecture risks and trade-offs.
+  - `60-implementation-plan.md`: architecture-safe implementation sequence with no hidden "decision later".
+  - `80-open-questions.md`: architecture-only uncertainties and blockers.
+  - `90-signoff.md`: final architecture decisions, rationale, risk notes, and reopen criteria.
+- Conditional alignment artifacts (update when architecture decisions affect them):
+  - `30-api-contract.md`: contract-level architecture implications only.
+  - `40-data-consistency-cache.md`: consistency frame and data-boundary implications.
+  - `50-security-observability-devops.md`: architecture-level security and operability constraints.
+  - `55-reliability-and-resilience.md`: architecture-level timeout/retry/degradation/shutdown policy frame.
+  - `70-test-plan.md`: architecture-driven test obligations only.
 - Language: match the user language when possible.
 - Detail level: concrete and reviewable, with explicit decisions and explicit trade-offs.
 - Constraint: do not drift into low-level implementation details that are out of scope.
@@ -65,12 +74,20 @@ Always load:
 - `docs/project-structure-and-module-organization.md`
 - `docs/llm/go-instructions/30-go-project-layout-and-modules.md`
 - `docs/llm/architecture/10-service-boundaries-and-decomposition.md`
-- `docs/llm/architecture/20-sync-communication-and-api-style.md`
-- `docs/llm/architecture/30-event-driven-and-async-workflows.md`
-- `docs/llm/architecture/40-distributed-consistency-and-sagas.md`
-- `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md`
 
 Load by trigger:
+
+Sync request-reply style, API hop rules, or deadline propagation decisions:
+- `docs/llm/architecture/20-sync-communication-and-api-style.md`
+
+Eventing, async workflows, queue semantics, or outbox/inbox decisions:
+- `docs/llm/architecture/30-event-driven-and-async-workflows.md`
+
+Cross-service consistency, saga choreography/orchestration, or compensation decisions:
+- `docs/llm/architecture/40-distributed-consistency-and-sagas.md`
+
+Failure-domain, degradation, startup/shutdown, retry budget, or rollout safety decisions:
+- `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md`
 
 API surface impact:
 - `docs/llm/api/10-rest-api-design.md`
@@ -97,7 +114,8 @@ Operability or delivery impact:
 - `docs/ci-cd-production-ready.md`
 
 Deep trade-off support:
-- relevant files from `docs/researches/`
+- only when core loaded docs are insufficient for a disputed trade-off or when the user requests evidence
+- use minimal additional repo sources and cite exact file names in decision rationale
 
 Conflict resolution:
 - The more specific document is the decisive rule for that topic.
@@ -106,8 +124,10 @@ Unknowns:
 - If critical facts are missing, proceed with bounded assumptions marked as `[assumption]`.
 
 ## Definition Of Done
-- Required artifacts are present and complete.
-- Architecture frame is internally consistent across `20/40/50/55/60/70` when those files are part of the spec package.
+- Minimum required artifacts `20/60/80/90` are present and complete.
+- If architecture decisions impact API/data/security/reliability/testing contracts, affected files `30/40/50/55/70` are updated or explicitly marked as "no changes required".
+- Architecture frame is internally consistent across all impacted artifacts.
+- Every major decision includes at least one rejected alternative with an explicit rejection reason.
 - No hidden architectural decisions are deferred to coding.
 - Key trade-offs and risks are explicitly documented.
 - Assumptions and constraints are explicit.
