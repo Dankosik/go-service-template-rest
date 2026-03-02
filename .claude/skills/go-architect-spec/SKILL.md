@@ -33,19 +33,26 @@ Out of scope:
    - Phase 0: `00/10/80` and skeleton readiness for `15..90`
    - Phase 1: `20/60/80/90`
    - Phase 2 and later: `20/60/80/90` plus impacted `30/40/50/55/70`
-3. Load context using the dynamic loading rules in this file and stop loading when coverage is sufficient.
+3. Load context using the dynamic loading rules in this file and stop loading when all four architecture axes are source-backed: boundaries/ownership, interaction style, consistency model, resilience/rollout safety.
 4. Frame the architecture problem: constraints, ownership boundaries, and non-negotiables.
-5. For each non-trivial decision, evaluate at least two options and select one explicitly.
-6. Assign a decision ID and owner for each major decision.
+5. For each major architectural decision, evaluate at least two options and select one explicitly.
+6. Assign a decision ID and owner for each major architectural decision.
 7. Record trade-offs and cross-domain impact (API, data, security, operability) for each selected option.
-8. Mark missing critical facts as `[assumption]` and keep assumptions bounded.
+8. Mark missing critical facts as `[assumption]`, keep assumptions bounded, and resolve each assumption by either validating it with a cited source in the current pass or converting it into a blocker in `80-open-questions.md` with owner and unblock condition.
 9. If an uncertainty blocks a decision, record it in `80-open-questions.md` with owner, unblock condition, and next step.
 10. Produce the required deliverables in the required structure.
 11. Check internal consistency: no conflicts and no hidden architectural decisions deferred to coding.
-12. Keep focus on architecture expertise and do not turn the output into workflow management notes.
+12. Keep focus on architecture expertise by stating technical positions, decision rationale, and cross-domain implications in architecture artifacts.
+
+## Decision Classification
+Treat a decision as major architectural when it changes at least one of:
+- service or module boundaries, ownership, or dependency direction
+- interaction style (sync/async) or command/event intent
+- consistency guarantee shape (local transaction, eventual consistency, outbox/saga frame)
+- failure, degradation, recovery, or rollout-safety behavior
 
 ## Architectural Decision Protocol
-For every non-trivial architectural decision, document:
+For every major architectural decision, document:
 1. decision ID (`ARCH-###`) and current phase
 2. owner role
 3. context and problem
@@ -88,10 +95,11 @@ For every non-trivial architectural decision, document:
   - when `Status: updated`, list changed sections and linked decision IDs
 - Language: match the user language when possible.
 - Detail level: concrete and reviewable, with explicit decisions and explicit trade-offs.
-- Constraint: do not drift into low-level implementation details that are out of scope.
+- Constraint: keep the output architecture-level with explicit downstream implementation criteria and reviewable acceptance boundaries.
 
 ## Context Intake (Dynamic Loading)
 Rule: load the smallest sufficient set of docs. Never bulk-load folders by default.
+Stop condition: stop loading once all four architecture axes are covered with at least one source-backed input each: boundaries/ownership, interaction style, consistency model, resilience/rollout safety.
 
 Always load:
 - `docs/spec-first-workflow.md`:
@@ -151,6 +159,7 @@ Conflict resolution:
 
 Unknowns:
 - If critical facts are missing, proceed with bounded assumptions marked as `[assumption]`.
+- Resolve each `[assumption]` by either citing a validating source in the current pass or promoting it to `80-open-questions.md` with owner and unblock condition.
 
 ## Definition Of Done
 - Current phase and target gate are explicitly stated.
@@ -161,6 +170,7 @@ Unknowns:
 - Every major decision includes decision ID, owner, selected option, and at least one rejected option with reason.
 - No hidden architectural decisions are deferred to coding.
 - Key trade-offs, risks, assumptions, and constraints are explicitly documented.
+- Every `[assumption]` is either source-validated or tracked as an open question with owner and unblock condition.
 - Blockers are closed or explicitly recorded with clear owner and next step.
 - Decisions are testable in review without reinterpretation.
 
