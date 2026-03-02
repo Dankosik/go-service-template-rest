@@ -1,15 +1,73 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-	echo "usage: $0 <module-path>"
-	echo "example: CODEOWNER=@acme/backend-team $0 github.com/acme/my-service"
+usage() {
+	echo "usage: $0 [module-path]"
+	echo "examples:"
+	echo "  CODEOWNER=@acme/backend-team $0 github.com/acme/my-service"
+	echo "  CODEOWNER=@acme/backend-team $0   # auto-detect from git remote origin"
+}
+
+if [[ $# -gt 1 ]]; then
+	usage
 	exit 1
 fi
 
-new_module="$1"
+detect_module_from_origin() {
+	local remote_url host path without_scheme
+
+	remote_url="$(git config --get remote.origin.url 2>/dev/null || true)"
+	if [[ -z "${remote_url}" ]]; then
+		return 1
+	fi
+
+	case "${remote_url}" in
+	git@*:* )
+		host="${remote_url#git@}"
+		host="${host%%:*}"
+		path="${remote_url#*:}"
+		;;
+	ssh://git@*/*)
+		without_scheme="${remote_url#ssh://git@}"
+		host="${without_scheme%%/*}"
+		path="${without_scheme#*/}"
+		;;
+	http://*|https://*)
+		without_scheme="${remote_url#*://}"
+		host="${without_scheme%%/*}"
+		path="${without_scheme#*/}"
+		;;
+	*)
+		return 1
+		;;
+	esac
+
+	path="${path%.git}"
+	path="${path#/}"
+	path="${path%/}"
+	host="${host%/}"
+	host="${host%%:*}"
+
+	if [[ -z "${host}" || -z "${path}" || "${path}" == "${remote_url}" ]]; then
+		return 1
+	fi
+
+	printf '%s/%s\n' "${host}" "${path}"
+}
+
+new_module="${1:-}"
 codeowner="${CODEOWNER:-}"
 codeowner_placeholder="@your-org/your-team"
+
+if [[ -z "${new_module}" ]]; then
+	new_module="$(detect_module_from_origin || true)"
+	if [[ -z "${new_module}" ]]; then
+		echo "module path is required when auto-detection from git remote origin is unavailable"
+		usage
+		exit 1
+	fi
+	echo "Auto-detected module path from origin: ${new_module}"
+fi
 
 if [[ "$new_module" =~ [[:space:]] ]]; then
 	echo "module path must not contain spaces"

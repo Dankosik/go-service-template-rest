@@ -79,7 +79,8 @@ Bootstrap shortcuts:
   - Highlights:
     - validates local Go/Node prerequisites;
     - validates Go version against `go.mod`;
-    - performs Go coverage compile sanity check.
+    - performs Go compile sanity check (required);
+    - performs Go coverage compile sanity check (optional warning-only).
 
 - `make doctor-docker`
   - Runs: `./scripts/dev/doctor.sh --mode docker`
@@ -93,13 +94,14 @@ Bootstrap shortcuts:
 
 ### Dependency and module maintenance
 
-- `make init-module MODULE=<module_path> [CODEOWNER=@org/team]`
-  - Runs: `./scripts/init-module.sh <module_path>`
+- `make init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
+  - Runs: `./scripts/init-module.sh [module-path]`
   - Purpose: one-shot bootstrap after clone; updates `go.mod`, internal Go imports, proto `go_package` module prefix, and optionally replaces CODEOWNERS placeholder.
+  - If `MODULE` is omitted, script auto-detects module path from `git remote origin`.
   - Includes: `go mod tidy` at the end.
   - Note: script no longer requires Perl.
 
-- `make docker-init-module MODULE=<module_path> [CODEOWNER=@org/team]`
+- `make docker-init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
   - Runs in Docker tooling container with the same behavior as `make init-module`.
 
 - `make gh-protect BRANCH=<branch>`
@@ -134,10 +136,10 @@ Bootstrap shortcuts:
   - Docker equivalent of `make fmt`.
 
 - `make fmt-check`
-  - Runs `make fmt` + `git diff --exit-code`.
+  - Fails only when `gofmt -l` reports unformatted Go files.
 
 - `make docker-fmt-check`
-  - Docker equivalent of `make fmt-check`.
+  - Docker equivalent of `make fmt-check` (same `gofmt -l` behavior).
 
 - `make lint`
   - Runs: `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> run --timeout=3m`
@@ -161,8 +163,12 @@ Bootstrap shortcuts:
 
 - `make test-cover`
   - Runs:
-    - `go test -covermode=atomic -coverprofile=coverage.out ./...`
+    - `GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...`
     - `go tool cover -func=coverage.out`
+
+- `make test-cover-local`
+  - Runs same coverage flow as `test-cover`, but degrades to warning when local coverage tooling is unhealthy.
+  - Intended for beginner-friendly local checks (`ci-local`) where regular tests already passed.
 
 - `make docker-test-cover`
   - Docker equivalent of `make test-cover`.
@@ -211,6 +217,27 @@ Bootstrap shortcuts:
   - Docker equivalent of `make openapi-check`.
 
 ### Security and CI-like local checks
+
+- `make go-security`
+  - Runs native `govulncheck` and `gosec -exclude-generated`.
+
+- `make ci-local`
+  - Native composite check for beginner-friendly local parity:
+    - `mod-check`
+    - `guardrails-check`
+    - `skills-check`
+    - `fmt-check`
+    - `lint`
+    - `test`
+    - `test-race`
+    - `test-cover-local`
+    - `openapi-check`
+    - `go-security`
+  - When Docker daemon is reachable, also runs:
+    - `test-integration` (`REQUIRE_DOCKER=1`)
+    - `docker-migration-validate`
+    - `docker-container-security`
+  - When Docker is unavailable, docker-only checks are skipped with a clear message.
 
 - `make docker-go-security`
   - Runs `govulncheck` and `gosec` through Docker tooling container.
@@ -308,16 +335,14 @@ Bootstrap shortcuts:
 ### First run after clone (native)
 
 1. `make setup-native`
-2. `make init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@your-org/your-team`
+2. `make init-module CODEOWNER=@your-org/your-team`
 3. `make gh-protect BRANCH=main`
-4. `make mod-check`
-5. `make skills-check`
-6. `make test`
+4. `make ci-local`
 
 ### First run after clone (zero-setup)
 
 1. `make setup-docker`
-2. `make docker-init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@your-org/your-team`
+2. `make docker-init-module CODEOWNER=@your-org/your-team`
 3. `make gh-protect BRANCH=main`
 4. `make docker-ci`
 
@@ -351,7 +376,7 @@ Local commands map directly to CI jobs:
 - `make test-cover` -> `test-coverage`
 - `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
 - `make migration-validate` -> `migration-validate` (only when migrations changed)
-- `govulncheck`, `gosec -exclude-generated`, Trivy image scan -> `go-security`, `container-security`
+- `make go-security` and Trivy image scan -> `go-security`, `container-security`
 
 Zero-setup wrappers:
 - `make docker-ci` runs a near-parity local CI baseline without local Go/Node installs.

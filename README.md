@@ -71,6 +71,7 @@ This template supports two onboarding modes:
 - if local `go` exists -> native bootstrap;
 - otherwise, if Docker exists -> zero-setup bootstrap.
 - if native bootstrap fails and Docker is available -> fallback to zero-setup bootstrap.
+- `make doctor-native` reports coverage-toolchain issues as optional warnings (does not block setup).
 
 ## Quick Start
 
@@ -90,9 +91,16 @@ make setup-docker
 2. Initialize module path once after clone (and set your CODEOWNERS team):
 
 ```bash
-make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make init-module CODEOWNER=@your-org/your-team
 # zero-setup alternative:
-make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make docker-init-module CODEOWNER=@your-org/your-team
+```
+
+`init-module` auto-detects `MODULE` from `git remote origin` when omitted.  
+You can still pass it explicitly:
+
+```bash
+make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
 ```
 
 3. Apply branch protection and required checks (repo admin required):
@@ -104,12 +112,15 @@ make gh-protect BRANCH=main
 4. Run baseline validation:
 
 ```bash
-make test && make lint && make openapi-check
+make ci-local
 # zero-setup alternative:
 make docker-ci
 ```
 
-`make docker-ci` runs integration tests, migration rehearsal, and container security scan in addition to core checks.
+`make ci-local` runs the native quality baseline (mod/fmt/lint/tests/OpenAPI/security).
+It uses resilient local coverage (`test-cover-local`) to avoid blocking on known host toolchain coverage issues.
+If Docker daemon is reachable, it also runs integration tests, migration rehearsal, and container scan.
+`make docker-ci` runs the full zero-setup CI-equivalent path.
 
 5. Run the service:
 
@@ -151,8 +162,8 @@ make setup-docker
 make doctor
 make doctor-native
 make doctor-docker
-make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
-make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make init-module CODEOWNER=@your-org/your-team
+make docker-init-module CODEOWNER=@your-org/your-team
 make gh-protect BRANCH=main
 make mod-check
 make docker-mod-check
@@ -165,10 +176,13 @@ make docker-test
 make test-race
 make docker-test-race
 make test-cover
+make test-cover-local
 make docker-test-cover
 make test-integration
 make docker-test-integration
 make lint
+make go-security
+make ci-local
 make docker-lint
 make openapi-generate
 make openapi-lint

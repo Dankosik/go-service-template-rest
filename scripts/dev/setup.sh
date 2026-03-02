@@ -75,8 +75,8 @@ setup_native() {
 
 	echo "Setup complete (native mode)."
 	echo "Next steps:"
-	echo "  1) make init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@<your-org>/<your-team>"
-	echo "  2) make test && make lint"
+	echo "  1) make init-module CODEOWNER=@<your-org>/<your-team>   # MODULE auto-detects from origin when omitted"
+	echo "  2) make ci-local"
 	echo "  3) make gh-protect BRANCH=main  # requires GitHub admin permissions"
 }
 
@@ -99,7 +99,7 @@ setup_docker() {
 
 	echo "Setup complete (docker mode)."
 	echo "Next steps:"
-	echo "  1) make docker-init-module MODULE=github.com/<your-org>/<your-service> CODEOWNER=@<your-org>/<your-team>"
+	echo "  1) make docker-init-module CODEOWNER=@<your-org>/<your-team>   # MODULE auto-detects from origin when omitted"
 	echo "  2) make docker-ci"
 	echo "  3) make gh-protect BRANCH=main  # requires GitHub admin permissions"
 }
@@ -116,6 +116,7 @@ auto)
 			setup_docker
 		else
 			echo "native setup failed and docker fallback is unavailable"
+			echo "fix native issues with 'make doctor-native' or start Docker and rerun 'make setup-docker'"
 			exit 1
 		fi
 	elif command -v docker >/dev/null 2>&1; then

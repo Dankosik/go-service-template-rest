@@ -137,7 +137,7 @@ check_template_placeholders() {
 	template_module="github.com/example/go-service-template-rest"
 	current_module="$(awk '/^module /{print $2; exit}' go.mod)"
 	if [[ "${current_module}" == "${template_module}" ]]; then
-		fail_optional "go.mod still uses template module path. Run 'make init-module MODULE=github.com/<your-org>/<your-service>' (or 'make docker-init-module ...')."
+		fail_optional "go.mod still uses template module path. Run 'make init-module' (auto-detect) or pass MODULE explicitly."
 	fi
 
 	codeowner_placeholder="@your-org/your-team"
@@ -164,11 +164,24 @@ check_native_go() {
 		fail_required "Go version $current_go is lower than required $required_go"
 	fi
 
-	if go test -covermode=atomic -run '^$' ./internal/api >/dev/null 2>&1; then
+	if env -u GOCOVERDIR go test -run '^$' ./internal/api >/dev/null 2>&1; then
+		ok "Go compile sanity check passed"
+	else
+		fail_required "Go compile sanity check failed. Run 'go clean -cache -testcache' and retry; if it still fails, reinstall Go or use zero-setup docker mode."
+	fi
+
+	local coverage_check_log
+	coverage_check_log="$(mktemp)"
+	if env -u GOCOVERDIR go test -covermode=atomic -run '^$' ./internal/api >"${coverage_check_log}" 2>&1; then
 		ok "Go coverage compile sanity check passed"
 	else
-		fail_required "Go coverage compile sanity check failed. Reinstall Go toolchain and remove conflicting custom GOROOT/GOTOOLDIR settings."
+		if grep -Eq 'does not match go tool version' "${coverage_check_log}"; then
+			fail_optional "Go coverage tooling mismatch detected. Run 'go clean -cache -testcache', unset GOCOVERDIR, or use 'make setup-docker'."
+		else
+			fail_optional "Go coverage compile sanity check failed. Run 'go test -covermode=atomic -run \"^$\" ./internal/api' for details."
+		fi
 	fi
+	rm -f "${coverage_check_log}"
 }
 
 echo "Running local environment checks from $ROOT_DIR (mode=${mode})"

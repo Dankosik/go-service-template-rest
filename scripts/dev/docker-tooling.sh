@@ -3,12 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-GO_IMAGE="${GO_IMAGE:-golang:1.25.7-bookworm}"
-NODE_IMAGE="${NODE_IMAGE:-node:20.19.0-bookworm}"
-GOLANGCI_LINT_IMAGE="${GOLANGCI_LINT_IMAGE:-golangci/golangci-lint:v2.10.1}"
-POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17}"
-MIGRATE_IMAGE="${MIGRATE_IMAGE:-migrate/migrate:v4.19.0}"
-TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.65.0}"
+GO_IMAGE="${GO_IMAGE:-golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1}"
+NODE_IMAGE="${NODE_IMAGE:-node:20.19.0-bookworm@sha256:a5fb035ac1dff34a4ecaea85f90f7321185695d3fd22c12ba12f4535a4647cc5}"
+GOLANGCI_LINT_IMAGE="${GOLANGCI_LINT_IMAGE:-golangci/golangci-lint:v2.10.1@sha256:ea84d14c2fef724411be7dc45e09e6ef721d748315252b02df19a7e3113ee763}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17@sha256:2cd82735a36356842d5eb1ef80db3ae8f1154172f0f653db48fde079b2a0b7f7}"
+MIGRATE_IMAGE="${MIGRATE_IMAGE:-migrate/migrate:v4.19.0@sha256:d5c978181e3bfa55cc50e3bd8d7da3d87418a87693453250a8804b81ee6494db}"
+TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.65.0@sha256:a22415a38938a56c379387a8163fcb0ce38b10ace73e593475d3658d578b2436}"
 REDOCLY_CLI_VERSION="${REDOCLY_CLI_VERSION:-2.20.0}"
 KIN_OPENAPI_VALIDATE_VERSION="${KIN_OPENAPI_VALIDATE_VERSION:-v0.133.0}"
 GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
@@ -22,7 +22,7 @@ usage() {
 	echo "commands:"
 	echo "  doctor"
 	echo "  pull-images"
-	echo "  init-module <module-path>   (uses CODEOWNER env optionally)"
+	echo "  init-module [module-path]   (uses CODEOWNER env optionally; auto-detects from origin when omitted)"
 	echo "  mod-check"
 	echo "  fmt"
 	echo "  fmt-check"
@@ -243,27 +243,35 @@ pull-images)
 	;;
 init-module)
 	module_path="${1:-}"
-	if [[ -z "${module_path}" ]]; then
-		echo "init-module requires <module-path>"
-		exit 1
-	fi
-	shift || true
-	if [[ $# -ne 0 ]]; then
-		echo "init-module accepts only one argument: <module-path>"
+	if [[ $# -gt 1 ]]; then
+		echo "init-module accepts at most one argument: [module-path]"
 		exit 1
 	fi
 	ensure_docker
 	mkdir -p "${ROOT_DIR}/.cache/go-mod" "${ROOT_DIR}/.cache/go-build"
-	docker run \
-		--rm \
-		-u "${host_uid}:${host_gid}" \
-		-v "${ROOT_DIR}:/workspace" \
-		-w /workspace \
-		-e CODEOWNER="${CODEOWNER:-}" \
-		-e GOMODCACHE=/workspace/.cache/go-mod \
-		-e GOCACHE=/workspace/.cache/go-build \
-		"${GO_IMAGE}" \
-		bash -lc "./scripts/init-module.sh \"${module_path}\""
+	if [[ -n "${module_path}" ]]; then
+		docker run \
+			--rm \
+			-u "${host_uid}:${host_gid}" \
+			-v "${ROOT_DIR}:/workspace" \
+			-w /workspace \
+			-e CODEOWNER="${CODEOWNER:-}" \
+			-e GOMODCACHE=/workspace/.cache/go-mod \
+			-e GOCACHE=/workspace/.cache/go-build \
+			"${GO_IMAGE}" \
+			bash -lc "./scripts/init-module.sh \"${module_path}\""
+	else
+		docker run \
+			--rm \
+			-u "${host_uid}:${host_gid}" \
+			-v "${ROOT_DIR}:/workspace" \
+			-w /workspace \
+			-e CODEOWNER="${CODEOWNER:-}" \
+			-e GOMODCACHE=/workspace/.cache/go-mod \
+			-e GOCACHE=/workspace/.cache/go-build \
+			"${GO_IMAGE}" \
+			bash -lc "./scripts/init-module.sh"
+	fi
 	;;
 mod-check)
 	run_go "GOFLAGS= go mod tidy -diff && go mod verify"
@@ -273,8 +281,7 @@ fmt)
 	run_go "gofmt -w \$(find . -type f -name '*.go' -not -path './vendor/*')"
 	;;
 fmt-check)
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt
-	git -C "${ROOT_DIR}" diff --exit-code
+	run_go "unformatted=\$(gofmt -l \$(find . -type f -name '*.go' -not -path './vendor/*')); if [[ -n \"\${unformatted}\" ]]; then echo 'gofmt required for:'; echo \"\${unformatted}\"; exit 1; fi"
 	;;
 test)
 	run_go "go test ./..."
@@ -283,7 +290,7 @@ test-race)
 	run_go "go test -race ./..."
 	;;
 test-cover)
-	run_go "go test -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
+	run_go "GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
 	;;
 test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."

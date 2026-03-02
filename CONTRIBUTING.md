@@ -16,10 +16,13 @@ make setup-docker
 2. Initialize module path once after clone:
 
 ```bash
-make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make init-module CODEOWNER=@your-org/your-team
 # zero-setup alternative:
-make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+make docker-init-module CODEOWNER=@your-org/your-team
 ```
+
+`init-module` auto-detects `MODULE` from `git remote origin` when omitted.  
+You can still pass `MODULE` explicitly if needed.
 
 3. Apply required branch protection/status checks (repo admin):
 
@@ -30,11 +33,7 @@ make gh-protect BRANCH=main
 4. Run baseline checks before opening a PR:
 
 ```bash
-make fmt-check
-make skills-check
-make lint
-make test
-make openapi-check
+make ci-local
 # zero-setup equivalent:
 make docker-ci
 ```
