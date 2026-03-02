@@ -18,6 +18,7 @@ Runnable skill locations:
 .gemini/skills/
 .github/skills/
 .cursor/skills/
+.opencode/skills/
 ```
 
 Documentation-only location:

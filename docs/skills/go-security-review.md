@@ -1,109 +1,252 @@
-# Skill Spec: `go-security-review` (Domain-Scoped Review)
+# Skill Spec: `go-security-review` (Domain Hard Skills)
 
 ## 1. Назначение
 
 `go-security-review` — экспертный review-skill по security-корректности Go-кода в Phase 4 (`Domain-Scoped Code Review`) spec-first workflow.
 
 Ценность skill:
-- выявляет security-регрессии до merge в реализациях, которые уже прошли фазу spec sign-off;
-- проверяет соответствие кода утвержденным security-решениям и fail-closed ожиданиям;
-- дает actionable findings в security-домене без захвата смежных review-ролей.
+- обнаруживает exploit-ready уязвимости и security-регрессии до merge;
+- проверяет, что реализация соблюдает утвержденный security intent из spec-пакета;
+- формирует actionable findings с `file:line`, реальным impact и минимальным безопасным fix-path;
+- повышает воспроизводимость качества security review между задачами с похожим risk-profile.
 
-Workflow-контур (`phases`, `gates`, `freeze/reopen`) задается в `docs/spec-first-workflow.md`; этот skill отвечает только за security-review экспертизу в рамках Phase 4.
+Workflow-контур (`phases`, `gates`, `freeze/reopen`) задается в `docs/spec-first-workflow.md`; этот skill отвечает только за security-domain review в рамках Phase 4.
 
-## 2. Ядро Экспертизы
+## 2. Формат Hard Skills (как в AGENTS.md)
 
-`go-security-review` принимает решения по:
-- корректности trust-boundary enforcement в измененных участках кода;
-- корректности `AuthN/AuthZ` и tenant/object-level access control;
-- качеству input validation и bounded parsing для untrusted input;
-- предотвращению injection-классов (SQL/NoSQL/command/template);
-- SSRF-контролям и безопасности outbound HTTP/RPC вызовов;
-- path traversal и file/upload безопасности;
-- управлению секретами и предотвращению утечек sensitive data в API/errors/logs/traces;
-- abuse-resistance контролям (timeouts, limits, bounded concurrency, rate semantics);
-- security fail-path поведению (deny-by-default/fail-closed);
-- traceability security-обязательств к approved spec artifacts и тестовым обязательствам.
+Для `go-security-review` hard skills фиксируются в формате, совместимом со стилем `AGENTS.md` и уже усиленных skill-пакетов:
+- `Mission`: что именно skill защищает на merge-path;
+- `Default Posture`: инженерные презумпции по умолчанию;
+- доменные компетенции (`... Competency`) с операциональными критериями проверки;
+- `Evidence Threshold`: обязательный уровень доказательности finding-ов;
+- `Review Blockers For This Skill`: что является merge-blocking в security-domain.
 
-## 3. Ответственность В Spec-First Workflow
+Такой формат делает skill не только процессным, но и автономным носителем предметной экспертизы.
+
+## 3. Персонализированные Hard Skills Для `go-security-review`
+
+### 3.1 Mission
+
+- Блокировать merge небезопасных изменений, которые нарушают доверенные границы, authz-модель и базовые secure-by-default контракты.
+- Переводить security-риски из «общих рекомендаций» в проверяемые findings с эксплуатационным контекстом.
+- Удерживать review строго в security-domain без смешения ownership соседних review-ролей.
+
+### 3.2 Default Posture
+
+- Любой input (`HTTP`, `queue`, `webhook`, `file`, `downstream data`) считается untrusted до явной валидации.
+- Internal traffic не считается trusted by default.
+- Для security-critical путей действует fail-closed и deny-by-default.
+- Отсутствие лимитов/таймаутов/tenant scope трактуется как дефект, пока не доказано обратное.
+- Любое отклонение от baseline требует явного spec reference или `Spec Reopen`.
+
+### 3.3 Spec-First Review Competency
+
+- Соблюдать Phase 4 ограничения из `docs/spec-first-workflow.md`:
+  - findings только в security-domain;
+  - точные `file:line`;
+  - practical fix path;
+  - `Spec Reopen` при конфликте с утвержденным intent.
+- Открытые `critical/high` findings считаются blocker для `Gate G4`.
+- Комментарии review не меняют approved security-contract неявно.
+
+### 3.4 Trust Boundary And Input Validation Competency
+
+- Проверять boundary-first validation до side effects.
+- Требовать strict JSON discipline на mutable endpoints:
+  - `http.MaxBytesReader` до decode;
+  - `DisallowUnknownFields()`;
+  - reject trailing tokens.
+- Проверять allowlist-подход для enum/range/format/filter/sort/state-transition.
+- Блокировать blacklist-only validation и позднюю валидацию после начала side effects.
+- Проверять transport/input limits: header/URI/body/multipart/filter complexity.
+
+### 3.5 AuthN/AuthZ/Tenant Isolation Competency
+
+- Жестко разделять AuthN findings и AuthZ findings.
+- Проверять полноту AuthN (signature/iss/aud/lifetime/alg и доверенная key chain).
+- Проверять object-level authorization в resource-by-ID путях.
+- Проверять caller/subject separation для mixed identity flows.
+- Проверять tenant scope end-to-end: service -> repository -> cache -> async.
+- Рассматривать default-allow, implicit superuser и tenant mismatch как high-risk.
+
+### 3.6 Injection, Query, Template, Command Competency
+
+- Проверять parameterized SQL/NoSQL доступ и allowlist dynamic identifiers.
+- Запрещать прямое использование raw client JSON как query/filter DSL.
+- Блокировать shell-based command execution (`sh -c`, `bash -c`, `cmd /c`) с user influence.
+- Проверять safe templating (`html/template` для HTML).
+- Любая user-influenced строковая сборка query/path/command без allowlist — finding.
+
+### 3.7 Outbound Security And SSRF Competency
+
+- Проверять явные outbound deadlines/timeouts и context propagation.
+- Для user-influenced targets требовать SSRF policy:
+  - allowlist scheme/host/port;
+  - DNS-resolved block private/loopback/link-local/multicast;
+  - redirect re-check.
+- Блокировать security-sensitive use of `http.Get`/`http.DefaultClient`.
+- Проверять, что code controls и network egress controls не противоречат друг другу.
+
+### 3.8 Filesystem, Path, And Upload Competency
+
+- Проверять root-constrained file access (`os.OpenInRoot`/equivalent boundary).
+- Запрещать trust client filename/path как storage key.
+- Проверять upload pipeline:
+  - size limit before parse;
+  - streaming over full-memory read;
+  - extension allowlist + content sniffing;
+  - storage outside webroot.
+- Для malware/content-scan flows требовать publish-after-scan semantics.
+
+### 3.9 Secrets, Error Disclosure, And Debug Surface Competency
+
+- Проверять sanitized client errors (без stack traces/SQL/internal topology).
+- Проверять redaction policy для logs/metrics/traces (no secrets/tokens/DSN/raw auth headers/PII dump).
+- Проверять, что correlation IDs используются только для observability, не для authz решений.
+- Проверять isolate-by-default админ/дебаг поверхность (`pprof`, `expvar`, debug handlers).
+- Утечка чувствительных данных в telemetry считается security finding.
+
+### 3.10 Abuse Resistance And Failure Semantics Competency
+
+- Проверять bounded resources:
+  - timeout budgets;
+  - bounded concurrency/queues;
+  - rate limits/quota semantics;
+  - retry budgets.
+- Проверять retry classification и idempotency alignment.
+- Проверять корректное overload mapping (`429` vs `503`) и safe caller behavior.
+- В security-critical dependencies проверять отсутствие unsafe fail-open.
+- Блокировать unbounded fan-out/retries/buffering на protected flows.
+
+### 3.11 Async Identity And Distributed Security Competency
+
+- Проверять отсутствие raw bearer token в async payloads.
+- Проверять integrity/authenticity envelope для async identity.
+- Проверять dedup/idempotency и durable ack ordering (`ack after durable state`).
+- Проверять correlation continuity across retry/DLQ.
+- Фиксировать dual-write и inconsistent outbox/inbox практики как security-impacting risks.
+
+### 3.12 Data/Cache/Migration Security Competency
+
+- Проверять least-privilege DB roles и query logging without sensitive interpolation.
+- Проверять tenant-safe cache key schema (`tenant + scope + version` where required).
+- Запрещать shared-cache reuse для private/per-user responses.
+- Проверять migration/backfill влияние на tenant boundaries, PII lifecycle, deletion guarantees.
+- Проверять rollback realism и неотложенные security последствия destructive migration steps.
+
+### 3.13 Delivery And Runtime Hardening Competency
+
+- Проверять merge-gate evidence path для security-sensitive changes:
+  - `go test ./...`;
+  - `go test -race ./...` (when concurrency-sensitive);
+  - `go vet ./...`;
+  - `govulncheck ./...`;
+  - `gosec ./...`;
+  - container scan / runtime hardening checks where impacted.
+- Проверять container hardening baseline (non-root, minimal base, no TLS verification bypass).
+- Ослабление blocking security gates без expiry/owner/rationale — blocker.
+
+### 3.14 Security Test Traceability Competency
+
+- Любой существенный finding должен трассироваться в `70-test-plan.md` как negative-path obligation.
+- Для changed critical paths ожидать тесты по категориям (если применимо):
+  - wrong tenant / object ownership;
+  - insufficient role/scope;
+  - forged/invalid token or signature;
+  - malformed/oversized payload;
+  - idempotency conflict/replay;
+  - SSRF/path traversal/injection attempts.
+- Отсутствие security-negative coverage для high-risk change должно фиксироваться как finding или residual risk.
+
+### 3.15 Evidence Threshold And Severity Calibration
+
+Каждая нетривиальная security-находка обязана содержать:
+- точный `file:line`;
+- `Axis` и нарушенное правило/контракт;
+- реалистичные attacker preconditions;
+- affected trust boundary/data asset;
+- минимально безопасный corrective action;
+- ссылку на spec source.
+
+Severity:
+- `critical`: подтвержденная exploitable high-impact vulnerability;
+- `high`: сильное доказательство серьезного security-contract breach;
+- `medium`: ограниченная, но значимая уязвимость/слабость;
+- `low`: локальный hardening gap.
+
+### 3.16 Assumption And Uncertainty Discipline
+
+- Неизвестные критичные факты маркируются как `[assumption]`.
+- Отсутствие spec-артефактов маркируется как `[assumption: missing-spec-artifacts]`.
+- Любая unresolved assumption с merge-impact идет в `Residual Risks` или `Spec Reopen`.
+- Неопределенность не маскируется общими формулировками.
+
+### 3.17 Review Blockers For This Skill
+
+- Нет trust-boundary validation/strict parsing/size limits на untrusted input.
+- Broken/missing AuthN/AuthZ/tenant/object checks на измененных путях.
+- Exploitable injection/SSRF/path traversal/unsafe upload patterns.
+- Secret/PII leakage в responses/errors/logs/traces/metrics/debug endpoints.
+- Unbounded abuse vectors (timeout/retry/concurrency/queue/memory) на sensitive operations.
+- Async replay/duplication/ack-order defects с security impact.
+- Ослабленные security gates без формального approved exception.
+- Security fix конфликтует с approved spec intent и не эскалирован через `Spec Reopen`.
+
+## 4. Матрица Переноса Из Referenced Docs
+
+| Источник | Что перенесено в hard skills | Где зафиксировано |
+|---|---|---|
+| `docs/spec-first-workflow.md` | Phase 4 domain boundaries, Gate G4 blocking logic, findings protocol, Spec Reopen discipline | `Spec-First Review Competency`, `Evidence Threshold`, `Review Blockers` |
+| `docs/llm/go-instructions/70-go-review-checklist.md` | Review posture: correctness-first, actionable evidence, validation command baseline | `Default Posture`, `Evidence Threshold`, `Delivery And Runtime Hardening Competency` |
+| `docs/llm/security/10-secure-coding.md` | strict input/output/injection/SSRF/path/upload/command/unsafe defaults and merge-gate criteria | `Trust Boundary`, `Injection`, `Outbound SSRF`, `Filesystem/Upload`, `Abuse Resistance`, `Review Blockers` |
+| `docs/llm/security/20-authn-authz-and-service-identity.md` | AuthContext model, deny-by-default, JWT/mTLS checks, tenant isolation, sync/async identity propagation | `AuthN/AuthZ/Tenant`, `Async Identity`, `Default Posture`, `Review Blockers` |
+| `docs/llm/api/10-rest-api-design.md` | retry/idempotency semantics, status/error model, async `202` contract, consistency disclosure | `Abuse Resistance`, `Evidence Threshold`, `Security Test Traceability` |
+| `docs/llm/api/30-api-cross-cutting-concerns.md` | validation pipeline order, input limits, identity/tenant context trust rules, rate limit semantics, middleware baseline | `Trust Boundary`, `AuthN/AuthZ/Tenant`, `Abuse Resistance`, `Outbound/Upload` |
+| `docs/llm/data/10-sql-modeling-and-oltp.md` | tenant isolation in pooled models, service-owned schema boundaries, constraint-first data integrity | `Data/Cache/Migration Security Competency` |
+| `docs/llm/data/20-sql-access-from-go.md` | parameterization, allowlist dynamic identifiers, least-privilege DB roles, query observability without secret leaks | `Injection And Query`, `Data/Cache/Migration`, `Secrets/Telemetry` |
+| `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md` | zero-downtime compatibility, outbox/no dual write, rollback realism, PII deletion and retention constraints | `Async Identity`, `Data/Cache/Migration`, `Review Blockers` |
+| `docs/llm/data/50-caching-strategy.md` | tenant-safe keys, no secret caching, fail-open vs fail-closed boundary, stampede/timeout/fallback controls | `Data/Cache/Migration`, `Abuse Resistance`, `Default Posture` |
+| `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md` | dependency criticality (`fail_closed` vs degraded/open), timeout/retry budgets, overload/backpressure controls | `Abuse Resistance`, `Default Posture`, `Review Blockers` |
+| `docs/llm/go-instructions/10-go-errors-and-context.md` | context deadlines/cancel correctness, no sensitive leakage at API boundaries, cancellation semantics | `Outbound SSRF`, `Abuse Resistance`, `Secrets/Error Disclosure` |
+| `docs/llm/architecture/20-sync-communication-and-api-style.md` | explicit sync deadlines/retries/idempotency, no infinite timeout calls, deterministic error mapping | `Abuse Resistance`, `Evidence Threshold` |
+| `docs/llm/architecture/30-event-driven-and-async-workflows.md` | outbox/inbox defaults, bounded retries, DLQ policies, async idempotency and observability | `Async Identity And Distributed Security Competency`, `Review Blockers` |
+| `docs/llm/architecture/40-distributed-consistency-and-sagas.md` | invariant ownership, saga step contracts, dedup/commit ordering, no hidden dual writes | `Async Identity`, `Data/Migration`, `Review Blockers` |
+| `docs/llm/go-instructions/20-go-concurrency.md` | bounded goroutines/lifetime/cancel paths, race/leak risk as abuse vector | `Abuse Resistance Competency`, `Delivery/Validation obligations` |
+| `docs/llm/go-instructions/40-go-testing-and-quality.md` | deterministic negative tests, race validation, quality-tool discipline | `Security Test Traceability`, `Delivery And Runtime Hardening` |
+| `docs/build-test-and-development-commands.md` | repo-native verification command path and security check integration in CI-like flow | `Delivery And Runtime Hardening Competency` |
+| `docs/llm/operability/10-observability-baseline.md` | structured redacted logging, correlation rules, bounded metric cardinality | `Secrets, Error Disclosure, And Telemetry Competency` |
+| `docs/llm/operability/30-debuggability-telemetry-cost-and-async-observability.md` | debug endpoint isolation, crash/pprof controls, async correlation continuity, no telemetry secret leakage | `Secrets/Telemetry`, `Async Identity`, `Review Blockers` |
+| `docs/llm/delivery/10-ci-quality-gates.md` | hard-stop gate policy for security scans/drift/contract checks, non-bypassable merge controls | `Delivery And Runtime Hardening`, `Review Blockers` |
+| `docs/llm/platform/10-containerization-and-dockerfile.md` | non-root minimal runtime, TLS trust requirements, container hardening anti-patterns | `Delivery And Runtime Hardening Competency` |
+
+## 5. Ответственность В Spec-First Workflow
 
 Ключевая роль `go-security-review`:
-- выполнять domain-scoped security review в Phase 4;
-- подтверждать, что реализация не нарушает security intent, утвержденный в `specs/<feature-id>/50-security-observability-devops.md` и `specs/<feature-id>/90-signoff.md`.
+- domain-scoped security review в Phase 4;
+- проверка соответствия реализации approved security intent;
+- оформление findings в workflow-формате без architectural redesign;
+- явная эскалация spec-intent конфликтов через `Spec Reopen`.
 
 Обязательная ответственность в каждом проходе:
-- оставлять findings только в security-domain;
-- ссылаться на конкретный `file:line` и `Spec reference`;
-- формулировать practical fix path, а не абстрактные рекомендации;
-- не редактировать spec-файлы в review-фазе;
-- при spec-level mismatch инициировать `Spec Reopen` в `reviews/<feature-id>/code-review-log.md`.
+- фиксировать только evidence-backed security findings;
+- давать concrete attacker-centric impact;
+- давать minimal safe fix;
+- поддерживать traceability к `50/70/90` и, при необходимости, `30/40/55`.
 
-## 4. Scope Проверок (Что Проверяет Skill)
+## 6. Границы Экспертизы (Out Of Scope)
 
-Обязательный проверочный scope:
-- `Input Validation And Boundary Parsing`:
-  - есть ли explicit size limits и strict decode discipline для untrusted input;
-  - нет ли parsing путей с silent acceptance unknown/extra data;
-- `AuthN/AuthZ And Tenant Isolation`:
-  - разделены ли authentication и authorization обязанности;
-  - есть ли object-level authorization и tenant-scoping в критичных ветках;
-  - нет ли implicit allow/default-allow поведения;
-- `Injection And Query Safety`:
-  - параметризованы ли запросы к SQL/NoSQL;
-  - нет ли shell/command execution с user-influenced input;
-  - нет ли template/encoding bypass путей;
-- `Outbound Security And SSRF Controls`:
-  - у outbound клиентов есть explicit timeout и policy controls;
-  - нет ли user-influenced URL вызовов без allowlist/egress checks;
-- `Filesystem, Path, And Upload Safety`:
-  - защищены ли file-path операции от traversal/symlink-escape;
-  - не используются ли user filenames как trusted storage path;
-  - есть ли размерные/типовые ограничения загрузок;
-- `Secrets And Sensitive Data Handling`:
-  - отсутствуют ли утечки секретов/PII в ответах/ошибках/логах/трейсах;
-  - соблюдается ли redaction/sanitization policy;
-- `Abuse Resistance And Resource Controls`:
-  - есть ли bounded limits для expensive operations;
-  - нет ли неограниченных ресурсов, открывающих DoS-вектор;
-  - корректно ли определены `429/503` и retry-related semantics на security-критичных путях;
-- `Security Verification Readiness`:
-  - есть ли покрытие критичных negative-path/security сценариев из `70-test-plan.md`.
+`go-security-review` не подменяет:
+- idiomatic/style ownership (`go-idiomatic-review`);
+- architecture-integrity ownership (`go-design-review`);
+- deep performance/concurrency/DB/reliability ownership как primary-domain;
+- общий test-strategy ownership (`go-qa-review`);
+- spec editing в review-фазе.
 
-## 5. Границы Экспертизы (Out Of Scope)
+Skill может фиксировать cross-domain signal, но обязан сделать handoff профильной роли.
 
-`go-security-review` не подменяет соседние reviewer-роли:
-- не выполняет полный idiomatic/style review (`go-idiomatic-review`, `go-language-simplifier-review`);
-- не выполняет архитектурный integrity review как primary-domain (`go-design-review`);
-- не выполняет deep performance ownership (`go-performance-review`);
-- не выполняет primary concurrency механический аудит (`go-concurrency-review`), кроме случаев прямого security-impact;
-- не выполняет primary DB/cache correctness review (`go-db-cache-review`);
-- не выполняет primary reliability policy review (`go-reliability-review`), кроме fail-open/fail-closed security последствий;
-- не выполняет общий test-strategy ownership (`go-qa-review`);
-- не выполняет бизнес-инвариант review как primary-domain (`go-domain-invariant-review`).
+## 7. Deliverables
 
-Также вне scope:
-- пересмотр утвержденной спецификации без явного spec-конфликта;
-- редактирование spec-артефактов в review-фазе;
-- блокирующие замечания без доказуемого security-impact.
-
-## 6. Интерфейс Со Смежными Review Skills
-
-`go-security-review` передает handoff:
-- в `go-concurrency-review`, если root cause в race/deadlock/lifecycle, а security-эффект вторичен;
-- в `go-reliability-review`, если основной риск связан с timeout/retry/degradation policy, а security-риск производный;
-- в `go-db-cache-review`, если уязвимость вызвана DB/query/cache semantics как primary cause;
-- в `go-qa-review`, если основной gap в отсутствии требуемых security-тестов;
-- в `go-design-review`, если исправление требует архитектурного переосмысления за пределами security-review domain;
-- в `go-domain-invariant-review`, если security-fix влияет на доменные state-transition/invariant behavior.
-
-Правило интерфейса:
-- `go-security-review` фиксирует security-risk, impact и минимальный safe fix,
-- но не захватывает primary ownership другого review-skill.
-
-## 7. Deliverable Формат Для Review-Лога
-
-Primary deliverable:
-- записи в `reviews/<feature-id>/code-review-log.md` в формате workflow:
+Основной deliverable в `reviews/<feature-id>/code-review-log.md`:
 
 ```text
 [severity] [go-security-review] [file:line]
@@ -113,17 +256,18 @@ Suggested fix:
 Spec reference:
 ```
 
-Минимальные требования к finding:
-- `Issue`: конкретный security-дефект/уязвимость/риск;
-- `Impact`: реалистичный security-impact (exploitability, blast radius, merge risk);
-- `Suggested fix`: минимально достаточное безопасное исправление;
-- `Spec reference`: ссылка на релевантный approved spec (`50/90`, при необходимости `30/40/55/70/20`).
+Минимальные секции итогового ответа:
+- `Findings`
+- `Handoffs`
+- `Spec Reopen`
+- `Residual Risks`
 
 ## 8. Матрица Документов Для Экспертизы
 
 ### 8.1 Always
 
-- `docs/spec-first-workflow.md` (Phase 4, Reviewer Focus Matrix, Review Findings Format, Gate G4)
+- `docs/spec-first-workflow.md`
+- `docs/llm/go-instructions/70-go-review-checklist.md`
 - `docs/llm/security/10-secure-coding.md`
 - `docs/llm/security/20-authn-authz-and-service-identity.md`
 - `specs/<feature-id>/50-security-observability-devops.md`
@@ -132,68 +276,63 @@ Spec reference:
 
 ### 8.2 Trigger-Based
 
-- Если security-semantics видны на API boundary:
+- API security semantics:
   - `specs/<feature-id>/30-api-contract.md`
   - `docs/llm/api/10-rest-api-design.md`
   - `docs/llm/api/30-api-cross-cutting-concerns.md`
-- Если security-risk пересекается с data/consistency/cache:
+- Data/cache security implications:
   - `specs/<feature-id>/40-data-consistency-cache.md`
   - `docs/llm/data/10-sql-modeling-and-oltp.md`
   - `docs/llm/data/20-sql-access-from-go.md`
   - `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`
   - `docs/llm/data/50-caching-strategy.md`
-- Если security-risk связан с reliability/failure semantics:
+- Reliability/failure semantics with security impact:
   - `specs/<feature-id>/55-reliability-and-resilience.md`
   - `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md`
-- Если требуется проверка test-obligations:
+  - `docs/llm/go-instructions/10-go-errors-and-context.md`
+- Sync/async trust propagation:
+  - `docs/llm/architecture/20-sync-communication-and-api-style.md`
+  - `docs/llm/architecture/30-event-driven-and-async-workflows.md`
+  - `docs/llm/architecture/40-distributed-consistency-and-sagas.md`
+- Concurrency-sensitive security controls:
+  - `docs/llm/go-instructions/20-go-concurrency.md`
+- Verification obligations:
   - `specs/<feature-id>/70-test-plan.md`
   - `docs/llm/go-instructions/40-go-testing-and-quality.md`
   - `docs/build-test-and-development-commands.md`
-- Если риск касается observability/redaction/debug surface:
+- Observability/debug/redaction implications:
   - `docs/llm/operability/10-observability-baseline.md`
   - `docs/llm/operability/30-debuggability-telemetry-cost-and-async-observability.md`
-- Если меняется delivery/platform control surface:
+- Delivery/platform hardening implications:
   - `docs/llm/delivery/10-ci-quality-gates.md`
   - `docs/llm/platform/10-containerization-and-dockerfile.md`
 
-## 9. Severity И Эскалация
+## 9. Протокол Фиксации Findings
 
-Severity-интерпретация в security-domain:
-- `critical`:
-  - подтвержденная уязвимость с высокой exploitability или крупным blast radius;
-  - broken access control/tenant escape/secret leakage path, блокирующий безопасный merge;
-- `high`:
-  - существенное нарушение approved security intent с высокой вероятностью инцидента;
-- `medium`:
-  - локальный security-risk с ограниченным blast radius, требующий исправления;
-- `low`:
-  - локальное hardening-улучшение без немедленного merge-block.
-
-Эскалация:
-- если safe fix требует изменения утвержденного spec intent, инициируется `Spec Reopen`;
-- до закрытия `Spec Reopen` merge по `Gate G4` не считается завершенным.
+Каждый нетривиальный finding проходит через минимальный протокол:
+1. `Где`: точный `file:line`.
+2. `Axis`: один из security review axes.
+3. `Issue`: что нарушено в контроле/контракте.
+4. `Impact`: attacker preconditions, blast radius, affected boundary/asset.
+5. `Suggested fix`: smallest safe correction.
+6. `Spec reference`: явная ссылка на approved obligation.
+7. `Escalation`: нужен ли `Spec Reopen`.
 
 ## 10. Definition Of Done Для Прохода Skill
 
 Проход `go-security-review` завершен, если:
-- проверены все измененные security-sensitive участки по обязательному scope;
-- все `critical/high` findings оформлены с `file:line`, impact, suggested fix и spec reference;
-- все выявленные spec-level mismatch либо устранены, либо эскалированы через `Spec Reopen`;
-- кросс-доменные риски переданы через handoff профильным reviewer-ролям;
-- вывод остается строго в security-domain;
-- при отсутствии проблем явно зафиксировано, что security findings не обнаружены.
+- findings строго в security-domain;
+- все findings evidence-backed и с `file:line`;
+- все `critical/high` issues явно закрыты или эскалированы;
+- нет неявных spec-intent конфликтов;
+- при отсутствии находок явно сказано `No security findings.` и указаны `Residual Risks`.
 
 ## 11. Анти-Паттерны
 
 `go-security-review` не должен:
-- превращаться в общий код-ревью без security-фокуса;
-- давать расплывчатые замечания без threat model и без exploit-impact;
-- смешивать `AuthN` и `AuthZ` в один неразличимый комментарий;
-- игнорировать negative-path и проверять только happy-path;
-- принимать "internal traffic trusted by default" без явного обоснования;
-- оставлять потенциальный security-critical дефект без явной фиксации или эскалации.
-
-## 12. Статус Текущего Документа
-
-Этот файл фиксирует `SCOPE` и `RESPONSIBILITIES` для будущего `SKILL.md` по `go-security-review`.
-Runtime-инструкция (`Working Rules`, `Context Intake`, output protocol для ответов) будет оформлена отдельным шагом.
+- превращаться в общий review без threat-ориентированной аргументации;
+- смешивать AuthN/AuthZ в один неразличимый комментарий;
+- давать абстрактные советы без exploit-impact и fix path;
+- пропускать fail-open/fail-closed анализ для критичных зависимостей;
+- замалчивать неопределенности вместо явных `[assumption]`;
+- менять approved requirements без формального `Spec Reopen`.

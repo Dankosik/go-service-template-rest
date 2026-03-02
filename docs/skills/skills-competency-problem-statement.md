@@ -77,9 +77,9 @@
 - Практический риск: инварианты могут быть перечислены, но не всегда одинаково жестко операционализированы.
 
 ### go-idiomatic-review
-- Идиоматический review-процесс присутствует, но domain-specific глубина некоторых языковых решений зависит от внешнего контекста.
-- В skill-пакете нет автономного репера для спорных «idiomatic vs practical» компромиссов в сервисном коде.
-- Практический риск: разная строгость idiomatic-оценки при близких изменениях.
+- Статус обновления: частично исправлено (добавлен `Hard Skills`-блок в runnable `SKILL.md` + обновлена спецификация в `docs/skills/go-idiomatic-review.md`).
+- Идиоматический review-процесс и автономная hard-база усилены, но требуется проверка воспроизводимости в нескольких реальных review-циклах.
+- Остаточный риск: возможна вариативность строгости на стыках доменов (idiomatic vs design/performance/security handoff), если не соблюдать обновленный `Evidence Threshold`.
 
 ### go-language-simplifier-review
 - Задан вектор упрощения, но граница между полезным упрощением и потерей инженерной семантики остается контекстно-зависимой.
@@ -87,9 +87,9 @@
 - Практический риск: непредсказуемость глубины упрощения и связанного риска регрессий понимания.
 
 ### go-observability-engineer-spec
-- Зона observability описана правильно, но внутри skill-папки нет автономной операционной базы с достаточной детализацией доказательств качества telemetry-решений.
-- Сильная опора на внешние документы при относительно легком собственном содержании skill-пакета.
-- Практический риск: неравномерная строгость в решениях по cardinality, correlation и cost-control.
+- Статус обновления: частично исправлено (добавлен `Hard Skills`-блок в runnable `SKILL.md` + обновлена спецификация в `docs/skills/go-observability-engineer-spec.md`).
+- Observability-процесс и автономная hard-база усилены за счет explicit competency-модели: telemetry contract, SLI/SLO+budget, burn-rate/routing, debuggability, cost/cardinality, async correlation.
+- Остаточный риск: требуется проверка воспроизводимости в нескольких реальных spec-enrichment циклах, особенно на стыке observability и соседних доменов (reliability/security/delivery handoff).
 
 ### go-performance-review
 - Review-рамка и формат findings заданы, но локальный уровень доказательной базы performance-оценок зависит от внешнего материала.
@@ -97,8 +97,9 @@
 - Практический риск: разный порог «достаточного performance-доказательства» по похожим PR.
 
 ### go-performance-spec
-- Сильная декларация performance-фокуса, но hard-часть по инженерной нормализации budget/measurement trade-off недостаточно автономна в skill-пакете.
-- Практический риск: спецификации могут отличаться по глубине измеримой enforceability.
+- Статус обновления: частично исправлено (добавлен `Hard Skills`-блок в runnable `SKILL.md` + обновлена спецификация в `docs/skills/go-performance-spec.md`).
+- Performance-spec процесс и автономная hard-база усилены за счет explicit competency-модели: budget decomposition, workload normalization, benchmark/profile/trace protocol, evidence threshold, and blocker gate.
+- Остаточный риск: требуется проверка воспроизводимости в нескольких реальных spec-enrichment циклах, особенно на стыках performance с reliability/observability/data-cache handoff.
 
 ### go-qa-review
 - Роль QA-review обозначена, но локальная проверочная база для оценки качества тестов и детерминизма не выражена как автономная skill-компетенция.
@@ -126,14 +127,14 @@
 - Практический риск: неравномерная enforceability reliability-требований в итоговых спеках.
 
 ### go-security-review
-- Security review ориентирован на правильные классы угроз, но собственная локальная база skill по доказательной строгости findings ограничена.
-- Внутреннее содержимое skill не полностью автономно для тяжелых security-кейсов без дополнительного внешнего контекста.
-- Практический риск: разный порог чувствительности к критичным security-дефектам.
+- Статус обновления: частично исправлено (добавлен `Hard Skills`-блок в runnable `SKILL.md` + обновлена спецификация в `docs/skills/go-security-review.md`).
+- Security-review процесс и автономная hard-база усилены за счет explicit competency-модели: trust boundary validation, authn/authz/tenant isolation, injection/SSRF/path/upload controls, secrets/redaction/debug-surface controls, abuse-resistance, async identity/dedup, data-cache-migration security checks, delivery/runtime hardening, evidence threshold, and blocker gate.
+- Остаточный риск: требуется проверка воспроизводимости в нескольких реальных review-циклах, особенно на стыках security с reliability/concurrency/db-cache/observability handoff.
 
 ### go-security-spec
-- Security-first спецификация качественно направлена, но hard-компетенция по разбору сложных security trade-off недостаточно «упакована» прямо в skill-папку.
-- Заметна зависимость от внешних документов при сравнительно краткой локальной глубине.
-- Практический риск: неодинаковая глубина и проверяемость security-решений в разных задачах.
+- Статус обновления: частично исправлено (добавлен `Hard Skills`-блок в runnable `SKILL.md` + обновлена спецификация в `docs/skills/go-security-spec.md`).
+- Security-spec процесс и автономная hard-база усилены за счет explicit competency-модели: trust boundaries, identity/authz/tenant isolation, threat-class control matrix, abuse-resistance, security telemetry/privacy, delivery/runtime hardening, evidence threshold, and blocker gate.
+- Остаточный риск: требуется проверка воспроизводимости в нескольких реальных spec-enrichment циклах, особенно на стыках security с API/distributed/data-cache/reliability/observability/delivery handoff.
 
 ## Операционные последствия
 - Навыки работают как хорошие role-orchestration инструкции, но не всегда как полноценные носители автономной экспертности.

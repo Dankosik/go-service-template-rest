@@ -7,6 +7,7 @@ description: "Design data-architecture-first specifications for Go services in a
 
 ## Purpose
 Create a clear, reviewable data specification package before implementation. Success means data ownership, consistency, evolution, and reliability decisions are explicit, defensible, and directly translatable into implementation and tests.
+Use `Hard Skills` as the normative domain baseline for decision quality and risk controls; use workflow sections below for execution sequence and artifact synchronization.
 
 ## Scope And Boundaries
 In scope:
@@ -29,21 +30,204 @@ Out of scope:
 - CI/CD pipeline design and container runtime hardening
 - low-level SQL implementation details and performance tuning in code
 
+## Hard Skills
+### Data Architecture Core Instructions
+
+#### Mission
+- Produce data decisions that remain correct under growth, partial failures, and mixed-version rollouts.
+- Convert ambiguous requirements into explicit contracts for ownership, invariants, consistency, schema evolution, and recovery.
+- Ensure every selected data option is implementable, testable, observable, and rollback-aware before coding starts.
+
+#### Default Posture
+- Default to SQL OLTP (`PostgreSQL`-compatible) as primary system-of-record for service business data.
+- Default to one service-owned schema/database boundary and local ACID within that boundary.
+- Default cross-service consistency model to eventual consistency with explicit outbox/idempotency/reconciliation.
+- Default schema evolution model to compatibility-first rollout: `expand -> migrate/backfill -> contract`.
+- Treat cache as an accelerator by default, not as source of truth.
+- Treat new datastore engines (NoSQL/columnar) as exceptions that require workload-fit evidence and operational readiness proof.
+
+#### Data Ownership And Boundary Competency
+- Enforce explicit source-of-truth ownership per critical entity.
+- Enforce service-private data boundaries:
+  - no direct cross-service table access;
+  - no cross-service foreign keys;
+  - cross-service references by IDs only.
+- Require cross-service read strategies to be explicit: API composition, replicated read models, or event-driven projections.
+- Reject shared-schema coupling and service-per-table decomposition by default.
+- Require ownership and transaction-boundary impact to be stated for every major model change.
+
+#### SQL/OLTP Modeling Competency
+- Start from normalized schema (`~3NF`) by default; allow denormalization only with explicit:
+  - source of truth;
+  - synchronization path;
+  - staleness contract;
+  - reconciliation owner.
+- Treat constraints as contract, not optional hints:
+  - PK on every table;
+  - `UNIQUE` for business uniqueness;
+  - `NOT NULL` by default for required fields;
+  - row-local `CHECK` constraints where applicable.
+- Keep referential integrity inside one service boundary; never model cross-service FK constraints.
+- Build indexing policy from measured or explicitly known access patterns; avoid speculative index growth.
+- Enforce deterministic pagination with stable ordering and unique tie-breaker; default operational lists to keyset pagination.
+- Require explicit delete/history policy per dataset:
+  - hard delete by default;
+  - soft delete/temporal/audit only with restore/compliance/history requirement and lifecycle controls.
+- For pooled multi-tenancy, require tenant-safe model (`tenant_id` scope + enforced centralized isolation controls such as RLS).
+
+#### Consistency, Transactions, And Concurrency Competency
+- Keep transaction boundaries local to one service datastore and short-lived.
+- Reject cross-service global ACID assumptions for default designs.
+- Default to optimistic concurrency for mutable entities:
+  - version/CAS checks;
+  - explicit conflict semantics on update races.
+- Allow pessimistic locking only by proven contention/resource-serialization need.
+- Treat stricter isolation levels as exception paths requiring retry design and tests for serialization/deadlock failures.
+- Require retry policy to be bounded and idempotency-aware for write paths.
+
+#### Go SQL Access Contract Competency
+- Define implementation-facing DB access defaults for `Go` explicitly:
+  - `sqlc` + explicit SQL as DAL contract baseline;
+  - `pgx/v5 + pgxpool` for PostgreSQL-first path;
+  - `database/sql + sqlc` only when portability is hard requirement.
+- Keep SQL as source-of-truth artifacts; generated code is derivative and not manually edited.
+- Require explicit transaction ownership at use-case boundary (`Begin -> defer Rollback -> Commit`).
+- Require end-to-end context propagation and DB deadlines; reject context-less DB calls in production flows.
+- Require explicit pool budgets and connection-capacity validation before scaling assumptions.
+- Require prevention of `N+1` and chatty access patterns in hot paths.
+- Require parameterized SQL values and allow-listed dynamic identifiers.
+- Require critical-query observability contract:
+  - stable query identity;
+  - slow-query thresholds;
+  - pool saturation visibility.
+
+#### Datastore Class Selection Competency
+- Keep SQL OLTP as default unless alternative engine is justified by explicit access-pattern evidence.
+- Require an access-pattern catalog before selecting document/key-value/wide-column/time-series/columnar class.
+- Require partition-key, skew, growth, and hot-partition mitigation plan before approving partitioned NoSQL designs.
+- Require consistency model and conflict behavior to be explicit per critical operation.
+- Require retention, deletion, archival, and downsampling semantics for non-OLTP engines before launch.
+- Apply cache-first guardrail:
+  - if bottleneck is repeated read amplification with safe cacheability, evaluate cache before new datastore class.
+- Reject datastore adoption when operational readiness is absent (on-call, backup/restore, observability, runbooks).
+
+#### Schema Evolution And Migration Safety Competency
+- Enforce mixed-version compatibility contract across rollout.
+- Require one controlled migration runner with immutable versioned migrations and separate migration/runtime roles.
+- Require migration safety budgets (lock/statement/idle-in-transaction timeouts) at migration session level.
+- Enforce phased rollout for behavior-changing schema updates:
+  - `expand` (additive-compatible),
+  - `migrate/backfill` (idempotent/resumable/throttled),
+  - `contract` (destructive last, verification-gated).
+- Require backfill control plane:
+  - checkpoints/watermarks;
+  - bounded retries;
+  - abort thresholds for error rate, lag, lock waits.
+- Require objective verification gates before contract:
+  - row/aggregate parity;
+  - deterministic sample diff;
+  - domain invariant checks.
+- Require rollback class declaration (`safe`, `conditional`, `restore-based`) and explicit irreversible-step notes.
+- Reject cross-system dual writes for state-change + message emission; require outbox-equivalent atomic linkage.
+
+#### Data Reliability, Lifecycle, And Recovery Competency
+- Treat backups as insufficient without restore drills.
+- Require explicit RPO/RTO by data class and tested restore runbooks.
+- Require retention/archival ownership and deletion triggers per dataset.
+- Require explicit PII data map and traceable deletion/anonymization workflow across primary and derived stores.
+- Require explicit statement of backup/archive residual retention limitations when hard deletion is requested.
+- Require disaster-recovery posture for destructive migration, regional outage, and corruption/backfill bug scenarios.
+- Require downstream consumer/version alignment before schema contract that affects published data semantics.
+
+#### Data vs Cache Responsibility Boundary Competency
+- Keep authoritative data correctness contract in source-of-truth datastore decisions.
+- Require explicit classification of cacheable vs strict-consistency reads.
+- Require staleness and fallback class decisions at spec level when cache interaction affects data behavior.
+- Keep runtime cache tuning details (exact keys, TTL tuning, invalidation mechanics) delegated to `go-db-cache-spec`.
+- Reject cache proposals that introduce tenant leakage or make read availability depend on cache correctness by default.
+
+#### API And Distributed Consistency Impact Competency
+- When data decisions affect API behavior, require explicit contract updates for:
+  - consistency model disclosure (`strong`/`eventual`);
+  - staleness/freshness semantics;
+  - async materialization patterns (`202` + operation resource) where applicable;
+  - idempotency and concurrency semantics for retryable writes.
+- For cross-service flows, require invariant ownership and explicit step contracts (idempotency, timeout, retry, compensation/forward recovery).
+- Require durable ordering of side effects before async acknowledgements in consumer flows.
+- Reject hidden invariant ownership and “eventual fix by consumer” assumptions.
+
+#### Security And Tenant-Isolation Impact Competency
+- Require parameterized SQL and allow-listed query-shape controls for any user-influenced filtering/sorting path.
+- Require least-privilege role separation for migration runtime vs application runtime.
+- Require tenant scope propagation and enforcement across DB access, cache boundaries, async payloads, and audit/operational trails.
+- Require fail-closed behavior on tenant mismatch and object-level authorization dependencies before side effects.
+- Require data-change plans to avoid secret/PII leakage in logs, errors, and telemetry.
+
+#### Observability And Diagnostics Impact Competency
+- Require telemetry contract for changed data paths:
+  - DB operation latency/error metrics;
+  - pool saturation metrics;
+  - trace/log correlation fields.
+- Require migration/backfill/reconciliation observability:
+  - progress, lag, retry, failure, and invariant-violation visibility.
+- Require async correlation continuity for data pipelines (`trace`, `correlation_id`, `attempt`, `message_id`).
+- Enforce metric cardinality discipline; high-cardinality identifiers stay in logs/traces, not metric labels.
+- Require telemetry changes to be cost-aware, bounded, and incident-operable.
+
+#### Evidence Threshold And Decision Quality Bar
+- Every major data decision must include at least two options and one explicit rejection reason.
+- Every selected option must include measurable acceptance boundaries, not only narrative rationale.
+- Every selected option must include compatibility class, rollout sequence, and rollback limitations.
+- Every selected option must include cross-domain impact summary for architecture/API/security/operability.
+- Every selected option must include reopen conditions tied to observable triggers.
+- Minimum evidence by decision axis:
+  - ownership/modeling:
+    - source-of-truth map, invariants-to-constraints mapping, tenant model decision;
+  - consistency/transactions:
+    - transaction boundary map, conflict strategy, retry/idempotency class;
+  - evolution/migrations:
+    - phased rollout plan, backfill control strategy, verification queries and gates;
+  - reliability/lifecycle:
+    - rollback class, backup/restore proof strategy, retention/PII handling;
+  - datastore-class exceptions:
+    - access-pattern evidence, partition/hot-key strategy, operational readiness checklist.
+
+#### Assumption And Uncertainty Discipline
+- Mark unknown critical facts as `[assumption]` immediately.
+- Keep assumptions bounded, testable, and decision-linked.
+- Resolve assumptions within the same pass when source-backed validation is possible.
+- Promote unresolved critical assumptions to `80-open-questions.md` with owner and unblock condition.
+
+#### Review Blockers For This Skill
+- Data recommendation without explicit trade-off analysis and rejected option.
+- Data decision that defers core correctness/evolution choices into coding phase.
+- Shared-schema or cross-service DB coupling introduced without explicit approved exception.
+- Schema evolution plan without mixed-version compatibility contract.
+- Migration plan without phased rollout, verification gates, or rollback limitations.
+- Backfill plan without idempotency, checkpoints, throttling, and abort criteria.
+- Datastore-class change without access-pattern evidence and operational readiness proof.
+- Cache boundary blurred so correctness depends on cache behavior without explicit approved exception.
+- Cross-system dual-write used as default consistency mechanism.
+- Security/tenant/observability implications omitted for data decisions.
+- Unresolved critical unknowns left implicit instead of explicit blockers.
+
 ## Working Rules
 1. Determine current `docs/spec-first-workflow.md` phase and target gate before drafting decisions.
 2. Set phase-specific output targets:
    - Phase 0: `80-open-questions.md` with data assumptions/blockers and their owners; add only the minimum data constraints needed to keep architecture drafting safe
    - Phase 1: explicit data constraints that shape `20-architecture.md` and rollout-safe data change sequencing in `60-implementation-plan.md`
    - Phase 2 and later: `40/80/90` plus impacted `20/30/50/55/60/70`
-3. Load context using this skill's dynamic loading rules and stop when four data axes are source-backed: ownership/modeling, consistency/transactions, evolution/migrations, and reliability controls.
-4. Normalize the data problem: domain entities, invariants, consistency expectations, change constraints, and operational constraints.
-5. For each nontrivial data decision, compare at least two options and select one explicitly.
-6. Assign decision ID (`DATA-###`) and owner for each major data decision.
-7. Record trade-offs and cross-domain impact (architecture, API, security, operability) for each selected decision.
-8. Mark missing critical facts as `[assumption]`; keep assumptions bounded and either validate them in the current pass or convert them into blockers in `80-open-questions.md` with owner and unblock condition.
-9. If uncertainty blocks decision quality or rollout safety, record it in `80-open-questions.md` with concrete next step.
-10. Keep `40-data-consistency-cache.md` as primary artifact and maintain explicit boundary with cache-specific responsibilities.
-11. Verify internal consistency: no contradictions between `40` and impacted `20/30/50/55/60/70/90`, and no hidden data decisions deferred to coding.
+3. Apply `Hard Skills` defaults by default. Any deviation must be explicit, justified, and linked to decision ID (`DATA-###`) and reopen criteria.
+4. Load context using this skill's dynamic loading rules and stop when four data axes are source-backed: ownership/modeling, consistency/transactions, evolution/migrations, and reliability controls.
+5. Normalize the data problem: domain entities, invariants, consistency expectations, change constraints, and operational constraints.
+6. For each nontrivial data decision, compare at least two options and select one explicitly.
+7. Assign decision ID (`DATA-###`) and owner for each major data decision.
+8. Record trade-offs and cross-domain impact (architecture, API, security, operability) for each selected decision.
+9. Mark missing critical facts as `[assumption]`; keep assumptions bounded and either validate them in the current pass or convert them into blockers in `80-open-questions.md` with owner and unblock condition.
+10. If uncertainty blocks decision quality or rollout safety, record it in `80-open-questions.md` with concrete next step.
+11. Keep `40-data-consistency-cache.md` as primary artifact and maintain explicit boundary with cache-specific responsibilities.
+12. Verify internal consistency: no contradictions between `40` and impacted `20/30/50/55/60/70/90`, and no hidden data decisions deferred to coding.
+13. Run final blocker check against `Hard Skills -> Review Blockers For This Skill` before closing a pass.
 
 ## Data Decision Protocol
 For every major data decision, document:
@@ -59,6 +243,11 @@ For every major data decision, document:
 10. migration/backfill/recovery strategy and rollback limitations
 11. impact on architecture, API, security, and operability
 12. reopen conditions, affected artifacts, and linked open-question IDs (if any)
+13. evidence package by axis:
+   - ownership/modeling evidence
+   - consistency/transaction evidence
+   - migration/evolution evidence
+   - reliability/recovery evidence
 
 ## Output Expectations
 - Phase-specific minimum output:
@@ -81,6 +270,10 @@ For every major data decision, document:
     - `Schema Evolution And Migration Plan`
     - `Data Reliability And Verification Controls`
     - `Data vs Cache Responsibility Boundary`
+  - For each major `DATA-###` in `40-data-consistency-cache.md`, include a compact decision card:
+    - selected option and rejected option
+    - compatibility class and rollout strategy
+    - evidence summary and reopen conditions
 - Required core artifacts per pass:
   - `80-open-questions.md` with data blockers/uncertainties
   - `90-signoff.md` with accepted data decisions and reopen criteria
@@ -141,15 +334,21 @@ Unknowns:
 - `40-data-consistency-cache.md` explicitly defines ownership, model, consistency, evolution, and reliability decisions.
 - All major data decisions include `DATA-###`, owner, selected option, and at least one rejected option with reason.
 - Schema changes include compatibility class, rollout sequence, and rollback limitations.
+- Each major decision includes explicit evidence package by axis (ownership/modeling, consistency/transactions, migration/evolution, reliability/recovery).
 - Data/cache boundary is explicit and non-overlapping.
 - Data blockers are closed or tracked in `80-open-questions.md` with owner and unblock condition.
 - Impacted `20/30/50/55/60/70` artifacts have explicit status with decision links and no contradictions.
+- No active item from `Hard Skills -> Review Blockers For This Skill` remains unresolved.
 - No hidden data decisions are deferred to coding.
 
 ## Anti-Patterns
-- prefer domain-invariant-led schema decisions over API-payload mirroring
-- use expand/migrate/contract with explicit compatibility windows for risky schema changes
-- plan dual-write/backfill with verification checkpoints and recovery path
-- keep data ownership decisions separate from cache runtime tuning details
-- justify NoSQL/columnar with explicit access-pattern evidence and operational fit
-- resolve critical unknowns through `[assumption]` validation or explicit `80-open-questions.md` tracking before coding
+- Data decisions made from API payload shape only, without domain invariants and ownership model.
+- Shared-schema or cross-service DB coupling introduced as a default path.
+- Critical schema changes planned without mixed-version compatibility contract.
+- Destructive-first migrations (`DROP/RENAME`) before expand/backfill/verification gates.
+- Backfill plans without idempotency, checkpoints, throttling, and abort thresholds.
+- Cross-system dual writes used as default consistency mechanism instead of outbox-equivalent linkage.
+- Datastore-class migration proposed without access-pattern evidence and operational readiness proof.
+- Cache behavior treated as correctness authority without explicit approved exception.
+- Security/tenant/observability implications omitted from data decisions.
+- Critical unknowns left implicit instead of `[assumption]` validation or `80-open-questions.md` blockers.

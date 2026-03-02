@@ -68,11 +68,11 @@ All `*-spec` skills are expertise roles first, not workflow-only roles.
 - `go-data-architect-spec` - SQL/data modeling/migrations/data reliability.
 - `go-distributed-architect-spec` - cross-service workflows, saga, outbox/inbox, consistency.
 - `go-db-cache-spec` - cache strategy and SQL-access risks in the specification.
-- `go-observability-engineer-spec` - logs/metrics/traces, SLI/SLO, debugability.
+- `go-observability-engineer-spec` - logs/metrics/traces, SLI/SLO, debuggability, telemetry cost/cardinality, async observability.
 - `go-security-spec` - secure-by-default requirements and threat controls.
 - `go-devops-spec` - CI gates, release safety, container/runtime hardening.
 - `go-qa-tester-spec` - test strategy and test implementation planning (unit/integration/contract/e2e-smoke).
-- `go-performance-spec` - perf budget, hot paths, profiling/benchmark plan, latency/throughput risks.
+- `go-performance-spec` - perf budget decomposition, workload/hot-path normalization, benchmark/profile/trace protocol, latency/throughput/allocation risks, and measurable acceptance criteria.
 - `go-domain-invariant-spec` - business invariants, state transitions, acceptance criteria, domain corner cases.
 - `go-reliability-spec` - timeout/retry budgets, backpressure, graceful shutdown, degradation, rollout/rollback safety.
 - `go-design-spec` - architecture integrity, simplicity, maintainability.
@@ -160,7 +160,7 @@ Skill execution order inside one loop:
 9. `go-security-spec` -> reviews the full spec package and edits any files.
 10. `go-devops-spec` -> reviews the full spec package and edits any files.
 11. `go-qa-tester-spec` -> reviews the full spec package and edits any files with focus on completeness of `70-test-plan.md`.
-12. `go-performance-spec` -> reviews the full spec package and edits any files with focus on perf budget and measurability.
+12. `go-performance-spec` -> reviews the full spec package and edits any files with focus on perf budget, measurable evidence thresholds, and explicit performance blockers/open questions.
 13. `go-design-spec` -> performs an integrated pass on the full spec package and edits as needed.
 14. `go-architect-spec` -> consolidates decisions, enforces architecture coherence across domains, closes/reframes questions in `80-open-questions.md`, and updates `90-signoff.md`.
 

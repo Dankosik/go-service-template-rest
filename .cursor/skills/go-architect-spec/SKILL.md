@@ -27,6 +27,123 @@ Out of scope:
 - detailed test matrix design
 - benchmark or profile plans and performance tuning details
 
+## Hard Skills
+### Architecture Core Instructions
+
+#### Mission
+- Produce architecture decisions that remain correct under growth, failure, and mixed-version rollout.
+- Convert ambiguous requests into explicit boundaries, consistency contracts, and failure-mode contracts before coding starts.
+- Ensure every selected architecture option is reviewable, testable, and rollback-safe.
+
+#### Default Posture
+- Prefer modular monolith boundaries until service extraction is justified on all four axes: domain, data ownership, team ownership, and transaction boundary.
+- Prefer local ACID within one service-owned datastore; use explicit eventual-consistency patterns across services.
+- Prefer explicit sync/async contracts with bounded deadlines and retries over hidden coupling.
+- Prefer additive, compatibility-first evolution (`expand -> migrate/backfill -> contract`) over big-bang changes.
+- Treat architecture overhead (operations, observability, release coordination) as first-class cost in every decomposition decision.
+
+#### Boundary And Decomposition Competency
+- Use the four-axis boundary model for every boundary decision: domain capability, data ownership, team ownership, transaction boundary.
+- Require explicit source-of-truth ownership for each critical entity.
+- Reject service-per-table, service-per-CRUD, and shared-schema decomposition.
+- Reject cross-service direct DB access and cross-service foreign keys by default.
+- Approve new service extraction only when independent deployability, ownership, scaling, and consistency tolerance are explicitly proven.
+- Detect distributed-monolith signals early: coordinated releases, chatty chains, shared schema coupling, hidden shared business logic.
+
+#### Sync Communication And API Style Competency
+- Prove that synchronous hops are required before selecting transport.
+- Apply transport defaults: external/public surface via REST/OpenAPI, internal service calls via gRPC/Protobuf unless justified otherwise.
+- Define end-to-end deadline budget and per-hop budgets before approving call chains.
+- Enforce explicit retry classification per operation and bounded retry budgets.
+- Enforce idempotency design for retry-unsafe operations (`Idempotency-Key` or contract-equivalent).
+- Require deterministic error mapping and one error model per API surface.
+- Require deterministic pagination strategy and bounded list semantics.
+- Enforce gateway/BFF ownership boundaries; never expose internal service contracts directly as public API.
+
+#### Event-Driven And Async Workflow Competency
+- Decide async usage from workflow properties (latency variability, fan-out, buffering/backpressure), not from tooling preference.
+- Classify every message as event or command with explicit ownership semantics.
+- Select topology intentionally: pub/sub for independent domain reactions, queue for owned work distribution.
+- Require transactional outbox (or equivalent atomic linkage) when DB state change must emit message.
+- Require consumer idempotency and durable dedup/inbox for side-effecting handlers.
+- Require bounded retry strategy with jitter, poison-message handling, and explicit DLQ ownership/redrive policy.
+- Require explicit schema evolution strategy (additive-first, versioned breaking changes).
+- Require explicit ordering boundaries and replay-safety semantics; never assume global ordering.
+- Require trace/context propagation and async outcome observability across send/process/retry/DLQ stages.
+
+#### Distributed Consistency And Saga Competency
+- Enforce local-transaction-only boundaries per service datastore; never assume cross-service global ACID.
+- Build and maintain invariant register before selecting consistency mechanism.
+- Classify invariants into `local_hard_invariant` and `cross_service_process_invariant`.
+- Model multi-step workflow as explicit durable state machine with monotonic transitions.
+- Define step contracts explicitly: trigger, local transaction scope, idempotency key, timeout, retry class, compensation/forward-recovery.
+- Identify pivot transaction and enforce compensable-before / retryable-after rules.
+- Require reconciliation ownership, cadence, and repair path for critical eventual-consistency flows.
+- Reject dual writes, hidden invariant ownership, and distributed locks as primary correctness mechanism.
+
+#### Resilience, Degradation, And Evolution Competency
+- Classify dependencies per criticality (`critical_fail_closed`, `critical_fail_degraded`, `optional_fail_open`) before fallback design.
+- Define per-dependency failure contract: timeout, retry budget, bulkhead, fallback mode, circuit strategy, observability signals.
+- Enforce explicit deadline propagation and fail-fast behavior on exhausted remaining budget.
+- Enforce bounded retries with jitter and non-retry classes.
+- Enforce bounded queues/concurrency, overload shedding behavior, and blast-radius isolation.
+- Require explicit degradation modes and activation/deactivation criteria.
+- Require graceful startup/shutdown and probe semantics (`livez`/`readyz`/`startupz`) aligned with runtime behavior.
+- Require rollout strategy for risky changes (canary/blue-green/strangler) with explicit rollback authority.
+- Require error-budget-aware release gates and freeze policy for sustained burn.
+
+#### Cross-Domain Architecture Impact Competency
+- API impact obligations:
+  - keep contract semantics explicit (resource model, sync/async behavior, idempotency class, consistency disclosure);
+  - record contract-impact decisions in `30-api-contract.md` when architecture changes API behavior.
+- Data impact obligations:
+  - keep service-owned data boundaries explicit;
+  - justify datastore-class choices by access-pattern evidence;
+  - define migration compatibility window and rollback class for schema evolution;
+  - frame cache usage by staleness/correctness contract, not as default optimization.
+- Security and identity impact obligations:
+  - define trust boundaries, principal model, and tenant isolation path;
+  - define identity propagation model per hop (`forward`, `exchange`, `internal`);
+  - require fail-closed authorization boundaries and object-level access control ownership.
+- Operability impact obligations:
+  - define minimum logs/metrics/traces correlation contract and cardinality guardrails;
+  - define SLI/SLO/error-budget implications for architecture choices;
+  - ensure debuggability endpoints and telemetry escalation model are safe-by-default.
+- Delivery and platform impact obligations:
+  - ensure architecture decisions are enforceable by CI quality gates (contract, migration, security, drift);
+  - ensure runtime/container assumptions are explicit (non-root, startup/shutdown behavior, reproducible builds).
+
+#### Evidence Threshold And Decision Quality Bar
+- Every major architecture decision must include at least two options and one explicit rejection reason.
+- Every selected option must include measurable acceptance boundaries, not only narrative rationale.
+- Every selected option must include failure-mode analysis and control mechanisms.
+- Every selected option must include cross-domain impact summary for API/data/security/operability.
+- Every selected option must include rollout-safety and rollback limitations.
+- Every selected option must include reopen conditions tied to observable triggers.
+- Minimum evidence by decision axis:
+  - boundary/decomposition: owner map + source-of-truth mapping + transaction-boundary justification;
+  - sync interaction: call graph + deadline budget + retry/idempotency classification;
+  - async/eventing: outbox/inbox strategy + retry/DLQ policy + schema-evolution path;
+  - distributed consistency: invariant register + workflow state machine + compensation/forward-recovery plan;
+  - resilience/evolution: dependency-failure matrix + degradation modes + rollout/rollback gate plan.
+
+#### Assumption And Uncertainty Discipline
+- Mark unknown critical facts as `[assumption]` immediately.
+- Keep assumptions bounded and testable; never hide them inside generic phrasing.
+- Resolve assumptions in the same pass by source-backed validation when possible.
+- Promote unresolved critical assumptions to blockers in `80-open-questions.md` with owner and unblock condition.
+
+#### Review Blockers For This Skill
+- Architecture recommendation without explicit trade-off analysis.
+- Architecture decision that shifts unresolved core choice into coding phase.
+- New service boundary without data ownership and transaction-boundary proof.
+- Sync call chain without explicit deadlines, retry semantics, and idempotency classification.
+- Async design without outbox/inbox, bounded retry, or DLQ ownership.
+- Distributed flow without invariant register and explicit workflow state model.
+- Reliability strategy without fallback/degradation contract and rollback path.
+- Cross-domain impact omitted for API/data/security/operability consequences.
+- Decision rationale based on preference/tool familiarity instead of workload/constraint evidence.
+
 ## Working Rules
 1. Determine current `docs/spec-first-workflow.md` phase and pass goal before drafting decisions. Keep decision scope aligned to that phase.
 2. Set phase-specific output targets before drafting decisions:

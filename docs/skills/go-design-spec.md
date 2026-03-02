@@ -132,8 +132,10 @@ Primary deliverable set (отдельного design-файла нет):
 4. Выбранный вариант упрощения и rationale.
 5. Trade-offs (simplicity/flexibility/cost/risk).
 6. Cross-domain impact на architecture/API/data/security/operability/reliability/testing.
-7. Риски и контрольные меры.
-8. Reopen conditions.
+7. Evidence basis и проверяемые acceptance boundaries.
+8. Статус затронутых артефактов (`updated` / `no changes required`) с обоснованием.
+9. Риски и контрольные меры.
+10. Reopen conditions.
 
 ## 9. Definition Of Done Для Прохода Skill
 
@@ -142,7 +144,9 @@ Primary deliverable set (отдельного design-файла нет):
 - снижена или формализована критичная accidental complexity;
 - в `60-implementation-plan.md` нет скрытых design-decisions "на потом";
 - каждое нетривиальное упрощение имеет явный trade-off и owner;
+- каждое major решение имеет evidence basis, acceptance boundaries и явный статус затронутых артефактов;
 - design blockers закрыты или вынесены в `80-open-questions.md` с owner и unblock condition;
+- нет активных design review blockers, не отраженных в `80-open-questions.md`;
 - затронутые `20/30/40/50/55/60/70/90` синхронизированы и непротиворечивы.
 
 ## 10. Анти-Паттерны

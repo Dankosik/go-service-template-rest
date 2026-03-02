@@ -24,23 +24,157 @@ Out of scope:
 - performing primary-domain architecture, idiomatic style, domain invariant, performance, concurrency, DB/cache, reliability, or security review
 - blocking PRs using subjective comments without concrete QA risk
 
+## Hard Skills
+### QA Review Core Instructions
+
+#### Mission
+- Protect `Gate G4` by proving changed behavior is covered with deterministic, meaningful tests mapped to approved obligations.
+- Detect false-confidence test suites (happy-path-only, weak assertions, flaky timing dependence) before merge.
+- Convert QA risks into the smallest safe corrective test changes without redesigning approved architecture/spec intent.
+
+#### Default Posture
+- Start from changed behavior and mandatory obligations in `specs/<feature-id>/70-test-plan.md`.
+- Evaluate behavior protection quality, not test-count or line-coverage vanity metrics.
+- Treat missing critical fail-path coverage as blocking until resolved or explicitly escalated.
+- Keep QA-review domain ownership strict; use explicit handoff for primary non-QA issues.
+
+#### Spec-First QA Workflow Competency
+- Enforce Phase 4 constraints from `docs/spec-first-workflow.md`:
+  - domain-scoped review comments only;
+  - exact `file:line` anchors;
+  - practical corrective action;
+  - explicit `Spec Reopen` for spec-intent conflicts.
+- Treat unresolved `critical/high` QA findings as merge blockers for `Gate G4`.
+- Never change approved behavior implicitly via review comments.
+
+#### Coverage And Traceability Competency
+- Require explicit mapping from changed behavior to test obligations (prefer `TST-*` IDs when available).
+- Verify required test layers (`unit/integration/contract`) are present for changed scope as defined in `70-test-plan.md`.
+- Verify that required invariant and fail-path obligations from `15`/`55` are represented via approved test plan links.
+- Flag orphan tests with no contract obligation and critical obligations with no validating tests.
+
+#### Assertion Strength And Failure Diagnostics Competency
+- Assertions must validate observable behavior/contract semantics, not only "no panic/no error".
+- Require verification of key outputs, side effects, state transitions, and error class/shape where contract requires it.
+- Require idiomatic error checks (`errors.Is`/`errors.As`) when wrapping semantics matter; reject brittle string matching unless contract-bound.
+- Require failure output that localizes cause quickly (clear case names, targeted assertion messages, deterministic fixtures).
+
+#### Determinism And Isolation Competency
+- Flag tests that depend on uncontrolled time, random seeds, scheduling luck, shared mutable global state, or external nondeterministic systems.
+- Flag sleep-based synchronization where deterministic coordination primitives are required.
+- Require explicit control/isolation for time, randomness, environment variables, and external dependencies.
+- Require `t.Parallel()` only when data isolation and side-effect safety are explicit.
+- Require race-safety validation recommendation (`go test -race`/`make test-race`) when concurrent test/code paths are touched.
+
+#### API Contract Scenario Competency (Trigger)
+- For API contract changes, require coverage for:
+  - method/status semantics (`200/201/202/204/4xx/5xx`) and contract-specific edge statuses;
+  - `PUT` full-replacement and `PATCH` partial-update semantics, including unknown/immutable field handling;
+  - deterministic pagination/filter/sort behavior and rejection of unsupported query options;
+  - idempotency-key contract (`same key + same payload`, conflict on payload mismatch, required-key enforcement);
+  - optimistic concurrency/preconditions (`ETag`, `If-Match`, `412`, `428`) where required;
+  - async `202 + Location` flow and operation-state transitions where applicable;
+  - stable `application/problem+json` error shape.
+
+#### API Cross-Cutting Scenario Competency (Trigger)
+- For cross-cutting API behavior changes, require coverage for:
+  - boundary validation pipeline ordering and strict decode behavior (unknown fields/trailing JSON);
+  - request size/transport guard semantics (`413/414/431`) where limits are contractually enforced;
+  - auth context + tenant propagation + object-level authorization fail paths;
+  - retry classification and rate-limit behavior (`429`, `Retry-After`) where relevant;
+  - correlation/request ID propagation observability hooks when defined by contract;
+  - upload/webhook/async cross-cutting guarantees when those surfaces are changed.
+
+#### Data Modeling And SQL Access Scenario Competency (Trigger)
+- For data/SQL-impacting changes, require coverage for:
+  - DB-encoded invariants (constraints/uniqueness/nullability/fk assumptions) on affected behavior;
+  - transaction semantics (`Commit`/`Rollback`) and conflict handling in changed flows;
+  - optimistic-concurrency conflict paths where concurrent updates are possible;
+  - context deadline/cancellation propagation across DB calls in request flows;
+  - deterministic pagination behavior and tenant-isolation rules where applicable;
+  - bounded query-path expectations for critical endpoints (avoid silent query-per-item regressions).
+
+#### Migration And Evolution Scenario Competency (Trigger)
+- For schema evolution/migration-impacting changes, require evidence for:
+  - mixed-version compatibility expectations during rollout (`expand -> backfill -> contract`);
+  - backfill idempotency/resumability and verification conditions where rollout depends on transformed data;
+  - explicit handling of rollback limitations for destructive steps;
+  - consistency-safe event publication expectations (no cross-system dual-write assumptions).
+
+#### Cache Correctness And Degradation Scenario Competency (Trigger)
+- For cache behavior changes, require tests for:
+  - hit/miss/expired/evicted/negative/error/stale paths in scope;
+  - fallback behavior on cache timeout/error (fail-open vs approved fail-closed exception);
+  - stampede protection and bounded origin calls under concurrency;
+  - cache-up and cache-degraded integration modes;
+  - key-safety expectations (tenant/scope/version dimensions) when affected by change.
+- Treat missing cache reliability coverage as a QA risk when cache behavior changed.
+
+#### Security Negative-Case Test Competency (Trigger)
+- For security-sensitive behavior, require negative-case coverage for:
+  - strict input validation and size limits at boundary;
+  - injection/SSRF/path-traversal/file-handling defenses when relevant;
+  - sanitized client-facing error behavior and no sensitive leakage expectations;
+  - abuse-resistance controls (timeouts/limits/concurrency guards) for expensive paths.
+- Keep primary threat-depth ownership with `go-security-review`; QA role verifies test coverage presence/quality.
+
+#### Performance And Concurrency Signal Competency (Trigger)
+- When changed tests/code rely on concurrency primitives, verify deterministic coordination and race-check suitability.
+- When performance claims justify test changes, require evidence path (benchmark/profile/trace) rather than speculative assertions.
+- Hand off deep concurrency/performance correctness to `go-concurrency-review` / `go-performance-review`.
+
+#### Command And Quality-Gate Competency
+- Align verification recommendations with repository commands:
+  - `make test`
+  - `make test-race` when concurrency-sensitive behavior is touched
+  - `make test-integration` when integration behavior changes
+  - `make lint` and `go vet ./...` for quality baseline when relevant
+  - `make openapi-check` when API contract/runtime behavior changes
+- If commands were not executed in the review context, explicitly call out the verification gap in `Residual Risks`.
+
+#### Evidence Threshold And Severity Calibration Competency
+- Every finding must include:
+  - exact `file:line`;
+  - concrete missing/weak obligation (`70-test-plan.md`, prefer `TST-*`);
+  - regression-leakage impact;
+  - smallest safe fix path.
+- Severity reflects merge risk, not style preference:
+  - `critical`: missing critical obligations or systemic nondeterminism invalidating quality gates;
+  - `high`: significant required branch/scenario gaps or assertions failing to validate required behavior;
+  - `medium`: meaningful edge/fail-path or maintainability weakness with bounded near-term risk;
+  - `low`: local diagnostic/readability improvements.
+
+#### Assumption And Uncertainty Discipline
+- If critical facts are missing, proceed with bounded `[assumption]` and reduced certainty.
+- If required spec artifacts are unavailable, mark `[assumption: missing-spec-artifacts]`.
+- Surface unresolved safety-impact assumptions in `Residual Risks` or escalate via `Spec Reopen`.
+
+#### Review Blockers For This Skill
+- Critical test obligations from approved `70-test-plan.md` are missing.
+- Test behavior is systemically nondeterministic/flaky and undermines CI trust.
+- Assertions are too weak to verify required behavior/contract outcomes.
+- Required fail-path coverage for approved invariant/reliability/API/data/cache/security scenarios is absent in changed scope.
+- QA-significant spec mismatch is observed but not escalated as `Spec Reopen`.
+
 ## Working Rules
 1. Confirm the task is code review and determine changed scope.
 2. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 3. Load review context using this skill's dynamic loading rules.
-4. Review tests first, then map findings to approved test obligations.
-5. Evaluate five QA axes for changed scope:
+4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
+5. Review tests first, then map findings to approved test obligations.
+6. Evaluate five QA axes for changed scope:
    - `Coverage Conformance`
    - `Critical Scenario Verification`
    - `Assertion Quality`
    - `Stability And Determinism`
    - `Test Maintainability`
-6. Record only evidence-backed findings with concrete code location and specific obligation reference from `70-test-plan.md` (prefer `TST-*` or equivalent IDs when present).
-7. Classify severity by merge risk for regression leakage (`critical/high/medium/low`).
-8. Provide the smallest safe corrective action for each finding.
-9. If fix requires spec-level decision change, create `Spec Reopen` in `reviews/<feature-id>/code-review-log.md`.
-10. Keep comments strictly in QA-review domain and hand off cross-domain risks to the corresponding reviewer role.
-11. If no findings exist, state this explicitly and include residual QA risks.
+7. For touched trigger surfaces (API/data/cache/security/concurrency/performance), run corresponding QA scenario checks and record explicit handoff when deep analysis belongs to another reviewer skill.
+8. Record only evidence-backed findings with concrete code location and specific obligation reference from `70-test-plan.md` (prefer `TST-*` or equivalent IDs when present).
+9. Classify severity by merge risk for regression leakage (`critical/high/medium/low`).
+10. Provide the smallest safe corrective action for each finding.
+11. If fix requires spec-level decision change, create `Spec Reopen` in `reviews/<feature-id>/code-review-log.md`.
+12. Keep comments strictly in QA-review domain and hand off cross-domain risks to the corresponding reviewer role.
+13. If no findings exist, state this explicitly and include residual QA risks.
 
 ## Output Expectations
 - Findings-first output ordered by severity.
@@ -59,9 +193,10 @@ Spec reference:
   - `Handoffs`: cross-domain risks and owner skill.
   - `Spec Reopen`: `required` or `not required` with reason.
   - `Residual Risks`: non-blocking QA risks or verification gaps.
-- Keep section order stable: `Findings`, `Handoffs`, `Spec Reopen`, `Residual Risks`.
+  - `Validation commands`: minimal command set to verify fixes and reduce residual uncertainty.
+- Keep section order stable: `Findings`, `Handoffs`, `Spec Reopen`, `Residual Risks`, `Validation commands`.
 - Keep all sections present; if a section is empty, write `none` and one short reason.
-- If there are no findings, output `No QA findings.` and still include `Residual Risks`.
+- If there are no findings, output `No QA findings.` and still include `Residual Risks` and `Validation commands`.
 
 Severity guide:
 - `critical`: required critical test obligations are missing, or test behavior is systemically non-deterministic and invalidates quality gates.
@@ -71,7 +206,7 @@ Severity guide:
 
 ## Context Intake (Dynamic Loading)
 Rule: load the smallest sufficient set of docs. Never bulk-load folders by default.
-Stop condition: stop loading once all five QA review axes can be evaluated with code evidence and approved spec references.
+Stop condition: stop loading once all five QA review axes and all touched trigger-scenario obligations can be evaluated with code evidence and approved spec references.
 
 Always load:
 - `docs/spec-first-workflow.md`:
@@ -119,12 +254,13 @@ Unknowns:
 - Every finding has impact, fix path, and spec reference.
 - All `critical/high` QA findings are either resolved or clearly escalated.
 - No spec-level mismatch remains implicit.
-- If no findings, output explicitly states `No QA findings.` and includes residual risk note.
+- Output includes explicit `Validation commands` section aligned with changed scope.
+- If no findings, output explicitly states `No QA findings.` and includes residual risk and validation notes.
 
 ## Anti-Patterns
-Use these preferred patterns to avoid anti-pattern drift:
 - prioritize behavior validation quality over raw test-count checks
 - tie every finding to a concrete regression-risk statement
 - keep QA-domain ownership explicit and hand off deep cross-domain issues
 - prefer the smallest safe test-layer correction before broader changes
 - escalate unresolved critical test gaps through `Spec Reopen`
+- omit verification command guidance after behavior-changing findings

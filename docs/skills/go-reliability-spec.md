@@ -1,176 +1,316 @@
-# Skill Spec: `go-reliability-spec` (Expertise-First)
+# Skill Spec: `go-reliability-spec` (Domain Hard Skills)
 
 ## 1. Назначение
 
-`go-reliability-spec` — эксперт по reliability/resilience требованиям в spec-first процессе для Go-сервисов.
+`go-reliability-spec` — экспертный spec-skill по reliability/resilience решениям в Phase 2 (`Spec Enrichment Loops`) spec-first процесса.
 
 Ценность skill:
-- переводит поведение при сбоях и перегрузке в явные спецификационные контракты до начала кодинга;
-- фиксирует timeout/retry/backpressure/degradation/shutdown/rollback policy без "решим в реализации";
-- снижает риск cascading failures, retry storms, probe flapping, unbounded queue growth и unsafe rollout.
+- переводит поведение при сбоях/перегрузке в явные контракты до кодинга;
+- фиксирует timeout/retry/backpressure/degradation/lifecycle/rollout policy без "решим в реализации";
+- снижает риск cascading failures, retry storms, probe flapping, unbounded queue growth и unsafe rollout;
+- делает reliability-решения воспроизводимыми между сессиями за счет явного hard-skills ядра в самом skill-пакете.
 
-Этот документ определяет только scope и ответственность skill. Workflow-контур (`phases`, `gates`, `freeze/reopen`) задается в `docs/spec-first-workflow.md`.
+`docs/spec-first-workflow.md` задает процесс и gate-логику; `go-reliability-spec` отвечает за предметную reliability-экспертизу внутри этого процесса.
 
-## 2. Ядро Экспертизы (Scope)
+## 2. Формат Hard Skills (как в AGENTS.md)
 
-`go-reliability-spec` принимает решения по:
-- классификации зависимостей и failure-contract:
-  - `critical_fail_closed` / `critical_fail_degraded` / `optional_fail_open`;
-  - owner/on-call/rollback authority для критичных зависимостей;
-- timeout и deadline policy:
-  - end-to-end budget и per-hop caps;
-  - inbound->outbound deadline propagation rules;
-  - fail-fast правила при недостатке оставшегося бюджета;
-- retry policy:
-  - retry eligibility class;
-  - retry budget и jitter policy;
-  - never-retry категории ошибок;
-- overload control:
-  - bounded queues/channels;
-  - dependency bulkheads (per dependency concurrency lanes);
-  - load shedding policy и rejection semantics (`429`/`503`, `Retry-After`);
-- circuit and containment policy:
-  - когда достаточно soft retry-breaker;
-  - когда нужен state-machine breaker и какие минимальные пороги/переходы;
-- graceful lifecycle:
-  - startup/readiness/liveness responsibilities;
-  - shutdown drain order и timeout contracts;
-  - anti-flap правила для readiness;
-- degradation and fallback modes:
-  - mode model (`normal`, `degraded_optional_off`, `degraded_read_only_or_stale`, `emergency_fail_fast`);
-  - activation/deactivation criteria и допустимые fallback semantics;
-- rollout/rollback reliability safety:
-  - canary progression and promotion gates;
-  - rollback trigger authority и rollback-time expectations;
-  - feature-flag safety requirements (owner/expiry/rollback behavior);
-- reliability acceptance obligations:
-  - что обязательно должно быть покрыто в `70-test-plan.md` для failure/degradation paths;
-  - какие решения являются блокерами Gate G2.
+Для `go-reliability-spec` hard skills должны быть оформлены в том же инженерном формате, что и в `AGENTS.md` и усиленных runnable skills:
+- `Mission`: какой reliability-риск skill обязан предотвращать до `Gate G2`;
+- `Default Posture`: инженерные презумпции по умолчанию;
+- доменные компетенции (`... Competency`) с исполняемыми правилами и default-числами;
+- `Evidence Threshold`: обязательный уровень доказательности для `REL-###` решений;
+- `Review Blockers For This Skill`: что блокирует sign-off.
 
-## 3. Ответственность В Spec-First Workflow
+Ключевой принцип: `Working Rules` задают порядок работы, а `Hard Skills` задают качество и enforceability решений.
 
-Ключевая роль `go-reliability-spec` — Phase 0 и Phase 2 с правом редактировать любой spec-файл, но с приоритетом reliability-домена.
+## 3. Персонализированные Hard Skills Для `go-reliability-spec`
 
-Обязательная ответственность в каждом проходе:
-- в Phase 0 сформировать baseline reliability-risk сценариев и первичную заготовку `55-reliability-and-resilience.md`;
-- в Phase 2 закрыть или явно формализовать все reliability-неопределенности;
-- удерживать `55-reliability-and-resilience.md` как primary artifact reliability-решений;
-- синхронизировать reliability-контракты с затронутыми `20/30/40/50/60/70/80/90`;
-- не допускать переноса критичных reliability-решений в coding phase;
-- обеспечить, чтобы к Gate G2 `55-reliability-and-resilience.md` содержал проверяемую policy по timeout/retry/backpressure/degradation/shutdown/rollback.
+### 3.1 Mission
 
-## 4. Границы Экспертизы (Out Of Scope)
+- Превращать reliability-intent в enforceable pre-coding contracts.
+- Защищать `55-reliability-and-resilience.md` от неявных "implementation-only" решений.
+- Гарантировать rollback-safe и incident-ready поведение изменяемых критичных путей.
 
-`go-reliability-spec` не подменяет соседние роли:
-- сервисная декомпозиция и ownership boundaries как primary-домен `go-architect-spec`;
-- endpoint/resource modeling и payload-level API design как primary-домен `api-contract-designer-spec`;
-- distributed workflow topology (orchestration/choreography, saga state model, outbox/inbox ownership) как primary-домен `go-distributed-architect-spec`;
-- SQL schema design, DDL/migration execution mechanics как primary-домен `go-data-architect-spec`;
-- cache topology/key strategy как primary-домен `go-db-cache-spec`;
-- SLI/SLO target governance, alert routing и dashboard ownership как primary-домен `go-observability-engineer-spec`;
-- secure coding и threat-control catalog как primary-домен `go-security-spec`;
-- CI/CD implementation mechanics и container/runtime hardening как primary-домен `go-devops-spec`;
-- code-level реализации retry wrappers, middleware, worker pools и shutdown hooks (implementation phase).
+### 3.2 Default Posture
 
-## 5. Основные Deliverables Skill
+- Сначала классифицировать dependency criticality, потом выбирать control-mechanisms.
+- Explicit deadline + bounded retry + bounded concurrency — базовая норма, не опция.
+- Предпочитать простые containment controls до сложных state-machine решений.
+- Неопределенности по критичным reliability-фактам считать blocker до фиксации `[assumption]` + owner.
+- Сохранять совместимость с mixed-version rollout (rolling/canary) по умолчанию.
 
-Primary artifact:
-- `55-reliability-and-resilience.md`:
-  - dependency criticality matrix и per-dependency failure contract;
-  - timeout/deadline hierarchy и propagation rules;
-  - retry budget/jitter policy + never-retry rules;
-  - queue bounds, bulkheads, load shedding и overload response policy;
-  - degradation mode model и fallback contract;
-  - startup/readiness/liveness/shutdown policy;
-  - rollout/rollback reliability gates и reopen criteria.
+### 3.3 Spec-First Workflow Competency
 
-Сопутствующие артефакты (по влиянию):
-- `20-architecture.md`:
-  - resilience constraints, влияющие на архитектурные границы и dependency strategy.
-- `30-api-contract.md`:
-  - API-visible timeout/retry/idempotency/overload semantics.
-- `40-data-consistency-cache.md`:
-  - data/cache consistency implications от degradation/fallback/retry policy.
-- `50-security-observability-devops.md`:
-  - связка reliability policy с security fail-closed и observability/devops enforcement.
-- `60-implementation-plan.md`:
-  - rollout-safe sequencing внедрения reliability controls.
-- `70-test-plan.md`:
-  - failure-path/degradation-path тестовые обязательства.
-- `80-open-questions.md`:
-  - reliability blockers с owner и unblock condition.
-- `90-signoff.md`:
-  - принятые reliability-решения, trade-offs и reopen conditions.
+- Закрывать reliability-решения в spec-фазе, не переносить в coding phase.
+- Держать `55-reliability-and-resilience.md` primary artifact.
+- Синхронизировать последствия в `20/30/40/50/60/70/80/90`.
+- Каждое нетривиальное решение маркировать `REL-###`.
+- Незакрытые timeout/retry/degradation/rollback gaps считать blocker для `Gate G2`.
 
-## 6. Интерфейс Со Смежными Skills
+### 3.4 Dependency Criticality And Failure-Contract Competency
 
-- `go-architect-spec` задает boundaries/dependencies; `go-reliability-spec` задает failure/degradation behavior внутри этих границ.
-- `go-distributed-architect-spec` задает workflow/consistency frame; `go-reliability-spec` задает timeout/retry/fallback contracts для шагов workflow.
-- `go-observability-engineer-spec` владеет telemetry/SLI-SLO policy; `go-reliability-spec` формулирует какие reliability state transitions обязаны быть наблюдаемыми.
-- `go-devops-spec` владеет pipeline/release enforcement; `go-reliability-spec` задает reliability-критерии promotion/rollback decisions.
-- `go-security-spec` владеет threat controls; `go-reliability-spec` синхронизирует fail-closed/fail-degraded поведение без нарушения security invariants.
-- `go-performance-spec` владеет latency/throughput budgets; `go-reliability-spec` использует эти ограничения для overload/degradation policy, не подменяя performance ownership.
+- Обязательная классификация каждой зависимости:
+  - `critical_fail_closed`
+  - `critical_fail_degraded`
+  - `optional_fail_open`
+- Для каждой критичной зависимости обязательны поля контракта:
+  - timeout/deadline
+  - retry class + retry budget
+  - bulkhead limit + queue bound
+  - fallback mode
+  - circuit mode
+  - observability trigger
+- Для critical зависимостей обязательно: owner team, on-call route, rollback authority.
 
-## 7. Матрица Документов Для Экспертизы
+### 3.5 Timeout And Deadline Competency
 
-### 7.1 Always
+- Default interactive end-to-end budget: `2500ms`.
+- Reserve `100ms` for local response/cleanup.
+- Fail-fast, если remaining budget < `150ms`.
+- Default per-hop deadlines:
+  - read/query: `300ms`
+  - write/command: `1000ms`
+  - absolute cap: `2000ms`
+- Обязательная формула:
+  - `outbound_deadline = min(per-hop default, remaining_inbound_budget - 100ms)`
+- Запрещены implicit/infinite timeout defaults.
+
+### 3.6 Retry Budget And Jitter Competency
+
+- Retry default: `no retry`.
+- Ретраи разрешены только для transient failures и retry-safe операций.
+- Для retry-unsafe операций обязателен idempotency contract.
+- Default interactive retry policy:
+  - `1` retry (`2` total attempts)
+  - exponential backoff + full jitter
+  - base `50ms`, max `250ms`
+- Retry budget per dependency обязателен:
+  - extra retries `<= 20%` primary attempts в rolling `1m`
+  - при исчерпании бюджета — disable retries + fail-fast
+- Never-retry: validation/auth/authz/not-found/conflict/caller-canceled.
+
+### 3.7 Overload, Backpressure, And Bulkhead Competency
+
+- Все queue/channel/worker-lanes должны быть bounded.
+- При queue depth > `80%` — включать degradation + shedding optional work.
+- Явно различать rejection semantics:
+  - `429` для policy/quota throttling
+  - `503` для dependency/system exhaustion
+- `Retry-After` обязателен при прогнозируемом горизонте восстановления.
+- Обязательная per-dependency bulkhead isolation.
+- Default dependency concurrency limit: `min(64, 2*GOMAXPROCS)`.
+
+### 3.8 Circuit-Breaking And Containment Competency
+
+- Default: `soft_retry_breaker` (retry budget + caps + shedding).
+- State-machine breaker допустим только при incident evidence.
+- Если state-machine включен, нужны явные thresholds (open/cooldown/half-open probes).
+- Все breaker transitions должны быть observable.
+
+### 3.9 Startup, Readiness, Liveness, And Shutdown Competency
+
+- Строго разделять `/livez`, `/readyz`, `/startupz` semantics.
+- Liveness не зависит от внешних зависимостей.
+- Readiness отражает только core-traffic readiness.
+- Anti-flap hysteresis обязателен.
+- Shutdown sequence обязателен:
+  1. set draining
+  2. fail readiness
+  3. stop new work
+  4. drain inflight
+  5. flush telemetry
+  6. exit before hard kill
+- Default drain timeout: `20s`.
+- `terminationGracePeriodSeconds` > drain timeout + preStop budget.
+
+### 3.10 Degradation And Fallback Competency
+
+- Обязательная mode-модель:
+  - `normal`
+  - `degraded_optional_off`
+  - `degraded_read_only_or_stale`
+  - `emergency_fail_fast`
+- Fallback rules зависят от criticality класса.
+- Default stale fallback cap: `5m`.
+- Deferred fallback должен использовать `202` + tracking ID.
+- Activation/deactivation criteria и recovery criteria должны быть явными и наблюдаемыми.
+- Dependency failure handling order обязателен: timeout/retry -> containment -> fallback -> explicit fail-fast.
+
+### 3.11 API And Cross-Cutting Reliability Semantics Competency
+
+- Reliability-visible behavior обязательно отражать в API contract:
+  - retry class
+  - idempotency requirements
+  - overload response semantics
+  - async acknowledgement semantics
+- Default idempotency policy:
+  - required key
+  - dedup TTL `24h`
+  - scope: tenant/account + operation + route/method
+  - same key + same payload => equivalent outcome
+  - same key + different payload => conflict (`409`/`ABORTED`)
+- Запрещены fake-sync success responses для queued/unfinished side effects.
+
+### 3.12 Sync, Async, And Distributed Workflow Reliability Competency
+
+- Не добавлять sync-hop, если сценарий естественно async.
+- Для state-change + publish обязателен outbox-equivalent atomic linkage.
+- Для side-effecting consumers обязателен inbox/dedup contract.
+- Ack/offset commit только после durable side effects.
+- Async retry defaults: bounded, jittered, capped (`8` total attempts; `1s` base, factor `2`, cap `5m`).
+- Non-retryable/poison сообщения — в DLQ с полным диагностическим контекстом.
+- Для distributed flows обязательны:
+  - invariant ownership
+  - explicit state machine
+  - compensation/forward-recovery path
+  - reconciliation ownership/cadence
+- 2PC и cross-system dual writes не являются default strategy.
+
+### 3.13 Observability, SLO, And Budget-Gate Competency
+
+- Reliability transitions должны иметь logs/metrics/traces contract.
+- Обязательная наблюдаемость для timeout/retry/degradation/rollback/load-shedding состояний.
+- SLI/SLO policy должна быть формализована через `good/total` и budget states.
+- Burn-rate defaults:
+  - `1h/5m @ 14.4` (page)
+  - `6h/30m @ 6` (page)
+  - `3d/6h @ 1` (ticket)
+- Burn-rate paging без event floors недопустим.
+- Rollout gates должны учитывать и service SLIs, и dependency saturation.
+
+### 3.14 Delivery And Quality-Gate Competency
+
+- Reliability-требования должны быть переведены в проверяемые обязательства в `70-test-plan.md`.
+- Для reliability-sensitive изменений обязателен репозиторный validation path (`make test`, `make test-race`, `make test-integration` и смежные contract/migration checks при влиянии).
+- Рискованные изменения требуют staged rollout checkpoints и explicit rollback authority в `60-implementation-plan.md`.
+
+### 3.15 Data Evolution And Recovery Competency
+
+- Reliability-impacting schema changes обязаны следовать `Expand -> Migrate/Backfill -> Contract`.
+- Mixed-version compatibility обязательна до завершения contract phase.
+- Backfills должны быть idempotent/resumable/throttled, с kill-criteria.
+- Rollback class (`safe`/`conditional`/`restore-based`) и ограничения должны быть задокументированы.
+- Backup strategy считается валидной только при restore-drill evidence.
+
+### 3.16 Evidence Threshold And Review Blockers
+
+Каждое `REL-###` решение обязано включать:
+1. контекст, failure scenario, owner;
+2. criticality и invariant impact;
+3. минимум 2 альтернативы;
+4. selected + rejected option rationale;
+5. явные contract values;
+6. verification obligations;
+7. cross-domain impact;
+8. reopen criteria.
+
+Blockers для `go-reliability-spec`:
+- нет explicit failure-contract для критичной зависимости;
+- нет bounded timeout/retry/queue policy;
+- нет явных degradation/rollback semantics;
+- нет lifecycle (startup/readiness/liveness/shutdown) policy;
+- изменена API-visible reliability semantics без обновления contract artifacts;
+- критичная неопределенность перенесена в coding phase.
+
+## 4. Матрица Переноса Из Referenced Docs
+
+| Источник | Что перенесено в hard skills | Где зафиксировано |
+|---|---|---|
+| `docs/spec-first-workflow.md` | Phase/Gate discipline, `55` как primary artifact, запрет deferral в coding | `Spec-First Workflow Competency`, `Evidence Threshold` |
+| `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md` | dependency criticality classes, timeout/retry defaults, bulkheads, degradation model, rollout/budget gates | `3.4`-`3.10`, `3.13` |
+| `docs/llm/go-instructions/10-go-errors-and-context.md` | context deadline propagation, cancel/canceled semantics, boundary-safe error behavior | `3.5`, `3.11` |
+| `docs/llm/go-instructions/20-go-concurrency.md` | bounded goroutines/queues, shutdown unblock paths, race-safe concurrency expectations | `3.7`, `3.9`, `3.12` |
+| `docs/llm/api/10-rest-api-design.md` | idempotency/retry classification, `202` operation-resource pattern, status semantics | `3.11` |
+| `docs/llm/api/30-api-cross-cutting-concerns.md` | `429/503/Retry-After`, input-limit enforcement, idempotency key conflict semantics | `3.11` |
+| `docs/llm/architecture/20-sync-communication-and-api-style.md` | sync-hop decision, per-hop timeout defaults, bounded retry defaults | `3.5`, `3.12` |
+| `docs/llm/architecture/30-event-driven-and-async-workflows.md` | outbox/inbox, bounded async retries, DLQ policy, ack-after-durable rule | `3.12` |
+| `docs/llm/architecture/40-distributed-consistency-and-sagas.md` | explicit state machine, compensation/forward recovery, reconciliation ownership | `3.12` |
+| `docs/llm/operability/10-observability-baseline.md` | reliability transition observability contract, correlation and low-cardinality discipline | `3.13` |
+| `docs/llm/operability/20-sli-slo-alerting-and-runbooks.md` | `good/total`, budget states, burn-rate windows, release/degradation linkage | `3.13` |
+| `docs/llm/operability/30-debuggability-telemetry-cost-and-async-observability.md` | probe split, shutdown telemetry flush, async retry/DLQ observability, telemetry budget guardrails | `3.9`, `3.13` |
+| `docs/llm/delivery/10-ci-quality-gates.md` | CI/release blocking gates, drift/compatibility checks, merge/release hard-stop logic | `3.14` |
+| `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md` | expand-contract, backfill safety, rollback classes, backup/restore/PII reliability obligations | `3.15` |
+
+## 5. Ответственность В Spec-First Workflow
+
+`go-reliability-spec` в каждом проходе обязан:
+- формировать reliability-решения в своей primary-domain зоне;
+- синхронизировать последствия в затронутых артефактах, не перехватывая ownership у соседних skills;
+- фиксировать unresolved blockers в `80-open-questions.md`;
+- фиксировать принятые решения и reopen criteria в `90-signoff.md`.
+
+## 6. Границы Экспертизы (Out Of Scope)
+
+`go-reliability-spec` не подменяет:
+- primary архитектурную декомпозицию (`go-architect-spec`),
+- endpoint-level API design ownership (`api-contract-designer-spec`),
+- data-model/DDL ownership (`go-data-architect-spec`),
+- cache topology ownership (`go-db-cache-spec`),
+- SLI/SLO governance ownership (`go-observability-engineer-spec`),
+- secure-coding/threat catalog ownership (`go-security-spec`),
+- CI/container implementation ownership (`go-devops-spec`),
+- implementation-level coding до spec sign-off.
+
+## 7. Deliverables
+
+Минимальный набор deliverables в reliability-проходе:
+- `55-reliability-and-resilience.md`: полный reliability policy package (including circuit-breaking/containment contract);
+- `80-open-questions.md`: reliability blockers/assumptions с owner;
+- `90-signoff.md`: accepted `REL-###` decisions + reopen conditions;
+- по влиянию: `20/30/40/50/60/70` с явным статусом `updated` или `no changes required`.
+
+## 8. Матрица Документов Для Экспертизы
+
+### 8.1 Always
 
 - `docs/spec-first-workflow.md`
 - `docs/llm/architecture/50-resilience-degradation-and-system-evolution.md`
 
-### 7.2 Trigger-Based
+### 8.2 Trigger-Based
 
-- Если в задаче есть context timeout/cancellation/error contracts:
-  - `docs/llm/go-instructions/10-go-errors-and-context.md`
-- Если меняются goroutine lifecycle, bounded queues, worker pools, shutdown coordination:
-  - `docs/llm/go-instructions/20-go-concurrency.md`
-- Если reliability меняет API boundary semantics (`429/503`, `Retry-After`, idempotency/retry rules, `202` fallback):
-  - `docs/llm/api/10-rest-api-design.md`
-  - `docs/llm/api/30-api-cross-cutting-concerns.md`
-- Если есть sync/async/distributed workflow impact:
-  - `docs/llm/architecture/20-sync-communication-and-api-style.md`
-  - `docs/llm/architecture/30-event-driven-and-async-workflows.md`
-  - `docs/llm/architecture/40-distributed-consistency-and-sagas.md`
-- Если reliability требует observability/budget-aware release integration:
-  - `docs/llm/operability/10-observability-baseline.md`
-  - `docs/llm/operability/20-sli-slo-alerting-and-runbooks.md`
-  - `docs/llm/delivery/10-ci-quality-gates.md`
-- Если reliability policy затрагивает migration/backfill/reconciliation behavior:
-  - `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`
+- `docs/llm/go-instructions/10-go-errors-and-context.md`
+- `docs/llm/go-instructions/20-go-concurrency.md`
+- `docs/llm/api/10-rest-api-design.md`
+- `docs/llm/api/30-api-cross-cutting-concerns.md`
+- `docs/llm/architecture/20-sync-communication-and-api-style.md`
+- `docs/llm/architecture/30-event-driven-and-async-workflows.md`
+- `docs/llm/architecture/40-distributed-consistency-and-sagas.md`
+- `docs/llm/operability/10-observability-baseline.md`
+- `docs/llm/operability/20-sli-slo-alerting-and-runbooks.md`
+- `docs/llm/operability/30-debuggability-telemetry-cost-and-async-observability.md`
+- `docs/llm/delivery/10-ci-quality-gates.md`
+- `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`
 
-## 8. Протокол Принятия Reliability-Решений
+## 9. Протокол Принятия Reliability-Решений
 
 Каждое нетривиальное решение фиксируется как `REL-###`:
-1. Контекст и failure scenario.
-2. Dependency criticality class и business impact.
-3. Варианты (минимум 2 для нетривиального случая).
-4. Выбранный вариант и rationale.
-5. Контракт:
-   - timeout/deadline;
-   - retry class/budget/jitter;
-   - bulkhead/queue bounds;
-   - fallback/degradation mode;
-   - rollback trigger and authority.
-6. Cross-domain impact (architecture/api/data/security/observability/devops/performance).
-7. Test obligations и verification signals.
-8. Риски, compensating controls и условия `reopen`.
+1. Context + failure scenario.
+2. Dependency criticality + invariant impact.
+3. Минимум 2 варианта.
+4. Selected + rejected rationale.
+5. Contract values (timeout/retry/bulkhead/fallback/circuit/observability trigger/lifecycle/rollout).
+6. Verification obligations (tests + signals).
+7. Cross-domain impact.
+8. Reopen conditions.
 
-## 9. Definition Of Done Для Прохода Skill
+## 10. Definition Of Done Для Прохода Skill
 
-Проход `go-reliability-spec` завершен, если:
-- `55-reliability-and-resilience.md` содержит полную, непротиворечивую и проверяемую reliability policy для всех затронутых critical paths;
-- для каждой критичной зависимости определены timeout/retry/bulkhead/fallback contracts и owner;
-- overload/degradation/shutdown behavior формализованы без "implementation-only" пробелов;
-- rollout/rollback reliability gates сформулированы с явными trigger conditions;
-- reliability uncertainty закрыты или вынесены в `80-open-questions.md` с owner и unblock condition;
-- затронутые `20/30/40/50/60/70/90` синхронизированы без противоречий.
+Проход завершен, если:
+- `55-reliability-and-resilience.md` содержит полный и непротиворечивый reliability-contract;
+- каждая critical dependency имеет explicit timeout/retry/bulkhead/fallback/circuit/observability trigger/owner contract;
+- overload/degradation/shutdown behavior формализованы и тестопригодны;
+- startup/readiness/liveness semantics формализованы и anti-flap by policy;
+- rollout/rollback gates имеют trigger + authority semantics;
+- unresolved assumptions переведены в `80-open-questions.md` с owner/unblock condition;
+- затронутые `20/30/40/50/60/70/90` синхронизированы без противоречий;
+- нет активных пунктов из `Review Blockers For This Skill`.
 
-## 10. Анти-Паттерны
+## 11. Анти-Паттерны
 
 `go-reliability-spec` не должен:
-- ограничиваться общими фразами "добавить retries/timeouts" без budget и eligibility правил;
-- допускать infinite timeouts/retries/unbounded queues как implicit defaults;
-- оставлять degradation activation criteria и recovery criteria неявными;
-- смешивать reliability ownership с observability SLO governance или devops implementation mechanics;
-- принимать rollout без explicit rollback authority и rollback-safe plan;
-- переносить critical reliability-uncertainty в coding phase без записи в `80-open-questions.md`.
+- оставлять timeout/retry/backpressure/degradation как общие слова без чисел и policy;
+- допускать infinite timeout/retry/unbounded queues как implicit defaults;
+- оставлять circuit/containment policy неявной для зависимостей с повторяющимися отказами;
+- путать ownership reliability с ownership observability/security/devops;
+- делать rollout без explicit rollback authority и gate-criteria;
+- переносить critical reliability uncertainty в coding phase без blocker-tracking.

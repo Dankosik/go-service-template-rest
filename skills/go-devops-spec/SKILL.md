@@ -8,6 +8,130 @@ description: "Design delivery/platform-first specifications for Go services in a
 ## Purpose
 Create a clear, reviewable delivery/platform specification package before implementation. Success means CI/CD gates, release-safety controls, and container/runtime hardening rules are explicit, defensible, and directly translatable into implementation and verification tasks.
 
+## Hard Skills
+
+#### Mission
+- Design delivery/platform specifications as enforceable operational policy, not as advisory notes.
+- Convert merge and release readiness into deterministic, machine-checkable gates with explicit hard-stop conditions.
+- Keep production-risk controls explicit across CI/CD, schema evolution, container runtime, and artifact trust.
+
+#### Default posture
+- Treat correctness, security, contract compatibility, migration safety, and release trust as blocking by default.
+- Prefer fail-closed decisions when facts are missing; unresolved critical unknowns become explicit blockers.
+- Prefer additive, backward-compatible rollout patterns over destructive or big-bang changes.
+- Require evidence-first decisions: no gate policy is accepted without concrete enforcement point and artifact proof.
+- Keep local and CI behavior aligned through exact repository commands and stable job mappings.
+
+#### CI gate engineering
+- Define and maintain four delivery tiers with distinct intent: `fast-path`, `full`, `nightly`, `release`.
+- Preserve merge-gate execution order with fail-fast semantics:
+  1. repository integrity (`-mod=readonly`, `go mod tidy -diff`, `go mod verify`)
+  2. formatting drift
+  3. static quality/lint
+  4. OpenAPI/codegen/compatibility checks
+  5. unit tests
+  6. source security (`govulncheck`, `gosec`)
+  7. race + integration checks
+  8. container build + Trivy scan
+- Keep required status check names stable and branch-protection compatible.
+- Treat cancelled/timed-out required jobs as failed gates.
+
+#### Branch protection and PR governance
+- Require PR-based merge for protected branches; disable direct pushes and force-push bypasses.
+- Require up-to-date branch, approved review, stale-approval dismissal, and conversation resolution.
+- Include administrators in protection policy to prevent privileged bypass drift.
+- Keep repository guardrails present in default branch (`CODEOWNERS`, PR template, security and contribution policy files).
+
+#### Command fidelity and CI mapping
+- Use only repository-defined commands and targets when defining gates.
+- Keep policy mapped to concrete commands from `docs/build-test-and-development-commands.md`.
+- Preserve CI/local parity for core checks (`mod-check`, `fmt-check`, `lint`, `test`, OpenAPI checks, security checks).
+- Keep conditional gates explicit (`openapi-breaking` for PR compatibility, `migration-validate` when migrations change).
+- Treat undocumented or non-reproducible command substitutions as policy defects.
+
+#### Drift and compatibility controls
+- Enforce docs drift checks for behavior-changing paths in the same PR.
+- Enforce codegen drift by running generation and zero-drift verification immediately after generation.
+- Enforce OpenAPI compatibility against base branch when contract can change.
+- Block undocumented breaking API changes unless there is explicit approved exception with rollout/versioning plan.
+- Require behavior-contract consistency between implementation, generated artifacts, and published docs.
+
+#### Migration and data-evolution safety
+- Require phased schema rollout: `Expand -> Migrate/Backfill -> Contract`.
+- Require mixed-version compatibility across rolling/canary deployments until contract phase.
+- Use one controlled migrator process, never migration-on-every-pod startup behavior.
+- Require session-level migration safety budgets (`lock_timeout`, `statement_timeout`, `idle_in_transaction_session_timeout`).
+- Require idempotent, resumable, throttled backfills with durable checkpoints and explicit abort thresholds.
+- Require objective verification gates (invariants, aggregate parity, deterministic diff checks) before contract.
+- Classify rollback mode explicitly (`safe`, `conditional`, `restore-based`) and document irreversible steps.
+- For DB + event consistency, require outbox/atomic publication patterns; reject cross-system dual writes.
+- Treat restore-drill failures and untested backup posture as release blockers.
+
+#### Security gate policy and identity safety
+- Keep `govulncheck` and `gosec` in blocking mode for merge decisions.
+- Keep container security scanning blocking on policy severities (`HIGH`, `CRITICAL`) for release artifacts.
+- Require suppression workflow with owner, rationale, expiry, and review trail.
+- Require secure-by-default controls on changed trust boundaries:
+  - bounded input size/time/concurrency
+  - strict validation/decoding
+  - parameterized data access
+  - no secret leakage in logs/errors
+- Require fail-closed authn/authz and tenant scoping behavior for delivery-significant security changes.
+
+#### Containerization and runtime hardening
+- Default to multi-stage Docker builds with minimal runtime image and no build toolchain leftovers.
+- Default runtime profile: distroless + non-root + exec-form `ENTRYPOINT`.
+- Default linking strategy: static (`CGO_ENABLED=0`) unless cgo requirements are explicit and justified.
+- Require runtime compatibility for outbound TLS and timezone behavior (CA trust + tzdata strategy).
+- Require reproducible build defaults (`-trimpath`, `-mod=readonly`, deterministic ldflags, explicit Go version).
+- Require `.dockerignore` to prevent context/secrets leakage.
+- Require runtime hardening baseline:
+  - non-root user
+  - read-only root filesystem
+  - no privilege escalation
+  - drop Linux capabilities by default
+  - no privileged/host-level execution modes without explicit exception
+
+#### Release trust and software supply chain evidence
+- Treat SBOM, provenance attestation, and artifact signing as release-gate evidence, not optional metadata.
+- Require release preflight gates before publish on version tags.
+- Require verifiable permissions/config for attestations, OIDC signing, and registry publishing.
+- Prefer digest pinning and explicit base-image/tool version management for reproducibility.
+- Reject release flows that cannot prove artifact integrity and origin.
+
+#### Observability and SLO-aware release gating
+- Require telemetry baseline for changed production paths:
+  - structured logs with correlation fields
+  - RED metrics plus saturation signals
+  - trace propagation across sync/async boundaries
+- Enforce low-cardinality telemetry dimensions; keep high-cardinality identifiers out of metrics labels.
+- Require SLO policy with explicit `good/total` SLI semantics and 28-day budget accounting.
+- Require multi-window burn-rate alerting with low-traffic floors.
+- Tie release permissions to budget state (`green`/`yellow`/`orange`/`red`) and degrade/freeze policies.
+- Require runbook and dashboard linkage for actionable paging alerts.
+
+#### Reliability and rollout safety
+- Require explicit per-dependency contracts for timeout, retry, bulkhead, fallback, and observability signals.
+- Prohibit infinite deadlines/retries and unbounded queues/concurrency.
+- Require overload semantics and backpressure behavior (`429`/`503` with clear policy).
+- Require progressive rollout controls for risky changes (canary/blue-green/feature flag strategy).
+- Require rollback ownership and objective promotion/rollback criteria.
+- Treat active page-level burn alerts as rollout blockers until stability criteria recover.
+
+#### Exception and risk acceptance governance
+- Every temporary bypass must include owner, expiry, compensating controls, and reopen condition.
+- No gate can be silently downgraded from blocking to informational.
+- Keep all unresolved critical unknowns in `80-open-questions.md` with unblock path and owner.
+- Keep accepted risk decisions and reopen criteria in `90-signoff.md`.
+- Reject "fix later" wording without bounded remediation plan and accountable owner.
+
+#### Non-negotiable never events
+- Never merge destructive-first schema changes on active production paths.
+- Never accept release without trust evidence (scan, SBOM, signature, provenance) required by policy.
+- Never treat red CI, red nightly reliability checks, or unresolved high-risk findings as merge/release eligible.
+- Never rely on manual memory instead of machine-enforced branch and CI controls.
+- Never design gates that cannot be reproduced locally or verified in CI logs/artifacts.
+
 ## Scope And Boundaries
 In scope:
 - define CI quality-gate policy and execution tiers (`fast-path`, `full`, `nightly`, `release`)

@@ -69,11 +69,12 @@
 1. `# <Skill Title>`
 2. `## Purpose`
 3. `## Scope And Boundaries`
-4. `## Working Rules`
-5. `## Output Expectations`
-6. `## Definition Of Done`
-7. `## Anti-Patterns`
-8. `## Context Intake (Dynamic Loading)` (если skill использует локальные инструкции из `docs/*`)
+4. `## Hard Skills` (для domain-critical skills: review/spec/coder/security/reliability/performance/data/observability)
+5. `## Working Rules`
+6. `## Output Expectations`
+7. `## Definition Of Done`
+8. `## Anti-Patterns`
+9. `## Context Intake (Dynamic Loading)` (если skill использует локальные инструкции из `docs/*`)
 
 В тело `SKILL.md` не включай:
 - тесты триггера;
@@ -117,6 +118,22 @@
 3. Выполнить основную задачу skill.
 4. Проверить внутреннюю согласованность результата.
 5. Вернуть итог в ожидаемом формате.
+
+## Hard Skills
+
+Этот раздел обязателен для skill, где нужна устойчивая инженерная глубина (review/spec/coder домены).
+
+Минимальный формат:
+- `Mission`
+- `Default Posture`
+- доменные компетенции (`... Competency`) с конкретными правилами
+- `Evidence Threshold` (какой уровень доказательности обязателен)
+- `Review Blockers For This Skill` (что блокирует merge/sign-off)
+
+Правила:
+- `Hard Skills` должны быть domain-specific, а не общими фразами.
+- Каждый пункт должен быть операционализирован: что проверять, что считать нарушением, что считать достаточным доказательством.
+- `Working Rules` исполняют skill, но `Hard Skills` определяют качество инженерных решений.
 
 ## Context Intake (Dynamic Loading)
 
@@ -229,6 +246,24 @@ In scope:
 
 Out of scope:
 - ...
+- ...
+
+## Hard Skills
+### <Domain> Core Instructions
+
+#### Mission
+- ...
+
+#### Default Posture
+- ...
+
+#### <Domain> Competency
+- ...
+
+#### Evidence Threshold
+- ...
+
+#### Review Blockers For This Skill
 - ...
 
 ## Working Rules

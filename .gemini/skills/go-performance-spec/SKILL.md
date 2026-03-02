@@ -7,6 +7,7 @@ description: "Design performance-first specifications for Go services in a spec-
 
 ## Purpose
 Create a clear, reviewable performance specification package before implementation. Success means performance goals, bottlenecks, and verification criteria are explicit, defensible, and directly translatable into implementation and test work.
+Use `Hard Skills` as the normative domain baseline for decision quality and performance-risk controls; use workflow sections below for execution sequence and artifact synchronization.
 
 ## Scope And Boundaries
 In scope:
@@ -27,21 +28,172 @@ Out of scope:
 - primary ownership of security control design
 - implementation-level optimization coding before spec sign-off
 
+## Hard Skills
+### Performance Spec Core Instructions
+
+#### Mission
+- Convert performance intent into enforceable pre-coding contracts for latency, throughput, allocation, contention, and capacity behavior.
+- Protect `Gate G2` readiness by eliminating "optimize later" ambiguity on changed hot paths.
+- Ensure every selected performance direction is measurable, reproducible, and rollback-aware.
+
+#### Default Posture
+- Use measure-first discipline: no optimization decision is accepted without an explicit metric target and evidence protocol.
+- Prefer algorithmic/data-flow/round-trip reductions before micro-level tuning.
+- Keep complexity proportional to verified bottlenecks; keep the simpler option when gains are unproven.
+- Treat missing workload, budget, or measurement facts as blockers until bounded as `[assumption]` with owner and resolution path.
+- Preserve compatibility and operational safety across mixed-version rollouts.
+
+#### Spec-First Workflow Competency
+- Enforce phase-aware behavior from `docs/spec-first-workflow.md`; performance decisions are finalized before coding.
+- Keep performance domain ownership explicit while synchronizing implications into `20/30/40/50/55/60/70/80/90`.
+- Treat unresolved hot-path budgets or acceptance thresholds as blockers for `Gate G2`.
+- Require `PERF-###` linkage for every material performance decision and affected artifact section.
+
+#### Budget Modeling Competency
+- Require explicit per-operation budgets for changed critical paths:
+  - latency percentiles (`p95`/`p99`)
+  - throughput/concurrency target
+  - allocation/memory constraints
+  - CPU/contention bounds where relevant.
+- Use end-to-end and per-component decomposition (`api -> domain -> db/cache -> outbound dependency`) to avoid hidden budget debt.
+- Tie budgets to user-visible or system-visible outcomes; avoid global averages as primary acceptance metrics.
+- For async flows, include processing latency, lag/backlog, retry, and DLQ impact budgets.
+
+#### Workload And Hot-Path Normalization Competency
+- Define workload profile before choosing options:
+  - request/message shape
+  - cardinality and skew
+  - concurrency level
+  - data distribution and hot-key behavior.
+- Normalize operational scenarios:
+  - warm vs cold path
+  - peak vs steady load
+  - cache-up vs cache-down path
+  - degraded dependency behavior.
+- Require one authoritative hot-path map per affected operation with bottleneck hypothesis and ownership.
+- Reject decisions based on toy inputs or non-representative traffic assumptions.
+
+#### Measurement Protocol Competency
+- Every selected option must define reproducible measurement protocol:
+  - benchmark/profile/trace type
+  - environment and runtime class
+  - dataset shape and scale
+  - baseline and target thresholds
+  - pass/fail rule.
+- Require before/after comparability controls:
+  - same workload class
+  - stable environment
+  - repeated runs and variance sanity check.
+- Microbenchmark-only evidence is insufficient for system-level claims; combine with profile/trace or scenario-level evidence.
+- If scheduler, blocking, or locking behavior is relevant, require `go tool trace` evidence planning.
+
+#### Benchmark And Profiling Competency
+- Benchmark obligations:
+  - use `go test -bench` for focused hot-path checks
+  - keep setup outside timed loop
+  - include allocation view (`-benchmem`) when allocation is relevant.
+- Profiling obligations:
+  - use `pprof` profile types by symptom (`cpu`, `heap`, `allocs`, `mutex`, `block`, `goroutine`)
+  - profile before and after nontrivial optimization decisions.
+- Optimize measured bottlenecks, not "slow-looking" code by intuition.
+- PGO is optional and allowed only after representative CPU profiles and validated bottleneck analysis.
+
+#### Concurrency And Contention Competency
+- For concurrency-sensitive paths, include contention model:
+  - goroutine fan-out bounds
+  - queue/channel bounds
+  - lock hotspot risk
+  - cancellation/shutdown behavior.
+- Require bounded parallelism strategy (`errgroup.SetLimit`, semaphore, worker limits) when introducing concurrency for performance.
+- Require race-aware validation path (`make test-race` or `go test -race ./...`) for impacted components.
+- Treat unbounded concurrency, missing cancellation path, or ignored blocking behavior as performance-spec blockers.
+
+#### DB And Cache Performance Competency
+- DB-side constraints must be explicit:
+  - query/round-trip budget
+  - N+1 prevention strategy
+  - pool capacity assumptions
+  - timeout/deadline expectations.
+- Cache-related constraints must include:
+  - cacheability/staleness class
+  - hit-ratio expectation
+  - stampede protection
+  - fallback behavior and cache-down load protection.
+- Require alignment with `40-data-consistency-cache.md` when performance decisions alter consistency or freshness semantics.
+- Reject performance proposals that shift risk to DB/cache without observability and degradation contracts.
+
+#### API And Cross-Cutting Performance Competency
+- For API-visible performance behavior, require contract-level explicitness for:
+  - payload size limits
+  - pagination defaults
+  - idempotency/retry semantics
+  - `202` + operation resource for long-running flows.
+- Do not hide async processing behind synchronous-success semantics.
+- Include overload/backpressure-visible outcomes (`429`/`503`) when envelopes depend on shedding or degradation behavior.
+- Ensure performance constraints remain compatible with validation, auth, and rate-limit cross-cutting controls.
+
+#### Observability And SLO Gating Competency
+- Performance acceptance must map to runtime telemetry contract:
+  - RED metrics and saturation signals
+  - low-cardinality dimensions
+  - trace/log correlation on critical paths.
+- Require explicit SLI/SLO linkage for user-facing performance objectives and burn-rate-aware release implications when relevant.
+- Define minimum diagnostics needed to verify budgets in production and during incident triage.
+- Reject performance decisions that cannot be detected and validated through runtime telemetry.
+
+#### Delivery And Quality-Gate Competency
+- Translate performance verification into executable obligations in `70-test-plan.md` and CI/release checks when relevant.
+- Require repository-native command path in plan sections (`make test`, `make test-race`, benchmark/profile commands, and contract checks when impacted).
+- Treat missing reproducible validation path as decision-quality defect.
+- Ensure risky performance changes include rollout checkpoints and rollback-safe criteria in `60-implementation-plan.md`.
+
+#### Evidence Threshold Competency
+- Every major performance decision must include:
+  1. decision ID (`PERF-###`) and owner
+  2. operation/workload context and baseline assumptions
+  3. at least two options
+  4. selected option and at least one rejected option with explicit reason
+  5. measurement protocol and thresholds
+  6. cross-domain impact summary (architecture/API/data/cache/reliability/observability/delivery)
+  7. acceptance and reopen criteria.
+- Any claim like "faster", "lower latency", or "better throughput" without threshold and protocol is invalid.
+- Decision quality is measured by enforceability, not narrative completeness.
+
+#### Assumption And Uncertainty Discipline
+- Mark unknown critical facts as `[assumption]` immediately.
+- Keep assumptions bounded, testable, and decision-linked.
+- Resolve assumptions in current pass when source-backed validation is possible.
+- Promote unresolved critical assumptions to `80-open-questions.md` with owner and unblock condition.
+- Never hide uncertainty in generic wording or defer it to coding phase.
+
+#### Review Blockers For This Skill
+- No explicit budget for affected critical-path operations.
+- No reproducible measurement protocol for selected performance option.
+- Major decision without alternative comparison and rejected-option rationale.
+- Performance claim based only on microbenchmark or anecdotal evidence.
+- Concurrency/contention-sensitive path without bounded-concurrency and validation plan.
+- DB/cache-heavy optimization without query/cache constraints and fallback implications.
+- API-visible performance behavior changed without required contract-level update.
+- Missing observability/SLO acceptance path for runtime verification.
+- Critical performance uncertainty deferred to coding instead of tracked blocker.
+
 ## Working Rules
 1. Determine current `docs/spec-first-workflow.md` phase and target gate before drafting decisions.
 2. Set phase-specific output targets:
    - Phase 0: seed performance assumptions and blockers in `80`.
    - Phase 1: define architecture-shaping performance constraints for `20` and sequencing constraints for `60`.
    - Phase 2 and later: maintain `20/60/70/80/90` and update impacted `30/40/50/55` when required.
-3. Load context using this file's dynamic loading rules and stop when four performance axes are source-backed: budget targets, bottleneck map, measurement protocol, and acceptance criteria.
-4. Normalize target operations and load shape: which operations are hot paths, what workload class matters, and what user-facing/system-facing metric is authoritative.
-5. For each nontrivial performance decision, compare at least two options and select one explicitly.
-6. Assign decision ID (`PERF-###`) and owner for each major performance decision.
-7. Record trade-offs and cross-domain impact (architecture, API, data/cache, reliability, observability, delivery).
-8. Mark missing critical facts as `[assumption]`; keep assumptions bounded and either validate in the current pass or move to `80-open-questions.md` with owner and unblock condition.
-9. If uncertainty blocks a measurable and safe performance decision, record it in `80-open-questions.md` with concrete next step.
-10. Keep performance outputs measurement-first: attach an explicit evidence plan and target threshold to each optimization claim.
-11. Verify internal consistency: ensure budgets, criteria, and affected artifacts are aligned before closing the pass.
+3. Apply `Hard Skills` defaults by default. Any deviation must be explicit, justified, and linked to decision ID (`PERF-###`) plus reopen criteria.
+4. Load context using this file's dynamic loading rules and stop when four performance axes are source-backed: budget targets, bottleneck map, measurement protocol, and acceptance criteria.
+5. Normalize target operations and load shape: which operations are hot paths, what workload class matters, and what user-facing/system-facing metric is authoritative.
+6. For each nontrivial performance decision, compare at least two options and select one explicitly.
+7. Assign decision ID (`PERF-###`) and owner for each major performance decision.
+8. Record trade-offs and cross-domain impact (architecture, API, data/cache, reliability, observability, delivery).
+9. Mark missing critical facts as `[assumption]`; keep assumptions bounded and either validate in the current pass or move to `80-open-questions.md` with owner and unblock condition.
+10. If uncertainty blocks a measurable and safe performance decision, record it in `80-open-questions.md` with concrete next step.
+11. Keep performance outputs measurement-first: attach an explicit evidence plan and target threshold to each optimization claim.
+12. Verify internal consistency: ensure budgets, criteria, and affected artifacts are aligned before closing the pass.
+13. Run final blocker check against `Hard Skills -> Review Blockers For This Skill` before closing a pass.
 
 ## Performance Decision Protocol
 For every major performance decision, document:
@@ -140,6 +292,7 @@ Unknowns:
 - Claimed improvements or constraints have explicit measurement protocol.
 - Impacted `30/40/50/55` artifacts have explicit status with decision links and no contradictions.
 - Performance blockers are closed or tracked in `80-open-questions.md` with owner and unblock condition.
+- No active item from `Hard Skills -> Review Blockers For This Skill` remains unresolved.
 - No critical performance decision is deferred to coding.
 
 ## Anti-Patterns
