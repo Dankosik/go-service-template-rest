@@ -35,7 +35,34 @@ fail_optional() {
 version_ge() {
 	local current="$1"
 	local minimum="$2"
-	[[ "$(printf '%s\n%s\n' "$minimum" "$current" | sort -V | head -n 1)" == "$minimum" ]]
+	local c_major c_minor c_patch
+	local m_major m_minor m_patch
+
+	IFS=. read -r c_major c_minor c_patch <<<"${current}"
+	IFS=. read -r m_major m_minor m_patch <<<"${minimum}"
+
+	c_major="${c_major:-0}"
+	c_minor="${c_minor:-0}"
+	c_patch="${c_patch:-0}"
+	m_major="${m_major:-0}"
+	m_minor="${m_minor:-0}"
+	m_patch="${m_patch:-0}"
+
+	if ((c_major > m_major)); then
+		return 0
+	fi
+	if ((c_major < m_major)); then
+		return 1
+	fi
+
+	if ((c_minor > m_minor)); then
+		return 0
+	fi
+	if ((c_minor < m_minor)); then
+		return 1
+	fi
+
+	((c_patch >= m_patch))
 }
 
 normalize_go_version() {
@@ -70,6 +97,7 @@ echo "Running local environment checks from $ROOT_DIR"
 check_cmd_required "make" "Install GNU Make from your package manager."
 check_cmd_required "git" "Install Git from https://git-scm.com/downloads."
 check_cmd_required "go" "Install Go from https://go.dev/dl/."
+check_cmd_required "perl" "Install Perl (required by scripts/init-module.sh)."
 
 required_go_raw="$(awk '/^go /{print $2; exit}' go.mod)"
 required_go="$(normalize_go_version "$required_go_raw")"

@@ -37,19 +37,22 @@ fi
 
 go mod edit -module "$new_module"
 
+files=()
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-	mapfile -t files < <(git ls-files --cached --others --exclude-standard -- '*.go' '*.proto')
+	while IFS= read -r file; do
+		files+=("$file")
+	done < <(git ls-files --cached --others --exclude-standard -- '*.go' '*.proto')
 else
-	mapfile -t files < <(find . -type f \( -name '*.go' -o -name '*.proto' \) -not -path './vendor/*')
+	while IFS= read -r file; do
+		files+=("$file")
+	done < <(find . -type f \( -name '*.go' -o -name '*.proto' \) -not -path './vendor/*')
 fi
-
-old_escaped="$(printf '%s' "$current_module" | sed 's/[\/&]/\\&/g')"
-new_escaped="$(printf '%s' "$new_module" | sed 's/[\/&]/\\&/g')"
 
 for file in "${files[@]}"; do
 	[[ -f "$file" ]] || continue
 	if grep -Fq "$current_module" "$file"; then
-		sed -i "s/${old_escaped}/${new_escaped}/g" "$file"
+		CURRENT_MODULE="$current_module" NEW_MODULE="$new_module" \
+			perl -i -pe 's/\Q$ENV{CURRENT_MODULE}\E/$ENV{NEW_MODULE}/g' "$file"
 	fi
 done
 

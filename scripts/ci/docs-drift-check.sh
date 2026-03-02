@@ -31,7 +31,7 @@ if [[ -z "${changed_files}" ]]; then
   exit 0
 fi
 
-requires_docs_pattern='^(api/openapi/service\.yaml|env/migrations/|Makefile|\.github/workflows/|cmd/|internal/app/|internal/infra/http/)'
+requires_docs_pattern='^(api/openapi/service\.yaml|env/migrations/|Makefile|\.github/workflows/|cmd/|internal/app/|internal/config/|internal/infra/http/|internal/infra/postgres/|internal/infra/telemetry/)'
 docs_pattern='^(docs/|README\.md$)'
 
 if echo "${changed_files}" | grep -Eq "${requires_docs_pattern}"; then

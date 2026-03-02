@@ -12,6 +12,7 @@ Commands in this document come from:
 ## Prerequisites
 
 - Go toolchain installed (version from `go.mod`)
+- Perl installed (used by `scripts/init-module.sh`)
 - Docker daemon running (required for `compose` and integration scenarios)
 - `golangci-lint` installed for `make lint`
 - Node/npm available for OpenAPI lint (`npx @redocly/cli`)
@@ -82,7 +83,7 @@ Bootstrap shortcut for beginners:
 
 - `make lint`
   - Runs: `golangci-lint run`
-  - Purpose: static checks (including vet/staticcheck/errcheck/revive per config).
+  - Purpose: static checks (including `govet`, `staticcheck`, `errcheck`, `bodyclose`, `sqlclosecheck`, `errorlint`, `contextcheck` per config).
   - Use when: before pushing and to reproduce CI lint failures.
 
 ### Unit and integration testing
@@ -108,7 +109,9 @@ Bootstrap shortcut for beginners:
   - Runs: `go test -tags=integration ./test/...`
   - Purpose: execute integration tests under `test/`.
   - Use when: validating DB/container-dependent behavior.
-  - Notes: requires Docker (used by integration setup).
+  - Notes:
+    - local mode skips tests when Docker daemon is unavailable;
+    - CI uses `REQUIRE_DOCKER=1` and fails if Docker is unavailable.
 
 ### OpenAPI and API contract workflow
 
@@ -179,7 +182,10 @@ Bootstrap shortcut for beginners:
     - `.github/workflows/**`
     - `cmd/**`
     - `internal/app/**`
+    - `internal/config/**`
     - `internal/infra/http/**`
+    - `internal/infra/postgres/**`
+    - `internal/infra/telemetry/**`
   - Required docs paths:
     - `docs/**` or `README.md`
 
@@ -255,9 +261,9 @@ Local commands map directly to CI jobs:
 - `make test` -> `test`
 - `make test-race` -> `test-race`
 - `make test-cover` -> `test-coverage`
-- `make test-integration` -> `test-integration`
+- `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
 - `make migration-validate` -> `migration-validate` (only when migrations changed)
-- `govulncheck`, `gosec`, Trivy image scan -> `go-security`, `container-security`
+- `govulncheck`, `gosec -exclude-generated`, Trivy image scan -> `go-security`, `container-security`
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:

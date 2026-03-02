@@ -2,13 +2,18 @@ openapi: 3.0.3
 info:
   title: go-service-template-rest
   version: 0.1.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 servers:
-  - url: http://localhost:8080
-    description: local development
+  - url: https://api.your-service.tld
+    description: placeholder production base URL
 security: []
 tags:
   - name: system
+    description: Operational endpoints for liveness, readiness, and metrics.
   - name: app
+    description: Application endpoints.
 paths:
   /api/v1/ping:
     get:
@@ -23,6 +28,12 @@ paths:
               schema:
                 type: string
                 example: pong
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/RequestEntityTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /health/live:
     get:
       tags: [system]
@@ -36,6 +47,12 @@ paths:
               schema:
                 type: string
                 example: ok
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/RequestEntityTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /health/ready:
     get:
       tags: [system]
@@ -49,6 +66,12 @@ paths:
               schema:
                 type: string
                 example: ok
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/RequestEntityTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
         "503":
           description: not ready
           content:
@@ -68,3 +91,58 @@ paths:
             text/plain:
               schema:
                 type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/RequestEntityTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          example: about:blank
+        title:
+          type: string
+          example: bad request
+        status:
+          type: integer
+          format: int32
+          example: 400
+        detail:
+          type: string
+          example: invalid request framing
+        request_id:
+          type: string
+          example: 9ccecdfd92c94665a46406f8ba73cd77
+  responses:
+    BadRequest:
+      description: request is malformed or invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RequestEntityTooLarge:
+      description: request body exceeds configured limit
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalServerError:
+      description: unexpected server failure
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

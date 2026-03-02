@@ -57,7 +57,7 @@ jobs:
         run: make test-race
 
       - name: Integration tests
-        run: make test-integration
+        run: REQUIRE_DOCKER=1 make test-integration
 
       - name: OpenAPI contract checks
         run: |
@@ -75,7 +75,7 @@ jobs:
       - name: Run gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-          "$(go env GOPATH)/bin/gosec" ./...
+          "$(go env GOPATH)/bin/gosec" -exclude-generated ./...
 
       - name: Build container image
         run: docker build -f build/docker/Dockerfile -t service:nightly .

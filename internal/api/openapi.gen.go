@@ -10,6 +10,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -19,6 +20,24 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 )
+
+// Problem defines model for Problem.
+type Problem struct {
+	Detail    *string `json:"detail,omitempty"`
+	RequestId *string `json:"request_id,omitempty"`
+	Status    int32   `json:"status"`
+	Title     string  `json:"title"`
+	Type      string  `json:"type"`
+}
+
+// BadRequest defines model for BadRequest.
+type BadRequest = Problem
+
+// InternalServerError defines model for InternalServerError.
+type InternalServerError = Problem
+
+// RequestEntityTooLarge defines model for RequestEntityTooLarge.
+type RequestEntityTooLarge = Problem
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -229,6 +248,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	return m
 }
 
+type BadRequestApplicationProblemPlusJSONResponse Problem
+
+type InternalServerErrorApplicationProblemPlusJSONResponse Problem
+
+type RequestEntityTooLargeApplicationProblemPlusJSONResponse Problem
+
 type PingRequestObject struct {
 }
 
@@ -244,6 +269,39 @@ func (response Ping200TextResponse) VisitPingResponse(w http.ResponseWriter) err
 
 	_, err := w.Write([]byte(response))
 	return err
+}
+
+type Ping400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response Ping400ApplicationProblemPlusJSONResponse) VisitPingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Ping413ApplicationProblemPlusJSONResponse struct {
+	RequestEntityTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response Ping413ApplicationProblemPlusJSONResponse) VisitPingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Ping500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response Ping500ApplicationProblemPlusJSONResponse) VisitPingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type HealthLiveRequestObject struct {
@@ -263,6 +321,39 @@ func (response HealthLive200TextResponse) VisitHealthLiveResponse(w http.Respons
 	return err
 }
 
+type HealthLive400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response HealthLive400ApplicationProblemPlusJSONResponse) VisitHealthLiveResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type HealthLive413ApplicationProblemPlusJSONResponse struct {
+	RequestEntityTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response HealthLive413ApplicationProblemPlusJSONResponse) VisitHealthLiveResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type HealthLive500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response HealthLive500ApplicationProblemPlusJSONResponse) VisitHealthLiveResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type HealthReadyRequestObject struct {
 }
 
@@ -278,6 +369,39 @@ func (response HealthReady200TextResponse) VisitHealthReadyResponse(w http.Respo
 
 	_, err := w.Write([]byte(response))
 	return err
+}
+
+type HealthReady400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response HealthReady400ApplicationProblemPlusJSONResponse) VisitHealthReadyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type HealthReady413ApplicationProblemPlusJSONResponse struct {
+	RequestEntityTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response HealthReady413ApplicationProblemPlusJSONResponse) VisitHealthReadyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type HealthReady500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response HealthReady500ApplicationProblemPlusJSONResponse) VisitHealthReadyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type HealthReady503TextResponse string
@@ -305,6 +429,39 @@ func (response Metrics200TextResponse) VisitMetricsResponse(w http.ResponseWrite
 
 	_, err := w.Write([]byte(response))
 	return err
+}
+
+type Metrics400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response Metrics400ApplicationProblemPlusJSONResponse) VisitMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Metrics413ApplicationProblemPlusJSONResponse struct {
+	RequestEntityTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response Metrics413ApplicationProblemPlusJSONResponse) VisitMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Metrics500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response Metrics500ApplicationProblemPlusJSONResponse) VisitMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 // StrictServerInterface represents all server handlers.
@@ -451,13 +608,21 @@ func (sh *strictHandler) Metrics(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/7yT0YrbPBCFX8XMtRN7//DDoidooYXS2yUXqj2NxVqaQTM2G4LevYwS0m7KkraUXsmS",
-	"juacb/CcIKSvBO4EGnRGcHCgjWBew4AbxcizV9xkFIUWVswSKIGDfvuw7aG0QIzJcwAHu22/3UEL7HUS",
-	"K9h5Dt360HFIB9sfUG0hxuw1UHo/goNPdtlCRmFKgvXhf31vy0BJMdU3ii/a8exDsp0ME0ZvX/jiI9fU",
-	"TLWOHtl2otnqllJaGFGGHFjPwavOjmWJ0efjJUKDaWQKySjVHwTcE3hm2Ju0m9DPOnVzWPFNkHdV88Ek",
-	"fwGHnn8Fhp5vUMw+oUjDmb7gDyxyFMX4GiejH493eD5XzT8DOkcqLfzf737bIpE2+ZL3rtN38esOGnC4",
-	"38KImsMgb3bv4+X+jzt3F+CSoKFFedHbXzpTRJ1wkSZek/wMYm8w21SDezrdGMw0+LkZccWZOGIdjSXP",
-	"4GBSZdd1VTCRqHvsH3so+6vFCZKPNf7ZqrTXExuqsi/fAgAA//8Yf04fdwQAAA==",
+	"H4sIAAAAAAAC/9RW32/bNhD+Vwhub1MsJ3aTRW8d0GEZUqxIO+xhCIYzebbZUCR3PBkxDP3vAynZih0X",
+	"7oYhRd5I8b778X3HozZS+Tp4h46jrDaSMAbvIubNT6Dv8O8GI6ed8o7R5SWEYI0CNt6VgfzMYv3D5+hd",
+	"OotqiTWk1feEc1nJ78ohRNmdxvJDh5Jt2xZSY1RkQnInK0ldSGGiqMHOPdWohSdh3Aqs0bIt5I1jJAf2",
+	"I9IK6R2Rp5fMsHH4GFAxahFzBmIOxjaEKbeesXeODa8/eX8LtMBvwd/M67XAR4Woo1Dezc2iIdTCmtqw",
+	"TLjeWYq19VdtZCAfkNh0PaCRwdi0wkeog0VZyV4JsY00J6iNW8hC8jokg8iU9m2xTeYvo/ddXCuFSs/1",
+	"9YW6nl5evoHp5XR8Of9xBlcTpa+ujvmKDNzEPT/T8biQqUWAc148uRiQxjEukBKUDVvcz2AGuwKOBes+",
+	"PAXAzDdczSy4h+eAvlRDqGX1Z3e6DbvL/H4H87PPqHoRUDVkeP0xidFxPkMgpLcNL4fdz9sif/3jk+yl",
+	"y2Xk0yGhJXPousK4uU94axS6mItxkDHvb5KLhmxvH6uy9AFd9A0pHHlalD0olsl2IFAu/FlqeaPwjLEO",
+	"FhjPqKNwhRS7DhyPzkfjhEpOIRhZycloPJrIQgbgZa6xhGDK1XkZEn3VRi4w34zUevle3GhZyQ9dV+0N",
+	"pYvx+OA2MT5yGSyYg/szSBf8se58fnWyXVvIaRfj2AXc5VI+mY4Jcj45DTk+G9pCvvmagMemXu6gpq6B",
+	"1j1fAp0O3rjc1bCIqR0hBHmfTMslguVlac0Kv8j6L9nmNpn8D9z7h69h3j+8Zt4TVw5jFGmY4xPi4zoy",
+	"1vvcE4JenyD/Ltu8GPtdSq9LgISd/Gs+nGdBPbknaRmM9+VO6pjTetfIZFT8otTv+/P/LPPJAvoMhG84",
+	"NPyqJxv5GnmJTRT1jrbnrOf3NPlI3zeH092CwqW3GikJpxuVDsQMIorf726fPYkQzGjtG9q+eCO2Wrb3",
+	"u7iH/n/bqgt2N4SjmHsStp8PRW4n0y3B6W0tI1ls3+a+lrY49P52+GccvD8Bphnf3rf/BAAA//93QVVL",
+	"0QsAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

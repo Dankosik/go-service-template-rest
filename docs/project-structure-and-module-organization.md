@@ -7,9 +7,13 @@ This document explains the `go-service-template-rest` repository layout: what is
 ```text
 .
 ├── .github/
+│   ├── CODEOWNERS
 │   ├── dependabot.yml
+│   ├── pull_request_template.md
 │   └── workflows/
-│       └── ci.yml
+│       ├── cd.yml
+│       ├── ci.yml
+│       └── nightly.yml
 ├── api/
 │   ├── openapi/
 │   │   └── service.yaml
@@ -63,6 +67,8 @@ This document explains the `go-service-template-rest` repository layout: what is
 │       ├── http/
 │       │   ├── handlers.go
 │       │   ├── middleware.go
+│       │   ├── openapi_contract_test.go
+│       │   ├── problem.go
 │       │   ├── router.go
 │       │   ├── router_test.go
 │       │   ├── server.go
@@ -70,9 +76,19 @@ This document explains the `go-service-template-rest` repository layout: what is
 │       ├── postgres/
 │       │   └── postgres.go
 │       └── telemetry/
-│           └── metrics.go
+│           ├── metrics.go
+│           ├── metrics_test.go
+│           ├── tracing.go
+│           └── tracing_test.go
 ├── scripts/
-│   └── gen.sh
+│   ├── ci/
+│   │   ├── docs-drift-check.sh
+│   │   └── required-guardrails-check.sh
+│   ├── dev/
+│   │   ├── doctor.sh
+│   │   └── setup.sh
+│   ├── gen.sh
+│   └── init-module.sh
 ├── test/
 │   ├── README.md
 │   └── postgres_integration_test.go

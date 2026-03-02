@@ -21,7 +21,7 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 	h := NewRouter(log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
-	}, telemetry.New())
+	}, telemetry.New(), RouterConfig{})
 
 	testCases := []struct {
 		name       string
@@ -84,7 +84,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 	h := NewRouter(log, Handlers{
 		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
 		Ping:   ping.New(),
-	}, telemetry.New())
+	}, telemetry.New(), RouterConfig{})
 
 	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	resp := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 
 func TestOpenAPIRuntimeContractFallbackServices(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{}, nil)
+	h := NewRouter(log, Handlers{}, nil, RouterConfig{})
 
 	t.Run("ping fallback", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)

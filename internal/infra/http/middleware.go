@@ -15,6 +15,7 @@ import (
 )
 
 const requestIDHeader = "X-Request-ID"
+const contentTypeOptionsHeader = "X-Content-Type-Options"
 
 type requestIDContextKey struct{}
 
@@ -43,10 +44,50 @@ func RequestCorrelation(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
-		ctx = propagation.TraceContext{}.Extract(ctx, propagation.HeaderCarrier(r.Header))
+		if !trace.SpanContextFromContext(ctx).IsValid() {
+			ctx = propagation.TraceContext{}.Extract(ctx, propagation.HeaderCarrier(r.Header))
+		}
 		r = r.WithContext(ctx)
 
 		w.Header().Set(requestIDHeader, requestID)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(contentTypeOptionsHeader, "nosniff")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func RequestFramingGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hasTransferEncoding := len(r.TransferEncoding) > 0 || strings.TrimSpace(r.Header.Get("Transfer-Encoding")) != ""
+		hasContentLength := strings.TrimSpace(r.Header.Get("Content-Length")) != ""
+		if hasTransferEncoding && hasContentLength {
+			w.Header().Set("Connection", "close")
+			writeProblem(w, r, http.StatusBadRequest, "bad request", "invalid request framing")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func RequestBodyLimit(maxBytes int64, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if maxBytes <= 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.ContentLength > maxBytes {
+			writeProblem(w, r, http.StatusRequestEntityTooLarge, "request entity too large", "request body exceeds limit")
+			return
+		}
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -57,21 +98,21 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
+		defer func(ctx context.Context, method, path string) {
 			if rec := recover(); rec != nil {
-				traceID, spanID := traceIDsFromContext(r.Context())
+				traceID, spanID := traceIDsFromContext(ctx)
 				log.Error(
 					"panic recovered",
 					"panic", rec,
-					"method", r.Method,
-					"path", r.URL.Path,
-					"request_id", requestIDFromContext(r.Context()),
+					"method", method,
+					"path", path,
+					"request_id", requestIDFromContext(ctx),
 					"trace_id", traceID,
 					"span_id", spanID,
 				)
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+				writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
 			}
-		}()
+		}(r.Context(), r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
 }

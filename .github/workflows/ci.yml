@@ -220,7 +220,7 @@ jobs:
           cache: true
 
       - name: Integration tests
-        run: make test-integration
+        run: REQUIRE_DOCKER=1 make test-integration
 
   migration-validate:
     runs-on: ubuntu-latest
@@ -310,7 +310,7 @@ jobs:
       - name: Run gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-          "$(go env GOPATH)/bin/gosec" ./...
+          "$(go env GOPATH)/bin/gosec" -exclude-generated ./...
 
   container-security:
     runs-on: ubuntu-latest

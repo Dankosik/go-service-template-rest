@@ -10,4 +10,8 @@ Run locally:
 make test-integration
 ```
 
-This requires a working Docker daemon (used by `testcontainers-go`).
+Local behavior:
+- if Docker daemon is unavailable, integration tests are skipped.
+
+CI behavior:
+- workflows set `REQUIRE_DOCKER=1`, so Docker unavailability fails the job.

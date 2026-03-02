@@ -102,7 +102,7 @@ jobs:
           "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
@@ -154,7 +154,7 @@ jobs:
         run: make test-race
 
       - name: Integration tests
-        run: make test-integration
+        run: REQUIRE_DOCKER=1 make test-integration
 
       - name: OpenAPI contract checks
         run: |
@@ -173,7 +173,7 @@ jobs:
       - name: Run gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-          "$(go env GOPATH)/bin/gosec" ./...
+          "$(go env GOPATH)/bin/gosec" -exclude-generated ./...
 
   publish-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -255,7 +255,7 @@ jobs:
           "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}

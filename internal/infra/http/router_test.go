@@ -20,7 +20,7 @@ func TestRouterEndpoints(t *testing.T) {
 	h := NewRouter(log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
-	}, telemetry.New())
+	}, telemetry.New(), RouterConfig{})
 
 	t.Run("ping", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -75,7 +75,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	h := NewRouter(log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
-	}, telemetry.New())
+	}, telemetry.New(), RouterConfig{})
 
 	t.Run("generates request id when header is absent", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -103,23 +103,94 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	})
 }
 
+func TestRouterAddsSecurityHeaders(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, telemetry.New(), RouterConfig{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+
+	if got := resp.Header().Get(contentTypeOptionsHeader); got != "nosniff" {
+		t.Fatalf("%s = %q, want %q", contentTypeOptionsHeader, got, "nosniff")
+	}
+}
+
+func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, telemetry.New(), RouterConfig{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	req.Header.Set("Transfer-Encoding", "chunked")
+	req.Header.Set("Content-Length", "1")
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
+		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
+	}
+	if !strings.Contains(resp.Body.String(), "invalid request framing") {
+		t.Fatalf("body = %q, want %q", resp.Body.String(), "invalid request framing")
+	}
+	if got := resp.Header().Get(contentTypeOptionsHeader); got != "nosniff" {
+		t.Fatalf("%s = %q, want %q", contentTypeOptionsHeader, got, "nosniff")
+	}
+	if got := resp.Header().Get(requestIDHeader); got == "" {
+		t.Fatalf("%s header is empty", requestIDHeader)
+	}
+}
+
+func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", strings.NewReader("ab"))
+	req.ContentLength = 2
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
+		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
+	}
+	if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
+		t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
+	}
+}
+
 func TestAccessLogIncludesCorrelationFields(t *testing.T) {
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	h := NewRouter(log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
-	}, nil)
+	}, nil, RouterConfig{})
 
 	const (
 		requestID = "demo-123"
 		traceID   = "4bf92f3577b34da6a3ce929d0e0e4736"
-		spanID    = "00f067aa0ba902b7"
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, requestID)
-	req.Header.Set("traceparent", "00-"+traceID+"-"+spanID+"-01")
+	req.Header.Set("traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
 	h.ServeHTTP(resp, req)
 
@@ -139,8 +210,8 @@ func TestAccessLogIncludesCorrelationFields(t *testing.T) {
 	if got := event["trace_id"]; got != traceID {
 		t.Fatalf("trace_id = %v, want %q", got, traceID)
 	}
-	if got := event["span_id"]; got != spanID {
-		t.Fatalf("span_id = %v, want %q", got, spanID)
+	if got, ok := event["span_id"].(string); !ok || got == "" {
+		t.Fatalf("span_id = %v, want non-empty string", event["span_id"])
 	}
 }
 
@@ -149,7 +220,7 @@ func TestMetricsExposeDurationHistogram(t *testing.T) {
 	h := NewRouter(log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
-	}, telemetry.New())
+	}, telemetry.New(), RouterConfig{})
 
 	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	pingResp := httptest.NewRecorder()

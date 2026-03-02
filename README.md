@@ -27,11 +27,14 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 - configuration via environment variables
 - structured JSON logs via `log/slog`
 - request correlation via `X-Request-ID` (`request_id`/`trace_id`/`span_id` in request logs)
+- OpenTelemetry tracing baseline (`otelhttp` + W3C propagators, env-driven sampler/exporter)
+- API hardening middleware (`X-Content-Type-Options: nosniff`, invalid request framing guard, request body limits)
+- standardized API error payloads (`application/problem+json` for request/internal failures)
 - `GET /health/live`, `GET /health/ready`, `GET /api/v1/ping`, `GET /metrics`
 - baseline HTTP timeouts and graceful shutdown
 - optional Postgres readiness probe (via `POSTGRES_DSN`)
 - OpenAPI workflow: codegen (`oapi-codegen`) + lint + validate + breaking check
-- Docker multi-stage + distroless runtime
+- Docker multi-stage + distroless runtime (image digests pinned)
 - repository guardrails: `.editorconfig`, `.gitattributes`, `CODEOWNERS`, PR template, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`
 - CI: integrity gates (mod/fmt/docs drift), tests (unit/race/coverage/integration), OpenAPI contract gates, migration validation, security gates
 - nightly reliability workflow with repeated test runs and full security/contract checks
@@ -140,7 +143,9 @@ Check OpenAPI breaking changes locally:
 BASE_OPENAPI=/path/to/base-service.yaml make openapi-breaking
 ```
 
-`make test-integration` runs tests with the `integration` tag and requires Docker.
+`make test-integration` runs tests with the `integration` tag.
+- local: Docker missing -> test is skipped;
+- CI: `REQUIRE_DOCKER=1` enforces Docker presence and fails the job otherwise.
 
 ## Configuration
 
@@ -154,9 +159,17 @@ See `env/.env.example`:
 - `HTTP_WRITE_TIMEOUT`
 - `HTTP_IDLE_TIMEOUT`
 - `HTTP_MAX_HEADER_BYTES`
+- `HTTP_MAX_BODY_BYTES`
 - `LOG_LEVEL`
+- `OTEL_SERVICE_NAME`
+- `OTEL_TRACES_SAMPLER`
+- `OTEL_TRACES_SAMPLER_ARG`
 - `POSTGRES_DSN`
   - empty by default; when set, enables Postgres readiness check on startup
+- optional OTLP exporter settings (if traces export is needed):
+  - `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+  - `OTEL_EXPORTER_OTLP_HEADERS`
+  - `OTEL_EXPORTER_OTLP_PROTOCOL`
 
 Default HTTP timeout profile for this template:
 - `HTTP_READ_HEADER_TIMEOUT=5s`
@@ -164,6 +177,7 @@ Default HTTP timeout profile for this template:
 - `HTTP_WRITE_TIMEOUT=10s`
 - `HTTP_IDLE_TIMEOUT=60s`
 - `HTTP_SHUTDOWN_TIMEOUT=10s`
+- `HTTP_MAX_BODY_BYTES=1048576`
 
 These values are safe defaults for typical JSON APIs. If you add streaming/long-running responses, tune timeouts explicitly for that path or use a dedicated server profile.
 
@@ -204,9 +218,9 @@ Workflow `.github/workflows/ci.yml` includes:
 - `test`: `go test ./...`
 - `test-race`: `go test -race ./...`
 - `test-coverage`: `go test -covermode=atomic -coverprofile=coverage.out ./...` + publish `coverage.out` as an artifact
-- `test-integration`: `go test -tags=integration ./test/...`
+- `test-integration`: `REQUIRE_DOCKER=1 go test -tags=integration ./test/...`
 - `migration-validate` (conditional): rehearses SQL migrations on ephemeral Postgres when `env/migrations/**` changes
-- `go-security`: `govulncheck` and `gosec`
+- `go-security`: `govulncheck` and `gosec` (generated files excluded)
 - `container-security`: Trivy scan for the Docker image
 
 Nightly reliability workflow `.github/workflows/nightly.yml` runs extended checks (repeat test runs, race/integration, OpenAPI, security, and container scan).

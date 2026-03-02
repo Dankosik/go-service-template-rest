@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG GO_VERSION=1.25.0
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1 AS build
 
 WORKDIR /src
 
@@ -25,7 +24,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -tags=timetzdata \
       -o /out/service ./cmd/service
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:a9329520abc449e3b14d5bc3a6ffae065bdde0f02667fa10880c49b35c109fd1
 
 WORKDIR /
 COPY --from=build /out/service /service

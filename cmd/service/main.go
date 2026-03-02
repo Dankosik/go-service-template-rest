@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
@@ -18,11 +19,19 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
+const telemetryShutdownTimeout = 5 * time.Second
+
 func main() {
+	if err := run(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() (runErr error) {
 	cfg, err := config.Load()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.Log.Level}))
@@ -31,14 +40,33 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	tracingShutdown, err := telemetry.SetupTracing(ctx, telemetry.TracingConfig{
+		ServiceName:      cfg.OTel.ServiceName,
+		DeploymentEnv:    cfg.Env,
+		TracesSampler:    cfg.OTel.TracesSampler,
+		TracesSamplerArg: cfg.OTel.TracesSamplerArg,
+	})
+	if err != nil {
+		return fmt.Errorf("setup tracing: %w", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), telemetryShutdownTimeout)
+		defer cancel()
+		if err := tracingShutdown(shutdownCtx); err != nil {
+			log.Error("tracing shutdown failed", "err", err)
+			if runErr == nil {
+				runErr = fmt.Errorf("shutdown tracing: %w", err)
+			}
+		}
+	}()
+
 	metrics := telemetry.New()
 
 	probes := make([]domain.ReadinessProbe, 0, 1)
 	if cfg.Postgres.DSN != "" {
 		pg, err := postgres.New(ctx, cfg.Postgres.DSN)
 		if err != nil {
-			log.Error("postgres init failed", "err", err)
-			os.Exit(1)
+			return fmt.Errorf("postgres init failed: %w", err)
 		}
 		defer pg.Close()
 		probes = append(probes, pg)
@@ -47,10 +75,15 @@ func main() {
 	healthSvc := health.New(probes...)
 	pingSvc := ping.New()
 
-	handler := httpx.NewRouter(log, httpx.Handlers{
-		Health: healthSvc,
-		Ping:   pingSvc,
-	}, metrics)
+	handler := httpx.NewRouter(
+		log,
+		httpx.Handlers{
+			Health: healthSvc,
+			Ping:   pingSvc,
+		},
+		metrics,
+		httpx.RouterConfig{MaxBodyBytes: cfg.HTTP.MaxBodyBytes},
+	)
 
 	srv := httpx.New(httpx.Config{
 		Addr:              cfg.HTTP.Addr,
@@ -61,20 +94,20 @@ func main() {
 		MaxHeaderBytes:    cfg.HTTP.MaxHeaderBytes,
 	}, handler)
 
-	runErr := make(chan error, 1)
+	runErrCh := make(chan error, 1)
 	go func() {
 		log.Info("http server started", "addr", cfg.HTTP.Addr, "env", cfg.Env)
-		runErr <- srv.Run()
+		runErrCh <- srv.Run()
 	}()
 
-	var failed bool
+	var serverErr error
 	select {
 	case <-ctx.Done():
 		log.Info("shutdown signal received")
-	case err := <-runErr:
-		if err != nil {
-			failed = true
-			log.Error("http server stopped with error", "err", err)
+	case err := <-runErrCh:
+		serverErr = err
+		if serverErr != nil {
+			log.Error("http server stopped with error", "err", serverErr)
 		}
 	}
 
@@ -82,13 +115,12 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
-		log.Error("graceful shutdown failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("graceful shutdown failed: %w", err)
 	}
-
-	if failed {
-		os.Exit(1)
+	if serverErr != nil {
+		return fmt.Errorf("http server stopped with error: %w", serverErr)
 	}
 
 	log.Info("shutdown complete")
+	return nil
 }

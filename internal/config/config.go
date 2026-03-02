@@ -13,6 +13,7 @@ type Config struct {
 	Env      string
 	HTTP     HTTPConfig
 	Log      LogConfig
+	OTel     OTelConfig
 	Postgres PostgresConfig
 }
 
@@ -24,10 +25,17 @@ type HTTPConfig struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 	MaxHeaderBytes    int
+	MaxBodyBytes      int64
 }
 
 type LogConfig struct {
 	Level slog.Level
+}
+
+type OTelConfig struct {
+	ServiceName      string
+	TracesSampler    string
+	TracesSamplerArg float64
 }
 
 type PostgresConfig struct {
@@ -45,9 +53,15 @@ func Load() (Config, error) {
 			WriteTimeout:      10 * time.Second,
 			IdleTimeout:       60 * time.Second,
 			MaxHeaderBytes:    1 << 20,
+			MaxBodyBytes:      1 << 20,
 		},
 		Log: LogConfig{
 			Level: slog.LevelInfo,
+		},
+		OTel: OTelConfig{
+			ServiceName:      "service",
+			TracesSampler:    "parentbased_traceidratio",
+			TracesSamplerArg: 0.10,
 		},
 	}
 
@@ -75,7 +89,19 @@ func Load() (Config, error) {
 	if err := applyPositiveInt("HTTP_MAX_HEADER_BYTES", &cfg.HTTP.MaxHeaderBytes); err != nil {
 		return Config{}, err
 	}
+	if err := applyPositiveInt64("HTTP_MAX_BODY_BYTES", &cfg.HTTP.MaxBodyBytes); err != nil {
+		return Config{}, err
+	}
 	if err := applyLogLevel("LOG_LEVEL", &cfg.Log.Level); err != nil {
+		return Config{}, err
+	}
+	if v, ok := lookupNonEmpty("OTEL_SERVICE_NAME"); ok {
+		cfg.OTel.ServiceName = v
+	}
+	if err := applyOTelSampler("OTEL_TRACES_SAMPLER", &cfg.OTel.TracesSampler); err != nil {
+		return Config{}, err
+	}
+	if err := applyOTelSamplerArg("OTEL_TRACES_SAMPLER_ARG", &cfg.OTel.TracesSamplerArg); err != nil {
 		return Config{}, err
 	}
 	if v, ok := lookupNonEmpty("POSTGRES_DSN"); ok {
@@ -133,6 +159,22 @@ func applyPositiveInt(key string, dst *int) error {
 	return nil
 }
 
+func applyPositiveInt64(key string, dst *int64) error {
+	v, ok := lookupNonEmpty(key)
+	if !ok {
+		return nil
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return fmt.Errorf("%s: invalid int %q: %w", key, v, err)
+	}
+	if n <= 0 {
+		return fmt.Errorf("%s: value must be > 0", key)
+	}
+	*dst = n
+	return nil
+}
+
 func applyLogLevel(key string, dst *slog.Level) error {
 	v, ok := lookupNonEmpty(key)
 	if !ok {
@@ -143,5 +185,36 @@ func applyLogLevel(key string, dst *slog.Level) error {
 		return fmt.Errorf("%s: invalid log level %q", key, v)
 	}
 	*dst = level
+	return nil
+}
+
+func applyOTelSampler(key string, dst *string) error {
+	v, ok := lookupNonEmpty(key)
+	if !ok {
+		return nil
+	}
+	sampler := strings.ToLower(v)
+	switch sampler {
+	case "always_on", "always_off", "traceidratio", "parentbased_traceidratio":
+		*dst = sampler
+		return nil
+	default:
+		return fmt.Errorf("%s: unsupported sampler %q", key, v)
+	}
+}
+
+func applyOTelSamplerArg(key string, dst *float64) error {
+	v, ok := lookupNonEmpty(key)
+	if !ok {
+		return nil
+	}
+	n, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fmt.Errorf("%s: invalid float %q: %w", key, v, err)
+	}
+	if n < 0 || n > 1 {
+		return fmt.Errorf("%s: value must be in range [0,1]", key)
+	}
+	*dst = n
 	return nil
 }
