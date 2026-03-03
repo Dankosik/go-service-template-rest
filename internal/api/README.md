@@ -7,3 +7,4 @@ go generate ./internal/api
 ```
 
 Generation config: `internal/api/oapi-codegen.yaml`.
+Current server mode: `chi-server: true` + `strict-server: true`.

@@ -2,7 +2,7 @@ package: api
 output: openapi.gen.go
 generate:
   models: true
-  std-http-server: true
+  chi-server: true
   strict-server: true
   embedded-spec: true
 output-options:

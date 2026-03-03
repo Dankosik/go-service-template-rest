@@ -166,6 +166,18 @@ Out of scope:
 - For long-running operations, preserve explicit async pattern (`202` + operation resource), never fake synchronous completion.
 - Keep consistency disclosures accurate; do not silently shift strong/eventual behavior in code.
 
+#### Go-Chi Transport Competency (When In Scope)
+- For routing/middleware changes under `internal/infra/http/*` with `go-chi` (`Route`/`Mount`, middleware order, `404/405/OPTIONS`, route-template labels), load `skills/go-chi-spec/SKILL.md` before coding.
+- Preserve approved router topology:
+  - root `chi.Router` + mounted OpenAPI subrouter;
+  - direct `/metrics` handler stays only on root router.
+- Preserve approved middleware-order and route-template extraction discipline:
+  - route-template extraction must run post-`next` using `chi.RouteContext(...).RoutePattern()` with defined fallbacks.
+- Preserve approved HTTP policy semantics:
+  - explicit `NotFound` and `MethodNotAllowed` behavior;
+  - explicit `OPTIONS` handling;
+  - CORS preflight remains fail-closed unless spec explicitly changes.
+
 #### SQL Access, Transaction, And Migration Competency
 - SQL access defaults:
   - query-first approach;
@@ -316,6 +328,9 @@ Load by trigger:
 - API-boundary implementation details:
   - `docs/llm/api/10-rest-api-design.md`
   - `docs/llm/api/30-api-cross-cutting-concerns.md`
+- `go-chi` routing/middleware changes:
+  - `skills/go-chi-spec/SKILL.md`
+  - runtime mirror alternative: `.agents/skills/go-chi-spec/SKILL.md`
 - Data access, migration compatibility, or cache behavior changes:
   - `docs/llm/data/10-sql-modeling-and-oltp.md`
   - `docs/llm/data/20-sql-access-from-go.md`

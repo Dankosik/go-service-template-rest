@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -18,6 +19,11 @@ const requestIDHeader = "X-Request-ID"
 const contentTypeOptionsHeader = "X-Content-Type-Options"
 
 type requestIDContextKey struct{}
+type routeLabelContextKey struct{}
+
+type routeLabelHolder struct {
+	value string
+}
 
 type statusWriter struct {
 	http.ResponseWriter
@@ -123,17 +129,23 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		routeHolder := &routeLabelHolder{}
+		ctxWithRouteHolder := context.WithValue(r.Context(), routeLabelContextKey{}, routeHolder)
+
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
 
-		next.ServeHTTP(sw, r)
+		next.ServeHTTP(sw, r.WithContext(ctxWithRouteHolder))
 		duration := time.Since(start)
 
 		if sw.status == 0 {
 			sw.status = http.StatusOK
 		}
 
-		route := r.Pattern
+		route := routeHolder.value
+		if route == "" {
+			route = routeLabelForRequest(r)
+		}
 		if route == "" {
 			route = "<unmatched>"
 		}
@@ -156,6 +168,58 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 			metrics.ObserveHTTPRequestDuration(r.Method, route, sw.status, duration)
 		}
 	})
+}
+
+func captureRouteLabelMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+
+		routeLabel := routeLabelForRequest(r)
+		if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() && routeLabel != "" {
+			span.SetName(routeLabel)
+		}
+
+		holder, _ := r.Context().Value(routeLabelContextKey{}).(*routeLabelHolder)
+		if holder == nil || holder.value != "" {
+			return
+		}
+		holder.value = routeLabel
+	})
+}
+
+func routeLabelForRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	if routeContext := chi.RouteContext(r.Context()); routeContext != nil {
+		if pattern := strings.TrimSpace(routeContext.RoutePattern()); pattern != "" {
+			return joinMethodAndPattern(r.Method, pattern)
+		}
+	}
+
+	pattern := strings.TrimSpace(r.Pattern)
+	if pattern == "" || pattern == "/" {
+		return ""
+	}
+
+	if r.Method != "" && strings.HasPrefix(pattern, r.Method+" ") {
+		return pattern
+	}
+	return joinMethodAndPattern(r.Method, pattern)
+}
+
+func joinMethodAndPattern(method, pattern string) string {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return ""
+	}
+
+	method = strings.TrimSpace(method)
+	if method == "" {
+		return pattern
+	}
+	return method + " " + pattern
 }
 
 func requestIDFromContext(ctx context.Context) string {

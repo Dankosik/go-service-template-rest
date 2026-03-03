@@ -22,7 +22,9 @@ Keep it short and stable. Load extra instructions only when the task needs them.
 - Business/use-case logic: `internal/app`.
 - Domain contracts/types: `internal/domain`.
 - Transport/infrastructure adapters: `internal/infra/*`.
+- HTTP transport baseline: `go-chi` router (`internal/infra/http/router.go`) with root router + mounted OpenAPI subrouter.
 - Generated OpenAPI artifacts: `internal/api` (do not hand-edit generated files).
+- OpenAPI HTTP server codegen baseline: `oapi-codegen` with `chi-server: true` and `strict-server: true` (`internal/api/oapi-codegen.yaml`).
 - OpenAPI source of truth: `api/openapi/service.yaml`.
 
 Details:
@@ -40,6 +42,9 @@ Use project skills when the task matches a skill scope.
 - Source skills: `skills/*/SKILL.md`
 - Runtime mirrors: `.agents/skills`, `.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills`, `.opencode/skills`
 - Keep mirrors in sync with `make skills-sync` (check with `make skills-check`).
+- For routing/middleware work on `go-chi` transport behavior (`Route`/`Mount`, middleware ordering, `404/405/OPTIONS`, route labels), use:
+  - `go-chi-spec` in specification phase;
+  - `go-chi-review` in code review phase.
 
 Portable skills notes:
 - `docs/skills/portable-agent-skills.md`
@@ -95,4 +100,5 @@ Use docker-based equivalents when local toolchain is unavailable.
 - Do not execute destructive or high-risk operations unless explicitly requested.
 - Do not perform unrelated refactors while addressing a scoped task.
 - If mandatory checks fail or assumptions are uncertain, report clearly with concrete next action.
+- Process timing guardrail: update `AGENTS.md` baseline statements (for example transport/router baseline) only after runtime migration is implemented and relevant quality gates are green.
 - Keep CI docs-drift gate green: if a change touches behavior/contract/CI-sensitive paths (`Makefile`, `.github/workflows`, `cmd/`, `internal/`, `api/openapi`, `scripts/ci`, `scripts/dev`, `build/docker`, migrations), update at least one of `docs/`, `README.md`, or `CONTRIBUTING.md` in the same change.

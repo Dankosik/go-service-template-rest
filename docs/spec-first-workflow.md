@@ -76,6 +76,7 @@ All `*-spec` skills are expertise roles first, not workflow-only roles.
 - `go-domain-invariant-spec` - business invariants, state transitions, acceptance criteria, domain corner cases.
 - `go-reliability-spec` - timeout/retry budgets, backpressure, graceful shutdown, degradation, rollout/rollback safety.
 - `go-design-spec` - architecture integrity, simplicity, maintainability.
+- `go-chi-spec` - `go-chi` transport-specific design decisions (`Route`/`Mount` topology, middleware ordering, `404/405/OPTIONS` policy, route-template extraction) for routing-related scope.
 
 Primary-domain rule for SPEC skills:
 
@@ -100,6 +101,7 @@ Primary-domain rule for SPEC skills:
 - `go-db-cache-review`
 - `go-reliability-review`
 - `go-security-review`
+- `go-chi-review`
 
 ## 5. Phase Sequence
 
@@ -228,7 +230,8 @@ Recommended order:
 7. `go-db-cache-review` (when DB/cache changes exist)
 8. `go-reliability-review` (timeout/retry/degradation/shutdown/rollback correctness)
 9. `go-security-review`
-10. `go-design-review`
+10. `go-chi-review` (when `go-chi` transport behavior changes: route topology/order/policy/labels)
+11. `go-design-review`
 
 Each reviewer must:
 
@@ -317,6 +320,11 @@ Actions:
 
 - Focus: input validation, authz, injection/SSRF/path traversal, secrets, abuse resistance.
 - Not focus: style/readability comments without security impact.
+
+### `go-chi-review`
+
+- Focus: `go-chi` transport behavior (`Route`/`Mount` topology, middleware ordering, `/metrics` conflict policy, `404/405/OPTIONS`, route-template extraction for logs/metrics/traces).
+- Not focus: broader business/domain correctness and non-transport architecture topics.
 
 ## 7. Review Findings Format
 

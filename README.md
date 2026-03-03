@@ -238,6 +238,7 @@ make openapi-runtime-contract-check
 ```
 
 The generation entrypoint is in `internal/api/doc.go` (`go:generate`), and the config file is `internal/api/oapi-codegen.yaml`.
+Current server generation mode is `chi-server: true` with `strict-server: true`.
 
 ## Migrations
 
