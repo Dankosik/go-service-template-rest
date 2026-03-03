@@ -230,7 +230,10 @@ Bootstrap shortcuts:
   - Then runs `make coverage-check`.
 
 - `make coverage-check [COVERAGE_MIN=70.0]`
-  - Fails if total coverage from `coverage.out` is below the configured threshold.
+  - Fails if coverage from `coverage.out` is below the configured threshold.
+  - Coverage threshold excludes:
+    - generated OpenAPI artifact (`internal/api/openapi.gen.go`),
+    - service composition root entrypoint (`cmd/service/main.go`).
 
 - `make test-fuzz-smoke [FUZZ_TIME=45s]`
   - Runs a short fuzzing pass (`go test -fuzz`) when fuzz targets exist.
@@ -371,11 +374,11 @@ Bootstrap shortcuts:
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
 
-- `make migration-validate MIGRATION_DSN=<postgres_dsn>`
-  - Runs `golang-migrate` against `env/migrations`:
-    - apply all up migrations
-    - run `down 1`
-    - run `up 1`
+- `make migration-validate [MIGRATION_DSN=<postgres_dsn>]`
+  - Behavior:
+    - when `MIGRATION_DSN` is provided, runs native `golang-migrate` against `env/migrations` (`up`, `down 1`, `up 1`);
+    - when `MIGRATION_DSN` is empty and Docker daemon is available, falls back to `make docker-migration-validate`;
+    - when both `MIGRATION_DSN` and Docker daemon are unavailable, prints warning and skips with success.
 
 ### Skills distribution and sync
 

@@ -242,11 +242,13 @@ The generation entrypoint is in `internal/api/doc.go` (`go:generate`), and the c
 ## Migrations
 
 SQL migrations are stored in `env/migrations`.
-CI migration rehearsal command:
+Run migration rehearsal with explicit DSN:
 
 ```bash
 make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'
 ```
+
+If `MIGRATION_DSN` is empty and Docker daemon is available, `make migration-validate` automatically falls back to `make docker-migration-validate`. If both DSN and Docker are unavailable, the target is skipped with a warning.
 
 ## CI Quality Gates
 
@@ -258,7 +260,7 @@ Workflow `.github/workflows/ci.yml` includes:
 - `openapi-breaking` (PR): check breaking changes between base and current OpenAPI spec
 - `test`: `go test ./...`
 - `test-race`: `go test -race ./...`
-- `test-coverage`: `make test-report COVERAGE_MIN=70.0` (`gotestsum` + race + coverage threshold + JUnit/JSON artifacts + `coverage.out`)
+- `test-coverage`: `make test-report COVERAGE_MIN=70.0` (`gotestsum` + race + coverage threshold + JUnit/JSON artifacts + `coverage.out`; threshold is computed without generated OpenAPI artifact and composition-root entrypoint file)
 - `test-integration`: `REQUIRE_DOCKER=1 go test -tags=integration ./test/...`
 - `migration-validate` (conditional): rehearses SQL migrations on ephemeral Postgres when `env/migrations/**` changes
 - `go-security`: `govulncheck` and `gosec` (generated files excluded)

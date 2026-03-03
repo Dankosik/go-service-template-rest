@@ -10,10 +10,13 @@ GOVULNCHECK_VERSION := v1.1.4
 GOSEC_VERSION := v2.24.7
 GOIMPORTS_VERSION := v0.42.0
 GITLEAKS_VERSION := v8.30.0
+GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 COVERAGE_MIN ?= 70.0
+COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)cmd/service/main\.go:
 FUZZ_TIME ?= 45s
 DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
 GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
@@ -184,18 +187,21 @@ test-race:
 	go test -race ./...
 
 test-cover:
-	GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...
-	go tool cover -func=coverage.out
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out
 
 test-report:
 	@mkdir -p $(TEST_REPORT_DIR)
-	go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -race -covermode=atomic -coverprofile=coverage.out ./...
-	go tool cover -func=coverage.out
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -race -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 
 coverage-check:
 	@test -f coverage.out || (echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1)
-	@total="$$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
+	@filtered_cov="$$(mktemp)"; \
+	grep -Ev '$(COVERAGE_EXCLUDE_REGEX)' coverage.out > "$$filtered_cov"; \
+	total="$$(GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func="$$filtered_cov" | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
+	rm -f "$$filtered_cov"; \
 	if [ -z "$$total" ]; then \
 		echo "failed to parse total coverage from coverage.out"; \
 		exit 1; \
@@ -223,9 +229,9 @@ test-fuzz-smoke:
 
 test-cover-local:
 	@coverage_log="$$(mktemp)"; \
-	if GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./... >"$$coverage_log" 2>&1; then \
+	if GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./... >"$$coverage_log" 2>&1; then \
 		cat "$$coverage_log"; \
-		go tool cover -func=coverage.out; \
+		GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out; \
 	else \
 		cat "$$coverage_log"; \
 		if grep -Eq 'does not match go tool version' "$$coverage_log"; then \
@@ -352,10 +358,17 @@ docker-ci:
 	$(DOCKER_TOOLING_SCRIPT) ci
 
 migration-validate:
-	@test -n "$(MIGRATION_DSN)" || (echo "MIGRATION_DSN is required"; exit 1)
-	go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up
-	go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" down 1
-	go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up 1
+	@if [ -n "$(MIGRATION_DSN)" ]; then \
+		go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up; \
+		go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" down 1; \
+		go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up 1; \
+	elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		echo "MIGRATION_DSN is empty: running docker-migration-validate"; \
+		$(MAKE) docker-migration-validate; \
+	else \
+		echo "MIGRATION_DSN is empty and docker daemon is unavailable: skipping migration validation"; \
+		echo "set MIGRATION_DSN or start Docker to run migration rehearsal"; \
+	fi
 
 gh-protect:
 	$(BRANCH_PROTECTION_SCRIPT) "$${BRANCH:-main}"
