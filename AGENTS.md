@@ -46,6 +46,12 @@ Use project skills when the task matches a skill scope.
   - `go-chi-spec` in specification phase;
   - `go-chi-review` in code review phase.
 
+Message-level process control:
+- Run `using-spec-first-superpowers` as mandatory pre-turn routing (`M0`) on every user message before any response or action.
+- If `M0` classifies intent as `new_feature_or_behavior_change`, run `spec-first-brainstorming` before `Phase 0` spec design.
+- After `spec-first-brainstorming` returns `B0 pass`, hand off to `go-architect-spec` to initialize/continue spec phases.
+- If `M0` returns `route_blocked`, do not proceed with implementation/review actions until unblock conditions are resolved.
+
 Portable skills notes:
 - `docs/skills/portable-agent-skills.md`
 

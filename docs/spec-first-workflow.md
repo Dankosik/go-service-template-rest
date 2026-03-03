@@ -23,6 +23,8 @@ Result: less architectural drift, fewer coding-time assumptions, and higher pred
 8. During code review, each reviewer is constrained to their domain and must not go outside their expertise.
 9. Workflow control and technical expertise are separate concerns: this file defines the workflow, while each `*-spec` skill must contribute domain expertise, not only process or formatting control.
 10. `*-spec` skills are expertise-first with explicit primary domains; cross-file edits are allowed, but specialist decisions must not be duplicated or overridden without rationale.
+11. Every user turn must pass mandatory message-level routing (`M0`) before any response or action.
+12. New feature/refactor/behavior-change requests must pass pre-spec brainstorming (`Phase -1`, `Gate B0`) before `Phase 0`.
 
 ## 3. Artifacts
 
@@ -56,8 +58,14 @@ reviews/<feature-id>/
 
 ### 4.1 Skill Classes
 
+- `PROCESS` class: message-level routing and pre-spec framing before specification phase starts.
 - `SPEC` class: specification design and enrichment, open-question closure, and Definition of Ready formation.
 - `REVIEW` class: code/diff review only, with validation against specs and domain quality criteria.
+
+### 4.1.1 PROCESS Skills (Pre-Spec Control)
+
+- `using-spec-first-superpowers` - mandatory pre-turn router (`M0`): classify intent/phase/gates, choose required/optional skills, and enforce route decision (`route_pass`/`route_lightweight`/`route_blocked`) before any work.
+- `spec-first-brainstorming` - pre-spec framing for new feature/refactor/behavior-change requests: normalize problem, fix scope/non-goals/constraints, seed assumptions/open questions, and decide `Gate B0`.
 
 ### 4.2 SPEC Skills (Specification Phase)
 
@@ -108,9 +116,54 @@ Primary-domain rule for SPEC skills:
 
 ## 5. Phase Sequence
 
+## Pre-Phase Control. Message-Level Routing (`M0`)
+
+Owner: `using-spec-first-superpowers`.
+
+Actions:
+
+1. Classify request intent.
+2. Determine current workflow phase and gate state.
+3. Select required and optional skills with explicit execution order.
+4. Emit routing decision:
+   - `route_pass`
+   - `route_lightweight`
+   - `route_blocked`
+
+Gate M0:
+
+- every turn has a routing record with explicit decision;
+- no response/action is produced before routing decision;
+- `route_blocked` stops execution until unblock condition is resolved.
+
+## Phase -1. Pre-Spec Brainstorming
+
+Owner: `spec-first-brainstorming`.
+
+Actions:
+
+1. Normalize request into one clear problem statement.
+2. Fix scope, non-goals, constraints, and success criteria.
+3. Record explicit assumptions and risks.
+4. Seed prioritized open questions with owner/unblock condition.
+5. Prepare handoff to `go-architect-spec` for `Phase 0`.
+
+Gate B0 (entry to Phase 0):
+
+- problem and expected behavior change are unambiguous;
+- scope/non-goals/constraints are explicitly fixed;
+- critical assumptions are explicit;
+- open questions are prioritized and actionable;
+- no hidden architecture decisions are made in brainstorming.
+
 ## Phase 0. Intake And Spec Initialization
 
 Owners: `go-architect-spec`, `go-domain-invariant-spec`, `go-reliability-spec`.
+
+Entry conditions:
+
+- Gate M0 passed for the active turn;
+- for new feature/refactor/behavior-change requests, Gate B0 passed.
 
 Actions:
 
