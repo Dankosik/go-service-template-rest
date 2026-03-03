@@ -65,6 +65,8 @@ make test-integration
 - Do not merge generated drift:
   - run `make openapi-generate`
   - verify with `make openapi-drift-check`
+  - when interface seams change, run `make mocks-generate`
+  - verify with `make mocks-drift-check`
 
 ## Security and Disclosure
 

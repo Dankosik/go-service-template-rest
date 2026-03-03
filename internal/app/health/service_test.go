@@ -4,23 +4,20 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 )
 
-type probeStub struct {
-	name string
-	err  error
-}
-
-func (p probeStub) Name() string {
-	return p.name
-}
-
-func (p probeStub) Check(context.Context) error {
-	return p.err
-}
-
 func TestServiceReadySuccess(t *testing.T) {
-	svc := New(probeStub{name: "db"}, probeStub{name: "cache"})
+	ctrl := gomock.NewController(t)
+
+	db := NewMockProbe(ctrl)
+	db.EXPECT().Check(gomock.Any()).Return(nil)
+
+	cache := NewMockProbe(ctrl)
+	cache.EXPECT().Check(gomock.Any()).Return(nil)
+
+	svc := New(db, cache)
 
 	if err := svc.Ready(context.Background()); err != nil {
 		t.Fatalf("Ready() error = %v", err)
@@ -28,15 +25,30 @@ func TestServiceReadySuccess(t *testing.T) {
 }
 
 func TestServiceReadyFail(t *testing.T) {
-	svc := New(probeStub{name: "db", err: errors.New("down")})
+	ctrl := gomock.NewController(t)
+	downErr := errors.New("down")
 
-	if err := svc.Ready(context.Background()); err == nil {
+	db := NewMockProbe(ctrl)
+	db.EXPECT().Name().Return("db")
+	db.EXPECT().Check(gomock.Any()).Return(downErr)
+
+	svc := New(db)
+
+	err := svc.Ready(context.Background())
+	if err == nil {
 		t.Fatalf("Ready() expected error")
+	}
+
+	if !errors.Is(err, downErr) {
+		t.Fatalf("Ready() error = %v, want wrapped %v", err, downErr)
 	}
 }
 
 func TestServiceReadyDraining(t *testing.T) {
-	svc := New()
+	ctrl := gomock.NewController(t)
+	probe := NewMockProbe(ctrl)
+
+	svc := New(probe)
 	svc.StartDrain()
 
 	err := svc.Ready(context.Background())

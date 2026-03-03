@@ -12,7 +12,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
-	"github.com/example/go-service-template-rest/internal/domain"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
@@ -137,7 +136,7 @@ type failingProbe struct {
 	err  error
 }
 
-var _ domain.ReadinessProbe = (*failingProbe)(nil)
+var _ health.Probe = (*failingProbe)(nil)
 
 func (p failingProbe) Name() string {
 	return p.name

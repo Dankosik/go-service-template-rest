@@ -5,19 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
-
-	"github.com/example/go-service-template-rest/internal/domain"
 )
 
 type Service struct {
-	probes   []domain.ReadinessProbe
+	probes   []Probe
 	draining atomic.Bool
+}
+
+//go:generate -command mockgen go tool mockgen
+//go:generate mockgen -source=service.go -destination=zz_probe_mock_test.go -package=health
+type Probe interface {
+	Name() string
+	Check(ctx context.Context) error
 }
 
 var ErrDraining = errors.New("service is draining")
 
-func New(probes ...domain.ReadinessProbe) *Service {
-	items := make([]domain.ReadinessProbe, len(probes))
+func New(probes ...Probe) *Service {
+	items := make([]Probe, len(probes))
 	copy(items, probes)
 	return &Service{probes: items}
 }

@@ -54,6 +54,7 @@ Out of scope:
 - Use table-driven structure and subtests where it improves readability and traceability.
 - Prefer test names that reveal scenario intent and source obligation (including `TST-###` when present).
 - Prove observable behavior (state transitions, responses, persisted effects, emitted outcomes), not only branch execution.
+- For seams approved for generated mocks, prefer generated mocks over introducing new handwritten fakes/stubs.
 
 #### Determinism And Isolation Competency
 - Eliminate timing flakiness:
@@ -109,6 +110,7 @@ Out of scope:
   - `make test-integration` (integration/boundary scope)
   - `go vet ./...` and/or `make lint` when required
   - `make openapi-check` when API contract/runtime contract tests are impacted
+  - `make mocks-drift-check` when interface seams, `//go:generate` mock directives, or `*_mock_test.go` artifacts are changed
   - `make migration-validate` when migration-related behavior is in scope.
 - Keep local validation evidence aligned with CI gate intent from `docs/llm/delivery/10-ci-quality-gates.md`.
 - Report command outcomes explicitly; do not claim readiness without executed evidence.
@@ -135,6 +137,7 @@ Out of scope:
 - Flaky or nondeterministic tests with uncontrolled timing/shared state.
 - Concurrency-sensitive changes without race/lifecycle validation.
 - API/data/security/cache semantics changed without corresponding test assertions.
+- New handwritten fake/stub introduced for a seam already adopted for generated mocks without explicit spec justification.
 - Required validation commands are not run or are failing.
 - Spec ambiguity affecting correctness is not escalated.
 
@@ -240,6 +243,7 @@ Unknowns:
 - writing tests without traceability to `70-test-plan.md`
 - resolving spec gaps inside tests without `Spec Clarification Request`
 - relying on timing sleeps or shared mutable state instead of deterministic control
+- introducing new handwritten fakes/stubs in seams already standardized on generated mocks
 - hiding behavior behind oversized helper layers that obscure assertions
 - claiming readiness without executing required validation commands
 - crossing role boundaries into spec authoring/review decisions during implementation

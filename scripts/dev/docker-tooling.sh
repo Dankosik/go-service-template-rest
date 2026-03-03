@@ -78,6 +78,8 @@ usage() {
 	echo "  test-race"
 	echo "  test-cover"
 	echo "  test-integration"
+	echo "  mocks-generate"
+	echo "  mocks-drift-check"
 	echo "  lint"
 	echo "  openapi-generate"
 	echo "  openapi-drift-check"
@@ -181,6 +183,22 @@ openapi_drift_check() {
 		echo "untracked openapi artifacts detected in internal/api"
 		echo "${untracked}"
 		echo "run 'make openapi-generate' and commit updated generated files"
+		exit 1
+	fi
+}
+
+mocks_drift_check() {
+	if ! git -C "${ROOT_DIR}" diff --quiet -- ':(glob)**/*_mock_test.go'; then
+		echo "tracked mockgen drift detected in *_mock_test.go files"
+		git -C "${ROOT_DIR}" diff -- ':(glob)**/*_mock_test.go'
+		exit 1
+	fi
+
+	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- ':(glob)**/*_mock_test.go')"
+	if [[ -n "${untracked}" ]]; then
+		echo "untracked mockgen artifacts detected"
+		echo "${untracked}"
+		echo "run 'make mocks-generate' and commit updated mock files"
 		exit 1
 	fi
 }
@@ -344,6 +362,13 @@ test-cover)
 test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."
 	;;
+mocks-generate)
+	run_go "go generate -run \"mockgen\" ./..."
+	;;
+mocks-drift-check)
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-generate
+	mocks_drift_check
+	;;
 lint)
 	run_lint run --timeout=3m
 	;;
@@ -406,6 +431,7 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-drift-check
 	REQUIRE_DOCKER=1 bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security

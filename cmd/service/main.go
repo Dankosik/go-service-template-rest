@@ -18,7 +18,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/domain"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -195,7 +194,7 @@ func run() (runErr error) {
 					"started",
 				)...,
 			)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), telemetryShutdownTimeout)
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(startupCtx), telemetryShutdownTimeout)
 			defer cancel()
 			if err := tracingShutdown(shutdownCtx); err != nil {
 				log.Error(
@@ -297,7 +296,7 @@ func run() (runErr error) {
 	dependencyProbeCtx, dependencyProbeCancel := withStageBudget(startupCtx, startupProbeBudget)
 	defer dependencyProbeCancel()
 
-	probes := make([]domain.ReadinessProbe, 0, 1)
+	probes := make([]health.Probe, 0, 1)
 	if cfg.Postgres.Enabled {
 		metrics.SetStartupDependencyStatus("postgres", "critical_fail_closed", false)
 		if err := ensureRemainingStartupBudget(dependencyProbeCtx, startupFailFastThreshold+startupReserveBudget, "postgres_startup_probe"); err != nil {

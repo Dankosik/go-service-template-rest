@@ -267,6 +267,16 @@ Bootstrap shortcuts:
   - Docker tooling equivalent of integration tests.
   - Uses Docker socket passthrough when available.
 
+### Mock generation workflow
+
+- `make mocks-generate`
+  - Runs: `go generate -run "mockgen" ./...`
+  - Purpose: execute only `//go:generate` directives that use `mockgen`.
+
+- `make mocks-drift-check`
+  - Runs `mocks-generate`, then verifies tracked and untracked `*_mock_test.go` artifacts.
+  - Fails when generated mock artifacts are stale or missing from git.
+
 ### OpenAPI and API contract workflow
 
 - `make openapi-generate`
@@ -327,6 +337,7 @@ Bootstrap shortcuts:
     - `test`
     - `test-race`
     - `test-cover-local`
+    - `mocks-drift-check`
     - `openapi-check`
     - `go-security`
     - `secrets-scan`
@@ -367,6 +378,7 @@ Bootstrap shortcuts:
     - `test`
     - `test-race`
     - `test-cover`
+    - `mocks-drift-check`
     - `test-integration` (`REQUIRE_DOCKER=1`)
     - `openapi-check`
     - `go-security`
