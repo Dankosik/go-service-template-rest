@@ -1,0 +1,18 @@
+app:
+  env: local
+
+http:
+  addr: ":8080"
+
+log:
+  level: debug
+
+postgres:
+  enabled: false
+
+redis:
+  enabled: false
+  mode: cache
+
+mongo:
+  enabled: false

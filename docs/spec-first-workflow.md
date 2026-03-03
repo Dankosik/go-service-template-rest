@@ -6,7 +6,7 @@ This workflow defines a process where:
 
 - the main unit of work is the specification;
 - architecture and contract decisions are closed before coding starts;
-- `go-coder` implements only decisions that are already approved;
+- `go-coder` implements only decisions that are already approved and operationalized into the detailed coder plan;
 - reviewers evaluate code strictly within their area of expertise.
 
 Result: less architectural drift, fewer coding-time assumptions, and higher predictability and implementation quality.
@@ -39,6 +39,7 @@ specs/<feature-id>/
   50-security-observability-devops.md
   55-reliability-and-resilience.md
   60-implementation-plan.md
+  65-coder-detailed-plan.md
   70-test-plan.md
   80-open-questions.md
   90-signoff.md
@@ -76,6 +77,7 @@ All `*-spec` skills are expertise roles first, not workflow-only roles.
 - `go-domain-invariant-spec` - business invariants, state transitions, acceptance criteria, domain corner cases.
 - `go-reliability-spec` - timeout/retry budgets, backpressure, graceful shutdown, degradation, rollout/rollback safety.
 - `go-design-spec` - architecture integrity, simplicity, maintainability.
+- `go-coder-plan-spec` - execution-grade coding plan design from approved specs (`65-coder-detailed-plan.md`) with atomic tasks, traceability, checkpoints, and clarification triggers.
 - `go-chi-spec` - `go-chi` transport-specific design decisions (`Route`/`Mount` topology, middleware ordering, `404/405/OPTIONS` policy, route-template extraction) for routing-related scope.
 
 Primary-domain rule for SPEC skills:
@@ -86,7 +88,8 @@ Primary-domain rule for SPEC skills:
 
 ### 4.3 Roles During Implementation
 
-- `go-coder` - implementation strictly against `60-implementation-plan.md` and approved contracts.
+- `go-coder-plan-spec` - prepares `65-coder-detailed-plan.md` after `G2` and before coding (`G2.5` readiness gate).
+- `go-coder` - implementation strictly against `65-coder-detailed-plan.md`, preserving strategic intent and constraints from `60` plus approved contracts.
 - `go-qa-tester` - test implementation strictly against `70-test-plan.md` and spec requirements.
 
 ### 4.4 REVIEW Skills (Code Review Phase)
@@ -187,13 +190,36 @@ Gate G2 (Spec Sign-Off, Definition of Ready for coding):
 - `90-signoff.md` includes confirmation from all `*-spec` skills;
 - `Spec Freeze` is active until code review is complete.
 
+## Phase 2.5. Detailed Coder Plan Design
+
+Owner: `go-coder-plan-spec`.
+
+Actions:
+
+1. Load approved feature artifacts (`15/20/30/40/50/55/60/70/80/90`) after `G2`.
+2. Create `65-coder-detailed-plan.md` as execution-grade plan for coding:
+   - atomic task graph;
+   - task-level traceability to approved decisions/invariants/test obligations;
+   - checkpoint contracts and clarification triggers;
+   - outcome-oriented sequencing without low-level coding prescriptions.
+3. Preserve coder autonomy in technical realization details:
+   - no hard file-path lock-in;
+   - no low-level code-mechanics prescriptions in the plan.
+
+Gate G2.5 (Detailed Plan Ready):
+
+- `65-coder-detailed-plan.md` exists and is complete;
+- critical approved obligations are mapped to executable tasks with expected evidence;
+- checkpoints and clarification contract are explicitly defined;
+- no contradiction with frozen approved decisions.
+
 ## Phase 3. Code-Only Implementation
 
 Owners: `go-coder`, `go-qa-tester`.
 
 Rules:
 
-1. `go-coder` writes production code strictly according to `60-implementation-plan.md`.
+1. `go-coder` writes production code strictly according to `65-coder-detailed-plan.md`, while preserving strategic intent and constraints from `60-implementation-plan.md`.
 2. `go-qa-tester` writes test code strictly according to `70-test-plan.md`:
    - unit tests
    - integration tests
@@ -209,7 +235,7 @@ Rules:
 
 Gate G3:
 
-- code is implemented according to spec;
+- code is implemented according to `65` and remains aligned with approved strategic constraints from `60` and contracts from `15/30/40/50/55`;
 - unit/integration/contract tests are implemented according to `70-test-plan.md`;
 - critical invariants and reliability fail-path scenarios are covered by tests;
 - local tests/lint/vet pass;
@@ -350,9 +376,10 @@ Severity:
 ### Definition of Ready (to start coding)
 
 - Gate G2 passed;
+- Gate G2.5 passed;
 - specification has no open questions;
 - `Spec Freeze` is active;
-- implementation/test plan is detailed.
+- `65-coder-detailed-plan.md` is present and execution-ready.
 
 ### Definition of Done (for merge)
 

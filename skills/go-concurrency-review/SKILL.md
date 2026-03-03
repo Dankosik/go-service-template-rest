@@ -142,7 +142,7 @@ Out of scope:
 - Any concurrency risk requiring spec intent change but left without `Spec Reopen`.
 
 ## Working Rules
-1. Confirm the task is code review and determine changed scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`) and determine changed scope.
 2. Map changed code to one or more concurrency axes. If no axis applies, return `No concurrency findings.` with `Residual Risks: none; no concurrency surface detected in changed scope.`.
 3. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 4. Load review context using this skill's dynamic loading rules.
@@ -217,6 +217,7 @@ Load by trigger:
   - `docs/build-test-and-development-commands.md`
 - Architecture-level ownership or lifecycle boundary ambiguity:
   - `specs/<feature-id>/20-architecture.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
 - Async workflow semantics affecting channel/pipeline design:
   - `docs/llm/architecture/30-event-driven-and-async-workflows.md`

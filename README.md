@@ -24,7 +24,7 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 
 - `cmd/service` as a thin entry point
 - `internal` for private logic (`app/domain/infra/config`)
-- configuration via environment variables
+- koanf-based configuration (`defaults -> file -> overlays -> env -> flags`)
 - structured JSON logs via `log/slog`
 - request correlation via `X-Request-ID` (`request_id`/`trace_id`/`span_id` in request logs)
 - OpenTelemetry tracing baseline (`otelhttp` + W3C propagators, env-driven sampler/exporter)
@@ -32,7 +32,7 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 - standardized API error payloads (`application/problem+json` for request/internal failures)
 - `GET /health/live`, `GET /health/ready`, `GET /api/v1/ping`, `GET /metrics`
 - baseline HTTP timeouts and graceful shutdown
-- optional Postgres readiness probe (via `POSTGRES_DSN`)
+- optional Postgres readiness probe (via `postgres.enabled=true` + `postgres.dsn`)
 - portable Agent Skills in git (`skills/` as source + provider mirrors for Codex/Claude/Cursor/Gemini/Copilot)
 - OpenAPI workflow: codegen (`oapi-codegen`) + lint + validate + breaking check
 - Docker multi-stage + distroless runtime (image digests pinned)
@@ -89,7 +89,7 @@ make run
 - native mode: `fmt-check`, `lint`, `test`;
 - Docker fallback (when local Go is unavailable): `docker-fmt-check`, `docker-lint`, `docker-test`.
 
-By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
+By default `postgres.enabled=false`, so the service starts without a Postgres readiness probe.
 `make run` auto-loads `.env` (if present) before starting the service.
 
 ## Full Validation (CI Parity)
@@ -137,7 +137,7 @@ make gh-protect BRANCH=main
 make compose-up
 ```
 
-Set `POSTGRES_DSN` in `.env`, then restart the service.
+Set `APP__POSTGRES__ENABLED=true` and `APP__POSTGRES__DSN=...` in `.env`, then restart the service.
 
 ## Endpoints
 
@@ -189,36 +189,62 @@ BASE_OPENAPI=/path/to/base-service.yaml make openapi-breaking
 ## Configuration
 
 See `env/.env.example`:
+- source-of-truth policy for `YAML vs ENV`: `docs/configuration-source-policy.md`
 
-- `APP_ENV`
-- `APP_VERSION`
-- `HTTP_ADDR`
-- `HTTP_SHUTDOWN_TIMEOUT`
-- `HTTP_READ_HEADER_TIMEOUT`
-- `HTTP_READ_TIMEOUT`
-- `HTTP_WRITE_TIMEOUT`
-- `HTTP_IDLE_TIMEOUT`
-- `HTTP_MAX_HEADER_BYTES`
-- `HTTP_MAX_BODY_BYTES`
-- `LOG_LEVEL`
-- `OTEL_SERVICE_NAME`
-- `OTEL_TRACES_SAMPLER`
-- `OTEL_TRACES_SAMPLER_ARG`
-- `POSTGRES_DSN`
-  - empty by default; when set, enables Postgres readiness check on startup
+- canonical namespace: `APP__<DOMAIN>__<FIELD>`
+  - examples:
+    - `APP__HTTP__ADDR=:8080`
+    - `APP__POSTGRES__ENABLED=true`
+    - `APP__POSTGRES__DSN=postgres://...`
+    - `APP__REDIS__MODE=cache`
 - optional OTLP exporter settings (if traces export is needed):
-  - `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
-  - `OTEL_EXPORTER_OTLP_HEADERS`
-  - `OTEL_EXPORTER_OTLP_PROTOCOL`
+  - keys:
+    - `APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT`
+    - `APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_TRACES_ENDPOINT`
+    - `APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS`
+    - `APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_PROTOCOL=http/protobuf`
+
+Precedence (last wins):
+1. defaults (code)
+2. `--config` base file
+3. `--config-overlay` files (in provided order)
+4. `APP__...` env namespace
+5. flags (`--config-strict`)
+
+Strict mode note:
+- `--config-strict=true` rejects unknown canonical keys.
+
+Runtime flags:
+- `--config=/path/to/config.yaml`
+- `--config-overlay=/path/to/overlay.yaml` (repeatable)
+- `--config-strict=true|false`
+
+Baseline non-secret config files:
+- `env/config/default.yaml`
+- `env/config/local.yaml`
+
+Security notes:
+- do not commit secrets to YAML; use env/secret-store injection.
+- secret-like values in YAML are rejected in all environments (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
+- in non-local environments, config files are hardened: absolute path required, allowed roots enforced, symlinks/group-writable/world-writable files rejected, max file size is `1MiB`.
+- allowed non-local config roots can be overridden via `APP_CONFIG_ALLOWED_ROOTS` (comma/semicolon/path-list separated). Defaults include `/etc/config`, `/etc/service/config`, and `/run/secrets`.
+- docs-drift policy: if a PR changes behavior/contract/CI-sensitive paths (`cmd/`, `internal/`, `api/openapi`, `Makefile`, workflows, scripts, migrations), update `docs/`, `README.md`, or `CONTRIBUTING.md` in the same PR.
+
+Startup dependency behavior:
+- `postgres.enabled=true`: startup is fail-closed (probe failure blocks startup).
+- `redis.enabled=true` with `mode=cache`: startup degrades to `feature_off` on probe failure.
+- `redis.enabled=true` with `mode=store`: startup is fail-closed on probe failure.
+- `mongo.enabled=true`: startup may continue in degraded mode if probe fails.
+- telemetry exporter initialization is fail-open: service starts with local logs if exporter setup fails, and `telemetry_init_failure_total{reason}` is emitted.
 
 Default HTTP timeout profile for this template:
-- `HTTP_READ_HEADER_TIMEOUT=5s`
-- `HTTP_READ_TIMEOUT=5s`
-- `HTTP_WRITE_TIMEOUT=10s`
-- `HTTP_IDLE_TIMEOUT=60s`
-- `HTTP_SHUTDOWN_TIMEOUT=10s`
-- `HTTP_MAX_HEADER_BYTES=16384`
-- `HTTP_MAX_BODY_BYTES=1048576`
+- `APP__HTTP__READ_HEADER_TIMEOUT=5s`
+- `APP__HTTP__READ_TIMEOUT=5s`
+- `APP__HTTP__WRITE_TIMEOUT=10s`
+- `APP__HTTP__IDLE_TIMEOUT=60s`
+- `APP__HTTP__SHUTDOWN_TIMEOUT=10s`
+- `APP__HTTP__MAX_HEADER_BYTES=16384`
+- `APP__HTTP__MAX_BODY_BYTES=1048576`
 
 These values are safe defaults for typical JSON APIs. If you add streaming/long-running responses, tune timeouts explicitly for that path or use a dedicated server profile.
 

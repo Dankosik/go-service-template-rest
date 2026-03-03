@@ -41,7 +41,14 @@ func TestPostgresReadinessProbe(t *testing.T) {
 		t.Fatalf("build postgres dsn: %v", err)
 	}
 
-	pool, err := postgres.New(ctx, dsn)
+	pool, err := postgres.New(ctx, postgres.Options{
+		DSN:                dsn,
+		ConnectTimeout:     3 * time.Second,
+		HealthcheckTimeout: 3 * time.Second,
+		MaxOpenConns:       10,
+		MaxIdleConns:       5,
+		ConnMaxLifetime:    time.Hour,
+	})
 	if err != nil {
 		t.Fatalf("create postgres pool: %v", err)
 	}

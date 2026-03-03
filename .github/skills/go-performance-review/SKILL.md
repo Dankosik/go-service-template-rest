@@ -48,7 +48,7 @@ Out of scope:
 - Never modify approved spec intent implicitly through review comments.
 
 #### Performance Budget Conformance Competency
-- Validate changed paths against approved `PERF-*` decisions and budget clauses in `20/60/70/90` artifacts.
+- Validate changed paths against approved `PERF-*` decisions and budget clauses in `20/60/65/70/90` artifacts.
 - Flag missing budget clauses for high-risk hot-path changes as evidence/decision gaps.
 - Require explicit checks for p95/p99 latency, throughput, and allocation impact when those dimensions are in scope.
 - Treat "optimization by guesswork" as a review anti-pattern.
@@ -146,7 +146,7 @@ Out of scope:
 - Any correction path that conflicts with approved spec intent but lacks `Spec Reopen`.
 
 ## Working Rules
-1. Confirm review scope: changed files, impacted packages, and execution paths.
+1. Confirm review unit from context (`single task` or `bounded task scope`) and set review scope: changed files, impacted packages, and execution paths.
 2. Determine `feature-id` from review context, changed paths, or task metadata; if unavailable, proceed with bounded `[assumption]`.
 3. Load context using this skill's dynamic-loading policy.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
@@ -157,7 +157,7 @@ Out of scope:
    - `Contention And Parallelism Cost`
    - `I/O Efficiency Signals`
    - `Evidence Quality`
-6. Record only evidence-backed findings and map each to a concrete approved obligation (`PERF-*` decision, budget clause, or explicit section in `20/60/70/90`).
+6. Record only evidence-backed findings and map each to a concrete approved obligation (`PERF-*` decision, budget clause, or explicit section in `20/60/65/70/90`).
 7. If high-risk hot-path changes lack required evidence, record this as a finding.
 8. Classify severity by merge risk (`critical/high/medium/low`) and provide the smallest safe correction path.
 9. Keep comments strictly in performance ownership; hand off deep cross-domain issues.
@@ -217,6 +217,7 @@ Always load:
 - `docs/llm/go-instructions/60-go-performance-and-profiling.md`
 - review artifacts:
   - `specs/<feature-id>/20-architecture.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
   - `specs/<feature-id>/70-test-plan.md`
   - `specs/<feature-id>/90-signoff.md`

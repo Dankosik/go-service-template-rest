@@ -34,3 +34,13 @@ func TestServiceReadyFail(t *testing.T) {
 		t.Fatalf("Ready() expected error")
 	}
 }
+
+func TestServiceReadyDraining(t *testing.T) {
+	svc := New()
+	svc.StartDrain()
+
+	err := svc.Ready(context.Background())
+	if !errors.Is(err, ErrDraining) {
+		t.Fatalf("Ready() error = %v, want ErrDraining", err)
+	}
+}

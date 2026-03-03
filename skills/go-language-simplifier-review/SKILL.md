@@ -144,7 +144,7 @@ Out of scope:
 - Missing evidence or unclear fix path for `critical/high` readability risks.
 
 ## Working Rules
-1. Confirm the task is a code review and identify changed scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`), then identify changed scope.
 2. Determine `feature-id` from task context, changed paths, or review metadata. If unknown, proceed with bounded `[assumption]` and reduced certainty.
 3. Load review context using this skill's dynamic loading rules.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
@@ -229,6 +229,7 @@ Load by trigger:
   - `docs/llm/go-instructions/20-go-concurrency.md`
 - If simplification concern may conflict with approved design:
   - `specs/<feature-id>/20-architecture.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
   - `specs/<feature-id>/90-signoff.md`
 

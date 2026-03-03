@@ -1,17 +1,19 @@
 ---
 name: go-coder
-description: "Implement approved Go service changes in a spec-first workflow. Use when coding production changes after spec sign-off and you need strict execution against `60-implementation-plan.md`, preserved invariants/contracts, and implementation-time ambiguity escalation via spec clarification. Skip when the task is specification design, test-strategy design, domain-scoped code review, or isolated brainstorming without code changes."
+description: "Implement approved Go service changes in a spec-first workflow. Use when coding production changes after detailed-plan readiness and you need focused execution of atomic tasks from `65-coder-detailed-plan.md` (default: one task per run) while preserving strategic constraints from `60-implementation-plan.md`, approved invariants/contracts, and implementation-time ambiguity escalation via spec clarification. Skip when the task is specification design, test-strategy design, domain-scoped code review, or isolated brainstorming without code changes."
 ---
 
 # Go Coder
 
 ## Purpose
-Implement production-ready Go code strictly from the approved spec package. Success means the delivered code follows `60-implementation-plan.md`, preserves approved contracts/invariants, and avoids architecture or contract drift during coding.
+Implement production-ready Go code strictly from the approved spec package. Success means each execution pass completes one atomic task from `65-coder-detailed-plan.md` with strong evidence, preserves strategic intent from `60-implementation-plan.md` plus approved contracts/invariants, and avoids architecture or contract drift during coding.
 
 ## Scope And Boundaries
 In scope:
 - implement production code for the approved feature scope from `specs/<feature-id>/`
-- execute `60-implementation-plan.md` steps in order without silently skipping architecture-significant steps
+- execute `65-coder-detailed-plan.md` in order with a focused default of one atomic task per run
+- do not silently skip dependency-blocking or architecture-significant tasks from `65`
+- preserve strategic sequencing and constraints defined in `60-implementation-plan.md`
 - preserve decisions and constraints from `15/30/40/50/55` artifacts
 - keep dependency wiring explicit and code idiomatic according to repository Go standards
 - keep behavior backward compatible by default unless an approved spec decision states otherwise
@@ -30,20 +32,31 @@ Out of scope:
 
 #### Mission
 - Implement approved spec decisions as production-grade Go without semantic drift.
-- Preserve contract/invariant/reliability/security/observability behavior from `15/30/40/50/55` while executing `60-implementation-plan.md`.
+- Preserve contract/invariant/reliability/security/observability behavior from `15/30/40/50/55` while executing `65-coder-detailed-plan.md` under strategic constraints from `60`.
 - Deliver implementation evidence that is directly reviewable at Gate G3 without interpretation gaps.
 
 #### Default Posture
-- Spec-first during coding: `60` defines execution sequence; `15/30/40/50/55` define mandatory behavior semantics.
+- Spec-first during coding: `65` defines execution sequence; `60` defines strategic implementation intent and boundaries; `15/30/40/50/55` define mandatory behavior semantics.
+- Default execution mode is `single-task`: finish one eligible `65` task with checks and evidence before touching the next task.
 - No new architecture or contract decisions are made during implementation.
 - Backward compatibility is default unless the approved spec explicitly states a behavior change.
 - Prefer standard library and explicit control flow; avoid speculative abstractions and hidden magic.
 - Keep dependency wiring explicit in composition root; keep package responsibilities focused and stable.
 
+#### Incremental Task Execution Competency
+- Execute one atomic `65` task card at a time by default.
+- A task is eligible only when:
+  - dependency prerequisites in `65` are satisfied;
+  - task status is `todo` or `in_progress`;
+  - no unresolved blocker applies to this task.
+- Do not start the next `65` task in the same run unless the user explicitly asks for multi-task execution.
+- If user explicitly requests multi-task execution, still preserve strict per-task completion boundaries (implement -> check -> evidence) before moving to the next task.
+
 #### Spec-Freeze Execution Discipline
-- Start coding only when Gate G2 has passed, `Spec Freeze` is active, and blocking open questions are closed.
-- For each implementation step, map code edits to:
-  - plan step in `60`;
+- Start coding only when Gate G2.5 has passed, `Spec Freeze` is active, and blocking open questions are closed.
+- For the active task, map code edits to:
+  - task ID in `65`;
+  - related strategic intent in `60`;
   - affected invariants in `15`;
   - affected API/data/security/reliability constraints in `30/40/50/55`.
 - If ambiguity changes architecture/API/security/consistency/reliability semantics:
@@ -259,10 +272,11 @@ Out of scope:
   - `govulncheck ./...` when dependency/security risk is in scope.
 - For API-contract-impacting code changes, ensure implementation stays in sync with contract artifacts and generated code.
 - Report executed checks with pass/fail status in handoff; do not claim readiness without evidence.
+- Before any positive completion/readiness statement, apply `go-verification-before-completion` to ensure claim scope matches fresh command evidence.
 
 #### Evidence Threshold And Merge-Blocking Signals For Coding
-- For each implemented plan step, provide explicit mapping:
-  - `60` step ID -> changed files -> preserved constraints (`15/30/40/50/55`) -> checks run.
+- For each executed task, provide explicit mapping:
+  - `65` task ID -> related `60` strategic item -> changed files -> preserved constraints (`15/30/40/50/55`) -> checks run.
 - Treat these as coding blockers:
   - unresolved spec ambiguity affecting semantics;
   - required behavior-changing checks not executed;
@@ -273,23 +287,28 @@ Out of scope:
 - If a blocker exists, pause coding and escalate; do not continue with speculative local fixes.
 
 ## Working Rules
-1. Identify the active feature spec package and verify implementation preconditions: Gate G2 passed, `Spec Freeze` active, and no blocking open questions.
-2. Load feature artifacts first (`60`, `80`, and impacted `15/30/40/50/55`), then load repository guidance via this skill's dynamic loading rules.
-3. Map planned steps to concrete file-level code changes before editing.
-4. Implement only approved scope from `60-implementation-plan.md`; preserve constraints from `15/30/40/50/55`.
-5. Keep code explicit and idiomatic; avoid hidden control flow and avoid speculative abstractions.
-6. If a blocking ambiguity appears, stop the affected change, record a `Spec Clarification Request`, and return to spec phase instead of inventing a new design decision.
-7. Run required quality checks and collect pass/fail evidence.
-8. Produce a concise implementation handoff with changed files, executed checks, and any unresolved blockers.
+1. Identify the active feature spec package and verify implementation preconditions: Gate G2.5 passed, `Spec Freeze` active, and no blocking open questions.
+2. Select one eligible `65` task as the active task for this run (earliest by plan order unless user specifies another).
+3. Load feature artifacts for the active task (`65`, related `60` constraints, `80`, and impacted `15/30/40/50/55`), then load repository guidance via this skill's dynamic loading rules.
+4. Map only the active task to concrete file-level code changes before editing.
+5. Implement only approved scope of the active task while preserving strategic constraints from `60` and mandatory constraints from `15/30/40/50/55`.
+6. Keep code explicit and idiomatic; avoid hidden control flow and avoid speculative abstractions.
+7. If a blocking ambiguity appears, stop the affected change, record a `Spec Clarification Request`, and return to spec phase instead of inventing a new design decision.
+8. Run required task-scoped quality checks and collect pass/fail evidence.
+9. Produce a focused handoff for the active task with status (`done`/`blocked`) and clear next eligible task.
 
 ## Output Expectations
 - Provide an implementation result with these sections:
-  - `Scope Executed`: which `60-implementation-plan.md` steps were implemented
+  - `Active Task`: executed `65` task ID and short objective
+  - `Strategic Alignment`: which `60-implementation-plan.md` items were preserved by the executed tasks
   - `Spec Alignment`: preserved constraints from `15/30/40/50/55`, including explicitly unchanged contract/reliability/security semantics
   - `Code Changes`: concrete file list and behavior impact
   - `Checks`: commands executed and pass/fail summary
+  - `Task Status`: `done` or `blocked` for the active task
   - `Blockers`: open ambiguities and explicit `Spec Clarification Request` items (if any)
-- When no blocker exists, output must clearly state implementation is ready for Gate G3 validation.
+  - `Next Task`: next eligible `65` task ID (or `none` with reason)
+- Claim full Gate G3 readiness only when all required `65` tasks for the requested scope are complete and evidence-backed.
+- For normal single-task runs, report task readiness, not whole-plan readiness.
 - When blockers exist, output must clearly state coding is paused for spec clarification.
 
 ## Context Intake (Dynamic Loading)
@@ -297,6 +316,7 @@ Rule: load the smallest sufficient set of docs. Never bulk-load folders by defau
 Stop condition: stop loading when four implementation axes are source-backed: plan steps, contract constraints, reliability/security constraints, and validation commands.
 
 Always load from the active feature package:
+- `specs/<feature-id>/65-coder-detailed-plan.md`
 - `specs/<feature-id>/60-implementation-plan.md`
 - `specs/<feature-id>/80-open-questions.md`
 - impacted sections of:
@@ -353,16 +373,17 @@ Unknowns:
 - If an assumption affects architecture, API contract, security boundary, consistency, or reliability semantics, stop and escalate to spec clarification.
 
 ## Definition Of Done
-- Implemented changes map explicitly to approved `60-implementation-plan.md` scope.
+- Active-task changes map explicitly to approved `65-coder-detailed-plan.md` task scope and preserve strategic constraints from `60-implementation-plan.md`.
 - No contract/invariant drift against `15/30/40/50/55`.
 - No hidden architecture-level decisions introduced during coding.
-- Required quality checks are executed and results are reported.
+- Required task-scoped quality checks are executed and results are reported.
 - All blocking ambiguities are either resolved or explicitly escalated through `Spec Clarification Request`.
-- Handoff output is complete and review-ready for Gate G3.
+- Handoff output is complete, task-focused, and review-ready for incremental progress.
 
 ## Anti-Patterns
 Use these preferred patterns to avoid anti-pattern drift:
 - implement decisions that are explicit in approved spec artifacts
+- execute one atomic `65` task per run by default, not broad plan batches
 - escalate semantic changes through `Spec Clarification Request` before coding
 - convert critical ambiguity into explicit blocker escalation, not deferred TODO/FIXME
 - attach validation evidence to the implementation handoff

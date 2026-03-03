@@ -157,7 +157,7 @@ Out of scope:
 - QA-significant spec mismatch is observed but not escalated as `Spec Reopen`.
 
 ## Working Rules
-1. Confirm the task is code review and determine changed scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`) and determine changed scope.
 2. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 3. Load review context using this skill's dynamic loading rules.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.

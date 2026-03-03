@@ -1,164 +1,944 @@
 package config
 
 import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestLoadDefaults(t *testing.T) {
-	t.Setenv("APP_ENV", "")
-	t.Setenv("APP_VERSION", "")
-	t.Setenv("HTTP_ADDR", "")
-	t.Setenv("HTTP_SHUTDOWN_TIMEOUT", "")
-	t.Setenv("HTTP_READ_HEADER_TIMEOUT", "")
-	t.Setenv("HTTP_READ_TIMEOUT", "")
-	t.Setenv("HTTP_WRITE_TIMEOUT", "")
-	t.Setenv("HTTP_IDLE_TIMEOUT", "")
-	t.Setenv("HTTP_MAX_HEADER_BYTES", "")
-	t.Setenv("HTTP_MAX_BODY_BYTES", "")
-	t.Setenv("LOG_LEVEL", "")
-	t.Setenv("OTEL_SERVICE_NAME", "")
-	t.Setenv("OTEL_TRACES_SAMPLER", "")
-	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "")
-	t.Setenv("POSTGRES_DSN", "")
+	resetConfigEnv(t)
 
-	cfg, err := Load()
+	cfg, report, err := LoadDetailed(LoadOptions{})
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("LoadDetailed() error = %v", err)
 	}
 
-	if cfg.Env != "local" {
-		t.Fatalf("Env = %q, want local", cfg.Env)
+	if cfg.App.Env != "local" {
+		t.Fatalf("App.Env = %q, want local", cfg.App.Env)
 	}
-	if cfg.Version != "dev" {
-		t.Fatalf("Version = %q, want dev", cfg.Version)
+	if cfg.App.Version != "dev" {
+		t.Fatalf("App.Version = %q, want dev", cfg.App.Version)
 	}
 	if cfg.HTTP.Addr != ":8080" {
-		t.Fatalf("Addr = %q, want :8080", cfg.HTTP.Addr)
+		t.Fatalf("HTTP.Addr = %q, want :8080", cfg.HTTP.Addr)
 	}
-	if cfg.HTTP.MaxHeaderBytes != 16<<10 {
-		t.Fatalf("MaxHeaderBytes = %d, want %d", cfg.HTTP.MaxHeaderBytes, 16<<10)
+	if cfg.Redis.Mode != "cache" {
+		t.Fatalf("Redis.Mode = %q, want cache", cfg.Redis.Mode)
 	}
-	if cfg.HTTP.ReadTimeout != 5*time.Second {
-		t.Fatalf("ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
+	if cfg.Redis.AllowStoreMode {
+		t.Fatalf("Redis.AllowStoreMode = true, want false")
 	}
-	if cfg.HTTP.WriteTimeout != 10*time.Second {
-		t.Fatalf("WriteTimeout = %s, want 10s", cfg.HTTP.WriteTimeout)
-	}
-	if cfg.HTTP.MaxBodyBytes != 1<<20 {
-		t.Fatalf("MaxBodyBytes = %d, want %d", cfg.HTTP.MaxBodyBytes, 1<<20)
-	}
-	if cfg.OTel.ServiceName != "service" {
-		t.Fatalf("OTel.ServiceName = %q, want service", cfg.OTel.ServiceName)
-	}
-	if cfg.OTel.TracesSampler != "parentbased_traceidratio" {
-		t.Fatalf("OTel.TracesSampler = %q, want parentbased_traceidratio", cfg.OTel.TracesSampler)
-	}
-	if cfg.OTel.TracesSamplerArg != 0.10 {
-		t.Fatalf("OTel.TracesSamplerArg = %v, want 0.10", cfg.OTel.TracesSamplerArg)
+	if cfg.Postgres.Enabled {
+		t.Fatalf("Postgres.Enabled = true, want false")
 	}
 	if cfg.Postgres.DSN != "" {
-		t.Fatalf("Postgres.DSN = %q, want empty by default", cfg.Postgres.DSN)
+		t.Fatalf("Postgres.DSN = %q, want empty", cfg.Postgres.DSN)
+	}
+	if cfg.Observability.OTel.ServiceName != "service" {
+		t.Fatalf("Observability.OTel.ServiceName = %q, want service", cfg.Observability.OTel.ServiceName)
+	}
+	if cfg.Observability.OTel.TracesSampler != "parentbased_traceidratio" {
+		t.Fatalf("Observability.OTel.TracesSampler = %q, want parentbased_traceidratio", cfg.Observability.OTel.TracesSampler)
+	}
+	if report.LoadDuration <= 0 {
+		t.Fatalf("LoadDuration = %s, want > 0", report.LoadDuration)
+	}
+	if report.ValidateDuration <= 0 {
+		t.Fatalf("ValidateDuration = %s, want > 0", report.ValidateDuration)
 	}
 }
 
-func TestLoadInvalidDuration(t *testing.T) {
-	t.Setenv("HTTP_SHUTDOWN_TIMEOUT", "oops")
+func TestPrecedenceNamespaceWinsOverFileAndOverlay(t *testing.T) {
+	resetConfigEnv(t)
 
-	_, err := Load()
+	basePath := writeTempConfig(t, `
+http:
+  addr: ":8081"
+`)
+	overlayPath := writeTempConfig(t, `
+http:
+  addr: ":8082"
+`)
+
+	t.Setenv("APP__HTTP__ADDR", ":8083")
+
+	cfg, _, err := LoadDetailed(LoadOptions{
+		ConfigPath:     basePath,
+		ConfigOverlays: []string{overlayPath},
+	})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+
+	if cfg.HTTP.Addr != ":8083" {
+		t.Fatalf("HTTP.Addr = %q, want :8083", cfg.HTTP.Addr)
+	}
+}
+
+func TestFlatEnvKeysAreIgnored(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("HTTP_ADDR", ":9090")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+
+	if cfg.HTTP.Addr != ":8080" {
+		t.Fatalf("HTTP.Addr = %q, want default :8080", cfg.HTTP.Addr)
+	}
+}
+
+func TestTST001PrecedenceDeterministicSnapshotAcrossRepeatedLoads(t *testing.T) {
+	resetConfigEnv(t)
+
+	basePath := writeTempConfig(t, `
+http:
+  addr: ":8081"
+`)
+	overlayPath := writeTempConfig(t, `
+http:
+  addr: ":8082"
+`)
+
+	t.Setenv("APP__HTTP__ADDR", ":8083")
+
+	opts := LoadOptions{
+		ConfigPath:     basePath,
+		ConfigOverlays: []string{overlayPath},
+	}
+
+	cfg1, report1, err := LoadDetailed(opts)
+	if err != nil {
+		t.Fatalf("first LoadDetailed() error = %v", err)
+	}
+	cfg2, report2, err := LoadDetailed(opts)
+	if err != nil {
+		t.Fatalf("second LoadDetailed() error = %v", err)
+	}
+
+	if cfg1 != cfg2 {
+		t.Fatalf("config snapshots differ between repeated loads: first=%+v second=%+v", cfg1, cfg2)
+	}
+	if !reflect.DeepEqual(report1.UnknownKeyWarnings, report2.UnknownKeyWarnings) {
+		t.Fatalf("UnknownKeyWarnings differs between repeated loads: first=%v second=%v", report1.UnknownKeyWarnings, report2.UnknownKeyWarnings)
+	}
+}
+
+func TestStrictUnknownKeyRejects(t *testing.T) {
+	resetConfigEnv(t)
+
+	configPath := writeTempConfig(t, `
+unknown:
+  field: value
+`)
+
+	_, _, err := LoadDetailed(LoadOptions{
+		ConfigPath: configPath,
+		Strict:     true,
+	})
 	if err == nil {
-		t.Fatalf("Load() expected error for invalid duration")
+		t.Fatalf("LoadDetailed() expected strict unknown key error")
+	}
+	if !errors.Is(err, ErrStrictUnknownKey) {
+		t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+	}
+	if got := ErrorType(err); got != "strict_unknown_key" {
+		t.Fatalf("ErrorType(error) = %q, want strict_unknown_key", got)
 	}
 }
 
-func TestLoadInvalidLogLevel(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "invalid")
+func TestPermissiveUnknownKeyAllows(t *testing.T) {
+	resetConfigEnv(t)
 
-	_, err := Load()
+	configPath := writeTempConfig(t, `
+unknown:
+  field: value
+`)
+
+	_, report, err := LoadDetailed(LoadOptions{
+		ConfigPath: configPath,
+		Strict:     false,
+	})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if !containsString(report.UnknownKeyWarnings, "unknown.field") {
+		t.Fatalf("UnknownKeyWarnings = %v, want unknown.field", report.UnknownKeyWarnings)
+	}
+}
+
+func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+
+	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("Load() expected error for invalid log level")
+		t.Fatalf("LoadDetailed() expected secret policy error")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
 	}
 }
 
-func TestLoadInvalidOTelSampler(t *testing.T) {
-	t.Setenv("OTEL_TRACES_SAMPLER", "unsupported")
+func TestTST003RequiredIfEnabledContracts(t *testing.T) {
+	t.Run("postgres_enabled_without_dsn_rejected", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__POSTGRES__ENABLED", "true")
 
-	_, err := Load()
+		_, _, err := LoadDetailed(LoadOptions{})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected secret policy error")
+		}
+		if !errors.Is(err, ErrSecretPolicy) {
+			t.Fatalf("error = %v, want ErrSecretPolicy", err)
+		}
+	})
+
+	t.Run("postgres_enabled_with_dsn_allowed", func(t *testing.T) {
+		resetConfigEnv(t)
+		dsn := "postgres://app:app@localhost:5432/app?sslmode=disable"
+		t.Setenv("APP__POSTGRES__ENABLED", "true")
+		t.Setenv("APP__POSTGRES__DSN", dsn)
+
+		cfg, _, err := LoadDetailed(LoadOptions{})
+		if err != nil {
+			t.Fatalf("LoadDetailed() error = %v", err)
+		}
+		if !cfg.Postgres.Enabled {
+			t.Fatalf("Postgres.Enabled = false, want true")
+		}
+		if cfg.Postgres.DSN != dsn {
+			t.Fatalf("Postgres.DSN = %q, want %q", cfg.Postgres.DSN, dsn)
+		}
+	})
+
+	t.Run("mongo_enabled_without_uri_rejected", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__MONGO__ENABLED", "true")
+
+		_, _, err := LoadDetailed(LoadOptions{})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected secret policy error")
+		}
+		if !errors.Is(err, ErrSecretPolicy) {
+			t.Fatalf("error = %v, want ErrSecretPolicy", err)
+		}
+	})
+
+	t.Run("mongo_enabled_without_database_rejected", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__MONGO__URI", "mongodb://localhost:27017")
+		configPath := writeTempConfig(t, `
+mongo:
+  enabled: true
+  database: ""
+`)
+
+		_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected validation error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+	})
+
+	t.Run("mongo_disabled_without_uri_allowed", func(t *testing.T) {
+		resetConfigEnv(t)
+
+		cfg, _, err := LoadDetailed(LoadOptions{})
+		if err != nil {
+			t.Fatalf("LoadDetailed() error = %v", err)
+		}
+		if cfg.Mongo.Enabled {
+			t.Fatalf("Mongo.Enabled = true, want false")
+		}
+		if cfg.Mongo.URI != "" {
+			t.Fatalf("Mongo.URI = %q, want empty", cfg.Mongo.URI)
+		}
+	})
+
+	t.Run("redis_enabled_with_empty_addr_rejected", func(t *testing.T) {
+		resetConfigEnv(t)
+		configPath := writeTempConfig(t, `
+redis:
+  enabled: true
+  addr: ""
+`)
+
+		_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected validation error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+	})
+}
+
+func TestRedisStoreGuardRejectsWithoutAllowFlag(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__REDIS__ENABLED", "true")
+	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
+	t.Setenv("APP__REDIS__MODE", "store")
+	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "false")
+
+	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("Load() expected error for invalid OTel sampler")
+		t.Fatalf("LoadDetailed() expected redis store guard rejection")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "redis.allow_store_mode=true") {
+		t.Fatalf("error = %v, want allow_store_mode hint", err)
 	}
 }
 
-func TestLoadInvalidOTelSamplerArg(t *testing.T) {
-	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "2.0")
+func TestRedisStoreGuardRequiresZeroStaleWindow(t *testing.T) {
+	resetConfigEnv(t)
 
-	_, err := Load()
+	t.Setenv("APP__REDIS__ENABLED", "true")
+	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
+	t.Setenv("APP__REDIS__MODE", "store")
+	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
+	t.Setenv("APP__REDIS__STALE_WINDOW", "1s")
+
+	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("Load() expected error for invalid OTel sampler arg")
+		t.Fatalf("LoadDetailed() expected stale-window validation error")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
 	}
 }
 
-func TestLoadHTTPTimeoutOverrides(t *testing.T) {
-	t.Setenv("HTTP_READ_TIMEOUT", "12s")
-	t.Setenv("HTTP_WRITE_TIMEOUT", "18s")
+func TestRedisStoreGuardAllowsConfiguredModeForV1GuardPath(t *testing.T) {
+	resetConfigEnv(t)
 
-	cfg, err := Load()
+	t.Setenv("APP__REDIS__ENABLED", "true")
+	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
+	t.Setenv("APP__REDIS__MODE", "store")
+	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
+	t.Setenv("APP__REDIS__STALE_WINDOW", "0s")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("LoadDetailed() error = %v", err)
 	}
-	if cfg.HTTP.ReadTimeout != 12*time.Second {
-		t.Fatalf("ReadTimeout = %s, want 12s", cfg.HTTP.ReadTimeout)
+	if cfg.Redis.Mode != "store" {
+		t.Fatalf("Redis.Mode = %q, want store", cfg.Redis.Mode)
 	}
-	if cfg.HTTP.WriteTimeout != 18*time.Second {
-		t.Fatalf("WriteTimeout = %s, want 18s", cfg.HTTP.WriteTimeout)
+	if !cfg.Redis.AllowStoreMode {
+		t.Fatalf("Redis.AllowStoreMode = false, want true")
+	}
+	if cfg.Redis.StaleWindow != 0 {
+		t.Fatalf("Redis.StaleWindow = %s, want 0", cfg.Redis.StaleWindow)
 	}
 }
 
-func TestLoadHTTPBodyLimitOverride(t *testing.T) {
-	t.Setenv("HTTP_MAX_BODY_BYTES", "2048")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+func TestNonLocalRejectsSymlinkConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation can require elevated privileges on Windows")
 	}
-	if cfg.HTTP.MaxBodyBytes != 2048 {
-		t.Fatalf("MaxBodyBytes = %d, want 2048", cfg.HTTP.MaxBodyBytes)
-	}
-}
 
-func TestLoadHTTPHeaderLimitOverride(t *testing.T) {
-	t.Setenv("HTTP_MAX_HEADER_BYTES", "32768")
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "prod")
 
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.HTTP.MaxHeaderBytes != 32768 {
-		t.Fatalf("MaxHeaderBytes = %d, want 32768", cfg.HTTP.MaxHeaderBytes)
-	}
-}
+	target := writeTempConfig(t, `
+http:
+  addr: ":8080"
+`)
 
-func TestLoadVersionOverride(t *testing.T) {
-	t.Setenv("APP_VERSION", "1.2.3")
+	tempDir := t.TempDir()
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", tempDir)
 
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+	linkPath := filepath.Join(tempDir, "config-link.yaml")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Fatalf("os.Symlink() error = %v", err)
 	}
-	if cfg.Version != "1.2.3" {
-		t.Fatalf("Version = %q, want %q", cfg.Version, "1.2.3")
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: linkPath})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected secret policy error for non-local symlink config")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
 	}
 }
 
-func TestLoadPostgresDSNOverride(t *testing.T) {
-	want := "postgres://app:app@localhost:5432/app?sslmode=disable"
-	t.Setenv("POSTGRES_DSN", want)
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+func TestTST005NonLocalRejectsWorldWritableConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not reliable on Windows")
 	}
-	if cfg.Postgres.DSN != want {
-		t.Fatalf("Postgres.DSN = %q, want %q", cfg.Postgres.DSN, want)
+
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "prod")
+
+	configPath := writeTempConfig(t, `
+http:
+  addr: ":8080"
+`)
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", filepath.Dir(configPath))
+
+	if err := os.Chmod(configPath, 0o666); err != nil {
+		t.Fatalf("os.Chmod() error = %v", err)
+	}
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected secret policy error for world-writable config")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestInvalidDurationParseError(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected parse error")
+	}
+	if !errors.Is(err, ErrParse) {
+		t.Fatalf("error = %v, want ErrParse", err)
+	}
+}
+
+func TestTST005MalformedYAMLReturnsParseError(t *testing.T) {
+	resetConfigEnv(t)
+
+	configPath := writeTempConfig(t, `
+http:
+  addr: ":8080"
+broken: [
+`)
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected parse error for malformed YAML")
+	}
+	if !errors.Is(err, ErrParse) {
+		t.Fatalf("error = %v, want ErrParse", err)
+	}
+	if got := ErrorType(err); got != "parse" {
+		t.Fatalf("ErrorType(error) = %q, want parse", got)
+	}
+}
+
+func TestConfigFileWithoutEnvironmentHintFailsClosed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not reliable on Windows")
+	}
+
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "")
+
+	configPath := writeTempConfig(t, `
+http:
+  addr: ":8080"
+`)
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", filepath.Dir(configPath))
+
+	if err := os.Chmod(configPath, 0o666); err != nil {
+		t.Fatalf("os.Chmod() error = %v", err)
+	}
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected fail-closed hardening error without explicit local env hint")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestNonLocalRejectsConfigOutsideAllowedRoots(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "prod")
+
+	allowedRoot := t.TempDir()
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", allowedRoot)
+
+	otherRoot := t.TempDir()
+	path := filepath.Join(otherRoot, "config.yaml")
+	if err := os.WriteFile(path, []byte("http:\n  addr: \":8080\"\n"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected allowed-root policy rejection")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestNonLocalDefaultRootsDoNotAllowRepositoryConfigDir(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "prod")
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", "")
+
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(previousWD, "..", ".."))
+	if err := os.Chdir(repoRoot); err != nil {
+		t.Fatalf("os.Chdir() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if chdirErr := os.Chdir(previousWD); chdirErr != nil {
+			t.Fatalf("os.Chdir() restore error = %v", chdirErr)
+		}
+	})
+
+	repoConfigDir := filepath.Join(repoRoot, "env", "config")
+	if err := os.MkdirAll(repoConfigDir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+	configPath := filepath.Join(repoConfigDir, "nonlocal-default-root-test.yaml")
+	content := "app:\n  env: prod\nhttp:\n  addr: \":8080\"\n"
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(configPath)
+	})
+
+	_, _, err = LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected allowed-root policy rejection for repository config path in non-local mode")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestNonLocalRejectsSymlinkPathComponents(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation can require elevated privileges on Windows")
+	}
+
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "prod")
+
+	allowedRoot := t.TempDir()
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", allowedRoot)
+
+	realRoot := t.TempDir()
+	configPath := filepath.Join(realRoot, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("http:\n  addr: \":8080\"\n"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	linkedDir := filepath.Join(allowedRoot, "linked")
+	if err := os.Symlink(realRoot, linkedDir); err != nil {
+		t.Fatalf("os.Symlink() error = %v", err)
+	}
+
+	pathViaSymlink := filepath.Join(linkedDir, "config.yaml")
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: pathViaSymlink})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected symlink-path rejection")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestNonLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", "prod")
+
+	allowedRoot := t.TempDir()
+	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", allowedRoot)
+
+	path := filepath.Join(allowedRoot, "config.yaml")
+	content := `
+app:
+  env: prod
+postgres:
+  enabled: true
+  dsn: "postgres://app:secret@localhost:5432/app?sslmode=disable"
+`
+	if err := os.WriteFile(path, []byte(strings.TrimSpace(content)), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected secret source policy rejection")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
+	resetConfigEnv(t)
+
+	path := writeTempConfig(t, `
+postgres:
+  enabled: true
+  dsn: "postgres://app:secret@localhost:5432/app?sslmode=disable"
+`)
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected secret source policy rejection")
+	}
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestParseErrorDoesNotLeakRawValue(t *testing.T) {
+	resetConfigEnv(t)
+
+	secretLikeValue := "supersecret-token-value"
+	t.Setenv("APP__HTTP__READ_TIMEOUT", secretLikeValue)
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected parse error")
+	}
+	if !errors.Is(err, ErrParse) {
+		t.Fatalf("error = %v, want ErrParse", err)
+	}
+	if strings.Contains(err.Error(), secretLikeValue) {
+		t.Fatalf("error unexpectedly contains raw secret-like value: %v", err)
+	}
+}
+
+func TestFlatPostgresDSNIsIgnored(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("POSTGRES_DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.Postgres.Enabled {
+		t.Fatalf("Postgres.Enabled = true, want false when only flat key is set")
+	}
+	if cfg.Postgres.DSN != "" {
+		t.Fatalf("Postgres.DSN = %q, want empty when only flat key is set", cfg.Postgres.DSN)
+	}
+}
+
+func TestErrorTypeMapping(t *testing.T) {
+	if got := ErrorType(ErrStrictUnknownKey); got != "strict_unknown_key" {
+		t.Fatalf("ErrorType(strict) = %q", got)
+	}
+	if got := ErrorType(ErrSecretPolicy); got != "secret_policy" {
+		t.Fatalf("ErrorType(secret_policy) = %q", got)
+	}
+	if got := ErrorType(ErrValidate); got != "validate" {
+		t.Fatalf("ErrorType(validate) = %q", got)
+	}
+	if got := ErrorType(ErrParse); got != "parse" {
+		t.Fatalf("ErrorType(parse) = %q", got)
+	}
+	if got := ErrorType(ErrDependencyInit); got != "dependency_init" {
+		t.Fatalf("ErrorType(dependency_init) = %q", got)
+	}
+	if got := ErrorType(ErrLoad); got != "load" {
+		t.Fatalf("ErrorType(load) = %q", got)
+	}
+}
+
+func TestLoadDetailedWithContextCanceled(t *testing.T) {
+	resetConfigEnv(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := LoadDetailedWithContext(ctx, LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailedWithContext() expected context cancellation error")
+	}
+	if !errors.Is(err, ErrLoad) {
+		t.Fatalf("error = %v, want ErrLoad", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+}
+
+func TestLoadDetailedFailedStageReporting(t *testing.T) {
+	t.Run("parse_stage", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
+
+		_, report, err := LoadDetailed(LoadOptions{})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected parse error")
+		}
+		if !errors.Is(err, ErrParse) {
+			t.Fatalf("error = %v, want ErrParse", err)
+		}
+		if report.FailedStage != StageParse {
+			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageParse)
+		}
+		if report.FailedStageDuration <= 0 {
+			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
+		}
+	})
+
+	t.Run("validate_stage", func(t *testing.T) {
+		resetConfigEnv(t)
+		configPath := writeTempConfig(t, `
+unknown:
+  field: value
+`)
+
+		_, report, err := LoadDetailed(LoadOptions{
+			ConfigPath: configPath,
+			Strict:     true,
+		})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected strict unknown key error")
+		}
+		if !errors.Is(err, ErrStrictUnknownKey) {
+			t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+		}
+		if report.FailedStage != StageValidate {
+			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
+		}
+		if report.FailedStageDuration <= 0 {
+			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
+		}
+	})
+
+	t.Run("load_file_stage", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__APP__ENV", "prod")
+		t.Setenv("APP_CONFIG_ALLOWED_ROOTS", t.TempDir())
+
+		_, report, err := LoadDetailed(LoadOptions{ConfigPath: "/nonexistent/config.yaml"})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected load error")
+		}
+		if !errors.Is(err, ErrLoad) && !errors.Is(err, ErrSecretPolicy) {
+			t.Fatalf("error = %v, want ErrLoad or ErrSecretPolicy", err)
+		}
+		if report.FailedStage != StageLoadFile {
+			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageLoadFile)
+		}
+		if report.FailedStageDuration <= 0 {
+			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
+		}
+	})
+}
+
+func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "https://otel.example.com:4318")
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_TRACES_ENDPOINT", "https://otel.example.com:4318/v1/traces")
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", "authorization=Bearer token")
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_PROTOCOL", "http/protobuf")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.Observability.OTel.Exporter.OTLPEndpoint != "https://otel.example.com:4318" {
+		t.Fatalf("OTLPEndpoint = %q, want %q", cfg.Observability.OTel.Exporter.OTLPEndpoint, "https://otel.example.com:4318")
+	}
+	if cfg.Observability.OTel.Exporter.OTLPTracesEndpoint != "https://otel.example.com:4318/v1/traces" {
+		t.Fatalf("OTLPTracesEndpoint = %q, want %q", cfg.Observability.OTel.Exporter.OTLPTracesEndpoint, "https://otel.example.com:4318/v1/traces")
+	}
+	if cfg.Observability.OTel.Exporter.OTLPHeaders != "authorization=Bearer token" {
+		t.Fatalf("OTLPHeaders = %q, want %q", cfg.Observability.OTel.Exporter.OTLPHeaders, "authorization=Bearer token")
+	}
+	if cfg.Observability.OTel.Exporter.OTLPProtocol != "http/protobuf" {
+		t.Fatalf("OTLPProtocol = %q, want %q", cfg.Observability.OTel.Exporter.OTLPProtocol, "http/protobuf")
+	}
+}
+
+func writeTempConfig(t *testing.T, content string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(strings.TrimSpace(content)), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	return path
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func resetConfigEnv(t *testing.T) {
+	t.Helper()
+
+	keys := []string{
+		"APP__APP__ENV",
+		"APP__APP__VERSION",
+		"APP__HTTP__ADDR",
+		"APP__HTTP__SHUTDOWN_TIMEOUT",
+		"APP__HTTP__READ_HEADER_TIMEOUT",
+		"APP__HTTP__READ_TIMEOUT",
+		"APP__HTTP__WRITE_TIMEOUT",
+		"APP__HTTP__IDLE_TIMEOUT",
+		"APP__HTTP__MAX_HEADER_BYTES",
+		"APP__HTTP__MAX_BODY_BYTES",
+		"APP__LOG__LEVEL",
+		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT",
+		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_TRACES_ENDPOINT",
+		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS",
+		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_PROTOCOL",
+		"APP__POSTGRES__ENABLED",
+		"APP__POSTGRES__DSN",
+		"APP__REDIS__ENABLED",
+		"APP__REDIS__MODE",
+		"APP__REDIS__ALLOW_STORE_MODE",
+		"APP__REDIS__ADDR",
+		"APP__REDIS__STALE_WINDOW",
+		"APP__MONGO__ENABLED",
+		"APP__MONGO__URI",
+		"APP__MONGO__DATABASE",
+		"APP_CONFIG_ALLOWED_ROOTS",
+	}
+
+	for _, key := range keys {
+		t.Setenv(key, "")
+	}
+	t.Setenv("APP__APP__ENV", "local")
+}
+
+func TestPostgresDurationBounds(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__POSTGRES__CONNECT_TIMEOUT", "50ms")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for connect timeout")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func TestPostgresDSNMustBeParseable(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://%zz")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for unparseable postgres dsn")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func TestRedisEnabledRequiresHostPortAddress(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__REDIS__ENABLED", "true")
+	t.Setenv("APP__REDIS__ADDR", "redis-without-port")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for redis addr without port")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func TestMongoURIMustBeParseable(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__MONGO__ENABLED", "true")
+	t.Setenv("APP__MONGO__URI", "mongo://bad-uri")
+	t.Setenv("APP__MONGO__DATABASE", "app")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for unparseable mongo uri")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func TestMongoDisabledAllowsInvalidURI(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__MONGO__ENABLED", "false")
+	t.Setenv("APP__MONGO__URI", "mongo://bad-uri")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v, want nil when mongo is disabled", err)
+	}
+	if cfg.Mongo.Enabled {
+		t.Fatalf("Mongo.Enabled = true, want false")
+	}
+}
+
+func TestMongoProbeAddress(t *testing.T) {
+	t.Run("mongodb scheme", func(t *testing.T) {
+		address, err := MongoProbeAddress("mongodb://user:pass@localhost:27017/app?replicaSet=rs0")
+		if err != nil {
+			t.Fatalf("MongoProbeAddress() error = %v", err)
+		}
+		if address != "localhost:27017" {
+			t.Fatalf("MongoProbeAddress() = %q, want localhost:27017", address)
+		}
+	})
+
+	t.Run("mongodb srv scheme defaults port", func(t *testing.T) {
+		address, err := MongoProbeAddress("mongodb+srv://cluster.example.com/app")
+		if err != nil {
+			t.Fatalf("MongoProbeAddress() error = %v", err)
+		}
+		if address != "cluster.example.com:27017" {
+			t.Fatalf("MongoProbeAddress() = %q, want cluster.example.com:27017", address)
+		}
+	})
+}
+
+func TestReadDurationParsesDefaultDurations(t *testing.T) {
+	resetConfigEnv(t)
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.HTTP.ReadTimeout != 5*time.Second {
+		t.Fatalf("HTTP.ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
+	}
+	if cfg.Postgres.ConnMaxLifetime != 30*time.Minute {
+		t.Fatalf("Postgres.ConnMaxLifetime = %s, want 30m", cfg.Postgres.ConnMaxLifetime)
 	}
 }

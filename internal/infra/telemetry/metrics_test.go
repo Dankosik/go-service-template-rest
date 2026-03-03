@@ -1,36 +1,49 @@
 package telemetry
 
-import (
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
-	"time"
-)
+import "testing"
 
-func TestMetricsExposeHTTPDurationHistogram(t *testing.T) {
-	m := New()
-	m.ObserveHTTPRequestDuration(http.MethodGet, "GET /api/v1/ping", http.StatusOK, 25*time.Millisecond)
-
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	resp := httptest.NewRecorder()
-	m.Handler().ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
+func TestNormalizeFieldGroupLabel(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "http field", input: "http.addr", want: "http"},
+		{name: "observability field", input: "observability.otel.service_name", want: "observability"},
+		{name: "redis group", input: "redis", want: "redis"},
+		{name: "unknown group", input: "custom.group.field", want: "other"},
+		{name: "empty", input: "", want: "other"},
 	}
 
-	body := resp.Body.String()
-	if !strings.Contains(body, "http_request_duration_seconds_bucket") {
-		t.Fatalf("metrics output does not contain duration histogram buckets")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeFieldGroupLabel(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeFieldGroupLabel(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
-	if !strings.Contains(body, "http_request_duration_seconds_sum") {
-		t.Fatalf("metrics output does not contain duration histogram sum")
+}
+
+func TestNormalizeTelemetryFailureReason(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "setup error", input: "setup_error", want: "setup_error"},
+		{name: "deadline exceeded", input: "deadline_exceeded", want: "deadline_exceeded"},
+		{name: "canceled upper", input: "CANCELED", want: "canceled"},
+		{name: "unknown", input: "dns_failure", want: "other"},
+		{name: "empty", input: "", want: "other"},
 	}
-	if !strings.Contains(body, "http_request_duration_seconds_count") {
-		t.Fatalf("metrics output does not contain duration histogram count")
-	}
-	if !strings.Contains(body, `method="GET",route="GET /api/v1/ping",status_code="200"`) {
-		t.Fatalf("metrics output does not contain expected labels for ping endpoint")
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeTelemetryFailureReason(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeTelemetryFailureReason(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
 }

@@ -158,7 +158,7 @@ Out of scope:
 - Spec-intent conflict left implicit instead of explicit `Spec Reopen`.
 
 ## Working Rules
-1. Confirm the task is code review and identify changed DB/cache-sensitive scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`), then identify changed DB/cache-sensitive scope.
 2. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 3. Load context using this skill's dynamic loading rules.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
@@ -170,7 +170,7 @@ Out of scope:
    - `Invalidation/TTL/Staleness Correctness`
    - `Stampede/Degradation/Origin Protection`
    - `DB/Cache Test Traceability`
-6. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer clauses in `40/60/70/90`, and `30/50/55` when relevant).
+6. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer clauses in `40/60/65/70/90`, and `30/50/55` when relevant).
 7. Classify severity by merge safety impact (`critical/high/medium/low`) and provide the smallest safe corrective action.
 8. Keep comments strictly in DB/cache-review domain; hand off deep cross-domain root causes to the corresponding reviewer role.
 9. If safe fix requires changing approved spec intent, create `Spec Reopen` in `reviews/<feature-id>/code-review-log.md`.
@@ -228,6 +228,7 @@ Always load:
 - `docs/llm/data/50-caching-strategy.md`
 - review artifacts:
   - `specs/<feature-id>/40-data-consistency-cache.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
   - `specs/<feature-id>/70-test-plan.md`
   - `specs/<feature-id>/90-signoff.md`

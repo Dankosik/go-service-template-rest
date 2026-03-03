@@ -124,7 +124,7 @@ Out of scope:
 - Spec conflict exists but no `Spec Reopen` is initiated.
 
 ## Working Rules
-1. Confirm review scope and identify changed domain-sensitive code paths.
+1. Confirm review unit from context (`single task` or `bounded task scope`), then identify changed domain-sensitive code paths.
 2. Determine `feature-id` from review context, changed paths, or task metadata. If unknown, continue with bounded `[assumption]`.
 3. Load context using this skill's dynamic loading rules.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.

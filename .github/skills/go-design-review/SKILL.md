@@ -10,7 +10,7 @@ Validate that code changes stay aligned with approved architecture and design de
 
 ## Scope And Boundaries
 In scope:
-- compare implementation with approved spec artifacts (`20/60` and relevant `15/30/40/50/55/70/90`)
+- compare implementation with approved spec artifacts (`20/60/65` and relevant `15/30/40/50/55/70/90`)
 - detect boundary violations, dependency-direction breaks, and hidden cross-layer coupling
 - detect accidental complexity and maintainability regressions
 - verify code does not introduce unapproved architecture-level decisions
@@ -32,7 +32,7 @@ Out of scope:
 - Detect cross-domain seam regressions (API/data/security/reliability/observability/delivery/testing) only when they create design-level drift or spec inconsistency.
 
 #### Default Posture
-- `20-architecture.md`, `60-implementation-plan.md`, and accepted decisions in `90-signoff.md` are the design source of truth.
+- `20-architecture.md`, `60-implementation-plan.md`, `65-coder-detailed-plan.md`, and accepted decisions in `90-signoff.md` are the design source of truth.
 - Review changed code and directly impacted paths first; do not start from broad repository cleanup.
 - Keep findings evidence-backed, minimal, and correction-oriented.
 - No spec edits in Phase 4; design/spec conflicts are escalated through `Spec Reopen`.
@@ -59,7 +59,7 @@ Out of scope:
 - Reject design drift masked as "local refactor" when it changes architectural behavior or responsibility boundaries.
 
 #### Plan Conformance And Spec-Freeze Execution Competency
-- Map implementation to approved steps in `60-implementation-plan.md`.
+- Map implementation to approved task flow in `65-coder-detailed-plan.md` and validate preservation of strategic constraints from `60-implementation-plan.md`.
 - Flag "decision later in code" behavior:
   - unresolved TODO-driven architecture choices;
   - ad hoc branching that contradicts signed-off execution sequence;
@@ -155,7 +155,7 @@ Out of scope:
 - Any spec-level conflict left without `Spec Reopen`.
 
 ## Working Rules
-1. Confirm the task is a Phase 4 code review and identify the target feature and diff scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`) as a Phase 4 code review, then identify the target feature and diff scope.
 2. Determine `feature-id` from task context, changed paths, or review metadata. If `feature-id` cannot be identified, continue with bounded `[assumption]` and state reduced certainty.
 3. Load approved feature artifacts and review context using dynamic loading rules from this skill.
 4. Review changed code first, then map each risky change to relevant approved spec decisions.
@@ -209,6 +209,7 @@ Always load:
 - `docs/llm/go-instructions/70-go-review-checklist.md`
 - review target artifacts:
   - `specs/<feature-id>/20-architecture.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
   - `specs/<feature-id>/90-signoff.md`
   - `reviews/<feature-id>/code-review-log.md` (if present)

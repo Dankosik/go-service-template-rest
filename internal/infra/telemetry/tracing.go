@@ -3,7 +3,7 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"os"
+	"net/url"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -20,6 +20,14 @@ type TracingConfig struct {
 	DeploymentEnv    string
 	TracesSampler    string
 	TracesSamplerArg float64
+	Exporter         TraceExporterConfig
+}
+
+type TraceExporterConfig struct {
+	OTLPEndpoint       string
+	OTLPTracesEndpoint string
+	OTLPHeaders        string
+	OTLPProtocol       string
 }
 
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
@@ -59,8 +67,12 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		sdktrace.WithSampler(sampler),
 	}
 
-	if isOTLPTraceExporterConfigured() {
-		exporter, err := otlptracehttp.New(ctx)
+	exporterOptions, exporterConfigured, err := buildTraceExporterOptions(cfg.Exporter)
+	if err != nil {
+		return nil, err
+	}
+	if exporterConfigured {
+		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
 		if err != nil {
 			return nil, fmt.Errorf("create otlp trace exporter: %w", err)
 		}
@@ -109,7 +121,106 @@ func clampRatio(v float64) float64 {
 	return v
 }
 
-func isOTLPTraceExporterConfigured() bool {
-	return strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")) != "" ||
-		strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")) != ""
+func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, bool, error) {
+	protocol := strings.ToLower(strings.TrimSpace(cfg.OTLPProtocol))
+	if protocol == "" {
+		protocol = "http/protobuf"
+	}
+	if protocol != "http/protobuf" {
+		return nil, false, fmt.Errorf("unsupported otlp protocol %q", cfg.OTLPProtocol)
+	}
+
+	options := make([]otlptracehttp.Option, 0, 4)
+	configured := false
+
+	if endpoint := strings.TrimSpace(cfg.OTLPEndpoint); endpoint != "" {
+		parsedOptions, err := parseOTLPEndpointOptions(endpoint)
+		if err != nil {
+			return nil, false, err
+		}
+		options = append(options, parsedOptions...)
+		configured = true
+	}
+	if endpoint := strings.TrimSpace(cfg.OTLPTracesEndpoint); endpoint != "" {
+		parsedOptions, err := parseOTLPEndpointOptions(endpoint)
+		if err != nil {
+			return nil, false, err
+		}
+		// Traces endpoint should override generic OTLP endpoint when both are set.
+		options = append(options, parsedOptions...)
+		configured = true
+	}
+	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
+		parsedHeaders, err := parseOTLPHeaders(headers)
+		if err != nil {
+			return nil, false, err
+		}
+		options = append(options, otlptracehttp.WithHeaders(parsedHeaders))
+		configured = true
+	}
+
+	return options, configured, nil
+}
+
+func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
+	parsedURL, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
+	}
+
+	options := make([]otlptracehttp.Option, 0, 3)
+	if parsedURL.Scheme == "" {
+		options = append(options, otlptracehttp.WithEndpoint(raw))
+		return options, nil
+	}
+
+	if parsedURL.Host == "" {
+		return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
+	}
+
+	switch strings.ToLower(parsedURL.Scheme) {
+	case "http":
+		options = append(options, otlptracehttp.WithInsecure())
+	case "https":
+	default:
+		return nil, fmt.Errorf("parse otlp endpoint %q: unsupported scheme %q", raw, parsedURL.Scheme)
+	}
+
+	options = append(options, otlptracehttp.WithEndpoint(parsedURL.Host))
+	path := strings.TrimSpace(parsedURL.EscapedPath())
+	if path != "" && path != "/" {
+		options = append(options, otlptracehttp.WithURLPath(path))
+	}
+	if parsedURL.RawQuery != "" {
+		return nil, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
+	}
+
+	return options, nil
+}
+
+func parseOTLPHeaders(raw string) (map[string]string, error) {
+	headers := make(map[string]string)
+
+	pairs := strings.Split(raw, ",")
+	for _, pair := range pairs {
+		entry := strings.TrimSpace(pair)
+		if entry == "" {
+			continue
+		}
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("parse otlp headers: malformed entry %q", entry)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" || value == "" {
+			return nil, fmt.Errorf("parse otlp headers: malformed entry %q", entry)
+		}
+		headers[key] = value
+	}
+
+	if len(headers) == 0 {
+		return nil, fmt.Errorf("parse otlp headers: no valid header pairs")
+	}
+	return headers, nil
 }

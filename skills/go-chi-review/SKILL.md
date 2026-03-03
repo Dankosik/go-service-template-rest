@@ -11,7 +11,7 @@ Use `Hard Skills` as the normative `go-chi` baseline for decision quality and me
 
 ## Scope And Boundaries
 In scope:
-- review changed transport code against approved routing intent in `specs/<feature-id>/20-architecture.md` and `specs/<feature-id>/60-implementation-plan.md`
+- review changed transport code against approved routing intent in `specs/<feature-id>/20-architecture.md`, execution constraints in `specs/<feature-id>/65-coder-detailed-plan.md`, and strategic constraints in `specs/<feature-id>/60-implementation-plan.md`
 - review `chi` router topology and route ownership (`Route`/`Group`/`Mount`, root vs subrouter boundaries)
 - review route conflict/shadowing/override risks caused by registration order or mixed route ownership
 - review middleware ordering invariants and global vs local scope boundaries
@@ -139,7 +139,7 @@ Out of scope:
 - Spec-intent conflict left implicit instead of explicit `Spec Reopen`.
 
 ## Working Rules
-1. Confirm the task is code review and identify changed `chi` routing-sensitive scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`), then identify changed `chi` routing-sensitive scope.
 2. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 3. Load context using this skill's dynamic loading rules.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
@@ -150,7 +150,7 @@ Out of scope:
    - `Route Observability Semantics`
    - `OpenAPI/Codegen Chi Integration`
    - `Transport Lifecycle Safety`
-6. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer `CHI-*` decisions or clauses in `20/30/50/55/60/70/90`).
+6. Record only evidence-backed findings and map each finding to explicit approved obligations (prefer `CHI-*` decisions or clauses in `20/30/50/55/60/65/70/90`).
 7. Classify severity by merge safety impact (`critical/high/medium/low`) and provide the smallest safe corrective action.
 8. Keep comments strictly in `go-chi-review` domain and hand off deep cross-domain root causes to the corresponding reviewer role.
 9. If safe fix requires changing approved spec intent, create `Spec Reopen` in `reviews/<feature-id>/code-review-log.md`.
@@ -200,9 +200,10 @@ Stop condition: stop loading once routing topology, middleware policy, HTTP poli
 Always load:
 - `docs/spec-first-workflow.md`:
   - read only `Core Principles`, `Phase 4`, `Reviewer Focus Matrix`, `Review Findings Format`, and `Gate G4` criteria first
-- `docs/deep-research-report (64).md`
+- `docs/deep-research-report (65).md`
 - review artifacts:
   - `specs/<feature-id>/20-architecture.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
   - `specs/<feature-id>/90-signoff.md`
   - `reviews/<feature-id>/code-review-log.md` (if present)

@@ -180,7 +180,7 @@ Out of scope:
 - Spec-conflicting security correction path without explicit `Spec Reopen`.
 
 ## Working Rules
-1. Confirm the task is code review and identify changed security-sensitive scope.
+1. Confirm review unit from context (`single task` or `bounded task scope`), then identify changed security-sensitive scope.
 2. Map changed files/functions to one or more security review axes. If no security-sensitive surface is present, return `No security findings.` with `Residual Risks` explaining why the scope is security-neutral.
 3. Determine `feature-id` from review context, changed paths, or task metadata. If it cannot be identified, continue with bounded `[assumption]` and reduced certainty.
 4. Load context using this skill's dynamic loading rules.

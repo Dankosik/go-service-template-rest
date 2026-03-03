@@ -157,7 +157,7 @@ Out of scope:
 - Any spec-conflicting correction path left without explicit `Spec Reopen`.
 
 ## Working Rules
-1. Confirm review scope: changed files, impacted packages, and available spec context.
+1. Confirm review unit from context (`single task` or `bounded task scope`) and set review scope: changed files, impacted packages, and available spec context.
 2. Determine `feature-id` from task context or changed paths; if unavailable, proceed with bounded `[assumption]`.
 3. Load context using this skill's dynamic-loading policy.
 4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.

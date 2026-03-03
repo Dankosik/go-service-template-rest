@@ -1,6 +1,6 @@
 ---
 name: go-qa-tester
-description: "Implement test-code-first execution for Go services in a spec-first workflow. Use when coding or updating tests after spec sign-off and you need to translate approved `70-test-plan.md` into deterministic unit/integration/contract tests with traceability to invariants and reliability fail-paths. Skip when the task is test strategy specification, architecture/API/data/security decision design, or code-review-only work."
+description: "Implement test-code-first execution for Go services in a spec-first workflow. Use when coding or updating tests after detailed-plan readiness (`G2.5`) and you need to translate approved `70-test-plan.md` into deterministic unit/integration/contract tests with traceability to invariants and reliability fail-paths. Skip when the task is test strategy specification, architecture/API/data/security decision design, or code-review-only work."
 ---
 
 # Go QA Tester
@@ -41,7 +41,7 @@ Out of scope:
 
 #### Phase 3 Spec-Freeze Execution Competency
 - Enforce `docs/spec-first-workflow.md` Phase 3 constraints:
-  - `Gate G2` passed;
+  - `Gate G2.5` passed;
   - `Spec Freeze` active;
   - no spec edits without formal reopen.
 - Implement only approved obligations from `70`, with mandatory preservation of `15` invariants and `55` reliability contracts.
@@ -112,6 +112,7 @@ Out of scope:
   - `make migration-validate` when migration-related behavior is in scope.
 - Keep local validation evidence aligned with CI gate intent from `docs/llm/delivery/10-ci-quality-gates.md`.
 - Report command outcomes explicitly; do not claim readiness without executed evidence.
+- Before any positive completion/readiness statement, apply `go-verification-before-completion` to keep claim scope aligned with fresh executed checks.
 
 #### Evidence Threshold Competency
 - For every implemented obligation group, provide:
@@ -139,14 +140,15 @@ Out of scope:
 
 ## Working Rules
 1. Confirm implementation preconditions before coding tests:
-   - Gate `G2` passed.
+   - Gate `G2.5` passed.
    - `Spec Freeze` active.
    - `70-test-plan.md` has no unresolved blocking ambiguities for the current increment.
-2. Determine current increment boundaries from `60-implementation-plan.md` and collect test obligations from approved artifacts.
+2. Determine current increment boundaries from `65-coder-detailed-plan.md`, then validate alignment with strategic constraints from `60-implementation-plan.md`, and collect test obligations from approved artifacts.
 3. Load minimal context for the current increment and extract explicit obligations first:
    - `specs/<feature-id>/70-test-plan.md` (primary)
    - `specs/<feature-id>/15-domain-invariants-and-acceptance.md`
    - `specs/<feature-id>/55-reliability-and-resilience.md`
+   - `specs/<feature-id>/65-coder-detailed-plan.md`
    - `specs/<feature-id>/60-implementation-plan.md`.
 4. Apply `Hard Skills` defaults from this file. Any deviation must be explicit in implementation notes or escalation output.
 5. Convert each obligation into concrete test cases with explicit pass/fail assertions.
@@ -186,13 +188,14 @@ Stop condition: stop loading when obligations, invariants, fail paths, and requi
 
 Always load:
 - `docs/spec-first-workflow.md`:
-  - read sections for current phase, `Gate G2/G3`, and `Spec Freeze` constraints first
+  - read sections for current phase, `Gate G2.5/G3`, and `Spec Freeze` constraints first
 - `docs/llm/go-instructions/40-go-testing-and-quality.md`
 - `docs/build-test-and-development-commands.md` (execution baseline)
 - feature artifacts for active increment:
   - `specs/<feature-id>/70-test-plan.md` (required)
   - `specs/<feature-id>/15-domain-invariants-and-acceptance.md`
   - `specs/<feature-id>/55-reliability-and-resilience.md`
+  - `specs/<feature-id>/65-coder-detailed-plan.md`
   - `specs/<feature-id>/60-implementation-plan.md`
 
 Load by trigger:
