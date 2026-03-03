@@ -143,10 +143,12 @@ Owner: `spec-first-brainstorming`.
 Actions:
 
 1. Normalize request into one clear problem statement.
-2. Fix scope, non-goals, constraints, and success criteria.
-3. Record explicit assumptions and risks.
-4. Seed prioritized open questions with owner/unblock condition.
-5. Prepare handoff to `go-architect-spec` for `Phase 0`.
+2. Ask clarifying questions one at a time until goals/scope constraints are clear.
+3. Fix scope, non-goals, constraints, and success criteria.
+4. Record explicit assumptions and risks.
+5. When direction is ambiguous, propose 2-3 lightweight framing approaches with trade-offs and recommendation.
+6. Seed prioritized open questions with owner/unblock condition.
+7. Prepare handoff to `go-architect-spec` for `Phase 0`.
 
 Gate B0 (entry to Phase 0):
 

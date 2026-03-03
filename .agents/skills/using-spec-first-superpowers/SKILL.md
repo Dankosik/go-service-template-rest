@@ -87,6 +87,9 @@ Out of scope:
   - `bug_or_failing_test` -> `go-systematic-debugging`
   - `informational_question` -> `route_lightweight` allowed when no artifact/code change is requested
   - `workflow_meta_question` -> `go-architect-spec` or governance process path
+- if a candidate skill is invoked by low-confidence applicability and proves non-applicable:
+  - mark it as `dismissed` in routing notes
+  - continue with the next candidate without blocking the turn
 
 #### Escalation Competency
 - enforce `route_blocked` when:
@@ -151,6 +154,7 @@ Output rules:
 - `required_skills` and `selected_order` must be explicit
 - `route_lightweight` must explain why heavy skill-chain is not required
 - `route_blocked` must include reason and minimum unblock condition
+- start with a short routing announcement: `Routing: <selected_order> because <reason>`
 
 ## Definition Of Done
 - `M0` was executed for the turn
@@ -165,6 +169,13 @@ Output rules:
 - ignoring gate constraints
 - using `route_lightweight` for requests that change specs/code/contracts
 - orchestration skill making domain decisions
+
+## Red Flags
+- "This is a simple request, I can skip routing"
+- "I should explore files first, then choose skills"
+- "I remember the skill, no need to load current instructions"
+- "I'll do one small action before M0"
+- "The selected skill seems close enough, I'll force it"
 
 ## Context Intake (Dynamic Loading)
 Rule: load the smallest sufficient set of docs. Never bulk-load folders by default.

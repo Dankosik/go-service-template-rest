@@ -39,6 +39,7 @@ Out of scope:
 - keep statements concrete and testable
 - prefer explicit blockers over hidden assumptions
 - do not solve design topics that belong to downstream `*-spec` skills
+- ask clarifying questions one at a time for unresolved critical points
 
 #### Problem Framing Competency
 - rewrite the request into one concise problem statement
@@ -59,6 +60,11 @@ Out of scope:
 - produce a prioritized question list
 - each question must include owner and unblock condition
 - separate "nice to know" from "blocking for Phase 0"
+
+#### Approach Comparison Competency
+- when solution direction is ambiguous, propose 2-3 viable framing approaches
+- include short trade-offs and one recommendation
+- keep the comparison lightweight; avoid architecture-deep detailing in brainstorming
 
 #### B0 Gate Competency
 - `B0 pass` only when:
@@ -87,15 +93,17 @@ Out of scope:
 ## Working Rules
 1. Confirm the request belongs to feature/refactor/behavior-change framing. If not, mark `not_applicable` and route to the appropriate skill path.
 2. Normalize the request into one problem statement.
-3. Extract goals, success criteria, non-goals, and hard constraints.
+3. Ask clarifying questions one at a time until goals, success criteria, non-goals, and hard constraints are clear.
 4. Build an explicit `[assumption]` register with risk and validation path.
 5. Seed prioritized open questions with owner and unblock condition.
-6. Check for early conflicts with current repository invariants and process guardrails.
-7. Evaluate readiness against `B0`.
-8. If `B0 pass`, prepare a Phase 0 handoff package for `go-architect-spec`.
-9. If `B0 fail`, provide blockers and minimum required clarifications for re-entry.
-10. If a feature folder already exists, ensure minimum updates are reflected in `specs/<feature-id>/00-input.md`, `10-context-goals-nongoals.md`, and `80-open-questions.md`.
-11. Keep output process-level; defer architecture and domain design to downstream skills.
+6. When needed, propose 2-3 framing approaches with trade-offs and one recommendation.
+7. Get quick user confirmation on problem framing/scope before `B0` decision.
+8. Check for early conflicts with current repository invariants and process guardrails.
+9. Evaluate readiness against `B0`.
+10. If `B0 pass`, prepare a Phase 0 handoff package for `go-architect-spec`.
+11. If `B0 fail`, provide blockers and minimum required clarifications for re-entry.
+12. If a feature folder already exists, ensure minimum updates are reflected in `specs/<feature-id>/00-input.md`, `10-context-goals-nongoals.md`, and `80-open-questions.md`.
+13. Keep output process-level; defer architecture and domain design to downstream skills.
 
 ## Output Expectations
 Use this section order:
@@ -116,6 +124,10 @@ Output rules:
   - one normalized problem statement
   - business/user impact
   - success criteria
+- when multiple directions are plausible, include a concise `Approaches` note:
+  - 2-3 options
+  - short trade-offs
+  - recommended option
 - `Handoff` must include one explicit status:
   - `Ready for Phase 0`
   - `Blocked before Phase 0`
