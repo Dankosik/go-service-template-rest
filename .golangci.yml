@@ -12,6 +12,8 @@ linters:
     - sqlclosecheck
     - errorlint
     - contextcheck
+    - gocritic
+    - nilerr
 
 issues:
   exclude-use-default: false

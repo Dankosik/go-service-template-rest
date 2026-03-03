@@ -36,7 +36,8 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   ├── ci/
 │   │   └── README.md
 │   └── docker/
-│       └── Dockerfile
+│       ├── Dockerfile
+│       └── tooling-images.Dockerfile
 ├── cmd/
 │   └── service/
 │       └── main.go
@@ -173,8 +174,14 @@ Build and delivery assets: Dockerfile, CI notes, related build files.
 Why: separates runtime code from build/deploy concerns and keeps `internal/` focused.
 
 ### `scripts/`
-Developer helper scripts (for example, code generation).  
+Developer and CI helper scripts.  
 Why: standard commands for local work and CI without repeating long command lines.
+
+Key scripts:
+- `scripts/dev/setup.sh`: onboarding bootstrap (native or docker mode), `.env` creation, skills sync, module auto-initialization from `git remote origin`, CODEOWNER inference from origin, and optional strict native coverage sanity (`--strict`).
+- `scripts/dev/doctor.sh`: readiness checks for native/docker prerequisites and template placeholders.
+- `scripts/init-module.sh`: manual fallback for module path and CODEOWNERS initialization after clone.
+- `scripts/dev/docker-tooling.sh`: zero-setup wrappers for test/lint/OpenAPI/security/CI flows without host Go/Node toolchain; tooling image references are read from `build/docker/tooling-images.Dockerfile`.
 
 ### `docs/`
 Engineering documentation (including LLM instructions and this document).  

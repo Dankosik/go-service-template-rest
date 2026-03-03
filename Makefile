@@ -8,42 +8,50 @@ MIGRATE_VERSION := v4.19.0
 GOLANGCI_LINT_VERSION := v2.10.1
 GOVULNCHECK_VERSION := v1.1.4
 GOSEC_VERSION := v2.24.6
-DOCS_DRIFT_SCRIPT := scripts/ci/docs-drift-check.sh
-GUARDRAILS_CHECK_SCRIPT := scripts/ci/required-guardrails-check.sh
-BRANCH_PROTECTION_SCRIPT := scripts/dev/configure-branch-protection.sh
-DOCKER_TOOLING_SCRIPT := scripts/dev/docker-tooling.sh
-SKILLS_SYNC_SCRIPT := scripts/dev/sync-skills.sh
+GOIMPORTS_VERSION := v0.32.0
+GITLEAKS_VERSION := v8.30.0
+DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
+GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
+BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
+DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
+SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 
-.PHONY: setup doctor init-module tidy fmt test test-race test-cover test-cover-local test-integration lint go-security ci-local run build docker-build docker-run compose-up compose-down vendor \
+.PHONY: setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt test test-race test-cover test-cover-local test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
-	setup-native setup-docker doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-ci \
+	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
+	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security
 
 setup:
-	./scripts/dev/setup.sh
+	bash ./scripts/dev/setup.sh
+
+setup-strict:
+	bash ./scripts/dev/setup.sh --strict
 
 setup-native:
-	./scripts/dev/setup.sh --native
+	bash ./scripts/dev/setup.sh --native
+
+setup-native-strict:
+	bash ./scripts/dev/setup.sh --native --strict
 
 setup-docker:
-	./scripts/dev/setup.sh --docker
+	bash ./scripts/dev/setup.sh --docker
 
 doctor:
-	./scripts/dev/doctor.sh --mode auto
+	bash ./scripts/dev/doctor.sh --mode auto
 
 doctor-native:
-	./scripts/dev/doctor.sh --mode native
+	bash ./scripts/dev/doctor.sh --mode native
 
 doctor-docker:
-	./scripts/dev/doctor.sh --mode docker
+	bash ./scripts/dev/doctor.sh --mode docker
 
 init-module:
 	@if [ -n "$(MODULE)" ]; then \
-		./scripts/init-module.sh "$(MODULE)"; \
+		bash ./scripts/init-module.sh "$(MODULE)"; \
 	else \
-		./scripts/init-module.sh; \
+		bash ./scripts/init-module.sh; \
 	fi
 
 docker-pull-tools:
@@ -60,7 +68,7 @@ tidy:
 	go mod tidy
 
 fmt:
-	gofmt -w $(shell find . -type f -name '*.go' -not -path './vendor/*')
+	go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -w $(shell find . -type f -name '*.go' -not -path './vendor/*')
 
 mod-check:
 	GOFLAGS= go mod tidy -diff
@@ -71,9 +79,9 @@ docker-mod-check:
 	$(DOCKER_TOOLING_SCRIPT) mod-check
 
 fmt-check:
-	@unformatted="$$(gofmt -l $$(find . -type f -name '*.go' -not -path './vendor/*'))"; \
+	@unformatted="$$(go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -l $$(find . -type f -name '*.go' -not -path './vendor/*'))"; \
 	if [ -n "$$unformatted" ]; then \
-		echo "gofmt required for:"; \
+		echo "goimports required for:"; \
 		echo "$$unformatted"; \
 		exit 1; \
 	fi
@@ -95,12 +103,21 @@ test-cover:
 	go tool cover -func=coverage.out
 
 test-cover-local:
-	@if GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...; then \
+	@coverage_log="$$(mktemp)"; \
+	if GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./... >"$$coverage_log" 2>&1; then \
+		cat "$$coverage_log"; \
 		go tool cover -func=coverage.out; \
 	else \
-		echo "coverage check skipped: local coverage tooling is unhealthy"; \
-		echo "run 'make doctor-native' for diagnostics or use 'make docker-test-cover'"; \
-	fi
+		cat "$$coverage_log"; \
+		if grep -Eq 'does not match go tool version' "$$coverage_log"; then \
+			echo "coverage check skipped: local coverage tooling is unhealthy"; \
+			echo "run 'make doctor-native' for diagnostics or use 'make docker-test-cover'"; \
+		else \
+			rm -f "$$coverage_log"; \
+			exit 1; \
+		fi; \
+	fi; \
+	rm -f "$$coverage_log"
 
 docker-test:
 	$(DOCKER_TOOLING_SCRIPT) test
@@ -124,8 +141,11 @@ go-security:
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -exclude-generated ./...
 
+secrets-scan:
+	go run github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION) git --no-banner --redact --exit-code 1 .
+
 ci-local:
-	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local openapi-check go-security
+	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local openapi-check go-security secrets-scan
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
@@ -188,6 +208,9 @@ skills-check:
 
 docker-go-security:
 	$(DOCKER_TOOLING_SCRIPT) go-security
+
+docker-secrets-scan:
+	$(DOCKER_TOOLING_SCRIPT) secrets-scan
 
 docker-guardrails-check:
 	$(DOCKER_TOOLING_SCRIPT) guardrails-check

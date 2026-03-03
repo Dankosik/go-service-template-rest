@@ -21,3 +21,25 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/build/docker"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "docker"
+    groups:
+      docker-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/env"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "docker"
+    groups:
+      docker-compose:
+        patterns:
+          - "*"

@@ -8,27 +8,44 @@ This repository is a Go REST service template optimized for beginners and AI-ass
 
 ```bash
 make setup
+make setup-strict
+# without make:
+bash ./scripts/dev/setup.sh
+bash ./scripts/dev/setup.sh --strict
 # or explicit modes:
 make setup-native
+make setup-native-strict
 make setup-docker
 ```
 
-2. Initialize module path once after clone:
+Setup auto-infers `CODEOWNER` from git `origin` when CODEOWNERS still has the template placeholder.
+If you want explicit team ownership, set CODEOWNER during setup:
+
+```bash
+CODEOWNER=@your-org/your-team make setup
+# without make:
+CODEOWNER=@your-org/your-team bash ./scripts/dev/setup.sh
+```
+
+2. In most cloned repositories this step is not needed (setup handles module initialization).  
+If setup reports skipped module initialization, run manual fallback once:
 
 ```bash
 make init-module CODEOWNER=@your-org/your-team
-# zero-setup alternative:
-make docker-init-module CODEOWNER=@your-org/your-team
+# or explicit module:
+make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+# zero-setup alternatives:
+make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+bash ./scripts/dev/docker-tooling.sh init-module github.com/your-org/your-service
 ```
-
-`init-module` auto-detects `MODULE` from `git remote origin` when omitted.  
-You can still pass `MODULE` explicitly if needed.
 
 3. Apply required branch protection/status checks (repo admin):
 
 ```bash
 make gh-protect BRANCH=main
 ```
+
+If this fails due placeholder CODEOWNERS, rerun setup with explicit `CODEOWNER=@your-org/your-team`.
 
 4. Run baseline checks before opening a PR:
 
@@ -54,7 +71,7 @@ make test-integration
 
 ## Commit and Code Style Expectations
 
-- Go formatting is mandatory (`gofmt` via `make fmt`/`make fmt-check`).
+- Go formatting is mandatory (`goimports` via `make fmt`/`make fmt-check`).
 - Prefer explicit, readable Go code over framework-heavy abstractions.
 - Keep module boundaries intact:
   - business logic: `internal/app`
@@ -72,4 +89,4 @@ make test-integration
 
 Critical paths are owner-protected via `.github/CODEOWNERS`.
 
-After cloning this template into a new repository, update CODEOWNERS to your actual team handles.
+After cloning this template into a new repository, verify CODEOWNERS points to real owners before enabling required code owner reviews.

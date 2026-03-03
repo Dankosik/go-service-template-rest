@@ -2,13 +2,26 @@
 set -euo pipefail
 
 required_files=(
+  "AGENTS.md"
+  "README.md"
+  "Makefile"
   ".editorconfig"
   ".gitattributes"
+  ".golangci.yml"
+  ".redocly.yaml"
   ".github/CODEOWNERS"
+  ".github/dependabot.yml"
   ".github/pull_request_template.md"
+  ".github/workflows/ci.yml"
+  ".github/workflows/cd.yml"
+  ".github/workflows/nightly.yml"
   "CONTRIBUTING.md"
   "SECURITY.md"
   "LICENSE"
+  "env/.env.example"
+  "env/docker-compose.yml"
+  "build/docker/Dockerfile"
+  "build/docker/tooling-images.Dockerfile"
 )
 
 missing=()

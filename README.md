@@ -36,11 +36,12 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 - portable Agent Skills in git (`skills/` as source + provider mirrors for Codex/Claude/Cursor/Gemini/Copilot)
 - OpenAPI workflow: codegen (`oapi-codegen`) + lint + validate + breaking check
 - Docker multi-stage + distroless runtime (image digests pinned)
+- tooling image catalog (`build/docker/tooling-images.Dockerfile`) consumed by zero-setup Docker wrappers
 - repository guardrails: `.editorconfig`, `.gitattributes`, `CODEOWNERS`, PR template, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`
-- CI: integrity gates (mod/fmt/docs drift), tests (unit/race/coverage/integration), OpenAPI contract gates, migration validation, security gates
+- CI: integrity gates (mod/fmt/docs drift), tests (unit/race/coverage/integration), OpenAPI contract gates, migration validation, security gates (govulncheck/gosec/gitleaks)
 - nightly reliability workflow with repeated test runs and full security/contract checks
 - CD: GHCR image publishing with Trivy scan, CycloneDX SBOM, cosign keyless signing, and provenance attestation
-- Dependabot for `gomod` and GitHub Actions
+- Dependabot for `gomod`, GitHub Actions, Dockerfiles, and docker-compose
 
 ## Structure
 
@@ -65,13 +66,16 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 This template supports two onboarding modes:
 
 - native mode: local `go` + `node` toolchain, regular `make <target>`.
-- zero-setup docker mode: host requires only `git` + running `docker`; run checks with `make docker-<target>`.
+- zero-setup docker mode: host requires only `git` + running `docker`; run checks with `make docker-<target>` or `bash ./scripts/dev/docker-tooling.sh <target>`.
 
-`make setup` auto-selects mode:
+`make setup` (or `bash ./scripts/dev/setup.sh`) auto-selects mode:
 - if local `go` exists -> native bootstrap;
 - otherwise, if Docker exists -> zero-setup bootstrap.
 - if native bootstrap fails and Docker is available -> fallback to zero-setup bootstrap.
+- setup auto-infers `CODEOWNER` from `git remote origin` when `.github/CODEOWNERS` still has the template placeholder.
 - `make doctor-native` reports coverage-toolchain issues as optional warnings (does not block setup).
+- setup auto-initializes `go.mod` module path from `git remote origin` when the template module is still present.
+- pass `--strict` (or use `make setup-strict`) to enforce native coverage sanity; auto mode falls back to Docker when strict native checks fail and Docker is available.
 
 ## Quick Start
 
@@ -79,48 +83,70 @@ This template supports two onboarding modes:
 
 ```bash
 make setup
+make setup-strict
+# without make:
+bash ./scripts/dev/setup.sh
+bash ./scripts/dev/setup.sh --strict
 ```
 
 Use explicit mode selection if needed:
 
 ```bash
 make setup-native
+make setup-native-strict
 make setup-docker
+# without make:
+bash ./scripts/dev/setup.sh --native
+bash ./scripts/dev/setup.sh --docker
+bash ./scripts/dev/setup.sh --native --strict
 ```
 
-2. Initialize module path once after clone (and set your CODEOWNERS team):
+By default setup tries to infer CODEOWNERS owner from git `origin` and applies it automatically.
+Set `CODEOWNER` explicitly if you want a team handle (recommended):
 
 ```bash
-make init-module CODEOWNER=@your-org/your-team
-# zero-setup alternative:
-make docker-init-module CODEOWNER=@your-org/your-team
+CODEOWNER=@your-org/your-team make setup
+# without make:
+CODEOWNER=@your-org/your-team bash ./scripts/dev/setup.sh
 ```
 
-`init-module` auto-detects `MODULE` from `git remote origin` when omitted.  
-You can still pass it explicitly:
+2. In most cloned repositories this step is not needed (setup handles it).  
+If setup reports that module initialization was skipped, run it once manually:
 
 ```bash
 make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+# zero-setup alternatives:
+make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
+bash ./scripts/dev/docker-tooling.sh init-module github.com/your-org/your-service
 ```
 
-3. Apply branch protection and required checks (repo admin required):
+`init-module` auto-detects `MODULE` from `git remote origin` when omitted:
+
+```bash
+make init-module CODEOWNER=@your-org/your-team
+```
+
+3. Run baseline validation:
+
+```bash
+make ci-local
+# zero-setup alternatives:
+make docker-ci
+bash ./scripts/dev/docker-tooling.sh ci
+```
+
+`make ci-local` runs the native quality baseline (mod/fmt/lint/tests/OpenAPI/security/secrets).
+It uses resilient local coverage (`test-cover-local`) only for known local Go coverage-toolchain mismatch cases.
+If Docker daemon is reachable, it also runs integration tests, migration rehearsal, and container scan.
+`make docker-ci` runs the full zero-setup CI-equivalent path.
+
+4. Apply branch protection and required checks (repo admin required):
 
 ```bash
 make gh-protect BRANCH=main
 ```
 
-4. Run baseline validation:
-
-```bash
-make ci-local
-# zero-setup alternative:
-make docker-ci
-```
-
-`make ci-local` runs the native quality baseline (mod/fmt/lint/tests/OpenAPI/security).
-It uses resilient local coverage (`test-cover-local`) to avoid blocking on known host toolchain coverage issues.
-If Docker daemon is reachable, it also runs integration tests, migration rehearsal, and container scan.
-`make docker-ci` runs the full zero-setup CI-equivalent path.
+`make gh-protect` requires a non-placeholder `.github/CODEOWNERS`. `make setup` usually prepares this automatically from `origin`; if not, rerun setup with explicit `CODEOWNER=@your-org/your-team`.
 
 5. Run the service:
 
@@ -132,7 +158,7 @@ make docker-run
 ```
 
 By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
-`make setup` creates `.env` from `env/.env.example` automatically if missing and syncs agent skill mirrors.
+`make setup` creates `.env` from `env/.env.example` automatically if missing, auto-initializes module path from `origin` when needed, and syncs agent skill mirrors.
 `make run` auto-loads `.env` (if present) before starting the service.
 
 6. Optional: enable local Postgres readiness probe:
@@ -157,7 +183,9 @@ Set `POSTGRES_DSN` in `.env`, then restart the service.
 ```bash
 make fmt
 make setup
+make setup-strict
 make setup-native
+make setup-native-strict
 make setup-docker
 make doctor
 make doctor-native
@@ -182,6 +210,7 @@ make test-integration
 make docker-test-integration
 make lint
 make go-security
+make secrets-scan
 make ci-local
 make docker-lint
 make openapi-generate
@@ -189,6 +218,7 @@ make openapi-lint
 make openapi-validate
 make docker-openapi-check
 make docker-go-security
+make docker-secrets-scan
 make docker-guardrails-check
 make docker-skills-check
 make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
@@ -203,6 +233,24 @@ make build
 make run
 make docker-build
 make docker-run
+```
+
+### No-Make Shortcuts
+
+If `make` is unavailable, use scripts directly:
+
+```bash
+bash ./scripts/dev/setup.sh
+bash ./scripts/dev/setup.sh --strict
+bash ./scripts/dev/setup.sh --native
+bash ./scripts/dev/setup.sh --docker
+bash ./scripts/dev/doctor.sh --mode auto
+bash ./scripts/init-module.sh github.com/your-org/your-service
+bash ./scripts/dev/docker-tooling.sh ci
+bash ./scripts/dev/docker-tooling.sh test
+bash ./scripts/dev/docker-tooling.sh openapi-check
+bash ./scripts/dev/docker-tooling.sh go-security
+bash ./scripts/dev/docker-tooling.sh secrets-scan
 ```
 
 ## Portable Agent Skills
@@ -303,6 +351,7 @@ Workflow `.github/workflows/ci.yml` includes:
 - `test-integration`: `REQUIRE_DOCKER=1 go test -tags=integration ./test/...`
 - `migration-validate` (conditional): rehearses SQL migrations on ephemeral Postgres when `env/migrations/**` changes
 - `go-security`: `govulncheck` and `gosec` (generated files excluded)
+- `secret-scan`: `gitleaks` scan over repository git history
 - `container-security`: Trivy scan for the Docker image
 
 Nightly reliability workflow `.github/workflows/nightly.yml` runs extended checks (repeat test runs, race/integration, OpenAPI, security, and container scan).

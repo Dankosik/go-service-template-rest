@@ -7,6 +7,7 @@ usage() {
 
 strict_mode=0
 mode="auto"
+template_source_origin="github.com/Dankosik/go-service-template-rest"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -113,6 +114,48 @@ normalize_go_version() {
 	printf '%s' "$raw"
 }
 
+detect_module_from_origin() {
+	local remote_url host path without_scheme
+
+	remote_url="$(git config --get remote.origin.url 2>/dev/null || true)"
+	if [[ -z "${remote_url}" ]]; then
+		return 1
+	fi
+
+	case "${remote_url}" in
+	git@*:* )
+		host="${remote_url#git@}"
+		host="${host%%:*}"
+		path="${remote_url#*:}"
+		;;
+	ssh://git@*/*)
+		without_scheme="${remote_url#ssh://git@}"
+		host="${without_scheme%%/*}"
+		path="${without_scheme#*/}"
+		;;
+	http://*|https://*)
+		without_scheme="${remote_url#*://}"
+		host="${without_scheme%%/*}"
+		path="${without_scheme#*/}"
+		;;
+	*)
+		return 1
+		;;
+	esac
+
+	path="${path%.git}"
+	path="${path#/}"
+	path="${path%/}"
+	host="${host%/}"
+	host="${host%%:*}"
+
+	if [[ -z "${host}" || -z "${path}" || "${path}" == "${remote_url}" ]]; then
+		return 1
+	fi
+
+	printf '%s/%s\n' "${host}" "${path}"
+}
+
 check_cmd_required() {
 	local cmd="$1"
 	local hint="$2"
@@ -134,10 +177,19 @@ check_cmd_optional() {
 }
 
 check_template_placeholders() {
+	local template_module current_module origin_module codeowner_placeholder
+
 	template_module="github.com/example/go-service-template-rest"
 	current_module="$(awk '/^module /{print $2; exit}' go.mod)"
+	origin_module="$(detect_module_from_origin || true)"
 	if [[ "${current_module}" == "${template_module}" ]]; then
-		fail_optional "go.mod still uses template module path. Run 'make init-module' (auto-detect) or pass MODULE explicitly."
+		if [[ "${origin_module}" == "${template_source_origin}" ]]; then
+			:
+		elif [[ -n "${origin_module}" && "${origin_module}" != "${template_module}" ]]; then
+			fail_optional "go.mod still uses template module path while origin points to '${origin_module}'. Run 'make init-module' (or 'make setup') to initialize module path."
+		else
+			fail_optional "go.mod still uses template module path. Run 'make init-module' (auto-detect) or pass MODULE explicitly."
+		fi
 	fi
 
 	codeowner_placeholder="@your-org/your-team"

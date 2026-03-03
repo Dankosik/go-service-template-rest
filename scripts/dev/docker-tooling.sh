@@ -2,17 +2,65 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TOOLING_IMAGES_FILE="${ROOT_DIR}/build/docker/tooling-images.Dockerfile"
 
-GO_IMAGE="${GO_IMAGE:-golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1}"
-NODE_IMAGE="${NODE_IMAGE:-node:20.19.0-bookworm@sha256:a5fb035ac1dff34a4ecaea85f90f7321185695d3fd22c12ba12f4535a4647cc5}"
-GOLANGCI_LINT_IMAGE="${GOLANGCI_LINT_IMAGE:-golangci/golangci-lint:v2.10.1@sha256:ea84d14c2fef724411be7dc45e09e6ef721d748315252b02df19a7e3113ee763}"
-POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17@sha256:2cd82735a36356842d5eb1ef80db3ae8f1154172f0f653db48fde079b2a0b7f7}"
-MIGRATE_IMAGE="${MIGRATE_IMAGE:-migrate/migrate:v4.19.0@sha256:d5c978181e3bfa55cc50e3bd8d7da3d87418a87693453250a8804b81ee6494db}"
-TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.65.0@sha256:a22415a38938a56c379387a8163fcb0ce38b10ace73e593475d3658d578b2436}"
+read_catalog_image() {
+	local stage_name="$1"
+	awk -v stage_name="${stage_name}" '
+		BEGIN { wanted = tolower(stage_name) }
+		toupper($1) == "FROM" {
+			image = $2
+			current_stage = ""
+			if (NF >= 4 && tolower($3) == "as") {
+				current_stage = $4
+			}
+			if (tolower(current_stage) == wanted) {
+				print image
+				found = 1
+				exit 0
+			}
+		}
+		END { if (!found) exit 1 }
+	' "${TOOLING_IMAGES_FILE}"
+}
+
+require_catalog_image() {
+	local stage_name="$1"
+	local image
+
+	if [[ ! -f "${TOOLING_IMAGES_FILE}" ]]; then
+		echo "tooling image catalog not found: ${TOOLING_IMAGES_FILE}"
+		exit 1
+	fi
+
+	image="$(read_catalog_image "${stage_name}" || true)"
+	if [[ -z "${image}" ]]; then
+		echo "tooling image catalog is missing stage '${stage_name}' in ${TOOLING_IMAGES_FILE}"
+		exit 1
+	fi
+
+	printf '%s' "${image}"
+}
+
+GO_IMAGE_DEFAULT="$(require_catalog_image go_toolchain)"
+NODE_IMAGE_DEFAULT="$(require_catalog_image node_toolchain)"
+GOLANGCI_LINT_IMAGE_DEFAULT="$(require_catalog_image golangci_lint_tool)"
+POSTGRES_IMAGE_DEFAULT="$(require_catalog_image postgres_tool)"
+MIGRATE_IMAGE_DEFAULT="$(require_catalog_image migrate_tool)"
+TRIVY_IMAGE_DEFAULT="$(require_catalog_image trivy_tool)"
+
+GO_IMAGE="${GO_IMAGE:-${GO_IMAGE_DEFAULT}}"
+NODE_IMAGE="${NODE_IMAGE:-${NODE_IMAGE_DEFAULT}}"
+GOLANGCI_LINT_IMAGE="${GOLANGCI_LINT_IMAGE:-${GOLANGCI_LINT_IMAGE_DEFAULT}}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-${POSTGRES_IMAGE_DEFAULT}}"
+MIGRATE_IMAGE="${MIGRATE_IMAGE:-${MIGRATE_IMAGE_DEFAULT}}"
+TRIVY_IMAGE="${TRIVY_IMAGE:-${TRIVY_IMAGE_DEFAULT}}"
 REDOCLY_CLI_VERSION="${REDOCLY_CLI_VERSION:-2.20.0}"
 KIN_OPENAPI_VALIDATE_VERSION="${KIN_OPENAPI_VALIDATE_VERSION:-v0.133.0}"
 GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
 GOSEC_VERSION="${GOSEC_VERSION:-v2.24.6}"
+GOIMPORTS_VERSION="${GOIMPORTS_VERSION:-v0.32.0}"
+GITLEAKS_VERSION="${GITLEAKS_VERSION:-v8.30.0}"
 
 host_uid="$(id -u 2>/dev/null || echo 0)"
 host_gid="$(id -g 2>/dev/null || echo 0)"
@@ -38,6 +86,7 @@ usage() {
 	echo "  openapi-validate"
 	echo "  openapi-check"
 	echo "  go-security"
+	echo "  secrets-scan"
 	echo "  guardrails-check"
 	echo "  skills-check"
 	echo "  docs-drift-check <base-ref> <head-ref>"
@@ -230,7 +279,7 @@ shift || true
 
 case "${cmd}" in
 doctor)
-	"${ROOT_DIR}/scripts/dev/doctor.sh" --mode docker
+	bash "${ROOT_DIR}/scripts/dev/doctor.sh" --mode docker
 	;;
 pull-images)
 	ensure_docker
@@ -259,7 +308,7 @@ init-module)
 			-e GOMODCACHE=/workspace/.cache/go-mod \
 			-e GOCACHE=/workspace/.cache/go-build \
 			"${GO_IMAGE}" \
-			bash -lc "./scripts/init-module.sh \"${module_path}\""
+			bash -lc "bash ./scripts/init-module.sh \"${module_path}\""
 	else
 		docker run \
 			--rm \
@@ -270,7 +319,7 @@ init-module)
 			-e GOMODCACHE=/workspace/.cache/go-mod \
 			-e GOCACHE=/workspace/.cache/go-build \
 			"${GO_IMAGE}" \
-			bash -lc "./scripts/init-module.sh"
+			bash -lc "bash ./scripts/init-module.sh"
 	fi
 	;;
 mod-check)
@@ -278,10 +327,10 @@ mod-check)
 	git -C "${ROOT_DIR}" diff --exit-code -- go.mod go.sum
 	;;
 fmt)
-	run_go "gofmt -w \$(find . -type f -name '*.go' -not -path './vendor/*')"
+	run_go "go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -w \$(find . -type f -name '*.go' -not -path './vendor/*')"
 	;;
 fmt-check)
-	run_go "unformatted=\$(gofmt -l \$(find . -type f -name '*.go' -not -path './vendor/*')); if [[ -n \"\${unformatted}\" ]]; then echo 'gofmt required for:'; echo \"\${unformatted}\"; exit 1; fi"
+	run_go "unformatted=\$(go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -l \$(find . -type f -name '*.go' -not -path './vendor/*')); if [[ -n \"\${unformatted}\" ]]; then echo 'goimports required for:'; echo \"\${unformatted}\"; exit 1; fi"
 	;;
 test)
 	run_go "go test ./..."
@@ -314,21 +363,24 @@ openapi-validate)
 	run_go "go run github.com/getkin/kin-openapi/cmd/validate@${KIN_OPENAPI_VALIDATE_VERSION} -- api/openapi/service.yaml"
 	;;
 openapi-check)
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-generate
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-drift-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-generate
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-drift-check
 	run_go "go test ./internal/api"
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-runtime-contract-check
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-lint
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-validate
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-runtime-contract-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-lint
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-validate
 	;;
 go-security)
 	run_go "go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} && \"\$(go env GOPATH)/bin/govulncheck\" ./... && go install github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} && \"\$(go env GOPATH)/bin/gosec\" -exclude-generated ./..."
 	;;
+secrets-scan)
+	run_go "go run github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION} git --no-banner --redact --exit-code 1 ."
+	;;
 guardrails-check)
-	"${ROOT_DIR}/scripts/ci/required-guardrails-check.sh"
+	bash "${ROOT_DIR}/scripts/ci/required-guardrails-check.sh"
 	;;
 skills-check)
-	"${ROOT_DIR}/scripts/dev/sync-skills.sh" --check
+	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --check
 	;;
 docs-drift-check)
 	base_ref="${1:-}"
@@ -337,7 +389,7 @@ docs-drift-check)
 		echo "docs-drift-check requires <base-ref> <head-ref>"
 		exit 1
 	fi
-	"${ROOT_DIR}/scripts/ci/docs-drift-check.sh" "${base_ref}" "${head_ref}"
+	bash "${ROOT_DIR}/scripts/ci/docs-drift-check.sh" "${base_ref}" "${head_ref}"
 	;;
 migration-validate)
 	run_migration_validate
@@ -346,22 +398,23 @@ container-security)
 	run_container_security_scan
 	;;
 ci)
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" test
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
-	REQUIRE_DOCKER=1 "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" migration-validate
-	"${ROOT_DIR}/scripts/dev/docker-tooling.sh" container-security
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
+	REQUIRE_DOCKER=1 bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" secrets-scan
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" migration-validate
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" container-security
 
 	if [[ -n "${BASE_REF:-}" && -n "${HEAD_REF:-}" ]]; then
-		"${ROOT_DIR}/scripts/dev/docker-tooling.sh" docs-drift-check "${BASE_REF}" "${HEAD_REF}"
+		bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" docs-drift-check "${BASE_REF}" "${HEAD_REF}"
 	else
 		echo "BASE_REF/HEAD_REF are not set, skipping docs drift check in docker-ci"
 	fi

@@ -20,6 +20,13 @@ make gh-protect BRANCH=main
 
 This command configures branch protection via GitHub API (requires `gh` auth and admin permissions).
 Before running it, ensure `.github/CODEOWNERS` does not contain the template placeholder (`@your-org/your-team`).
+Recommended bootstrap: run setup first. Setup auto-infers CODEOWNER from `git remote origin` and replaces placeholder owners when possible.
+
+```bash
+make setup
+# optional explicit override:
+CODEOWNER=@your-org/your-team make setup
+```
 
 Required status checks from `.github/workflows/ci.yml`:
 - `repo-integrity`
@@ -31,6 +38,7 @@ Required status checks from `.github/workflows/ci.yml`:
 - `test-integration`
 - `migration-validate`
 - `go-security`
+- `secret-scan`
 - `container-security`
 
 Notes:
@@ -38,6 +46,7 @@ Notes:
 - `migration-validate` is conditional and returns a successful skip when no migration files changed.
 - `repo-integrity` includes required guardrails check (`make guardrails-check`) and skills mirror check (`make skills-check`), and should not be downgraded to optional.
 - `go-security` runs `govulncheck` plus `gosec -exclude-generated` to avoid false positives from codegen artifacts.
+- `secret-scan` runs `gitleaks` against git history with redaction enabled.
 - integration jobs run with `REQUIRE_DOCKER=1` to fail fast if Docker is unavailable in CI runners.
 
 ## Pull Request Policy
@@ -50,13 +59,26 @@ Notes:
 
 ## Repository Guardrails (must exist in default branch)
 
+- `AGENTS.md`
+- `README.md`
+- `Makefile`
 - `.editorconfig`
 - `.gitattributes`
+- `.golangci.yml`
+- `.redocly.yaml`
 - `.github/CODEOWNERS`
+- `.github/dependabot.yml`
 - `.github/pull_request_template.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/cd.yml`
+- `.github/workflows/nightly.yml`
 - `CONTRIBUTING.md`
 - `SECURITY.md`
 - `LICENSE`
+- `env/.env.example`
+- `env/docker-compose.yml`
+- `build/docker/Dockerfile`
+- `build/docker/tooling-images.Dockerfile`
 
 ## Release and Artifact Trust
 
@@ -83,4 +105,4 @@ If deployment steps are added later (for Kubernetes/Helm/Terraform/Cloud), enfor
 
 - Keep `nightly.yml` enabled to detect flaky tests and delayed regressions.
 - Treat nightly failures as release blockers.
-- Review and rotate pinned tool versions (`golangci-lint`, `govulncheck`, `gosec`, `Trivy`, `cosign`) on a regular schedule.
+- Review and rotate pinned tool versions (`golangci-lint`, `govulncheck`, `gosec`, `gitleaks`, `Trivy`, `cosign`) on a regular schedule.

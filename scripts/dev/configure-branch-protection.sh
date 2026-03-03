@@ -50,6 +50,7 @@ read -r -d '' payload <<JSON || true
       {"context": "test-integration"},
       {"context": "migration-validate"},
       {"context": "go-security"},
+      {"context": "secret-scan"},
       {"context": "container-security"}
     ]
   },

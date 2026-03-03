@@ -31,16 +31,21 @@ if [[ -z "${changed_files}" ]]; then
   exit 0
 fi
 
-requires_docs_pattern='^(api/openapi/service\.yaml|env/migrations/|Makefile|\.github/workflows/|cmd/|internal/app/|internal/config/|internal/infra/http/|internal/infra/postgres/|internal/infra/telemetry/)'
-docs_pattern='^(docs/|README\.md$)'
+requires_docs_pattern='^(api/openapi/service\.yaml|api/proto/|env/migrations/|env/docker-compose\.yml|build/docker/|Makefile|\.github/workflows/|\.github/dependabot\.yml|cmd/|internal/|scripts/ci/|scripts/dev/|scripts/init-module\.sh)'
+docs_pattern='^(docs/|README\.md$|CONTRIBUTING\.md$)'
 
-if echo "${changed_files}" | grep -Eq "${requires_docs_pattern}"; then
-  if ! echo "${changed_files}" | grep -Eq "${docs_pattern}"; then
-    echo "docs drift: behavior/contract/ci-sensitive files changed without docs update"
-    echo "changed files:"
-    echo "${changed_files}"
-    exit 1
-  fi
+docs_relevant_changes="$(
+  echo "${changed_files}" \
+    | grep -E "${requires_docs_pattern}" \
+    | grep -Ev '(_test\.go$|^test/|^internal/api/openapi\.gen\.go$)' \
+    || true
+)"
+
+if [[ -n "${docs_relevant_changes}" ]] && ! echo "${changed_files}" | grep -Eq "${docs_pattern}"; then
+  echo "docs drift: behavior/contract/ci-sensitive files changed without docs update"
+  echo "changed files:"
+  echo "${changed_files}"
+  exit 1
 fi
 
 echo "docs drift check passed"
