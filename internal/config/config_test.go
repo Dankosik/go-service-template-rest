@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -941,4 +942,132 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	if cfg.Postgres.ConnMaxLifetime != 30*time.Minute {
 		t.Fatalf("Postgres.ConnMaxLifetime = %s, want 30m", cfg.Postgres.ConnMaxLifetime)
 	}
+}
+
+func TestParseInt(t *testing.T) {
+	t.Run("supports mixed numeric inputs", func(t *testing.T) {
+		value, err := parseInt("42")
+		if err != nil {
+			t.Fatalf("parseInt(string) error = %v", err)
+		}
+		if value != 42 {
+			t.Fatalf("parseInt(string) = %d, want 42", value)
+		}
+
+		value, err = parseInt(float64(7))
+		if err != nil {
+			t.Fatalf("parseInt(float64) error = %v", err)
+		}
+		if value != 7 {
+			t.Fatalf("parseInt(float64) = %d, want 7", value)
+		}
+	})
+
+	t.Run("rejects non integer floats", func(t *testing.T) {
+		if _, err := parseInt(1.25); err == nil {
+			t.Fatalf("parseInt() expected non-integer error")
+		}
+	})
+
+	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
+		overflow := uint(math.MaxInt) + 1
+		if _, err := parseInt(overflow); err == nil {
+			t.Fatalf("parseInt() expected overflow error for uint value")
+		}
+		if _, err := parseInt(uint64(math.MaxUint64)); err == nil {
+			t.Fatalf("parseInt() expected overflow error for uint64 value")
+		}
+	})
+}
+
+func TestParseInt64(t *testing.T) {
+	t.Run("supports mixed numeric inputs", func(t *testing.T) {
+		value, err := parseInt64("922")
+		if err != nil {
+			t.Fatalf("parseInt64(string) error = %v", err)
+		}
+		if value != 922 {
+			t.Fatalf("parseInt64(string) = %d, want 922", value)
+		}
+
+		value, err = parseInt64(uint32(11))
+		if err != nil {
+			t.Fatalf("parseInt64(uint32) error = %v", err)
+		}
+		if value != 11 {
+			t.Fatalf("parseInt64(uint32) = %d, want 11", value)
+		}
+	})
+
+	t.Run("rejects non integer floats", func(t *testing.T) {
+		if _, err := parseInt64(float64(2.5)); err == nil {
+			t.Fatalf("parseInt64() expected non-integer error")
+		}
+	})
+
+	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
+		if _, err := parseInt64(uint64(math.MaxUint64)); err == nil {
+			t.Fatalf("parseInt64() expected overflow error")
+		}
+	})
+}
+
+func TestParseBool(t *testing.T) {
+	value, err := parseBool("true")
+	if err != nil {
+		t.Fatalf("parseBool(true) error = %v", err)
+	}
+	if !value {
+		t.Fatalf("parseBool(true) = false, want true")
+	}
+
+	if _, err := parseBool(1); err == nil {
+		t.Fatalf("parseBool() expected unsupported type error")
+	}
+}
+
+func TestValidateRangeHelpers(t *testing.T) {
+	t.Run("int range is inclusive", func(t *testing.T) {
+		if err := validateIntRange("redis.pool_size", 1, 1, 100); err != nil {
+			t.Fatalf("validateIntRange(min) error = %v", err)
+		}
+		if err := validateIntRange("redis.pool_size", 100, 1, 100); err != nil {
+			t.Fatalf("validateIntRange(max) error = %v", err)
+		}
+	})
+
+	t.Run("int range out of bounds returns ErrValidate", func(t *testing.T) {
+		err := validateIntRange("redis.pool_size", 101, 1, 100)
+		if err == nil {
+			t.Fatalf("validateIntRange() expected error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		if !strings.Contains(err.Error(), "redis.pool_size") {
+			t.Fatalf("error = %v, want field name in message", err)
+		}
+	})
+
+	t.Run("duration range is inclusive", func(t *testing.T) {
+		if err := validateDurationRange("http.read_timeout", time.Second, time.Second, 10*time.Second); err != nil {
+			t.Fatalf("validateDurationRange(min) error = %v", err)
+		}
+		if err := validateDurationRange("http.read_timeout", 10*time.Second, time.Second, 10*time.Second); err != nil {
+			t.Fatalf("validateDurationRange(max) error = %v", err)
+		}
+	})
+
+	t.Run("duration range out of bounds returns ErrValidate", func(t *testing.T) {
+		err := validateDurationRange("http.read_timeout", 11*time.Second, time.Second, 10*time.Second)
+		if err == nil {
+			t.Fatalf("validateDurationRange() expected error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		if !strings.Contains(err.Error(), "http.read_timeout") {
+			t.Fatalf("error = %v, want field name in message", err)
+		}
+	})
 }

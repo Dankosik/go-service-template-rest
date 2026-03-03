@@ -213,6 +213,7 @@ Precedence (last wins):
 
 Strict mode note:
 - `--config-strict=true` rejects unknown canonical keys.
+- numeric/bool parsing is strict: invalid formats and integer overflow are rejected at startup (`ErrParse`), not silently coerced to zero-values.
 
 Runtime flags:
 - `--config=/path/to/config.yaml`
