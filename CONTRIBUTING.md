@@ -7,27 +7,24 @@ This repository is a Go REST service template optimized for beginners and AI-ass
 1. Bootstrap local tooling and environment:
 
 ```bash
-make setup
-make setup-strict
-# without make:
-bash ./scripts/dev/setup.sh
-bash ./scripts/dev/setup.sh --strict
-# or explicit modes:
-make setup-native
-make setup-native-strict
-make setup-docker
+make bootstrap
 ```
 
-Setup auto-infers `CODEOWNER` from git `origin` when CODEOWNERS still has the template placeholder.
-If you want explicit team ownership, set CODEOWNER during setup:
+2. Run checks before opening a PR:
 
 ```bash
-CODEOWNER=@your-org/your-team make setup
-# without make:
-CODEOWNER=@your-org/your-team bash ./scripts/dev/setup.sh
+make check
 ```
 
-2. In most cloned repositories this step is not needed (setup handles module initialization).  
+3. Optional: force setup mode explicitly:
+
+```bash
+make setup-native
+make setup-docker
+make setup-strict
+```
+
+4. In most cloned repositories this step is not needed (setup handles module initialization).  
 If setup reports skipped module initialization, run manual fallback once:
 
 ```bash
@@ -39,21 +36,13 @@ make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-
 bash ./scripts/dev/docker-tooling.sh init-module github.com/your-org/your-service
 ```
 
-3. Apply required branch protection/status checks (repo admin):
+5. Apply required branch protection/status checks (repo admin):
 
 ```bash
 make gh-protect BRANCH=main
 ```
 
 If this fails due placeholder CODEOWNERS, rerun setup with explicit `CODEOWNER=@your-org/your-team`.
-
-4. Run baseline checks before opening a PR:
-
-```bash
-make ci-local
-# zero-setup equivalent:
-make docker-ci
-```
 
 If your change is concurrency- or integration-sensitive, also run:
 

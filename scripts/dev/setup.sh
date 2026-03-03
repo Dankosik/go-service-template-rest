@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 usage() {
 	echo "usage: $0 [--auto|--native|--docker] [--strict]"
+	echo "default auto mode prefers docker when daemon is reachable"
 	echo "examples:"
 	echo "  $0"
 	echo "  $0 --native"
@@ -281,7 +282,7 @@ setup_native() {
 
 	echo "Setup complete (native mode)."
 	echo "Next steps:"
-	echo "  1) make ci-local"
+	echo "  1) make check"
 	echo "  2) make gh-protect BRANCH=main  # requires GitHub admin permissions"
 	echo "  3) if module path init was skipped, run: make init-module MODULE=<host/org/repo> CODEOWNER=@<your-org>/<your-team>"
 }
@@ -307,14 +308,18 @@ setup_docker() {
 
 	echo "Setup complete (docker mode)."
 	echo "Next steps:"
-	echo "  1) make docker-ci"
+	echo "  1) make check"
 	echo "  2) make gh-protect BRANCH=main  # requires GitHub admin permissions"
 	echo "  3) if module path init was skipped, run: make docker-init-module MODULE=<host/org/repo> CODEOWNER=@<your-org>/<your-team>"
 }
 
 case "${mode}" in
 auto)
-	if command -v go >/dev/null 2>&1; then
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+		echo "auto mode: docker daemon detected, using zero-setup docker mode"
+		setup_docker
+	elif command -v go >/dev/null 2>&1; then
+		echo "auto mode: docker unavailable, using native mode"
 		if setup_native; then
 			exit 0
 		fi
@@ -328,7 +333,9 @@ auto)
 			exit 1
 		fi
 	elif command -v docker >/dev/null 2>&1; then
-		setup_docker
+		echo "auto setup failed: docker is installed but daemon is unreachable, and Go is not installed"
+		echo "start Docker Desktop/Engine or install Go and rerun setup"
+		exit 1
 	else
 		echo "auto setup failed: install either Go (native mode) or Docker (zero-setup mode)"
 		exit 1

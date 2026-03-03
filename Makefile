@@ -16,12 +16,45 @@ BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
 DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
 SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 
-.PHONY: setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt test test-race test-cover test-cover-local test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+.DEFAULT_GOAL := help
+
+.PHONY: help bootstrap bootstrap-native bootstrap-docker check \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt test test-race test-cover test-cover-local test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security
+
+help:
+	@echo "Quick onboarding commands:"
+	@echo "  make bootstrap      # prepare environment (auto mode, prefers Docker)"
+	@echo "  make check          # run full checks (Docker if available, else native)"
+	@echo "  make run            # run service locally"
+	@echo ""
+	@echo "Most used commands:"
+	@echo "  make setup-native   # force native setup (Go + Node on host)"
+	@echo "  make setup-docker   # force zero-setup Docker mode"
+	@echo "  make ci-local       # native CI-like checks"
+	@echo "  make docker-ci      # Docker CI-like checks"
+	@echo "  make gh-protect BRANCH=main"
+	@echo ""
+	@echo "Reference: docs/build-test-and-development-commands.md"
+
+bootstrap: setup
+
+bootstrap-native: setup-native
+
+bootstrap-docker: setup-docker
+
+check:
+	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		echo "docker daemon detected: running zero-setup CI checks"; \
+		$(MAKE) docker-ci; \
+	else \
+		echo "docker daemon unavailable: running native CI checks"; \
+		$(MAKE) ci-local; \
+	fi
 
 setup:
 	bash ./scripts/dev/setup.sh

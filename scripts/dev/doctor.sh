@@ -242,8 +242,8 @@ if [[ "${mode}" == "native" ]]; then
 	check_cmd_required "make" "Install GNU Make from your package manager."
 	check_cmd_required "git" "Install Git from https://git-scm.com/downloads."
 	check_cmd_required "go" "Install Go from https://go.dev/dl/."
-	check_cmd_required "node" "Install Node.js LTS from https://nodejs.org/."
-	check_cmd_required "npx" "npx should be bundled with Node.js/npm installation."
+	check_cmd_optional "node" "Optional for core service development; required for 'make openapi-lint' and OpenAPI checks."
+	check_cmd_optional "npx" "Optional for core service development; required for 'make openapi-lint' and OpenAPI checks."
 
 	if command -v go >/dev/null 2>&1; then
 		check_native_go

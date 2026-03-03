@@ -18,11 +18,11 @@ This template supports two onboarding modes.
 
 Required:
 - Go toolchain installed (version from `go.mod`)
-- Node/npm (`npx`) for OpenAPI lint
 - GNU Make
 - Git
 
 Optional:
+- Node/npm (`npx`) for OpenAPI lint and OpenAPI checks
 - Docker daemon (for integration tests, compose, container build/run)
 - GitHub CLI (`gh`) for `make gh-protect`
 
@@ -38,6 +38,8 @@ Optional:
 - GitHub CLI (`gh`) for `make gh-protect`
 
 Bootstrap shortcuts:
+- `make bootstrap` (recommended onboarding shortcut; alias of `make setup`)
+- `make check` (recommended quality shortcut; Docker CI checks when daemon is reachable, otherwise native checks)
 - `make setup` (auto-select mode)
 - `make setup-strict` (auto-select + strict native coverage sanity)
 - `make setup-native`
@@ -48,13 +50,20 @@ Bootstrap shortcuts:
 
 ### Bootstrap and environment checks
 
+- `make help`
+  - Purpose: print minimal onboarding command set and common workflows.
+
+- `make bootstrap`
+  - Alias of `make setup`.
+  - Purpose: clone-and-go onboarding entrypoint.
+
 - `make setup`
   - Runs: `bash ./scripts/dev/setup.sh`
   - Purpose: first-run bootstrap with mode auto-detection.
   - Mode choice:
-    - prefers native mode when local `go` exists;
-    - falls back to docker mode when local `go` is absent and Docker is available.
-    - if native bootstrap fails and Docker is available, switches to docker bootstrap.
+    - prefers zero-setup Docker mode when Docker daemon is reachable;
+    - falls back to native mode when Docker is unavailable and local `go` exists;
+    - if native bootstrap fails and Docker is available, switches to Docker bootstrap.
   - Additional behavior:
     - auto-initializes module path from `git remote origin` when template module is still present in `go.mod`;
     - auto-infers `CODEOWNER` from `git remote origin` when `.github/CODEOWNERS` still has template placeholder values;
@@ -99,7 +108,8 @@ Bootstrap shortcuts:
 - `make doctor-native`
   - Runs: `bash ./scripts/dev/doctor.sh --mode native`
   - Highlights:
-    - validates local Go/Node prerequisites;
+    - validates local Go prerequisites;
+    - reports Node/npx as optional (required only for OpenAPI lint/check commands);
     - validates Go version against `go.mod`;
     - performs Go compile sanity check (required);
     - performs Go coverage compile sanity check (optional warning-only).
@@ -243,6 +253,12 @@ Bootstrap shortcuts:
 
 ### Security and CI-like local checks
 
+- `make check`
+  - Composite onboarding check:
+    - runs `make docker-ci` when Docker daemon is reachable;
+    - otherwise runs `make ci-local`.
+  - Purpose: one command for beginners without mode-specific decision making.
+
 - `make go-security`
   - Runs native `govulncheck` and `gosec -exclude-generated`.
 
@@ -364,6 +380,13 @@ Bootstrap shortcuts:
   - Runs: `docker compose -f env/docker-compose.yml down -v`
 
 ## Recommended Local Workflows
+
+### First run after clone (recommended)
+
+1. `make bootstrap`
+2. `make check`
+3. `make run`
+4. Optional repo-hardening step (admin): `make gh-protect BRANCH=main`
 
 ### First run after clone (native)
 

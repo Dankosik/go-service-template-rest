@@ -65,13 +65,13 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 
 This template supports two onboarding modes:
 
-- native mode: local `go` + `node` toolchain, regular `make <target>`.
-- zero-setup docker mode: host requires only `git` + running `docker`; run checks with `make docker-<target>` or `bash ./scripts/dev/docker-tooling.sh <target>`.
+- zero-setup docker mode (recommended): host requires only `git` + running Docker daemon.
+- native mode: local `go` toolchain; Node is only needed for OpenAPI lint/check commands.
 
-`make setup` (or `bash ./scripts/dev/setup.sh`) auto-selects mode:
-- if local `go` exists -> native bootstrap;
-- otherwise, if Docker exists -> zero-setup bootstrap.
-- if native bootstrap fails and Docker is available -> fallback to zero-setup bootstrap.
+`make setup` (or `bash ./scripts/dev/setup.sh`) in auto mode now prefers Docker when daemon is reachable.
+If Docker is unavailable, setup falls back to native mode.
+
+Setup also:
 - setup auto-infers `CODEOWNER` from `git remote origin` when `.github/CODEOWNERS` still has the template placeholder.
 - `make doctor-native` reports coverage-toolchain issues as optional warnings (does not block setup).
 - setup auto-initializes `go.mod` module path from `git remote origin` when the template module is still present.
@@ -79,68 +79,53 @@ This template supports two onboarding modes:
 
 ## Quick Start
 
-1. Bootstrap environment:
+1. Bootstrap (clone-and-go default):
 
 ```bash
-make setup
-make setup-strict
-# without make:
-bash ./scripts/dev/setup.sh
-bash ./scripts/dev/setup.sh --strict
+make bootstrap
 ```
 
-Use explicit mode selection if needed:
+2. Run quality checks:
+
+```bash
+make check
+```
+
+3. Run the service:
+
+```bash
+make run
+```
+
+That is enough for first-use onboarding.
+
+### Optional Explicit Mode Selection
 
 ```bash
 make setup-native
-make setup-native-strict
 make setup-docker
-# without make:
-bash ./scripts/dev/setup.sh --native
-bash ./scripts/dev/setup.sh --docker
-bash ./scripts/dev/setup.sh --native --strict
+make setup-strict
 ```
 
-By default setup tries to infer CODEOWNERS owner from git `origin` and applies it automatically.
-Set `CODEOWNER` explicitly if you want a team handle (recommended):
+### Optional CODEOWNERS Override
+
+By default setup tries to infer CODEOWNERS owner from git `origin`.
+Set `CODEOWNER` explicitly if you want a team handle:
 
 ```bash
-CODEOWNER=@your-org/your-team make setup
-# without make:
-CODEOWNER=@your-org/your-team bash ./scripts/dev/setup.sh
+CODEOWNER=@your-org/your-team make bootstrap
 ```
 
-2. In most cloned repositories this step is not needed (setup handles it).  
-If setup reports that module initialization was skipped, run it once manually:
+### Optional Manual Module Initialization
 
-```bash
-make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
-# zero-setup alternatives:
-make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
-bash ./scripts/dev/docker-tooling.sh init-module github.com/your-org/your-service
-```
-
-`init-module` auto-detects `MODULE` from `git remote origin` when omitted:
+In most cloned repositories this step is not needed.
+If setup reports that module initialization was skipped, run:
 
 ```bash
 make init-module CODEOWNER=@your-org/your-team
 ```
 
-3. Run baseline validation:
-
-```bash
-make ci-local
-# zero-setup alternatives:
-make docker-ci
-bash ./scripts/dev/docker-tooling.sh ci
-```
-
-`make ci-local` runs the native quality baseline (mod/fmt/lint/tests/OpenAPI/security/secrets).
-It uses resilient local coverage (`test-cover-local`) only for known local Go coverage-toolchain mismatch cases.
-If Docker daemon is reachable, it also runs integration tests, migration rehearsal, and container scan.
-`make docker-ci` runs the full zero-setup CI-equivalent path.
-
-4. Apply branch protection and required checks (repo admin required):
+### Optional Branch Protection (repo admin)
 
 ```bash
 make gh-protect BRANCH=main
@@ -148,20 +133,11 @@ make gh-protect BRANCH=main
 
 `make gh-protect` requires a non-placeholder `.github/CODEOWNERS`. `make setup` usually prepares this automatically from `origin`; if not, rerun setup with explicit `CODEOWNER=@your-org/your-team`.
 
-5. Run the service:
-
-```bash
-make run
-# zero-setup alternative:
-make docker-build
-make docker-run
-```
-
 By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
 `make setup` creates `.env` from `env/.env.example` automatically if missing, auto-initializes module path from `origin` when needed, and syncs agent skill mirrors.
 `make run` auto-loads `.env` (if present) before starting the service.
 
-6. Optional: enable local Postgres readiness probe:
+### Optional Local Postgres
 
 ```bash
 make compose-up
@@ -181,59 +157,18 @@ Set `POSTGRES_DSN` in `.env`, then restart the service.
 ## Main Commands
 
 ```bash
-make fmt
-make setup
-make setup-strict
-make setup-native
-make setup-native-strict
-make setup-docker
-make doctor
-make doctor-native
-make doctor-docker
-make init-module CODEOWNER=@your-org/your-team
-make docker-init-module CODEOWNER=@your-org/your-team
-make gh-protect BRANCH=main
-make mod-check
-make docker-mod-check
-make guardrails-check
-make fmt-check
-make docker-fmt
-make docker-fmt-check
-make test
-make docker-test
-make test-race
-make docker-test-race
-make test-cover
-make test-cover-local
-make docker-test-cover
-make test-integration
-make docker-test-integration
-make lint
-make go-security
-make secrets-scan
-make ci-local
-make docker-lint
-make openapi-generate
-make openapi-lint
-make openapi-validate
-make docker-openapi-check
-make docker-go-security
-make docker-secrets-scan
-make docker-guardrails-check
-make docker-skills-check
-make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
-make docker-migration-validate
-make docker-container-security
-make docker-ci
-make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>
-make migration-validate MIGRATION_DSN=<postgres_dsn>
-make skills-sync
-make skills-check
-make build
+make help
+make bootstrap
+make check
 make run
-make docker-build
-make docker-run
+make ci-local
+make docker-ci
+make setup-native
+make setup-docker
+make gh-protect BRANCH=main
 ```
+
+For the full command reference, see `docs/build-test-and-development-commands.md`.
 
 ### No-Make Shortcuts
 
@@ -241,16 +176,9 @@ If `make` is unavailable, use scripts directly:
 
 ```bash
 bash ./scripts/dev/setup.sh
-bash ./scripts/dev/setup.sh --strict
+bash ./scripts/dev/docker-tooling.sh ci
 bash ./scripts/dev/setup.sh --native
 bash ./scripts/dev/setup.sh --docker
-bash ./scripts/dev/doctor.sh --mode auto
-bash ./scripts/init-module.sh github.com/your-org/your-service
-bash ./scripts/dev/docker-tooling.sh ci
-bash ./scripts/dev/docker-tooling.sh test
-bash ./scripts/dev/docker-tooling.sh openapi-check
-bash ./scripts/dev/docker-tooling.sh go-security
-bash ./scripts/dev/docker-tooling.sh secrets-scan
 ```
 
 ## Portable Agent Skills
