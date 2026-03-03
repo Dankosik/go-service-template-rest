@@ -179,27 +179,33 @@ Bootstrap shortcuts:
 - `make docker-mod-check`
   - Docker equivalent of `make mod-check`.
 
+- Adding a new Go developer tool (`go tool` baseline)
+  - Add/pin with: `go get -tool <module-path>@<version>`.
+  - Run via `go tool <binary-name>` in `Makefile` and `go:generate` (do not reintroduce `go run ...@` for migrated scope).
+  - Run `go mod tidy` and `make mod-check`.
+  - For codegen tools, regenerate artifacts and commit drift in the same change.
+
 - `make vendor`
   - Runs: `go mod vendor`
 
 ### Formatting and static quality
 
 - `make fmt`
-  - Runs `goimports` on all Go files except `vendor/`.
+  - Runs `go tool goimports -w` on all Go files except `vendor/`.
 
 - `make docker-fmt`
   - Docker equivalent of `make fmt`.
 
 - `make fmt-check`
-  - Fails only when `goimports -l` reports unformatted Go files.
+  - Fails only when `go tool goimports -l` reports unformatted Go files.
 
 - `make docker-fmt-check`
   - Docker equivalent of `make fmt-check` (same `goimports -l` behavior).
 
 - `make lint`
   - Runs:
-    - `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> config verify`
-    - `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> run --timeout=3m`
+    - `go tool golangci-lint config verify`
+    - `go tool golangci-lint run --timeout=3m`
   - Note: local lint now matches CI behavior by validating `.golangci.yml` schema before running linters.
 
 - `make docker-lint`
@@ -276,10 +282,10 @@ Bootstrap shortcuts:
   - Runs: `npx @redocly/cli@2.20.3 lint --config .redocly.yaml api/openapi/service.yaml`
 
 - `make openapi-validate`
-  - Runs: `kin-openapi validate` against `api/openapi/service.yaml`
+  - Runs: `go tool validate -- api/openapi/service.yaml`
 
 - `make openapi-breaking`
-  - Runs `oasdiff breaking` against `BASE_OPENAPI` and current spec.
+  - Runs `go tool oasdiff breaking` against `BASE_OPENAPI` and current spec.
 
 - `make openapi-check`
   - Composite target:
@@ -306,10 +312,10 @@ Bootstrap shortcuts:
     - otherwise runs `make ci-local`.
 
 - `make go-security`
-  - Runs native `govulncheck` and `gosec -exclude-generated`.
+  - Runs native `go tool govulncheck` and `go tool gosec -exclude-generated`.
 
 - `make secrets-scan`
-  - Runs native `gitleaks` scan over repository git history.
+  - Runs native `go tool gitleaks` scan over repository git history.
 
 - `make ci-local`
   - Native composite check for beginner-friendly local parity:
@@ -379,7 +385,7 @@ Bootstrap shortcuts:
 
 - `make migration-validate [MIGRATION_DSN=<postgres_dsn>]`
   - Behavior:
-    - when `MIGRATION_DSN` is provided, runs native `golang-migrate` against `env/migrations` (`up`, `down 1`, `up 1`);
+    - when `MIGRATION_DSN` is provided, runs native `go tool migrate` against `env/migrations` (`up`, `down 1`, `up 1`);
     - when `MIGRATION_DSN` is empty and Docker daemon is available, falls back to `make docker-migration-validate`;
     - when both `MIGRATION_DSN` and Docker daemon are unavailable, prints warning and skips with success.
 

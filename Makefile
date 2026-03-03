@@ -2,14 +2,6 @@ SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
 REDOCLY_CLI_VERSION := 2.20.3
-KIN_OPENAPI_VALIDATE_VERSION := v0.133.0
-OASDIFF_VERSION := v1.11.10
-MIGRATE_VERSION := v4.19.1
-GOLANGCI_LINT_VERSION := v2.10.1
-GOVULNCHECK_VERSION := v1.1.4
-GOSEC_VERSION := v2.24.7
-GOIMPORTS_VERSION := v0.42.0
-GITLEAKS_VERSION := v8.30.0
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
@@ -156,7 +148,7 @@ tidy:
 	go mod tidy
 
 fmt:
-	go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -w $(shell find . -type f -name '*.go' -not -path './vendor/*')
+	go tool goimports -w $(shell find . -type f -name '*.go' -not -path './vendor/*')
 
 mod-check:
 	GOFLAGS= go mod tidy -diff
@@ -167,7 +159,7 @@ docker-mod-check:
 	$(DOCKER_TOOLING_SCRIPT) mod-check
 
 fmt-check:
-	@unformatted="$$(go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -l $$(find . -type f -name '*.go' -not -path './vendor/*'))"; \
+	@unformatted="$$(go tool goimports -l $$(find . -type f -name '*.go' -not -path './vendor/*'))"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \
@@ -260,15 +252,15 @@ docker-test-integration:
 	$(DOCKER_TOOLING_SCRIPT) test-integration
 
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) config verify
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --timeout=3m
+	go tool golangci-lint config verify
+	go tool golangci-lint run --timeout=3m
 
 go-security:
-	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
-	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -exclude-generated ./...
+	go tool govulncheck ./...
+	go tool gosec -exclude-generated ./...
 
 secrets-scan:
-	go run github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION) git --no-banner --redact --exit-code 1 .
+	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
 	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local openapi-check go-security secrets-scan
@@ -305,11 +297,11 @@ openapi-lint:
 	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILE)
 
 openapi-validate:
-	go run github.com/getkin/kin-openapi/cmd/validate@$(KIN_OPENAPI_VALIDATE_VERSION) -- $(OPENAPI_FILE)
+	go tool validate -- $(OPENAPI_FILE)
 
 openapi-breaking:
 	@test -n "$(BASE_OPENAPI)" || (echo "BASE_OPENAPI is required"; exit 1)
-	go run github.com/oasdiff/oasdiff@$(OASDIFF_VERSION) breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
+	go tool oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
 
 openapi-check: openapi-generate openapi-drift-check
 	go test ./internal/api
@@ -360,9 +352,9 @@ docker-ci:
 
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \
-		go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up; \
-		go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" down 1; \
-		go run github.com/golang-migrate/migrate/v4/cmd/migrate@$(MIGRATE_VERSION) -path env/migrations -database "$(MIGRATION_DSN)" up 1; \
+		go tool migrate -path env/migrations -database "$(MIGRATION_DSN)" up; \
+		go tool migrate -path env/migrations -database "$(MIGRATION_DSN)" down 1; \
+		go tool migrate -path env/migrations -database "$(MIGRATION_DSN)" up 1; \
 	elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "MIGRATION_DSN is empty: running docker-migration-validate"; \
 		$(MAKE) docker-migration-validate; \
