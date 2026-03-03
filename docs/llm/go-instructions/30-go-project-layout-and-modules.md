@@ -39,6 +39,7 @@
 - Keep package names lowercase and concise.
 - Do not force unrelated responsibilities into one package just to reduce file count.
 - Avoid over-layering. Small Go programs rarely need Java-style architecture directories.
+- Do not let one file become a mixed-responsibility "god file". When a file accumulates distinct concerns, split by responsibility into multiple files within the same package first.
 
 ## Public versus private code
 

@@ -68,6 +68,7 @@ Inspect in this order:
 - Was a `util` or `common` package introduced without a strong reason?
 - Should some code move into `internal/`?
 - Is the exported API larger than necessary?
+- Did any touched file become a mixed-responsibility "god file" that should be split into focused files within the same package?
 - Are `go.mod` and `go.sum` being handled correctly?
 
 ### Concurrency

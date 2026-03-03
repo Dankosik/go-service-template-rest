@@ -98,6 +98,11 @@ Out of scope:
   - prefer straightforward code over clever indirection;
   - avoid hidden runtime magic and speculative abstraction layers;
   - keep functions short enough that the happy path is obvious.
+- File-growth guardrails:
+  - avoid growing a single file into a mixed-responsibility "god file";
+  - when a touched file accumulates multiple distinct concerns, split it into focused files inside the same package;
+  - prefer intra-package file decomposition first before introducing new packages;
+  - do not postpone decomposition once readability or change-isolation degrades.
 - SOLID/KISS/DRY/YAGNI in Go:
   - apply SOLID heuristically, not as OOP ceremony;
   - prefer small consumer-owned interfaces (ISP);
