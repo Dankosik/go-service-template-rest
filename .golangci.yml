@@ -14,6 +14,3 @@ linters:
     - contextcheck
     - gocritic
     - nilerr
-
-issues:
-  exclude-use-default: false

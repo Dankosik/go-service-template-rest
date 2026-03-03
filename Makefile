@@ -260,6 +260,7 @@ docker-test-integration:
 	$(DOCKER_TOOLING_SCRIPT) test-integration
 
 lint:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) config verify
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --timeout=3m
 
 go-security:

@@ -68,6 +68,7 @@ func runPostgresContainer(ctx context.Context) (container *tcpostgres.PostgresCo
 		tcpostgres.WithDatabase("app"),
 		tcpostgres.WithUsername("app"),
 		tcpostgres.WithPassword("app"),
+		tcpostgres.BasicWaitStrategies(),
 	)
 	return container, err
 }
