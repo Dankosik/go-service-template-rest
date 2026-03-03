@@ -95,3 +95,4 @@ Use docker-based equivalents when local toolchain is unavailable.
 - Do not execute destructive or high-risk operations unless explicitly requested.
 - Do not perform unrelated refactors while addressing a scoped task.
 - If mandatory checks fail or assumptions are uncertain, report clearly with concrete next action.
+- Keep CI docs-drift gate green: if a change touches behavior/contract/CI-sensitive paths (`Makefile`, `.github/workflows`, `cmd/`, `internal/`, `api/openapi`, `scripts/ci`, `scripts/dev`, `build/docker`, migrations), update at least one of `docs/`, `README.md`, or `CONTRIBUTING.md` in the same change.

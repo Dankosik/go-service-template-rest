@@ -197,7 +197,10 @@ Bootstrap shortcuts:
   - Docker equivalent of `make fmt-check` (same `goimports -l` behavior).
 
 - `make lint`
-  - Runs: `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> run --timeout=3m`
+  - Runs:
+    - `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> config verify`
+    - `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned-version> run --timeout=3m`
+  - Note: local lint now matches CI behavior by validating `.golangci.yml` schema before running linters.
 
 - `make docker-lint`
   - Docker equivalent of `make lint`.
