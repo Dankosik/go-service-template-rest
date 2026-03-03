@@ -16,7 +16,8 @@ env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
   GOVULNCHECK_VERSION: v1.1.4
-  GOSEC_VERSION: v2.24.6
+  GOSEC_VERSION: v2.24.7
+  COVERAGE_MIN: "70.0"
 
 jobs:
   repo-integrity:
@@ -96,7 +97,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: "20.19.0"
+          node-version: "20.20.0"
 
       - name: Setup Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -199,14 +200,23 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Coverage
-        run: make test-cover
+      - name: Coverage + JUnit + JSON
+        run: make test-report COVERAGE_MIN=${{ env.COVERAGE_MIN }}
 
       - name: Upload coverage report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: coverage-report
           path: coverage.out
+          if-no-files-found: error
+
+      - name: Upload test report artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: test-report-artifacts
+          path: |
+            .artifacts/test/junit.xml
+            .artifacts/test/test2json.json
           if-no-files-found: error
 
   test-integration:
@@ -344,7 +354,7 @@ jobs:
         run: docker build -f build/docker/Dockerfile -t service:ci .
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           image-ref: service:ci
           format: table

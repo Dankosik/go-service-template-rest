@@ -1,15 +1,20 @@
 SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
-REDOCLY_CLI_VERSION := 2.20.0
+REDOCLY_CLI_VERSION := 2.20.3
 KIN_OPENAPI_VALIDATE_VERSION := v0.133.0
 OASDIFF_VERSION := v1.11.10
-MIGRATE_VERSION := v4.19.0
+MIGRATE_VERSION := v4.19.1
 GOLANGCI_LINT_VERSION := v2.10.1
 GOVULNCHECK_VERSION := v1.1.4
-GOSEC_VERSION := v2.24.6
-GOIMPORTS_VERSION := v0.32.0
+GOSEC_VERSION := v2.24.7
+GOIMPORTS_VERSION := v0.42.0
 GITLEAKS_VERSION := v8.30.0
+TEST_REPORT_DIR := .artifacts/test
+TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
+TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
+COVERAGE_MIN ?= 70.0
+FUZZ_TIME ?= 45s
 DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
 GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
 BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
@@ -18,8 +23,9 @@ SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap bootstrap-native bootstrap-docker check \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt test test-race test-cover test-cover-local test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+.PHONY: help bootstrap bootstrap-native bootstrap-docker check check-full \
+	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
@@ -28,26 +34,62 @@ SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 
 help:
 	@echo "Quick onboarding commands:"
-	@echo "  make bootstrap      # prepare environment (auto mode, prefers Docker)"
-	@echo "  make check          # run full checks (Docker if available, else native)"
+	@echo "  make bootstrap      # prepare local environment (.env + dependencies)"
+	@echo "  make check          # quick checks (fmt/lint/test)"
+	@echo "  make check-full     # full CI-like checks"
 	@echo "  make run            # run service locally"
 	@echo ""
-	@echo "Most used commands:"
-	@echo "  make setup-native   # force native setup (Go + Node on host)"
-	@echo "  make setup-docker   # force zero-setup Docker mode"
+	@echo "Template/admin commands:"
+	@echo "  make template-init          # module/CODEOWNERS/skills initialization"
+	@echo "  make template-init-native   # force native template initialization"
+	@echo "  make template-init-docker   # force docker template initialization"
+	@echo ""
+	@echo "Advanced validation commands:"
 	@echo "  make ci-local       # native CI-like checks"
 	@echo "  make docker-ci      # Docker CI-like checks"
 	@echo "  make gh-protect BRANCH=main"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
-bootstrap: setup
+bootstrap:
+	@if [ ! -f .env ]; then \
+		cp env/.env.example .env; \
+		echo "Created .env from env/.env.example"; \
+	fi
+	@if command -v go >/dev/null 2>&1; then \
+		echo "go toolchain detected: downloading Go modules"; \
+		go mod download; \
+	elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		echo "go toolchain missing: preparing Docker tooling images"; \
+		$(MAKE) docker-pull-tools; \
+	else \
+		echo "bootstrap requires either a local Go toolchain or Docker daemon"; \
+		exit 1; \
+	fi
+	@echo "Bootstrap complete. Next steps: make check && make run"
 
-bootstrap-native: setup-native
+bootstrap-native: bootstrap
 
-bootstrap-docker: setup-docker
+bootstrap-docker: bootstrap
 
 check:
+	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		if command -v go >/dev/null 2>&1; then \
+			echo "go toolchain detected: running quick local checks"; \
+			$(MAKE) fmt-check lint test; \
+		else \
+			echo "go toolchain missing: running quick checks in docker mode"; \
+			$(MAKE) docker-fmt-check docker-lint docker-test; \
+		fi; \
+	elif command -v go >/dev/null 2>&1; then \
+		echo "go toolchain detected: running quick local checks"; \
+		$(MAKE) fmt-check lint test; \
+	else \
+		echo "quick checks require either local Go toolchain or Docker daemon"; \
+		exit 1; \
+	fi
+
+check-full:
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running zero-setup CI checks"; \
 		$(MAKE) docker-ci; \
@@ -55,6 +97,16 @@ check:
 		echo "docker daemon unavailable: running native CI checks"; \
 		$(MAKE) ci-local; \
 	fi
+
+template-init: setup
+
+template-init-strict: setup-strict
+
+template-init-native: setup-native
+
+template-init-native-strict: setup-native-strict
+
+template-init-docker: setup-docker
 
 setup:
 	bash ./scripts/dev/setup.sh
@@ -134,6 +186,40 @@ test-race:
 test-cover:
 	GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
+
+test-report:
+	@mkdir -p $(TEST_REPORT_DIR)
+	go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -race -covermode=atomic -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
+	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
+
+coverage-check:
+	@test -f coverage.out || (echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1)
+	@total="$$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
+	if [ -z "$$total" ]; then \
+		echo "failed to parse total coverage from coverage.out"; \
+		exit 1; \
+	fi; \
+	awk -v total="$$total" -v minimum="$(COVERAGE_MIN)" 'BEGIN { \
+		if ((total + 0) < (minimum + 0)) { \
+			printf "coverage %.2f%% is below threshold %.2f%%\n", total, minimum; \
+			exit 1; \
+		} \
+		printf "coverage %.2f%% meets threshold %.2f%%\n", total, minimum; \
+	}'
+
+test-fuzz-smoke:
+	@found=0; \
+	for pkg in $$(go list ./...); do \
+		if go test "$$pkg" -list '^Fuzz' | grep -q '^Fuzz'; then \
+			found=1; \
+			echo "running fuzz smoke for $$pkg"; \
+			go test "$$pkg" -run '^$$' -fuzz=Fuzz -fuzztime=$(FUZZ_TIME); \
+		fi; \
+	done; \
+	if [ "$$found" -eq 0 ]; then \
+		echo "no fuzz targets found; skipping fuzz smoke run"; \
+	fi
 
 test-cover-local:
 	@coverage_log="$$(mktemp)"; \

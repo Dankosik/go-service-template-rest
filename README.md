@@ -61,81 +61,75 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 └── README.md
 ```
 
-## Setup Modes
+## Quick Start (3 Commands)
 
-This template supports two onboarding modes:
-
-- zero-setup docker mode (recommended): host requires only `git` + running Docker daemon.
-- native mode: local `go` toolchain; Node is only needed for OpenAPI lint/check commands.
-
-`make setup` (or `bash ./scripts/dev/setup.sh`) in auto mode now prefers Docker when daemon is reachable.
-If Docker is unavailable, setup falls back to native mode.
-
-Setup also:
-- setup auto-infers `CODEOWNER` from `git remote origin` when `.github/CODEOWNERS` still has the template placeholder.
-- `make doctor-native` reports coverage-toolchain issues as optional warnings (does not block setup).
-- setup auto-initializes `go.mod` module path from `git remote origin` when the template module is still present.
-- pass `--strict` (or use `make setup-strict`) to enforce native coverage sanity; auto mode falls back to Docker when strict native checks fail and Docker is available.
-
-## Quick Start
-
-1. Bootstrap (clone-and-go default):
+1. Bootstrap:
 
 ```bash
 make bootstrap
 ```
 
-2. Run quality checks:
+2. Run quick checks:
 
 ```bash
 make check
 ```
 
-3. Run the service:
+3. Start the service:
 
 ```bash
 make run
 ```
 
-That is enough for first-use onboarding.
+`make bootstrap` is intentionally minimal:
+- creates `.env` from `env/.env.example` when missing;
+- downloads Go modules (or pre-pulls Docker tooling images when Go is unavailable).
 
-### Optional Explicit Mode Selection
+`make check` is intentionally fast for daily work:
+- native mode: `fmt-check`, `lint`, `test`;
+- Docker fallback (when local Go is unavailable): `docker-fmt-check`, `docker-lint`, `docker-test`.
 
-```bash
-make setup-native
-make setup-docker
-make setup-strict
-```
+By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
+`make run` auto-loads `.env` (if present) before starting the service.
 
-### Optional CODEOWNERS Override
-
-By default setup tries to infer CODEOWNERS owner from git `origin`.
-Set `CODEOWNER` explicitly if you want a team handle:
+## Full Validation (CI Parity)
 
 ```bash
-CODEOWNER=@your-org/your-team make bootstrap
+make check-full
 ```
 
-### Optional Manual Module Initialization
+`make check-full` runs full CI-like validation:
+- with Docker daemon: `make docker-ci`;
+- without Docker daemon: `make ci-local` (docker-only checks are skipped with an explicit message).
 
-In most cloned repositories this step is not needed.
-If setup reports that module initialization was skipped, run:
+## Template/Admin Initialization (Optional)
+
+If you cloned this template into a new repository and want template rewiring (module path, `CODEOWNERS` placeholder replacement, skills mirror sync), run:
+
+```bash
+make template-init
+```
+
+Optional explicit modes:
+
+```bash
+make template-init-native
+make template-init-docker
+make template-init-strict
+```
+
+Manual overrides when needed:
 
 ```bash
 make init-module CODEOWNER=@your-org/your-team
+make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
 ```
 
-### Optional Branch Protection (repo admin)
+Branch protection bootstrap (repo admin):
 
 ```bash
 make gh-protect BRANCH=main
 ```
-
-`make gh-protect` requires a non-placeholder `.github/CODEOWNERS`. `make setup` usually prepares this automatically from `origin`; if not, rerun setup with explicit `CODEOWNER=@your-org/your-team`.
-
-By default `POSTGRES_DSN` is empty, so the service starts without a Postgres readiness probe.
-`make setup` creates `.env` from `env/.env.example` automatically if missing, auto-initializes module path from `origin` when needed, and syncs agent skill mirrors.
-`make run` auto-loads `.env` (if present) before starting the service.
 
 ### Optional Local Postgres
 
@@ -160,26 +154,15 @@ Set `POSTGRES_DSN` in `.env`, then restart the service.
 make help
 make bootstrap
 make check
+make check-full
 make run
 make ci-local
 make docker-ci
-make setup-native
-make setup-docker
+make template-init
 make gh-protect BRANCH=main
 ```
 
 For the full command reference, see `docs/build-test-and-development-commands.md`.
-
-### No-Make Shortcuts
-
-If `make` is unavailable, use scripts directly:
-
-```bash
-bash ./scripts/dev/setup.sh
-bash ./scripts/dev/docker-tooling.sh ci
-bash ./scripts/dev/setup.sh --native
-bash ./scripts/dev/setup.sh --docker
-```
 
 ## Portable Agent Skills
 
@@ -275,14 +258,14 @@ Workflow `.github/workflows/ci.yml` includes:
 - `openapi-breaking` (PR): check breaking changes between base and current OpenAPI spec
 - `test`: `go test ./...`
 - `test-race`: `go test -race ./...`
-- `test-coverage`: `go test -covermode=atomic -coverprofile=coverage.out ./...` + publish `coverage.out` as an artifact
+- `test-coverage`: `make test-report COVERAGE_MIN=70.0` (`gotestsum` + race + coverage threshold + JUnit/JSON artifacts + `coverage.out`)
 - `test-integration`: `REQUIRE_DOCKER=1 go test -tags=integration ./test/...`
 - `migration-validate` (conditional): rehearses SQL migrations on ephemeral Postgres when `env/migrations/**` changes
 - `go-security`: `govulncheck` and `gosec` (generated files excluded)
 - `secret-scan`: `gitleaks` scan over repository git history
 - `container-security`: Trivy scan for the Docker image
 
-Nightly reliability workflow `.github/workflows/nightly.yml` runs extended checks (repeat test runs, race/integration, OpenAPI, security, and container scan).
+Nightly reliability workflow `.github/workflows/nightly.yml` runs extended checks (repeat test runs, fuzz smoke run, race/integration, OpenAPI, security, and container scan).
 
 ## CD Pipeline
 

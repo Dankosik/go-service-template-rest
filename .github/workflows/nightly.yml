@@ -16,7 +16,8 @@ env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
   GOVULNCHECK_VERSION: v1.1.4
-  GOSEC_VERSION: v2.24.6
+  GOSEC_VERSION: v2.24.7
+  FUZZ_TIME: 60s
 
 jobs:
   reliability:
@@ -36,7 +37,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: "20.19.0"
+          node-version: "20.20.0"
 
       - name: Verify module integrity
         run: make mod-check
@@ -55,6 +56,9 @@ jobs:
 
       - name: Flake detection run
         run: go test -count=5 ./...
+
+      - name: Fuzz smoke run
+        run: make test-fuzz-smoke FUZZ_TIME=${{ env.FUZZ_TIME }}
 
       - name: Race detector
         run: make test-race
@@ -84,7 +88,7 @@ jobs:
         run: docker build -f build/docker/Dockerfile -t service:nightly .
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           image-ref: service:nightly
           format: table

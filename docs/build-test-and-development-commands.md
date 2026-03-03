@@ -33,18 +33,15 @@ Required:
 - Docker CLI + running Docker daemon
 
 Optional:
-- GNU Make (convenience wrapper; commands can be called via scripts directly)
+- GNU Make (recommended)
 - local Go/Node toolchain (not required in this mode)
 - GitHub CLI (`gh`) for `make gh-protect`
 
 Bootstrap shortcuts:
-- `make bootstrap` (recommended onboarding shortcut; alias of `make setup`)
-- `make check` (recommended quality shortcut; Docker CI checks when daemon is reachable, otherwise native checks)
-- `make setup` (auto-select mode)
-- `make setup-strict` (auto-select + strict native coverage sanity)
-- `make setup-native`
-- `make setup-native-strict`
-- `make setup-docker`
+- `make bootstrap` (recommended onboarding shortcut; minimal local prep)
+- `make check` (recommended quick quality shortcut for everyday development)
+- `make check-full` (full CI-like local validation)
+- `make template-init` (template/admin initialization for cloned repos)
 
 ## Command Groups
 
@@ -54,30 +51,54 @@ Bootstrap shortcuts:
   - Purpose: print minimal onboarding command set and common workflows.
 
 - `make bootstrap`
+  - Purpose: clone-and-go onboarding entrypoint with minimum side effects.
+  - Includes:
+    - create `.env` from `env/.env.example` when missing,
+    - `go mod download` when local `go` is available,
+    - otherwise pre-pull Docker tooling images when Docker daemon is reachable.
+  - Does not run template/admin rewiring (`go.mod` module init, CODEOWNERS replacement, skills sync).
+
+- `make check`
+  - Purpose: quick local validation for daily feature work.
+  - Behavior:
+    - with local Go toolchain: runs `fmt-check`, `lint`, `test`;
+    - without local Go but with Docker daemon: runs `docker-fmt-check`, `docker-lint`, `docker-test`.
+
+- `make check-full`
+  - Purpose: full CI-like local validation.
+  - Behavior:
+    - with Docker daemon: runs `make docker-ci`;
+    - without Docker daemon: runs `make ci-local`.
+
+- `make template-init`
   - Alias of `make setup`.
-  - Purpose: clone-and-go onboarding entrypoint.
+  - Purpose: template/admin initialization for newly cloned repositories.
+  - Includes:
+    - module path auto-init from `git remote origin` when needed,
+    - CODEOWNERS placeholder auto-replacement (with origin inference or explicit `CODEOWNER`),
+    - environment doctor checks,
+    - skills mirror sync.
 
 - `make setup`
   - Runs: `bash ./scripts/dev/setup.sh`
-  - Purpose: first-run bootstrap with mode auto-detection.
+  - Purpose: template/admin initialization with mode auto-detection.
   - Mode choice:
     - prefers zero-setup Docker mode when Docker daemon is reachable;
     - falls back to native mode when Docker is unavailable and local `go` exists;
-    - if native bootstrap fails and Docker is available, switches to Docker bootstrap.
+    - if native initialization fails and Docker is available, switches to Docker mode.
   - Additional behavior:
     - auto-initializes module path from `git remote origin` when template module is still present in `go.mod`;
     - auto-infers `CODEOWNER` from `git remote origin` when `.github/CODEOWNERS` still has template placeholder values;
     - applies `CODEOWNER` placeholder replacement when `CODEOWNER=@org/team` is provided explicitly.
-  - Script alternative (no `make`): `bash ./scripts/dev/setup.sh`
 
-- `make setup-strict`
+- `make template-init-strict` / `make setup-strict`
   - Runs: `bash ./scripts/dev/setup.sh --strict`
-  - Purpose: same bootstrap behavior as `make setup`, but strict native mode requires healthy coverage tooling.
+  - Purpose: same initialization behavior as `make template-init`, but strict native mode requires healthy coverage tooling.
   - Strict behavior:
-    - when native coverage sanity fails, native bootstrap exits non-zero;
+    - when native coverage sanity fails, native initialization exits non-zero;
     - in auto mode, setup falls back to Docker mode when Docker is available.
 
-- `make setup-native`
+- `make template-init-native` / `make setup-native`
   - Runs: `bash ./scripts/dev/setup.sh --native`
   - Includes:
     - create `.env` from `env/.env.example` when missing,
@@ -86,13 +107,13 @@ Bootstrap shortcuts:
     - `make doctor-native`,
     - `make skills-sync`.
 
-- `make setup-native-strict`
+- `make template-init-native-strict` / `make setup-native-strict`
   - Runs: `bash ./scripts/dev/setup.sh --native --strict`
   - Includes:
-    - everything from `make setup-native`;
+    - everything from `make template-init-native`;
     - strict native coverage sanity check (`go test -covermode=atomic -run '^$' ./internal/api`) as a blocking step.
 
-- `make setup-docker`
+- `make template-init-docker` / `make setup-docker`
   - Runs: `bash ./scripts/dev/setup.sh --docker`
   - Includes:
     - create `.env` from `env/.env.example` when missing,
@@ -142,7 +163,7 @@ Bootstrap shortcuts:
   - Purpose: apply required branch protection and CI status checks for production usage.
   - Notes:
     - `.github/CODEOWNERS` must not contain template placeholder (`@your-org/your-team`);
-    - `make setup` usually prepares CODEOWNERS automatically via origin-based CODEOWNER inference;
+    - `make template-init` usually prepares CODEOWNERS automatically via origin-based CODEOWNER inference;
     - requires `gh auth login`;
     - requires admin/maintainer permissions.
 
@@ -200,6 +221,21 @@ Bootstrap shortcuts:
     - `GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...`
     - `go tool cover -func=coverage.out`
 
+- `make test-report [COVERAGE_MIN=70.0]`
+  - Runs `gotestsum` over `go test` with:
+    - race detector enabled,
+    - coverage profile output (`coverage.out`),
+    - JUnit XML artifact (`.artifacts/test/junit.xml`),
+    - raw `test2json` artifact (`.artifacts/test/test2json.json`).
+  - Then runs `make coverage-check`.
+
+- `make coverage-check [COVERAGE_MIN=70.0]`
+  - Fails if total coverage from `coverage.out` is below the configured threshold.
+
+- `make test-fuzz-smoke [FUZZ_TIME=45s]`
+  - Runs a short fuzzing pass (`go test -fuzz`) when fuzz targets exist.
+  - Skips with success when no `Fuzz*` tests are present.
+
 - `make test-cover-local`
   - Runs same coverage flow as `test-cover`, but degrades to warning only for known local Go coverage-toolchain mismatch (`does not match go tool version`).
   - Any other coverage failure remains blocking.
@@ -231,7 +267,7 @@ Bootstrap shortcuts:
   - Runs: `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1`
 
 - `make openapi-lint`
-  - Runs: `npx @redocly/cli@2.20.0 lint --config .redocly.yaml api/openapi/service.yaml`
+  - Runs: `npx @redocly/cli@2.20.3 lint --config .redocly.yaml api/openapi/service.yaml`
 
 - `make openapi-validate`
   - Runs: `kin-openapi validate` against `api/openapi/service.yaml`
@@ -254,10 +290,14 @@ Bootstrap shortcuts:
 ### Security and CI-like local checks
 
 - `make check`
-  - Composite onboarding check:
+  - Quick daily check:
+    - native: `fmt-check`, `lint`, `test`;
+    - Docker fallback (when native Go is unavailable): `docker-fmt-check`, `docker-lint`, `docker-test`.
+
+- `make check-full`
+  - Full CI-like local check:
     - runs `make docker-ci` when Docker daemon is reachable;
     - otherwise runs `make ci-local`.
-  - Purpose: one command for beginners without mode-specific decision making.
 
 - `make go-security`
   - Runs native `govulncheck` and `gosec -exclude-generated`.
@@ -386,37 +426,17 @@ Bootstrap shortcuts:
 1. `make bootstrap`
 2. `make check`
 3. `make run`
-4. Optional repo-hardening step (admin): `make gh-protect BRANCH=main`
+4. Optional full validation: `make check-full`
 
-### First run after clone (native)
+### First run after clone (template/admin initialization)
 
-1. `make setup-native` (or `make setup-native-strict` for strict native coverage health)
-2. If setup reports skipped module initialization:
+1. `make template-init`
+2. If module path was not inferred automatically:
    `make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team`
-3. `make ci-local`
-4. `make gh-protect BRANCH=main`
-5. If CODEOWNERS still has placeholder owners, rerun setup with explicit owner:
-   `CODEOWNER=@your-org/your-team make setup-native`
-
-Without `make`:
-1. `bash ./scripts/dev/setup.sh --native` (or `bash ./scripts/dev/setup.sh --native --strict`)
-2. If setup reports skipped module initialization:
-   `CODEOWNER=@your-org/your-team bash ./scripts/init-module.sh github.com/your-org/your-service`
-3. Run native checks manually (`go test ./...`, `go test -race ./...`, and other relevant commands from this guide).
-
-### First run after clone (zero-setup)
-
-1. `make setup-docker`
-2. If setup reports skipped module initialization:
-   `make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team`
-3. `make docker-ci`
-4. `make gh-protect BRANCH=main`
-5. If CODEOWNERS still has placeholder owners, rerun setup with explicit owner:
-   `CODEOWNER=@your-org/your-team make setup-docker`
-
-Without `make`:
-1. `bash ./scripts/dev/setup.sh --docker`
-2. `bash ./scripts/dev/docker-tooling.sh ci`
+3. Optional strict native coverage sanity:
+   `make template-init-strict` or `make template-init-native-strict`
+4. Optional repo-hardening step (admin):
+   `make gh-protect BRANCH=main`
 
 ### Feature implementation (native)
 
@@ -445,7 +465,7 @@ Local commands map directly to CI jobs:
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
 - `make test` -> `test`
 - `make test-race` -> `test-race`
-- `make test-cover` -> `test-coverage`
+- `make test-report COVERAGE_MIN=<value>` -> `test-coverage`
 - `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
 - `make migration-validate` -> `migration-validate` (only when migrations changed)
 - `make go-security` + `make secrets-scan` + Trivy image scan -> `go-security`, `secret-scan`, `container-security`
@@ -453,11 +473,11 @@ Local commands map directly to CI jobs:
 Zero-setup wrappers:
 - `make docker-ci` runs a near-parity local CI baseline without local Go/Node installs.
 - `make docker-openapi-check`, `make docker-go-security`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
-- `bash ./scripts/dev/docker-tooling.sh <command>` provides the same zero-setup flow when `make` is unavailable.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:
   - `go test -count=5 ./...`
+  - `make test-fuzz-smoke FUZZ_TIME=60s`
   - `make test-race`
   - `make test-integration`
   - full OpenAPI/security/container checks

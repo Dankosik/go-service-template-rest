@@ -4,36 +4,33 @@ This repository is a Go REST service template optimized for beginners and AI-ass
 
 ## Quick Start for Contributors
 
-1. Bootstrap local tooling and environment:
+1. Bootstrap local environment:
 
 ```bash
 make bootstrap
 ```
 
-2. Run checks before opening a PR:
+2. Run quick checks before opening a PR:
 
 ```bash
 make check
 ```
 
-3. Optional: force setup mode explicitly:
+3. Run full CI-like checks when needed:
 
 ```bash
-make setup-native
-make setup-docker
-make setup-strict
+make check-full
 ```
 
-4. In most cloned repositories this step is not needed (setup handles module initialization).  
-If setup reports skipped module initialization, run manual fallback once:
+4. If this repository was cloned as a new service and needs template rewiring (module path/CODEOWNERS/skills mirrors), run:
 
 ```bash
-make init-module CODEOWNER=@your-org/your-team
-# or explicit module:
+make template-init
+# optional explicit modes:
+make template-init-native
+make template-init-docker
+# manual fallback:
 make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
-# zero-setup alternatives:
-make docker-init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
-bash ./scripts/dev/docker-tooling.sh init-module github.com/your-org/your-service
 ```
 
 5. Apply required branch protection/status checks (repo admin):
@@ -42,7 +39,7 @@ bash ./scripts/dev/docker-tooling.sh init-module github.com/your-org/your-servic
 make gh-protect BRANCH=main
 ```
 
-If this fails due placeholder CODEOWNERS, rerun setup with explicit `CODEOWNER=@your-org/your-team`.
+If this fails due placeholder CODEOWNERS, run `make template-init` with explicit `CODEOWNER=@your-org/your-team`.
 
 If your change is concurrency- or integration-sensitive, also run:
 

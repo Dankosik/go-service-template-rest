@@ -20,12 +20,12 @@ make gh-protect BRANCH=main
 
 This command configures branch protection via GitHub API (requires `gh` auth and admin permissions).
 Before running it, ensure `.github/CODEOWNERS` does not contain the template placeholder (`@your-org/your-team`).
-Recommended bootstrap: run setup first. Setup auto-infers CODEOWNER from `git remote origin` and replaces placeholder owners when possible.
+Recommended bootstrap: run template initialization first. `make template-init` auto-infers CODEOWNER from `git remote origin` and replaces placeholder owners when possible.
 
 ```bash
-make setup
+make template-init
 # optional explicit override:
-CODEOWNER=@your-org/your-team make setup
+CODEOWNER=@your-org/your-team make template-init
 ```
 
 Required status checks from `.github/workflows/ci.yml`:

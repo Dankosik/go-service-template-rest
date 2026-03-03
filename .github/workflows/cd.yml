@@ -22,7 +22,7 @@ env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
   GOVULNCHECK_VERSION: v1.1.4
-  GOSEC_VERSION: v2.24.6
+  GOSEC_VERSION: v2.24.7
 
 jobs:
   publish-main:
@@ -59,7 +59,7 @@ jobs:
             .
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: table
@@ -68,7 +68,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: cyclonedx
@@ -89,11 +89,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: "1.25.x"
+          go-version: "1.26.x"
           cache: true
 
       - name: Install cosign
-        run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
+        run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.6.2
 
       - name: Sign container image (keyless)
         env:
@@ -102,7 +102,7 @@ jobs:
           "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
@@ -133,7 +133,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: "20.19.0"
+          node-version: "20.20.0"
 
       - name: Verify module integrity
         run: make mod-check
@@ -214,7 +214,7 @@ jobs:
             .
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: table
@@ -223,7 +223,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: cyclonedx
@@ -245,11 +245,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: "1.25.x"
+          go-version: "1.26.x"
           cache: true
 
       - name: Install cosign
-        run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
+        run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.6.2
 
       - name: Sign container image (keyless)
         env:
@@ -258,7 +258,7 @@ jobs:
           "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
