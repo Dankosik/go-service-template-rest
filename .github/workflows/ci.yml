@@ -46,6 +46,9 @@ jobs:
       - name: Verify formatting drift
         run: make fmt-check
 
+      - name: Verify sqlc generation drift
+        run: make sqlc-check
+
       - name: Verify docs drift policy
         run: |
           case "${{ github.event_name }}" in

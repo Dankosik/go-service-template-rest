@@ -201,6 +201,9 @@ Out of scope:
   - query-first approach;
   - `sqlc`-generated DAL for production paths;
   - no manual edits of generated files.
+- `sqlc` drift discipline:
+  - when editing `env/migrations/*`, `internal/infra/postgres/queries/*`, or `internal/infra/postgres/sqlc.yaml`, run `make sqlc-check` before completion claim;
+  - if drift is detected, run `make sqlc-generate`, include regenerated `internal/infra/postgres/sqlcgen/*`, then rerun `make sqlc-check`.
 - Parameterize all SQL values; use allowlists for dynamic identifiers.
 - Keep transaction boundaries explicit at use-case level:
   - `Begin`;
@@ -276,6 +279,7 @@ Out of scope:
   - `staticcheck ./...` and/or `golangci-lint run` when configured for the repository;
   - `govulncheck ./...` when dependency/security risk is in scope.
 - For API-contract-impacting code changes, ensure implementation stays in sync with contract artifacts and generated code.
+- For `sqlc`-impacting changes (migrations, `queries/*.sql`, `sqlc.yaml`, or generated `sqlcgen` outputs), run `make sqlc-check` (or Docker equivalent) and keep generated artifacts drift-free.
 - For enum/stringer-impacting changes (internal integer enums, `//go:generate ... stringer`, `*_string.go` artifacts), run `make stringer-drift-check` (or Docker equivalent) and keep tracked/untracked enum string artifacts drift-free.
 - Report executed checks with pass/fail status in handoff; do not claim readiness without evidence.
 - Before any positive completion/readiness statement, apply `go-verification-before-completion` to ensure claim scope matches fresh command evidence.

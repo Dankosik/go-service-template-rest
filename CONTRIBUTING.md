@@ -69,6 +69,8 @@ make test-integration
   - verify with `make mocks-drift-check`
   - when internal integer enums change, run `make stringer-generate`
   - verify with `make stringer-drift-check`
+  - when SQL queries or migrations change, run `make sqlc-generate`
+  - verify with `make sqlc-check`
 
 ## Security and Disclosure
 

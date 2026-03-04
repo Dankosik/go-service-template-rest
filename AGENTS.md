@@ -24,6 +24,7 @@ Keep it short and stable. Load extra instructions only when the task needs them.
 - Transport/infrastructure adapters: `internal/infra/*`.
 - HTTP transport baseline: `go-chi` router (`internal/infra/http/router.go`) with root router + mounted OpenAPI subrouter.
 - Generated OpenAPI artifacts: `internal/api` (do not hand-edit generated files).
+- Generated `sqlc` artifacts: `internal/infra/postgres/sqlcgen` (do not hand-edit generated files).
 - OpenAPI HTTP server codegen baseline: `oapi-codegen` with `chi-server: true` and `strict-server: true` (`internal/api/oapi-codegen.yaml`).
 - OpenAPI source of truth: `api/openapi/service.yaml`.
 
@@ -96,6 +97,7 @@ Common commands:
 - `make lint`
 - `make test-race` (when concurrency changed)
 - `make openapi-check` (when API contract/handlers/generated API changed)
+- `make sqlc-check` (when `env/migrations`, `internal/infra/postgres/queries`, `internal/infra/postgres/sqlc.yaml`, or `internal/infra/postgres/sqlcgen/*` changed)
 - `make stringer-drift-check` (when internal integer enums, `stringer` directives, or `*_string.go` artifacts changed)
 
 Use docker-based equivalents when local toolchain is unavailable.

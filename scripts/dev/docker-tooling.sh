@@ -80,6 +80,8 @@ usage() {
 	echo "  test-integration"
 	echo "  stringer-generate"
 	echo "  stringer-drift-check"
+	echo "  sqlc-generate"
+	echo "  sqlc-check"
 	echo "  mocks-generate"
 	echo "  mocks-drift-check"
 	echo "  lint"
@@ -217,6 +219,46 @@ stringer_drift_check() {
 		echo "untracked stringer artifacts detected"
 		echo "${untracked}"
 		echo "run 'make stringer-generate' and commit updated enum string files"
+		exit 1
+	fi
+}
+
+sqlc_drift_check() {
+	if ! git -C "${ROOT_DIR}" diff --quiet -- internal/infra/postgres/sqlcgen; then
+		echo "tracked sqlc drift detected in internal/infra/postgres/sqlcgen"
+		git -C "${ROOT_DIR}" diff -- internal/infra/postgres/sqlcgen
+		exit 1
+	fi
+
+	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- internal/infra/postgres/sqlcgen)"
+	if [[ -n "${untracked}" ]]; then
+		echo "untracked sqlc artifacts detected in internal/infra/postgres/sqlcgen"
+		echo "${untracked}"
+		echo "run 'make sqlc-generate' and commit updated sqlc generated files"
+		exit 1
+	fi
+
+	expected_stems="$(
+		for file in "${ROOT_DIR}"/internal/infra/postgres/queries/*.sql; do
+			[[ -e "${file}" ]] || continue
+			basename "${file}" .sql
+		done | sort
+	)"
+
+	actual_stems="$(
+		for file in "${ROOT_DIR}"/internal/infra/postgres/sqlcgen/*.sql.go; do
+			[[ -e "${file}" ]] || continue
+			basename "${file}" .sql.go
+		done | sort
+	)"
+
+	if [[ "${expected_stems}" != "${actual_stems}" ]]; then
+		echo "sqlc query/source mismatch detected"
+		echo "expected generated query stems:"
+		printf '%s\n' "${expected_stems}"
+		echo "actual generated query stems:"
+		printf '%s\n' "${actual_stems}"
+		echo "remove stale generated files and run 'make sqlc-generate'"
 		exit 1
 	fi
 }
@@ -387,6 +429,13 @@ stringer-drift-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-generate
 	stringer_drift_check
 	;;
+sqlc-generate)
+	run_go "go tool sqlc generate -f internal/infra/postgres/sqlc.yaml"
+	;;
+sqlc-check)
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" sqlc-generate
+	sqlc_drift_check
+	;;
 mocks-generate)
 	run_go "go generate -run \"mockgen\" ./..."
 	;;
@@ -458,6 +507,7 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-drift-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-drift-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" sqlc-check
 	REQUIRE_DOCKER=1 bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security

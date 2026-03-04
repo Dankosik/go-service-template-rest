@@ -24,9 +24,9 @@ SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-secrets-scan docker-ci \
+	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security \
-	mocks-generate mocks-drift-check stringer-generate stringer-drift-check
+	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
 help:
 	@echo "Quick onboarding commands:"
@@ -264,7 +264,7 @@ secrets-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
-	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local mocks-drift-check stringer-drift-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
@@ -288,6 +288,30 @@ stringer-drift-check: stringer-generate
 		echo "untracked stringer artifacts detected"; \
 		echo "$$untracked"; \
 		echo "run 'make stringer-generate' and commit updated enum string files"; \
+		exit 1; \
+	fi
+
+sqlc-generate:
+	go tool sqlc generate -f internal/infra/postgres/sqlc.yaml
+
+sqlc-check: sqlc-generate
+	@git diff --quiet -- internal/infra/postgres/sqlcgen || (echo "tracked sqlc drift detected in internal/infra/postgres/sqlcgen"; git diff -- internal/infra/postgres/sqlcgen; exit 1)
+	@untracked="$$(git ls-files --others --exclude-standard -- internal/infra/postgres/sqlcgen)"; \
+	if [ -n "$$untracked" ]; then \
+		echo "untracked sqlc artifacts detected in internal/infra/postgres/sqlcgen"; \
+		echo "$$untracked"; \
+		echo "run 'make sqlc-generate' and commit updated sqlc generated files"; \
+		exit 1; \
+	fi
+	@expected="$$(for f in internal/infra/postgres/queries/*.sql; do [ -e "$$f" ] || continue; basename "$$f" .sql; done | sort)"; \
+	actual="$$(for f in internal/infra/postgres/sqlcgen/*.sql.go; do [ -e "$$f" ] || continue; basename "$$f" .sql.go; done | sort)"; \
+	if [ "$$expected" != "$$actual" ]; then \
+		echo "sqlc query/source mismatch detected"; \
+		echo "expected generated query stems:"; \
+		printf '%s\n' "$$expected"; \
+		echo "actual generated query stems:"; \
+		printf '%s\n' "$$actual"; \
+		echo "remove stale generated files and run 'make sqlc-generate'"; \
 		exit 1; \
 	fi
 
@@ -336,6 +360,9 @@ openapi-check: openapi-generate openapi-drift-check
 
 docker-openapi-check:
 	$(DOCKER_TOOLING_SCRIPT) openapi-check
+
+docker-sqlc-check:
+	$(DOCKER_TOOLING_SCRIPT) sqlc-check
 
 docs-drift-check:
 	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)

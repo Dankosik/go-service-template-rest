@@ -287,6 +287,19 @@ Bootstrap shortcuts:
   - Runs `stringer-generate`, then verifies tracked and untracked `*_string.go` artifacts.
   - Fails when enum `stringer` artifacts are stale or missing from git.
 
+### SQL query generation workflow
+
+- `make sqlc-generate`
+  - Runs: `go tool sqlc generate -f internal/infra/postgres/sqlc.yaml`
+  - Purpose: regenerate sqlc query code from migration-backed schema and infra-local SQL query files.
+
+- `make sqlc-check`
+  - Runs `sqlc-generate`, then verifies:
+    - tracked/untracked drift in `internal/infra/postgres/sqlcgen`,
+    - one-to-one mapping between `queries/*.sql` and generated `sqlcgen/*.sql.go` stems.
+  - Fails when generated artifacts are stale or when stale generated query files remain after query removal/rename.
+  - Operational rule: when `env/migrations/*.up.sql` or `internal/infra/postgres/queries/*.sql` changes, run `make sqlc-generate` and commit `internal/infra/postgres/sqlcgen/*` changes in the same PR.
+
 ### OpenAPI and API contract workflow
 
 - `make openapi-generate`
@@ -349,6 +362,7 @@ Bootstrap shortcuts:
     - `test-cover-local`
     - `mocks-drift-check`
     - `stringer-drift-check`
+    - `sqlc-check`
     - `openapi-check`
     - `go-security`
     - `secrets-scan`
@@ -391,6 +405,7 @@ Bootstrap shortcuts:
     - `test-cover`
     - `mocks-drift-check`
     - `test-integration` (`REQUIRE_DOCKER=1`)
+    - `sqlc-check`
     - `openapi-check`
     - `go-security`
     - `secrets-scan`
@@ -480,6 +495,7 @@ Bootstrap shortcuts:
 3. `make lint`
 4. If API contract changed: `make openapi-check`
 5. If integration behavior changed: `make test-integration`
+6. If SQL queries/migrations changed: `make sqlc-check`
 
 ### Feature implementation (zero-setup)
 
@@ -488,13 +504,14 @@ Bootstrap shortcuts:
 3. `make docker-lint`
 4. If API contract changed: `make docker-openapi-check`
 5. If integration behavior changed: `make docker-test-integration`
+6. If SQL queries/migrations changed: `make docker-sqlc-check`
 
 ## CI Mapping
 
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make skills-check` + `make fmt-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
@@ -507,7 +524,7 @@ Local commands map directly to CI jobs:
 
 Zero-setup wrappers:
 - `make docker-ci` runs a near-parity local CI baseline without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-go-security`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:
