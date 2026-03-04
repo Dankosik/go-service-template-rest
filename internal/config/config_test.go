@@ -849,6 +849,23 @@ func TestPostgresDurationBounds(t *testing.T) {
 	}
 }
 
+func TestShutdownTimeoutMustMatchReliabilityBaseline(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "25s")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for shutdown timeout drift")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "http.shutdown_timeout must equal 30s") {
+		t.Fatalf("error = %v, want explicit shutdown timeout policy lock", err)
+	}
+}
+
 func TestPostgresDSNMustBeParseable(t *testing.T) {
 	resetConfigEnv(t)
 

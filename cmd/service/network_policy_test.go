@@ -84,6 +84,38 @@ func TestNetworkPolicyEnforceIngressAllowsActiveException(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicyEnforceIngressRejectsExpiredException(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-expired")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(-5*time.Minute).Format(time.RFC3339))
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy.now = func() time.Time { return now }
+
+	recorder, metrics := newTestDeployTelemetryRecorder()
+	err = policy.EnforceIngress(context.Background(), recorder)
+	if err == nil {
+		t.Fatal("EnforceIngress() error = nil, want non-nil")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `policy_class="ingress"`) {
+		t.Fatalf("metrics output does not contain ingress policy class:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `reason_class="expired_exception"`) {
+		t.Fatalf("metrics output does not contain expired_exception reason:\n%s", metricsText)
+	}
+}
+
 func TestNetworkPolicyEnforceEgressTargetDeniesPublicHost(t *testing.T) {
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -143,6 +175,37 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing
 	metricsText := collectServiceMetricsText(t, metrics)
 	if !strings.Contains(metricsText, `reason_class="scheme_denied"`) {
 		t.Fatalf("metrics output does not contain scheme_denied reason:\n%s", metricsText)
+	}
+}
+
+func TestNetworkPolicyEmitEgressExceptionStateRejectsExpiredException(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-expired")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-upstream-debug")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", "api.example.com")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", now.Add(-5*time.Minute).Format(time.RFC3339))
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy.now = func() time.Time { return now }
+
+	recorder, metrics := newTestDeployTelemetryRecorder()
+	err = policy.EmitEgressExceptionState(context.Background(), recorder)
+	if err == nil {
+		t.Fatal("EmitEgressExceptionState() error = nil, want non-nil")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `policy_class="egress"`) {
+		t.Fatalf("metrics output does not contain egress policy class:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `reason_class="expired_exception"`) {
+		t.Fatalf("metrics output does not contain expired_exception reason:\n%s", metricsText)
 	}
 }
 

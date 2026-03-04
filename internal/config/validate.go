@@ -44,7 +44,7 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		return ValidationResult{}, fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
 	}
 
-	if err := validateDurationRange("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
+	if err := validateDurationExact("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, 30*time.Second); err != nil {
 		return ValidationResult{}, err
 	}
 	if err := validateDurationRange("http.read_header_timeout", cfg.HTTP.ReadHeaderTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
@@ -266,6 +266,13 @@ func validateOTLPExporter(cfg OTelExporterConfig) error {
 func validateDurationRange(name string, value time.Duration, min time.Duration, max time.Duration) error {
 	if value < min || value > max {
 		return fmt.Errorf("%w: %s must be in range [%s,%s]", ErrValidate, name, min, max)
+	}
+	return nil
+}
+
+func validateDurationExact(name string, value time.Duration, expected time.Duration) error {
+	if value != expected {
+		return fmt.Errorf("%w: %s must equal %s", ErrValidate, name, expected)
 	}
 	return nil
 }

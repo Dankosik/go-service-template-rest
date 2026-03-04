@@ -219,6 +219,12 @@ Bootstrap shortcuts:
 - `make docker-test`
   - Docker equivalent of `make test`.
 
+- `make vet`
+  - Runs: `go vet ./...`
+
+- `make docker-vet`
+  - Docker equivalent of `make vet`.
+
 - `make test-race`
   - Runs: `go test -race ./...`
 
@@ -358,6 +364,7 @@ Bootstrap shortcuts:
     - `fmt-check`
     - `lint`
     - `test`
+    - `vet`
     - `test-race`
     - `test-cover-local`
     - `mocks-drift-check`
@@ -401,6 +408,7 @@ Bootstrap shortcuts:
     - `fmt-check`
     - `lint`
     - `test`
+    - `vet`
     - `test-race`
     - `test-cover`
     - `mocks-drift-check`
@@ -493,19 +501,21 @@ Bootstrap shortcuts:
 
 1. `make fmt`
 2. `make test`
-3. `make lint`
-4. If API contract changed: `make openapi-check`
-5. If integration behavior changed: `make test-integration`
-6. If SQL queries/migrations changed: `make sqlc-check`
+3. `make vet`
+4. `make lint`
+5. If API contract changed: `make openapi-check`
+6. If integration behavior changed: `make test-integration`
+7. If SQL queries/migrations changed: `make sqlc-check`
 
 ### Feature implementation (zero-setup)
 
 1. `make docker-fmt-check`
 2. `make docker-test`
-3. `make docker-lint`
-4. If API contract changed: `make docker-openapi-check`
-5. If integration behavior changed: `make docker-test-integration`
-6. If SQL queries/migrations changed: `make docker-sqlc-check`
+3. `make docker-vet`
+4. `make docker-lint`
+5. If API contract changed: `make docker-openapi-check`
+6. If integration behavior changed: `make docker-test-integration`
+7. If SQL queries/migrations changed: `make docker-sqlc-check`
 
 ## CI Mapping
 
@@ -516,7 +526,7 @@ Local commands map directly to CI jobs:
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
-- `make test` -> `test`
+- `make test` + `make vet` -> `test`
 - `make test-race` -> `test-race`
 - `make test-report COVERAGE_MIN=<value>` -> `test-coverage`
 - `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`

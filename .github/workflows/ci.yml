@@ -203,6 +203,9 @@ jobs:
       - name: Unit tests
         run: make test
 
+      - name: Go vet
+        run: make vet
+
   test-race:
     runs-on: ubuntu-latest
     timeout-minutes: 20

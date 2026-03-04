@@ -154,6 +154,9 @@ jobs:
       - name: Unit tests
         run: make test
 
+      - name: Go vet
+        run: make vet
+
       - name: Race detector
         run: make test-race
 

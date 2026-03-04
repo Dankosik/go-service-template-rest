@@ -150,10 +150,7 @@ func run() (runErr error) {
 				"error.type", errorType,
 			)...,
 		)
-		deployTelemetry.RecordAdmission(startupCtx, "failure", "startup_error", "startup")
-		deployTelemetry.RecordRollback(startupCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
-		deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-		deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+		recordAdmissionFailureWithRollback(startupCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
 		return fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
@@ -404,10 +401,7 @@ func run() (runErr error) {
 					"dependency", "postgres",
 				)...,
 			)
-			deployTelemetry.RecordAdmission(bootstrapCtx, "failure", "dependency_init", "postgres")
-			deployTelemetry.RecordRollback(bootstrapCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
-			deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-			deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+			recordAdmissionFailureWithRollback(bootstrapCtx, deployTelemetry, "dependency_init", "postgres", startupLifecycleStartedAt)
 			return fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, err)
 		}
 
@@ -443,10 +437,7 @@ func run() (runErr error) {
 					"dependency", "postgres",
 				)...,
 			)
-			deployTelemetry.RecordAdmission(bootstrapCtx, "failure", "dependency_init", "postgres")
-			deployTelemetry.RecordRollback(bootstrapCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
-			deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-			deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+			recordAdmissionFailureWithRollback(bootstrapCtx, deployTelemetry, "dependency_init", "postgres", startupLifecycleStartedAt)
 			return sanitizedErr
 		}
 		probeSpan.SetAttributes(
@@ -548,10 +539,7 @@ func run() (runErr error) {
 						"mode", redisMode,
 					)...,
 				)
-				deployTelemetry.RecordAdmission(bootstrapCtx, "failure", "dependency_init", "redis")
-				deployTelemetry.RecordRollback(bootstrapCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
-				deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-				deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+				recordAdmissionFailureWithRollback(bootstrapCtx, deployTelemetry, "dependency_init", "redis", startupLifecycleStartedAt)
 				return rejectErr
 			}
 			metrics.SetStartupDependencyStatus("redis", "feature_off", true)
@@ -644,10 +632,6 @@ func run() (runErr error) {
 		metrics.SetStartupDependencyStatus("mongo", "disabled", true)
 	}
 
-	metrics.IncConfigStartupOutcome("ready")
-	bootstrapSpan.SetAttributes(attribute.String("result", "success"))
-	deployTelemetry.RecordAdmission(bootstrapCtx, "success", "ready", "")
-
 	healthSvc := health.New(probes...)
 	pingSvc := ping.New()
 
@@ -670,11 +654,40 @@ func run() (runErr error) {
 		MaxHeaderBytes:    cfg.HTTP.MaxHeaderBytes,
 	}, handler)
 
+	listener, err := net.Listen("tcp", cfg.HTTP.Addr)
+	if err != nil {
+		bootstrapSpan.RecordError(err)
+		bootstrapSpan.SetAttributes(
+			attribute.String("result", "error"),
+			attribute.String("error.type", "startup_error"),
+			attribute.String("failed.stage", "startup.http_listen"),
+		)
+		metrics.IncConfigValidationFailure("startup_error")
+		metrics.IncConfigStartupOutcome("rejected")
+		log.Error(
+			"startup_blocked",
+			startupLogArgs(
+				bootstrapCtx,
+				"startup_probes",
+				"http_listen",
+				"error",
+				"error.type", "startup_error",
+				"err", err,
+			)...,
+		)
+		recordAdmissionFailureWithRollback(bootstrapCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
+		return fmt.Errorf("listen http server: %w", err)
+	}
+
+	metrics.IncConfigStartupOutcome("ready")
+	bootstrapSpan.SetAttributes(attribute.String("result", "success"))
+	deployTelemetry.RecordAdmission(bootstrapCtx, "success", "ready", "")
+
 	runErrCh := make(chan error, 1)
 	serverStartedAt := time.Now()
 	go func() {
-		log.Info("http server started", "addr", cfg.HTTP.Addr, "env", cfg.App.Env)
-		runErrCh <- srv.Run()
+		log.Info("http server started", "addr", listener.Addr().String(), "env", cfg.App.Env)
+		runErrCh <- srv.Serve(listener)
 	}()
 
 	var serverErr error
@@ -685,17 +698,13 @@ func run() (runErr error) {
 		serverErr = err
 		if serverErr != nil {
 			log.Error("http server stopped with error", "err", serverErr)
-			deployTelemetry.RecordRollback(signalCtx, "runtime_error", "failure", "", time.Since(serverStartedAt))
-			deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-			deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+			recordRollbackFailure(signalCtx, deployTelemetry, "runtime_error", serverStartedAt)
 		}
 	}
 
 	shutdownStartedAt := time.Now()
 	if err := drainAndShutdown(signalCtx, cfg.HTTP.ShutdownTimeout, healthSvc, srv); err != nil {
-		deployTelemetry.RecordRollback(signalCtx, "shutdown_error", "failure", "", time.Since(shutdownStartedAt))
-		deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-		deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+		recordRollbackFailure(signalCtx, deployTelemetry, "shutdown_error", shutdownStartedAt)
 		return err
 	}
 	if serverErr != nil {
@@ -828,11 +837,38 @@ func rejectStartupForPolicyViolation(
 			"dependency", strings.ToLower(strings.TrimSpace(dependency)),
 		)...,
 	)
-	deployTelemetry.RecordAdmission(ctx, "failure", "policy_violation", strings.ToLower(strings.TrimSpace(dependency)))
-	deployTelemetry.RecordRollback(ctx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
+	recordAdmissionFailureWithRollback(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)), startupLifecycleStartedAt)
+	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
+}
+
+func recordAdmissionFailureWithRollback(
+	ctx context.Context,
+	deployTelemetry *deployTelemetryRecorder,
+	reasonClass string,
+	probeType string,
+	startedAt time.Time,
+) {
+	if deployTelemetry == nil {
+		return
+	}
+
+	deployTelemetry.RecordAdmission(ctx, "failure", reasonClass, probeType)
+	recordRollbackFailure(ctx, deployTelemetry, "admission_failed", startedAt)
+}
+
+func recordRollbackFailure(
+	ctx context.Context,
+	deployTelemetry *deployTelemetryRecorder,
+	trigger string,
+	startedAt time.Time,
+) {
+	if deployTelemetry == nil {
+		return
+	}
+
+	deployTelemetry.RecordRollback(ctx, trigger, "failure", "", time.Since(startedAt))
 	deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
 	deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
-	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

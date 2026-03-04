@@ -20,11 +20,11 @@ SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 
 .PHONY: help bootstrap bootstrap-native bootstrap-docker check check-full \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
+	docker-test docker-vet docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
@@ -176,6 +176,9 @@ docker-fmt-check:
 test:
 	go test ./...
 
+vet:
+	go vet ./...
+
 test-race:
 	go test -race ./...
 
@@ -240,6 +243,9 @@ test-cover-local:
 docker-test:
 	$(DOCKER_TOOLING_SCRIPT) test
 
+docker-vet:
+	$(DOCKER_TOOLING_SCRIPT) vet
+
 docker-test-race:
 	$(DOCKER_TOOLING_SCRIPT) test-race
 
@@ -264,7 +270,7 @@ secrets-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
-	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test vet test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \

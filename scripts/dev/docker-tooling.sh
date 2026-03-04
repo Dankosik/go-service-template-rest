@@ -75,6 +75,7 @@ usage() {
 	echo "  fmt"
 	echo "  fmt-check"
 	echo "  test"
+	echo "  vet"
 	echo "  test-race"
 	echo "  test-cover"
 	echo "  test-integration"
@@ -413,6 +414,9 @@ fmt-check)
 test)
 	run_go "go test ./..."
 	;;
+vet)
+	run_go "go vet ./..."
+	;;
 test-race)
 	run_go "go test -race ./..."
 	;;
@@ -503,6 +507,7 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" vet
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-drift-check

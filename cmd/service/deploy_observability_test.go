@@ -10,9 +10,14 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestDeployTelemetryRecorderRecordAdmissionEmitsLogAndMetrics(t *testing.T) {
+	spanRecorder := installTestTracerProvider(t)
+
 	t.Setenv("ROLLOUT_ID", "rollout-123")
 	t.Setenv("DEPLOYMENT_ID", "deploy-123")
 	t.Setenv("CI_RUN_ID", "ci-123")
@@ -55,17 +60,31 @@ func TestDeployTelemetryRecorderRecordAdmissionEmitsLogAndMetrics(t *testing.T) 
 	if got := jsonFieldString(entry, "commit_sha"); got != "abc123" {
 		t.Fatalf("commit_sha = %q, want %q", got, "abc123")
 	}
+
+	admissionSpan := assertSingleSpanByName(t, spanRecorder.Ended(), "deploy.health.admission")
+	assertSpanStringAttribute(t, admissionSpan, "environment", "production")
+	assertSpanStringAttribute(t, admissionSpan, "result", "success")
+	assertSpanStringAttribute(t, admissionSpan, "reason_class", "ready")
+	assertSpanStringAttribute(t, admissionSpan, "rollout_id", "rollout-123")
+	assertSpanStringAttribute(t, admissionSpan, "deployment_id", "deploy-123")
+	assertSpanStringAttribute(t, admissionSpan, "ci_run_id", "ci-123")
+	assertSpanStringAttribute(t, admissionSpan, "commit_sha", "abc123")
 }
 
 func TestDeployTelemetryRecorderRecordRollbackIncludesCorrelation(t *testing.T) {
+	spanRecorder := installTestTracerProvider(t)
+
 	t.Setenv("ROLLOUT_ID", "rollout-rollback")
 	t.Setenv("DEPLOYMENT_ID", "deploy-rollback")
 	t.Setenv("CI_RUN_ID", "ci-rollback")
 	t.Setenv("COMMIT_SHA", "rollbacksha")
+	t.Setenv("ROLLBACK_ID", "rb-rollback")
+	t.Setenv("ROLLBACK_OWNER", "platform")
+	t.Setenv("RAILWAY_PREVIOUS_DEPLOYMENT_ID", "rev-fallback")
 
 	recorder, metrics, logBuffer := newBufferedDeployTelemetryRecorder("production")
 
-	recorder.RecordRollback(context.Background(), "admission_failed", "failure", "rev-previous", 2*time.Second)
+	recorder.RecordRollback(context.Background(), "admission_failed", "failure", "", 2*time.Second)
 	recorder.RecordRollbackPostcheck("/health/ready", "failure")
 
 	metricsText := collectServiceMetricsText(t, metrics)
@@ -90,9 +109,27 @@ func TestDeployTelemetryRecorderRecordRollbackIncludesCorrelation(t *testing.T) 
 	if got := jsonFieldString(entry, "rollout_id"); got != "rollout-rollback" {
 		t.Fatalf("rollout_id = %q, want %q", got, "rollout-rollback")
 	}
-	if got := jsonFieldString(entry, "previous_revision"); got != "rev-previous" {
-		t.Fatalf("previous_revision = %q, want %q", got, "rev-previous")
+	if got := jsonFieldString(entry, "rollback_id"); got != "rb-rollback" {
+		t.Fatalf("rollback_id = %q, want %q", got, "rb-rollback")
 	}
+	if got := jsonFieldString(entry, "owner"); got != "platform" {
+		t.Fatalf("owner = %q, want %q", got, "platform")
+	}
+	if got := jsonFieldString(entry, "previous_revision"); got != "rev-fallback" {
+		t.Fatalf("previous_revision = %q, want %q", got, "rev-fallback")
+	}
+
+	rollbackSpan := assertSingleSpanByName(t, spanRecorder.Ended(), "deploy.rollback.execute")
+	assertSpanStringAttribute(t, rollbackSpan, "environment", "production")
+	assertSpanStringAttribute(t, rollbackSpan, "trigger", "admission_failed")
+	assertSpanStringAttribute(t, rollbackSpan, "result", "failure")
+	assertSpanStringAttribute(t, rollbackSpan, "owner", "platform")
+	assertSpanStringAttribute(t, rollbackSpan, "previous_revision", "rev-fallback")
+	assertSpanStringAttribute(t, rollbackSpan, "rollout_id", "rollout-rollback")
+	assertSpanStringAttribute(t, rollbackSpan, "deployment_id", "deploy-rollback")
+	assertSpanStringAttribute(t, rollbackSpan, "ci_run_id", "ci-rollback")
+	assertSpanStringAttribute(t, rollbackSpan, "commit_sha", "rollbacksha")
+	assertSpanStringAttribute(t, rollbackSpan, "rollback_id", "rb-rollback")
 }
 
 func TestDeployTelemetryRecorderRecordConfigDriftLifecycle(t *testing.T) {
@@ -193,4 +230,60 @@ func jsonFieldString(entry map[string]any, key string) string {
 	}
 	str, _ := value.(string)
 	return str
+}
+
+func installTestTracerProvider(t *testing.T) *tracetest.SpanRecorder {
+	t.Helper()
+
+	previousProvider := otel.GetTracerProvider()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider()
+	tracerProvider.RegisterSpanProcessor(spanRecorder)
+	otel.SetTracerProvider(tracerProvider)
+
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousProvider)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer shutdownCancel()
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			t.Errorf("tracerProvider.Shutdown() error = %v", err)
+		}
+	})
+
+	return spanRecorder
+}
+
+func assertSingleSpanByName(t *testing.T, spans []sdktrace.ReadOnlySpan, name string) sdktrace.ReadOnlySpan {
+	t.Helper()
+
+	var matched []sdktrace.ReadOnlySpan
+	for _, span := range spans {
+		if span.Name() == name {
+			matched = append(matched, span)
+		}
+	}
+	if len(matched) != 1 {
+		names := make([]string, 0, len(spans))
+		for _, span := range spans {
+			names = append(names, span.Name())
+		}
+		t.Fatalf("span %q count = %d, want 1 (all spans: %v)", name, len(matched), names)
+	}
+	return matched[0]
+}
+
+func assertSpanStringAttribute(t *testing.T, span sdktrace.ReadOnlySpan, key, want string) {
+	t.Helper()
+
+	for _, attr := range span.Attributes() {
+		if string(attr.Key) != key {
+			continue
+		}
+		if got := attr.Value.AsString(); got != want {
+			t.Fatalf("span %q attribute %q = %q, want %q", span.Name(), key, got, want)
+		}
+		return
+	}
+
+	t.Fatalf("span %q missing attribute %q", span.Name(), key)
 }

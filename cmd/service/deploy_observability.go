@@ -18,6 +18,7 @@ type rolloutCorrelation struct {
 	DeploymentID string
 	CIRunID      string
 	CommitSHA    string
+	RollbackID   string
 }
 
 func rolloutCorrelationFromEnv() rolloutCorrelation {
@@ -26,6 +27,7 @@ func rolloutCorrelationFromEnv() rolloutCorrelation {
 		DeploymentID: firstNonEmpty(os.Getenv("DEPLOYMENT_ID"), os.Getenv("RAILWAY_DEPLOYMENT_ID")),
 		CIRunID:      firstNonEmpty(os.Getenv("CI_RUN_ID"), os.Getenv("GITHUB_RUN_ID")),
 		CommitSHA:    firstNonEmpty(os.Getenv("COMMIT_SHA"), os.Getenv("GITHUB_SHA")),
+		RollbackID:   firstNonEmpty(os.Getenv("ROLLBACK_ID"), os.Getenv("RAILWAY_ROLLBACK_ID")),
 	}
 }
 
@@ -39,11 +41,35 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+type rollbackMetadata struct {
+	Owner            string
+	PreviousRevision string
+}
+
+func rollbackMetadataFromEnv() rollbackMetadata {
+	owner := strings.TrimSpace(os.Getenv("ROLLBACK_OWNER"))
+	if owner == "" {
+		owner = "service-owner"
+	}
+
+	previousRevision := firstNonEmpty(
+		os.Getenv("RAILWAY_PREVIOUS_DEPLOYMENT_ID"),
+		os.Getenv("PREVIOUS_DEPLOYMENT_ID"),
+		os.Getenv("ROLLBACK_PREVIOUS_REVISION"),
+	)
+
+	return rollbackMetadata{
+		Owner:            owner,
+		PreviousRevision: previousRevision,
+	}
+}
+
 type deployTelemetryRecorder struct {
 	log               *slog.Logger
 	metrics           *telemetry.Metrics
 	environment       string
 	correlation       rolloutCorrelation
+	rollback          rollbackMetadata
 	admissionStarted  time.Time
 	admissionRecorded bool
 }
@@ -58,6 +84,7 @@ func newDeployTelemetryRecorder(log *slog.Logger, metrics *telemetry.Metrics, en
 		metrics:          metrics,
 		environment:      strings.TrimSpace(environment),
 		correlation:      rolloutCorrelationFromEnv(),
+		rollback:         rollbackMetadataFromEnv(),
 		admissionStarted: time.Now(),
 	}
 }
@@ -120,6 +147,16 @@ func (r *deployTelemetryRecorder) RecordRollback(ctx context.Context, trigger, r
 		return
 	}
 
+	resolvedPreviousRevision := strings.TrimSpace(previousRevision)
+	if resolvedPreviousRevision == "" {
+		resolvedPreviousRevision = strings.TrimSpace(r.rollback.PreviousRevision)
+	}
+
+	rollbackOwner := strings.TrimSpace(r.rollback.Owner)
+	if rollbackOwner == "" {
+		rollbackOwner = "service-owner"
+	}
+
 	r.metrics.ObserveRollbackExecution(r.environment, trigger, result, duration)
 
 	tracer := otel.Tracer("service.deploy")
@@ -129,10 +166,11 @@ func (r *deployTelemetryRecorder) RecordRollback(ctx context.Context, trigger, r
 		attribute.String("environment", safeEnvironment(r.environment)),
 		attribute.String("trigger", strings.ToLower(strings.TrimSpace(trigger))),
 		attribute.String("result", strings.ToLower(strings.TrimSpace(result))),
+		attribute.String("owner", rollbackOwner),
 		attribute.Int64("duration_ms", duration.Milliseconds()),
 	)
-	if strings.TrimSpace(previousRevision) != "" {
-		span.SetAttributes(attribute.String("previous_revision", strings.TrimSpace(previousRevision)))
+	if resolvedPreviousRevision != "" {
+		span.SetAttributes(attribute.String("previous_revision", resolvedPreviousRevision))
 	}
 	span.End()
 
@@ -140,10 +178,11 @@ func (r *deployTelemetryRecorder) RecordRollback(ctx context.Context, trigger, r
 		"environment", safeEnvironment(r.environment),
 		"trigger", strings.ToLower(strings.TrimSpace(trigger)),
 		"result", strings.ToLower(strings.TrimSpace(result)),
+		"owner", rollbackOwner,
 		"duration_ms", duration.Milliseconds(),
 	}
-	if strings.TrimSpace(previousRevision) != "" {
-		args = append(args, "previous_revision", strings.TrimSpace(previousRevision))
+	if resolvedPreviousRevision != "" {
+		args = append(args, "previous_revision", resolvedPreviousRevision)
 	}
 	args = r.appendCorrelationLogArgs(args)
 
@@ -340,6 +379,9 @@ func (r *deployTelemetryRecorder) appendCorrelationLogArgs(args []any) []any {
 	if r.correlation.CommitSHA != "" {
 		args = append(args, "commit_sha", r.correlation.CommitSHA)
 	}
+	if r.correlation.RollbackID != "" {
+		args = append(args, "rollback_id", r.correlation.RollbackID)
+	}
 	return args
 }
 
@@ -358,6 +400,9 @@ func (r *deployTelemetryRecorder) setCorrelationSpanAttributes(span trace.Span) 
 	}
 	if r.correlation.CommitSHA != "" {
 		span.SetAttributes(attribute.String("commit_sha", r.correlation.CommitSHA))
+	}
+	if r.correlation.RollbackID != "" {
+		span.SetAttributes(attribute.String("rollback_id", r.correlation.RollbackID))
 	}
 }
 

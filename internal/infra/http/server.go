@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"time"
 )
@@ -10,6 +11,9 @@ import (
 type Server struct {
 	srv *http.Server
 }
+
+// ErrNilListener indicates Serve received a nil listener.
+var ErrNilListener = errors.New("nil listener")
 
 type Config struct {
 	Addr              string
@@ -35,7 +39,18 @@ func New(cfg Config, handler http.Handler) *Server {
 }
 
 func (s *Server) Run() error {
-	err := s.srv.ListenAndServe()
+	listener, err := net.Listen("tcp", s.srv.Addr)
+	if err != nil {
+		return err
+	}
+	return s.Serve(listener)
+}
+
+func (s *Server) Serve(listener net.Listener) error {
+	if listener == nil {
+		return ErrNilListener
+	}
+	err := s.srv.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}

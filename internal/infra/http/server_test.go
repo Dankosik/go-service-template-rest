@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -125,5 +126,18 @@ func TestServerShutdownBeforeRun(t *testing.T) {
 	}))
 	if err := srv.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() error = %v, want nil", err)
+	}
+}
+
+func TestServerServeNilListener(t *testing.T) {
+	t.Parallel()
+
+	srv := New(Config{Addr: "127.0.0.1:0"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	err := srv.Serve(nil)
+	if err == nil {
+		t.Fatal("Serve(nil) error = nil, want non-nil")
+	}
+	if !errors.Is(err, ErrNilListener) {
+		t.Fatalf("Serve(nil) error = %v, want ErrNilListener", err)
 	}
 }
