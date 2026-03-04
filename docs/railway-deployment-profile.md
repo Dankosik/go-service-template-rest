@@ -14,6 +14,8 @@ This document defines the repository-managed Railway deployment policy baseline 
 
 - Production build path is Dockerfile-only.
 - Canonical Dockerfile: `build/docker/Dockerfile`
+- Railway compatibility rule:
+  - do not use BuildKit cache mounts (`RUN --mount=type=cache,...`) in the canonical Dockerfile unless mount IDs are explicitly Railway-formatted and validated for the target service.
 - CI/CD parity requirement:
   - `.github/workflows/cd.yml` must build images with `docker build -f build/docker/Dockerfile`.
   - `railway.toml` must keep `builder = "DOCKERFILE"` and `dockerfilePath = "build/docker/Dockerfile"`.
