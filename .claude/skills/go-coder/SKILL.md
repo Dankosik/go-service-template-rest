@@ -276,6 +276,7 @@ Out of scope:
   - `staticcheck ./...` and/or `golangci-lint run` when configured for the repository;
   - `govulncheck ./...` when dependency/security risk is in scope.
 - For API-contract-impacting code changes, ensure implementation stays in sync with contract artifacts and generated code.
+- For enum/stringer-impacting changes (internal integer enums, `//go:generate ... stringer`, `*_string.go` artifacts), run `make stringer-drift-check` (or Docker equivalent) and keep tracked/untracked enum string artifacts drift-free.
 - Report executed checks with pass/fail status in handoff; do not claim readiness without evidence.
 - Before any positive completion/readiness statement, apply `go-verification-before-completion` to ensure claim scope matches fresh command evidence.
 

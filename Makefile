@@ -26,7 +26,7 @@ SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-go-security docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security \
-	mocks-generate mocks-drift-check
+	mocks-generate mocks-drift-check stringer-generate stringer-drift-check
 
 help:
 	@echo "Quick onboarding commands:"
@@ -264,7 +264,7 @@ secrets-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
-	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local mocks-drift-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test test-race test-cover-local mocks-drift-check stringer-drift-check openapi-check go-security secrets-scan
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
@@ -277,6 +277,19 @@ ci-local:
 
 docker-lint:
 	$(DOCKER_TOOLING_SCRIPT) lint
+
+stringer-generate:
+	go generate -run "stringer" ./...
+
+stringer-drift-check: stringer-generate
+	@git diff --quiet -- ':(glob)**/*_string.go' || (echo "tracked stringer drift detected in *_string.go files"; git diff -- ':(glob)**/*_string.go'; exit 1)
+	@untracked="$$(git ls-files --others --exclude-standard -- ':(glob)**/*_string.go')"; \
+	if [ -n "$$untracked" ]; then \
+		echo "untracked stringer artifacts detected"; \
+		echo "$$untracked"; \
+		echo "run 'make stringer-generate' and commit updated enum string files"; \
+		exit 1; \
+	fi
 
 mocks-generate:
 	go generate -run "mockgen" ./...

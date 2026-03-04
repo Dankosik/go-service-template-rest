@@ -498,6 +498,7 @@ tool (
 	github.com/zricethezav/gitleaks/v8
 	go.uber.org/mock/mockgen
 	golang.org/x/tools/cmd/goimports
+	golang.org/x/tools/cmd/stringer
 	golang.org/x/vuln/cmd/govulncheck
 	gotest.tools/gotestsum
 )

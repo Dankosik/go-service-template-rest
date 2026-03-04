@@ -67,6 +67,8 @@ make test-integration
   - verify with `make openapi-drift-check`
   - when interface seams change, run `make mocks-generate`
   - verify with `make mocks-drift-check`
+  - when internal integer enums change, run `make stringer-generate`
+  - verify with `make stringer-drift-check`
 
 ## Security and Disclosure
 

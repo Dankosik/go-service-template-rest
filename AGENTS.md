@@ -96,6 +96,7 @@ Common commands:
 - `make lint`
 - `make test-race` (when concurrency changed)
 - `make openapi-check` (when API contract/handlers/generated API changed)
+- `make stringer-drift-check` (when internal integer enums, `stringer` directives, or `*_string.go` artifacts changed)
 
 Use docker-based equivalents when local toolchain is unavailable.
 

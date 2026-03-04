@@ -78,6 +78,8 @@ usage() {
 	echo "  test-race"
 	echo "  test-cover"
 	echo "  test-integration"
+	echo "  stringer-generate"
+	echo "  stringer-drift-check"
 	echo "  mocks-generate"
 	echo "  mocks-drift-check"
 	echo "  lint"
@@ -199,6 +201,22 @@ mocks_drift_check() {
 		echo "untracked mockgen artifacts detected"
 		echo "${untracked}"
 		echo "run 'make mocks-generate' and commit updated mock files"
+		exit 1
+	fi
+}
+
+stringer_drift_check() {
+	if ! git -C "${ROOT_DIR}" diff --quiet -- ':(glob)**/*_string.go'; then
+		echo "tracked stringer drift detected in *_string.go files"
+		git -C "${ROOT_DIR}" diff -- ':(glob)**/*_string.go'
+		exit 1
+	fi
+
+	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- ':(glob)**/*_string.go')"
+	if [[ -n "${untracked}" ]]; then
+		echo "untracked stringer artifacts detected"
+		echo "${untracked}"
+		echo "run 'make stringer-generate' and commit updated enum string files"
 		exit 1
 	fi
 }
@@ -362,6 +380,13 @@ test-cover)
 test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."
 	;;
+stringer-generate)
+	run_go "go generate -run \"stringer\" ./..."
+	;;
+stringer-drift-check)
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-generate
+	stringer_drift_check
+	;;
 mocks-generate)
 	run_go "go generate -run \"mockgen\" ./..."
 	;;
@@ -432,6 +457,7 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-drift-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-drift-check
 	REQUIRE_DOCKER=1 bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security

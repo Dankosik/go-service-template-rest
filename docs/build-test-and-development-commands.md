@@ -277,6 +277,16 @@ Bootstrap shortcuts:
   - Runs `mocks-generate`, then verifies tracked and untracked `*_mock_test.go` artifacts.
   - Fails when generated mock artifacts are stale or missing from git.
 
+### Enum string generation workflow
+
+- `make stringer-generate`
+  - Runs: `go generate -run "stringer" ./...`
+  - Purpose: execute only `//go:generate` directives that use `stringer`.
+
+- `make stringer-drift-check`
+  - Runs `stringer-generate`, then verifies tracked and untracked `*_string.go` artifacts.
+  - Fails when enum `stringer` artifacts are stale or missing from git.
+
 ### OpenAPI and API contract workflow
 
 - `make openapi-generate`
@@ -338,6 +348,7 @@ Bootstrap shortcuts:
     - `test-race`
     - `test-cover-local`
     - `mocks-drift-check`
+    - `stringer-drift-check`
     - `openapi-check`
     - `go-security`
     - `secrets-scan`
