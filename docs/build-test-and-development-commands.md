@@ -420,6 +420,7 @@ Bootstrap shortcuts:
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
+  - Exception: isolated updates to `build/docker/tooling-images.Dockerfile` are ignored by docs-drift policy.
 
 - `make migration-validate [MIGRATION_DSN=<postgres_dsn>]`
   - Behavior:

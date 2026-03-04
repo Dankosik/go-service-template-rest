@@ -84,10 +84,38 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Lint
+      - name: Install golangci-lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
+          install-only: true
+
+      - name: Verify golangci-lint config (15s schema timeout)
+        run: |
+          SCHEMA_VERSION="$(echo "${GOLANGCI_LINT_VERSION#v}" | cut -d. -f1,2)"
+          SCHEMA_URL="https://golangci-lint.run/jsonschema/golangci.v${SCHEMA_VERSION}.jsonschema.json"
+          SCHEMA_FILE="$(mktemp)"
+
+          curl \
+            --fail \
+            --show-error \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --retry-delay 2 \
+            --connect-timeout 15 \
+            --max-time 15 \
+            "${SCHEMA_URL}" \
+            --output "${SCHEMA_FILE}"
+
+          golangci-lint config verify --schema "${SCHEMA_FILE}"
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+        with:
+          install-mode: none
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          verify: false
           args: --timeout=3m
 
   openapi-contract:

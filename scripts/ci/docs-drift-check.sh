@@ -37,7 +37,7 @@ docs_pattern='^(docs/|README\.md$|CONTRIBUTING\.md$)'
 docs_relevant_changes="$(
   echo "${changed_files}" \
     | grep -E "${requires_docs_pattern}" \
-    | grep -Ev '(_test\.go$|^test/|^internal/api/openapi\.gen\.go$)' \
+    | grep -Ev '(^build/docker/tooling-images\.Dockerfile$|_test\.go$|^test/|^internal/api/openapi\.gen\.go$)' \
     || true
 )"
 
