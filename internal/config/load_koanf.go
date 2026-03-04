@@ -112,6 +112,7 @@ func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, localEnvir
 		return err
 	}
 
+	// #nosec G304 -- resolvedPath is normalized and validated by enforceConfigFilePolicy.
 	fileHandle, err := os.Open(resolvedPath)
 	if err != nil {
 		return fmt.Errorf("%w: open config file %q: %w", ErrLoad, cleanPath, err)

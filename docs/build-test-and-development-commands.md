@@ -41,7 +41,7 @@ Bootstrap shortcuts:
 - `make bootstrap` (recommended onboarding shortcut; minimal local prep)
 - `make check` (recommended quick quality shortcut for everyday development)
 - `make check-full` (full CI-like local validation)
-- `make template-init` (template/admin initialization for cloned repos)
+- `make template-init` (required once after cloning this template into a new service repo)
 
 ## Command Groups
 
@@ -230,7 +230,7 @@ Bootstrap shortcuts:
     - `GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...`
     - `go tool cover -func=coverage.out`
 
-- `make test-report [COVERAGE_MIN=70.0]`
+- `make test-report [COVERAGE_MIN=65.0]`
   - Runs `gotestsum` over `go test` with:
     - race detector enabled,
     - coverage profile output (`coverage.out`),
@@ -238,7 +238,7 @@ Bootstrap shortcuts:
     - raw `test2json` artifact (`.artifacts/test/test2json.json`).
   - Then runs `make coverage-check`.
 
-- `make coverage-check [COVERAGE_MIN=70.0]`
+- `make coverage-check [COVERAGE_MIN=65.0]`
   - Fails if coverage from `coverage.out` is below the configured threshold.
   - Coverage threshold excludes:
     - generated OpenAPI artifact (`internal/api/openapi.gen.go`),

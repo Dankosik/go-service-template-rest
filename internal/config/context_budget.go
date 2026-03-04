@@ -18,7 +18,7 @@ func checkContext(ctx context.Context) error {
 
 func withContextBudget(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
 	if budget <= 0 {
-		return context.WithCancel(parent)
+		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}
 	if deadline, ok := parent.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -27,7 +27,7 @@ func withContextBudget(parent context.Context, budget time.Duration) (context.Co
 		}
 	}
 	if budget <= 0 {
-		return context.WithCancel(parent)
+		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}
-	return context.WithTimeout(parent, budget)
+	return context.WithTimeout(parent, budget) // #nosec G118 -- cancel function is returned to caller.
 }

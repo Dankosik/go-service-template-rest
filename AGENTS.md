@@ -8,7 +8,6 @@ Keep it short and stable. Load extra instructions only when the task needs them.
 - Write idiomatic, production-grade Go.
 - Prefer clarity, explicit control flow, and small focused packages.
 - Prefer standard library unless a dependency is clearly justified.
-- Keep behavior and public API backward compatible by default.
 - Keep wiring explicit in `cmd/service/main.go`; avoid hidden global magic.
 - Handle errors explicitly, add context, and wrap with `%w` when callers need cause inspection.
 - Use `context.Context` as first parameter when cancellation/deadline/request scope matters.
@@ -43,9 +42,6 @@ Use project skills when the task matches a skill scope.
 - Source skills: `skills/*/SKILL.md`
 - Runtime mirrors: `.agents/skills`, `.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills`, `.opencode/skills`
 - Keep mirrors in sync with `make skills-sync` (check with `make skills-check`).
-- For routing/middleware work on `go-chi` transport behavior (`Route`/`Mount`, middleware ordering, `404/405/OPTIONS`, route labels), use:
-  - `go-chi-spec` in specification phase;
-  - `go-chi-review` in code review phase.
 
 Message-level process control:
 - Run `using-spec-first-superpowers` as mandatory pre-turn routing (`M0`) on every user message before any response or action.

@@ -22,7 +22,7 @@ make check
 make check-full
 ```
 
-4. If this repository was cloned as a new service and needs template rewiring (module path/CODEOWNERS/skills mirrors), run:
+4. If this repository was cloned as a new service, run template rewiring before the first PR (module path/CODEOWNERS/skills mirrors):
 
 ```bash
 make template-init

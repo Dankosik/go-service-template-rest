@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"net"
 	"os"
 	"os/signal"
@@ -722,12 +723,17 @@ func fullJitterDelay(attempt int) time.Duration {
 	if backoff <= 0 {
 		return 0
 	}
-	return time.Duration(rand.Int63n(int64(backoff) + 1))
+
+	jitter, err := crand.Int(crand.Reader, big.NewInt(int64(backoff)+1))
+	if err != nil {
+		return backoff
+	}
+	return time.Duration(jitter.Int64())
 }
 
 func withStageBudget(parent context.Context, stageBudget time.Duration) (context.Context, context.CancelFunc) {
 	if stageBudget <= 0 {
-		return context.WithCancel(parent)
+		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}
 	if deadline, ok := parent.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -736,9 +742,9 @@ func withStageBudget(parent context.Context, stageBudget time.Duration) (context
 		}
 	}
 	if stageBudget <= 0 {
-		return context.WithCancel(parent)
+		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}
-	return context.WithTimeout(parent, stageBudget)
+	return context.WithTimeout(parent, stageBudget) // #nosec G118 -- cancel function is returned to caller.
 }
 
 func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duration, stage string) error {

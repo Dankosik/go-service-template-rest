@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -44,8 +45,14 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	if opts.MaxOpenConns <= 0 {
 		return nil, fmt.Errorf("%w: max open conns must be > 0", ErrConfig)
 	}
+	if opts.MaxOpenConns > math.MaxInt32 {
+		return nil, fmt.Errorf("%w: max open conns must be <= %d", ErrConfig, math.MaxInt32)
+	}
 	if opts.MaxIdleConns < 0 || opts.MaxIdleConns > opts.MaxOpenConns {
 		return nil, fmt.Errorf("%w: max idle conns must be in range [0,max_open_conns]", ErrConfig)
+	}
+	if opts.MaxIdleConns > math.MaxInt32 {
+		return nil, fmt.Errorf("%w: max idle conns must be <= %d", ErrConfig, math.MaxInt32)
 	}
 	if opts.ConnMaxLifetime <= 0 {
 		return nil, fmt.Errorf("%w: conn max lifetime must be > 0", ErrConfig)
@@ -56,7 +63,7 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, fmt.Errorf("%w: parse postgres dsn: %w", ErrConfig, err)
 	}
 	poolConfig.ConnConfig.ConnectTimeout = opts.ConnectTimeout
-	poolConfig.MaxConns = int32(opts.MaxOpenConns)
+	poolConfig.MaxConns = int32(opts.MaxOpenConns) // #nosec G115 -- validated to be <= math.MaxInt32 above.
 	poolConfig.MaxConnLifetime = opts.ConnMaxLifetime
 	// Enforce max_idle_conns as an upper bound for retained idle connections.
 	// pgxpool does not expose a direct MaxIdleConns knob.
@@ -66,7 +73,7 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		if pool == nil {
 			return true
 		}
-		return shouldKeepReleasedConn(int32(opts.MaxIdleConns), pool.Stat().IdleConns())
+		return shouldKeepReleasedConn(int32(opts.MaxIdleConns), pool.Stat().IdleConns()) // #nosec G115 -- validated to be <= math.MaxInt32 above.
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)

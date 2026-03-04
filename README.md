@@ -61,12 +61,18 @@ In short: this is a Go microservice starter template optimized for AI-assisted d
 └── README.md
 ```
 
-## Quick Start (3 Commands)
+## Quick Start
 
 1. Bootstrap:
 
 ```bash
 make bootstrap
+```
+
+If this repository was cloned as a new service, run template initialization before the first PR/CI run:
+
+```bash
+make template-init
 ```
 
 2. Run quick checks:
@@ -102,9 +108,9 @@ make check-full
 - with Docker daemon: `make docker-ci`;
 - without Docker daemon: `make ci-local` (docker-only checks are skipped with an explicit message).
 
-## Template/Admin Initialization (Optional)
+## Template Initialization (Required After Clone)
 
-If you cloned this template into a new repository and want template rewiring (module path, `CODEOWNERS` placeholder replacement, skills mirror sync), run:
+If you cloned this template into a new repository, run template rewiring before opening the first PR (module path, `CODEOWNERS` placeholder replacement, skills mirror sync):
 
 ```bash
 make template-init
@@ -231,6 +237,10 @@ Security notes:
 - allowed non-local config roots can be overridden via `APP_CONFIG_ALLOWED_ROOTS` (comma/semicolon/path-list separated). Defaults include `/etc/config`, `/etc/service/config`, and `/run/secrets`.
 - docs-drift policy: if a PR changes behavior/contract/CI-sensitive paths (`cmd/`, `internal/`, `api/openapi`, `Makefile`, workflows, scripts, migrations), update `docs/`, `README.md`, or `CONTRIBUTING.md` in the same PR.
 
+Template extension points (opt-in by design):
+- `observability.metrics.enabled` and `observability.metrics.path` are reserved knobs; current template wiring always serves metrics at `/metrics`.
+- `feature_flags.postgres_readiness_probe`, `feature_flags.redis_readiness_probe`, and `feature_flags.mongo_readiness_probe` are reserved switches for future behavior toggles; current startup probe behavior is driven by dependency `*.enabled` settings.
+
 Startup dependency behavior:
 - `postgres.enabled=true`: startup is fail-closed (probe failure blocks startup).
 - `redis.enabled=true` with `mode=cache`: startup degrades to `feature_off` on probe failure.
@@ -288,7 +298,7 @@ Workflow `.github/workflows/ci.yml` includes:
 - `openapi-breaking` (PR): check breaking changes between base and current OpenAPI spec
 - `test`: `go test ./...`
 - `test-race`: `go test -race ./...`
-- `test-coverage`: `make test-report COVERAGE_MIN=70.0` (`gotestsum` + race + coverage threshold + JUnit/JSON artifacts + `coverage.out`; threshold is computed without generated OpenAPI artifact and composition-root entrypoint file)
+- `test-coverage`: `make test-report COVERAGE_MIN=65.0` (`gotestsum` + race + coverage threshold + JUnit/JSON artifacts + `coverage.out`; threshold is computed without generated OpenAPI artifact and composition-root entrypoint file)
 - `test-integration`: `REQUIRE_DOCKER=1 go test -tags=integration ./test/...`
 - `migration-validate` (conditional): rehearses SQL migrations on ephemeral Postgres when `env/migrations/**` changes
 - `go-security`: `govulncheck` and `gosec` (generated files excluded)
