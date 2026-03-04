@@ -43,6 +43,7 @@ type dependencyProbeSpec struct {
 
 type probeExecutionResult struct {
 	budgetBlocked bool
+	failed        bool
 	err           error
 }
 
@@ -118,7 +119,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 			return err
 		},
 	})
-	if probeResult.err != nil {
+	if probeResult.failed {
 		if probeResult.budgetBlocked {
 			runtime.bootstrapSpan.RecordError(probeResult.err)
 			runtime.bootstrapSpan.SetAttributes(
@@ -228,7 +229,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			return probeRedisWithContext(probeCtx, runtime.cfg.Redis)
 		},
 	})
-	if probeResult.err != nil {
+	if probeResult.failed {
 		if redisMode == "store" {
 			rejectErr := fmt.Errorf("%w: redis init failed", config.ErrDependencyInit)
 			runtime.bootstrapSpan.RecordError(rejectErr)
@@ -320,7 +321,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			return probeMongoWithRetry(probeCtx, runtime.cfg.Mongo)
 		},
 	})
-	if probeResult.err != nil {
+	if probeResult.failed {
 		runtime.log.Warn(
 			"startup_dependency_degraded",
 			startupLogArgs(
@@ -341,7 +342,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 
 func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer, spec dependencyProbeSpec) probeExecutionResult {
 	if err := ensureRemainingStartupBudget(dependencyProbeCtx, spec.minRemaining, spec.stage); err != nil {
-		return probeExecutionResult{budgetBlocked: true, err: err}
+		return probeExecutionResult{budgetBlocked: true, failed: true, err: err}
 	}
 
 	probeCtx, probeCancel := withStageBudget(dependencyProbeCtx, spec.budget)
@@ -362,5 +363,5 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeSpan.SetAttributes(attrs...)
 	probeSpan.End()
 
-	return probeExecutionResult{budgetBlocked: false, err: err}
+	return probeExecutionResult{budgetBlocked: false, failed: err != nil, err: err}
 }
