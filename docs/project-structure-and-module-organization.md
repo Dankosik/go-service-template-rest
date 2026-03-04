@@ -40,7 +40,18 @@ This document explains the `go-service-template-rest` repository layout: what is
 │       └── tooling-images.Dockerfile
 ├── cmd/
 │   └── service/
-│       └── main.go
+│       ├── main.go
+│       └── internal/
+│           └── bootstrap/
+│               ├── run.go
+│               ├── startup_bootstrap.go
+│               ├── startup_common.go
+│               ├── startup_dependencies.go
+│               ├── startup_probe_addresses.go
+│               ├── startup_probe_helpers.go
+│               ├── startup_server.go
+│               ├── shutdown.go
+│               └── network_policy*.go
 ├── docs/
 │   ├── llm/
 │   │   └── go-instructions/
@@ -129,6 +140,10 @@ This document explains the `go-service-template-rest` repository layout: what is
 Thin executable entrypoints.  
 Why: startup and wiring are separated from business logic. This makes it easier to reuse code and add new binaries (for example, worker, migrator, admin CLI) without duplicating domain logic.
 
+### `cmd/service/internal/bootstrap/`
+Service bootstrap implementation for the `service` binary: startup orchestration, dependency probes, shutdown flow, and deploy/network policy helpers used during process lifecycle.
+Why: keeps `cmd/service/main.go` as a composition entrypoint while moving complex lifecycle logic into focused files with local tests.
+
 ### `internal/`
 Private service code that is not part of the module public API.  
 Why: Go `internal` enforces import boundaries and keeps the service contract controlled.
@@ -201,11 +216,11 @@ Why: quality and security checks are codified, reviewable, and reproducible on e
 
 ## 3) Code Ownership Boundaries
 
-`cmd/service/main.go` should only perform composition:
+`cmd/service/main.go` should only perform composition and delegate lifecycle orchestration to `cmd/service/internal/bootstrap`:
 - read config;
 - wire dependencies;
-- start the HTTP server;
-- perform graceful shutdown.
+- call bootstrap runner with CLI flags/context;
+- return process exit status based on bootstrap result.
 
 `internal/app/*` should not import `internal/infra/http` or concrete database drivers.
 
@@ -231,6 +246,11 @@ New binary:
 1. Create `cmd/<binary>/main.go`.
 2. Reuse existing packages from `internal/*`.
 3. Do not duplicate business logic in `cmd`.
+
+Changes to startup/lifecycle flow of the `service` binary:
+1. Keep `cmd/service/main.go` thin.
+2. Add/modify logic in `cmd/service/internal/bootstrap/*`.
+3. Add tests near modified bootstrap files (`*_test.go` in the same folder).
 
 ## 5) Why This Structure Scales
 
