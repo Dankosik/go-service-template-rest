@@ -6,7 +6,7 @@ func defaultValues() map[string]any {
 		"app.version": "dev",
 
 		"http.addr":                ":8080",
-		"http.shutdown_timeout":    "10s",
+		"http.shutdown_timeout":    "30s",
 		"http.read_header_timeout": "5s",
 		"http.read_timeout":        "5s",
 		"http.write_timeout":       "10s",

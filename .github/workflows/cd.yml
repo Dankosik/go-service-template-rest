@@ -23,6 +23,7 @@ env:
   GOLANGCI_LINT_VERSION: v2.10.1
   GOVULNCHECK_VERSION: v1.1.4
   GOSEC_VERSION: v2.24.7
+  TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
 
 jobs:
   publish-main:

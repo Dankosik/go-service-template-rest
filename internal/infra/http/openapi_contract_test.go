@@ -98,6 +98,50 @@ func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 	}
 }
 
+func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
+	healthSvc := health.New()
+	healthSvc.StartDrain()
+
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: healthSvc,
+		Ping:   ping.New(),
+	}, telemetry.New(), RouterConfig{})
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
+	}
+	if body := resp.Body.String(); body != "not ready" {
+		t.Fatalf("body = %q, want %q", body, "not ready")
+	}
+}
+
+func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewRouter(log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+	}, telemetry.New(), RouterConfig{})
+
+	// Deployment admission must fail deterministically when an unknown health path is used.
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
+		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
+	}
+}
+
 func TestOpenAPIRuntimeContractFallbackServices(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewRouter(log, Handlers{}, nil, RouterConfig{})

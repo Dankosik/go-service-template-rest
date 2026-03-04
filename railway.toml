@@ -1,0 +1,20 @@
+# Railway deployment-policy source of truth for privacy-sanitization-service.
+# Owners: Platform + Service Owner.
+# Scope: non-secret deployment policy only. Keep secrets in Railway variables.
+# Review rule: policy changes must go through PR review and pass `make guardrails-check`.
+#
+# Baseline policy assertions tracked as release evidence:
+# - production replica baseline: >=2
+# - per-replica baseline: 2 vCPU / 2 GiB
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "build/docker/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health/ready"
+healthcheckTimeout = 180
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+overlapSeconds = 45
+drainingSeconds = 30

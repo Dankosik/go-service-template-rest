@@ -48,6 +48,19 @@ make test-race
 make test-integration
 ```
 
+## Railway Deployment Policy Changes
+
+- Treat `railway.toml` as the deployment policy source of truth.
+- Keep secrets out of `railway.toml`; use Railway variables/secrets.
+- Any deployment policy change must be PR-reviewed and traceable.
+- Run before PR:
+
+```bash
+make guardrails-check
+```
+
+- If you need to change locked rollout/capacity policy values (`180s`, `45s`, `30s`, `5 retries`, replica/capacity baseline), reopen spec first.
+
 ## Pull Request Rules
 
 - Use the PR template and fill all required sections.

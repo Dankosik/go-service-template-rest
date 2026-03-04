@@ -30,6 +30,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("HTTP.Addr = %q, want :8080", cfg.HTTP.Addr)
 	}
+	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s", cfg.HTTP.ShutdownTimeout)
+	}
 	if cfg.Redis.Mode != "cache" {
 		t.Fatalf("Redis.Mode = %q, want cache", cfg.Redis.Mode)
 	}

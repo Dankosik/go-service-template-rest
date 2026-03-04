@@ -84,6 +84,7 @@ func run() (runErr error) {
 	slog.SetDefault(bootstrapLog)
 
 	metrics := telemetry.New()
+	deployTelemetry := newDeployTelemetryRecorder(bootstrapLog, metrics, "unknown")
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	defer func() {
@@ -113,6 +114,7 @@ func run() (runErr error) {
 
 	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupBudget)
 	defer startupCancel()
+	startupLifecycleStartedAt := time.Now()
 
 	loadOptions.LoadBudget = startupConfigLoadBudget
 	loadOptions.ValidateBudget = startupConfigValidateBudget
@@ -148,6 +150,10 @@ func run() (runErr error) {
 				"error.type", errorType,
 			)...,
 		)
+		deployTelemetry.RecordAdmission(startupCtx, "failure", "startup_error", "startup")
+		deployTelemetry.RecordRollback(startupCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
+		deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+		deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
 		return fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
@@ -163,6 +169,8 @@ func run() (runErr error) {
 		"deployment.environment.name", cfg.App.Env,
 	)
 	slog.SetDefault(log)
+	deployTelemetry.SetLogger(log)
+	deployTelemetry.SetEnvironment(cfg.App.Env)
 
 	metrics.SetStartupDependencyStatus("telemetry", "optional_fail_open", false)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
@@ -260,6 +268,11 @@ func run() (runErr error) {
 			)...,
 		)
 	}
+	if len(configReport.UnknownKeyWarnings) > 0 {
+		deployTelemetry.RecordConfigDriftDetected(bootstrapCtx, "runtime", "", "startup-config")
+	} else {
+		deployTelemetry.RecordConfigDriftReconciled(bootstrapCtx, "success", "", "startup-config", 0)
+	}
 	if telemetryInitErr != nil {
 		log.Warn(
 			"startup_dependency_degraded",
@@ -294,12 +307,83 @@ func run() (runErr error) {
 		)...,
 	)
 
+	networkPolicy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		policyClass, reasonClass := networkPolicyErrorLabels(err)
+		if policyClass == "egress" {
+			deployTelemetry.RecordNetworkEgressPolicyViolation(bootstrapCtx, reasonClass, "deny")
+		} else {
+			deployTelemetry.RecordNetworkIngressPolicyViolation(bootstrapCtx, reasonClass, "deny")
+		}
+		return rejectStartupForPolicyViolation(
+			bootstrapCtx,
+			bootstrapSpan,
+			metrics,
+			log,
+			deployTelemetry,
+			startupLifecycleStartedAt,
+			"network_policy",
+			fmt.Errorf("%w: invalid network policy configuration", config.ErrDependencyInit),
+		)
+	}
+
+	if err := networkPolicy.EnforceIngress(bootstrapCtx, deployTelemetry); err != nil {
+		return rejectStartupForPolicyViolation(
+			bootstrapCtx,
+			bootstrapSpan,
+			metrics,
+			log,
+			deployTelemetry,
+			startupLifecycleStartedAt,
+			"ingress_policy",
+			err,
+		)
+	}
+
+	if err := networkPolicy.EmitEgressExceptionState(bootstrapCtx, deployTelemetry); err != nil {
+		return rejectStartupForPolicyViolation(
+			bootstrapCtx,
+			bootstrapSpan,
+			metrics,
+			log,
+			deployTelemetry,
+			startupLifecycleStartedAt,
+			"egress_exception",
+			err,
+		)
+	}
+
 	dependencyProbeCtx, dependencyProbeCancel := withStageBudget(startupCtx, startupProbeBudget)
 	defer dependencyProbeCancel()
 
 	probes := make([]health.Probe, 0, 1)
 	if cfg.Postgres.Enabled {
 		metrics.SetStartupDependencyStatus("postgres", "critical_fail_closed", false)
+		postgresProbeAddress, addressErr := postgresStartupProbeAddress(cfg.Postgres)
+		if addressErr != nil {
+			return rejectStartupForPolicyViolation(
+				bootstrapCtx,
+				bootstrapSpan,
+				metrics,
+				log,
+				deployTelemetry,
+				startupLifecycleStartedAt,
+				"postgres",
+				addressErr,
+			)
+		}
+		if err := networkPolicy.EnforceEgressTarget(bootstrapCtx, deployTelemetry, postgresProbeAddress, "tcp"); err != nil {
+			return rejectStartupForPolicyViolation(
+				bootstrapCtx,
+				bootstrapSpan,
+				metrics,
+				log,
+				deployTelemetry,
+				startupLifecycleStartedAt,
+				"postgres",
+				err,
+			)
+		}
 		if err := ensureRemainingStartupBudget(dependencyProbeCtx, startupFailFastThreshold+startupReserveBudget, "postgres_startup_probe"); err != nil {
 			bootstrapSpan.RecordError(err)
 			bootstrapSpan.SetAttributes(
@@ -320,6 +404,10 @@ func run() (runErr error) {
 					"dependency", "postgres",
 				)...,
 			)
+			deployTelemetry.RecordAdmission(bootstrapCtx, "failure", "dependency_init", "postgres")
+			deployTelemetry.RecordRollback(bootstrapCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
+			deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+			deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
 			return fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, err)
 		}
 
@@ -355,6 +443,10 @@ func run() (runErr error) {
 					"dependency", "postgres",
 				)...,
 			)
+			deployTelemetry.RecordAdmission(bootstrapCtx, "failure", "dependency_init", "postgres")
+			deployTelemetry.RecordRollback(bootstrapCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
+			deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+			deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
 			return sanitizedErr
 		}
 		probeSpan.SetAttributes(
@@ -378,6 +470,32 @@ func run() (runErr error) {
 		metrics.SetStartupDependencyStatus("redis", redisCriticality, false)
 		if redisMode == "cache" {
 			metrics.SetStartupDependencyStatus("redis", "feature_off", false)
+		}
+
+		redisProbeAddress, addressErr := redisStartupProbeAddress(cfg.Redis)
+		if addressErr != nil {
+			return rejectStartupForPolicyViolation(
+				bootstrapCtx,
+				bootstrapSpan,
+				metrics,
+				log,
+				deployTelemetry,
+				startupLifecycleStartedAt,
+				"redis",
+				addressErr,
+			)
+		}
+		if err := networkPolicy.EnforceEgressTarget(bootstrapCtx, deployTelemetry, redisProbeAddress, "tcp"); err != nil {
+			return rejectStartupForPolicyViolation(
+				bootstrapCtx,
+				bootstrapSpan,
+				metrics,
+				log,
+				deployTelemetry,
+				startupLifecycleStartedAt,
+				"redis",
+				err,
+			)
 		}
 
 		probeErr := ensureRemainingStartupBudget(dependencyProbeCtx, startupFailFastThreshold, "redis_startup_probe")
@@ -430,6 +548,10 @@ func run() (runErr error) {
 						"mode", redisMode,
 					)...,
 				)
+				deployTelemetry.RecordAdmission(bootstrapCtx, "failure", "dependency_init", "redis")
+				deployTelemetry.RecordRollback(bootstrapCtx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
+				deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+				deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
 				return rejectErr
 			}
 			metrics.SetStartupDependencyStatus("redis", "feature_off", true)
@@ -456,6 +578,31 @@ func run() (runErr error) {
 
 	if cfg.Mongo.Enabled {
 		metrics.SetStartupDependencyStatus("mongo", "critical_fail_degraded", false)
+		mongoProbeAddress, addressErr := mongoStartupProbeAddress(cfg.Mongo)
+		if addressErr != nil {
+			return rejectStartupForPolicyViolation(
+				bootstrapCtx,
+				bootstrapSpan,
+				metrics,
+				log,
+				deployTelemetry,
+				startupLifecycleStartedAt,
+				"mongo",
+				addressErr,
+			)
+		}
+		if err := networkPolicy.EnforceEgressTarget(bootstrapCtx, deployTelemetry, mongoProbeAddress, "tcp"); err != nil {
+			return rejectStartupForPolicyViolation(
+				bootstrapCtx,
+				bootstrapSpan,
+				metrics,
+				log,
+				deployTelemetry,
+				startupLifecycleStartedAt,
+				"mongo",
+				err,
+			)
+		}
 
 		probeErr := ensureRemainingStartupBudget(dependencyProbeCtx, startupFailFastThreshold, "mongo_startup_probe")
 		if probeErr == nil {
@@ -499,6 +646,7 @@ func run() (runErr error) {
 
 	metrics.IncConfigStartupOutcome("ready")
 	bootstrapSpan.SetAttributes(attribute.String("result", "success"))
+	deployTelemetry.RecordAdmission(bootstrapCtx, "success", "ready", "")
 
 	healthSvc := health.New(probes...)
 	pingSvc := ping.New()
@@ -523,6 +671,7 @@ func run() (runErr error) {
 	}, handler)
 
 	runErrCh := make(chan error, 1)
+	serverStartedAt := time.Now()
 	go func() {
 		log.Info("http server started", "addr", cfg.HTTP.Addr, "env", cfg.App.Env)
 		runErrCh <- srv.Run()
@@ -536,39 +685,84 @@ func run() (runErr error) {
 		serverErr = err
 		if serverErr != nil {
 			log.Error("http server stopped with error", "err", serverErr)
+			deployTelemetry.RecordRollback(signalCtx, "runtime_error", "failure", "", time.Since(serverStartedAt))
+			deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+			deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
 		}
 	}
 
-	log.Info(
-		"drain_started",
-		startupLogArgs(
-			signalCtx,
-			"shutdown",
-			"drain",
-			"started",
-		)...,
-	)
-	healthSvc.StartDrain()
-	log.Info(
-		"readiness_failed",
-		startupLogArgs(
-			signalCtx,
-			"shutdown",
-			"readiness",
-			"failed",
-		)...,
-	)
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.ShutdownTimeout)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("graceful shutdown failed: %w", err)
+	shutdownStartedAt := time.Now()
+	if err := drainAndShutdown(signalCtx, cfg.HTTP.ShutdownTimeout, healthSvc, srv); err != nil {
+		deployTelemetry.RecordRollback(signalCtx, "shutdown_error", "failure", "", time.Since(shutdownStartedAt))
+		deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+		deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+		return err
 	}
 	if serverErr != nil {
 		return fmt.Errorf("http server stopped with error: %w", serverErr)
 	}
 
 	log.Info("shutdown complete")
+	return nil
+}
+
+type startupDrainer interface {
+	StartDrain()
+}
+
+type shutdownServer interface {
+	Shutdown(context.Context) error
+}
+
+func drainAndShutdown(ctx context.Context, timeout time.Duration, drainer startupDrainer, srv shutdownServer) error {
+	slog.Info(
+		"drain_started",
+		startupLogArgs(
+			ctx,
+			"shutdown",
+			"drain",
+			"started",
+		)...,
+	)
+	drainer.StartDrain()
+	slog.Info(
+		"readiness_disabled",
+		startupLogArgs(
+			ctx,
+			"shutdown",
+			"readiness",
+			"success",
+		)...,
+	)
+
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Error(
+				"shutdown_timeout",
+				startupLogArgs(
+					ctx,
+					"shutdown",
+					"drain",
+					"error",
+					"error.type", "deadline_exceeded",
+				)...,
+			)
+		}
+		return fmt.Errorf("graceful shutdown failed: %w", err)
+	}
+
+	slog.Info(
+		"drain_completed",
+		startupLogArgs(
+			ctx,
+			"shutdown",
+			"drain",
+			"success",
+		)...,
+	)
 	return nil
 }
 
@@ -603,6 +797,42 @@ func failedStageDetails(report config.LoadReport) (string, time.Duration) {
 		duration = time.Millisecond
 	}
 	return stage, duration
+}
+
+func rejectStartupForPolicyViolation(
+	ctx context.Context,
+	bootstrapSpan trace.Span,
+	metrics *telemetry.Metrics,
+	log *slog.Logger,
+	deployTelemetry *deployTelemetryRecorder,
+	startupLifecycleStartedAt time.Time,
+	dependency string,
+	err error,
+) error {
+	bootstrapSpan.RecordError(err)
+	bootstrapSpan.SetAttributes(
+		attribute.String("result", "error"),
+		attribute.String("error.type", "policy_violation"),
+		attribute.String("failed.stage", "startup.policy."+strings.ToLower(strings.TrimSpace(dependency))),
+	)
+	metrics.IncConfigValidationFailure("policy_violation")
+	metrics.IncConfigStartupOutcome("rejected")
+	log.Error(
+		"startup_blocked",
+		startupLogArgs(
+			ctx,
+			"startup_probes",
+			strings.ToLower(strings.TrimSpace(dependency))+"_policy",
+			"error",
+			"error.type", "policy_violation",
+			"dependency", strings.ToLower(strings.TrimSpace(dependency)),
+		)...,
+	)
+	deployTelemetry.RecordAdmission(ctx, "failure", "policy_violation", strings.ToLower(strings.TrimSpace(dependency)))
+	deployTelemetry.RecordRollback(ctx, "admission_failed", "failure", "", time.Since(startupLifecycleStartedAt))
+	deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
+	deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
+	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

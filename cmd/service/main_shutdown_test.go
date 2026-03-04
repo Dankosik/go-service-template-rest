@@ -1,0 +1,121 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
+
+type fakeDrainer struct {
+	events  *[]string
+	started bool
+}
+
+func (f *fakeDrainer) StartDrain() {
+	f.started = true
+	*f.events = append(*f.events, "drain")
+}
+
+type fakeShutdownServer struct {
+	events   *[]string
+	err      error
+	onCalled func(context.Context) error
+}
+
+func (f *fakeShutdownServer) Shutdown(ctx context.Context) error {
+	*f.events = append(*f.events, "shutdown")
+	if f.onCalled != nil {
+		if err := f.onCalled(ctx); err != nil {
+			return err
+		}
+	}
+	return f.err
+}
+
+func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+
+	srv := &fakeShutdownServer{
+		events: &events,
+		onCalled: func(ctx context.Context) error {
+			if !drainer.started {
+				t.Fatal("shutdown called before drain started")
+			}
+
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("shutdown context has no deadline")
+			}
+			remaining := time.Until(deadline)
+			if remaining < 29*time.Second || remaining > 31*time.Second {
+				t.Fatalf("shutdown deadline remaining = %s, want around 30s", remaining)
+			}
+
+			return nil
+		},
+	}
+
+	if err := drainAndShutdown(context.Background(), 30*time.Second, drainer, srv); err != nil {
+		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
+	}
+
+	if got := strings.Join(events, ","); got != "drain,shutdown" {
+		t.Fatalf("event order = %q, want %q", got, "drain,shutdown")
+	}
+}
+
+func TestDrainAndShutdownIgnoresParentCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+	srv := &fakeShutdownServer{
+		events: &events,
+		onCalled: func(ctx context.Context) error {
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("shutdown context err = %v, want nil", err)
+			}
+			return nil
+		},
+	}
+
+	if err := drainAndShutdown(ctx, time.Second, drainer, srv); err != nil {
+		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
+	}
+}
+
+func TestDrainAndShutdownPropagatesShutdownFailure(t *testing.T) {
+	wantErr := errors.New("boom")
+
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+	srv := &fakeShutdownServer{
+		events: &events,
+		err:    wantErr,
+	}
+
+	err := drainAndShutdown(context.Background(), time.Second, drainer, srv)
+	if err == nil {
+		t.Fatal("drainAndShutdown() error = nil, want non-nil")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("drainAndShutdown() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestDrainAndShutdownIgnoresContextCanceledError(t *testing.T) {
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+	srv := &fakeShutdownServer{
+		events: &events,
+		err:    context.Canceled,
+	}
+
+	if err := drainAndShutdown(context.Background(), time.Second, drainer, srv); err != nil {
+		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
+	}
+}

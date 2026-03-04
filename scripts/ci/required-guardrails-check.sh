@@ -4,6 +4,7 @@ set -euo pipefail
 required_files=(
   "AGENTS.md"
   "README.md"
+  "railway.toml"
   "Makefile"
   ".editorconfig"
   ".gitattributes"
@@ -38,5 +39,53 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   done
   exit 1
 fi
+
+require_regex() {
+  local pattern="$1"
+  local file="$2"
+  local message="$3"
+  if ! grep -Eq -- "${pattern}" "${file}"; then
+    echo "guardrail check failed: ${message}"
+    echo "  file: ${file}"
+    echo "  expected pattern: ${pattern}"
+    exit 1
+  fi
+}
+
+# Keep Railway deployment policy deterministic and repo-reviewable.
+require_regex '^builder = "DOCKERFILE"$' "railway.toml" "railway build policy must use DOCKERFILE builder"
+require_regex '^dockerfilePath = "build/docker/Dockerfile"$' "railway.toml" "railway build policy must point to build/docker/Dockerfile"
+require_regex '^healthcheckPath = "/health/ready"$' "railway.toml" "railway deploy healthcheck path must be /health/ready"
+require_regex '^healthcheckTimeout = 180$' "railway.toml" "railway deploy healthcheck timeout must be 180 seconds"
+require_regex '^restartPolicyType = "ON_FAILURE"$' "railway.toml" "railway restart policy type must be ON_FAILURE"
+require_regex '^restartPolicyMaxRetries = 5$' "railway.toml" "railway restart retries must be locked to 5"
+require_regex '^overlapSeconds = 45$' "railway.toml" "railway overlap window must be 45 seconds"
+require_regex '^drainingSeconds = 30$' "railway.toml" "railway draining window must be 30 seconds"
+require_regex '^# - production replica baseline: >=2$' "railway.toml" "railway policy baseline comment must define replica floor"
+require_regex '^# - per-replica baseline: 2 vCPU / 2 GiB$' "railway.toml" "railway policy baseline comment must define per-replica CPU and memory"
+
+# Keep canonical build path aligned with hardened repository Dockerfile.
+require_regex 'docker build' ".github/workflows/cd.yml" "cd workflow must build with docker build"
+require_regex '-f build/docker/Dockerfile' ".github/workflows/cd.yml" "cd workflow must explicitly use build/docker/Dockerfile"
+
+# Keep branch protection required checks aligned with CI job contexts.
+required_contexts=(
+  "repo-integrity"
+  "lint"
+  "openapi-contract"
+  "test"
+  "test-race"
+  "test-coverage"
+  "test-integration"
+  "migration-validate"
+  "go-security"
+  "secret-scan"
+  "container-security"
+)
+
+for context in "${required_contexts[@]}"; do
+  require_regex "\"context\": \"${context}\"" "scripts/dev/configure-branch-protection.sh" "branch protection must require '${context}' context"
+  require_regex "^[[:space:]]{2}${context}:" ".github/workflows/ci.yml" "ci workflow must expose '${context}' job context"
+done
 
 echo "required repository guardrails check passed"
