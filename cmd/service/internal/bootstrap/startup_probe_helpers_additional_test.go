@@ -150,7 +150,11 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Listen() error = %v", err)
 		}
-		defer ln.Close()
+		defer func() {
+			if closeErr := ln.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+				t.Errorf("ln.Close() error = %v", closeErr)
+			}
+		}()
 		go func() {
 			conn, acceptErr := ln.Accept()
 			if acceptErr == nil {
@@ -169,7 +173,11 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Listen() error = %v", err)
 		}
-		defer ln.Close()
+		defer func() {
+			if closeErr := ln.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+				t.Errorf("ln.Close() error = %v", closeErr)
+			}
+		}()
 		go func() {
 			conn, acceptErr := ln.Accept()
 			if acceptErr == nil {
