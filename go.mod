@@ -5,20 +5,20 @@ go 1.26.0
 require (
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.8.0
 	github.com/knadh/koanf/parsers/yaml v1.1.0
 	github.com/knadh/koanf/providers/confmap v1.0.0
 	github.com/knadh/koanf/providers/rawbytes v1.0.0
 	github.com/knadh/koanf/v2 v2.3.2
 	github.com/oapi-codegen/runtime v1.2.0
-	github.com/prometheus/client_golang v1.21.1
+	github.com/prometheus/client_golang v1.23.2
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0
-	go.opentelemetry.io/otel v1.40.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.19.0
-	go.opentelemetry.io/otel/sdk v1.40.0
-	go.opentelemetry.io/otel/trace v1.40.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.66.0
+	go.opentelemetry.io/otel v1.41.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.41.0
+	go.opentelemetry.io/otel/sdk v1.41.0
+	go.opentelemetry.io/otel/trace v1.41.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.6.0
 )
@@ -121,6 +121,7 @@ require (
 	github.com/catenacyber/perfsprint v0.10.1 // indirect
 	github.com/ccojocar/zxcvbn-go v1.0.4 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charithe/durationcheck v0.0.11 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
@@ -348,8 +349,8 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.62.0 // indirect
-	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/prometheus/common v0.66.1 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/quasilyte/go-ruleguard v0.4.5 // indirect
 	github.com/quasilyte/go-ruleguard/dsl v0.3.23 // indirect
 	github.com/quasilyte/gogrep v0.5.0 // indirect
@@ -444,13 +445,14 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.39.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.29.0 // indirect
-	go.opentelemetry.io/otel/metric v1.40.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
-	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.41.0 // indirect
+	go.opentelemetry.io/otel/metric v1.41.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.41.0 // indirect
+	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
