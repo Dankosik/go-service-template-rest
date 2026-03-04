@@ -8,6 +8,10 @@ description: "Run mandatory pre-turn routing for this repository's spec-first wo
 ## Purpose
 Execute mandatory pre-turn routing (`M0`) before any response or action. Success means each turn has a deterministic `Routing Record` and an explicit decision: `route_pass`, `route_lightweight`, or `route_blocked`.
 
+Routing source of truth:
+- skill discovery and routing decisions must use `references/skill-routing-catalog.md`
+- do not rely on memory for skill names/descriptions
+
 ## Scope And Boundaries
 In scope:
 - classify incoming requests by `intent`
@@ -72,6 +76,7 @@ Out of scope:
 
 #### Skill Selection Competency
 - build candidate list from `phase x intent`
+- derive candidates from `references/skill-routing-catalog.md` (exact `name` + `description`)
 - assign `required_skills` and `optional_skills`
 - define explicit `selected_order` using this priority:
   - process/safety skills
@@ -90,6 +95,7 @@ Out of scope:
 - if a candidate skill is invoked by low-confidence applicability and proves non-applicable:
   - mark it as `dismissed` in routing notes
   - continue with the next candidate without blocking the turn
+- avoid routing to skills absent from the catalog unless the user explicitly requests a non-catalog workflow
 
 #### Escalation Competency
 - enforce `route_blocked` when:
@@ -110,19 +116,20 @@ Out of scope:
 
 ## Working Rules
 1. If a complete routing record already exists for the same turn, reuse it and do not re-run `M0`.
-2. Read the user turn and determine whether a feature context already exists.
-3. Infer `phase` and `gate_state` from artifacts and thread context.
-4. Classify primary `intent`.
-5. Build skill candidates by `phase x intent`.
-6. Apply minimal-probability applicability rule and keep relevant candidates.
-7. Assign `required_skills`, `optional_skills`, and explicit `selected_order`.
-8. Decide one route:
+2. Load `references/skill-routing-catalog.md` and use it as routing source of truth.
+3. Read the user turn and determine whether a feature context already exists.
+4. Infer `phase` and `gate_state` from artifacts and thread context.
+5. Classify primary `intent`.
+6. Build skill candidates by `phase x intent`.
+7. Apply minimal-probability applicability rule and keep relevant candidates.
+8. Assign `required_skills`, `optional_skills`, and explicit `selected_order`.
+9. Decide one route:
    - `route_pass`
    - `route_lightweight`
    - `route_blocked`
-9. If blocked, include reason and minimum unblock condition.
-10. Emit `Routing Record`.
-11. Only after that, execute downstream skills or answer.
+10. If blocked, include reason and minimum unblock condition.
+11. Emit `Routing Record`.
+12. Only after that, execute downstream skills or answer.
 
 ## Output Expectations
 Use this section order:
@@ -141,6 +148,7 @@ Next Action
 - `intent`
 - `phase`
 - `gate_state`
+- `catalog_matches`
 - `required_skills`
 - `optional_skills`
 - `selected_order`
@@ -187,7 +195,7 @@ Always load:
 - `AGENTS.md`:
   - read dynamic loading policy and execution loop
 - `docs/skills/using-spec-first-superpowers-spec.md`
-- available skill registry from `skills/*` (and mirrors when needed for parity checks)
+- `skills/using-spec-first-superpowers/references/skill-routing-catalog.md`
 
 Load by trigger:
 - routing matrix tuning or governance discussions:

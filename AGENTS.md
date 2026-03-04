@@ -3,6 +3,14 @@
 This file is the always-on baseline for coding agents in this repository.
 Keep it short and stable. Load extra instructions only when the task needs them.
 
+## 0) Operating Mode (M0 First)
+
+- `using-spec-first-superpowers` is mandatory on every user message before any response or action.
+- Run message-gate `M0` first, then follow its routing decision (`route_pass` / `route_lightweight` / `route_blocked`).
+- Load other skills/docs only after `M0`, and only those selected by routing.
+- If `M0` returns `route_blocked`, stop execution and resolve unblock conditions first.
+- Priority rule: routing discipline is primary; all other workflow instructions are applied through the selected route.
+
 ## 1) Core Defaults (Always On)
 
 - Write idiomatic, production-grade Go.
@@ -35,6 +43,7 @@ Details:
 
 Load only the minimum extra context needed for the current task.
 Do not load all instruction files or all skills by default.
+Load sequence is strict: `M0` routing first, domain loading second.
 
 ### 3.1 Skills First For Repeatable Workflows
 
@@ -42,12 +51,14 @@ Use project skills when the task matches a skill scope.
 - Source skills: `skills/*/SKILL.md`
 - Runtime mirrors: `.agents/skills`, `.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills`, `.opencode/skills`
 - Keep mirrors in sync with `make skills-sync` (check with `make skills-check`).
+- Routing source of truth for skill metadata:
+  - `skills/using-spec-first-superpowers/references/skill-routing-catalog.md`
 
-Message-level process control:
-- Run `using-spec-first-superpowers` as mandatory pre-turn routing (`M0`) on every user message before any response or action.
-- If `M0` classifies intent as `new_feature_or_behavior_change`, run `spec-first-brainstorming` before `Phase 0` spec design.
-- After `spec-first-brainstorming` returns `B0 pass`, hand off to `go-architect-spec` to initialize/continue spec phases.
-- If `M0` returns `route_blocked`, do not proceed with implementation/review actions until unblock conditions are resolved.
+Required control flow:
+- Start every turn with `using-spec-first-superpowers`.
+- If `M0` classifies intent as `new_feature_or_behavior_change`, run `spec-first-brainstorming` before `Phase 0`.
+- After `spec-first-brainstorming` returns `B0 pass`, hand off to `go-architect-spec`.
+- If `M0` returns `route_blocked`, do not proceed with implementation/review actions.
 
 Portable skills notes:
 - `docs/skills/portable-agent-skills.md`

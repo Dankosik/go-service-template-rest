@@ -73,6 +73,7 @@ Skip when:
 3. `docs/spec-first-workflow.md`.
 4. `AGENTS.md`.
 5. Реестр доступных skills (`skills/*` + mirrors).
+6. `skills/using-spec-first-superpowers/references/skill-routing-catalog.md` как source-of-truth для `name`/`description`.
 
 Опциональные входы:
 1. Артефакты `specs/<feature-id>/*`, если задача уже в feature-контуре.
@@ -108,12 +109,13 @@ Skill обязан формировать `Routing Record`:
 2. Классифицировать intent текущего запроса.
 3. Проверить gate-ограничения для этой фазы.
 4. Построить candidate list skills по `phase x intent`.
-5. Применить правило минимальной вероятности применимости (1%-правило).
-6. Назначить `required` skills.
-7. Назначить `optional` skills.
-8. Отсортировать execution order по приоритетам.
-9. Сформировать `Routing Record`.
-10. Разрешить действие (`route_pass` / `route_lightweight`) или заблокировать (`route_blocked`).
+5. Построить matching candidates из routing catalog по `name`/`description`.
+6. Применить правило минимальной вероятности применимости (1%-правило).
+7. Назначить `required` skills.
+8. Назначить `optional` skills.
+9. Отсортировать execution order по приоритетам.
+10. Сформировать `Routing Record`.
+11. Разрешить действие (`route_pass` / `route_lightweight`) или заблокировать (`route_blocked`).
 
 ## 9. Определение Фазы И Gate-State
 
