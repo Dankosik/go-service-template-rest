@@ -5,17 +5,14 @@ FROM --platform=$BUILDPLATFORM golang:1.26.0-bookworm@sha256:2a0ba12e11668709878
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN go mod download
 
 COPY . .
 
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build \
       -trimpath \
       -mod=readonly \
