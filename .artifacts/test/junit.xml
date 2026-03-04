@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="216" failures="0" errors="0" time="0.573825">
+	<testsuite tests="0" failures="0" time="0.331000" name="github.com/example/go-service-template-rest/cmd/service" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+	</testsuite>
+	<testsuite tests="55" failures="0" time="0.015000" name="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDeployTelemetryRecorderRecordAdmissionEmitsLogAndMetrics" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDeployTelemetryRecorderRecordRollbackIncludesCorrelation" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDeployTelemetryRecorderRecordConfigDriftLifecycle" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDeployTelemetryRecorderNetworkPolicySignals" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDrainAndShutdownOrdersDrainBeforeShutdown" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDrainAndShutdownIgnoresParentCancellation" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDrainAndShutdownPropagatesShutdownFailure" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestDrainAndShutdownIgnoresContextCanceledError" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestLoadNetworkPolicyFromEnvRequiresExceptionMetadata" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEnforceIngressFailClosedWithoutException" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEnforceIngressAllowsActiveException" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEnforceIngressRejectsExpiredException" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEnforceEgressTargetDeniesPublicHost" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEnforceEgressTargetAllowsPrivateAndAllowlistedHosts" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestNetworkPolicyEmitEgressExceptionStateRejectsExpiredException" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestOverlayPathsFlagSetAndString" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestRunReturnsParseErrorForInvalidFlags" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupLogArgsIncludesTraceIDs" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestServeHTTPRuntimeListenError" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestFailedStageDetails" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestTelemetryInitFailureReason" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeTCPAndDependencyWrappers/empty_address" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestParseLoadOptions/parses_flags" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeWithRetry/single_attempt" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics/shouldRetryPostgresStartup" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestRunDependencyProbe/budget_blocked" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses/postgres_invalid_dsn" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestParseLoadOptions/fails_on_unknown_flag" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestParseLoadOptions" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics/fullJitterDelay_bounded" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics/withStageBudget_clamps_to_parent_deadline" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses/postgres_valid_dsn" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses/redis_empty" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics/ensureRemainingStartupBudget" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics/redisStartupMode" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestRunDependencyProbe/probe_success" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses/redis_trimmed" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestRunDependencyProbe" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeTCPAndDependencyWrappers/tcp_success" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses/mongo_invalid" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics/shouldRetryStartupProbe" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeHelperBasics" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses/mongo_valid" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestStartupProbeAddresses" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeTCPAndDependencyWrappers/redis_wrapper" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeTCPAndDependencyWrappers/mongo_invalid_uri" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeTCPAndDependencyWrappers/sleepWithContext" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeTCPAndDependencyWrappers" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestRecordConfigHelpers" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestPolicyViolationAndRollbackHelpers" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestInitStartupDependenciesAllDisabled" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeWithRetry/retry_then_success" time="0.030000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeWithRetry/ctx_canceled" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/cmd/service/internal/bootstrap" name="TestProbeWithRetry" time="0.030000"></testcase>
+	</testsuite>
+	<testsuite tests="0" failures="0" time="0.343000" name="github.com/example/go-service-template-rest/internal/api" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+	</testsuite>
+	<testsuite tests="3" failures="0" time="0.001000" name="github.com/example/go-service-template-rest/internal/app/health" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/internal/app/health" name="TestServiceReadySuccess" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/app/health" name="TestServiceReadyFail" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/app/health" name="TestServiceReadyDraining" time="0.000000"></testcase>
+	</testsuite>
+	<testsuite tests="1" failures="0" time="0.000000" name="github.com/example/go-service-template-rest/internal/app/ping" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/internal/app/ping" name="TestServicePong" time="0.000000"></testcase>
+	</testsuite>
+	<testsuite tests="60" failures="0" time="0.327000" name="github.com/example/go-service-template-rest/internal/config" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLoadDefaults" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestPrecedenceNamespaceWinsOverFileAndOverlay" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestFlatEnvKeysAreIgnored" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST001PrecedenceDeterministicSnapshotAcrossRepeatedLoads" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestStrictUnknownKeyRejects" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestPermissiveUnknownKeyAllows" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestRequiredIfEnabledPostgresSecretPolicy" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts/postgres_enabled_without_dsn_rejected" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts/postgres_enabled_with_dsn_allowed" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts/mongo_enabled_without_uri_rejected" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts/mongo_enabled_without_database_rejected" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts/mongo_disabled_without_uri_allowed" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts/redis_enabled_with_empty_addr_rejected" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST003RequiredIfEnabledContracts" time="0.020000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestRedisStoreGuardRejectsWithoutAllowFlag" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestRedisStoreGuardRequiresZeroStaleWindow" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestRedisStoreGuardAllowsConfiguredModeForV1GuardPath" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestNonLocalRejectsSymlinkConfig" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST005NonLocalRejectsWorldWritableConfig" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestInvalidDurationParseError" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestTST005MalformedYAMLReturnsParseError" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestConfigFileWithoutEnvironmentHintFailsClosed" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestNonLocalRejectsConfigOutsideAllowedRoots" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestNonLocalDefaultRootsDoNotAllowRepositoryConfigDir" time="0.050000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestNonLocalRejectsSymlinkPathComponents" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestNonLocalRejectsSecretLikeValuesInConfigFile" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLocalRejectsSecretLikeValuesInConfigFile" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseErrorDoesNotLeakRawValue" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestFlatPostgresDSNIsIgnored" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestErrorTypeMapping" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLoadDetailedWithContextCanceled" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLoadDetailedFailedStageReporting/parse_stage" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLoadDetailedFailedStageReporting/validate_stage" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLoadDetailedFailedStageReporting/load_file_stage" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestLoadDetailedFailedStageReporting" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestOTLPExporterValuesFromNamespaceEnv" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestPostgresDurationBounds" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestShutdownTimeoutMustMatchReliabilityBaseline" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestPostgresDSNMustBeParseable" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestRedisEnabledRequiresHostPortAddress" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestMongoURIMustBeParseable" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestMongoDisabledAllowsInvalidURI" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestMongoProbeAddress/mongodb_scheme" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestMongoProbeAddress/mongodb_srv_scheme_defaults_port" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestMongoProbeAddress" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestReadDurationParsesDefaultDurations" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt/supports_mixed_numeric_inputs" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt/rejects_non_integer_floats" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt/rejects_overflow_from_unsigned_values" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt64/supports_mixed_numeric_inputs" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt64/rejects_non_integer_floats" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt64/rejects_overflow_from_unsigned_values" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseInt64" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestParseBool" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestValidateRangeHelpers/int_range_is_inclusive" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestValidateRangeHelpers/int_range_out_of_bounds_returns_ErrValidate" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestValidateRangeHelpers/duration_range_is_inclusive" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestValidateRangeHelpers/duration_range_out_of_bounds_returns_ErrValidate" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/config" name="TestValidateRangeHelpers" time="0.000000"></testcase>
+	</testsuite>
+	<testsuite tests="0" failures="0" time="0.000000" name="github.com/example/go-service-template-rest/internal/domain" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+	</testsuite>
+	<testsuite tests="40" failures="0" time="0.314000" name="github.com/example/go-service-template-rest/internal/infra/http" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractEndpoints/ping" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractEndpoints/health_live" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractEndpoints/health_ready" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractEndpoints/metrics" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractEndpoints" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractReadinessUnavailable" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractWrongHealthcheckPathRejected" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractFallbackServices/ping_fallback" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractFallbackServices/metrics_fallback" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestOpenAPIRuntimeContractFallbackServices" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterEndpoints/ping" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterEndpoints/live" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterEndpoints/ready" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterEndpoints/metrics" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterEndpoints" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy/not_found_uses_problem_envelope" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy/method_not_allowed_uses_problem_envelope_and_allow_header" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy/method_not_allowed_allow_header_includes_trace_when_route_exists" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy/options_for_known_path_returns_no_content_with_allow" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy/cors_preflight_is_explicit_and_fail-closed" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy/options_for_unknown_path_returns_not_found" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterHTTPPolicy" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterAddsRequestIDHeader/generates_request_id_when_header_is_absent" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterAddsRequestIDHeader/echoes_inbound_request_id" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterAddsRequestIDHeader" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterAddsSecurityHeaders" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterRejectsConflictingRequestFraming" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouterRejectsRequestBodyTooLarge" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestAccessLogIncludesCorrelationFields" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestMetricsExposeDurationHistogram" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRootRouterMetricsRouteHasPriorityOverMountedSubrouter/metrics_uses_root_handler" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRootRouterMetricsRouteHasPriorityOverMountedSubrouter/non-conflicting_routes_still_served_by_mounted_subrouter" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRootRouterMetricsRouteHasPriorityOverMountedSubrouter" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestRouteTemplateUsedForOTelSpanName" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestServerShutdownBeforeRun" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestServerServeNilListener" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestServerRunInvalidAddress" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestNewServerAppliesConfig" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/http" name="TestServerRunAndShutdown" time="0.030000"></testcase>
+	</testsuite>
+	<testsuite tests="18" failures="0" time="0.257000" name="github.com/example/go-service-template-rest/internal/infra/postgres" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPingHistoryRepositoryCreateWrapsQueryError" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPoolHelpersWithoutConnection" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPingHistoryRepositoryCreateAndListRecentInTxBeginError" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsEmptyDSN" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPingHistoryRepositoryListRecentErrors" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPingHistoryRepositoryListRecent" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPingHistoryRepositoryCreateRejectsNullCreatedAt" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestPingHistoryRepositoryCreate" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsInvalidOptions/connect_timeout" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsInvalidOptions/healthcheck_timeout" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestShouldKeepReleasedConn/zero_max_idle_closes_released_conn" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsInvalidOptions/max_open_conns" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestShouldKeepReleasedConn/close_when_at_max" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestShouldKeepReleasedConn/keep_when_below_max" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestShouldKeepReleasedConn" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsInvalidOptions/max_idle_conns" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsInvalidOptions/conn_max_lifetime" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/postgres" name="TestNewRejectsInvalidOptions" time="0.000000"></testcase>
+	</testsuite>
+	<testsuite tests="0" failures="0" time="0.358000" name="github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+	</testsuite>
+	<testsuite tests="39" failures="0" time="0.329000" name="github.com/example/go-service-template-rest/internal/infra/telemetry" timestamp="2026-03-04T23:47:49+03:00">
+		<properties>
+			<property name="go.version" value="go1.26.0 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeFieldGroupLabel/http_field" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeFieldGroupLabel/observability_field" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeFieldGroupLabel/redis_group" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeFieldGroupLabel/unknown_group" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeFieldGroupLabel/empty" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeFieldGroupLabel" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeTelemetryFailureReason/setup_error" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeTelemetryFailureReason/deadline_exceeded" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeTelemetryFailureReason/canceled_upper" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeTelemetryFailureReason/unknown" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeTelemetryFailureReason/empty" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestNormalizeTelemetryFailureReason" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestDeployRollbackAndDriftMetrics" time="0.010000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestTelemetryLabelNormalizers" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestPolicyThresholdInputFromRailwayTOML" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestPolicyThresholdInputFromRailwayTOMLRejectsMissingFields" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestPolicyThresholdInputFromRepositoryRailwayToml" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildReleaseReadinessEvidence" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildReleaseReadinessEvidenceDefaults" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildReleaseReadinessEvidenceCapacityDegraded" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildReleaseReadinessEvidenceNumericPolicyBlocked" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler/default_sampler" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler/always_on" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler/always_off" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler/traceidratio" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler/parentbased_traceidratio" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler/unsupported_sampler" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceSampler" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestClampRatio/below_zero" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestClampRatio/above_one" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestClampRatio/valid_range" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestClampRatio" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceExporterOptions/not_configured" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceExporterOptions/configured_endpoint_and_headers" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceExporterOptions/invalid_protocol" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestBuildTraceExporterOptions" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestParseOTLPEndpointOptions" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestParseOTLPHeaders" time="0.000000"></testcase>
+		<testcase classname="github.com/example/go-service-template-rest/internal/infra/telemetry" name="TestExporterOptionTypeCompatibility" time="0.000000"></testcase>
+	</testsuite>
+</testsuites>

@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -17,10 +17,9 @@ type startupBootstrap struct {
 	cfg              config.Config
 	log              *slog.Logger
 	tracer           trace.Tracer
-	bootstrapCtx     context.Context
 	bootstrapSpan    trace.Span
 	networkPolicy    networkPolicy
-	telemetryCleanup func()
+	telemetryCleanup func(context.Context)
 }
 
 func bootstrapRuntime(
@@ -30,13 +29,70 @@ func bootstrapRuntime(
 	deployTelemetry *deployTelemetryRecorder,
 	startupLifecycleStartedAt time.Time,
 ) (result startupBootstrap, err error) {
-	telemetryCleanup := func() {}
+	telemetryCleanup := func(context.Context) {}
 	defer func() {
 		if err != nil {
-			telemetryCleanup()
+			telemetryCleanup(startupCtx)
 		}
 	}()
 
+	cfg, configReport, err := bootstrapConfigStage(
+		startupCtx,
+		loadOptions,
+		metrics,
+		deployTelemetry,
+		startupLifecycleStartedAt,
+	)
+	if err != nil {
+		return startupBootstrap{}, err
+	}
+
+	log := bootstrapLoggerStage(cfg, deployTelemetry)
+	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
+	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
+	spanOwnedByCaller := false
+	defer func() {
+		if !spanOwnedByCaller {
+			bootstrapSpan.End()
+		}
+	}()
+
+	bootstrapReportStage(bootstrapCtx, tracer, log, deployTelemetry, cfg, loadOptions, configReport, telemetryInitErr)
+	netPolicy, err := bootstrapNetworkPolicyStage(
+		bootstrapCtx,
+		bootstrapSpan,
+		metrics,
+		log,
+		deployTelemetry,
+		startupLifecycleStartedAt,
+	)
+	if err != nil {
+		return startupBootstrap{}, err
+	}
+
+	result = startupBootstrap{
+		cfg:              cfg,
+		log:              log,
+		tracer:           tracer,
+		bootstrapSpan:    bootstrapSpan,
+		networkPolicy:    netPolicy,
+		telemetryCleanup: telemetryCleanup,
+	}
+	spanOwnedByCaller = true
+	return result, nil
+}
+
+func startupBootstrapContext(startupCtx context.Context, bootstrapSpan trace.Span) context.Context {
+	return trace.ContextWithSpan(startupCtx, bootstrapSpan)
+}
+
+func bootstrapConfigStage(
+	startupCtx context.Context,
+	loadOptions config.LoadOptions,
+	metrics *telemetry.Metrics,
+	deployTelemetry *deployTelemetryRecorder,
+	startupLifecycleStartedAt time.Time,
+) (config.Config, config.LoadReport, error) {
 	slog.Info(
 		"config_load_started",
 		startupLogArgs(
@@ -69,7 +125,7 @@ func bootstrapRuntime(
 			)...,
 		)
 		recordAdmissionFailureWithRollback(startupCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
-		return startupBootstrap{}, fmt.Errorf("load config (%s): %w", errorType, err)
+		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
 	recordConfigSuccessMetrics(metrics, configReport)
@@ -77,6 +133,10 @@ func bootstrapRuntime(
 		metrics.AddConfigUnknownKeyWarnings(len(configReport.UnknownKeyWarnings))
 	}
 
+	return cfg, configReport, nil
+}
+
+func bootstrapLoggerStage(cfg config.Config, deployTelemetry *deployTelemetryRecorder) *slog.Logger {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.Log.Level}))
 	log = log.With(
 		"service.name", cfg.Observability.OTel.ServiceName,
@@ -86,7 +146,15 @@ func bootstrapRuntime(
 	slog.SetDefault(log)
 	deployTelemetry.SetLogger(log)
 	deployTelemetry.SetEnvironment(cfg.App.Env)
+	return log
+}
 
+func bootstrapTelemetryStage(
+	startupCtx context.Context,
+	cfg config.Config,
+	metrics *telemetry.Metrics,
+	log *slog.Logger,
+) (func(context.Context), error) {
 	metrics.SetStartupDependencyStatus("telemetry", "optional_fail_open", false)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
@@ -106,55 +174,64 @@ func bootstrapRuntime(
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.SetStartupDependencyStatus("telemetry", "feature_off", false)
-	} else {
-		metrics.SetStartupDependencyStatus("telemetry", "optional_fail_open", true)
-		telemetryCleanup = func() {
-			log.Info(
-				"telemetry_flush_started",
-				startupLogArgs(
-					startupCtx,
-					"shutdown",
-					"telemetry_flush",
-					"started",
-				)...,
-			)
-			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(startupCtx), telemetryShutdownTimeout)
-			defer cancel()
-			if shutdownErr := tracingShutdown(shutdownCtx); shutdownErr != nil {
-				log.Error(
-					"tracing shutdown failed",
-					startupLogArgs(
-						startupCtx,
-						"startup_probes",
-						"telemetry_shutdown",
-						"error",
-						"error.type", "dependency_init",
-						"err", shutdownErr,
-					)...,
-				)
-				return
-			}
-			log.Info(
-				"telemetry_flush_completed",
-				startupLogArgs(
-					startupCtx,
-					"shutdown",
-					"telemetry_flush",
-					"success",
-				)...,
-			)
-		}
+		return func(context.Context) {}, telemetryInitErr
 	}
 
+	metrics.SetStartupDependencyStatus("telemetry", "optional_fail_open", true)
+	return func(shutdownBaseCtx context.Context) {
+		log.Info(
+			"telemetry_flush_started",
+			startupLogArgs(
+				shutdownBaseCtx,
+				"shutdown",
+				"telemetry_flush",
+				"started",
+			)...,
+		)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(shutdownBaseCtx), telemetryShutdownTimeout)
+		defer cancel()
+		if shutdownErr := tracingShutdown(shutdownCtx); shutdownErr != nil {
+			log.Error(
+				"tracing shutdown failed",
+				startupLogArgs(
+					shutdownBaseCtx,
+					"startup_probes",
+					"telemetry_shutdown",
+					"error",
+					"error.type", "dependency_init",
+					"err", shutdownErr,
+				)...,
+			)
+			return
+		}
+		log.Info(
+			"telemetry_flush_completed",
+			startupLogArgs(
+				shutdownBaseCtx,
+				"shutdown",
+				"telemetry_flush",
+				"success",
+			)...,
+		)
+	}, nil
+}
+
+func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Context, trace.Span) {
 	tracer := otel.Tracer("service.startup")
 	bootstrapCtx, bootstrapSpan := tracer.Start(startupCtx, "config.bootstrap")
-	spanOwnedByCaller := false
-	defer func() {
-		if !spanOwnedByCaller {
-			bootstrapSpan.End()
-		}
-	}()
+	return tracer, bootstrapCtx, bootstrapSpan
+}
 
+func bootstrapReportStage(
+	bootstrapCtx context.Context,
+	tracer trace.Tracer,
+	log *slog.Logger,
+	deployTelemetry *deployTelemetryRecorder,
+	cfg config.Config,
+	loadOptions config.LoadOptions,
+	configReport config.LoadReport,
+	telemetryInitErr error,
+) {
 	recordConfigStageSpan(tracer, bootstrapCtx, config.StageLoadDefaults, configReport.LoadDefaultsDuration, "success", "")
 	recordConfigStageSpan(tracer, bootstrapCtx, config.StageLoadFile, configReport.LoadFileDuration, "success", "")
 	recordConfigStageSpan(tracer, bootstrapCtx, config.StageLoadEnv, configReport.LoadEnvDuration, "success", "")
@@ -224,7 +301,16 @@ func bootstrapRuntime(
 			"mongo.enabled", cfg.Mongo.Enabled,
 		)...,
 	)
+}
 
+func bootstrapNetworkPolicyStage(
+	bootstrapCtx context.Context,
+	bootstrapSpan trace.Span,
+	metrics *telemetry.Metrics,
+	log *slog.Logger,
+	deployTelemetry *deployTelemetryRecorder,
+	startupLifecycleStartedAt time.Time,
+) (networkPolicy, error) {
 	netPolicy, netPolicyErr := loadNetworkPolicyFromEnv()
 	if netPolicyErr != nil {
 		policyClass, reasonClass := networkPolicyErrorLabels(netPolicyErr)
@@ -233,7 +319,7 @@ func bootstrapRuntime(
 		} else {
 			deployTelemetry.RecordNetworkIngressPolicyViolation(bootstrapCtx, reasonClass, "deny")
 		}
-		return startupBootstrap{}, rejectStartupForPolicyViolation(
+		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
@@ -246,7 +332,7 @@ func bootstrapRuntime(
 	}
 
 	if ingressErr := netPolicy.EnforceIngress(bootstrapCtx, deployTelemetry); ingressErr != nil {
-		return startupBootstrap{}, rejectStartupForPolicyViolation(
+		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
@@ -259,7 +345,7 @@ func bootstrapRuntime(
 	}
 
 	if egressErr := netPolicy.EmitEgressExceptionState(bootstrapCtx, deployTelemetry); egressErr != nil {
-		return startupBootstrap{}, rejectStartupForPolicyViolation(
+		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
@@ -271,15 +357,5 @@ func bootstrapRuntime(
 		)
 	}
 
-	result = startupBootstrap{
-		cfg:              cfg,
-		log:              log,
-		tracer:           tracer,
-		bootstrapCtx:     bootstrapCtx,
-		bootstrapSpan:    bootstrapSpan,
-		networkPolicy:    netPolicy,
-		telemetryCleanup: telemetryCleanup,
-	}
-	spanOwnedByCaller = true
-	return result, nil
+	return netPolicy, nil
 }
