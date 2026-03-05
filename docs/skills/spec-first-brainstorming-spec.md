@@ -14,7 +14,7 @@
 ## 2. Позиция В Workflow
 
 Место skill в цепочке:
-1. `M0` routing (`using-spec-first-superpowers`) определяет intent `new_feature_or_behavior_change`.
+1. Агент определяет intent `new_feature_or_behavior_change`.
 2. Запускается `spec-first-brainstorming`.
 3. После успешного `B0` handoff в `go-architect-spec` и старт `Phase 0`.
 
@@ -193,6 +193,5 @@ description: "Structure and de-risk feature requests before spec design in this 
 2. Синхронизировать mirrors:
    - `make skills-sync`
    - `make skills-check`
-3. Добавить routing reference в process-skill `using-spec-first-superpowers`.
-4. После этого обновить `docs/spec-first-workflow.md`:
+3. После этого обновить `docs/spec-first-workflow.md`:
    - добавить `Phase -1` и `Gate B0`.
