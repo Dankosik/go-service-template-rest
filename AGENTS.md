@@ -39,11 +39,14 @@ For any feature size, if you need spec-first planning, use the same universal wo
 - `docs/spec-first-workflow.md`
 
 Spec-first guardrails in this repository:
-- Prefer one spec artifact: `specs/<feature-id>/spec.md`.
+- Keep `specs/<feature-id>/spec.md` as the canonical decisions artifact.
+- For long/ambiguous work, use `specs/<feature-id>/research/*.md` to preserve validated research context (flexible format, no universal template).
 - Add extra spec files only when readability requires it.
 - Avoid multi-file template expansion by default.
 - Keep decision text single-source (no cross-file duplication).
 - Treat legacy multi-file spec packages as historical, not mandatory templates for new work.
+- Keep a distinct implementation planning step before coding.
+- In main flow, planning may use `go-coder-plan-spec`; code changes may use `go-coder` only at implementation step.
 
 ## 4) Engineering Defaults
 

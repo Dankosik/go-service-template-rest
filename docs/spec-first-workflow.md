@@ -13,14 +13,16 @@ No tiering, no mandatory phase matrix, no mandatory file fan-out.
 
 ## 2. Core Rules
 
-1. One core artifact first: `specs/<feature-id>/spec.md`.
-2. Keep process smaller than the change. Add structure only when it removes real risk.
-3. Avoid duplicate text across artifacts. A decision is written once and referenced.
-4. No mandatory "N files" policy. Create extra files only when one file stops being readable.
-5. No mandatory "at least two options" for every decision. Use option comparison only for irreversible or high-cost choices.
-6. No mandatory status boilerplate (`updated/no changes required`) per domain file.
-7. Code and spec stay in sync continuously; do not postpone drift cleanup.
-8. Any readiness claim must include fresh command evidence.
+1. One canonical decision artifact: `specs/<feature-id>/spec.md`.
+2. For long/ambiguous work, validated research may be stored in separate `research/*.md` files.
+3. `spec.md` contains final decisions; research files contain evidence and exploration history.
+4. Keep process smaller than the change. Add structure only when it removes real risk.
+5. Avoid duplicate text across artifacts. A decision is written once and referenced.
+6. No mandatory "N files" policy. Create extra files only when readability or reuse requires it.
+7. No mandatory "at least two options" for every decision. Use option comparison only for irreversible or high-cost choices.
+8. No mandatory status boilerplate (`updated/no changes required`) per domain file.
+9. Code and spec stay in sync continuously; do not postpone drift cleanup.
+10. Any readiness claim must include fresh command evidence.
 
 ## 3. Default Artifact Layout
 
@@ -35,10 +37,14 @@ Optional only when needed:
 
 ```text
 specs/<feature-id>/
+  research/
+    <topic>.md   # validated research memory; format is flexible
   plan.md        # when execution steps are too large for one section in spec.md
   test-plan.md   # when test strategy is large enough to hide in spec.md
 ```
 
+Research files may be created before final decision text is written in `spec.md`.
+There is no universal mandatory template for `research/*.md`.
 Do not create optional files preemptively.
 
 ## 4. Canonical `spec.md` Structure
@@ -79,14 +85,19 @@ For a small feature each section can be 1-3 bullets. For a large feature the sam
 
 ## 5. Single Universal Loop
 
-1. Clarify request and write a minimal `spec.md` draft.
-2. Resolve only critical unknowns.
-3. Add decisions directly in `Decisions`.
-4. Implement in small slices.
-5. Run minimal useful validation after each meaningful slice.
-6. Update `Outcome` and close resolved open questions.
+1. Clarify request and create the feature folder.
+2. Resolve critical unknowns; persist validated research into `research/*.md` when needed.
+3. Add final decisions in `spec.md` `Decisions`, linking to relevant research files when useful.
+4. Convert decisions into an explicit `Implementation Plan` (in `spec.md` or `plan.md`).
+5. Implement in small slices.
+6. Run minimal useful validation after each meaningful slice.
+7. Update `Outcome` and close resolved open questions.
 
 No extra phase machinery is required.
+
+In agent-centric execution:
+- planning is owned by the orchestrator in the main flow (optionally via planning skill, e.g. `go-coder-plan-spec`);
+- coding starts after planning and may use implementation skill (e.g. `go-coder`).
 
 ## 6. Scaling Rule (Without Tiering)
 
@@ -105,9 +116,11 @@ Split from `spec.md` only if at least one is true:
 1. Implementation steps become hard to review in a single section.
 2. Test obligations become too long/noisy for the `Validation` section.
 3. Multiple contributors need independent parallel workstreams.
+4. Research volume is high enough that decision-quality evidence should be preserved separately from `spec.md`.
 
 When split happens:
 - keep `spec.md` as source of truth,
+- keep research history in `research/*.md` and final decisions in `spec.md`,
 - keep only links/summaries in extra files,
 - do not duplicate full decision text.
 
