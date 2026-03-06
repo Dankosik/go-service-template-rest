@@ -145,6 +145,7 @@ Bootstrap shortcuts:
   - Runs: `bash ./scripts/dev/docker-tooling.sh pull-images`
   - Purpose: pre-pull Docker images used by zero-setup commands.
   - Image references are sourced from `build/docker/tooling-images.Dockerfile`.
+  - Go toolchain rule: keep the Go patch line in `go.mod`, `build/docker/Dockerfile`, and `build/docker/tooling-images.Dockerfile` aligned so native CI and Docker-based flows resolve the same minimum toolchain.
 
 ### Dependency and module maintenance
 
@@ -429,6 +430,7 @@ Bootstrap shortcuts:
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
   - Exception: isolated updates to `build/docker/tooling-images.Dockerfile` are ignored by docs-drift policy.
+  - If `build/docker/Dockerfile` changes, update docs in the same change set because the canonical container build path is CI-sensitive and reviewable by policy.
 
 - `make migration-validate [MIGRATION_DSN=<postgres_dsn>]`
   - Behavior:
