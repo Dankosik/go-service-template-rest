@@ -72,22 +72,23 @@ This repository distinguishes between two different things:
 - **Skills** are portable workflow playbooks loaded on demand by the orchestrator or a subagent.
 
 The repository ships with project-scoped, read-only subagents for focused reasoning and review.
+Click an agent name to open its project-scoped instruction file in `.claude/agents`.
 
 | Agent | Owns | Use when | Returns |
 |---|---|---|---|
-| `architecture-agent` | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
-| `api-agent` | client-visible contract behavior and transport semantics | endpoints, statuses, errors, idempotency, or async acknowledgment change | contract recommendation, compatibility notes |
-| `concurrency-agent` | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
-| `data-agent` | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
-| `delivery-agent` | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
-| `design-integrator-agent` | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
-| `distributed-agent` | cross-service consistency, outbox/inbox, replay, reconciliation | the workflow crosses service boundaries or depends on eventual consistency | flow model, recovery stance |
-| `domain-agent` | business invariants, state transitions, acceptance semantics | behavior changes touch lifecycle, rules, duplicates, or forbidden paths | invariant set, corner cases, handoffs |
-| `performance-agent` | performance budgets, bottleneck hypotheses, proof strategy | the change is hot-path sensitive or justified mainly by speed | performance stance, proof obligations |
-| `qa-agent` | test obligations, proving levels, validation readiness | a non-trivial behavior change needs a real regression plan | scenario matrix, validation strategy |
-| `quality-agent` | idiomatic Go review and simplification | the diff feels noisy, over-abstracted, or hard to maintain | maintainability findings, cleanup guidance |
-| `reliability-agent` | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
-| `security-agent` | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
+| [`architecture-agent`](.claude/agents/architecture-agent.md) | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
+| [`api-agent`](.claude/agents/api-agent.md) | client-visible contract behavior and transport semantics | endpoints, statuses, errors, idempotency, or async acknowledgment change | contract recommendation, compatibility notes |
+| [`concurrency-agent`](.claude/agents/concurrency-agent.md) | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
+| [`data-agent`](.claude/agents/data-agent.md) | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
+| [`delivery-agent`](.claude/agents/delivery-agent.md) | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
+| [`design-integrator-agent`](.claude/agents/design-integrator-agent.md) | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
+| [`distributed-agent`](.claude/agents/distributed-agent.md) | cross-service consistency, outbox/inbox, replay, reconciliation | the workflow crosses service boundaries or depends on eventual consistency | flow model, recovery stance |
+| [`domain-agent`](.claude/agents/domain-agent.md) | business invariants, state transitions, acceptance semantics | behavior changes touch lifecycle, rules, duplicates, or forbidden paths | invariant set, corner cases, handoffs |
+| [`performance-agent`](.claude/agents/performance-agent.md) | performance budgets, bottleneck hypotheses, proof strategy | the change is hot-path sensitive or justified mainly by speed | performance stance, proof obligations |
+| [`qa-agent`](.claude/agents/qa-agent.md) | test obligations, proving levels, validation readiness | a non-trivial behavior change needs a real regression plan | scenario matrix, validation strategy |
+| [`quality-agent`](.claude/agents/quality-agent.md) | idiomatic Go review and simplification | the diff feels noisy, over-abstracted, or hard to maintain | maintainability findings, cleanup guidance |
+| [`reliability-agent`](.claude/agents/reliability-agent.md) | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
+| [`security-agent`](.claude/agents/security-agent.md) | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
 
 All of these agents stay advisory and read-only. Final decisions always stay with the orchestrator in the main flow.
 
@@ -122,57 +123,58 @@ claude -p --agent qa-agent -- "List the minimum regression obligations for chang
 ## Skill Library
 
 `skills/` is the canonical repository skill set. These skills are procedural building blocks, not autonomous owners of the workflow.
+Click a skill name to open its mirrored instruction file in `.agents/skills`.
 
 ### Framing, Planning, Implementation, And Verification
 
 | Skill | What it does | Load when |
 |---|---|---|
-| `spec-first-brainstorming` | turns a raw request into scope, constraints, assumptions, and design-readiness | the task is still fuzzy and needs framing before design |
-| `go-coder-plan-spec` | turns approved decisions into atomic coding steps, checkpoints, and evidence expectations | planning is complete enough to prepare implementation, but coding has not started |
-| `go-coder` | implements approved Go changes without semantic drift | the implementation plan is explicit and code work is next |
-| `go-qa-tester` | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
-| `go-systematic-debugging` | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
-| `go-verification-before-completion` | maps completion claims to fresh command evidence | you are about to say “fixed”, “ready”, or “done” |
+| [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a raw request into scope, constraints, assumptions, and design-readiness | the task is still fuzzy and needs framing before design |
+| [`go-coder-plan-spec`](.agents/skills/go-coder-plan-spec/SKILL.md) | turns approved decisions into atomic coding steps, checkpoints, and evidence expectations | planning is complete enough to prepare implementation, but coding has not started |
+| [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift | the implementation plan is explicit and code work is next |
+| [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
+| [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
+| [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence | you are about to say “fixed”, “ready”, or “done” |
 
 ### System Design And Control Surfaces
 
 | Skill | Focus | Load when |
 |---|---|---|
-| `go-architect-spec` | service boundaries, ownership, sync vs async interaction style | system shape or module ownership may change |
-| `go-design-spec` | integrated pre-coding design pass across domains | the draft design feels contradictory, layered, or overly complex |
-| `go-devops-spec` | CI/CD policy, rollout controls, runtime hardening, release trust | delivery or release behavior is part of the change |
-| `go-observability-engineer-spec` | logs, metrics, traces, correlation, telemetry cost | observability behavior needs an explicit contract |
-| `go-performance-spec` | latency, throughput, contention, benchmark strategy | performance budgets or hot paths drive the design |
-| `go-reliability-spec` | timeouts, retries, degradation, lifecycle behavior | failure handling or operational resilience changes |
-| `go-security-spec` | trust boundaries, auth, tenant isolation, abuse resistance | the change touches security-critical surfaces |
-| `go-qa-tester-spec` | test levels, scenario coverage, proof strategy | you need an explicit verification plan before coding |
+| [`go-architect-spec`](.agents/skills/go-architect-spec/SKILL.md) | service boundaries, ownership, sync vs async interaction style | system shape or module ownership may change |
+| [`go-design-spec`](.agents/skills/go-design-spec/SKILL.md) | integrated pre-coding design pass across domains | the draft design feels contradictory, layered, or overly complex |
+| [`go-devops-spec`](.agents/skills/go-devops-spec/SKILL.md) | CI/CD policy, rollout controls, runtime hardening, release trust | delivery or release behavior is part of the change |
+| [`go-observability-engineer-spec`](.agents/skills/go-observability-engineer-spec/SKILL.md) | logs, metrics, traces, correlation, telemetry cost | observability behavior needs an explicit contract |
+| [`go-performance-spec`](.agents/skills/go-performance-spec/SKILL.md) | latency, throughput, contention, benchmark strategy | performance budgets or hot paths drive the design |
+| [`go-reliability-spec`](.agents/skills/go-reliability-spec/SKILL.md) | timeouts, retries, degradation, lifecycle behavior | failure handling or operational resilience changes |
+| [`go-security-spec`](.agents/skills/go-security-spec/SKILL.md) | trust boundaries, auth, tenant isolation, abuse resistance | the change touches security-critical surfaces |
+| [`go-qa-tester-spec`](.agents/skills/go-qa-tester-spec/SKILL.md) | test levels, scenario coverage, proof strategy | you need an explicit verification plan before coding |
 
 ### API, Routing, Domain, Data, And Distributed Semantics
 
 | Skill | Focus | Load when |
 |---|---|---|
-| `api-contract-designer-spec` | resources, methods, statuses, errors, idempotency, async contracts | client-visible API behavior is changing |
-| `go-chi-spec` | chi router topology, middleware ordering, fallback and CORS semantics | routing shape or HTTP middleware policy changes |
-| `go-data-architect-spec` | source of truth, schema ownership, migration and rollback shape | schema or persistence model changes |
-| `go-db-cache-spec` | query discipline, transaction rules, cache strategy and staleness | runtime DB or cache behavior needs an explicit contract |
-| `go-domain-invariant-spec` | business invariants, state transitions, acceptance rules | lifecycle or core domain behavior changes |
-| `go-distributed-architect-spec` | saga shape, outbox/inbox, replay safety, reconciliation | a flow crosses service boundaries or depends on eventual consistency |
+| [`api-contract-designer-spec`](.agents/skills/api-contract-designer-spec/SKILL.md) | resources, methods, statuses, errors, idempotency, async contracts | client-visible API behavior is changing |
+| [`go-chi-spec`](.agents/skills/go-chi-spec/SKILL.md) | chi router topology, middleware ordering, fallback and CORS semantics | routing shape or HTTP middleware policy changes |
+| [`go-data-architect-spec`](.agents/skills/go-data-architect-spec/SKILL.md) | source of truth, schema ownership, migration and rollback shape | schema or persistence model changes |
+| [`go-db-cache-spec`](.agents/skills/go-db-cache-spec/SKILL.md) | query discipline, transaction rules, cache strategy and staleness | runtime DB or cache behavior needs an explicit contract |
+| [`go-domain-invariant-spec`](.agents/skills/go-domain-invariant-spec/SKILL.md) | business invariants, state transitions, acceptance rules | lifecycle or core domain behavior changes |
+| [`go-distributed-architect-spec`](.agents/skills/go-distributed-architect-spec/SKILL.md) | saga shape, outbox/inbox, replay safety, reconciliation | a flow crosses service boundaries or depends on eventual consistency |
 
 ### Review Skills
 
 | Skill | Focus | Load when |
 |---|---|---|
-| `go-design-review` | architecture alignment, boundary integrity, accidental complexity | a diff may hide broader design drift |
-| `go-chi-review` | router ownership, middleware order, HTTP fallback semantics | chi routing or transport behavior changed |
-| `go-db-cache-review` | SQL safety, transaction scope, cache correctness, fallback risk | DB or cache code changed |
-| `go-domain-invariant-review` | business-invariant preservation and side-effect safety | behavior changes carry semantic risk |
-| `go-idiomatic-review` | idiomatic Go, error handling, context flow, naming | you want merge-risk review on Go code quality |
-| `go-language-simplifier-review` | lower cognitive complexity and cleaner control flow | the code works but feels noisy or over-abstracted |
-| `go-concurrency-review` | goroutines, channels, cancellation, shutdown safety | concurrent behavior changed or races are suspected |
-| `go-performance-review` | hot-path regression, allocation and contention risk | performance is a review concern |
-| `go-qa-review` | coverage quality, assertion strength, determinism | review depends on test quality and proof strength |
-| `go-reliability-review` | retries, backpressure, startup, shutdown, degraded mode | failure-path behavior changed |
-| `go-security-review` | authz, isolation, injection/SSRF, secret handling | changed paths accept untrusted input or cross trust boundaries |
+| [`go-design-review`](.agents/skills/go-design-review/SKILL.md) | architecture alignment, boundary integrity, accidental complexity | a diff may hide broader design drift |
+| [`go-chi-review`](.agents/skills/go-chi-review/SKILL.md) | router ownership, middleware order, HTTP fallback semantics | chi routing or transport behavior changed |
+| [`go-db-cache-review`](.agents/skills/go-db-cache-review/SKILL.md) | SQL safety, transaction scope, cache correctness, fallback risk | DB or cache code changed |
+| [`go-domain-invariant-review`](.agents/skills/go-domain-invariant-review/SKILL.md) | business-invariant preservation and side-effect safety | behavior changes carry semantic risk |
+| [`go-idiomatic-review`](.agents/skills/go-idiomatic-review/SKILL.md) | idiomatic Go, error handling, context flow, naming | you want merge-risk review on Go code quality |
+| [`go-language-simplifier-review`](.agents/skills/go-language-simplifier-review/SKILL.md) | lower cognitive complexity and cleaner control flow | the code works but feels noisy or over-abstracted |
+| [`go-concurrency-review`](.agents/skills/go-concurrency-review/SKILL.md) | goroutines, channels, cancellation, shutdown safety | concurrent behavior changed or races are suspected |
+| [`go-performance-review`](.agents/skills/go-performance-review/SKILL.md) | hot-path regression, allocation and contention risk | performance is a review concern |
+| [`go-qa-review`](.agents/skills/go-qa-review/SKILL.md) | coverage quality, assertion strength, determinism | review depends on test quality and proof strength |
+| [`go-reliability-review`](.agents/skills/go-reliability-review/SKILL.md) | retries, backpressure, startup, shutdown, degraded mode | failure-path behavior changed |
+| [`go-security-review`](.agents/skills/go-security-review/SKILL.md) | authz, isolation, injection/SSRF, secret handling | changed paths accept untrusted input or cross trust boundaries |
 
 ### Skill Mirrors Across Runtimes
 
