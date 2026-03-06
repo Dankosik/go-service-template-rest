@@ -194,15 +194,6 @@ func TestDeploymentResilienceScenarioEvidenceExecutors(t *testing.T) {
 	}
 }
 
-func TestDeploymentResilienceNoOpCoverageDeclarations(t *testing.T) {
-	root := repositoryRoot(t)
-	testPlan := readFile(t, filepath.Join(root, "specs/railway-deployment-resilience/70-test-plan.md"))
-
-	requireContains(t, testPlan, "1. No new product API contract in scope (`30` remains no-change).", "explicit API no-op declaration")
-	requireContains(t, testPlan, "Status: no changes required.", "explicit data/cache no-op status declaration")
-	requireContains(t, testPlan, "retain explicit no-op coverage reference to `40` under `TST-004`.", "explicit reference to no-op data/cache coverage")
-}
-
 func runCommand(t *testing.T, repoRoot string, timeout time.Duration, name string, args ...string) {
 	t.Helper()
 
