@@ -58,7 +58,7 @@ func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {
 		},
 	}
 
-	if err := drainAndShutdown(context.Background(), 30*time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(context.Background(), 0, 30*time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 
@@ -83,7 +83,7 @@ func TestDrainAndShutdownIgnoresParentCancellation(t *testing.T) {
 		},
 	}
 
-	if err := drainAndShutdown(ctx, time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(ctx, 0, time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }
@@ -98,7 +98,7 @@ func TestDrainAndShutdownPropagatesShutdownFailure(t *testing.T) {
 		err:    wantErr,
 	}
 
-	err := drainAndShutdown(context.Background(), time.Second, drainer, srv)
+	err := drainAndShutdown(context.Background(), 0, time.Second, drainer, srv)
 	if err == nil {
 		t.Fatal("drainAndShutdown() error = nil, want non-nil")
 	}
@@ -115,7 +115,53 @@ func TestDrainAndShutdownIgnoresContextCanceledError(t *testing.T) {
 		err:    context.Canceled,
 	}
 
-	if err := drainAndShutdown(context.Background(), time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(context.Background(), 0, time.Second, drainer, srv); err != nil {
+		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
+	}
+}
+
+func TestDrainAndShutdownWaitsForPropagationDelay(t *testing.T) {
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+	startedAt := time.Now()
+
+	srv := &fakeShutdownServer{
+		events: &events,
+		onCalled: func(context.Context) error {
+			if elapsed := time.Since(startedAt); elapsed < 20*time.Millisecond {
+				t.Fatalf("shutdown called too early: %s", elapsed)
+			}
+			return nil
+		},
+	}
+
+	if err := drainAndShutdown(context.Background(), 20*time.Millisecond, time.Second, drainer, srv); err != nil {
+		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
+	}
+}
+
+func TestDrainAndShutdownWaitsForPropagationDelayDespiteCanceledParent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+	startedAt := time.Now()
+
+	srv := &fakeShutdownServer{
+		events: &events,
+		onCalled: func(ctx context.Context) error {
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("shutdown context err = %v, want nil", err)
+			}
+			if elapsed := time.Since(startedAt); elapsed < 20*time.Millisecond {
+				t.Fatalf("shutdown called too early: %s", elapsed)
+			}
+			return nil
+		},
+	}
+
+	if err := drainAndShutdown(ctx, 20*time.Millisecond, time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }

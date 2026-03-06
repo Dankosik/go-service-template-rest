@@ -134,7 +134,9 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"}`) {
 		t.Fatalf("metrics output missing rejected startup outcome:\n%s", metricsText)
 	}
+	if strings.Contains(metricsText, `rollback_execution_total`) {
+		t.Fatalf("metrics output unexpectedly contains rollback execution telemetry:\n%s", metricsText)
+	}
 
-	recordAdmissionFailureWithRollback(context.Background(), nil, "x", "y", time.Now())
-	recordRollbackFailure(context.Background(), nil, "x", time.Now())
+	recordAdmissionFailure(context.Background(), nil, "x", "y", time.Now())
 }

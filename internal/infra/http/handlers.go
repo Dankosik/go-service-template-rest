@@ -14,14 +14,18 @@ import (
 )
 
 type Handlers struct {
-	Health *health.Service
-	Ping   *ping.Service
+	Health         *health.Service
+	Ping           *ping.Service
+	BeforeReady    func(context.Context) error
+	OnReadySuccess func(context.Context) error
 }
 
 type strictHandlers struct {
-	health  *health.Service
-	ping    *ping.Service
-	metrics *telemetry.Metrics
+	health         *health.Service
+	ping           *ping.Service
+	metrics        *telemetry.Metrics
+	beforeReady    func(context.Context) error
+	onReadySuccess func(context.Context) error
 }
 
 const readinessTimeout = 2 * time.Second
@@ -40,9 +44,11 @@ func newStrictHandlers(h Handlers, metrics *telemetry.Metrics) strictHandlers {
 	}
 
 	return strictHandlers{
-		health:  h.Health,
-		ping:    h.Ping,
-		metrics: metrics,
+		health:         h.Health,
+		ping:           h.Ping,
+		metrics:        metrics,
+		beforeReady:    h.BeforeReady,
+		onReadySuccess: h.OnReadySuccess,
 	}
 }
 
@@ -58,8 +64,18 @@ func (h strictHandlers) HealthReady(ctx context.Context, _ api.HealthReadyReques
 	readyCtx, cancel := context.WithTimeout(ctx, readinessTimeout)
 	defer cancel()
 
+	if h.beforeReady != nil {
+		if err := h.beforeReady(readyCtx); err != nil {
+			return api.HealthReady503TextResponse("not ready"), nil
+		}
+	}
 	if err := h.health.Ready(readyCtx); err != nil {
 		return api.HealthReady503TextResponse("not ready"), nil
+	}
+	if h.onReadySuccess != nil {
+		if err := h.onReadySuccess(readyCtx); err != nil {
+			return api.HealthReady503TextResponse("not ready"), nil
+		}
 	}
 
 	return api.HealthReady200TextResponse("ok"), nil

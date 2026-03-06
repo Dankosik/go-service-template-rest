@@ -71,6 +71,32 @@ func TestDeployTelemetryRecorderRecordAdmissionEmitsLogAndMetrics(t *testing.T) 
 	assertSpanStringAttribute(t, admissionSpan, "commit_sha", "abc123")
 }
 
+func TestDeployTelemetryRecorderRecordAdmissionAllowsSuccessAfterFailure(t *testing.T) {
+	recorder, metrics, logBuffer := newBufferedDeployTelemetryRecorder("production")
+
+	recorder.RecordAdmission(context.Background(), "failure", "startup_error", "startup")
+	recorder.RecordAdmission(context.Background(), "success", "ready", "readiness")
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `deploy_health_admission_total{environment="production",reason_class="startup_error",result="failure"} 1`) {
+		t.Fatalf("metrics output does not contain failure admission:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `deploy_health_admission_total{environment="production",reason_class="ready",result="success"} 1`) {
+		t.Fatalf("metrics output does not contain success admission after failure:\n%s", metricsText)
+	}
+
+	entries := parseJSONLogEntries(t, logBuffer)
+	if len(entries) != 2 {
+		t.Fatalf("log entries len = %d, want %d", len(entries), 2)
+	}
+	if got := jsonFieldString(entries[0], "result"); got != "failure" {
+		t.Fatalf("first result = %q, want %q", got, "failure")
+	}
+	if got := jsonFieldString(entries[1], "result"); got != "success" {
+		t.Fatalf("second result = %q, want %q", got, "success")
+	}
+}
+
 func TestDeployTelemetryRecorderRecordRollbackIncludesCorrelation(t *testing.T) {
 	spanRecorder := installTestTracerProvider(t)
 

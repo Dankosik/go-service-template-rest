@@ -225,6 +225,7 @@ func parseHostMatchers(raw string, policyClass string) ([]networkHostMatcher, er
 				}
 			}
 			matcher.suffix = normalized
+			matcher.includeApex = true
 		default:
 			matcher.exact = normalized
 		}

@@ -16,7 +16,16 @@ type shutdownServer interface {
 	Shutdown(context.Context) error
 }
 
-func drainAndShutdown(ctx context.Context, timeout time.Duration, drainer startupDrainer, srv shutdownServer) error {
+func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, srv shutdownServer) error {
+	slog.Info(
+		"shutdown_started",
+		startupLogArgs(
+			ctx,
+			"shutdown",
+			"shutdown",
+			"started",
+		)...,
+	)
 	slog.Info(
 		"drain_started",
 		startupLogArgs(
@@ -36,6 +45,11 @@ func drainAndShutdown(ctx context.Context, timeout time.Duration, drainer startu
 			"success",
 		)...,
 	)
+	if propagationDelay > 0 {
+		if err := sleepWithContext(context.WithoutCancel(ctx), propagationDelay); err != nil {
+			return fmt.Errorf("drain propagation wait failed: %w", err)
+		}
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
@@ -93,4 +94,172 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	if !strings.Contains(metricsText, `startup_dependency_status{dep="mongo",mode="disabled"} 1`) {
 		t.Fatalf("missing mongo disabled status:\n%s", metricsText)
 	}
+}
+
+func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
+	runtime := dependencyProbeRuntime{
+		tracer:                    otel.Tracer("test"),
+		bootstrapSpan:             trace.SpanFromContext(context.Background()),
+		metrics:                   metrics,
+		log:                       logger,
+		deployTelemetry:           recorder,
+		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		startupLifecycleStartedAt: time.Now(),
+	}
+
+	t.Run("redis cache", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		runtime.cfg = config.Config{
+			Redis: config.RedisConfig{
+				Enabled: true,
+				Mode:    "cache",
+				Addr:    "127.0.0.1:6379",
+			},
+		}
+		err := initRedisDependency(context.Background(), runtime, ctx)
+		if err == nil {
+			t.Fatal("initRedisDependency() error = nil, want non-nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, context.Canceled)
+		}
+	})
+
+	t.Run("mongo degraded", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		runtime.cfg = config.Config{
+			Mongo: config.MongoConfig{
+				Enabled: true,
+				URI:     "mongodb://127.0.0.1:27017/app",
+			},
+		}
+		err := initMongoDependency(context.Background(), runtime, ctx)
+		if err == nil {
+			t.Fatal("initMongoDependency() error = nil, want non-nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("initMongoDependency() error = %v, want wrapped %v", err, context.Canceled)
+		}
+	})
+}
+
+func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
+	runtime := dependencyProbeRuntime{
+		tracer:                    otel.Tracer("test"),
+		bootstrapSpan:             trace.SpanFromContext(context.Background()),
+		metrics:                   metrics,
+		log:                       logger,
+		deployTelemetry:           recorder,
+		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		startupLifecycleStartedAt: time.Now(),
+	}
+
+	expiredCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	t.Run("redis cache", func(t *testing.T) {
+		runtime.cfg = config.Config{
+			Redis: config.RedisConfig{
+				Enabled: true,
+				Mode:    "cache",
+				Addr:    "127.0.0.1:6379",
+			},
+		}
+		err := initRedisDependency(context.Background(), runtime, expiredCtx)
+		if err == nil {
+			t.Fatal("initRedisDependency() error = nil, want non-nil")
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, context.DeadlineExceeded)
+		}
+	})
+
+	t.Run("mongo degraded", func(t *testing.T) {
+		runtime.cfg = config.Config{
+			Mongo: config.MongoConfig{
+				Enabled: true,
+				URI:     "mongodb://127.0.0.1:27017/app",
+			},
+		}
+		err := initMongoDependency(context.Background(), runtime, expiredCtx)
+		if err == nil {
+			t.Fatal("initMongoDependency() error = nil, want non-nil")
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("initMongoDependency() error = %v, want wrapped %v", err, context.DeadlineExceeded)
+		}
+	})
+}
+
+func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
+	runtime := dependencyProbeRuntime{
+		tracer:                    otel.Tracer("test"),
+		bootstrapSpan:             trace.SpanFromContext(context.Background()),
+		metrics:                   metrics,
+		log:                       logger,
+		deployTelemetry:           recorder,
+		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		startupLifecycleStartedAt: time.Now(),
+	}
+
+	lowBudgetCtx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+
+	t.Run("redis cache", func(t *testing.T) {
+		runtime.cfg = config.Config{
+			Redis: config.RedisConfig{
+				Enabled: true,
+				Mode:    "cache",
+				Addr:    "127.0.0.1:6379",
+			},
+		}
+		err := initRedisDependency(context.Background(), runtime, lowBudgetCtx)
+		if err == nil {
+			t.Fatal("initRedisDependency() error = nil, want non-nil")
+		}
+		if !errors.Is(err, config.ErrDependencyInit) {
+			t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+		}
+		if !strings.Contains(err.Error(), "low remaining startup budget") {
+			t.Fatalf("initRedisDependency() error = %v, want low-budget context", err)
+		}
+	})
+
+	t.Run("mongo degraded", func(t *testing.T) {
+		runtime.cfg = config.Config{
+			Mongo: config.MongoConfig{
+				Enabled: true,
+				URI:     "mongodb://127.0.0.1:27017/app",
+			},
+		}
+		err := initMongoDependency(context.Background(), runtime, lowBudgetCtx)
+		if err == nil {
+			t.Fatal("initMongoDependency() error = nil, want non-nil")
+		}
+		if !errors.Is(err, config.ErrDependencyInit) {
+			t.Fatalf("initMongoDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+		}
+		if !strings.Contains(err.Error(), "low remaining startup budget") {
+			t.Fatalf("initMongoDependency() error = %v, want low-budget context", err)
+		}
+	})
 }

@@ -158,6 +158,27 @@ func TestNetworkPolicyEnforceEgressTargetAllowsPrivateAndAllowlistedHosts(t *tes
 	if allowlistedSuffixErr != nil {
 		t.Fatalf("EnforceEgressTarget(allowlisted suffix) error = %v, want nil", allowlistedSuffixErr)
 	}
+	allowlistedApexErr := policy.EnforceEgressTarget(context.Background(), recorder, "allowed.example:443", "tcp")
+	if allowlistedApexErr == nil {
+		t.Fatal("EnforceEgressTarget(wildcard apex) error = nil, want non-nil")
+	}
+}
+
+func TestNetworkPolicyEnforceEgressTargetLeadingDotMatchesApexAndSubdomain(t *testing.T) {
+	t.Setenv(envNetworkEgressAllowlist, ".allowed.example")
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+
+	recorder, _ := newTestDeployTelemetryRecorder()
+
+	if err := policy.EnforceEgressTarget(context.Background(), recorder, "allowed.example:443", "tcp"); err != nil {
+		t.Fatalf("EnforceEgressTarget(leading-dot apex) error = %v, want nil", err)
+	}
+	if err := policy.EnforceEgressTarget(context.Background(), recorder, "service.allowed.example:443", "tcp"); err != nil {
+		t.Fatalf("EnforceEgressTarget(leading-dot subdomain) error = %v, want nil", err)
+	}
 }
 
 func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing.T) {
@@ -206,6 +227,47 @@ func TestNetworkPolicyEmitEgressExceptionStateRejectsExpiredException(t *testing
 	}
 	if !strings.Contains(metricsText, `reason_class="expired_exception"`) {
 		t.Fatalf("metrics output does not contain expired_exception reason:\n%s", metricsText)
+	}
+}
+
+func TestNetworkPolicyValidateIngressRuntimeRejectsExpiredException(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-expired-runtime")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(-5*time.Minute).Format(time.RFC3339))
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy.now = func() time.Time { return now }
+
+	err = policy.ValidateIngressRuntime()
+	if err == nil {
+		t.Fatal("ValidateIngressRuntime() error = nil, want non-nil")
+	}
+}
+
+func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testing.T) {
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+
+	recorder, metrics := newTestDeployTelemetryRecorder()
+	err = policy.EnforceEgressTarget(context.Background(), recorder, "redis:6379", "tcp")
+	if err == nil {
+		t.Fatal("EnforceEgressTarget(single label) error = nil, want non-nil")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `reason_class="public_target_denied"`) {
+		t.Fatalf("metrics output does not contain public_target_denied reason:\n%s", metricsText)
 	}
 }
 

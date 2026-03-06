@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -65,13 +66,14 @@ func rollbackMetadataFromEnv() rollbackMetadata {
 }
 
 type deployTelemetryRecorder struct {
-	log               *slog.Logger
-	metrics           *telemetry.Metrics
-	environment       string
-	correlation       rolloutCorrelation
-	rollback          rollbackMetadata
-	admissionStarted  time.Time
-	admissionRecorded bool
+	mu                 sync.Mutex
+	log                *slog.Logger
+	metrics            *telemetry.Metrics
+	environment        string
+	correlation        rolloutCorrelation
+	rollback           rollbackMetadata
+	admissionStarted   time.Time
+	admissionSucceeded bool
 }
 
 func newDeployTelemetryRecorder(log *slog.Logger, metrics *telemetry.Metrics, environment string) *deployTelemetryRecorder {
@@ -93,6 +95,8 @@ func (r *deployTelemetryRecorder) SetLogger(log *slog.Logger) {
 	if r == nil || log == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.log = log
 }
 
@@ -100,46 +104,64 @@ func (r *deployTelemetryRecorder) SetEnvironment(environment string) {
 	if r == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.environment = strings.TrimSpace(environment)
 }
 
 func (r *deployTelemetryRecorder) RecordAdmission(ctx context.Context, result, reasonClass, probeType string) {
-	if r == nil || r.admissionRecorded {
+	if r == nil {
 		return
 	}
 
+	normalizedResult := strings.ToLower(strings.TrimSpace(result))
+	normalizedReason := strings.ToLower(strings.TrimSpace(reasonClass))
+	normalizedProbeType := strings.TrimSpace(probeType)
+
+	r.mu.Lock()
+	if r.admissionSucceeded {
+		r.mu.Unlock()
+		return
+	}
+	if normalizedResult == "success" {
+		r.admissionSucceeded = true
+	}
+
 	duration := time.Since(r.admissionStarted)
-	r.metrics.ObserveDeployHealthAdmission(r.environment, result, reasonClass, duration)
-	if strings.ToLower(strings.TrimSpace(result)) != "success" && strings.TrimSpace(probeType) != "" {
-		r.metrics.IncDeployHealthProbeFailure(r.environment, probeType)
+	environment := r.environment
+	log := r.log
+	metrics := r.metrics
+	r.mu.Unlock()
+
+	metrics.ObserveDeployHealthAdmission(environment, normalizedResult, normalizedReason, duration)
+	if normalizedResult != "success" && normalizedProbeType != "" {
+		metrics.IncDeployHealthProbeFailure(environment, normalizedProbeType)
 	}
 
 	tracer := otel.Tracer("service.deploy")
 	_, span := tracer.Start(ctx, "deploy.health.admission")
 	r.setCorrelationSpanAttributes(span)
 	span.SetAttributes(
-		attribute.String("environment", safeEnvironment(r.environment)),
-		attribute.String("result", strings.ToLower(strings.TrimSpace(result))),
-		attribute.String("reason_class", strings.ToLower(strings.TrimSpace(reasonClass))),
+		attribute.String("environment", safeEnvironment(environment)),
+		attribute.String("result", normalizedResult),
+		attribute.String("reason_class", normalizedReason),
 		attribute.Int64("duration_ms", duration.Milliseconds()),
 	)
 	span.End()
 
 	args := []any{
-		"environment", safeEnvironment(r.environment),
-		"result", strings.ToLower(strings.TrimSpace(result)),
-		"reason_class", strings.ToLower(strings.TrimSpace(reasonClass)),
+		"environment", safeEnvironment(environment),
+		"result", normalizedResult,
+		"reason_class", normalizedReason,
 		"duration_ms", duration.Milliseconds(),
 	}
 	args = r.appendCorrelationLogArgs(args)
 
-	if strings.EqualFold(strings.TrimSpace(result), "success") {
-		r.log.Info("deploy_health_check", args...)
+	if normalizedResult == "success" {
+		log.Info("deploy_health_check", args...)
 	} else {
-		r.log.Error("deploy_health_check", args...)
+		log.Error("deploy_health_check", args...)
 	}
-
-	r.admissionRecorded = true
 }
 
 func (r *deployTelemetryRecorder) RecordRollback(ctx context.Context, trigger, result, previousRevision string, duration time.Duration) {

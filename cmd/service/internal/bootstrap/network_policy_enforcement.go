@@ -32,6 +32,19 @@ func (p networkPolicy) EnforceIngress(ctx context.Context, recorder *deployTelem
 	return nil
 }
 
+func (p networkPolicy) ValidateIngressRuntime() error {
+	if !p.ingressPublicEnabled {
+		return nil
+	}
+	if !p.ingressException.Active {
+		return fmt.Errorf("%w: public ingress denied without approved exception", config.ErrDependencyInit)
+	}
+	if p.isExceptionExpired(p.ingressException) {
+		return fmt.Errorf("%w: ingress exception is expired", config.ErrDependencyInit)
+	}
+	return nil
+}
+
 func (p networkPolicy) EmitEgressExceptionState(ctx context.Context, recorder *deployTelemetryRecorder) error {
 	if !p.egressException.Active {
 		recorder.RecordNetworkExceptionStateChange(ctx, "egress", "closed", "deny", p.egressException.ID)
@@ -108,7 +121,7 @@ func matchesHost(host string, matchers []networkHostMatcher) bool {
 		}
 		if matcher.suffix != "" {
 			base := strings.TrimPrefix(matcher.suffix, ".")
-			if normalized == base || strings.HasSuffix(normalized, matcher.suffix) {
+			if (matcher.includeApex && normalized == base) || strings.HasSuffix(normalized, matcher.suffix) {
 				return true
 			}
 		}
@@ -138,9 +151,6 @@ func classifyHostExposure(host string) string {
 	}
 
 	if normalized == "localhost" {
-		return "private"
-	}
-	if !strings.Contains(normalized, ".") {
 		return "private"
 	}
 	if strings.HasSuffix(normalized, ".internal") ||

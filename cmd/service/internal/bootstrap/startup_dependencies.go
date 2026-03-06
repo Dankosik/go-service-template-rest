@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -140,11 +141,11 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 					"dependency", "postgres",
 				)...,
 			)
-			recordAdmissionFailureWithRollback(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres", runtime.startupLifecycleStartedAt)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres", runtime.startupLifecycleStartedAt)
 			return nil, fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, probeResult.err)
 		}
 
-		sanitizedErr := fmt.Errorf("%w: postgres init failed", config.ErrDependencyInit)
+		sanitizedErr := dependencyInitFailure("postgres", probeResult.err)
 		runtime.metrics.SetStartupDependencyStatus("postgres", "critical_fail_closed", false)
 		runtime.metrics.IncConfigValidationFailure("dependency_init")
 		runtime.metrics.IncConfigStartupOutcome("rejected")
@@ -165,7 +166,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 				"dependency", "postgres",
 			)...,
 		)
-		recordAdmissionFailureWithRollback(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres", runtime.startupLifecycleStartedAt)
+		recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres", runtime.startupLifecycleStartedAt)
 		return nil, sanitizedErr
 	}
 
@@ -230,8 +231,32 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		},
 	})
 	if probeResult.failed {
+		if shouldAbortDegradedDependencyStartup(probeResult) {
+			runtime.metrics.IncConfigValidationFailure("dependency_init")
+			runtime.metrics.IncConfigStartupOutcome("rejected")
+			runtime.bootstrapSpan.RecordError(probeResult.err)
+			runtime.bootstrapSpan.SetAttributes(
+				attribute.String("result", "error"),
+				attribute.String("error.type", "dependency_init"),
+				attribute.String("failed.stage", "startup.probe.redis"),
+			)
+			runtime.log.Error(
+				"startup_blocked",
+				startupLogArgs(
+					bootstrapCtx,
+					"startup_probes",
+					"redis_probe",
+					"error",
+					"error.type", "dependency_init",
+					"dependency", "redis",
+					"mode", redisMode,
+				)...,
+			)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis", runtime.startupLifecycleStartedAt)
+			return dependencyInitAbortFailure("redis", probeResult)
+		}
 		if redisMode == "store" {
-			rejectErr := fmt.Errorf("%w: redis init failed", config.ErrDependencyInit)
+			rejectErr := dependencyInitFailure("redis", probeResult.err)
 			runtime.bootstrapSpan.RecordError(rejectErr)
 			runtime.bootstrapSpan.SetAttributes(
 				attribute.String("result", "error"),
@@ -252,7 +277,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", redisMode,
 				)...,
 			)
-			recordAdmissionFailureWithRollback(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis", runtime.startupLifecycleStartedAt)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis", runtime.startupLifecycleStartedAt)
 			return rejectErr
 		}
 
@@ -322,6 +347,30 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		},
 	})
 	if probeResult.failed {
+		if shouldAbortDegradedDependencyStartup(probeResult) {
+			runtime.metrics.IncConfigValidationFailure("dependency_init")
+			runtime.metrics.IncConfigStartupOutcome("rejected")
+			runtime.bootstrapSpan.RecordError(probeResult.err)
+			runtime.bootstrapSpan.SetAttributes(
+				attribute.String("result", "error"),
+				attribute.String("error.type", "dependency_init"),
+				attribute.String("failed.stage", "startup.probe.mongo"),
+			)
+			runtime.log.Error(
+				"startup_blocked",
+				startupLogArgs(
+					bootstrapCtx,
+					"startup_probes",
+					"mongo_probe",
+					"error",
+					"error.type", "dependency_init",
+					"dependency", "mongo",
+					"mode", "degraded_read_only_or_stale",
+				)...,
+			)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "mongo", runtime.startupLifecycleStartedAt)
+			return dependencyInitAbortFailure("mongo", probeResult)
+		}
 		runtime.log.Warn(
 			"startup_dependency_degraded",
 			startupLogArgs(
@@ -364,4 +413,25 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeSpan.End()
 
 	return probeExecutionResult{budgetBlocked: false, failed: err != nil, err: err}
+}
+
+func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {
+	if result.budgetBlocked {
+		return true
+	}
+	return errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded)
+}
+
+func dependencyInitFailure(dep string, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("%w: %s init failed: %w", config.ErrDependencyInit, dep, err)
+	}
+	return fmt.Errorf("%w: %s init failed", config.ErrDependencyInit, dep)
+}
+
+func dependencyInitAbortFailure(dep string, result probeExecutionResult) error {
+	if result.budgetBlocked {
+		return fmt.Errorf("%w: %s init skipped: %w", config.ErrDependencyInit, dep, result.err)
+	}
+	return dependencyInitFailure(dep, result.err)
 }

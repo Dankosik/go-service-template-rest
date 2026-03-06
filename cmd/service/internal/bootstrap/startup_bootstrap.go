@@ -124,7 +124,7 @@ func bootstrapConfigStage(
 				"error.type", errorType,
 			)...,
 		)
-		recordAdmissionFailureWithRollback(startupCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
+		recordAdmissionFailure(startupCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
 		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
@@ -262,11 +262,6 @@ func bootstrapReportStage(
 				"key", key,
 			)...,
 		)
-	}
-	if len(configReport.UnknownKeyWarnings) > 0 {
-		deployTelemetry.RecordConfigDriftDetected(bootstrapCtx, "runtime", "", "startup-config")
-	} else {
-		deployTelemetry.RecordConfigDriftReconciled(bootstrapCtx, "success", "", "startup-config", 0)
 	}
 	if telemetryInitErr != nil {
 		log.Warn(

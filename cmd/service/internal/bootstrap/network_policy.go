@@ -25,8 +25,9 @@ type networkException struct {
 }
 
 type networkHostMatcher struct {
-	exact  string
-	suffix string
+	exact       string
+	suffix      string
+	includeApex bool
 }
 
 type networkPolicyConfigError struct {

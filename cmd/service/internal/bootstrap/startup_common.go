@@ -76,38 +76,22 @@ func rejectStartupForPolicyViolation(
 			"dependency", strings.ToLower(strings.TrimSpace(dependency)),
 		)...,
 	)
-	recordAdmissionFailureWithRollback(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)), startupLifecycleStartedAt)
+	recordAdmissionFailure(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)), startupLifecycleStartedAt)
 	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
 }
 
-func recordAdmissionFailureWithRollback(
+func recordAdmissionFailure(
 	ctx context.Context,
 	deployTelemetry *deployTelemetryRecorder,
 	reasonClass string,
 	probeType string,
-	startedAt time.Time,
+	_ time.Time,
 ) {
 	if deployTelemetry == nil {
 		return
 	}
 
 	deployTelemetry.RecordAdmission(ctx, "failure", reasonClass, probeType)
-	recordRollbackFailure(ctx, deployTelemetry, "admission_failed", startedAt)
-}
-
-func recordRollbackFailure(
-	ctx context.Context,
-	deployTelemetry *deployTelemetryRecorder,
-	trigger string,
-	startedAt time.Time,
-) {
-	if deployTelemetry == nil {
-		return
-	}
-
-	deployTelemetry.RecordRollback(ctx, trigger, "failure", "", time.Since(startedAt))
-	deployTelemetry.RecordRollbackPostcheck("/health/live", "failure")
-	deployTelemetry.RecordRollbackPostcheck("/health/ready", "failure")
 }
 
 func startupLogArgs(ctx context.Context, component, operation, outcome string, extra ...any) []any {
