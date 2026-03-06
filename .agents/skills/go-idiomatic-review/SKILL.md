@@ -1,260 +1,123 @@
 ---
 name: go-idiomatic-review
-description: "Review Go code changes for idiomatic correctness in a spec-first workflow. Use when auditing diffs or pull requests for Go style with correctness impact, error/context handling, package boundary discipline, naming clarity, and toolchain-aligned maintainability. Skip when the task is architecture/spec design, feature implementation, domain/business validation, or specialized performance/security/concurrency review."
+description: "Review Go code changes for idiomatic correctness, error and context handling, boundary discipline, naming clarity, and maintainability with real merge-risk impact."
 ---
 
 # Go Idiomatic Review
 
 ## Purpose
-Deliver domain-scoped code review findings for idiomatic Go quality during Phase 4 review. Success means changed code stays predictable for Go maintainers, correctness-critical language pitfalls are surfaced early, and findings are actionable without domain drift.
+Protect changed Go code from language-level mistakes and non-idiomatic patterns that increase correctness, operability, or maintenance risk.
 
-## Scope And Boundaries
-In scope:
-- review changed Go code for idiomatic correctness with merge-risk impact
-- review control flow, error handling, context propagation, package boundaries, and naming
-- review interface usage, pointer/value semantics, and exported-surface discipline
-- review toolchain compatibility and validation readiness (`gofmt/goimports`, test/vet/lint baselines)
-- provide file-anchored findings with concrete fix direction
-- escalate spec-level mismatch through `Spec Reopen` when required
+## Scope
+- review control flow, error handling, and context propagation
+- review package boundaries, exported surface, and composition-root discipline
+- review interface usage, pointer or value choices, and zero-value friendliness
+- review naming, docs, and public-surface clarity
+- review whether the validation path matches the changed risk surface
 
-Out of scope:
-- redesigning approved architecture during review
-- primary-domain review of business invariants, security, performance, reliability, concurrency, or DB/cache correctness
-- introducing new feature requirements in Phase 4
-- preference-only comments without correctness or maintainability impact
-- editing spec files during code review
+## Boundaries
+Do not:
+- turn idiomatic review into architecture redesign or deep specialist review
+- block on taste-only comments with no correctness or maintainability impact
+- take primary ownership of business rules, DB/cache contracts, concurrency correctness, or security depth
+- confuse “shorter code” with clearer or safer code
 
-## Hard Skills
-### Idiomatic Review Core Instructions
+## Core Defaults
+- Correctness comes before style.
+- Prefer explicit, readable, toolchain-compatible code over clever abstraction.
+- Errors should remain explicit contract values, not logs-only side effects.
+- Request-scoped work should preserve request context and cancellation semantics.
+- Prefer concrete types, minimal exports, and the smallest safe idiomatic correction.
 
-#### Mission
-- Protect merge safety by finding Go-idiomatic defects that can cause correctness, operability, or maintenance regressions.
-- Keep review output aligned with Phase 4 reviewer constraints and Gate G4 readiness criteria.
-- Convert idiomatic risks into minimal, concrete fixes that a Go team can apply without architectural redesign.
+## Expertise
 
-#### Default Posture
-- Review changed and directly impacted paths first; avoid broad cleanup scanning.
-- Prefer explicit, readable, toolchain-compatible code over clever abstractions.
-- Treat ambiguous ownership, hidden control flow, and weak error/context semantics as defects until proven safe.
-- Use concrete Go rules and project conventions, not personal style preference.
-- Keep domain ownership strict; hand off deep non-idiomatic domains to the corresponding reviewer skill.
+### Control Flow And Readability
+- Prefer guard clauses and early returns for the happy path.
+- Flag unnecessary nesting, mixed abstraction levels, and functions with multiple unrelated responsibilities.
+- Prefer explicit behavior over helper indirection that hides what the code actually does.
+- Treat confusing control flow as a maintenance risk when it makes failure behavior hard to follow.
 
-#### Spec-First Review Competency
-- Enforce `docs/spec-first-workflow.md` Phase 4 constraints:
-  - domain-scoped findings only;
-  - exact `file:line` references;
-  - practical fix path;
-  - explicit `Spec Reopen` for spec-intent conflicts.
-- Treat open `critical/high` idiomatic findings as merge blockers for Gate G4.
-- Never change approved spec intent implicitly through review suggestions.
+### Error Handling
+- Require errors to be returned or handled explicitly, not swallowed behind logs.
+- Require operation context in errors when that is needed for diagnosis.
+- Use `%w` when callers need to inspect causes; use `errors.Is` and `errors.As` rather than string matching.
+- Reject panic for normal error handling.
+- Keep error strings lowercase and punctuation-free unless an external contract requires otherwise.
 
-#### Correctness-First Idiomatic Competency
-- Prioritize findings by behavioral risk before style:
-  - contract stability and API behavior changes;
-  - hidden behavior shifts introduced by refactors;
-  - unsafe assumptions around nil/zero/default semantics.
-- Flag code that appears stylistically acceptable but weakens correctness guarantees.
-- Keep recommendations backward-compatible by default unless spec says otherwise.
+### Context Propagation
+- Require `ctx context.Context` first where request scope, cancellation, or deadlines matter.
+- Flag storing contexts in structs or passing nil context.
+- Require `cancel()` on derived contexts.
+- Reject replacing request context with `context.Background()` in request flows.
+- Preserve `context.Canceled` and `context.DeadlineExceeded` semantics.
 
-#### Control Flow And Readability Competency
-- Enforce clear happy path with guard clauses and early returns.
-- Flag unnecessary `else` after `return`, excessive nesting, and mixed abstraction levels that hide failure behavior.
-- Flag functions that combine unrelated responsibilities and become hard to reason about.
-- Prefer explicit control flow over implicit side effects and helper indirection that obscures intent.
+### Package And Boundary Discipline
+- Keep package responsibilities focused and import direction clear.
+- Flag junk-drawer packages and hidden wiring through globals or `init` side effects.
+- Keep composition explicit at the composition root.
+- Minimize exported surface and use `internal/` where privacy matters.
+- Treat accidental public API growth as a contract risk, not just style noise.
 
-#### Error Handling Competency
-- Errors must be explicit contract values, not logs-only side effects.
-- Require operation context in returned errors where diagnosis depends on resource/action identity.
-- Require `%w` wrapping when cause inspection by caller matters.
-- Require `errors.Is`/`errors.As` for matching; reject `err.Error()` string checks/parsing.
-- Require lowercase, punctuation-free error strings unless external contract says otherwise.
-- Treat panic-for-normal-failure and swallowed errors as idiomatic blockers.
+### Types, Interfaces, And Zero Values
+- Prefer concrete types unless consumer-side substitution really exists.
+- Flag interface-per-struct and producer-owned “for mocking” interfaces without real need.
+- Require pointer usage to be justified by mutation, identity, or copy cost.
+- Prefer useful zero values when practical.
+- Flag over-embedding, pointer-to-basic cargo-culting, and abstraction layers that add no value.
 
-#### Context Propagation Competency
-- Require `ctx context.Context` as first parameter where cancellation/deadline/request scope is relevant.
-- Flag storing context in structs and nil-context passing.
-- Require derived context cancel calls (`WithCancel`/`WithTimeout`/`WithDeadline`).
-- Require propagation of request context instead of `context.Background()` replacement in request flows.
-- Require cancellation/deadline errors to remain recognizable via `errors.Is`.
+### Naming, Documentation, And Public Surface
+- Enforce Go naming norms, consistent initialisms, and non-stuttering package APIs.
+- Require boolean names that read as facts or questions.
+- For exported changes, require documentation that explains behavior or constraints, not just restates the name.
+- Treat unclear naming on critical paths as a maintainability defect.
 
-#### Package, Module, And Boundary Competency
-- Enforce focused package responsibilities and clear import direction.
-- Flag junk-drawer packages (`util`, `utils`, `common`, `helpers`, `misc`) without strong domain reason.
-- Enforce composition root discipline in `cmd/<service>/main.go`; avoid hidden dependency wiring via globals/init side effects.
-- Enforce minimal exported surface and correct `internal/` usage for private implementation.
-- Treat avoidable boundary leaks and premature module complexity as maintainability risk.
+### Validation Path
+- Suggest only the minimal command set that honestly validates the changed risk surface.
+- Expect race checks for concurrency-sensitive touched paths and security checks for security-sensitive ones when relevant.
+- Do not claim readiness without a clear verification path.
 
-#### Types, Interfaces, And Zero-Value Competency
-- Prefer concrete types unless runtime substitution is required by consumer-side need.
-- Flag interface-per-struct and producer-owned "for mocking" interfaces without real consumers.
-- Validate pointer/value choices:
-  - no pointer-to-basic or pointer-to-interface cargo-culting;
-  - pointer semantics justified by mutation/shared-state/copy cost.
-- Encourage useful zero values where practical.
-- Flag speculative abstractions and inheritance-style over-embedding that is atypical for Go service code.
+### Cross-Domain Handoffs
+- Hand off deep race, deadlock, and shutdown analysis to `go-concurrency-review`.
+- Hand off public API semantic depth to `go-design-review` or the contract owner.
+- Hand off coverage completeness to `go-qa-review`.
+- Hand off profiling and hot-path evidence questions to `go-performance-review`.
+- Hand off threat-depth analysis to `go-security-review`.
 
-#### Naming, Export Surface, And Documentation Competency
-- Enforce Go naming conventions:
-  - short lowercase package names;
-  - non-stuttering call sites;
-  - consistent initialisms (`ID`, `URL`, `HTTP`, `JSON`, `API`);
-  - short consistent receiver names.
-- Require boolean names that read as facts/questions (`isReady`, `hasNext`, `enabled`).
-- For exported changes, require doc comments that start with identifier name and describe behavior/constraints.
-- Treat accidental export growth as contract risk.
+## Finding Quality Bar
+Each finding should include:
+- exact `file:line`
+- the concrete Go rule or idiomatic defect
+- impact on correctness, diagnosability, or maintenance
+- the smallest safe correction
+- a validation command when useful
+- whether the issue is local code drift or needs design escalation
 
-#### Toolchain And Validation Competency
-- Require recommendations aligned with repository and Go defaults:
-  - `make fmt-check` or `gofmt -w .`;
-  - `make test` or `go test ./...`;
-  - `go vet ./...`;
-  - `make lint` when lint scope is relevant.
-- For concurrency-sensitive touched paths, require race-evidence recommendation (`make test-race` or `go test -race ./...`).
-- For dependency/security-sensitive touched paths, note `govulncheck ./...` recommendation.
-- Do not claim code quality readiness without explicit validation path.
+Severity is merge-risk based:
+- `critical`: confirmed idiomatic defect with direct correctness or operational risk
+- `high`: strong evidence of meaningful maintainability or correctness risk
+- `medium`: bounded but important idiomatic weakness
+- `low`: local cleanup that improves clarity or consistency
 
-#### Trigger-Driven Cross-Domain Signal Competency
-- When goroutines/channels/mutexes/lifecycle are touched:
-  - perform idiomatic-concurrency sanity check;
-  - hand off deep race/deadlock/leak analysis to `go-concurrency-review`.
-- When exported/public API surface is touched:
-  - enforce naming/docs/compatibility basics;
-  - hand off deep contract semantics to API/design reviewers as needed.
-- When tests or quality gates are touched:
-  - verify idiomatic test/readability baseline;
-  - hand off full test-strategy completeness to `go-qa-review`.
-- When performance claims drive code complexity:
-  - require evidence-first idiomatic guidance;
-  - hand off deep profiling/budget decisions to `go-performance-review`.
-- When secure coding controls are involved:
-  - flag obvious unsafe idiomatic patterns;
-  - hand off threat-depth analysis to `go-security-review`.
+## Deliverable Shape
+Return review output in this order:
+- `Findings`
+- `Handoffs`
+- `Design Escalations`
+- `Residual Risks`
+- `Validation Commands`
 
-#### Evidence Threshold And Severity Calibration Competency
-- Every finding must include:
-  - exact `file:line`;
-  - concrete Go rule violated;
-  - impact on correctness/operability/maintainability;
-  - smallest safe fix path;
-  - verification command suggestion.
-- Severity is assigned by merge risk, not by taste:
-  - `critical/high`: behavior or strong maintainability risk likely to cause regressions;
-  - `medium`: meaningful idiomatic debt with bounded short-term risk;
-  - `low`: local consistency/readability cleanup.
-
-#### Assumption And Uncertainty Discipline
-- If facts are missing, proceed with bounded `[assumption]` and reduced certainty.
-- Any unresolved assumption affecting merge safety must be surfaced in `Residual Risks` or escalated via `Spec Reopen`.
-- Avoid vague wording; unknowns must be explicit and testable.
-
-#### Review Blockers For This Skill
-- Error handling that loses cause semantics or hides ordinary failures.
-- Context misuse that breaks cancellation/deadline propagation.
-- Package/export boundary changes that create accidental public API or dependency drift.
-- Control flow complexity that materially obscures behavior and increases regression risk.
-- Interface/pointer abstractions that introduce non-idiomatic complexity without justified need.
-- Missing idiomatic validation guidance for behavior-changing or concurrency-sensitive changes.
-- Any spec-conflicting correction path left without explicit `Spec Reopen`.
-
-## Working Rules
-1. Confirm review unit from context (`single task` or `bounded task scope`) and set review scope: changed files, impacted packages, and available spec context.
-2. Determine `feature-id` from task context or changed paths; if unavailable, proceed with bounded `[assumption]`.
-3. Load context using this skill's dynamic-loading policy.
-4. Apply `Hard Skills` defaults from this file; any deviation must be explicit in findings or residual risks.
-5. Inspect findings in this order:
-   - correctness and API behavior implications
-   - errors and context handling
-   - control flow, naming, and readability
-   - package boundaries and exported surface discipline
-   - toolchain and validation readiness
-6. Record only evidence-backed, actionable findings with exact `file:line`.
-7. Keep comments in idiomatic-review ownership; hand off cross-domain primary issues.
-8. If correction requires spec-intent change, create `Spec Reopen` entry in `reviews/<feature-id>/code-review-log.md`.
-9. Do not edit spec files in Phase 4.
-10. If no findings exist, state this explicitly and include residual risks or verification gaps.
-
-## Output Expectations
-- Findings-first output ordered by severity: `critical`, `high`, `medium`, `low`.
-- Match output language to user language when practical.
-- Use this exact finding format:
+Use this format for each finding:
 
 ```text
 [severity] [go-idiomatic-review] [file:line]
 Issue:
 Impact:
 Suggested fix:
-Spec reference:
+Reference:
 ```
 
-- After findings, include:
-  - `Handoffs`: cross-domain issues and owner review skill.
-  - `Spec Reopen`: `required` or `not required` with reason.
-  - `Residual Risks`: non-blocking idiomatic risks and assumption notes.
-  - `Validation commands`: minimal command set to verify proposed fixes.
-- Keep section order stable:
-  - `Findings`
-  - `Handoffs`
-  - `Spec Reopen`
-  - `Residual Risks`
-  - `Validation commands`
-- Keep every section present; if empty, write `none` and one short reason.
-- If there are no findings, output `No idiomatic findings.` and still include `Residual Risks` and `Validation commands`.
-
-Severity guide:
-- `critical`: confirmed idiomatic defect with direct correctness or operational failure risk.
-- `high`: strong evidence of maintainability/correctness risk likely to cause regressions.
-- `medium`: meaningful idiomatic debt that should be fixed with bounded near-term risk.
-- `low`: local idiomatic consistency improvement.
-
-## Context Intake (Dynamic Loading)
-Rule: load the smallest sufficient set of docs. Never bulk-load folders by default.
-Stop condition: stop loading when all idiomatic review axes and triggered checks are assessable with code evidence and approved references.
-
-Always load:
-- `docs/spec-first-workflow.md`:
-  - read `Core Principles`, `Phase 4`, `Reviewer Focus Matrix`, `Review Findings Format`, and `Gate G4`
-- `docs/llm/go-instructions/70-go-review-checklist.md`
-- `docs/llm/go-instructions/10-go-errors-and-context.md`
-- `docs/llm/go-instructions/30-go-project-layout-and-modules.md`
-- `docs/project-structure-and-module-organization.md`
-- review artifact if present:
-  - `reviews/<feature-id>/code-review-log.md`
-
-Load by trigger:
-- Concurrency-related changes (`goroutine`, `channel`, `mutex`, lifecycle/shutdown):
-  - `docs/llm/go-instructions/20-go-concurrency.md`
-- Test-quality and validation expectations:
-  - `docs/llm/go-instructions/40-go-testing-and-quality.md`
-  - `docs/build-test-and-development-commands.md`
-- Exported/public API surface changes:
-  - `docs/llm/go-instructions/50-go-public-api-and-docs.md`
-- Performance-sensitive hot-path changes:
-  - `docs/llm/go-instructions/60-go-performance-and-profiling.md`
-- Security-impacting idiomatic risks:
-  - `docs/llm/security/10-secure-coding.md`
-
-Conflict resolution:
-- The more specific document is the decisive rule for that topic.
-- If specificity is equal, prefer trigger-loaded documents over always-loaded documents.
-- If conflict remains, preserve approved spec intent and record `Spec Reopen` with evidence.
-
-Unknowns:
-- If critical facts are missing, proceed with bounded assumptions marked as `[assumption]`.
-- If required review artifacts are missing, mark `[assumption: missing-review-artifacts]` and reduce certainty.
-- Promote unresolvable safety-impact assumptions to `Residual Risks` or `Spec Reopen`.
-
-## Definition Of Done
-- Review remains within idiomatic Go ownership boundaries.
-- All `critical/high` idiomatic findings are actionable and file-anchored.
-- Findings include concrete impact, minimal fix direction, and verification command path.
-- Cross-domain issues are handed off explicitly.
-- Spec-level conflicts are explicit via `Spec Reopen`.
-- If no findings, output explicitly states `No idiomatic findings.` and includes residual-risk note.
-
-## Anti-Patterns
-- style-policing comments without concrete impact on correctness or maintainability
-- architecture redesign proposals disguised as idiomatic feedback
-- vague suggestions without exact code location and fix path
-- taking ownership of other review domains instead of handoff
-- ignoring project/toolchain conventions or approved spec intent
-- hiding uncertainty instead of explicit `[assumption]` and residual risk annotation
+## Escalate When
+Escalate when:
+- safe correction changes the public API or the approved package or boundary model (`go-design-spec`)
+- the issue reveals a missing contract for public behavior or transport semantics (`api-contract-designer-spec` or `go-chi-spec`)
+- local cleanup is blocked by a broader design mistake (`go-design-spec` or `go-architect-spec`)

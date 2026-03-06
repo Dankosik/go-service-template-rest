@@ -1,15 +1,10 @@
 # Condition-Based Waiting For Go Tests
 
 ## Overview
-Sleep-based test synchronization (`time.Sleep`) is a common source of flakes.
+Sleep-based synchronization (`time.Sleep`) is a common source of flakes.
 Wait for a condition, not for guessed timing.
 
-## Use When
-- async behavior is under test (worker completion, queue drain, eventually consistent read)
-- CI shows intermittent failures
-- tests become unstable under load or parallel execution
-
-## Prefer This Pattern
+## Recommended Pattern
 
 ```go
 func waitFor(t *testing.T, timeout time.Duration, interval time.Duration, cond func() bool, what string) {
@@ -35,10 +30,11 @@ waitFor(t, 2*time.Second, 20*time.Millisecond, func() bool {
 
 ## Guidelines
 - timeout must be explicit and tied to expected behavior
-- polling interval should be bounded (for example 10-50ms)
-- failure message must describe missing condition
-- condition function must read fresh state each loop
+- polling interval should be bounded, often in the `10-50ms` range
+- failure message must describe the missing condition
+- the condition function must read fresh state on each loop
+- prefer the narrowest condition that proves the behavior under test
 
-## When Fixed Delay Is Acceptable
-Only when timing itself is the behavior under test (debounce/throttle/lease expiry).
-Document why fixed delay is required and how value is derived.
+## Fixed-Delay Exception
+Use a fixed delay only when timing itself is the behavior under test, such as debounce, throttle, or lease expiry.
+Document why a fixed delay is required and how its value was derived.
