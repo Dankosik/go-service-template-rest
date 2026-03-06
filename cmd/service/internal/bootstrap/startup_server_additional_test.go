@@ -142,13 +142,15 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
+	bootstrapCtx := context.WithoutCancel(signalCtx)
+	bootstrapSpan := trace.SpanFromContext(bootstrapCtx)
 
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- serveHTTPRuntime(
 			signalCtx,
-			context.Background(),
-			trace.SpanFromContext(context.Background()),
+			bootstrapCtx,
+			bootstrapSpan,
 			config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			logger,
 			metrics,
