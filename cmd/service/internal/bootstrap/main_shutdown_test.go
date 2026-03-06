@@ -140,6 +140,34 @@ func TestDrainAndShutdownWaitsForPropagationDelay(t *testing.T) {
 	}
 }
 
+func TestDrainAndShutdownCountsPropagationDelayAgainstShutdownTimeout(t *testing.T) {
+	var events []string
+	drainer := &fakeDrainer{events: &events}
+
+	srv := &fakeShutdownServer{
+		events: &events,
+		onCalled: func(ctx context.Context) error {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("shutdown context has no deadline")
+			}
+
+			remaining := time.Until(deadline)
+			if remaining >= 35*time.Millisecond {
+				t.Fatalf("shutdown deadline remaining = %s, want propagation delay to consume part of timeout", remaining)
+			}
+			if remaining <= 0 {
+				t.Fatalf("shutdown deadline remaining = %s, want positive budget for shutdown", remaining)
+			}
+			return nil
+		},
+	}
+
+	if err := drainAndShutdown(context.Background(), 20*time.Millisecond, 40*time.Millisecond, drainer, srv); err != nil {
+		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
+	}
+}
+
 func TestDrainAndShutdownWaitsForPropagationDelayDespiteCanceledParent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

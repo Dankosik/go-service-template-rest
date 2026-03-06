@@ -165,7 +165,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 					"dependency", "postgres",
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres", runtime.startupLifecycleStartedAt)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres")
 			return nil, fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, probeResult.err)
 		}
 
@@ -190,7 +190,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 				"dependency", "postgres",
 			)...,
 		)
-		recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres", runtime.startupLifecycleStartedAt)
+		recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres")
 		return nil, sanitizedErr
 	}
 
@@ -277,7 +277,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", redisMode,
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis", runtime.startupLifecycleStartedAt)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis")
 			return nil, dependencyInitAbortFailure("redis", probeResult)
 		}
 		if redisMode == "store" {
@@ -302,7 +302,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", redisMode,
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis", runtime.startupLifecycleStartedAt)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis")
 			return nil, rejectErr
 		}
 
@@ -402,7 +402,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", "degraded_read_only_or_stale",
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "mongo", runtime.startupLifecycleStartedAt)
+			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "mongo")
 			return nil, dependencyInitAbortFailure("mongo", probeResult)
 		}
 		runtime.log.Warn(

@@ -9,8 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -31,6 +29,7 @@ const (
 	startupConfigValidateBudget = 2 * time.Second
 	startupProbeBudget          = 15 * time.Second
 	startupTelemetryBudget      = 2 * time.Second
+	startupAdmissionBudget      = 2 * time.Second
 
 	postgresProbeBudget = 5 * time.Second
 	redisProbeBudget    = 3 * time.Second
@@ -135,58 +134,21 @@ func Run(args []string) (runErr error) {
 
 	healthSvc := health.New(probeOutcome.probes...)
 	pingSvc := ping.New()
-	var admissionReadyOnce sync.Once
-	var runtimeIngressViolationOnce sync.Once
-	var admissionSucceeded atomic.Bool
-	var admissionClosed atomic.Bool
-	admissionReadyCh := make(chan struct{})
-
-	readinessLifecycleErr := func() error {
-		if admissionClosed.Load() {
-			return context.Canceled
+	startupAdmission := newStartupAdmissionController(bootstrapSpan, metrics, deployTelemetry)
+	ingressGuard := newRuntimeIngressAdmissionGuard(bootstrap.networkPolicy, deployTelemetry)
+	readinessCheck := func(ctx context.Context) error {
+		if err := ingressGuard.Check(ctx); err != nil {
+			return err
 		}
-		if admissionSucceeded.Load() {
-			return nil
-		}
-		return startupCtx.Err()
+		return healthSvc.Ready(ctx)
 	}
 
 	handler := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
-			Health: healthSvc,
-			Ping:   pingSvc,
-			BeforeReady: func(ctx context.Context) error {
-				if err := readinessLifecycleErr(); err != nil {
-					return err
-				}
-				if err := bootstrap.networkPolicy.ValidateIngressRuntime(); err != nil {
-					runtimeIngressViolationOnce.Do(func() {
-						if !bootstrap.networkPolicy.ingressException.Active {
-							deployTelemetry.RecordNetworkExceptionStateChange(ctx, "ingress", "denied", "deny", bootstrap.networkPolicy.ingressException.ID)
-							deployTelemetry.RecordNetworkIngressPolicyViolation(ctx, "missing_exception", "deny")
-							return
-						}
-						deployTelemetry.RecordNetworkExceptionStateChange(ctx, "ingress", "expired", "deny", bootstrap.networkPolicy.ingressException.ID)
-						deployTelemetry.RecordNetworkIngressPolicyViolation(ctx, "expired_exception", "deny")
-					})
-					return err
-				}
-				return nil
-			},
-			OnReadySuccess: func(ctx context.Context) error {
-				if err := readinessLifecycleErr(); err != nil {
-					return err
-				}
-				admissionReadyOnce.Do(func() {
-					admissionSucceeded.Store(true)
-					metrics.IncConfigStartupOutcome("ready")
-					bootstrapSpan.MarkReady()
-					deployTelemetry.RecordAdmission(ctx, "success", "ready", "readiness")
-					close(admissionReadyCh)
-				})
-				return nil
-			},
+			Health:      healthSvc,
+			Ping:        pingSvc,
+			BeforeReady: ingressGuard.Check,
 		},
 		metrics,
 		httpx.RouterConfig{MaxBodyBytes: bootstrap.cfg.HTTP.MaxBodyBytes},
@@ -209,13 +171,10 @@ func Run(args []string) (runErr error) {
 		bootstrap.log,
 		metrics,
 		deployTelemetry,
-		startupLifecycleStartedAt,
 		healthSvc,
 		srv,
-		admissionReadyCh,
-		func() {
-			admissionClosed.Store(true)
-		},
+		readinessCheck,
+		startupAdmission,
 		shutdownReadinessDelay,
 	)
 }

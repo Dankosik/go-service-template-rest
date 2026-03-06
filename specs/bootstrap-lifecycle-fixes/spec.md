@@ -52,10 +52,19 @@ Non-goals:
 
 ## Validation
 
-Planned commands:
+Executed commands:
 - `go test ./cmd/service/internal/bootstrap/...`
-- `go test ./cmd/service -run 'Test(DrainAndShutdown|ServeHTTPRuntime|Admission)' -count=1`
+- `go test ./cmd/service/internal/bootstrap -run 'Test(DrainAndShutdown|ServeHTTPRuntime|Admission|RuntimeIngressAdmissionGuard)' -count=1`
+
+Observed results:
+- bootstrap package tests passed
+- targeted lifecycle/readiness tests passed
 
 ## Outcome
 
-Planned; implementation not started in this artifact yet.
+Completed.
+
+Implemented outcome:
+- startup admission is now driven by an internal readiness check instead of waiting for an external `/health/ready` request;
+- shutdown propagation delay is now spent from the configured shutdown timeout budget and is skipped before admission-ready;
+- targeted tests now cover internal startup admission, pre-ready serve failure, bounded shutdown budget accounting, and one-shot runtime ingress violation telemetry.

@@ -11,11 +11,15 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/config"
-	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
+
+type runtimeServer interface {
+	Serve(net.Listener) error
+	Shutdown(context.Context) error
+}
 
 func serveHTTPRuntime(
 	signalCtx context.Context,
@@ -25,11 +29,10 @@ func serveHTTPRuntime(
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
 	deployTelemetry *deployTelemetryRecorder,
-	startupLifecycleStartedAt time.Time,
 	healthSvc *health.Service,
-	srv *httpx.Server,
-	admissionReady <-chan struct{},
-	closeReadiness func(),
+	srv runtimeServer,
+	readinessCheck func(context.Context) error,
+	admission *startupAdmissionController,
 	shutdownDelay time.Duration,
 ) error {
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
@@ -39,7 +42,6 @@ func serveHTTPRuntime(
 			metrics,
 			log,
 			deployTelemetry,
-			startupLifecycleStartedAt,
 			"startup.http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
 		)
@@ -53,7 +55,6 @@ func serveHTTPRuntime(
 			metrics,
 			log,
 			deployTelemetry,
-			startupLifecycleStartedAt,
 			"startup.http_listen",
 			fmt.Errorf("listen http server: %w", err),
 		)
@@ -66,7 +67,6 @@ func serveHTTPRuntime(
 			metrics,
 			log,
 			deployTelemetry,
-			startupLifecycleStartedAt,
 			"startup.http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
 		)
@@ -78,50 +78,80 @@ func serveHTTPRuntime(
 		runErrCh <- srv.Serve(listener)
 	}()
 
+	admissionCtx, cancelAdmission := context.WithCancel(bootstrapCtx)
+	defer cancelAdmission()
+
+	admissionErrCh := startStartupAdmission(admissionCtx, readinessCheck, admission)
 	var serverErr error
 	var terminalErr error
+	startupFailureRecorded := false
 	startupWatchCh := bootstrapCtx.Done()
-	startupReadyCh := admissionReady
+	recordPreReadyFailure := func(ctx context.Context, reasonClass string, probeType string) {
+		if startupFailureRecorded || admission.Ready() {
+			return
+		}
+		recordAdmissionFailure(ctx, deployTelemetry, reasonClass, probeType)
+		startupFailureRecorded = true
+	}
 
 waitForStop:
 	for {
 		select {
-		case <-startupReadyCh:
-			startupReadyCh = nil
+		case err := <-admissionErrCh:
+			admissionErrCh = nil
+			if err != nil {
+				terminalErr = rejectHTTPStartup(
+					bootstrapCtx,
+					bootstrapSpan,
+					metrics,
+					log,
+					deployTelemetry,
+					"startup.readiness",
+					fmt.Errorf("startup readiness check failed: %w", err),
+				)
+				startupFailureRecorded = true
+				break waitForStop
+			}
 			startupWatchCh = nil
 		case <-signalCtx.Done():
 			log.Info("shutdown signal received")
-			closeReadiness()
-			recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
+			recordPreReadyFailure(signalCtx, "startup_error", "readiness")
 			break waitForStop
 		case <-startupWatchCh:
-			closeReadiness()
 			if signalCtx.Err() != nil {
 				log.Info("shutdown signal received")
-				recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
+				recordPreReadyFailure(signalCtx, "startup_error", "readiness")
 				break waitForStop
 			}
 			terminalErr = fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
 			log.Error("startup budget exhausted before readiness", "err", terminalErr)
-			recordAdmissionFailure(bootstrapCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
+			recordPreReadyFailure(bootstrapCtx, "startup_error", "readiness")
 			break waitForStop
 		case err := <-runErrCh:
 			serverErr = err
-			if serverErr != nil {
-				closeReadiness()
-				if startupReadyCh != nil {
+			if !admission.Ready() {
+				if serverErr != nil {
 					terminalErr = fmt.Errorf("http server stopped before readiness: %w", serverErr)
+				} else {
+					terminalErr = errors.New("http server stopped before readiness")
 				}
+				recordPreReadyFailure(signalCtx, "startup_error", "readiness")
+			}
+			if serverErr != nil {
 				log.Error("http server stopped with error", "err", serverErr)
-				recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
 			}
 			break waitForStop
 		}
 	}
 
-	if err := drainAndShutdown(signalCtx, shutdownDelay, cfg.HTTP.ShutdownTimeout, healthSvc, srv); err != nil {
-		closeReadiness()
-		recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
+	cancelAdmission()
+
+	effectiveShutdownDelay := shutdownDelay
+	if !admission.Ready() {
+		effectiveShutdownDelay = 0
+	}
+	if err := drainAndShutdown(signalCtx, effectiveShutdownDelay, cfg.HTTP.ShutdownTimeout, healthSvc, srv); err != nil {
+		recordPreReadyFailure(signalCtx, "startup_error", "readiness")
 		if terminalErr != nil {
 			return errors.Join(terminalErr, err)
 		}
@@ -136,6 +166,35 @@ waitForStop:
 
 	log.Info("shutdown complete")
 	return nil
+}
+
+func startStartupAdmission(
+	bootstrapCtx context.Context,
+	readinessCheck func(context.Context) error,
+	admission *startupAdmissionController,
+) <-chan error {
+	resultCh := make(chan error, 1)
+
+	go func() {
+		readyCtx, cancel := withStageBudget(bootstrapCtx, startupAdmissionBudget)
+		defer cancel()
+
+		if err := readyCtx.Err(); err != nil {
+			resultCh <- err
+			return
+		}
+		if readinessCheck != nil {
+			if err := readinessCheck(readyCtx); err != nil {
+				resultCh <- err
+				return
+			}
+		}
+
+		admission.MarkReady(readyCtx)
+		resultCh <- nil
+	}()
+
+	return resultCh
 }
 
 func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Context) error {
@@ -154,7 +213,6 @@ func rejectHTTPStartup(
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
 	deployTelemetry *deployTelemetryRecorder,
-	startupLifecycleStartedAt time.Time,
 	stage string,
 	err error,
 ) error {
@@ -177,6 +235,6 @@ func rejectHTTPStartup(
 			"err", err,
 		)...,
 	)
-	recordAdmissionFailure(bootstrapCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
+	recordAdmissionFailure(bootstrapCtx, deployTelemetry, "startup_error", "startup")
 	return err
 }

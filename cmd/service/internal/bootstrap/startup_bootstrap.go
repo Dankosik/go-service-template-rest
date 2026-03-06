@@ -124,7 +124,7 @@ func bootstrapConfigStage(
 				"error.type", errorType,
 			)...,
 		)
-		recordAdmissionFailure(startupCtx, deployTelemetry, "startup_error", "startup", startupLifecycleStartedAt)
+		recordAdmissionFailure(startupCtx, deployTelemetry, "startup_error", "startup")
 		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 

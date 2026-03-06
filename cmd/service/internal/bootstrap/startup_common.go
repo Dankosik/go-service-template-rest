@@ -77,7 +77,7 @@ func rejectStartupForPolicyViolation(
 			"err", err,
 		)...,
 	)
-	recordAdmissionFailure(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)), startupLifecycleStartedAt)
+	recordAdmissionFailure(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)))
 	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
 }
 
@@ -122,7 +122,7 @@ func rejectStartupForDependencyInit(
 			"err", rejectErr,
 		)...,
 	)
-	recordAdmissionFailure(ctx, deployTelemetry, "dependency_init", dep, startupLifecycleStartedAt)
+	recordAdmissionFailure(ctx, deployTelemetry, "dependency_init", dep)
 	return rejectErr
 }
 
@@ -131,7 +131,6 @@ func recordAdmissionFailure(
 	deployTelemetry *deployTelemetryRecorder,
 	reasonClass string,
 	probeType string,
-	_ time.Time,
 ) {
 	if deployTelemetry == nil {
 		return

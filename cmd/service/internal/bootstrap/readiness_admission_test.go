@@ -159,3 +159,40 @@ func TestAdmissionSuccessNotRecordedWhenReadinessFails(t *testing.T) {
 		}
 	})
 }
+
+func TestRuntimeIngressAdmissionGuardEmitsViolationTelemetryOnce(t *testing.T) {
+	recorder, metrics, _ := newBufferedDeployTelemetryRecorder("test")
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	guard := newRuntimeIngressAdmissionGuard(
+		networkPolicy{ingressPublicEnabled: true},
+		recorder,
+	)
+
+	handler := httpx.NewRouter(
+		log,
+		httpx.Handlers{
+			Health:      health.New(),
+			Ping:        ping.New(),
+			BeforeReady: guard.Check,
+		},
+		metrics,
+		httpx.RouterConfig{},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	for i := 0; i < 2; i++ {
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		if resp.Code != http.StatusServiceUnavailable {
+			t.Fatalf("GET /health/ready #%d status = %d, want %d", i+1, resp.Code, http.StatusServiceUnavailable)
+		}
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `network_policy_violation_total{environment="test",policy_class="ingress",reason_class="missing_exception"} 1`) {
+		t.Fatalf("metrics do not contain single ingress violation emission:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `network_policy_violation_total{environment="test",policy_class="ingress",reason_class="missing_exception"} 2`) {
+		t.Fatalf("metrics contain duplicate ingress violation emissions:\n%s", metricsText)
+	}
+}

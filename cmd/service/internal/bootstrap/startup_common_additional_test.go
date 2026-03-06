@@ -138,7 +138,7 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 		t.Fatalf("metrics output unexpectedly contains rollback execution telemetry:\n%s", metricsText)
 	}
 
-	recordAdmissionFailure(context.Background(), nil, "x", "y", time.Now())
+	recordAdmissionFailure(context.Background(), nil, "x", "y")
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {

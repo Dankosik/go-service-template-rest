@@ -36,6 +36,7 @@
   - project-scoped agents;
   - portable skills;
   - a real Go/OpenAPI/Postgres backend stack underneath.
+- The README will not treat the “generic AI-native repos are too generic for Go” point as a side note. It will use that problem as the organizing narrative for the hero, why-section, and the transition into workflow, agents, skills, and stack.
 - The workflow section will show the actual repository loop: `intake -> research -> synthesis -> planning -> implementation -> review -> validation`.
 - The README will explicitly explain the difference between:
   - **subagents**: read-only specialists for research or review;
@@ -97,6 +98,8 @@
 ## Outcome
 - Rewrote `README.md` around an AI-native, solo-builder-friendly narrative.
 - Removed the team-centric hero and replaced it with solo-developer wording.
+- Added a top-level problem statement that contrasts generic AI workflow repos with this repository’s Go-native instruction depth.
+- Reframed the hero and the “why” section so the whole README now starts from that problem and explains the template as a concrete answer to it.
 - Added a full subagent table and grouped repository-native skill tables.
 - Kept the orchestrator workflow, quickstart, repo layout, stack, and quality-gate sections aligned with the actual repository.
 - Validated that the referenced agent directories, skill mirrors, files, and make targets exist, and confirmed that the local `claude` CLI exposes `--agent` while the local `codex` CLI exposes the expected command surface.

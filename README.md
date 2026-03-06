@@ -1,10 +1,13 @@
 # Go Service Template REST
 
-AI-native Go REST template for solo developers shipping web backends with Codex, Claude Code, Cursor, Gemini CLI, and other LLM-assisted workflows.
+AI-native Go REST template for solo developers who want coding agents that can work inside real Go constraints.
 
-`go-service-template-rest` is for people who code with agents but still want a real engineering loop. The orchestrator owns the task, read-only subagents handle focused research and review, `spec.md` records the decisions, and the Go/OpenAPI/Postgres stack underneath is ready for real backend work.
+Generic AI-native repos are good at teaching agents how to spec, plan, and delegate. They are usually much weaker at teaching them how to operate inside idiomatic Go boundaries, preserve invariants, work with `context`, respect generated artifacts, reason about `chi` and `sqlc`, and ship code that survives review. `go-service-template-rest` is built around that exact gap.
+
+This repository is for people who code with Codex, Claude Code, Cursor, Gemini CLI, and other LLM-assisted workflows, but do not want a generic process layer floating above the language. The workflow is agent-native. The instructions, skills, review surfaces, and validation loop are Go-native.
 
 - **Orchestrator-first**: frame, delegate, synthesize, plan, implement, verify.
+- **Go-native guidance**: the repository does not stop at language-agnostic workflow advice.
 - **Project-scoped agents**: Codex agents live in `.codex/agents/`, Claude Code agents live in `.claude/agents/`.
 - **Portable skills**: reusable workflow expertise lives in `skills/` and is mirrored to multiple agent runtimes.
 - **Spec-first**: non-trivial work starts in `specs/<feature-id>/spec.md`, not in prompt spaghetti.
@@ -12,20 +15,40 @@ AI-native Go REST template for solo developers shipping web backends with Codex,
 
 ## Why This Template Exists
 
-Most AI-native coding today is solo. Most Go templates still stop at folder layout, Docker files, and a `Makefile`. That is not enough when you and your coding agent are both writing code in the same repository.
+Most AI-native coding today is solo. Most generic AI-native repos intentionally stay technology-independent. Most Go templates still stop at folder layout, Docker files, and a `Makefile`. That combination leaves a real hole:
 
-This template is built for developers who want:
+- the workflow knows how to spec and delegate, but not how to reason in Go;
+- the stack knows how to compile, but not how to guide an agent through non-trivial changes;
+- the repo has commands, but no explicit ownership model for research, planning, implementation, review, and validation.
 
-- a backend starter that works with LLM-assisted coding instead of fighting it;
-- an explicit workflow for research, planning, implementation, review, and validation;
-- project-scoped agents with clear ownership instead of one giant all-purpose assistant;
-- a serious Go REST baseline once the workflow moves into implementation.
+This template is built from the opposite assumption: if you want agents to be useful in a Go backend, the workflow and the language need to be wired together on purpose.
 
-If you want a Go backend template that feels natural inside Codex or Claude Code, this repository is designed for that use case.
+That is why this repository is opinionated in four places:
+
+1. **The workflow is explicit.**
+   Non-trivial work starts with framing, research, synthesis, planning, implementation, review, and validation. The loop is visible, not implied.
+2. **The specialists are real.**
+   Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
+3. **The skills are Go-native.**
+   The skill library does not stop at abstract design advice. It covers Go architecture, routing, DB/cache contracts, invariants, reliability, security, review, debugging, testing, and verification.
+4. **The backend substrate is real.**
+   OpenAPI, `chi`, PostgreSQL, `sqlc`, observability, tests, and CI gates are already in the template, so the workflow lands on an actual service baseline.
+
+If you want a Go backend template that feels natural inside Codex or Claude Code and still respects how Go services are actually built, this repository is designed for that use case.
+
+## How This Template Solves The Problem
+
+The fix is not a single block of text. It shapes the whole repository:
+
+- **Specs before edits**: `specs/<feature-id>/spec.md` is where decisions, assumptions, implementation steps, and validation evidence live.
+- **Go-aware subagents**: the agent portfolio is organized around real backend concerns instead of generic brainstorming personas.
+- **Go-native skills**: the skill library gives the orchestrator and subagents concrete playbooks for Go design, implementation, review, and verification.
+- **Verification as a first-class rule**: “done” is tied to fresh command evidence, not to confident prose from an LLM.
+- **A serious service template underneath**: once the workflow moves into implementation, the repo already has OpenAPI-first HTTP, PostgreSQL, `sqlc`, telemetry, and CI guardrails.
 
 ## Workflow First
 
-This repository treats delivery as an explicit loop, not as a single long chat:
+This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
 
 ```text
 intake -> research -> synthesis -> planning -> implementation -> review -> validation

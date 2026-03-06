@@ -45,14 +45,21 @@ func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeo
 			"success",
 		)...,
 	)
-	if propagationDelay > 0 {
-		if err := sleepWithContext(context.WithoutCancel(ctx), propagationDelay); err != nil {
-			return fmt.Errorf("drain propagation wait failed: %w", err)
-		}
-	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
+
+	if propagationDelay > 0 {
+		if deadline, ok := shutdownCtx.Deadline(); ok {
+			remaining := time.Until(deadline)
+			if remaining < propagationDelay {
+				propagationDelay = remaining
+			}
+		}
+		if err := sleepWithContext(shutdownCtx, propagationDelay); err != nil {
+			return fmt.Errorf("drain propagation wait failed: %w", err)
+		}
+	}
 
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
 		if errors.Is(err, context.DeadlineExceeded) {
