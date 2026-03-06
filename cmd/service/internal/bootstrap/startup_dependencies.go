@@ -106,7 +106,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	runtime.metrics.SetStartupDependencyStatus("postgres", "critical_fail_closed", false)
 	postgresProbeAddress, addressErr := postgresStartupProbeAddress(runtime.cfg.Postgres)
 	if addressErr != nil {
-		return nil, rejectStartupForPolicyViolation(
+		return nil, rejectStartupForDependencyInit(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.metrics,
@@ -114,6 +114,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"postgres",
+			"startup.resolve.postgres",
 			addressErr,
 		)
 	}
@@ -215,7 +216,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 
 	redisProbeAddress, addressErr := redisStartupProbeAddress(runtime.cfg.Redis)
 	if addressErr != nil {
-		return nil, rejectStartupForPolicyViolation(
+		return nil, rejectStartupForDependencyInit(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.metrics,
@@ -223,6 +224,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"redis",
+			"startup.resolve.redis",
 			addressErr,
 		)
 	}
@@ -343,7 +345,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	runtime.metrics.SetStartupDependencyStatus("mongo", "critical_fail_degraded", false)
 	mongoProbeAddress, addressErr := mongoStartupProbeAddress(runtime.cfg.Mongo)
 	if addressErr != nil {
-		return nil, rejectStartupForPolicyViolation(
+		return nil, rejectStartupForDependencyInit(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.metrics,
@@ -351,6 +353,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"mongo",
+			"startup.resolve.mongo",
 			addressErr,
 		)
 	}

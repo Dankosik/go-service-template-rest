@@ -75,6 +75,94 @@ func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	}
 }
 
+func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
+	runtime := dependencyProbeRuntime{
+		tracer:                    otel.Tracer("test"),
+		bootstrapSpan:             trace.SpanFromContext(context.Background()),
+		metrics:                   metrics,
+		log:                       logger,
+		deployTelemetry:           recorder,
+		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		startupLifecycleStartedAt: time.Now(),
+		cfg: config.Config{
+			Redis: config.RedisConfig{
+				Enabled: true,
+				Mode:    "cache",
+			},
+		},
+	}
+
+	_, err := initRedisDependency(context.Background(), runtime, context.Background())
+	if err == nil {
+		t.Fatal("initRedisDependency() error = nil, want non-nil")
+	}
+	if !errors.Is(err, config.ErrDependencyInit) {
+		t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `config_validation_failures_total{reason="dependency_init"} 1`) {
+		t.Fatalf("metrics output missing dependency_init classification:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `config_validation_failures_total{reason="policy_violation"}`) {
+		t.Fatalf("metrics output unexpectedly contains policy_violation classification:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `network_policy_violation_total`) {
+		t.Fatalf("metrics output unexpectedly contains network policy violation telemetry:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `deploy_health_admission_total{environment="test",reason_class="dependency_init",result="failure"} 1`) {
+		t.Fatalf("metrics output missing dependency_init admission failure:\n%s", metricsText)
+	}
+}
+
+func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
+	runtime := dependencyProbeRuntime{
+		tracer:                    otel.Tracer("test"),
+		bootstrapSpan:             trace.SpanFromContext(context.Background()),
+		metrics:                   metrics,
+		log:                       logger,
+		deployTelemetry:           recorder,
+		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		startupLifecycleStartedAt: time.Now(),
+		cfg: config.Config{
+			Redis: config.RedisConfig{
+				Enabled: true,
+				Mode:    "cache",
+				Addr:    "api.example.com:6379",
+			},
+		},
+	}
+
+	_, err := initRedisDependency(context.Background(), runtime, context.Background())
+	if err == nil {
+		t.Fatal("initRedisDependency() error = nil, want non-nil")
+	}
+	if !errors.Is(err, config.ErrDependencyInit) {
+		t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `config_validation_failures_total{reason="policy_violation"} 1`) {
+		t.Fatalf("metrics output missing policy_violation classification:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `network_policy_violation_total{environment="test",policy_class="egress",reason_class="public_target_denied"} 1`) {
+		t.Fatalf("metrics output missing egress policy violation telemetry:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `deploy_health_admission_total{environment="test",reason_class="policy_violation",result="failure"} 1`) {
+		t.Fatalf("metrics output missing policy_violation admission failure:\n%s", metricsText)
+	}
+}
+
 func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) {
 	t.Parallel()
 

@@ -19,7 +19,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -112,8 +111,8 @@ func Run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	defer bootstrap.bootstrapSpan.End()
-	defer bootstrap.telemetryCleanup(startupCtx)
+	bootstrapSpan := newStartupSpanController(bootstrap.bootstrapSpan, bootstrap.telemetryCleanup)
+	defer bootstrapSpan.Close(startupCtx)
 
 	bootstrapCtx := startupBootstrapContext(startupCtx, bootstrap.bootstrapSpan)
 
@@ -182,7 +181,7 @@ func Run(args []string) (runErr error) {
 				admissionReadyOnce.Do(func() {
 					admissionSucceeded.Store(true)
 					metrics.IncConfigStartupOutcome("ready")
-					bootstrap.bootstrapSpan.SetAttributes(attribute.String("result", "success"))
+					bootstrapSpan.MarkReady()
 					deployTelemetry.RecordAdmission(ctx, "success", "ready", "readiness")
 					close(admissionReadyCh)
 				})

@@ -81,6 +81,51 @@ func rejectStartupForPolicyViolation(
 	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
 }
 
+func rejectStartupForDependencyInit(
+	ctx context.Context,
+	bootstrapSpan trace.Span,
+	metrics *telemetry.Metrics,
+	log *slog.Logger,
+	deployTelemetry *deployTelemetryRecorder,
+	startupLifecycleStartedAt time.Time,
+	dependency string,
+	stage string,
+	err error,
+) error {
+	dep := strings.ToLower(strings.TrimSpace(dependency))
+	if dep == "" {
+		dep = "dependency"
+	}
+	failedStage := strings.TrimSpace(stage)
+	if failedStage == "" {
+		failedStage = "startup.resolve." + dep
+	}
+
+	rejectErr := dependencyInitFailure(dep, err)
+	bootstrapSpan.RecordError(rejectErr)
+	bootstrapSpan.SetAttributes(
+		attribute.String("result", "error"),
+		attribute.String("error.type", "dependency_init"),
+		attribute.String("failed.stage", failedStage),
+	)
+	metrics.IncConfigValidationFailure("dependency_init")
+	metrics.IncConfigStartupOutcome("rejected")
+	log.Error(
+		"startup_blocked",
+		startupLogArgs(
+			ctx,
+			"startup_probes",
+			dep+"_config",
+			"error",
+			"error.type", "dependency_init",
+			"dependency", dep,
+			"err", rejectErr,
+		)...,
+	)
+	recordAdmissionFailure(ctx, deployTelemetry, "dependency_init", dep, startupLifecycleStartedAt)
+	return rejectErr
+}
+
 func recordAdmissionFailure(
 	ctx context.Context,
 	deployTelemetry *deployTelemetryRecorder,
