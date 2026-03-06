@@ -1,19 +1,19 @@
 # Defense-In-Depth After Root-Cause Fix
 
 ## Overview
-After source-level fix, add focused safeguards so the same defect class cannot silently return through a different path.
+After a source-level fix, add focused safeguards so the same defect class cannot silently return through a different path.
 
-## Layer Model For This Repository
-1. Transport boundary (`internal/infra/http`): decode, size limits, required fields, semantic validation.
-2. Application/use-case layer (`internal/app`): business preconditions and transition checks.
-3. Infra adapters (`internal/infra/*`): persistence/network/cache safety constraints.
-4. Diagnostics layer: bounded logs/metrics/traces for future forensics.
+## Layer Model
+1. Transport boundary: decode, size limits, required fields, semantic validation
+2. Application or use-case layer: business preconditions and transition checks
+3. Infrastructure adapters: persistence, network, or cache safety constraints
+4. Diagnostics layer: bounded logs, metrics, and traces for future forensics
 
 ## Guardrail Checklist
 - Is boundary input validated before expensive side effects?
-- Is domain/use-case invariant checked where ownership belongs?
-- Are infra operations context-bounded and fail-fast?
-- Is diagnostics sufficient to localize future failures quickly?
+- Is the invariant checked where ownership belongs?
+- Are infrastructure operations context-bounded and fail-fast?
+- Is diagnostics sufficient to localize a recurrence quickly?
 
 ## Go Example: Boundary + Domain + Infra
 
@@ -38,10 +38,10 @@ if err := repo.Save(ctx, entity); err != nil {
 
 ## Anti-Overhardening Rule
 Add only safeguards justified by the discovered failure mode.
-Do not add unrelated guardrails that increase complexity without reducing incident class risk.
+Do not add unrelated guardrails that increase complexity without reducing recurrence risk.
 
 ## Verification
 After adding guardrails:
-- reproduce old failing scenario (must fail safely or be rejected early)
-- run regression path (must pass)
-- run baseline quality checks for changed scope
+- reproduce the old failing scenario and confirm it now fails safely or is rejected early
+- run the regression path and confirm it still passes
+- run the baseline quality checks needed for the changed scope

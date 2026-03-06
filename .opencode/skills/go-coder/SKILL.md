@@ -1,400 +1,157 @@
 ---
 name: go-coder
-description: "Implement approved Go service changes in a spec-first workflow. Use when coding production changes after detailed-plan readiness and you need focused execution of atomic tasks from `65-coder-detailed-plan.md` (default: one task per run) while preserving strategic constraints from `60-implementation-plan.md`, approved invariants/contracts, and implementation-time ambiguity escalation via spec clarification. Skip when the task is specification design, test-strategy design, domain-scoped code review, or isolated brainstorming without code changes."
+description: "Implement production-grade Go changes from approved requirements and task plans with review-clean defaults: explicit design, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
 ---
 
 # Go Coder
 
 ## Purpose
-Implement production-ready Go code strictly from the approved spec package. Success means each execution pass completes one atomic task from `65-coder-detailed-plan.md` with strong evidence, preserves strategic intent from `60-implementation-plan.md` plus approved contracts/invariants, and avoids architecture or contract drift during coding.
+Implement approved Go changes as production-grade, review-clean code that preserves intended behavior, fits repository boundaries, and ships with honest verification evidence.
 
-## Scope And Boundaries
-In scope:
-- implement production code for the approved feature scope from `specs/<feature-id>/`
-- execute `65-coder-detailed-plan.md` in order with a focused default of one atomic task per run
-- do not silently skip dependency-blocking or architecture-significant tasks from `65`
-- preserve strategic sequencing and constraints defined in `60-implementation-plan.md`
-- preserve decisions and constraints from `15/30/40/50/55` artifacts
-- keep dependency wiring explicit and code idiomatic according to repository Go standards
-- keep behavior backward compatible by default unless an approved spec decision states otherwise
-- run required local quality checks and report outcomes before handoff
-- stop and escalate implementation ambiguity through a formal spec clarification path
+## Scope
+- implement approved features, fixes, refactors, and integration work in Go
+- translate approved requirements, task plans, and contracts into code without semantic drift
+- keep changes idiomatic, explicit, testable, operable, and safe at service boundaries
+- keep dependency wiring, error semantics, concurrency behavior, data access, and observability coherent
+- run the smallest sufficient validation commands and report factual outcomes
 
-Out of scope:
-- creating new architecture/API/data/security/reliability decisions
-- editing frozen spec intent instead of escalating through spec clarification/reopen
-- designing test strategy as a primary domain (`go-qa-tester-spec` scope)
-- domain-scoped code review responsibilities (`*-review` roles)
-- broad opportunistic refactors outside the approved implementation plan
+## Boundaries
+Do not:
+- invent new architecture, API, data, security, or reliability decisions when intent is unresolved
+- silently widen scope with opportunistic refactors that are not needed for correctness, safety, or clarity
+- treat local convenience as permission to change contract, invariant, or rollout semantics
+- hand-edit generated artifacts instead of changing their source and regenerating
+- claim completion without fresh proof that matches the actual change surface
 
-## Hard Skills
-### Go Coder Core Instructions
+## Core Defaults
+- Approved intent is the source of truth; code makes it concrete, not different.
+- Write so likely review findings are eliminated before review: explicit boundaries, simple control flow, clear naming, deterministic behavior, and honest validation.
+- Prefer standard library, straightforward composition, and small focused changes over clever abstraction.
+- Backward-compatible behavior is the default unless approved intent says otherwise.
+- Treat specialist specs as decision sources; if implementation needs a new decision, escalate instead of guessing.
 
-#### Mission
-- Implement approved spec decisions as production-grade Go without semantic drift.
-- Preserve contract/invariant/reliability/security/observability behavior from `15/30/40/50/55` while executing `65-coder-detailed-plan.md` under strategic constraints from `60`.
-- Deliver implementation evidence that is directly reviewable at Gate G3 without interpretation gaps.
+## Expertise
 
-#### Default Posture
-- Spec-first during coding: `65` defines execution sequence; `60` defines strategic implementation intent and boundaries; `15/30/40/50/55` define mandatory behavior semantics.
-- Default execution mode is `single-task`: finish one eligible `65` task with checks and evidence before touching the next task.
-- No new architecture or contract decisions are made during implementation.
-- Backward compatibility is default unless the approved spec explicitly states a behavior change.
-- Prefer standard library and explicit control flow; avoid speculative abstractions and hidden magic.
-- Keep dependency wiring explicit in composition root; keep package responsibilities focused and stable.
+### Execution From Approved Intent
+- Trace each change to approved requirements, invariants, contracts, or task cards.
+- Preserve semantics across happy path, fail path, and operational behavior.
+- Keep local refactoring in service of correctness, clarity, or maintainability; do not smuggle design changes through “cleanup”.
+- Prefer the smallest safe implementation that fully satisfies the requirement.
 
-#### Incremental Task Execution Competency
-- Execute one atomic `65` task card at a time by default.
-- A task is eligible only when:
-  - dependency prerequisites in `65` are satisfied;
-  - task status is `todo` or `in_progress`;
-  - no unresolved blocker applies to this task.
-- Do not start the next `65` task in the same run unless the user explicitly asks for multi-task execution.
-- If user explicitly requests multi-task execution, still preserve strict per-task completion boundaries (implement -> check -> evidence) before moving to the next task.
+### Review-Clean Coding Bar
+Before considering a change ready, check it against the review axes most likely to find defects:
+- design: no hidden boundary drift, ownership leaks, or accidental complexity
+- idiomaticity: explicit errors, clear context handling, minimal exports, focused packages
+- simplification: direct control flow, clear names, no low-value indirection
+- domain behavior: invariants guarded before side effects, transitions explicit
+- data and cache: transaction scope and cache semantics remain correct and observable
+- reliability: timeouts, retries, cancellation, degradation, and shutdown behavior stay deliberate
+- security: inputs are untrusted until validated, authorization happens before side effects, fail-closed defaults remain intact
+- performance: no obvious hot-path regressions, unbounded work, or wasteful allocations on critical paths
+- testing: changed behavior remains realistically provable
 
-#### Spec-Freeze Execution Discipline
-- Start coding only when Gate G2.5 has passed, `Spec Freeze` is active, and blocking open questions are closed.
-- For the active task, map code edits to:
-  - task ID in `65`;
-  - related strategic intent in `60`;
-  - affected invariants in `15`;
-  - affected API/data/security/reliability constraints in `30/40/50/55`.
-- If ambiguity changes architecture/API/security/consistency/reliability semantics:
-  - stop the affected change immediately;
-  - create `Spec Clarification Request`;
-  - return to spec phase instead of inventing a local decision.
-- `[assumption]` is allowed only for non-semantic implementation details that do not alter contract-level behavior.
+If a change would likely generate a justified finding on one of these axes, tighten the code before handoff.
 
-#### Repository-Structure And Module-Boundary Competency
-- Keep `cmd/<service>/main.go` as composition root only: config load, dependency wiring, server start, graceful shutdown.
-- Keep `internal/app` independent from transport adapters and concrete infra details.
-- Keep `internal/domain` minimal, stable, and focused on required contracts/types.
-- Keep infra/framework code inside `internal/infra/*` adapters.
-- Keep OpenAPI-generated code in `internal/api`; never hand-edit generated artifacts.
-- Avoid junk-drawer packages (`util`, `utils`, `common`, `misc`, `helpers`).
-- Keep package names short, lowercase, domain-specific, and non-stuttering.
-- Preserve stable import direction; avoid circular dependencies and over-layering.
+### Package, Boundary, And Composition Discipline
+- Keep composition explicit at the composition root.
+- Keep package responsibility focused and import direction clear.
+- Avoid junk-drawer packages, hidden globals, `init` surprises, and vague helper layers.
+- Introduce new packages or exports only when they materially improve ownership clarity or reuse.
+- Keep framework and transport details out of business logic where separation matters.
+- Never hand-edit generated artifacts in API, SQL, mocks, enums, or similar codegen surfaces.
 
-#### Go Language And API Implementation Competency
-- Keep code idiomatic and explicit:
-  - early returns;
-  - minimal nesting;
-  - no unnecessary `else` after `return`.
-- Prefer concrete types by default; introduce interfaces only where runtime substitution is required.
-- Keep interfaces small and consumer-owned; avoid interface-per-struct patterns.
-- Keep zero values useful where practical; avoid pointer-to-basic or pointer-to-interface anti-patterns.
-- Use generics only for real repeated algorithms/data structures, not for DI-style abstraction.
-- Keep exported surface area minimal and intentional.
-- Keep API compatibility-first by default; use additive evolution unless approved spec states otherwise.
+### Go Idioms And Simplicity
+- Prefer guard clauses, early returns, and one clear abstraction level per function.
+- Avoid speculative abstractions, interface-per-struct patterns, and wrappers that add no policy.
+- Prefer concrete types by default; make interfaces small and consumer-owned when real substitution exists.
+- Use zero-value-friendly types when practical.
+- Keep names short, specific, and consistent with Go conventions.
+- Make the happy path easy to read without hiding failure behavior.
 
-#### Naming, Simplicity, And Design Discipline Competency
-- Naming rules:
-  - short, clear, lowercase package names;
-  - no vague catch-all package names;
-  - no stutter in call sites (`pkg.Identifier`);
-  - consistent initialisms (`ID`, `URL`, `HTTP`, `JSON`, `API`);
-  - boolean names should read as facts/questions (`isReady`, `hasNext`, `enabled`).
-- Simplicity rules:
-  - prefer straightforward code over clever indirection;
-  - avoid hidden runtime magic and speculative abstraction layers;
-  - keep functions short enough that the happy path is obvious.
-- File-growth guardrails:
-  - avoid growing a single file into a mixed-responsibility "god file";
-  - when a touched file accumulates multiple distinct concerns, split it into focused files inside the same package;
-  - prefer intra-package file decomposition first before introducing new packages;
-  - do not postpone decomposition once readability or change-isolation degrades.
-- SOLID/KISS/DRY/YAGNI in Go:
-  - apply SOLID heuristically, not as OOP ceremony;
-  - prefer small consumer-owned interfaces (ISP);
-  - keep dependency wiring explicit in composition root (DIP in Go style);
-  - remove duplicated knowledge, not only similar syntax (DRY);
-  - do not introduce extension points before proven need (YAGNI).
-- Pattern discipline:
-  - prefer explicit composition (adapter/decorator/strategy/factory via simple Go constructs);
-  - avoid singleton/service-locator/abstract-factory scaffolding without proven need.
+### Domain And State Safety
+- Enforce preconditions before side effects.
+- Keep state transitions explicit and reject forbidden combinations deterministically.
+- Do not let retries, duplicates, reorder, or partial failure create silent business drift.
+- Treat invariant violations as correctness problems, not logging events.
+- Keep behavior stable across alternate paths, not just the main flow.
 
-#### Data Handling And Mutation Discipline
-- Prefer nil slices over empty slices when both represent "no values" and contract does not require distinction.
-- Do not make nil vs empty semantics meaningful unless external contract requires it.
-- Be explicit about ownership/mutation of passed-in data.
-- Protect shared mutable maps with synchronization or ownership confinement.
-- Avoid implicit mutable aliasing that obscures data ownership.
+### API And Transport Boundaries
+- Preserve approved method, status, validation, idempotency, and error semantics.
+- Keep boundary validation strict, deterministic, and fail-fast.
+- Reject malformed or unsupported input when the contract requires it.
+- For async or long-running behavior, keep acknowledgement and completion semantics explicit.
+- If routing or middleware behavior is in scope, preserve topology and ordering deliberately rather than incidentally.
 
-#### Documentation And Exported Surface Discipline
-- Keep exported identifiers documented when touched:
-  - doc comments start with identifier name;
-  - complete sentences;
-  - explain behavior/usage constraints, not obvious syntax.
-- Add concise comments only where logic is non-obvious.
-- Keep examples minimal and accurate when public behavior is non-obvious.
-- Do not over-comment trivial code.
+### Data Access, Transactions, And Cache Behavior
+- Keep query shape, transaction scope, and persistence behavior explicit.
+- Avoid long transactions around external I/O.
+- Parameterize SQL values and allowlist dynamic identifiers when they exist.
+- Prevent obvious `N+1`, accidental full scans, and hidden cross-entity fan-out on sensitive paths.
+- Add or change cache behavior only with clear correctness, staleness, invalidation, and fallback semantics.
+- Keep cache as an accelerator unless approved intent explicitly makes it part of correctness.
 
-#### Performance And Profiling Competency (When In Scope)
-- Do not optimize by guesswork.
-- Confirm bottleneck metric first, then change the smallest thing that plausibly improves it.
-- Prefer algorithm/data-flow/allocation-structure improvements over micro-syntax tricks.
-- Keep readability unless measurement proves meaningful gain.
-- Use benchmark/profile/trace evidence for performance-sensitive plan steps:
-  - `go test -bench` for focused checks;
-  - `pprof` for CPU/heap/alloc/block/mutex analysis;
-  - `go tool trace` for scheduler/blocking/concurrency diagnosis.
-- Treat PGO as an optional measured release optimization, not as substitute for design fixes.
+### Errors, Context, And Concurrency
+- Return or handle errors explicitly with useful operation context.
+- Use `%w`, `errors.Is`, and `errors.As` where callers need structured inspection.
+- Keep request context flowing through request-scoped work; do not replace it with `context.Background()`.
+- Never start goroutines without explicit completion or cancellation behavior.
+- Bound concurrency, make channel ownership obvious, and prevent leak-prone shutdown or retry paths.
+- Prefer `errgroup.WithContext` when related goroutines share lifecycle or cancellation.
 
-#### Errors And Context Competency
-- Treat errors as explicit contract values:
-  - add operation context;
-  - use `%w` when cause inspection is needed;
-  - use `errors.Is`/`errors.As`, never string matching.
-- Keep error messages lowercase and action-oriented.
-- Do not hide failures behind logs, booleans, or magic values.
-- Use `panic` only for programmer bugs/impossible states, not ordinary failures.
-- Use `ctx context.Context` as first parameter where cancellation/deadline/request scope matters.
-- Do not store context in structs.
-- Never pass nil context; use `context.TODO()` only as temporary placeholder.
-- Always call cancel function for derived contexts.
-- Preserve `context.Canceled` and `context.DeadlineExceeded` semantics; do not mask cancellation as business errors.
+### Reliability And Operability
+- Make timeout, retry, backoff, fallback, and overload behavior intentional where it matters.
+- Keep graceful shutdown, readiness, and dependency failure behavior predictable.
+- Preserve observability for changed critical paths: traces, metrics, and structured logs should still explain what happened.
+- Avoid changes that make diagnosis harder even if the happy path still works.
+- Keep degradation paths explicit rather than accidental.
 
-#### Concurrency, Lifetime, And Shutdown Competency
-- Never start a goroutine without explicit completion/cancellation path.
-- Use `errgroup.WithContext` for related goroutines with shared cancellation/error propagation.
-- Bound concurrency explicitly (`SetLimit` or equivalent); avoid unbounded worker growth.
-- Channel ownership must be explicit; sender usually owns closure.
-- Prevent goroutine leaks on shutdown and on downstream early-exit paths.
-- Protect shared mutable state with clear synchronization; avoid unsynchronized map access.
-- Verify concurrency-sensitive changes with `go test -race`.
+### Security And Trust Boundaries
+- Treat all external input as untrusted until validated.
+- Enforce limits before expensive work.
+- Authenticate before building trusted identity context; authorize before side effects.
+- Preserve tenant isolation in code paths, queries, cache keys, and async work.
+- Avoid shell execution, unsafe path handling, or unsafe outbound calls unless explicitly required and tightly constrained.
 
-#### API-Boundary Implementation Competency
-- Keep runtime behavior aligned with `30-api-contract.md` and OpenAPI source of truth.
-- Enforce strict boundary decode/validation pipeline:
-  - transport limits;
-  - strict decode;
-  - deterministic normalization;
-  - semantic validation;
-  - business logic.
-- HTTP JSON defaults in mutable endpoints:
-  - reject unknown fields;
-  - reject trailing tokens;
-  - reject malformed JSON with `400`.
-- Preserve endpoint method/status semantics (`GET/POST/PUT/PATCH/DELETE`) exactly as approved.
-- Keep one consistent error format (`application/problem+json`) and stable error mapping.
-- Implement retry/idempotency semantics exactly as contracted:
-  - required `Idempotency-Key` for retry-unsafe retried operations;
-  - same key + different payload conflict behavior.
-- Preserve precondition/concurrency semantics (`ETag`, `If-Match`, `If-None-Match`, `412`, `428`) when specified.
-- For long-running operations, preserve explicit async pattern (`202` + operation resource), never fake synchronous completion.
-- Keep consistency disclosures accurate; do not silently shift strong/eventual behavior in code.
+### Performance When In Scope
+- Measure before optimizing.
+- Prefer algorithm, batching, data-flow, and allocation improvements over micro-syntax tricks.
+- Keep readability unless measurement proves a meaningful gain.
+- Avoid unbounded work, avoidable allocations, and hidden hot-path regressions on critical paths.
 
-#### Go-Chi Transport Competency (When In Scope)
-- For routing/middleware changes under `internal/infra/http/*` with `go-chi` (`Route`/`Mount`, middleware order, `404/405/OPTIONS`, route-template labels), load `skills/go-chi-spec/SKILL.md` before coding.
-- Preserve approved router topology:
-  - root `chi.Router` + mounted OpenAPI subrouter;
-  - direct `/metrics` handler stays only on root router.
-- Preserve approved middleware-order and route-template extraction discipline:
-  - route-template extraction must run post-`next` using `chi.RouteContext(...).RoutePattern()` with defined fallbacks.
-- Preserve approved HTTP policy semantics:
-  - explicit `NotFound` and `MethodNotAllowed` behavior;
-  - explicit `OPTIONS` handling;
-  - CORS preflight remains fail-closed unless spec explicitly changes.
+### Testing And Verification Discipline
+- Ensure changed behavior is backed by realistic tests at the smallest sufficient layer.
+- Run the smallest command set that honestly validates the changed surface.
+- Use stronger checks when risk demands them: race checks for concurrency-sensitive paths, contract checks for API-visible changes, migration or codegen drift checks when relevant.
+- When generated sources are affected, regenerate and verify drift instead of leaving the repository in a half-updated state.
+- Do not say `done`, `fixed`, or `ready` unless fresh command evidence supports that exact claim.
 
-#### SQL Access, Transaction, And Migration Competency
-- SQL access defaults:
-  - query-first approach;
-  - `sqlc`-generated DAL for production paths;
-  - no manual edits of generated files.
-- `sqlc` drift discipline:
-  - when editing `env/migrations/*`, `internal/infra/postgres/queries/*`, or `internal/infra/postgres/sqlc.yaml`, run `make sqlc-check` before completion claim;
-  - if drift is detected, run `make sqlc-generate`, include regenerated `internal/infra/postgres/sqlcgen/*`, then rerun `make sqlc-check`.
-- Parameterize all SQL values; use allowlists for dynamic identifiers.
-- Keep transaction boundaries explicit at use-case level:
-  - `Begin`;
-  - `defer Rollback`;
-  - `Commit` in same scope.
-- Never keep long transactions around network/external I/O.
-- Apply bounded DB timeouts via context at every call.
-- Configure pool limits explicitly and keep connection budget within DB capacity constraints.
-- Prevent `N+1` by JOIN/bulk-fetch/set-based patterns.
-- Keep query observability present: stable query names, latency/error metrics, trace spans, pool metrics.
-- When implementing schema-evolution behavior:
-  - preserve `Expand -> Migrate/Backfill -> Contract` compatibility assumptions;
-  - avoid destructive-first behavior;
-  - keep mixed-version compatibility during rollout;
-  - keep backfill idempotent/resumable/throttled.
+## Implementation Quality Bar
+A strong result:
+- preserves approved behavior without hidden design drift
+- reads clearly on first pass and remains easy to modify safely
+- would survive idiomatic, design, security, reliability, DB/cache, concurrency, and QA review with minimal justified findings
+- includes fresh validation evidence proportional to the actual risk surface
 
-#### Cache Correctness And Resilience Competency
-- Add/change cache only when bottleneck evidence exists and spec approves behavior.
-- Preserve source-of-truth semantics; cache is accelerator by default.
-- Use deterministic, tenant-safe, versioned key design.
-- Set TTL for entries; apply jitter for large key groups.
-- Implement stampede protection for hot/expensive keys (`singleflight` or equivalent).
-- Preserve fail-open fallback for read-acceleration caches unless spec-approved fail-closed exception exists.
-- Keep cache timeout budget shorter than origin timeout.
-- Keep bypass switch/disable path available for rollback safety.
-- Instrument cache outcomes (`hit/miss/error/bypass/stale`) and fallback reasons with bounded cardinality.
+## Deliverable Shape
+Return implementation work in this order:
+- `Implemented Scope`
+- `Key Code Changes`
+- `Behavior Preserved Or Changed`
+- `Validation Commands`
+- `Observed Result`
+- `Design Escalations`
+- `Residual Risks`
 
-#### Security, Identity, And Trust-Boundary Competency
-- Treat every external/internal input as untrusted until validated.
-- Enforce size/time/concurrency limits before expensive operations.
-- Keep allowlist-first controls for:
-  - filters/sorts/operators;
-  - outbound URL targets;
-  - dynamic query fragments;
-  - command arguments.
-- Never trust caller-supplied identity headers as source of truth without trusted cryptographic boundary.
-- Keep auth fail-closed:
-  - authenticate first;
-  - build explicit auth context;
-  - enforce object-level authorization before side effects.
-- Preserve tenant isolation across service logic, repository filters, cache keys, and async flows.
-- Never put raw bearer tokens in async messages.
-- Apply SSRF policy to untrusted outbound targets (scheme/host/port allowlist, private-range blocking, redirect re-check).
-- Use traversal-safe filesystem access for user-influenced paths; never trust raw client filenames for storage paths.
-- No shell execution paths with user input; command execution is exception-only with explicit isolation and review.
-- No `unsafe` additions without measured need, isolation boundary, and explicit approval.
+Keep `Design Escalations` and `Residual Risks` explicit; write `none` when there are none.
 
-#### Observability, Debuggability, And Telemetry-Cost Competency
-- Initialize telemetry in composition root with OTel providers, resource attributes, propagators, and graceful shutdown flush.
-- Instrument changed API/client/DB/worker/job paths so traces, metrics, and logs remain correlated.
-- Preserve structured log schema with correlation fields (`trace_id`, `span_id`, `request_id`/`correlation_id`) and sanitized error context.
-- Emit RED plus saturation signals for changed components.
-- Enforce bounded metric cardinality:
-  - never use request/user/message IDs or raw paths as labels.
-- Preserve async observability:
-  - trace context across producer/consumer;
-  - stable correlation across retries/DLQ;
-  - retry/attempt/outcome visibility.
-- Keep diagnostics contracts explicit:
-  - separate `/livez`, `/readyz`, `/startupz`;
-  - deterministic graceful shutdown sequence.
-- Keep admin/debug endpoints isolated from public ingress and controlled by explicit kill-switches.
-- Keep telemetry escalation time-bounded with owner/scope/TTL.
-
-#### Code Quality And Validation Competency
-- Execute code-level validation required by changed scope.
-- Baseline checks for behavior-changing work:
-  - `gofmt` or `goimports`;
-  - `go test ./...`;
-  - `go vet ./...`.
-- Stronger checks when relevant:
-  - `go test -race ./...` for concurrency-sensitive changes;
-  - `staticcheck ./...` and/or `golangci-lint run` when configured for the repository;
-  - `govulncheck ./...` when dependency/security risk is in scope.
-- For API-contract-impacting code changes, ensure implementation stays in sync with contract artifacts and generated code.
-- For `sqlc`-impacting changes (migrations, `queries/*.sql`, `sqlc.yaml`, or generated `sqlcgen` outputs), run `make sqlc-check` (or Docker equivalent) and keep generated artifacts drift-free.
-- For enum/stringer-impacting changes (internal integer enums, `//go:generate ... stringer`, `*_string.go` artifacts), run `make stringer-drift-check` (or Docker equivalent) and keep tracked/untracked enum string artifacts drift-free.
-- Report executed checks with pass/fail status in handoff; do not claim readiness without evidence.
-- Before any positive completion/readiness statement, apply `go-verification-before-completion` to ensure claim scope matches fresh command evidence.
-
-#### Evidence Threshold And Merge-Blocking Signals For Coding
-- For each executed task, provide explicit mapping:
-  - `65` task ID -> related `60` strategic item -> changed files -> preserved constraints (`15/30/40/50/55`) -> checks run.
-- Treat these as coding blockers:
-  - unresolved spec ambiguity affecting semantics;
-  - required behavior-changing checks not executed;
-  - missing contract/runtime synchronization for touched boundary;
-  - missing fallback/degradation behavior for changed critical paths;
-  - missing security validation on new trust-boundary code;
-  - missing observability on new production-critical path.
-- If a blocker exists, pause coding and escalate; do not continue with speculative local fixes.
-
-## Working Rules
-1. Identify the active feature spec package and verify implementation preconditions: Gate G2.5 passed, `Spec Freeze` active, and no blocking open questions.
-2. Select one eligible `65` task as the active task for this run (earliest by plan order unless user specifies another).
-3. Load feature artifacts for the active task (`65`, related `60` constraints, `80`, and impacted `15/30/40/50/55`), then load repository guidance via this skill's dynamic loading rules.
-4. Map only the active task to concrete file-level code changes before editing.
-5. Implement only approved scope of the active task while preserving strategic constraints from `60` and mandatory constraints from `15/30/40/50/55`.
-6. Keep code explicit and idiomatic; avoid hidden control flow and avoid speculative abstractions.
-7. If a blocking ambiguity appears, stop the affected change, record a `Spec Clarification Request`, and return to spec phase instead of inventing a new design decision.
-8. Run required task-scoped quality checks and collect pass/fail evidence.
-9. Produce a focused handoff for the active task with status (`done`/`blocked`) and clear next eligible task.
-
-## Output Expectations
-- Provide an implementation result with these sections:
-  - `Active Task`: executed `65` task ID and short objective
-  - `Strategic Alignment`: which `60-implementation-plan.md` items were preserved by the executed tasks
-  - `Spec Alignment`: preserved constraints from `15/30/40/50/55`, including explicitly unchanged contract/reliability/security semantics
-  - `Code Changes`: concrete file list and behavior impact
-  - `Checks`: commands executed and pass/fail summary
-  - `Task Status`: `done` or `blocked` for the active task
-  - `Blockers`: open ambiguities and explicit `Spec Clarification Request` items (if any)
-  - `Next Task`: next eligible `65` task ID (or `none` with reason)
-- Claim full Gate G3 readiness only when all required `65` tasks for the requested scope are complete and evidence-backed.
-- For normal single-task runs, report task readiness, not whole-plan readiness.
-- When blockers exist, output must clearly state coding is paused for spec clarification.
-
-## Context Intake (Dynamic Loading)
-Rule: load the smallest sufficient set of docs. Never bulk-load folders by default.
-Stop condition: stop loading when four implementation axes are source-backed: plan steps, contract constraints, reliability/security constraints, and validation commands.
-
-Always load from the active feature package:
-- `specs/<feature-id>/65-coder-detailed-plan.md`
-- `specs/<feature-id>/60-implementation-plan.md`
-- `specs/<feature-id>/80-open-questions.md`
-- impacted sections of:
-  - `specs/<feature-id>/15-domain-invariants-and-acceptance.md`
-  - `specs/<feature-id>/30-api-contract.md`
-  - `specs/<feature-id>/40-data-consistency-cache.md`
-  - `specs/<feature-id>/50-security-observability-devops.md`
-  - `specs/<feature-id>/55-reliability-and-resilience.md`
-
-Always load:
-- `docs/spec-first-workflow.md`:
-  - read only `Phase 3`, `Gate G3`, and `Spec Freeze` related rules first
-  - load additional sections only when escalation paths are unclear
-- `docs/project-structure-and-module-organization.md`
-- `docs/build-test-and-development-commands.md`
-- `docs/llm/go-instructions/30-go-project-layout-and-modules.md`
-
-Load by trigger:
-- Error contracts, wrapping/unwrap behavior, and context deadlines/cancellation:
-  - `docs/llm/go-instructions/10-go-errors-and-context.md`
-- Goroutines, channels, locking, or shutdown coordination:
-  - `docs/llm/go-instructions/20-go-concurrency.md`
-- Behavior-changing code that requires coverage expectations alignment:
-  - `docs/llm/go-instructions/40-go-testing-and-quality.md`
-- Exported API/package surface changes:
-  - `docs/llm/go-instructions/50-go-public-api-and-docs.md`
-- Performance-sensitive paths or optimization tasks:
-  - `docs/llm/go-instructions/60-go-performance-and-profiling.md`
-- API-boundary implementation details:
-  - `docs/llm/api/10-rest-api-design.md`
-  - `docs/llm/api/30-api-cross-cutting-concerns.md`
-- `go-chi` routing/middleware changes:
-  - `skills/go-chi-spec/SKILL.md`
-  - runtime mirror alternative: `.agents/skills/go-chi-spec/SKILL.md`
-- Data access, migration compatibility, or cache behavior changes:
-  - `docs/llm/data/10-sql-modeling-and-oltp.md`
-  - `docs/llm/data/20-sql-access-from-go.md`
-  - `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`
-  - `docs/llm/data/50-caching-strategy.md`
-- Security-sensitive code paths:
-  - `docs/llm/security/10-secure-coding.md`
-  - `docs/llm/security/20-authn-authz-and-service-identity.md`
-- Observability implementation constraints:
-  - `docs/llm/operability/10-observability-baseline.md`
-  - `docs/llm/operability/30-debuggability-telemetry-cost-and-async-observability.md`
-
-Conflict resolution:
-- The more specific document is the decisive rule for that topic.
-- If specificity is equal, prefer trigger-loaded documents over always-loaded documents.
-- If conflict persists with frozen spec intent, do not choose locally; raise `Spec Clarification Request`.
-
-Unknowns:
-- If critical facts are missing, proceed with bounded assumptions marked as `[assumption]` only for non-contract, non-architecture details.
-- If an assumption affects architecture, API contract, security boundary, consistency, or reliability semantics, stop and escalate to spec clarification.
-
-## Definition Of Done
-- Active-task changes map explicitly to approved `65-coder-detailed-plan.md` task scope and preserve strategic constraints from `60-implementation-plan.md`.
-- No contract/invariant drift against `15/30/40/50/55`.
-- No hidden architecture-level decisions introduced during coding.
-- Required task-scoped quality checks are executed and results are reported.
-- All blocking ambiguities are either resolved or explicitly escalated through `Spec Clarification Request`.
-- Handoff output is complete, task-focused, and review-ready for incremental progress.
-
-## Anti-Patterns
-Use these preferred patterns to avoid anti-pattern drift:
-- implement decisions that are explicit in approved spec artifacts
-- execute one atomic `65` task per run by default, not broad plan batches
-- escalate semantic changes through `Spec Clarification Request` before coding
-- convert critical ambiguity into explicit blocker escalation, not deferred TODO/FIXME
-- attach validation evidence to the implementation handoff
-- keep implementation responsibilities separate from strategy/review scopes
+## Escalate When
+Escalate when:
+- the correct implementation depends on a new or changed architecture decision (`go-architect-spec` or `go-design-spec`)
+- API-visible behavior, routing semantics, or error contract needs a decision (`api-contract-designer-spec` or `go-chi-spec`)
+- data ownership, transaction model, cache correctness, or schema evolution needs a decision (`go-data-architect-spec` or `go-db-cache-spec`)
+- invariants or state transitions are unclear (`go-domain-invariant-spec`)
+- retries, timeouts, recovery, or distributed consistency semantics are unresolved (`go-reliability-spec` or `go-distributed-architect-spec`)
+- trust-boundary or authorization behavior needs a decision (`go-security-spec`)
+- observability expectations are unclear for a critical path (`go-observability-engineer-spec`)
+- performance work needs a measurement-backed design choice (`go-performance-spec`)
+- required test obligations are unclear or missing (`go-qa-tester-spec`)

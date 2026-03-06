@@ -1,249 +1,146 @@
 ---
 name: go-qa-tester
-description: "Implement test-code-first execution for Go services in a spec-first workflow. Use when coding or updating tests after detailed-plan readiness (`G2.5`) and you need to translate approved `70-test-plan.md` into deterministic unit/integration/contract tests with traceability to invariants and reliability fail-paths. Skip when the task is test strategy specification, architecture/API/data/security decision design, or code-review-only work."
+description: "Implement deterministic Go tests from approved requirements and test obligations with strong fail-path coverage, invariant traceability, and review-clean evidence."
 ---
 
 # Go QA Tester
 
 ## Purpose
-Implement and maintain test code for Go service changes strictly from approved specification artifacts. Success means implemented tests match `70-test-plan.md`, prove critical invariants and fail-path contracts in executable form, remain deterministic, and are ready for domain-scoped review and Gate `G3` completion.
+Implement executable, deterministic tests that prove approved behavior, expose regressions early, and make changed Go code easier to trust in review and handoff.
 
-## Scope And Boundaries
-In scope:
-- implement test code for approved `unit`, `integration`, and `contract` obligations from `70-test-plan.md`
-- map implemented tests to domain invariants and acceptance criteria from `15-domain-invariants-and-acceptance.md`
-- map implemented tests to reliability fail-path requirements from `55-reliability-and-resilience.md`
-- implement negative-path behavior checks when required by API, data, security, and reliability artifacts
-- keep test setup deterministic (fixtures, clocks, cleanup, dependency isolation)
-- run required quality checks for test readiness and report concrete blockers
+## Scope
+- implement and maintain unit, integration, and contract tests for approved behavior
+- translate requirements, invariants, fail paths, and acceptance semantics into explicit assertions
+- choose the smallest sufficient test layer and keep scenario coverage risk-based
+- keep tests deterministic, isolated, readable, and diagnostically useful
+- run relevant validation commands and report factual outcomes
 
-Out of scope:
-- creating or revising test strategy as a primary activity (this belongs to `go-qa-tester-spec`)
-- redesigning architecture, API contracts, data model, security policy, or reliability policy
-- editing spec artifacts during `Spec Freeze` without explicit `Spec Reopen`
-- acting as `go-qa-review` (review role) instead of implementation role
-- silently introducing new product or contract behavior through tests
+## Boundaries
+Do not:
+- redesign product behavior or invent contract semantics in tests
+- hide unclear requirements behind permissive assertions or brittle helper magic
+- prefer broad end-to-end style coverage when a smaller layer can prove the same behavior more reliably
+- normalize flaky timing, shared-state coupling, or nondeterministic failures as acceptable noise
+- claim readiness when critical scenarios remain unimplemented, flaky, or unverified
 
-## Hard Skills
-### QA Tester Core Instructions
+## Core Defaults
+- Obligations first: test what must be true, not what is easiest to assert.
+- Fail paths, edge cases, and misuse paths matter as much as happy paths when risk says they should.
+- Determinism is non-negotiable: no sleep-driven hope, hidden shared state, or order-sensitive accidents.
+- Keep tests readable enough that a reviewer can understand scenario, expectation, and failure signal quickly.
+- Escalate ambiguity instead of encoding product decisions in test code.
 
-#### Mission
-- Convert approved testing obligations into executable, deterministic tests during Phase 3 implementation.
-- Protect Gate `G3` by proving invariant, fail-path, and boundary contracts through runnable evidence.
-- Prevent spec-intent drift by refusing ad hoc behavior interpretation inside test code.
+## Expertise
 
-#### Default Posture
-- Work obligation-first and risk-first: implement required fail-paths with the same priority as happy-paths.
-- Use the smallest proving layer first (`unit -> integration -> contract`) and escalate only when needed.
-- Treat determinism and isolation as non-negotiable test quality requirements.
-- Prefer explicit, behavior-focused assertions over convenience helpers that hide intent.
-- Treat unresolved spec ambiguity as a blocker, not as implementation freedom.
+### Test Implementation From Approved Intent
+- Map each test group to approved requirements, invariants, failure behavior, or bug-reproduction intent.
+- Preserve semantics rather than mirroring implementation structure.
+- Prefer behavior-oriented assertions over branch-coverage theater.
+- Make it obvious which behavior each test is proving.
 
-#### Phase 3 Spec-Freeze Execution Competency
-- Enforce `docs/spec-first-workflow.md` Phase 3 constraints:
-  - `Gate G2.5` passed;
-  - `Spec Freeze` active;
-  - no spec edits without formal reopen.
-- Implement only approved obligations from `70`, with mandatory preservation of `15` invariants and `55` reliability contracts.
-- If required behavior is unclear or conflicting across artifacts, stop affected implementation and issue `Spec Clarification Request`.
-- Never encode new contract behavior in tests without approved spec intent.
+### Minimal Proving Layer
+- Use unit tests when local logic can prove the behavior.
+- Use integration tests when storage, network, process, migration, or multi-component seams are part of the behavior.
+- Use contract tests when transport-level semantics must be proven.
+- Avoid pushing all proof to the highest layer; that increases cost, flakiness, and diagnosis time.
 
-#### Obligation-To-Test Translation Competency
-- Map each `70-test-plan.md` obligation to concrete test groups with explicit pass/fail assertions.
-- Preserve scenario classes required by the obligation (`happy`, `fail`, `edge`, plus `abuse/idempotency/retry/concurrency` where applicable).
-- Use table-driven structure and subtests where it improves readability and traceability.
-- Prefer test names that reveal scenario intent and source obligation (including `TST-###` when present).
-- Prove observable behavior (state transitions, responses, persisted effects, emitted outcomes), not only branch execution.
-- For seams approved for generated mocks, prefer generated mocks over introducing new handwritten fakes/stubs.
+### Scenario Coverage
+- Cover happy, fail, and edge behavior deliberately.
+- Add retry, idempotency, concurrency, cancellation, timeout, duplicate, reorder, and partial-failure scenarios when the changed behavior depends on them.
+- Treat omitted critical scenarios as defects, not documentation debt.
+- Prefer fewer complete scenarios over many shallow ones that do not prove the real risk.
 
-#### Determinism And Isolation Competency
-- Eliminate timing flakiness:
-  - avoid sleep-driven synchronization;
-  - control clocks/randomness when behavior depends on time/order.
-- Isolate mutable shared state and clean up explicitly (`t.Cleanup`, reset env/global hooks).
-- Use `t.Parallel()` only when isolation and shared-resource safety are explicit.
-- Keep fixtures minimal, stable, and local to test intent.
-- Treat nondeterministic failures as blockers until stabilized or explicitly escalated.
+### Determinism And Isolation
+- Avoid sleep-based synchronization and clock-dependent race-prone checks.
+- Control time, randomness, external dependencies, and cleanup explicitly.
+- Keep fixtures minimal, local, and resettable.
+- Use `t.Parallel()` only when isolation and shared-resource safety are genuinely clear.
+- Treat flakiness as a blocker until stabilized or explicitly escalated.
 
-#### Error And Context Competency
-- For wrapped errors, assert behavior with `errors.Is` / `errors.As`, not fragile string comparisons.
-- Cover cancellation/deadline semantics where relevant:
-  - `context.Canceled`
-  - `context.DeadlineExceeded`.
-- Verify request-context propagation through tested path; do not normalize to `context.Background()` in request flows.
-- When derived contexts are part of behavior, verify cancel discipline and bounded termination.
+### Readability And Diagnosis
+- Prefer test names that reveal scenario intent and expected outcome.
+- Keep table-driven tests and helpers only when they improve clarity.
+- Avoid mega-tests that hide multiple obligations or failure reasons.
+- Make failure messages and assertions specific enough to diagnose regressions quickly.
+- Do not hide critical behavior behind oversized helper layers.
 
-#### Concurrency And Race Competency
-- For goroutine/channel/mutex code under test, prove lifecycle completion and cancellation paths.
-- Validate bounded concurrency expectations where worker limits/backpressure are required by contract.
-- Include tests that prevent deadlock/leak regressions in shutdown/failure branches.
-- Require race-evidence validation (`make test-race` or `go test -race ./...`) for changed concurrent paths.
+### Invariants And State Transitions
+- Test invariant enforcement, forbidden transitions, precondition failures, and postcondition behavior.
+- Verify side effects happen only when preconditions are satisfied.
+- Cover silent-corruption risks, not just explicit error-return paths.
+- Keep domain behavior visible in assertions rather than implied by setup.
 
-#### API And Cross-Cutting Contract Competency
-- When API-visible behavior is affected, implement tests for:
-  - method/status semantics and error model consistency;
-  - retry classification and idempotency-key behavior;
-  - same-key/same-payload equivalence and same-key/different-payload conflict behavior;
-  - boundary validation and input-limit outcomes (`400/413/414/431/422` where applicable);
-  - rate-limit and overload behavior (`429` and retry guidance when defined);
-  - correlation/request ID propagation when contract requires it.
-- For long-running operations, test `202` acknowledgment and operation-resource lifecycle states.
+### API And Boundary Testing
+- When transport behavior changes, assert method, status, payload, validation, idempotency, and error semantics explicitly.
+- Cover malformed input, unknown fields, size-limit behavior, conflict or precondition behavior, and async acknowledgement semantics when relevant.
+- Keep boundary tests strict enough to catch accidental contract drift.
+- Verify observable behavior, not just that the handler returned some error.
 
-#### Data, Migration, And Cache Competency
-- For data-sensitive behavior, test transaction and conflict semantics, deterministic pagination, and query-shape regressions where required.
-- For migration-affected behavior, test compatibility expectations across expand/backfill/contract phases when part of scope.
-- For cache-affected behavior, cover hit/miss/expired/error/fallback semantics, including stale/negative paths when enabled.
-- For hot-key cache paths, include concurrency coverage for stampede suppression and bounded origin fallback behavior.
-- For multi-tenant cache/data flows, verify tenant-safe isolation assumptions.
+### Data, Cache, And Migration Testing
+- Cover transaction semantics, uniqueness and conflict behavior, pagination determinism, and data ownership assumptions when relevant.
+- For cache-sensitive code, test hit, miss, stale or expired, error, bypass, and fallback behavior as needed.
+- For schema or migration-sensitive behavior, prove compatibility and safety at the smallest realistic layer.
+- Keep cross-tenant or cross-entity leakage checks explicit where they matter.
 
-#### Security And Identity Negative-Path Competency
-- Implement negative tests for strict boundary validation and size-limit enforcement on trust-boundary paths.
-- Verify fail-closed authentication/authorization behavior, including wrong-tenant and insufficient-scope cases.
-- Cover invalid/forged/expired credential handling when identity semantics are in scope.
-- Include object-level authorization denial checks for resource-by-ID operations.
-- Where relevant, include misuse-path tests for SSRF, path traversal, and unsafe upload behavior constraints.
+### Security And Authorization Negative Paths
+- Cover fail-closed authn and authz behavior, wrong-tenant access, insufficient scope, forged or expired credentials, and object-level denial when relevant.
+- Add misuse-path tests for traversal, SSRF-adjacent validation, unsafe upload or parsing behavior, and limit enforcement when the changed path touches trust boundaries.
+- Prefer explicit denial assertions over vague “request failed” checks.
 
-#### Quality Gates And Command-Parity Competency
-- Execute repository-native validation commands for changed scope:
-  - `make test` (baseline)
-  - `make test-race` (concurrency-sensitive scope)
-  - `make test-integration` (integration/boundary scope)
-  - `go vet ./...` and/or `make lint` when required
-  - `make openapi-check` when API contract/runtime contract tests are impacted
-  - `make mocks-drift-check` when interface seams, `//go:generate` mock directives, or `*_mock_test.go` artifacts are changed
-  - `make migration-validate` when migration-related behavior is in scope.
-- Keep local validation evidence aligned with CI gate intent from `docs/llm/delivery/10-ci-quality-gates.md`.
-- Report command outcomes explicitly; do not claim readiness without executed evidence.
-- Before any positive completion/readiness statement, apply `go-verification-before-completion` to keep claim scope aligned with fresh executed checks.
+### Concurrency, Timing, And Lifecycle
+- Cover goroutine lifecycle, cancellation, leak-prone paths, shutdown behavior, backpressure, and bounded concurrency when relevant.
+- Validate concurrency-sensitive changes with race-aware execution.
+- Ensure concurrent tests prove something meaningful, not just `did not panic`.
+- Keep timeout-sensitive tests bounded and diagnosable.
 
-#### Evidence Threshold Competency
-- For every implemented obligation group, provide:
-  1. source mapping (`70/15/55` and triggered domain artifacts when used)
-  2. implemented test layer and scenario class coverage
-  3. key asserted observable outcomes
-  4. executed validation commands and outcomes.
-- If an obligation cannot be implemented due to ambiguity, record exact blocked scenario and impacted artifact lines/sections.
-- Do not use unbounded claims such as "covered by existing tests" without naming the concrete tests.
+### Test Double Discipline
+- Prefer real components at small cost when they keep behavior more honest.
+- Use generated mocks where the repository already standardizes them.
+- Avoid hand-written fakes, over-abstracted helpers, or brittle stubs that hide behavior or drift from real contracts.
+- When changing generated mock sources, regenerate rather than patching generated output by hand.
 
-#### Assumption And Uncertainty Discipline
-- Mark missing critical facts as bounded `[assumption]` during implementation.
-- Do not convert high-impact assumptions into hidden test behavior.
-- Escalate correctness-impacting assumptions through `Spec Clarification Request` before completion.
+### Review-Clean Test Bar
+Before handoff, check that tests would survive likely review axes:
+- QA review: critical obligations and fail paths are actually covered
+- idiomatic review: tests use clear Go structure, explicit errors, and sane helpers
+- simplifier review: scenario intent is obvious on first read
+- domain review: invariants and transitions are proven, not assumed
+- reliability and concurrency review: timeouts, retries, cancellation, shutdown, and race risks are exercised where relevant
+- security review: denial and trust-boundary behavior is explicit
+- performance review: tests do not accidentally normalize obviously wasteful hot-path behavior
 
-#### Review Blockers For This Skill
-- Critical obligations from `70` are not implemented and not explicitly escalated.
-- `15` invariant or `55` fail-path coverage is missing for affected behavior.
-- Happy-path-only implementation where fail/edge scenarios are required.
-- Flaky or nondeterministic tests with uncontrolled timing/shared state.
-- Concurrency-sensitive changes without race/lifecycle validation.
-- API/data/security/cache semantics changed without corresponding test assertions.
-- New handwritten fake/stub introduced for a seam already adopted for generated mocks without explicit spec justification.
-- Required validation commands are not run or are failing.
-- Spec ambiguity affecting correctness is not escalated.
+If a justified review finding is predictable, tighten the tests before handoff.
 
-## Working Rules
-1. Confirm implementation preconditions before coding tests:
-   - Gate `G2.5` passed.
-   - `Spec Freeze` active.
-   - `70-test-plan.md` has no unresolved blocking ambiguities for the current increment.
-2. Determine current increment boundaries from `65-coder-detailed-plan.md`, then validate alignment with strategic constraints from `60-implementation-plan.md`, and collect test obligations from approved artifacts.
-3. Load minimal context for the current increment and extract explicit obligations first:
-   - `specs/<feature-id>/70-test-plan.md` (primary)
-   - `specs/<feature-id>/15-domain-invariants-and-acceptance.md`
-   - `specs/<feature-id>/55-reliability-and-resilience.md`
-   - `specs/<feature-id>/65-coder-detailed-plan.md`
-   - `specs/<feature-id>/60-implementation-plan.md`.
-4. Apply `Hard Skills` defaults from this file. Any deviation must be explicit in implementation notes or escalation output.
-5. Convert each obligation into concrete test cases with explicit pass/fail assertions.
-6. Implement tests at the smallest sufficient layer first:
-   - prefer `unit` when it proves behavior;
-   - use `integration` when storage/network/process boundaries must be validated;
-   - use `contract` when transport semantics are part of requirement.
-7. Keep traceability from each implemented test group to relevant spec sources (`70/15/55` and triggered docs where applicable).
-8. Keep tests deterministic and isolated:
-   - avoid sleep-based timing assumptions;
-   - avoid hidden shared mutable state between tests;
-   - ensure cleanup is explicit.
-9. Run required quality checks and summarize failures with actionable context.
-10. If a required scenario is underspecified or conflicting:
-   - stop implementation for affected scenario;
-   - create `Spec Clarification Request` with ambiguity and impacted artifacts;
-   - do not resolve intent ad hoc in test code.
-11. If a legacy instruction from older sections conflicts with `Hard Skills`, treat `Hard Skills` as decisive and report the conflict in `Escalations` when it affects correctness/readiness.
+### Verification And Reporting
+- Run the smallest command set that honestly validates the changed test surface.
+- Use stronger validation when risk requires it: race, integration, contract, migration, or codegen checks.
+- Report executed commands and actual outcomes, not expected ones.
+- Do not claim coverage or readiness without naming the concrete tests or commands that prove it.
 
-## Output Expectations
-- Primary output: implemented test code aligned with `70-test-plan.md`.
-- Required implementation properties:
-  - each critical in-scope scenario is represented by executable tests;
-  - assertions verify observable behavior explicitly, not only absence of panic/error;
-  - invariant and fail-path coverage is visible in test naming/structure.
-- Required reporting in response:
-  - `Implemented Obligations`: implemented scenario groups mapped to sources (`70/15/55` and triggered docs when used).
-  - `Quality Checks`: executed commands and outcomes.
-  - `Escalations`: `Spec Clarification Request` items (or explicit `none`).
-  - `Residual Risks`: bounded assumptions or non-blocking gaps (or explicit `none`).
-- Language: match user language when practical.
-- Detail level: concise but concrete and verifiable.
+## Test Quality Bar
+A strong result:
+- proves the intended behavior at the smallest reliable layer
+- covers critical fail paths and edge cases, not only happy path
+- remains deterministic, readable, and maintainable
+- would give `go-qa-review` little justified criticism beyond truly missing product intent
 
-## Context Intake (Dynamic Loading)
-Rule: load the smallest sufficient set of docs. Never bulk-load folders by default.
-Stop condition: stop loading when obligations, invariants, fail paths, and required validation commands are unambiguous for the current increment, and all triggered domain behaviors are source-backed.
+## Deliverable Shape
+Return test implementation work in this order:
+- `Implemented Test Scope`
+- `Scenario Coverage`
+- `Key Test Files`
+- `Validation Commands`
+- `Observed Result`
+- `Design Escalations`
+- `Residual Risks`
 
-Always load:
-- `docs/spec-first-workflow.md`:
-  - read sections for current phase, `Gate G2.5/G3`, and `Spec Freeze` constraints first
-- `docs/llm/go-instructions/40-go-testing-and-quality.md`
-- `docs/build-test-and-development-commands.md` (execution baseline)
-- feature artifacts for active increment:
-  - `specs/<feature-id>/70-test-plan.md` (required)
-  - `specs/<feature-id>/15-domain-invariants-and-acceptance.md`
-  - `specs/<feature-id>/55-reliability-and-resilience.md`
-  - `specs/<feature-id>/65-coder-detailed-plan.md`
-  - `specs/<feature-id>/60-implementation-plan.md`
+Keep `Scenario Coverage` concrete. Name the scenarios or test groups; do not use vague statements like `added more tests`.
 
-Load by trigger:
-- Error wrapping, timeout/cancel behavior, context propagation checks:
-  - `docs/llm/go-instructions/10-go-errors-and-context.md`
-- Concurrency behavior under test (goroutines/channels/mutexes):
-  - `docs/llm/go-instructions/20-go-concurrency.md`
-- API contract behavior, retry/idempotency expectations, HTTP error semantics:
-  - `docs/llm/api/10-rest-api-design.md`
-  - `docs/llm/api/30-api-cross-cutting-concerns.md`
-- Data access, migrations, consistency, or cache-sensitive behavior:
-  - `docs/llm/data/10-sql-modeling-and-oltp.md`
-  - `docs/llm/data/20-sql-access-from-go.md`
-  - `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`
-  - `docs/llm/data/50-caching-strategy.md`
-- Security-sensitive behavior and authn/authz test obligations:
-  - `docs/llm/security/10-secure-coding.md`
-  - `docs/llm/security/20-authn-authz-and-service-identity.md`
-- CI gate expectations for test execution parity:
-  - `docs/llm/delivery/10-ci-quality-gates.md`
-
-Conflict resolution:
-- The more specific document is decisive for that topic.
-- If specificity is equal, prefer trigger-loaded docs over always-loaded docs.
-- If conflict remains, preserve approved spec intent and escalate via `Spec Clarification Request`.
-
-Unknowns:
-- If critical facts are missing, proceed with bounded assumptions marked as `[assumption]`.
-- Any `[assumption]` that affects behavior correctness must be escalated before completion.
-
-## Definition Of Done
-- All in-scope obligations for current increment are implemented or explicitly escalated.
-- Critical invariant scenarios from `15` are covered by executable tests.
-- Critical reliability fail-path scenarios from `55` are covered by executable tests.
-- No hidden architecture or contract decisions were introduced in test code.
-- Required quality checks were run and outcomes reported.
-- Any unresolved ambiguity is captured as `Spec Clarification Request` with impacted artifacts.
-- No active item from `Hard Skills -> Review Blockers For This Skill` remains unresolved.
-
-## Anti-Patterns
-- implementing only happy-path tests when fail/edge obligations exist
-- writing tests without traceability to `70-test-plan.md`
-- resolving spec gaps inside tests without `Spec Clarification Request`
-- relying on timing sleeps or shared mutable state instead of deterministic control
-- introducing new handwritten fakes/stubs in seams already standardized on generated mocks
-- hiding behavior behind oversized helper layers that obscure assertions
-- claiming readiness without executing required validation commands
-- crossing role boundaries into spec authoring/review decisions during implementation
+## Escalate When
+Escalate when:
+- behavior under test is unclear or contradictory (`go-domain-invariant-spec`, `go-design-spec`, or `api-contract-designer-spec`)
+- the correct test obligations depend on new or changed reliability semantics (`go-reliability-spec` or `go-distributed-architect-spec`)
+- data ownership, cache correctness, or migration expectations are unresolved (`go-data-architect-spec` or `go-db-cache-spec`)
+- authorization or trust-boundary behavior is unclear (`go-security-spec`)
+- the change needs new observability or performance expectations to be testable (`go-observability-engineer-spec` or `go-performance-spec`)
+- the required testing approach itself is unclear or missing (`go-qa-tester-spec`)

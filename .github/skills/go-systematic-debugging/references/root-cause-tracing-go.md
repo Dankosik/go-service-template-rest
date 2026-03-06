@@ -1,20 +1,15 @@
 # Root-Cause Tracing For Go Services
 
 ## Overview
-When a defect appears deep in the stack, fixing the crash point usually treats only the symptom.
-The goal is to trace backward until you find where the bad state was first created.
-
-## Use When
-- stack traces point to infra/runtime layer, but source input is unclear
-- failure happens across multiple layers (HTTP -> app -> domain -> infra -> DB/cache)
-- same symptom appears in different entry points
+When a defect appears deep in the stack, fixing the crash point usually treats the symptom instead of the cause.
+Trace backward until you find where the bad state was first created or first allowed through.
 
 ## Trace Procedure
-1. Record symptom location (`file:line`, panic/error message, failing test).
-2. Identify immediate caller and input values at that point.
-3. Move one layer up and ask: who provided this value/state?
-4. Repeat until the first boundary where invariant is broken.
-5. Fix at that boundary, then add guardrails for downstream layers.
+1. Record the symptom location: `file:line`, panic or error message, failing test, and exact command.
+2. Identify the immediate caller and the input values at that point.
+3. Move one layer up and ask: who provided this value or state?
+4. Repeat until you reach the first boundary where the invariant was already broken.
+5. Fix at that boundary, then add downstream guardrails only if they prevent useful recurrence.
 
 ## Minimal Go Instrumentation Pattern
 Use short-lived diagnostics while tracing.
@@ -58,14 +53,13 @@ if err != nil {
 ```
 
 ## Test-Focused Backtracking
-- run focused test first:
-  - `go test ./... -run '^TestName$' -count=1 -v`
-- inspect first failing assertion/panic
-- search upstream call path with `rg` and `go test -run`
-- if flake: run repeated single test and capture timestamps/context IDs
+- run the narrowest failing test first
+- inspect the first failing assertion or panic
+- search upstream call paths
+- if the issue is flaky, repeat the narrow test and capture timestamps or context IDs
 
 ## Stop Condition
 Tracing is complete only when you can answer:
-- which invariant failed first,
-- where that invariant should have been enforced,
-- why downstream layers did not prevent symptom spread.
+- which invariant failed first
+- where that invariant should have been enforced
+- why downstream layers did not stop the symptom earlier

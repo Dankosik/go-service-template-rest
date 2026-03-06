@@ -1,208 +1,148 @@
 ---
 name: go-coder-plan-spec
-description: "Design an execution-grade coder plan (`65-coder-detailed-plan.md`) from an approved spec package in a spec-first workflow. Use after G2 when coding needs atomic, traceable, checkpointed tasks with explicit evidence, while preserving coder freedom in technical implementation details. Skip when writing production code, redesigning architecture, or performing domain code review."
+description: "Create execution-grade coding plans from approved requirements: atomic tasks, traceability, checkpoints, verification evidence, and clarification triggers while preserving coder autonomy."
 ---
 
 # Go Coder Plan Spec
 
 ## Purpose
-Create a deterministic, execution-grade plan for coding after spec sign-off.
+Turn approved requirements and constraints into an execution-grade coding plan that is atomic, traceable, check-pointed, and testable without over-prescribing implementation mechanics.
 
-Success means:
-- `60-implementation-plan.md` is transformed into an atomic execution artifact for coding;
-- every critical spec obligation is mapped to tasks and verification evidence;
-- `go-coder` gets clear what/why/order constraints without losing freedom in how to implement code.
+## Scope
+- turn approved requirements, invariants, and constraints into atomic coding tasks
+- define dependency-aware sequencing and change surface
+- define checkpoints, progress tracking, and clarification triggers
+- define verification commands and expected evidence for each task
+- preserve coder autonomy in technical decomposition and low-level implementation details
 
-## Scope And Boundaries
-In scope:
-- produce `65-coder-detailed-plan.md` for the active feature;
-- convert approved constraints from `15/20/30/40/50/55/60/70/90` into atomic tasks;
-- define checkpoints, progress tracking, and clarification triggers;
-- keep plan outcome-oriented and implementation-technique-agnostic.
+## Boundaries
+Do not:
+- write production code or tests as the primary output
+- rewrite approved architecture, contract, security, or reliability decisions
+- replace specialist-domain ownership with local planning guesses
+- force exact file paths or exact low-level coding technique unless a real constraint requires it
 
-Out of scope:
-- writing production code or tests;
-- changing approved architecture/contract/security/reliability decisions;
-- replacing specialist-domain ownership from existing `*-spec` roles;
-- enforcing exact file-path lock-in for coder execution.
+## Core Defaults
+- Plan by outcomes and dependencies, not by coding style.
+- Prefer the smallest safe tasks with explicit evidence over broad narrative work packages.
+- Treat blocked ambiguity as a clarification trigger, not as permission to invent local decisions.
+- Preserve coder freedom to refactor locally, split files, or adjust technical structure while keeping approved intent intact.
 
-## Hard Skills
-### Mission
-- Bridge strategic spec artifacts and real coding execution with minimal interpretation drift.
-- Preserve approved intent while making execution observable, auditable, and checkpointed.
-- Keep coder autonomy for technical realization details.
+## Expertise
 
-### Default Posture
-- `60` remains strategic source of implementation intent.
-- `65` is execution contract for coding.
-- Plan by outcomes and dependencies, not by prescribing low-level code mechanics.
-- Prefer smallest safe tasks with explicit evidence over broad narrative packages.
+### Planning Preconditions
+- Start from approved or otherwise stable intent.
+- Surface blocker-level contradictions before decomposing work into tasks.
+- If the plan depends on unresolved architecture, contract, security, or reliability questions, block the affected tasks instead of guessing.
 
-### Phase And Gate Competency
-- This skill runs after `G2` and before coding starts.
-- Target output is readiness for `G2.5` (`Detailed Plan Ready`).
-- If blocker-level ambiguity appears, do not invent local decisions; open clarification and pause affected tasks.
+### Atomic Task Design
+- Each task should change one observable behavior or one tightly coupled behavior set.
+- Task size should allow meaningful verification without repository-wide execution whenever possible.
+- Avoid mega-tasks that mix unrelated domains or force broad retesting too early.
 
-### Atomic Task Design Competency
-- Each task must change one observable behavior or one tightly coupled behavior set.
-- Task size should allow meaningful verification without repo-wide execution whenever possible.
-- Avoid mega-tasks that mix unrelated domains.
+### Traceability Closure
+For each task, maintain explicit links to:
+- requirements or decisions
+- invariants and acceptance behavior
+- test obligations
 
-### Traceability Closure Competency
-For each task, require explicit links to:
-- decisions (`ARCH/DOM/REL/DATA/DBC/OBS/SEC/DOPS/TST/DES` as applicable);
-- invariants and acceptance obligations;
-- test obligations from `70`.
+The plan should support a clean closure chain:
+- requirement or decision -> task -> verification command -> expected evidence
 
-The plan must enable closure proof:
-- `decision/invariant/obligation -> task(s) -> command(s) -> expected evidence`.
-
-### Change Surface Competency (No Path Lock-In)
-- Define expected change surface by module/layer/package area.
+### Change Surface Without Path Lock-In
+- Define expected change surface by module, layer, or package area.
 - Do not force exact file lists as mandatory.
-- Allow coder to create/move/split files or perform local refactoring when it improves implementation quality and keeps approved intent.
+- Allow the coder to create, move, split, or consolidate files when it improves implementation quality and stays within approved intent.
 
-### Task Sequence Competency (Outcome-Oriented)
-- Define high-level sequencing by dependencies and outcomes only.
-- Do not prescribe low-level coding technique, function extraction order, or exact internals.
+### Outcome-Oriented Sequence
+- Define sequencing by dependencies and outcomes.
+- Do not prescribe function extraction order, exact internal naming, or micro-level implementation sequence unless those details are themselves constraints.
 
-### Verification And Evidence Competency
-Each task must include:
-- smallest sufficient verification commands;
-- expected evidence (observable pass criteria).
+### Verification And Evidence
+Each task should include:
+- smallest sufficient verification commands
+- expected evidence for `done` vs `not done`
 
-Evidence must be concrete enough to decide `done` vs `not done` without reinterpretation.
+For behavior-changing work, make before-and-after observable checks explicit.
 
-For behavior-changing tasks:
-- include explicit observable behavior checks (before/after or equivalent) in verification expectations.
+### Checkpoints
+- Insert checkpoints after small task groups, usually every `2-4` tasks.
+- Each checkpoint should define what the later execution or review stage must confirm:
+  - required checks completed for the group
+  - alignment with approved intent
+  - progress against critical obligations
+  - evidence quality
+  - reconciliation of actual touched modules against expected change surface
+  - go/no-go for the next group
 
-### Checkpoint Competency
-- Insert checkpoints after small task groups (default: every `2-4` tasks).
-- Checkpoint definition must specify what the later execution/review stage must confirm:
-  - required checks for the group are completed;
-  - spec alignment;
-  - decision coverage progress;
-  - evidence quality;
-  - actual touched files/modules are reconciled against declared `Change Surface` with a short justification for deviations;
-  - go/no-go for next group.
-- This skill defines checkpoint contracts only; it does not execute or validate code changes.
-
-### Clarification Competency
-Define mandatory clarification trigger contract for blocked tasks:
+### Clarification Contract
+For blocked tasks, capture:
 - `request_id`
 - `blocked_task_id`
-- `ambiguity_type` (`contract`, `invariant`, `security`, `reliability`, `test`, `other`)
+- `ambiguity_type`
 - `conflicting_sources`
 - `decision_impact`
 - `proposed_options`
 - `owner`
 - `resume_condition`
 
-No continuation on blocked task before resolution criteria are met.
+Blocked tasks should not continue until their resume condition is met.
 
-### Coder Autonomy Competency
-The plan must explicitly preserve coder autonomy:
-- coder chooses technical decomposition and low-level implementation order;
-- coder decides refactoring approach within approved intent and scope boundaries;
-- plan governs outcomes/constraints/evidence, not coding style internals.
+### Coder Autonomy
+The plan should explicitly preserve coder autonomy:
+- the coder chooses technical decomposition and low-level implementation order
+- the coder chooses local refactoring shape within approved intent
+- the plan governs outcomes, constraints, checkpoints, and evidence, not coding style internals
 
-### Review-Ready Planning Competency
-Every task should carry a compact review checklist for in-flight quality validation.
+### Review-Ready Task Cards
+Each task should carry a compact review checklist:
+- intended behavior reached
+- no contract or invariant drift
+- verification evidence collected
+- unresolved ambiguity status explicit
 
-Checklist focus:
-- intended behavior reached;
-- no contract/invariant drift;
-- verification evidence collected;
-- unresolved ambiguity status explicit.
+### Execution Modes
+The plan should support both:
+- in-session execution
+- batch execution
 
-### Execution Mode Competency
-The plan should support both execution handoff modes:
-- in-session execution (task-by-task in one active session);
-- batch execution (separate run with mandatory checkpoints).
+Whichever mode is used, checkpoint discipline must stay explicit.
 
-The selected mode and checkpoint discipline must be explicit in the plan header.
+## Plan Quality Bar
+A good coding plan:
+- covers all critical approved obligations
+- uses atomic tasks with meaningful verification
+- preserves coder autonomy
+- makes blockers and clarifications explicit
+- avoids contradictions with the approved design or requirements
 
-## Working Rules
-1. Confirm feature phase readiness: `G2` passed, `Spec Freeze` active, blocker-level open questions closed.
-2. Load current feature artifacts in this order:
-   - `60` (strategic plan)
-   - `15/30/40/50/55` (constraints)
-   - `70` (test obligations)
-   - `90` (accepted decisions)
-   - `80` (remaining uncertainties/reopen notes)
-3. Build a closure map of critical obligations before writing tasks.
-4. Split work into atomic tasks with explicit dependency order.
-5. For each task, define change surface, sequence, verification commands, expected evidence, checklist, and progress field.
-6. Add checkpoints after each small task group.
-7. Define execution mode (`in-session` or `batch`) and keep checkpoint discipline explicit.
-8. Add clarification triggers and schema for ambiguity handling.
-9. Validate internal consistency: no task contradicts frozen decisions.
-10. Output `65-coder-detailed-plan.md` as the execution artifact.
+## Deliverable Shape
+Return the plan in a compact, execution-ready form:
+- `Execution Context`
+- `Execution Mode`
+- `Task Graph`
+- `Task Cards`
+- `Checkpoint Plan`
+- `Clarification Contract`
+- `Coverage Matrix`
+- `Execution Notes` when truly needed
 
-## Output Expectations
-Primary artifact:
-- `specs/<feature-id>/65-coder-detailed-plan.md`
+A strong task card usually includes:
+- `Task ID`
+- `Objective`
+- `Traceability`
+- `Change Surface`
+- `Task Sequence`
+- `Verification Commands`
+- `Expected Evidence`
+- `Review Checklist`
+- `Ambiguity Triggers`
+- `Change Reconciliation`
+- `Progress Status`
 
-Mandatory sections:
-1. `Execution Context`
-   - scope boundaries, non-goals, critical invariants, forbidden changes.
-2. `Execution Mode`
-   - `in-session` or `batch`, with checkpoint policy.
-3. `Task Graph`
-   - ordered atomic tasks with dependency edges.
-4. `Task Cards`
-   - `Task ID`
-   - `Objective`
-   - `Spec Traceability`
-   - `Change Surface`
-   - `Task Sequence`
-   - `Verification Commands`
-   - `Expected Evidence`
-   - `Review Checklist`
-   - `Ambiguity Triggers`
-   - `Change Reconciliation` (actual touched files/modules and short deviation rationale when different from expected surface)
-   - `Progress Status` (`todo/in_progress/done/blocked`)
-5. `Checkpoint Plan`
-   - checkpoint cadence and go/no-go criteria for the later execution/review stage.
-6. `Clarification Contract`
-   - required fields and resolution policy.
-7. `Coverage Matrix`
-   - obligation-to-task closure summary.
-8. `Execution Notes`
-   - optional operational notes only when required by approved spec decisions.
-
-## Context Intake (Dynamic Loading)
-Rule: load the smallest sufficient set of sources. Do not bulk-load unrelated docs.
-
-Always load:
-- `docs/spec-first-workflow.md` (G2, freeze, Phase 3 expectations)
-- `specs/<feature-id>/60-implementation-plan.md`
-- `specs/<feature-id>/15-domain-invariants-and-acceptance.md`
-- `specs/<feature-id>/30-api-contract.md`
-- `specs/<feature-id>/40-data-consistency-cache.md`
-- `specs/<feature-id>/50-security-observability-devops.md`
-- `specs/<feature-id>/55-reliability-and-resilience.md`
-- `specs/<feature-id>/70-test-plan.md`
-- `specs/<feature-id>/80-open-questions.md`
-- `specs/<feature-id>/90-signoff.md`
-
-Load additional docs only when needed to resolve a concrete planning ambiguity.
-
-## Definition Of Done
-- `65-coder-detailed-plan.md` exists and is complete.
-- All critical approved obligations are mapped to at least one task with evidence.
-- Tasks are atomic, ordered by dependencies, and checkpointed.
-- Plan preserves coder technical autonomy and avoids low-level coding prescriptions.
-- Clarification triggers and schema are explicitly included.
-- No contradictions with approved frozen spec decisions.
-- Checkpoints are defined as declarative validation contracts; no claim of code execution/review completion is made by this skill.
-
-## Anti-Patterns
-- Rewriting architecture during execution planning.
-- Copying `60` narrative as-is without atomic task decomposition.
-- Forcing exact file paths as hard constraints.
-- Describing low-level coding internals instead of outcome/dependency sequence.
-- Missing evidence expectations for task completion.
-- Missing checkpoint policy.
-- Ignoring `70` obligations when building coder tasks.
-- Silent ambiguity handling without clarification triggers.
+## Escalate When
+Escalate if:
+- approved intent is unstable or contradictory
+- blocked questions would materially change architecture, contract, security, reliability, or invariants
+- the work cannot be decomposed into atomic tasks with meaningful verification
+- the plan would need exact file-path lock-in or low-level code prescriptions just to remain coherent
