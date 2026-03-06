@@ -1,19 +1,20 @@
 # Go Service Template REST
 
-AI-native Go REST template for teams shipping web backends with Codex, Claude Code, Cursor, Gemini CLI, and other LLM-assisted workflows.
+AI-native Go REST template for solo developers shipping web backends with Codex, Claude Code, Cursor, Gemini CLI, and other LLM-assisted workflows.
 
-`go-service-template-rest` is not just a Go starter. It is a repository contract for agentic delivery: the orchestrator owns the task, read-only subagents handle focused research and review, `spec.md` records the decisions, and the service stack underneath is ready for real backend work.
+`go-service-template-rest` is for people who code with agents but still want a real engineering loop. The orchestrator owns the task, read-only subagents handle focused research and review, `spec.md` records the decisions, and the Go/OpenAPI/Postgres stack underneath is ready for real backend work.
 
 - **Orchestrator-first**: frame, delegate, synthesize, plan, implement, verify.
 - **Project-scoped agents**: Codex agents live in `.codex/agents/`, Claude Code agents live in `.claude/agents/`.
+- **Portable skills**: reusable workflow expertise lives in `skills/` and is mirrored to multiple agent runtimes.
 - **Spec-first**: non-trivial work starts in `specs/<feature-id>/spec.md`, not in prompt spaghetti.
 - **Production stack underneath**: OpenAPI-first HTTP, PostgreSQL, `sqlc`, observability, tests, and CI gates are already wired.
 
 ## Why This Template Exists
 
-Most Go templates stop at folder layout, Docker files, and a `Makefile`. That is not enough when humans and agents are both writing code in the same repository.
+Most AI-native coding today is solo. Most Go templates still stop at folder layout, Docker files, and a `Makefile`. That is not enough when you and your coding agent are both writing code in the same repository.
 
-This template is built for teams that want:
+This template is built for developers who want:
 
 - a backend starter that works with LLM-assisted coding instead of fighting it;
 - an explicit workflow for research, planning, implementation, review, and validation;
@@ -42,12 +43,28 @@ The full contract lives in [AGENTS.md](AGENTS.md) and the supporting workflow do
 
 ## Agent Portfolio
 
+This repository distinguishes between two different things:
+
+- **Subagents** are read-only specialists you fan out to for focused research or review.
+- **Skills** are portable workflow playbooks loaded on demand by the orchestrator or a subagent.
+
 The repository ships with project-scoped, read-only subagents for focused reasoning and review.
 
-- `architecture-agent`, `api-agent`, `domain-agent`, `data-agent`, `distributed-agent`: use these when the shape of the system, contract, invariants, storage, or cross-service workflow is changing.
-- `design-integrator-agent`: use this when multiple specialist outputs need reconciliation into one coherent path.
-- `security-agent`, `reliability-agent`, `performance-agent`, `concurrency-agent`: use these when the main risk is trust boundaries, failure behavior, hot paths, or concurrent correctness.
-- `quality-agent`, `qa-agent`, `delivery-agent`: use these for maintainability, proof obligations, and release or CI policy.
+| Agent | Owns | Use when | Returns |
+|---|---|---|---|
+| `architecture-agent` | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
+| `api-agent` | client-visible contract behavior and transport semantics | endpoints, statuses, errors, idempotency, or async acknowledgment change | contract recommendation, compatibility notes |
+| `concurrency-agent` | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
+| `data-agent` | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
+| `delivery-agent` | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
+| `design-integrator-agent` | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
+| `distributed-agent` | cross-service consistency, outbox/inbox, replay, reconciliation | the workflow crosses service boundaries or depends on eventual consistency | flow model, recovery stance |
+| `domain-agent` | business invariants, state transitions, acceptance semantics | behavior changes touch lifecycle, rules, duplicates, or forbidden paths | invariant set, corner cases, handoffs |
+| `performance-agent` | performance budgets, bottleneck hypotheses, proof strategy | the change is hot-path sensitive or justified mainly by speed | performance stance, proof obligations |
+| `qa-agent` | test obligations, proving levels, validation readiness | a non-trivial behavior change needs a real regression plan | scenario matrix, validation strategy |
+| `quality-agent` | idiomatic Go review and simplification | the diff feels noisy, over-abstracted, or hard to maintain | maintainability findings, cleanup guidance |
+| `reliability-agent` | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
+| `security-agent` | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
 
 All of these agents stay advisory and read-only. Final decisions always stay with the orchestrator in the main flow.
 
@@ -78,6 +95,74 @@ claude -p --agent qa-agent -- "List the minimum regression obligations for chang
 - Storage, cache, or migration change: `data-agent` + `reliability-agent`
 - Cross-service or async workflow: `architecture-agent` + `distributed-agent` + `security-agent`
 - Pre-merge cleanup on a larger diff: `quality-agent` + the domain reviewer that matches the risk
+
+## Skill Library
+
+`skills/` is the canonical repository skill set. These skills are procedural building blocks, not autonomous owners of the workflow.
+
+### Framing, Planning, Implementation, And Verification
+
+| Skill | What it does | Load when |
+|---|---|---|
+| `spec-first-brainstorming` | turns a raw request into scope, constraints, assumptions, and design-readiness | the task is still fuzzy and needs framing before design |
+| `go-coder-plan-spec` | turns approved decisions into atomic coding steps, checkpoints, and evidence expectations | planning is complete enough to prepare implementation, but coding has not started |
+| `go-coder` | implements approved Go changes without semantic drift | the implementation plan is explicit and code work is next |
+| `go-qa-tester` | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
+| `go-systematic-debugging` | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
+| `go-verification-before-completion` | maps completion claims to fresh command evidence | you are about to say “fixed”, “ready”, or “done” |
+
+### System Design And Control Surfaces
+
+| Skill | Focus | Load when |
+|---|---|---|
+| `go-architect-spec` | service boundaries, ownership, sync vs async interaction style | system shape or module ownership may change |
+| `go-design-spec` | integrated pre-coding design pass across domains | the draft design feels contradictory, layered, or overly complex |
+| `go-devops-spec` | CI/CD policy, rollout controls, runtime hardening, release trust | delivery or release behavior is part of the change |
+| `go-observability-engineer-spec` | logs, metrics, traces, correlation, telemetry cost | observability behavior needs an explicit contract |
+| `go-performance-spec` | latency, throughput, contention, benchmark strategy | performance budgets or hot paths drive the design |
+| `go-reliability-spec` | timeouts, retries, degradation, lifecycle behavior | failure handling or operational resilience changes |
+| `go-security-spec` | trust boundaries, auth, tenant isolation, abuse resistance | the change touches security-critical surfaces |
+| `go-qa-tester-spec` | test levels, scenario coverage, proof strategy | you need an explicit verification plan before coding |
+
+### API, Routing, Domain, Data, And Distributed Semantics
+
+| Skill | Focus | Load when |
+|---|---|---|
+| `api-contract-designer-spec` | resources, methods, statuses, errors, idempotency, async contracts | client-visible API behavior is changing |
+| `go-chi-spec` | chi router topology, middleware ordering, fallback and CORS semantics | routing shape or HTTP middleware policy changes |
+| `go-data-architect-spec` | source of truth, schema ownership, migration and rollback shape | schema or persistence model changes |
+| `go-db-cache-spec` | query discipline, transaction rules, cache strategy and staleness | runtime DB or cache behavior needs an explicit contract |
+| `go-domain-invariant-spec` | business invariants, state transitions, acceptance rules | lifecycle or core domain behavior changes |
+| `go-distributed-architect-spec` | saga shape, outbox/inbox, replay safety, reconciliation | a flow crosses service boundaries or depends on eventual consistency |
+
+### Review Skills
+
+| Skill | Focus | Load when |
+|---|---|---|
+| `go-design-review` | architecture alignment, boundary integrity, accidental complexity | a diff may hide broader design drift |
+| `go-chi-review` | router ownership, middleware order, HTTP fallback semantics | chi routing or transport behavior changed |
+| `go-db-cache-review` | SQL safety, transaction scope, cache correctness, fallback risk | DB or cache code changed |
+| `go-domain-invariant-review` | business-invariant preservation and side-effect safety | behavior changes carry semantic risk |
+| `go-idiomatic-review` | idiomatic Go, error handling, context flow, naming | you want merge-risk review on Go code quality |
+| `go-language-simplifier-review` | lower cognitive complexity and cleaner control flow | the code works but feels noisy or over-abstracted |
+| `go-concurrency-review` | goroutines, channels, cancellation, shutdown safety | concurrent behavior changed or races are suspected |
+| `go-performance-review` | hot-path regression, allocation and contention risk | performance is a review concern |
+| `go-qa-review` | coverage quality, assertion strength, determinism | review depends on test quality and proof strength |
+| `go-reliability-review` | retries, backpressure, startup, shutdown, degraded mode | failure-path behavior changed |
+| `go-security-review` | authz, isolation, injection/SSRF, secret handling | changed paths accept untrusted input or cross trust boundaries |
+
+### Skill Mirrors Across Runtimes
+
+These repository-native skills are mirrored to multiple runtimes so the workflow stays portable:
+
+- `.agents/skills`
+- `.claude/skills`
+- `.cursor/skills`
+- `.gemini/skills`
+- `.github/skills`
+- `.opencode/skills`
+
+The source of truth stays in `skills/`, so you do not have to hand-maintain separate skill instructions per tool.
 
 ## This Is An Orchestrator Project
 
@@ -129,19 +214,6 @@ Frame a change to add tenant-aware export jobs.
 Fan out to `architecture-agent`, `data-agent`, and `qa-agent` only if needed.
 Write decisions and the implementation plan to `specs/tenant-export-jobs/spec.md` before coding.
 ```
-
-### Cross-Runtime Skill Mirrors
-
-The repository also mirrors skills for other agent runtimes:
-
-- `.agents/skills`
-- `.claude/skills`
-- `.cursor/skills`
-- `.gemini/skills`
-- `.github/skills`
-- `.opencode/skills`
-
-The skill source of truth stays in `skills/`, so you do not have to hand-maintain separate workflow instructions per tool.
 
 ## Repository Layout
 
