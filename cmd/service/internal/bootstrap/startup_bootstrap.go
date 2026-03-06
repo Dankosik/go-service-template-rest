@@ -322,7 +322,7 @@ func bootstrapNetworkPolicyStage(
 			deployTelemetry,
 			startupLifecycleStartedAt,
 			"network_policy",
-			fmt.Errorf("%w: invalid network policy configuration", config.ErrDependencyInit),
+			fmt.Errorf("%w: invalid network policy configuration: %w", config.ErrDependencyInit, netPolicyErr),
 		)
 	}
 

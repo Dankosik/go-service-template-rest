@@ -140,3 +140,57 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 
 	recordAdmissionFailure(context.Background(), nil, "x", "y", time.Now())
 }
+
+func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
+	t.Parallel()
+
+	recorder, metrics := newTestDeployTelemetryRecorder()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "policy-log")
+	rootCause := errors.New("NETWORK_INGRESS_EXCEPTION_EXPIRY must be RFC3339")
+	err := rejectStartupForPolicyViolation(
+		ctx,
+		span,
+		metrics,
+		logger,
+		recorder,
+		time.Now(),
+		"network_policy",
+		rootCause,
+	)
+	span.End()
+	if err == nil {
+		t.Fatal("rejectStartupForPolicyViolation() error = nil, want non-nil")
+	}
+	if !strings.Contains(logBuffer.String(), "RFC3339") {
+		t.Fatalf("policy violation log does not contain root cause:\n%s", logBuffer.String())
+	}
+}
+
+func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", "not-rfc3339")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+
+	recorder, metrics := newTestDeployTelemetryRecorder()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, recorder, time.Now())
+	span.End()
+	if err == nil {
+		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
+	}
+	if !errors.Is(err, config.ErrDependencyInit) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	}
+	if !strings.Contains(err.Error(), "RFC3339") {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want original parse detail", err)
+	}
+}

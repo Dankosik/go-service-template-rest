@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -118,8 +119,11 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	)
 	span.End()
 
-	if err != nil {
-		t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+	if err == nil {
+		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, context.DeadlineExceeded)
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)

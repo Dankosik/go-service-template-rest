@@ -74,6 +74,7 @@ func rejectStartupForPolicyViolation(
 			"error",
 			"error.type", "policy_violation",
 			"dependency", strings.ToLower(strings.TrimSpace(dependency)),
+			"err", err,
 		)...,
 	)
 	recordAdmissionFailure(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)), startupLifecycleStartedAt)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,78 @@ func TestRunDependencyProbe(t *testing.T) {
 			t.Fatalf("unexpected result: %+v", res)
 		}
 	})
+}
+
+func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
+	t.Parallel()
+
+	rootCause := errors.New("dial tcp 127.0.0.1:6379: connect refused")
+	err := dependencyInitFailure("redis", rootCause)
+	if err == nil {
+		t.Fatal("dependencyInitFailure() error = nil, want non-nil")
+	}
+	if !errors.Is(err, config.ErrDependencyInit) {
+		t.Fatalf("error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	}
+	if !errors.Is(err, rootCause) {
+		t.Fatalf("error = %v, want wrapped root cause", err)
+	}
+}
+
+func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = ln.Close()
+	})
+
+	go func() {
+		for i := 0; i < 2; i++ {
+			conn, acceptErr := ln.Accept()
+			if acceptErr != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runtime := dependencyProbeRuntime{
+		tracer:                    otel.Tracer("test"),
+		bootstrapSpan:             trace.SpanFromContext(context.Background()),
+		metrics:                   metrics,
+		log:                       logger,
+		deployTelemetry:           newDeployTelemetryRecorder(logger, metrics, "test"),
+		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		startupLifecycleStartedAt: time.Now(),
+		cfg: config.Config{
+			Redis: config.RedisConfig{
+				Enabled:     true,
+				Mode:        "store",
+				Addr:        ln.Addr().String(),
+				DialTimeout: 100 * time.Millisecond,
+			},
+		},
+	}
+
+	probe, err := initRedisDependency(context.Background(), runtime, context.Background())
+	if err != nil {
+		t.Fatalf("initRedisDependency() error = %v, want nil", err)
+	}
+	if probe == nil {
+		t.Fatal("initRedisDependency() probe = nil, want runtime readiness probe")
+	}
+	if probe.Name() != "redis" {
+		t.Fatalf("probe.Name() = %q, want %q", probe.Name(), "redis")
+	}
+	if err := probe.Check(context.Background()); err != nil {
+		t.Fatalf("probe.Check() error = %v, want nil", err)
+	}
 }
 
 func TestInitStartupDependenciesAllDisabled(t *testing.T) {
@@ -123,7 +196,7 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 				Addr:    "127.0.0.1:6379",
 			},
 		}
-		err := initRedisDependency(context.Background(), runtime, ctx)
+		_, err := initRedisDependency(context.Background(), runtime, ctx)
 		if err == nil {
 			t.Fatal("initRedisDependency() error = nil, want non-nil")
 		}
@@ -142,7 +215,7 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 				URI:     "mongodb://127.0.0.1:27017/app",
 			},
 		}
-		err := initMongoDependency(context.Background(), runtime, ctx)
+		_, err := initMongoDependency(context.Background(), runtime, ctx)
 		if err == nil {
 			t.Fatal("initMongoDependency() error = nil, want non-nil")
 		}
@@ -179,7 +252,7 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 				Addr:    "127.0.0.1:6379",
 			},
 		}
-		err := initRedisDependency(context.Background(), runtime, expiredCtx)
+		_, err := initRedisDependency(context.Background(), runtime, expiredCtx)
 		if err == nil {
 			t.Fatal("initRedisDependency() error = nil, want non-nil")
 		}
@@ -195,7 +268,7 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 				URI:     "mongodb://127.0.0.1:27017/app",
 			},
 		}
-		err := initMongoDependency(context.Background(), runtime, expiredCtx)
+		_, err := initMongoDependency(context.Background(), runtime, expiredCtx)
 		if err == nil {
 			t.Fatal("initMongoDependency() error = nil, want non-nil")
 		}
@@ -232,7 +305,7 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 				Addr:    "127.0.0.1:6379",
 			},
 		}
-		err := initRedisDependency(context.Background(), runtime, lowBudgetCtx)
+		_, err := initRedisDependency(context.Background(), runtime, lowBudgetCtx)
 		if err == nil {
 			t.Fatal("initRedisDependency() error = nil, want non-nil")
 		}
@@ -251,7 +324,7 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 				URI:     "mongodb://127.0.0.1:27017/app",
 			},
 		}
-		err := initMongoDependency(context.Background(), runtime, lowBudgetCtx)
+		_, err := initMongoDependency(context.Background(), runtime, lowBudgetCtx)
 		if err == nil {
 			t.Fatal("initMongoDependency() error = nil, want non-nil")
 		}

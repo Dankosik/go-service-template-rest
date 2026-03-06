@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -78,6 +79,7 @@ func serveHTTPRuntime(
 	}()
 
 	var serverErr error
+	var terminalErr error
 	startupWatchCh := bootstrapCtx.Done()
 	startupReadyCh := admissionReady
 
@@ -99,13 +101,17 @@ waitForStop:
 				recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
 				break waitForStop
 			}
-			log.Error("startup budget exhausted before readiness", "err", bootstrapCtx.Err())
+			terminalErr = fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
+			log.Error("startup budget exhausted before readiness", "err", terminalErr)
 			recordAdmissionFailure(bootstrapCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
 			break waitForStop
 		case err := <-runErrCh:
 			serverErr = err
 			if serverErr != nil {
 				closeReadiness()
+				if startupReadyCh != nil {
+					terminalErr = fmt.Errorf("http server stopped before readiness: %w", serverErr)
+				}
 				log.Error("http server stopped with error", "err", serverErr)
 				recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
 			}
@@ -116,7 +122,13 @@ waitForStop:
 	if err := drainAndShutdown(signalCtx, shutdownDelay, cfg.HTTP.ShutdownTimeout, healthSvc, srv); err != nil {
 		closeReadiness()
 		recordAdmissionFailure(signalCtx, deployTelemetry, "startup_error", "readiness", startupLifecycleStartedAt)
+		if terminalErr != nil {
+			return errors.Join(terminalErr, err)
+		}
 		return err
+	}
+	if terminalErr != nil {
+		return terminalErr
 	}
 	if serverErr != nil {
 		return fmt.Errorf("http server stopped with error: %w", serverErr)
