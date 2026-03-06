@@ -42,6 +42,7 @@ For very small, low-risk tasks, keep research local and avoid orchestration over
 12. Never invent missing facts or fill irrelevant sections for “completeness”.
 13. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
 14. No readiness or completion claim without fresh validation evidence.
+15. Do not treat a short subagent wait timeout as failure; when subagent output is required for fan-in, review, or user-requested agent work, use long waits of up to 20 minutes per wait cycle and continue polling without interrupting or abandoning the agent unless it is clearly hung, superseded, or explicitly canceled by the user.
 
 ## 3. Authoring and intake rules
 
@@ -133,6 +134,8 @@ When using subagents:
 - pass only the **minimum relevant slice of context**,
 - keep independent tracks parallel by default,
 - use multi-angle patterns for high-impact or ambiguous areas when needed.
+- if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, prefer long waits of up to 20 minutes over short polling and treat short timeouts as “still running”, not “no result”.
+- do not interrupt, close, or declare a subagent unavailable just because one or more wait cycles timed out; only stop it when there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
 
 Useful multi-angle patterns:
 - `primary + challenger`
@@ -145,6 +148,7 @@ At fan-in, the orchestrator must:
 - compare assumptions, evidence quality, and applicability,
 - record the chosen path and rejected alternatives when they materially affect execution,
 - trigger recheck when confidence is too low or the impact is too high.
+- not claim agent-backed synthesis, review coverage, or cross-checking if the needed subagents were interrupted, abandoned early, or never returned.
 
 ### 5.4 Tie-break order
 
