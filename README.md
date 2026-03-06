@@ -1,90 +1,118 @@
 # Go Service Template REST
 
-Production-ready **Go REST API template** for **AI coding** and fast backend delivery.
+Production-ready **Go REST API template** for building **OpenAPI-first**, **PostgreSQL-backed** services with a **spec-first** and **agent-centric** workflow.
 
-`go-service-template-rest` helps Go developers (especially AI-assisted workflows) start a service with a ready architecture, OpenAPI-first contract, SQL-first data layer, and strict CI/CD quality gates.
+`go-service-template-rest` is a Go microservice template for developers who want more than boilerplate. It gives you a working service layout, an OpenAPI source of truth, SQL-first data access with `sqlc`, local and CI quality gates, and explicit repository rules for AI coding workflows.
 
-Keywords: **Go REST API template**, **Go microservice template**, **OpenAPI Go starter**, **AI coding template**, **PostgreSQL sqlc template**.
+If you are looking for a **Go REST API template**, **Go microservice template**, **OpenAPI Go starter**, or **PostgreSQL + sqlc Go backend template**, this repository is designed for that use case.
 
-## Why This Project
+## Why Use This Template
 
-- Fast start for a Go backend service without manual boilerplate.
-- One baseline for teams and AI agents (`AGENTS.md` + portable skills).
-- Production-ready defaults: tests, security checks, contract checks, and container delivery.
+- Start a Go backend service with a clear module layout instead of inventing one from scratch.
+- Keep the REST contract in `api/openapi/service.yaml` and generate runtime artifacts from it.
+- Use SQL-first PostgreSQL access with `sqlc` instead of ad hoc query code.
+- Keep local development, CI, and container delivery aligned through shared commands and guardrails.
+- Give humans and AI agents the same repository contract through `AGENTS.md`, `spec.md`, and mirrored skills.
 
-## Who It Is For
+## What You Get
 
-- Go backend developers.
-- AI-first workflows (Codex, ChatGPT, Claude, Copilot, etc.).
-- Teams that need a reproducible microservice template.
+- **OpenAPI-first HTTP service** with generated bindings in `internal/api`.
+- **Chi-based routing** and HTTP runtime adapters in `internal/infra/http`.
+- **PostgreSQL + pgx + sqlc** for typed SQL access.
+- **Config loading** with `koanf`.
+- **Metrics and tracing** with Prometheus and OpenTelemetry.
+- **Deterministic tests** with unit, race, coverage, and integration paths.
+- **Security and delivery guardrails** for linting, vulnerability checks, secrets scanning, image scanning, SBOM generation, and signed container release flows.
+
+## Why This Repository Is Spec-First And Agent-Centric
+
+This template treats implementation as a controlled engineering workflow, not as a free-form coding session.
+
+- **Spec-first** means non-trivial work starts with `specs/<feature-id>/spec.md`, where decisions, scope, assumptions, implementation steps, validation, and outcome are recorded.
+- **Agent-centric** means the repository is built for orchestrated AI workflows, not one-off prompts. The main flow stays with the orchestrator, while subagents handle narrow read-only research or review tasks.
+- **Planning before implementation** is a repository rule, not a suggestion. `AGENTS.md` and `docs/spec-first-workflow.md` require an explicit implementation plan before code changes start.
+- **Skills are on-demand tools**, mirrored to multiple runtimes, instead of being the main workflow themselves.
+
+Why this matters in practice:
+
+- fewer undocumented decisions,
+- better reviewability,
+- easier reuse of validated research,
+- safer AI-assisted changes,
+- less drift between human and agent workflows.
+
+Read the workflow contract in [AGENTS.md](AGENTS.md) and the supporting process document in [docs/spec-first-workflow.md](docs/spec-first-workflow.md).
 
 ## Quick Start
 
 ```bash
 make bootstrap
-make template-init   # for a new repo created from this template
+make template-init   # run this when you create a new repo from the template
 make check
 make run
 ```
 
-## Key Directories
+Typical next steps:
 
-- `cmd/service` - composition root.
-- `internal/app` - use-cases.
-- `internal/domain` - domain contracts/types.
-- `internal/infra` - infrastructure adapters.
-- `api/openapi/service.yaml` - source of truth OpenAPI.
+1. Copy `env/.env.example` to `.env` if `make bootstrap` did not already do it.
+2. Run `make template-init` after cloning into a new service repository to rewire module path, CODEOWNERS, and skill mirrors.
+3. Use `make check-full` before larger changes or before opening a PR.
+
+## Repository Layout
+
+- `cmd/service` - service entrypoint and bootstrap lifecycle orchestration.
+- `internal/app` - use-case layer.
+- `internal/domain` - domain contracts and types.
+- `internal/infra` - HTTP, Postgres, telemetry, and other infrastructure adapters.
+- `api/openapi/service.yaml` - REST API source of truth.
 - `internal/api` - generated OpenAPI artifacts.
-- `internal/infra/postgres/sqlcgen` - generated sqlc artifacts.
+- `env/migrations` - SQL migrations for the local PostgreSQL environment.
+- `internal/infra/postgres/sqlcgen` - generated `sqlc` artifacts.
+- `specs/` - spec-first decision records and implementation history for non-trivial work.
+- `skills/` - canonical skill definitions mirrored into agent runtime directories.
 
-## Technologies And Libraries
+More detail: [docs/project-structure-and-module-organization.md](docs/project-structure-and-module-organization.md)
 
-Below are **all direct** project technologies/libraries (runtime + tooling).
+## Quality Gates And CI/CD
 
-### Runtime
+This template ships with a production-oriented quality baseline instead of a bare `go test`.
+
+Local entry points:
+
+- `make check` - quick local checks.
+- `make check-full` - CI-like verification.
+- `make ci-local` - native CI-style flow.
+- `make docker-ci` - Docker-based CI-style flow.
+
+Repository and CI guardrails include:
+
+- formatting and module integrity checks,
+- `golangci-lint`,
+- unit tests, race tests, and coverage thresholds,
+- OpenAPI generation drift, validation, lint, and breaking-change checks,
+- `sqlc` generation drift checks,
+- docs and skills mirror drift checks,
+- `govulncheck`, `gosec`, and `gitleaks`,
+- container image scanning with Trivy,
+- GHCR publishing, CycloneDX SBOM generation, and Cosign signing in release flows.
+
+See `.github/workflows/` and `Makefile` for the exact pipeline steps.
+
+## Technology Stack
+
+Core stack:
 
 - Go `1.26`
-- Standard library: `net/http`, `log/slog`
-- HTTP router: `github.com/go-chi/chi/v5`
-- Config: `github.com/knadh/koanf/v2`, `github.com/knadh/koanf/parsers/yaml`, `github.com/knadh/koanf/providers/confmap`, `github.com/knadh/koanf/providers/rawbytes`
-- OpenAPI runtime: `github.com/oapi-codegen/runtime`
-- OpenAPI validation/spec work: `github.com/getkin/kin-openapi`
-- PostgreSQL driver: `github.com/jackc/pgx/v5`
-- Metrics: `github.com/prometheus/client_golang`
-- Tracing: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/trace`, `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`, `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp`
-- Testing libs: `github.com/testcontainers/testcontainers-go`, `github.com/testcontainers/testcontainers-go/modules/postgres`, `go.uber.org/mock`, `go.uber.org/goleak`
+- `chi` for HTTP routing
+- `kin-openapi` and `oapi-codegen` for contract-first API work
+- PostgreSQL `17`, `pgx/v5`, and `sqlc` for SQL-first data access
+- `koanf` for configuration
+- Prometheus and OpenTelemetry for observability
+- `testcontainers-go`, `go.uber.org/mock`, and `goleak` for testing
+- Docker multi-stage builds and distroless runtime images
+- GitHub Actions for CI, nightly checks, and CD
 
-### Tooling (go.mod `tool (...)`)
-
-- `github.com/getkin/kin-openapi/cmd/validate`
-- `github.com/golang-migrate/migrate/v4/cmd/migrate`
-- `github.com/golangci/golangci-lint/v2/cmd/golangci-lint`
-- `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen`
-- `github.com/oasdiff/oasdiff`
-- `github.com/securego/gosec/v2/cmd/gosec`
-- `github.com/sqlc-dev/sqlc/cmd/sqlc`
-- `github.com/zricethezav/gitleaks/v8`
-- `go.uber.org/mock/mockgen`
-- `golang.org/x/tools/cmd/goimports`
-- `golang.org/x/tools/cmd/stringer`
-- `golang.org/x/vuln/cmd/govulncheck`
-- `gotest.tools/gotestsum`
-
-### Platform And Infra
-
-- OpenAPI `3.0.3`
-- PostgreSQL `17` (local compose)
-- Docker multi-stage build
-- Distroless runtime: `gcr.io/distroless/static-debian12:nonroot`
-- Node.js `20` (OpenAPI lint via Redocly CLI)
-- GitHub Actions (`ci`, `nightly`, `cd`)
-- GHCR publishing
-- Container scan: Trivy
-- SBOM: CycloneDX
-- Image signing: Cosign (keyless)
-- Build provenance attestation
-
-Full transitive dependency list: `go.mod` and `go.sum`.
+For the full dependency graph, see [`go.mod`](go.mod) and [`go.sum`](go.sum).
 
 ## Core Commands
 
@@ -96,10 +124,17 @@ make ci-local
 make docker-ci
 make openapi-check
 make sqlc-check
+make test-integration
+make gh-protect BRANCH=main
 ```
 
-## AI coding
+## AI Tooling And Skills
 
-- Agent contract: [AGENTS.md](AGENTS.md)
-- Skills source: `skills/`
-- Portable mirrors: `.agents/skills`, `.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills`, `.opencode/skills`
+The repository is prepared for multi-tool AI workflows:
+
+- [`AGENTS.md`](AGENTS.md) defines the repository contract for orchestrator/subagent-first execution.
+- `skills/` is the canonical source of skill content.
+- Skills are mirrored to `.agents/skills`, `.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills`, and `.opencode/skills`.
+- `CLAUDE.md` keeps Claude-facing instructions aligned with `AGENTS.md`.
+
+This makes the template usable for AI-assisted development across Codex, Claude Code, Cursor, Gemini, GitHub, and similar agent runtimes without maintaining separate workflow definitions per tool.
