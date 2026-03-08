@@ -1,4 +1,0 @@
-- Assumed `GET /v1/payouts/{payout_id}` can be backed by an authoritative read path even though `GET /v1/payouts` is an eventually consistent history projection.
-- Assumed the service can retain idempotency records and operation resources for at least `24h`; if product requirements need a longer duplicate-suppression window, the contract should change before implementation.
-- Chose `202 Accepted` plus an operation resource as the primary contract because the PSP latency range makes synchronous `201` semantics too risky for retries.
-- Left exact payload-size, metadata-size, and projection-lag numeric limits open because the prompt did not provide product constraints for them.

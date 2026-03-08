@@ -1,4 +1,0 @@
-- Assumed the service exposes one editable profile per authenticated customer, so the primary resource is a singleton at `/v1/profile`.
-- Assumed profile edits are synchronous and should provide read-after-write consistency for the same resource.
-- Exact mutable field names and nullable/clearable fields are not specified yet; they must be defined in OpenAPI before implementation.
-- The main remaining rollout uncertainty is whether existing `POST /v1/profile/update` callers can send `If-Match` and `Idempotency-Key`, or whether a short legacy exception is required.

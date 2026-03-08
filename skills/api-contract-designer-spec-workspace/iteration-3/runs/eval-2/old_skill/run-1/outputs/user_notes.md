@@ -1,5 +1,0 @@
-- Assumed the editable profile is a singleton self-service resource for the authenticated customer, so `/v1/profile` is the right canonical URI.
-- Assumed normal profile edits are synchronous and should provide strong read-after-write behavior for the same customer; otherwise the contract needs explicit freshness or async semantics.
-- Assumed the service can issue a strong opaque `ETag` for the profile resource. If it cannot, the `If-Match` requirement in `final.md` should not ship as written.
-- Main rollout uncertainty: existing `POST /v1/profile/update` consumers may not tolerate a new error schema or may not be able to send `If-Match` and `Idempotency-Key`, so the old endpoint stays wire-compatible during coexistence.
-- Repo-level uncertainty: the current OpenAPI file uses `/api/v1/*`, while the prompt describes `/v1/profile/update`; the spec needs an explicit decision on whether the customer API prefix is `/v1` or `/api/v1`.

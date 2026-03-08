@@ -1,5 +1,0 @@
-- Assumed the profile is a singleton resource for the authenticated customer, so `/v1/profile` is preferable to any customer-ID path.
-- Assumed normal profile edits complete synchronously and can return the committed resource representation immediately.
-- Assumed the service can issue a strong `ETag` for the profile resource. If it cannot, the `If-Match` contract in `final.md` is not ready to ship.
-- Deterministic `application/problem+json` errors are guaranteed for the new `PATCH /v1/profile` contract. The legacy `POST /v1/profile/update` endpoint intentionally stays wire-compatible during rollout unless consumers are verified tolerant of error-schema changes.
-- The remaining product decisions are the editable-field whitelist, field nullability, whether `email` belongs on this surface, and the legacy endpoint sunset date.
