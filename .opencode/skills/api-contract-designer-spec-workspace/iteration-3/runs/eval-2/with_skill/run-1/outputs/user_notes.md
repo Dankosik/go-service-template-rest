@@ -1,0 +1,6 @@
+- Assumed the prompt's `/v1/...` path family is authoritative. The current repo template OpenAPI uses `/api/v1/...`, so confirm the public base-path convention before updating `api/openapi/service.yaml`.
+- Assumed one editable profile exists per authenticated subject and ownership comes entirely from auth context. If clients can address multiple profiles, the URI model must change.
+- Assumed the service can return a strong opaque `ETag` and satisfy read-after-write on `GET /v1/profile` after `PATCH /v1/profile`. If reads can lag, freshness disclosure must be added and `If-Match` semantics may need revision.
+- Assumed web/mobile clients can generate and send `Idempotency-Key` on the new `PATCH` endpoint. If that client requirement is not acceptable, retry behavior becomes weaker and should be revisited explicitly.
+- Legacy success and error envelopes for `POST /v1/profile/update` are unknown. Keep them wire-compatible during coexistence unless compatibility testing proves consumers tolerate a change.
+- Final editable-field, nullability, and verified-contact rules are still product/domain questions and should be resolved before OpenAPI is finalized.

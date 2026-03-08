@@ -1,0 +1,118 @@
+{
+  "winner": "B",
+  "reasoning": "Both outputs satisfy the prompt and hit all stated expectations. Output B is stronger because it keeps the same large-file async design but lands on a more defensible partner-facing webhook model by using a pre-registered target, and it adds a monotonic job version that makes webhook-versus-poll reconciliation clearer when the cache-backed status view lags. Output A is slightly more exhaustive, but its caller-supplied per-job webhook URL is less settled and its stale-read story is a bit less operationally sharp.",
+  "rubric": {
+    "A": {
+      "content": {
+        "correctness": 4,
+        "completeness": 5,
+        "accuracy": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "usability": 5
+      },
+      "content_score": 4.3,
+      "structure_score": 5.0,
+      "overall_score": 9.3
+    },
+    "B": {
+      "content": {
+        "correctness": 5,
+        "completeness": 5,
+        "accuracy": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "usability": 5
+      },
+      "content_score": 4.7,
+      "structure_score": 5.0,
+      "overall_score": 9.7
+    }
+  },
+  "output_quality": {
+    "A": {
+      "score": 9.3,
+      "strengths": [
+        "Covers the full contract surface with strong endpoint, state, error, webhook, compatibility, and open-question sections",
+        "Makes partial failures explicit with terminal summary counts plus a paginated failures subresource",
+        "Discloses cache-backed freshness clearly with view and source timestamps"
+      ],
+      "weaknesses": [
+        "The per-request webhook URL model is less constrained than the rest of the contract and leaves target registration unresolved",
+        "Polling-versus-webhook reconciliation relies on timestamps rather than an explicit monotonic version"
+      ]
+    },
+    "B": {
+      "score": 9.7,
+      "strengths": [
+        "Uses the expected large-file two-step upload plus async job pattern instead of a direct 50 MB API upload",
+        "Defines a tighter partner-facing signed webhook contract with a pre-registered target and clear delivery semantics",
+        "Adds a job version for reconciling webhook events against a stale cache-backed GET view"
+      ],
+      "weaknesses": [
+        "Slightly less explicit than A about upload-target-specific behavior and freshness metadata detail",
+        "Does not provide the extra polling ergonomics that A adds, such as explicit Retry-After guidance"
+      ]
+    }
+  },
+  "expectation_results": {
+    "A": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+          "passed": true
+        },
+        {
+          "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+          "passed": true
+        },
+        {
+          "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+          "passed": true
+        },
+        {
+          "text": "The output includes size/media or rate-limit error semantics such as 413, 415, 422, or 429.",
+          "passed": true
+        },
+        {
+          "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+          "passed": true
+        }
+      ]
+    },
+    "B": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+          "passed": true
+        },
+        {
+          "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+          "passed": true
+        },
+        {
+          "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+          "passed": true
+        },
+        {
+          "text": "The output includes size/media or rate-limit error semantics such as 413, 415, 422, or 429.",
+          "passed": true
+        },
+        {
+          "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+          "passed": true
+        }
+      ]
+    }
+  }
+}

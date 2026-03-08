@@ -1,0 +1,12 @@
+{
+  "eval_id": 1,
+  "eval_name": "payout-async-idempotent",
+  "prompt": "We are adding vendor payout initiation to a Go service. Clients call POST /v1/payouts and network timeouts are common, so retries matter. The PSP may take 5-90 seconds and final settlement is asynchronous. Payout-history reads come from an eventually consistent projection. Design the client-visible REST contract before coding in this spec-first repo. I need the contract, not handler code: resource model, endpoint/status matrix, request/response/error shape, idempotency/retry rules, preconditions if relevant, operation-resource semantics, freshness disclosure, compatibility notes, and open questions.",
+  "assertions": [
+    "The output uses an explicit async acknowledgement pattern such as `202 Accepted` plus an operation/status resource.",
+    "The output defines `Idempotency-Key` behavior, including what happens for same-key/different-payload retries.",
+    "The output discloses eventual consistency or freshness behavior for payout-history reads.",
+    "The output uses one stable HTTP error model such as `application/problem+json`.",
+    "The output includes compatibility notes or change classification instead of leaving rollout semantics implicit."
+  ]
+}

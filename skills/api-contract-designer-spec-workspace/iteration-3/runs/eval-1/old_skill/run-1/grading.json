@@ -1,0 +1,62 @@
+{
+  "expectations": [
+    {
+      "text": "The output uses an explicit async acknowledgement pattern such as `202 Accepted` plus an operation/status resource.",
+      "passed": true,
+      "evidence": "Matched 202 Accepted and payout-operations."
+    },
+    {
+      "text": "The output defines `Idempotency-Key` behavior, including what happens for same-key/different-payload retries.",
+      "passed": true,
+      "evidence": "Matched Idempotency-Key and Same key + same semantically equivalent payload returns the same operation resource and the same `Location`.\n  - Same key + different payload returns `409."
+    },
+    {
+      "text": "The output discloses eventual consistency or freshness behavior for payout-history reads.",
+      "passed": true,
+      "evidence": "Matched projection with payout-history context."
+    },
+    {
+      "text": "The output uses one stable HTTP error model such as `application/problem+json`.",
+      "passed": true,
+      "evidence": "Matched application/problem+json."
+    },
+    {
+      "text": "The output includes compatibility notes or change classification instead of leaving rollout semantics implicit.",
+      "passed": true,
+      "evidence": "Matched Compatibility."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 15693,
+    "transcript_chars": 0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [
+      "Assumed `GET /v1/payouts/{payout_id}` can be backed by an authoritative read path even though `GET /v1/payouts` is an eventually consistent history projection.",
+      "Assumed the service can retain idempotency records and operation resources for at least `24h`; if product requirements need a longer duplicate-suppression window, the contract should change before implementation.",
+      "Chose `202 Accepted` plus an operation resource as the primary contract because the PSP latency range makes synchronous `201` semantics too risky for retries.",
+      "Left exact payload-size, metadata-size, and projection-lag numeric limits open because the prompt did not provide product constraints for them."
+    ],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "These assertions check baseline contract coverage well, but they do not fully discriminate richer option analysis, artifact-handoff quality, or semantic precision. Use the blind comparison to judge those qualities."
+      }
+    ],
+    "overall": "Assertions are intentionally minimum-coverage checks; qualitative comparison is still needed for richer output quality."
+  }
+}

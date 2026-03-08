@@ -1,0 +1,122 @@
+{
+  "winner": "A",
+  "reasoning": "Both outputs satisfy all explicit expectations, but Output A is the stronger contract. It is more execution-ready on the exact prompt dimensions: it explicitly rejects PUT and alternative URI shapes, defines merge-patch semantics in more concrete terms, makes deterministic validation behavior more specific with stable ordering and status-code boundaries, and gives a fuller coexistence plan for replacing POST /v1/profile/update, including deprecation headers and explicit legacy-write behavior. Output B is strong and easier to scan, but it leaves more legacy error-parity details implicit and adds a mandatory Idempotency-Key requirement that is less directly justified by the prompt.",
+  "rubric": {
+    "A": {
+      "content": {
+        "contract_decisions": 5,
+        "concurrency_and_rollout": 5,
+        "error_and_artifact_coverage": 5
+      },
+      "structure": {
+        "organization": 4,
+        "formatting": 5,
+        "implementation_readiness": 5
+      },
+      "content_score": 5.0,
+      "structure_score": 4.7,
+      "overall_score": 9.7
+    },
+    "B": {
+      "content": {
+        "contract_decisions": 5,
+        "concurrency_and_rollout": 4,
+        "error_and_artifact_coverage": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "implementation_readiness": 4
+      },
+      "content_score": 4.3,
+      "structure_score": 4.7,
+      "overall_score": 9.0
+    }
+  },
+  "output_quality": {
+    "A": {
+      "score": 9.7,
+      "strengths": [
+        "Makes the PATCH decision and rejected alternatives explicit and well-justified",
+        "Defines optimistic concurrency clearly with ETag, If-Match, 412, and 428 behavior",
+        "Specifies deterministic application/problem+json validation behavior with stable ordering",
+        "Provides the most complete compatibility plan for the legacy POST /v1/profile/update endpoint",
+        "Anchors the decision in 30-api-contract.md and related spec artifacts"
+      ],
+      "weaknesses": [
+        "Denser and longer than necessary for a first-pass contract decision",
+        "Includes some extra adjacent-handoff detail beyond the core prompt"
+      ]
+    },
+    "B": {
+      "score": 9.0,
+      "strengths": [
+        "Clear and concise decision summary with the right singleton resource shape",
+        "Explicit PATCH choice with sound justification against PUT",
+        "Covers ETag and If-Match concurrency behavior and a deprecated rollout path",
+        "Places the decision in 30-api-contract.md and OpenAPI updates"
+      ],
+      "weaknesses": [
+        "Legacy compatibility behavior is less explicit about aligning old-endpoint errors to the new error contract",
+        "Makes Idempotency-Key mandatory on PATCH without as much justification from the prompt",
+        "Less concrete than Output A on deterministic validation behavior and rollout edge cases"
+      ]
+    }
+  },
+  "expectation_results": {
+    "A": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output explicitly chooses `PUT` or `PATCH` and justifies the choice.",
+          "passed": true
+        },
+        {
+          "text": "The output defines concurrency or precondition behavior such as `ETag`, `If-Match`, `412`, or `428`.",
+          "passed": true
+        },
+        {
+          "text": "The output gives a compatibility strategy for replacing the old `POST /v1/profile/update` endpoint.",
+          "passed": true
+        },
+        {
+          "text": "The output places the decision into `30-api-contract.md` or an equivalent spec artifact instead of treating it as implementation detail.",
+          "passed": true
+        },
+        {
+          "text": "The output uses one stable error-model choice such as `application/problem+json`.",
+          "passed": true
+        }
+      ]
+    },
+    "B": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output explicitly chooses `PUT` or `PATCH` and justifies the choice.",
+          "passed": true
+        },
+        {
+          "text": "The output defines concurrency or precondition behavior such as `ETag`, `If-Match`, `412`, or `428`.",
+          "passed": true
+        },
+        {
+          "text": "The output gives a compatibility strategy for replacing the old `POST /v1/profile/update` endpoint.",
+          "passed": true
+        },
+        {
+          "text": "The output places the decision into `30-api-contract.md` or an equivalent spec artifact instead of treating it as implementation detail.",
+          "passed": true
+        },
+        {
+          "text": "The output uses one stable error-model choice such as `application/problem+json`.",
+          "passed": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,263 @@
+{
+  "metadata": {
+    "skill_name": "go-qa-tester",
+    "skill_path": "/mnt/c/Users/danii/IdeaProjects/go-service-template-rest/skills/go-qa-tester",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-03-07T23:04:58Z",
+    "evals_run": [
+      0,
+      1,
+      2
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response covers missing idempotency key behavior, same-key same-payload equivalence, and same-key different-payload conflict handling.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes `TestStartExportRequiresIdempotencyKey`, `TestStartExportSameKeySamePayloadReturnsExistingOperation`, and `TestStartExportSameKeyDifferentPayloadConflicts`."
+        },
+        {
+          "text": "The response covers async API semantics including `202 Accepted` and operation-resource lifecycle, plus `429` retry guidance when rate limiting is described.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes `TestOpenAPIRuntimeContractPayoutExportAccepted`, lifecycle tests for `pending -> running -> succeeded|failed`, and `TestOpenAPIRuntimeContractPayoutExportQuotaExceeded` with `Retry-After`."
+        },
+        {
+          "text": "The response includes strict boundary parsing cases such as unknown fields, trailing JSON, or request size/status-split behavior, and it names concrete validation commands.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes unknown-field, trailing-JSON, and oversized-body `413` tests; Validation Commands names `go test`, `go test -race`, `make openapi-check`, and `make test-integration`."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response covers cache hit or miss behavior, fail-open degradation, tenant-safe key isolation, and stampede or coalescing behavior under parallel requests.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes cache hit, cache miss, fail-open Redis outage, tenant-safe key tests, and same-key coalescing under concurrent misses."
+        },
+        {
+          "text": "The response covers migration or backfill safety including mixed-version compatibility, read fallback during transition, and idempotent or resumable backfill behavior.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes backfill fallback for incomplete `summary_version`, mixed-version safety, checkpoint resume, and rerun idempotence."
+        },
+        {
+          "text": "The response names stronger validation commands appropriate for cache or migration risk, such as race, integration, migration, or full-check commands.",
+          "passed": true,
+          "evidence": "Validation Commands includes targeted `go test -race`, integration-tagged tests, `make migration-validate`, and `make check-full`."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response explicitly covers `errors.Is` or `errors.As` and recognizability of `context.Canceled` or `context.DeadlineExceeded`.",
+          "passed": true,
+          "evidence": "Scenario Coverage explicitly asserts `errors.Is(err, errDB)`, `errors.Is(err, context.Canceled)`, and `errors.Is(err, context.DeadlineExceeded)`."
+        },
+        {
+          "text": "The response covers worker or goroutine shutdown, unblock-on-cancel behavior, and deterministic coordination instead of sleep-based synchronization.",
+          "passed": true,
+          "evidence": "Implemented Test Scope bans `time.Sleep`; Scenario Coverage includes sibling cancel, blocked send exit on cancel, and deterministic channel-based coordination."
+        },
+        {
+          "text": "The response includes race-aware validation commands and does not treat concurrency testing as just `did not panic` or happy-path execution.",
+          "passed": true,
+          "evidence": "Validation Commands includes `go test -race` and `make test-race`, and the proposed tests assert concrete shutdown, concurrency-limit, and wrapped-error outcomes."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response covers missing idempotency key behavior, same-key same-payload equivalence, and same-key different-payload conflict handling.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes missing-key rejection, same-key replay reuse, and same-key different-payload conflict handling."
+        },
+        {
+          "text": "The response covers async API semantics including `202 Accepted` and operation-resource lifecycle, plus `429` retry guidance when rate limiting is described.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes `TestPayoutExportStartReturns202AndLocation`, operation-resource state exposure, and `TestPayoutExportStartReturns429WithRetryAfter`."
+        },
+        {
+          "text": "The response includes strict boundary parsing cases such as unknown fields, trailing JSON, or request size/status-split behavior, and it names concrete validation commands.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes unknown-field, trailing-JSON, and `413` split tests; Validation Commands names service, HTTP, race, integration, and repo-wide test commands."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response covers cache hit or miss behavior, fail-open degradation, tenant-safe key isolation, and stampede or coalescing behavior under parallel requests.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes cache hit, cache miss, fail-open cache-get failure fallback, tenant-scoped keying, and same-key coalescing tests."
+        },
+        {
+          "text": "The response covers migration or backfill safety including mixed-version compatibility, read fallback during transition, and idempotent or resumable backfill behavior.",
+          "passed": true,
+          "evidence": "Scenario Coverage includes legacy fallback while `summary_version` is incomplete, post-backfill versioned reads, resumable backfill after partial progress, and idempotent reruns."
+        },
+        {
+          "text": "The response names stronger validation commands appropriate for cache or migration risk, such as race, integration, migration, or full-check commands.",
+          "passed": true,
+          "evidence": "Validation Commands includes `make test-race`, `make test-integration`, and `make migration-validate`."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response explicitly covers `errors.Is` or `errors.As` and recognizability of `context.Canceled` or `context.DeadlineExceeded`.",
+          "passed": true,
+          "evidence": "Scenario Coverage explicitly preserves wrapped `context.Canceled` and `context.DeadlineExceeded` with `errors.Is` checks."
+        },
+        {
+          "text": "The response covers worker or goroutine shutdown, unblock-on-cancel behavior, and deterministic coordination instead of sleep-based synchronization.",
+          "passed": true,
+          "evidence": "Implemented Test Scope says to use channel handshakes and atomic counters with no `time.Sleep`; Scenario Coverage includes sibling shutdown and blocked-send unblock on cancel."
+        },
+        {
+          "text": "The response includes race-aware validation commands and does not treat concurrency testing as just `did not panic` or happy-path execution.",
+          "passed": true,
+          "evidence": "Validation Commands includes multiple `go test -race` runs, and the scenarios assert shutdown, context propagation, and bounded parallelism rather than panic absence."
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "new_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "old_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.00",
+      "time_seconds": "+0.0",
+      "tokens": "+0"
+    }
+  },
+  "notes": []
+}

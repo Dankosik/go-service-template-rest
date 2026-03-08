@@ -1,0 +1,119 @@
+{
+  "winner": "A",
+  "reasoning": "Output A is the stronger client-visible contract. Both outputs satisfy the core task and all stated expectations, but A is more focused on the external API surface, keeps the contract tighter around the requested concerns, and gives clearer guidance on stale cache-backed reads by tying webhook delivery to job versioning and explicit projection freshness metadata. Output B is also strong, especially on the upload-session split, but it weakens the contract slightly by broadening media handling beyond the CSV-centered prompt, introducing a `canceled` outcome without a matching v1 cancel surface, and mixing in some internal handoff material that is less relevant to the client-visible contract.",
+  "rubric": {
+    "A": {
+      "content": {
+        "correctness": 5,
+        "completeness": 5,
+        "accuracy": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "usability": 5
+      },
+      "content_score": 4.7,
+      "structure_score": 5.0,
+      "overall_score": 9.7
+    },
+    "B": {
+      "content": {
+        "correctness": 4,
+        "completeness": 5,
+        "accuracy": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "usability": 4
+      },
+      "content_score": 4.3,
+      "structure_score": 4.7,
+      "overall_score": 9.0
+    }
+  },
+  "output_quality": {
+    "A": {
+      "score": 9.7,
+      "strengths": [
+        "Uses a large-file-safe async job creation flow with a single-use upload URL instead of a direct multipart API upload",
+        "Defines a strong signed webhook contract and explicitly explains how clients should reason about stale job reads versus newer webhook versions",
+        "Covers partial failures, rate-limit and media errors, compatibility boundaries, and open questions without drifting away from the client-visible contract"
+      ],
+      "weaknesses": [
+        "Representing `all_failed` as `status=succeeded` with a result outcome may surprise some clients at first glance",
+        "Creating the job before the file upload introduces an abandoned-job state that clients must handle"
+      ]
+    },
+    "B": {
+      "score": 9.0,
+      "strengths": [
+        "Separates upload-session reservation from import acceptance cleanly, which is a good fit for large-file handling",
+        "Defines a robust item-results subresource and clear eventual-consistency freshness fields for cache-backed reads",
+        "Includes solid webhook signing, retry, problem-details, and rate-limit behavior"
+      ],
+      "weaknesses": [
+        "Allows `application/vnd.ms-excel` despite the prompt being centered on CSV uploads, which muddies the media contract slightly",
+        "Exposes a `canceled` terminal outcome even though no corresponding v1 cancel operation is defined",
+        "Adds internal artifact and handoff notes that are less relevant to the requested client-visible contract"
+      ]
+    }
+  },
+  "expectation_results": {
+    "A": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+          "passed": true
+        },
+        {
+          "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+          "passed": true
+        },
+        {
+          "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+          "passed": true
+        },
+        {
+          "text": "The output includes size/media or rate-limit error semantics such as `413`, `415`, `422`, or `429`.",
+          "passed": true
+        },
+        {
+          "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+          "passed": true
+        }
+      ]
+    },
+    "B": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+          "passed": true
+        },
+        {
+          "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+          "passed": true
+        },
+        {
+          "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+          "passed": true
+        },
+        {
+          "text": "The output includes size/media or rate-limit error semantics such as `413`, `415`, `422`, or `429`.",
+          "passed": true
+        },
+        {
+          "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+          "passed": true
+        }
+      ]
+    }
+  }
+}

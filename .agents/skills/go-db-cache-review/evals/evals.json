@@ -1,0 +1,47 @@
+{
+  "skill_name": "go-db-cache-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the attached numbered Go snippet as a DB/cache-focused code review. Return review output in the skill's standard format, keep findings merge-risk oriented, and cite `file:line` references from the snippet.",
+      "expected_output": "A DB/cache review that catches transaction and cache correctness defects in the profile update path without drifting into unrelated cleanup.",
+      "files": [
+        "evals/files/profile_update_invalidation.txt"
+      ],
+      "expectations": [
+        "The review identifies that `internal/user/service.go:15` uses a tenant-unsafe cache key or otherwise misses a required scope dimension.",
+        "The review identifies that cache invalidation happens before the successful commit at `internal/user/service.go:16-20`, creating a partial-side-effect or freshness risk.",
+        "The review suggests a fix that preserves freshness only after commit or through another deliberate post-commit strategy.",
+        "The review output cites `internal/user/service.go` with line references rather than giving only generic advice."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review the attached numbered Go snippet as a DB/cache-focused code review. Return review output in the skill's standard format, keep findings merge-risk oriented, and cite `file:line` references from the snippet.",
+      "expected_output": "A DB/cache review that catches caller-context misuse, resource-safety gaps, and invalid negative-cache behavior in a request-path repository method.",
+      "files": [
+        "evals/files/list_active_users_negative_cache.txt"
+      ],
+      "expectations": [
+        "The review flags request-path use of `context.Background()` at `internal/user/repository.go:7` as unsafe for DB access.",
+        "The review flags missing `rows.Close` and/or `rows.Err` handling as a resource-safety defect in `internal/user/repository.go`.",
+        "The review flags caching a DB failure as `[]` at `internal/user/repository.go:12` as an invalid negative-cache or business-truth bug.",
+        "The review suggests keeping DB access caller-aware and bounded instead of detached from the inbound context."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review the attached numbered Go snippet as a DB/cache-focused code review. Return review output in the skill's standard format, keep findings merge-risk oriented, and cite `file:line` references from the snippet.",
+      "expected_output": "A DB/cache review that catches tenant-unsafe cache keys, hot-miss origin-protection risk, and non-owned async cache writes while handing off the non-primary concurrency or reliability depth.",
+      "files": [
+        "evals/files/hot_product_cache_wrapper.txt"
+      ],
+      "expectations": [
+        "The review identifies that `internal/catalog/cache.go:2` uses a tenant-unsafe cache key or otherwise misses a required scope dimension.",
+        "The review flags the hot-miss path as lacking stampede suppression, coalescing, or other origin-protection controls.",
+        "The review flags the fire-and-forget cache write at `internal/catalog/cache.go:12-14` as unsafe DB/cache behavior, not just style drift.",
+        "The review includes a handoff to `go-concurrency-review` or `go-reliability-review` for the non-primary coordination or fallback-policy part of the defect."
+      ]
+    }
+  ]
+}

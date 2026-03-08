@@ -1,0 +1,5 @@
+- Assumption: the service can allocate `payout_id` and `operation_id` at durable acceptance time, even if the PSP call finishes later.
+- Assumption: payout-history reads include both `GET /v1/payouts/{payout_id}` and `GET /v1/payouts`, and both are backed by an eventually consistent projection.
+- Assumption: `Idempotency-Key` can be required on `POST /v1/payouts`; this is the main retry-safety mechanism for client timeouts.
+- Uncertainty: the exact business status taxonomy for payouts may need to expand beyond `initiating`, `processing`, `paid`, `failed`, and `canceled`.
+- Uncertainty: the retention period for operation resources was not specified; the contract leaves the exact duration as an open product/API decision.

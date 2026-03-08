@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "The response covers cache hit or miss behavior, fail-open degradation, tenant-safe key isolation, and stampede or coalescing behavior under parallel requests.",
+      "passed": true,
+      "evidence": "Scenario Coverage includes cache hit, cache miss, fail-open cache-get failure fallback, tenant-scoped keying, and same-key coalescing tests."
+    },
+    {
+      "text": "The response covers migration or backfill safety including mixed-version compatibility, read fallback during transition, and idempotent or resumable backfill behavior.",
+      "passed": true,
+      "evidence": "Scenario Coverage includes legacy fallback while `summary_version` is incomplete, post-backfill versioned reads, resumable backfill after partial progress, and idempotent reruns."
+    },
+    {
+      "text": "The response names stronger validation commands appropriate for cache or migration risk, such as race, integration, migration, or full-check commands.",
+      "passed": true,
+      "evidence": "Validation Commands includes `make test-race`, `make test-integration`, and `make migration-validate`."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  }
+}

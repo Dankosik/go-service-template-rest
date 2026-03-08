@@ -1,0 +1,64 @@
+{
+  "expectations": [
+    {
+      "text": "The output uses an explicit async acknowledgement pattern such as `202 Accepted` plus an operation/status resource.",
+      "passed": true,
+      "evidence": "Matched 202 Accepted and operation resource."
+    },
+    {
+      "text": "The output defines `Idempotency-Key` behavior, including what happens for same-key/different-payload retries.",
+      "passed": true,
+      "evidence": "Matched Idempotency-Key and Same key plus different payload returns `409."
+    },
+    {
+      "text": "The output discloses eventual consistency or freshness behavior for payout-history reads.",
+      "passed": true,
+      "evidence": "Matched eventual with payout-history context."
+    },
+    {
+      "text": "The output uses one stable HTTP error model such as `application/problem+json`.",
+      "passed": true,
+      "evidence": "Matched application/problem+json."
+    },
+    {
+      "text": "The output includes compatibility notes or change classification instead of leaving rollout semantics implicit.",
+      "passed": true,
+      "evidence": "Matched Compatibility."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 17906,
+    "transcript_chars": 0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [
+      "# Assumptions And Uncertainties",
+      "Assumed `POST /v1/payouts` may allocate a `payout_id` immediately while PSP submission continues asynchronously; if that is not feasible, the operation-resource design should be revisited.",
+      "Assumed `GET /v1/payouts/{payout_id}` can be served strongly enough to support timeout recovery, while `GET /v1/payouts` remains projection-backed and eventual.",
+      "Used `Idempotency-Key` as a required precondition because network timeouts are common; exact key format and maximum length are still unspecified.",
+      "Left exact amount-scale limits, destination-type taxonomy, and operation-retention window as open questions rather than inventing values.",
+      "No client-facing webhook contract was added; this draft intentionally keeps clients on polling only."
+    ],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "These assertions check baseline contract coverage well, but they do not fully discriminate richer option analysis, artifact-handoff quality, or semantic precision. Use the blind comparison to judge those qualities."
+      }
+    ],
+    "overall": "Assertions are intentionally minimum-coverage checks; qualitative comparison is still needed for richer output quality."
+  }
+}

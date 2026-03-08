@@ -1,0 +1,63 @@
+{
+  "expectations": [
+    {
+      "text": "The output explicitly chooses `PUT` or `PATCH` and justifies the choice.",
+      "passed": true,
+      "evidence": "Matched both PUT/PATCH discussion and option rationale snippets such as PATCH /v1/profile`.\n- Write method: use `PATCH`, not `PUT`, because."
+    },
+    {
+      "text": "The output defines concurrency or precondition behavior such as `ETag`, `If-Match`, `412`, or `428`.",
+      "passed": true,
+      "evidence": "Matched ETag, If-Match, and 428."
+    },
+    {
+      "text": "The output gives a compatibility strategy for replacing the old `POST /v1/profile/update` endpoint.",
+      "passed": true,
+      "evidence": "Matched POST /v1/profile/update with rollout/deprecation language."
+    },
+    {
+      "text": "The output places the decision into `30-api-contract.md` or an equivalent spec artifact instead of treating it as implementation detail.",
+      "passed": true,
+      "evidence": "Matched artifact reference api/openapi/service.yaml."
+    },
+    {
+      "text": "The output uses one stable error-model choice such as `application/problem+json`.",
+      "passed": true,
+      "evidence": "Matched application/problem+json."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 14148,
+    "transcript_chars": 0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [
+      "# Assumptions And Uncertainties",
+      "Assumed model: each authenticated customer has exactly one editable profile. If that is false, `/v1/profile` is too narrow and the URI needs an explicit identifier.",
+      "Assumed consistency: profile edits can honor a strong read-after-write contract. If the backing write path is eventually consistent, the API contract needs explicit freshness disclosure or an async redesign.",
+      "Main rollout uncertainty: existing `POST /v1/profile/update` consumers may not be able to send `If-Match` or `Idempotency-Key`; if so, the legacy endpoint needs a time-boxed compatibility exception with documented lost-update risk.",
+      "Main compatibility uncertainty: the current legacy error body is unknown. If clients depend on that exact shape, the old endpoint should keep it during coexistence even though the new `/v1/profile` surface uses `application/problem+json`."
+    ],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "These assertions check baseline contract coverage well, but they do not fully discriminate richer option analysis, artifact-handoff quality, or semantic precision. Use the blind comparison to judge those qualities."
+      }
+    ],
+    "overall": "Assertions are intentionally minimum-coverage checks; qualitative comparison is still needed for richer output quality."
+  }
+}

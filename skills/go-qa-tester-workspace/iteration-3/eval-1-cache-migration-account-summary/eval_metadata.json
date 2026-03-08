@@ -1,0 +1,11 @@
+{
+  "eval_id": 1,
+  "eval_name": "cache-migration-account-summary",
+  "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `skills/go-qa-tester/evals/files/cache-migration-account-summary.md` and return only the deliverable shape required by the skill.",
+  "assertions": [
+    "The response covers cache hit or miss behavior, fail-open degradation, tenant-safe key isolation, and stampede or coalescing behavior under parallel requests.",
+    "The response covers migration or backfill safety including mixed-version compatibility, read fallback during transition, and idempotent or resumable backfill behavior.",
+    "The response names stronger validation commands appropriate for cache or migration risk, such as race, integration, migration, or full-check commands.",
+    "The response avoids inventing cache key schema, final-cache shape, or checkpoint mechanics beyond the prompt and prefers observable stale-data-safety tests."
+  ]
+}

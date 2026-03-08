@@ -1,0 +1,120 @@
+{
+  "winner": "B",
+  "reasoning": "Output B is stronger on the timeout and retry contract that matters most for this payout API. It uses the required `202 Accepted` plus operation-resource pattern, then goes further by defining terminal same-key replay behavior (`200 OK` after completion versus `202 Accepted` while work is still in flight), spelling out which responses do and do not consume the idempotency key, and making projection staleness highly visible through an explicit consistency block on payout-history reads. Output A is solid and well organized, but it leaves terminal replay semantics and key-consumption rules less explicit, which makes the client contract slightly weaker under common network timeouts.",
+  "rubric": {
+    "A": {
+      "content": {
+        "correctness": 4,
+        "completeness": 4,
+        "accuracy": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "usability": 4
+      },
+      "content_score": 4.0,
+      "structure_score": 4.7,
+      "overall_score": 8.7
+    },
+    "B": {
+      "content": {
+        "correctness": 4,
+        "completeness": 5,
+        "accuracy": 4
+      },
+      "structure": {
+        "organization": 5,
+        "formatting": 5,
+        "usability": 5
+      },
+      "content_score": 4.3,
+      "structure_score": 5.0,
+      "overall_score": 9.3
+    }
+  },
+  "output_quality": {
+    "A": {
+      "score": 8.7,
+      "strengths": [
+        "Clear async acknowledgement design with a dedicated operation resource",
+        "Comprehensive endpoint and HTTP error matrix",
+        "Explicit freshness disclosure for payout-history reads via `as_of`"
+      ],
+      "weaknesses": [
+        "Terminal same-key replay behavior is not defined as explicitly as in output B",
+        "It does not clearly classify which non-2xx responses consume or do not consume the idempotency key",
+        "Submission-failure semantics leave the presence of a durable payout resource less settled"
+      ]
+    },
+    "B": {
+      "score": 9.3,
+      "strengths": [
+        "Most explicit idempotency and retry contract, including replay and key-consumption rules",
+        "Strong operation-resource semantics with clear separation between submission completion and final settlement",
+        "Freshness and compatibility behavior are highly visible and easy for clients to act on"
+      ],
+      "weaknesses": [
+        "Its generic server-error matrix is less exhaustive than output A",
+        "The initial `202 Accepted` body is larger because it returns both operation and payout representations",
+        "There is minor terminology drift between `payout_operation` and `payout_submission`"
+      ]
+    }
+  },
+  "expectation_results": {
+    "A": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output uses an explicit async acknowledgement pattern such as `202 Accepted` plus an operation/status resource.",
+          "passed": true
+        },
+        {
+          "text": "The output defines `Idempotency-Key` behavior, including what happens for same-key/different-payload retries.",
+          "passed": true
+        },
+        {
+          "text": "The output discloses eventual consistency or freshness behavior for payout-history reads.",
+          "passed": true
+        },
+        {
+          "text": "The output uses one stable HTTP error model such as `application/problem+json`.",
+          "passed": true
+        },
+        {
+          "text": "The output includes compatibility notes or change classification instead of leaving rollout semantics implicit.",
+          "passed": true
+        }
+      ]
+    },
+    "B": {
+      "passed": 5,
+      "total": 5,
+      "pass_rate": 1.0,
+      "details": [
+        {
+          "text": "The output uses an explicit async acknowledgement pattern such as `202 Accepted` plus an operation/status resource.",
+          "passed": true
+        },
+        {
+          "text": "The output defines `Idempotency-Key` behavior, including what happens for same-key/different-payload retries.",
+          "passed": true
+        },
+        {
+          "text": "The output discloses eventual consistency or freshness behavior for payout-history reads.",
+          "passed": true
+        },
+        {
+          "text": "The output uses one stable HTTP error model such as `application/problem+json`.",
+          "passed": true
+        },
+        {
+          "text": "The output includes compatibility notes or change classification instead of leaving rollout semantics implicit.",
+          "passed": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "eval_id": 2,
+  "eval_name": "concurrency-context-worker-shutdown",
+  "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `skills/go-qa-tester/evals/files/concurrency-context-worker-shutdown.md` and return only the deliverable shape required by the skill.",
+  "assertions": [
+    "The response explicitly covers `errors.Is` or `errors.As` and recognizability of `context.Canceled` or `context.DeadlineExceeded`.",
+    "The response covers worker or goroutine shutdown, unblock-on-cancel behavior, and deterministic coordination instead of sleep-based synchronization.",
+    "The response includes race-aware validation commands and does not treat concurrency testing as just `did not panic` or happy-path execution.",
+    "The response includes a direct context-propagation check that would catch accidental `context.Background()` substitution and, when relevant, preserves the wrapped fatal cause."
+  ]
+}

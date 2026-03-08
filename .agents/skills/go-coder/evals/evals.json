@@ -1,0 +1,79 @@
+{
+  "skill_name": "go-coder",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Work inside the provided workdir using the go-coder skill. The request text asks for an async upload flow, but you must reconcile that request against `specs/upload-delivery/spec.md` and `specs/upload-delivery/plan.md` before touching code. If the work is not implementation-ready, stop cleanly, avoid code edits, and save a concise handoff report to `outputs/response.md` describing the blocking decision. Do not claim completion without proof.",
+      "expected_output": "A clean escalation that detects the sync-vs-async conflict, avoids speculative code edits, uses a blocker-oriented concise report instead of empty implementation sections, and reports the blocker without a false completion claim.",
+      "files": [
+        "../go-coder-workspace/iteration-4/eval-0-upload-conflict/inputs"
+      ],
+      "expectations": [
+        "The result explicitly identifies a conflict between the approved spec or plan and the async request note.",
+        "The result avoids Go source changes because the work is blocked on a design decision.",
+        "The result does not claim the change is implemented, fixed, or ready.",
+        "The blocker report stays blocker-oriented and does not expand into empty implementation sections."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Implement the approved config snapshot isolation fix inside the provided workdir using the go-coder skill. Read `specs/config-aliasing/spec.md` before editing, keep the change scoped to `internal/profile`, add the smallest sufficient regression tests, and keep `Validation` and `Outcome` in `spec.md` aligned with what you actually verified. Save a concise handoff report to `outputs/response.md`.",
+      "expected_output": "A scoped Go implementation that isolates mutable slices and maps on both store writes and reads, preserves nil-vs-empty semantics, updates focused regression tests, and keeps the spec artifact aligned with fresh validation.",
+      "files": [
+        "../go-coder-workspace/iteration-4/eval-1-config-aliasing/inputs"
+      ],
+      "expectations": [
+        "Mutating the caller-owned `Preferences` after `Put` no longer changes the stored snapshot.",
+        "Mutating the `Preferences` returned by `Get` no longer changes the stored snapshot.",
+        "The implementation preserves `nil` versus empty semantics for `Tags` and `Flags`.",
+        "The implementation updates `specs/config-aliasing/spec.md` so `Validation` and `Outcome` reflect the commands actually run.",
+        "The scoped Go tests in the workdir pass after the change."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Implement the approved strict JSON boundary fix inside the provided workdir using the go-coder skill. Read `specs/json-boundary/spec.md` before editing, keep the change scoped to `internal/http`, add the smallest sufficient regression tests, and keep `Validation` and `Outcome` in `spec.md` aligned with what you actually verified. Save a concise handoff report to `outputs/response.md`.",
+      "expected_output": "A scoped Go implementation that caps request size, rejects unknown fields and trailing JSON, keeps the happy path intact, updates focused tests, and keeps the spec artifact aligned with fresh validation.",
+      "files": [
+        "../go-coder-workspace/iteration-4/eval-2-json-boundary/inputs"
+      ],
+      "expectations": [
+        "Requests larger than 1 KiB are rejected with a 400-level response before store execution.",
+        "Unknown JSON fields are rejected instead of being silently ignored.",
+        "Trailing non-whitespace after the single JSON object is rejected.",
+        "The implementation updates `specs/json-boundary/spec.md` so `Validation` and `Outcome` reflect the commands actually run.",
+        "The scoped Go tests in the workdir pass after the change."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Implement the approved repository cursor handling fix inside the provided workdir using the go-coder skill. Read `specs/repo-cursor/spec.md` before editing, keep the change scoped to `internal/user`, add the smallest sufficient regression tests, and keep `Validation` and `Outcome` in `spec.md` aligned with what you actually verified. Save a concise handoff report to `outputs/response.md`.",
+      "expected_output": "A scoped Go implementation that keeps caller context, closes rows, surfaces terminal cursor errors with structured wrapping, updates focused tests, and keeps the spec artifact aligned with fresh validation.",
+      "files": [
+        "../go-coder-workspace/iteration-4/eval-3-repo-cursor/inputs"
+      ],
+      "expectations": [
+        "The repository uses the caller context instead of replacing it with `context.Background()`.",
+        "Rows are closed on every exit path and terminal cursor errors are surfaced instead of being ignored.",
+        "Query or cursor errors keep structured wrapping semantics instead of flattening error identity.",
+        "The implementation updates `specs/repo-cursor/spec.md` so `Validation` and `Outcome` reflect the commands actually run.",
+        "The scoped Go tests in the workdir pass after the change."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Implement the approved transaction and cache ordering fix inside the provided workdir using the go-coder skill. Read `specs/tx-cache-commit-order/spec.md` before editing, keep the change scoped to `internal/profile`, preserve caller context into the transaction path, make cache invalidation happen only after a successful commit, keep commit errors inspectable, add the smallest sufficient regression tests, and keep `Validation` and `Outcome` in `spec.md` aligned with what you actually verified. Save a concise handoff report to `outputs/response.md`.",
+      "expected_output": "A scoped Go implementation that keeps caller context through transaction begin, commits before cache invalidation, preserves commit error identity, updates focused regression tests, and leaves the spec artifact aligned with fresh verification.",
+      "files": [
+        "../go-coder-workspace/iteration-7/eval-4-tx-cache-commit-order/inputs"
+      ],
+      "expectations": [
+        "The transaction begins with the caller context instead of replacing it with `context.Background()`.",
+        "Cache invalidation happens only after a successful commit.",
+        "Commit failures preserve wrapped error identity instead of flattening it.",
+        "The implementation updates `specs/tx-cache-commit-order/spec.md` so `Validation` and `Outcome` reflect the commands actually run.",
+        "The scoped Go tests in the workdir pass after the change."
+      ]
+    }
+  ]
+}

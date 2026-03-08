@@ -1,0 +1,44 @@
+{
+  "skill_name": "go-data-architect-spec",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use the go-data-architect-spec skill. We are adding prepaid USD credits and refunds to an AI API gateway written in Go. Current proposal: one mutable accounts.balance column in Postgres, usage events emitted asynchronously after the provider responds, and a nightly invoice rebuild job. Requirements: customer-visible balance must never go negative; requests may stream for minutes and provider failure can happen after partial output; refunds and manual corrections must be explainable to finance; provider callbacks may arrive twice and out of order; teams and sub-accounts share a workspace budget; support needs to replay a date range after pricing bugs; product analytics can lag. Write the data-architecture section for the spec: options, chosen model, authoritative tables/facts, concurrency/idempotency rules, migration path, retention/deletion, and recovery risks.",
+      "expected_output": "A senior data architecture recommendation for credits and refunds that distinguishes authoritative financial facts from derived analytics and makes replay, idempotency, and lifecycle behavior explicit.",
+      "files": [],
+      "expectations": [
+        "The output distinguishes authoritative financial facts from derived analytics, reporting, or projections.",
+        "The output defines a state model or equivalent separation for pending vs committed and reversal/refund behavior.",
+        "The output specifies duplicate callback or replay handling through idempotency keys, immutable entries, or an equivalent data-level mechanism.",
+        "The output rejects or explicitly tightly justifies a single mutable balance column as the only source of truth.",
+        "The output includes migration and recovery considerations, not only steady-state schema recommendations."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use the go-data-architect-spec skill. We run a ticketing service in Go with Postgres today. The team wants to use Redis holds plus an eventual write to Postgres because seat drops create hot contention. Requirements: one seat can be sold once; checkout holds last 10 minutes; the payment provider may time out after capture; users open multiple tabs; operators need manual repair tools; search and list pages can lag a few seconds; ticket emails and PDF generation are retryable. Write the data-architecture section for the spec and recommend the data model, source-of-truth boundary, hold/lease behavior, concurrency mechanism, projection strategy, migration/cutover notes, and explicit rejected options.",
+      "expected_output": "A senior reservation data design that maps scarce-resource invariants to concrete mechanisms and keeps derived read models separate from authoritative allocation state.",
+      "files": [],
+      "expectations": [
+        "The output defines an explicit hold, lease, or reservation record model and names who owns expiry or release behavior.",
+        "The output maps the seat-allocation invariant to a concrete mechanism such as uniqueness, exclusion, versioning, or locking instead of generic advice.",
+        "The output keeps search or list views as derived surfaces with an explicit lag or staleness allowance.",
+        "The output covers payment timeout, duplicate side effects, or manual repair as data and idempotency concerns.",
+        "The output includes at least one explicit rejection reason for Redis-first or eventual-write allocation truth."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use the go-data-architect-spec skill. We store product activity for usage-based billing and analytics in a Go SaaS platform. Product wants flexible JSON events in Postgres forever. Finance wants monthly billable usage recomputation after pricing fixes. Legal needs GDPR deletion for personal data plus 2-year retention for billing evidence. Queries include per-tenant daily usage, monthly invoicing, anomaly investigation, and customer-visible quota counters. Volume is hundreds of millions of events per month and late events happen. Write the data-architecture section for the spec: authoritative stores, OLTP vs append/projection split, identity and dedupe model, late/out-of-order policy, partitioning/retention, deletion boundaries, replay/backfill strategy, and datastore trade-offs with rejections.",
+      "expected_output": "A senior event-and-billing data architecture that separates raw facts, operational truth, and derived analytics while handling lifecycle, partitioning, and replay correctly.",
+      "files": [],
+      "expectations": [
+        "The output separates OLTP truth, raw immutable usage facts, and derived billing or analytics projections instead of collapsing them into one store.",
+        "The output defines a dedupe key or equivalent identity model for event ingestion and addresses late or out-of-order arrivals.",
+        "The output addresses retention and GDPR deletion across authoritative and derived stores, not only the primary table.",
+        "The output evaluates datastore fit and rejects at least one plausible but weaker option.",
+        "The output covers replay, recomputation, backfill, or partitioning strategy in a concrete way."
+      ]
+    }
+  ]
+}

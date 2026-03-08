@@ -1,0 +1,64 @@
+{
+  "expectations": [
+    {
+      "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+      "passed": true,
+      "evidence": "Matched upload session with rejection of direct upload."
+    },
+    {
+      "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+      "passed": true,
+      "evidence": "Matched async job semantics and webhook contract snippets: job resource / webhook."
+    },
+    {
+      "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+      "passed": true,
+      "evidence": "Matched Partial with explicit partial-failure wording."
+    },
+    {
+      "text": "The output includes size/media or rate-limit error semantics such as `413`, `415`, `422`, or `429`.",
+      "passed": true,
+      "evidence": "Matched error-status snippet 413."
+    },
+    {
+      "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+      "passed": true,
+      "evidence": "Matched freshness snippet lag."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 22231,
+    "transcript_chars": 0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [
+      "# Assumptions And Uncertainties",
+      "Assumed webhook delivery uses a pre-registered partner endpoint referenced by `webhook_endpoint_id`; arbitrary callback URLs were intentionally excluded from `v1`.",
+      "Assumed `POST /v1/catalog-import-jobs` can safely replay to recover an expired unused upload session while keeping the same `job_id`.",
+      "Exact freshness SLA for the cache-backed job view is unknown, so the contract discloses eventual consistency with `version` and `consistency.as_of` instead of promising a hard max lag.",
+      "The CSV business schema and any `schema_version` field were left out because the prompt focused on the transport and lifecycle contract, not row schema design.",
+      "Retention period for completed jobs and row-level failure records is still open and may affect whether a downloadable failure artifact is needed."
+    ],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "These assertions check baseline contract coverage well, but they do not fully discriminate richer option analysis, artifact-handoff quality, or semantic precision. Use the blind comparison to judge those qualities."
+      }
+    ],
+    "overall": "Assertions are intentionally minimum-coverage checks; qualitative comparison is still needed for richer output quality."
+  }
+}

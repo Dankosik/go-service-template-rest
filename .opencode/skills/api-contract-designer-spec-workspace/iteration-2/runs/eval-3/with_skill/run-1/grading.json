@@ -1,0 +1,64 @@
+{
+  "expectations": [
+    {
+      "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+      "passed": true,
+      "evidence": "Matched upload session with rejection of direct upload."
+    },
+    {
+      "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+      "passed": true,
+      "evidence": "Matched async job semantics and webhook contract snippets: job resource / signed completion webhook."
+    },
+    {
+      "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+      "passed": false,
+      "evidence": "Expected evidence was not found in outputs/final.md."
+    },
+    {
+      "text": "The output includes size/media or rate-limit error semantics such as `413`, `415`, `422`, or `429`.",
+      "passed": true,
+      "evidence": "Matched error-status snippet 422."
+    },
+    {
+      "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+      "passed": true,
+      "evidence": "Matched freshness snippet cache-backed."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 17135,
+    "transcript_chars": 0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [
+      "# User Notes",
+      "Assumed `50 MB` means `50,000,000` bytes. If the product actually means `50 MiB`, update the limit and examples.",
+      "Assumed the upload itself uses an opaque presigned `PUT` URL outside the versioned REST surface because a direct 50 MB API upload plus mandatory malware scanning would make acceptance semantics muddy.",
+      "Assumed signed webhooks use a partner account-level secret configured outside this contract; the per-job request only supplies the callback URL.",
+      "Assumed `failed` is a strong invariant meaning no catalog changes from that job were committed. Partial row acceptance appears only under `completed_with_errors`.",
+      "The job `GET` and failure-list `GET` are intentionally eventual-consistency views; a signed terminal webhook may arrive before those cache-backed reads converge."
+    ],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "These assertions check baseline contract coverage well, but they do not fully discriminate richer option analysis, artifact-handoff quality, or semantic precision. Use the blind comparison to judge those qualities."
+      }
+    ],
+    "overall": "Assertions are intentionally minimum-coverage checks; qualitative comparison is still needed for richer output quality."
+  }
+}
