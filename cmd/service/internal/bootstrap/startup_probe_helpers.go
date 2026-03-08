@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/Dankosik/privacy-sanitization-service/internal/config"
+	"github.com/Dankosik/privacy-sanitization-service/internal/infra/postgres"
 )
 
 func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {

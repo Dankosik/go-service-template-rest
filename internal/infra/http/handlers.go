@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/app/health"
-	"github.com/example/go-service-template-rest/internal/app/ping"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/privacy-sanitization-service/internal/api"
+	"github.com/Dankosik/privacy-sanitization-service/internal/app/health"
+	"github.com/Dankosik/privacy-sanitization-service/internal/app/ping"
+	"github.com/Dankosik/privacy-sanitization-service/internal/infra/telemetry"
 )
 
 type Handlers struct {

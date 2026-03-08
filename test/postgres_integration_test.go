@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/Dankosik/privacy-sanitization-service/internal/infra/postgres"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )

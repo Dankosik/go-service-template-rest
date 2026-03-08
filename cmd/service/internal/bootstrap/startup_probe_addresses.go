@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/Dankosik/privacy-sanitization-service/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

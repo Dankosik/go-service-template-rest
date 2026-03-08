@@ -1,4 +1,4 @@
-module github.com/example/go-service-template-rest
+module github.com/Dankosik/privacy-sanitization-service
 
 go 1.26.1
 

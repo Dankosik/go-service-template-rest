@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/privacy-sanitization-service/internal/api"
+	"github.com/Dankosik/privacy-sanitization-service/internal/infra/telemetry"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )

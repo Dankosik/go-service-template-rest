@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/Dankosik/privacy-sanitization-service/internal/infra/postgres"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/testcontainers/testcontainers-go"
 )
