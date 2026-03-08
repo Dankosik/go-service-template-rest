@@ -1,0 +1,71 @@
+{
+  "skill_name": "go-idiomatic-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review this Go diff for idiomatic issues with merge-risk impact. Stay focused on Go idioms, not broad redesign.\n\nFile: internal/service/user_service.go\n```go\npackage service\n\nimport (\n    \"context\"\n    \"errors\"\n    \"fmt\"\n)\n\nvar ErrUserNotFound = errors.New(\"user not found\")\n\ntype repo interface {\n    FindUser(ctx context.Context, id string) (*User, error)\n}\n\ntype User struct {\n    ID string\n}\n\ntype UserService struct {\n    ctx context.Context\n    repo repo\n}\n\nfunc NewUserService(r repo) *UserService {\n    return &UserService{ctx: context.Background(), repo: r}\n}\n\nfunc (s *UserService) GetUser(id string) (*User, error) {\n    ctx, _ := context.WithCancel(context.Background())\n    u, err := s.repo.FindUser(ctx, id)\n    if err != nil {\n        if err.Error() == \"user not found\" {\n            return nil, fmt.Errorf(\"User %s was not found\", id)\n        }\n        fmt.Println(err)\n        return nil, nil\n    } else {\n        return u, nil\n    }\n}\n```",
+      "expected_output": "Should identify stored context in struct, replacing request context with Background, leaked cancel func, string-matched error handling, loss of sentinel wrapping/inspection, log-and-swallow returning nil,nil, and unnecessary else after return.",
+      "files": [],
+      "expectations": [
+        "Finds the stored context in UserService and/or replacing request context with context.Background as a real issue.",
+        "Finds string-matched error handling and destroyed error-inspection contract.",
+        "Finds the log-and-swallow path that returns nil, nil on error."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Review this Go diff for idiomatic issues with merge-risk impact. Stay focused on Go idioms, exported API clarity, and maintainability.\n\nFile: pkg/cache/client.go\n```go\npackage cache\n\nimport \"sync\"\n\ntype Config struct {\n    Addr string\n}\n\ntype Client struct {\n    mu *sync.Mutex\n    data map[string][]byte\n    cfg *Config\n}\n\nfunc New(cfg *Config) *Client {\n    return &Client{mu: &sync.Mutex{}, data: map[string][]byte{}, cfg: cfg}\n}\n\nfunc (c Client) Get(key string) ([]byte, bool) {\n    c.mu.Lock()\n    defer c.mu.Unlock()\n    v, ok := c.data[key]\n    return v, ok\n}\n\nfunc (c Client) Set(key string, val []byte) {\n    c.mu.Lock()\n    defer c.mu.Unlock()\n    c.data[key] = val\n}\n\nfunc (c *Client) IsReady() bool {\n    return c != nil && c.cfg != nil && c.cfg.Addr != \"\"\n}\n```",
+      "expected_output": "Should identify value receivers on a type containing mutex/map causing copylock semantics and misleading method set, mutable slice aliasing on Get/Set, avoidable pointer-to-mutex and pointer-to-config zero-value friendliness issues, and assess IsReady naming/zero-value contract clarity.",
+      "files": [],
+      "expectations": [
+        "Finds value receiver copy-safety problems on a type containing mutex-protected state.",
+        "Finds mutable []byte ownership or aliasing leak across Get and/or Set.",
+        "Flags zero-value or pointer-heavy surface issues on the exported Client shape."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review this Go diff for idiomatic issues with merge-risk impact. Stay focused on Go language pitfalls, package hygiene, and public-surface clarity.\n\nFile: pkg/httpx/headers.go\n```go\npackage httpx\n\nimport \"net/http\"\n\nvar DefaultHeaders = map[string]string{\n    \"X-Service\": \"billing\",\n}\n\nfunc init() {\n    DefaultHeaders[\"X-Version\"] = \"v1\"\n}\n\nfunc Apply(h *http.Header, extra map[string]string) {\n    if h == nil {\n        return\n    }\n    for k, v := range DefaultHeaders {\n        (*h)[k] = []string{v}\n    }\n    for k, v := range extra {\n        (*h)[k] = []string{v}\n    }\n}\n\nfunc CloneMap(in map[string]string) map[string]string {\n    out := map[string]string{}\n    for k, v := range in {\n        out[k] = v\n    }\n    return out\n}\n```",
+      "expected_output": "Should identify mutable exported global plus init side effects, awkward *http.Header API instead of http.Header value, possible nil map write on *h, direct map assignment bypassing Header helpers/canonicalization/add semantics, and optionally note zero-value/nil map behavior in CloneMap contract if relevant.",
+      "files": [],
+      "expectations": [
+        "Finds mutable exported global state and/or init side effects as a package-surface risk.",
+        "Finds the awkward pointer-to-http.Header API shape or nil-map-write risk.",
+        "Finds raw header map mutation bypassing http.Header helper semantics."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review this Go diff for idiomatic issues with merge-risk impact. Stay focused on Go language semantics and exported API behavior.\n\nFile: pkg/runner/factory.go\n```go\npackage runner\n\nimport \"fmt\"\n\ntype Runner interface {\n    Run() error\n}\n\ntype Job struct {\n    Name string\n}\n\ntype jobRunner struct {\n    job *Job\n}\n\nfunc (r *jobRunner) Run() error {\n    fmt.Println(r.job.Name)\n    return nil\n}\n\nfunc NewRunner(enabled bool, job *Job) Runner {\n    if !enabled {\n        var r *jobRunner\n        return r\n    }\n    return &jobRunner{job: job}\n}\n```",
+      "expected_output": "Should identify returning a typed-nil pointer through an interface as a real exported API bug, explain why callers see a non-nil interface, and optionally flag nil-job panic risk on Run.",
+      "files": [],
+      "expectations": [
+        "Finds the typed-nil interface return as a real exported API bug.",
+        "Explains why callers can observe a non-nil interface even though the concrete pointer is nil.",
+        "Keeps the review centered on caller-visible API and runtime behavior rather than style."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Review this Go diff for idiomatic issues with merge-risk impact. Stay focused on Go map semantics, determinism, and exported helper behavior.\n\nFile: pkg/key/key.go\n```go\npackage key\n\nimport \"strings\"\n\nfunc CacheKey(tags map[string]string) string {\n    parts := make([]string, 0, len(tags))\n    for k, v := range tags {\n        parts = append(parts, k+\"=\"+v)\n    }\n    return strings.Join(parts, \",\")\n}\n```",
+      "expected_output": "Should identify map iteration order assumption as a correctness issue for a stable key helper, explain caller-visible instability, and give a deterministic fix direction. Stronger answers may also notice delimiter-collision risk on the exported string contract.",
+      "files": [],
+      "expectations": [
+        "Finds map iteration order assumption as a correctness problem for a stable exported helper.",
+        "Explains caller-visible instability or cache-key mismatch risk from non-deterministic map order.",
+        "Provides a concrete deterministic fix direction."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Review this Go diff for idiomatic issues with merge-risk impact. Stay focused on standard-library error discipline and correctness.\n\nFile: pkg/read/read.go\n```go\npackage read\n\nimport (\n    \"bufio\"\n    \"io\"\n)\n\nfunc ReadLines(r io.Reader) ([]string, error) {\n    scanner := bufio.NewScanner(r)\n    var lines []string\n    for scanner.Scan() {\n        lines = append(lines, scanner.Text())\n    }\n    return lines, nil\n}\n```",
+      "expected_output": "Should identify missing scanner.Err check as a correctness bug, explain why loop completion does not prove success, and ideally mention bufio.Scanner token-limit behavior as residual risk.",
+      "files": [],
+      "expectations": [
+        "Finds missing scanner.Err check as a correctness issue.",
+        "Explains why loop completion without checking scanner.Err is not proof of success.",
+        "Keeps the review in the idiomatic Go lane rather than broad architecture commentary."
+      ]
+    }
+  ]
+}

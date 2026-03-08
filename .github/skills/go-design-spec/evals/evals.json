@@ -1,0 +1,41 @@
+{
+  "skill_name": "go-design-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I have a draft Go service spec for promo-code redemption. I do NOT want a fresh architecture doc. I want a design-integrity pass before I hand this to go-coder-plan-spec.\n\nCurrent design:\n- `promo-api` handles `POST /redemptions` and writes the redemption row locally.\n- It then publishes `redemption.requested` via Kafka using a manual dual write; no outbox is planned.\n- Fraud checks run async in `risk-worker`, but the API still returns `200 redeemed` immediately because product wants a fast UX.\n- The read model in Redis may lag by 30 seconds, but the support dashboard expects immediate `redeemed` status.\n- The security section says internal events carry `user_id` and `tenant_id` headers from the original request; there is no explicit signed envelope.\n- The reliability section says retries are infinite for the Kafka consumer until success.\n- The testing section only mentions happy-path handler tests.\n- Rollout notes say the schema change and consumer deploy must happen together.\n\nPlease return a compact design-integrity pass I can paste into our spec work. Keep it design-level, identify contradictions, simplify where possible, say what is actually ready for planning, and say what must go back to a specialist pass.",
+      "expected_output": "A compact integrated design pass that surfaces the cross-domain contradictions, narrows the minimum coherent design changes, and states planning readiness plus specialist handoffs without drifting into code.",
+      "files": [],
+      "expectations": [
+        "The output identifies at least three concrete cross-domain contradictions or unsafe assumptions from the draft.",
+        "The output explicitly challenges either the dual-write event publication, the fake synchronous success semantics, or the stale read-model expectation mismatch.",
+        "The output makes planning readiness explicit and separates what can proceed from what must go back to specialist design work.",
+        "The output stays design-level and does not drift into implementation code or CI wiring."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Can you sanity-check this draft design and simplify it without replacing the specialist passes?\n\nProblem: we need inventory reservation in a modular monolith Go service.\n\nDraft:\n- Add `ReservationOrchestrator`, `ReservationManager`, `ReservationPolicyFactory`, and `ReservationWorkflowService`.\n- API stays synchronous `POST /reservations`.\n- The DB transaction is local to PostgreSQL, but email confirmation and audit log are emitted by calling two downstream internal HTTP services inside the same request path.\n- The design says `timeouts/retries TBD during coding`.\n- The cache layer will be the source of truth for `available stock` because it is faster than DB reads.\n- The security note says tenant comes from an `X-Tenant-Id` header added by the frontend.\n- The QA note says integration tests can be added later after implementation if needed.\n\nI want the smallest coherent design changes, not a greenfield redesign. Give options only where they matter, explain what abstraction or seam should be removed or kept, and make the next handoff clear.",
+      "expected_output": "A scoped simplification pass that removes speculative abstractions, keeps the smallest coherent design, and makes the next specialist handoffs explicit.",
+      "files": [],
+      "expectations": [
+        "The output explicitly questions or removes speculative abstractions instead of accepting the extra layers as given.",
+        "The output flags both the cache source-of-truth problem and the untrusted tenant header problem.",
+        "The output includes a selected simplification path and at least one rejected alternative with a reason.",
+        "The output names next specialist handoffs instead of absorbing all API, data, security, and QA depth into generic prose."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We already have separate specialist notes and they do not fully agree. Reconcile them into one design-integrity pass.\n\nArchitecture note:\n- Keep billing inside the modular monolith for now.\n- Use async `invoice.generated` event for downstream notifications.\n\nAPI note:\n- `POST /invoices/{id}/finalize` returns `201` with the final invoice body and says clients can treat it as durable success.\n\nData note:\n- Invoice finalization updates the DB and then publishes the event with a best-effort background goroutine.\n- A new `invoice_status` column will be dropped immediately after backfill because we do not want mixed-version clutter.\n\nReliability note:\n- If notification delivery fails, we will retry from memory on process restart.\n- Timeout budget is not set yet because we need real traffic first.\n\nQA note:\n- We will test finalize success and maybe one error case.\n\nPlease do the integrated design pass: separate real contradictions from wording differences, decide what is coherent, what is blocked, and what needs a specialist re-pass. I care about a spec-first result that does not invent extra process theater.",
+      "expected_output": "An integrated, spec-first reconciliation that separates coherent decisions from blocked contradictions and produces clean next-step handoffs without workflow bloat.",
+      "files": [],
+      "expectations": [
+        "The output separates coherent decisions from blocked contradictions instead of treating the whole design as uniformly good or bad.",
+        "The output calls out both the best-effort background publish pattern and the unsafe mixed-version rollout assumption around dropping the column immediately.",
+        "The output makes the spec-first next step explicit without introducing workflow theater or implementation-plan noise.",
+        "The output includes assumptions or reopen conditions for unresolved design gaps."
+      ]
+    }
+  ]
+}

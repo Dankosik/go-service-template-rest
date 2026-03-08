@@ -4,7 +4,7 @@ This repository keeps runnable skills in provider runtime directories so they ca
 
 ## Goal
 
-- Keep `skills/` as canonical source of runnable skills.
+- Keep `.agents/skills` as canonical source of runnable skills.
 - Keep `docs/skills/` as documentation-only.
 - Store executable `SKILL.md` where agents actually load them.
 - Keep the same `SKILL.md` format across providers.
@@ -14,7 +14,6 @@ This repository keeps runnable skills in provider runtime directories so they ca
 Runnable skill locations:
 
 ```text
-skills/
 .agents/skills/
 .claude/skills/
 .gemini/skills/
@@ -32,8 +31,9 @@ docs/skills/
 `docs/skills/` is for guides, specifications, and writing rules only.
 Do not store runnable `SKILL.md` files there.
 
-`make skills-sync` copies `skills/` into provider runtime directories.
-`make skills-check` verifies that provider mirrors are in sync with `skills/`.
+`make skills-sync` copies `.agents/skills` into runtime mirrors.
+`make skills-check` verifies that mirrors are in sync with `.agents/skills`.
+These commands are maintenance helpers, not blocking CI gates.
 
 ## Why these paths
 

@@ -194,7 +194,7 @@ DoD:
 
 Артефакты:
 - `docs/agent-centric-rewrite/70-skills-refactor-strategy.md`
-- обновления в `docs/skills/*` и `skills/*/SKILL.md` (поэтапно)
+- обновления в `docs/skills/*` и `.agents/skills/*/SKILL.md` (поэтапно)
 
 DoD:
 - skills не навязывают process choreography главному потоку;

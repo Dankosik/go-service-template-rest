@@ -1,0 +1,57 @@
+{
+  "skill_name": "go-language-simplifier-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the changed Go file at `.agents/skills/go-language-simplifier-review/evals/files/handler_state_pyramid.go`. Focus strictly on merge-relevant simplification and readability issues, not a broad correctness review. I care most about whether control flow, state shape, and local reasoning became harder. Return findings with exact `file:line`, then `Handoffs`, `Design Escalations`, `Residual Risks`, and `Validation Commands`.",
+      "expected_output": "A review that spots the nested success-path pyramid, delayed interpretation through shared sentinels, and the hidden audit/error precedence rule, then recommends the smallest behavior-preserving simplification.",
+      "files": [
+        ".agents/skills/go-language-simplifier-review/evals/files/handler_state_pyramid.go"
+      ],
+      "expectations": [
+        "The review includes at least one finding with an exact file:line reference.",
+        "The review identifies the delayed interpretation problem as cross-branch sentinel state, hidden state machine, or equivalent temporal coupling, not just generic readability debt.",
+        "The review explains that any simplification must preserve the current audit and main-error precedence rather than flattening the function blindly."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review the changed Go file at `.agents/skills/go-language-simplifier-review/evals/files/signature_and_optionality.go`. Focus on simplification and maintainability only. I want to know whether the exported API and call sites became cognitively heavier, and whether the obvious cleanup is actually local or needs escalation. Return findings with exact `file:line`, then `Handoffs`, `Design Escalations`, `Residual Risks`, and `Validation Commands`.",
+      "expected_output": "A review that flags the boolean mode cluster, same-typed positional arguments, and the ad hoc `map[string]any` option bag as false simplification, while recognizing that fixing the exported surface is not obviously a local cleanup.",
+      "files": [
+        ".agents/skills/go-language-simplifier-review/evals/files/signature_and_optionality.go"
+      ],
+      "expectations": [
+        "The review includes at least one finding with an exact file:line reference.",
+        "The review identifies the function shape as a hidden-mode or call-site burden problem by naming the flag cluster, same-typed positional arguments, or option-bag decoding.",
+        "The review notes that improving the exported API shape is not obviously a local cleanup and may require design escalation or a handoff."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review the changed Go file at `.agents/skills/go-language-simplifier-review/evals/files/error_path_false_simplicity.go`. Focus strictly on simplification and readability. I deliberately tried to 'simplify' the error path; tell me whether that simplification is actually safe and readable. Return findings with exact `file:line`, then `Handoffs`, `Design Escalations`, `Residual Risks`, and `Validation Commands`.",
+      "expected_output": "A review that recognizes false simplification in the error path, explains why merged error handling hides distinct semantics, and avoids treating semantic collapse as a harmless cleanup.",
+      "files": [
+        ".agents/skills/go-language-simplifier-review/evals/files/error_path_false_simplicity.go"
+      ],
+      "expectations": [
+        "The review includes at least one finding with an exact file:line reference.",
+        "The review identifies the generic error helper or merged error-path handling as false simplification rather than praising it for reducing duplication.",
+        "The review explains that collapsing the original errors into a single replacement error weakens caller-visible semantics, error identity, or inspectability and is therefore not a behavior-preserving simplification."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Review the changed Go file at `.agents/skills/go-language-simplifier-review/evals/files/thin_policy_seam_vs_dead_wrapper.go`. Focus on simplification review only. I want to know which helpers are real simplification debt and which thin seams should stay because they still protect meaning. Return findings with exact `file:line`, then `Handoffs`, `Design Escalations`, `Residual Risks`, and `Validation Commands`.",
+      "expected_output": "A review that distinguishes the dead wrapper from the thin ownership and error-contract seams, instead of flattening every short helper just because it is small.",
+      "files": [
+        ".agents/skills/go-language-simplifier-review/evals/files/thin_policy_seam_vs_dead_wrapper.go"
+      ],
+      "expectations": [
+        "The review includes at least one finding with an exact file:line reference.",
+        "The review identifies `loadRaw` or its equivalent as dead indirection with no real semantic compression.",
+        "The review explains that removing `normalizeLoadError` or `cloneForCaller` without preserving their error-contract or ownership behavior would be a false simplification rather than a clear win."
+      ]
+    }
+  ]
+}

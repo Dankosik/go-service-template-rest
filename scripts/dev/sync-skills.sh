@@ -4,10 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SOURCE_DIR="$REPO_ROOT/skills"
+SOURCE_DIR="$REPO_ROOT/.agents/skills"
 
 TARGET_DIRS=(
-  ".agents/skills"
   ".claude/skills"
   ".gemini/skills"
   ".github/skills"
@@ -29,6 +28,9 @@ usage: sync-skills.sh [--sync|--check] [--strict]
 Default mode is non-destructive:
 - sync keeps target-only files and updates/creates source-managed files
 - check allows target-only files but fails on missing/changed source-managed files
+
+Canonical source: .agents/skills
+Runtime mirrors: .claude/skills, .gemini/skills, .github/skills, .cursor/skills, .opencode/skills
 EOF
 }
 

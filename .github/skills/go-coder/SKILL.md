@@ -6,131 +6,179 @@ description: "Implement production-grade Go changes from approved requirements a
 # Go Coder
 
 ## Purpose
-Implement approved Go changes as production-grade, review-clean code that preserves intended behavior, fits repository boundaries, and ships with honest verification evidence.
+Implement approved Go changes as production-grade, review-clean code that preserves intended behavior, fits the repository's boundaries, and stays easy to read, modify, and verify later.
 
-## Scope
-- implement approved features, fixes, refactors, and integration work in Go
-- translate approved requirements, task plans, and contracts into code without semantic drift
-- keep changes idiomatic, explicit, testable, operable, and safe at service boundaries
-- keep dependency wiring, error semantics, concurrency behavior, data access, and observability coherent
-- run the smallest sufficient validation commands and report factual outcomes
+## Use This Skill For
+- implementing approved Go features, fixes, refactors, integrations, regenerations, and targeted test updates
+- translating an approved spec, plan, or task list into code without changing the decision that was already made
+- keeping code, tests, generated artifacts, and verification evidence aligned with the approved change
 
-## Boundaries
-Do not:
-- invent new architecture, API, data, security, or reliability decisions when intent is unresolved
-- silently widen scope with opportunistic refactors that are not needed for correctness, safety, or clarity
-- treat local convenience as permission to change contract, invariant, or rollout semantics
-- hand-edit generated artifacts instead of changing their source and regenerating
-- claim completion without fresh proof that matches the actual change surface
+## Do Not Use This Skill For
+- open design work where architecture, API, data, security, reliability, or rollout semantics are still undecided
+- speculative cleanup that widens scope without helping correctness, clarity, or safety
+- hand-editing generated artifacts instead of changing the owning source and regenerating
 
-## Core Defaults
-- Approved intent is the source of truth; code makes it concrete, not different.
-- Write so likely review findings are eliminated before review: explicit boundaries, simple control flow, clear naming, deterministic behavior, and honest validation.
-- Prefer standard library, straightforward composition, and small focused changes over clever abstraction.
-- Backward-compatible behavior is the default unless approved intent says otherwise.
-- Treat specialist specs as decision sources; if implementation needs a new decision, escalate instead of guessing.
+## Core Stance
+- Treat the approved spec or plan as the source of truth for behavior.
+- Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
+- Prefer explicit, boring, review-clean Go over clever abstraction.
+- If the spec is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
+- Escalate when correctness depends on a new product or architecture decision; do not hide that decision inside code.
 
-## Expertise
+## Hard-Skill Bar
+Strong implementation work usually gets these details right before review:
+- exported surface, package ownership, and composition boundaries stay tight
+- functions stay readable at one clear abstraction level and do not gain low-value indirection
+- value versus reference semantics for slices, maps, `[]byte`, pointers, interfaces, and mutex-bearing structs stay deliberate
+- boundary decoding, validation, normalization, and error mapping remain deterministic
+- resource lifetime, transactions, cancellation, retries, and partial-failure behavior stay explicit
+- tests prove the changed behavior with deterministic evidence at the smallest sufficient layer
 
-### Execution From Approved Intent
-- Trace each change to approved requirements, invariants, contracts, or task cards.
-- Preserve semantics across happy path, fail path, and operational behavior.
-- Keep local refactoring in service of correctness, clarity, or maintainability; do not smuggle design changes through “cleanup”.
-- Prefer the smallest safe implementation that fully satisfies the requirement.
+## Engineering Defaults
 
-### Review-Clean Coding Bar
-Before considering a change ready, check it against the review axes most likely to find defects:
-- design: no hidden boundary drift, ownership leaks, or accidental complexity
-- idiomaticity: explicit errors, clear context handling, minimal exports, focused packages
-- simplification: direct control flow, clear names, no low-value indirection
-- domain behavior: invariants guarded before side effects, transitions explicit
-- data and cache: transaction scope and cache semantics remain correct and observable
-- reliability: timeouts, retries, cancellation, degradation, and shutdown behavior stay deliberate
-- security: inputs are untrusted until validated, authorization happens before side effects, fail-closed defaults remain intact
-- performance: no obvious hot-path regressions, unbounded work, or wasteful allocations on critical paths
-- testing: changed behavior remains realistically provable
+### Make The Diff Tell One Story
+- Keep the change shaped around one bug class or requirement, not a side quest of adjacent cleanup.
+- Prefer direct edits in the owning code over new wrappers, helper layers, or abstractions that only move code around.
+- If a helper is used once and hides the main control flow, inline it.
+- If a helper only saves a couple of lines in one file, especially in tests, prefer the repeated lines over another jump in the reader's mental stack.
+- If a helper is worth extracting, let its name capture policy or ownership, not mechanics.
+- Keep one clear abstraction level per function when practical; do not mix boundary parsing, business policy, persistence, and formatting in one dense block.
+- Avoid flag-heavy or positionally confusing signatures when named helpers, local structs, or clearer call sites would read better.
 
-If a change would likely generate a justified finding on one of these axes, tighten the code before handoff.
+### Exports, Packages, And API Shape
+- Export the smallest surface you can defend. Do not widen visibility just to satisfy tests.
+- Prefer `internal/` and unexported helpers unless a real cross-package contract exists.
+- Keep composition explicit at the composition root; avoid hidden package globals, `init` surprises, and ambient mutable state.
+- Prefer concrete types by default. Introduce interfaces at consumer seams where real substitution exists and keep them narrow.
+- Keep package responsibility focused and import direction obvious. Do not create junk-drawer helpers or boundary-spanning utility packages.
+- Prefer zero-value-usable types when practical. Require constructors only when invariants, resources, or mandatory dependencies make that necessary.
+- Make exported behavior easy to reason about: stable naming, minimal surface area, and comments that explain why or constraints, not the syntax already visible in code.
+- Be careful with interface-typed returns and typed `nil`: if `nil` is part of the contract, make sure callers actually observe `nil`.
 
-### Package, Boundary, And Composition Discipline
-- Keep composition explicit at the composition root.
-- Keep package responsibility focused and import direction clear.
-- Avoid junk-drawer packages, hidden globals, `init` surprises, and vague helper layers.
-- Introduce new packages or exports only when they materially improve ownership clarity or reuse.
-- Keep framework and transport details out of business logic where separation matters.
-- Never hand-edit generated artifacts in API, SQL, mocks, enums, or similar codegen surfaces.
+### Names, Function Shape, And Readability
+- Choose names that reveal purpose, ownership, or policy, not just mechanism.
+- Keep boolean names and parameters readable at call sites.
+- Avoid abbreviations or overloaded terms that force the reader to remember local dialect.
+- Prefer guard clauses and early returns so the happy path stays obvious.
+- Remove unnecessary `else` after `return`.
+- Do not split straightforward logic into tiny pass-through helpers just to make functions shorter on paper.
+- Do not compress one or two cases into a table-driven test or abstraction if it becomes harder to read than the direct version.
+- Treat `err` shadowing, reused mutable temporaries, and mixed abstraction levels as correctness-adjacent maintainability problems, not just style nits.
 
-### Go Idioms And Simplicity
-- Prefer guard clauses, early returns, and one clear abstraction level per function.
-- Avoid speculative abstractions, interface-per-struct patterns, and wrappers that add no policy.
-- Prefer concrete types by default; make interfaces small and consumer-owned when real substitution exists.
-- Use zero-value-friendly types when practical.
-- Keep names short, specific, and consistent with Go conventions.
-- Make the happy path easy to read without hiding failure behavior.
+### Ownership, Receivers, And Mutable State
+- Use pointer receivers when the method mutates state, when copying would duplicate mutexes or large state, or when identity matters.
+- Use value receivers only for small immutable value-like types where copying is clearly safe.
+- Do not copy structs containing `sync.Mutex`, `sync.RWMutex`, `sync.Once`, `sync.WaitGroup`, atomics, pools, builders, or other stateful synchronization or must-not-copy fields.
+- Remember that slices, maps, and `[]byte` carry shared backing state. Copy when retaining caller-owned data, storing cache entries, or returning snapshots that must not alias internal state.
+- Be explicit about `nil` versus empty semantics when they affect JSON, SQL, caches, or public APIs.
+- Decide ownership once at the boundary where data changes hands. Avoid shallow copies that pretend to isolate mutable state but still leak aliases.
+- For small clone paths, prefer one readable clone function over helper fan-out unless helper extraction removes real duplication or preserves a tricky contract.
+- Do not take the address of a loop variable or close over mutable loop state accidentally in goroutines or callbacks.
+- Review method values and closures carefully when they capture receiver copies or caller-owned state.
 
-### Domain And State Safety
+### Control Flow, State Changes, And Contracts
 - Enforce preconditions before side effects.
-- Keep state transitions explicit and reject forbidden combinations deterministically.
-- Do not let retries, duplicates, reorder, or partial failure create silent business drift.
-- Treat invariant violations as correctness problems, not logging events.
-- Keep behavior stable across alternate paths, not just the main flow.
+- Keep state transitions explicit. Reject invalid combinations deterministically rather than logging and continuing.
+- Make side-effect ordering intentional. If a write, publish, cache invalidation, or callback happens in the wrong order, treat that as a correctness issue.
+- Do not let retries, duplicates, re-entry, or partial failure silently widen business effects.
+- Return errors with enough operation context to explain where failure happened, while keeping sentinel or typed errors inspectable with `%w`.
+- Use `errors.Is` and `errors.As` where callers need semantic branching.
+- Do not log and return the same error at the same layer unless the additional log materially improves diagnosis and is not already guaranteed upstream.
+- Keep request context flowing through request-scoped work. Avoid `context.Background()` inside request paths unless the work is explicitly detached and approved.
+- Preserve `context.Canceled` and `context.DeadlineExceeded` semantics instead of collapsing them into generic internal errors.
+- If a boundary maps domain errors to transport status codes, keep that mapping deliberate, narrow, and near the boundary.
 
-### API And Transport Boundaries
-- Preserve approved method, status, validation, idempotency, and error semantics.
-- Keep boundary validation strict, deterministic, and fail-fast.
-- Reject malformed or unsupported input when the contract requires it.
-- For async or long-running behavior, keep acknowledgement and completion semantics explicit.
-- If routing or middleware behavior is in scope, preserve topology and ordering deliberately rather than incidentally.
+### Resource Lifetime And I/O Discipline
+- Acquire, use, and release resources in one obvious scope unless ownership is explicitly transferred.
+- Put `defer` next to the acquisition site so close, unlock, rollback, or cancel behavior is hard to miss.
+- Avoid `defer` inside long-running loops when per-iteration cleanup timing matters.
+- Close readers, bodies, rows, files, and network handles exactly once and check terminal error surfaces such as `rows.Err()` or scanner errors.
+- Stop tickers, timers, streams, subscriptions, and derived contexts when their lifecycle ends.
+- Use context-aware datastore calls such as `QueryContext`, `ExecContext`, and `BeginTx` so cancellation and deadlines reach the datastore.
+- Keep network calls, blocking RPCs, and unrelated side effects outside transactions unless the approved design explicitly requires otherwise.
+- Use the standard transaction pattern: begin, `defer tx.Rollback()`, do work, then `Commit()` once success is certain.
 
-### Data Access, Transactions, And Cache Behavior
-- Keep query shape, transaction scope, and persistence behavior explicit.
-- Avoid long transactions around external I/O.
-- Parameterize SQL values and allowlist dynamic identifiers when they exist.
-- Prevent obvious `N+1`, accidental full scans, and hidden cross-entity fan-out on sensitive paths.
-- Add or change cache behavior only with clear correctness, staleness, invalidation, and fallback semantics.
-- Keep cache as an accelerator unless approved intent explicitly makes it part of correctness.
+## Bug-Class Playbooks
 
-### Errors, Context, And Concurrency
-- Return or handle errors explicitly with useful operation context.
-- Use `%w`, `errors.Is`, and `errors.As` where callers need structured inspection.
-- Keep request context flowing through request-scoped work; do not replace it with `context.Background()`.
-- Never start goroutines without explicit completion or cancellation behavior.
-- Bound concurrency, make channel ownership obvious, and prevent leak-prone shutdown or retry paths.
-- Prefer `errgroup.WithContext` when related goroutines share lifecycle or cancellation.
+### Shared Mutable State And Aliasing Bugs
+- Decide who owns the mutable value after the call returns.
+- Clone once at the ownership boundary instead of sprinkling partial copies throughout the code.
+- Preserve observable `nil` versus empty semantics when copying.
+- Remember that common clone idioms can silently change shape: for example, `append([]T(nil), src...)` collapses a non-nil empty slice to `nil`. When empty-versus-nil is observable, choose a clone strategy that preserves that distinction.
+- When `nil` versus empty is part of the contract, regression tests should cover both `nil` inputs and non-nil empty inputs; proving only one side is incomplete.
+- Add regression proof for both directions that matter: caller mutation after write, and mutation of returned data after read.
 
-### Reliability And Operability
-- Make timeout, retry, backoff, fallback, and overload behavior intentional where it matters.
-- Keep graceful shutdown, readiness, and dependency failure behavior predictable.
-- Preserve observability for changed critical paths: traces, metrics, and structured logs should still explain what happened.
-- Avoid changes that make diagnosis harder even if the happy path still works.
-- Keep degradation paths explicit rather than accidental.
+### Boundary Hardening Bugs
+- Reject malformed, oversize, or unsupported input before expensive work or side effects.
+- Normalize once at the edge so downstream code can trust one representation.
+- When the contract is strict, bound reads, reject unknown JSON fields, and reject trailing data instead of partially accepting input.
+- Distinguish syntax errors, validation errors, authorization failures, not-found, conflicts, and internal failures. They are not interchangeable.
 
-### Security And Trust Boundaries
-- Treat all external input as untrusted until validated.
-- Enforce limits before expensive work.
-- Authenticate before building trusted identity context; authorize before side effects.
-- Preserve tenant isolation in code paths, queries, cache keys, and async work.
-- Avoid shell execution, unsafe path handling, or unsafe outbound calls unless explicitly required and tightly constrained.
+### Repository And Cursor Bugs
+- Preserve caller context all the way into repository calls.
+- Close rows on every exit path and surface terminal cursor errors instead of ignoring them.
+- Wrap query and scan failures with operation context while preserving inspectable error identity.
+- Keep repository code explicit about ownership of resources and transaction scope; hidden helpers must not obscure cleanup.
 
-### Performance When In Scope
-- Measure before optimizing.
-- Prefer algorithm, batching, data-flow, and allocation improvements over micro-syntax tricks.
-- Keep readability unless measurement proves a meaningful gain.
-- Avoid unbounded work, avoidable allocations, and hidden hot-path regressions on critical paths.
+### Cache And Derived-State Bugs
+- Make cache keys include every dimension required for correctness: tenant, actor, locale, version, query shape, or feature flags when applicable.
+- Invalidate or update cache entries only after authoritative mutation succeeds unless the approved design explicitly prefers another order.
+- Treat cache as an accelerator unless the approved design makes it part of the observable contract.
+- Do not let fallback behavior hide stale, aliased, or cross-tenant data.
 
-### Testing And Verification Discipline
-- Ensure changed behavior is backed by realistic tests at the smallest sufficient layer.
-- Run the smallest command set that honestly validates the changed surface.
-- Use stronger checks when risk demands them: race checks for concurrency-sensitive paths, contract checks for API-visible changes, migration or codegen drift checks when relevant.
-- When generated sources are affected, regenerate and verify drift instead of leaving the repository in a half-updated state.
-- Do not say `done`, `fixed`, or `ready` unless fresh command evidence supports that exact claim.
+### Concurrency And Background Work
+- Make ownership of each goroutine, channel, worker pool, and cancel function obvious.
+- Do not start background work without a clear stop condition, error path, and lifecycle owner.
+- Use `errgroup.WithContext` when related goroutines share cancellation and outcome.
+- Bound concurrency and queue growth; unbounded fan-out is a defect, not an optimization.
+- Preserve ordering when callers or tests depend on it.
+- Close channels from the sender side, not the receiver side.
+- If request-scoped work spawns goroutines, make sure cancellation, result collection, and shutdown cannot leak.
 
-## Implementation Quality Bar
-A strong result:
-- preserves approved behavior without hidden design drift
-- reads clearly on first pass and remains easy to modify safely
-- would survive idiomatic, design, security, reliability, DB/cache, concurrency, and QA review with minimal justified findings
-- includes fresh validation evidence proportional to the actual risk surface
+### Time, Randomness, And Determinism
+- Inject or isolate clocks, random sources, and external time dependence when behavior or tests depend on them.
+- Be explicit about timezone, truncation, and inclusive or exclusive boundaries.
+- Do not make tests rely on wall-clock sleeps if a controllable seam can prove the same behavior faster and more reliably.
+
+## Testing And Verification
+
+### Tests Should Prove The Changed Behavior
+- Add or update the smallest sufficient test at the layer where the bug or requirement is observable.
+- Prefer a regression test that would have failed before the change over broad unrelated test churn.
+- Cover the edge or negative case that made the bug possible, not just the happy path.
+- Keep tests deterministic: control clocks, randomness, goroutine completion, and external I/O.
+- Prefer direct test setup and explicit assertions over tiny one-off helpers; only extract helpers when they remove real repeated setup or encode shared test policy.
+- Avoid assertions on volatile text, exact timing, map iteration order, or log formatting unless that is the contract.
+- Use table-driven tests when they genuinely clarify multiple independent scenarios, not as default ceremony.
+- When concurrency or lifecycle behavior changed, run stronger checks such as `go test -race` or targeted repeated tests if the surface justifies it.
+
+### Verification Should Match The Risk
+- Run the smallest command set that honestly verifies the changed surface.
+- Regenerate code when the source of truth changed, then verify no unintended drift remains.
+- If verification fails, report that failure plainly; do not translate a red check into a green handoff.
+- Do not claim `done`, `fixed`, or `ready` without fresh command evidence for that exact claim.
+
+## Generated And Tool-Owned Artifacts
+- Change the owning source for OpenAPI, SQL generation, mocks, protobuf, enum generation, or similar codegen surfaces.
+- Regenerate instead of hand-editing generated output.
+- Keep generated drift either fully resolved or explicitly escalated; do not leave the repository half-updated.
+
+## Completion Checklist
+Before handoff, ask:
+1. Did I preserve the approved behavior and avoid sneaking in a new decision?
+2. Is the exported or package-local surface still as small and obvious as it can be?
+3. What can still alias, leak, block, go stale, be retried twice, or collapse a contract?
+4. Did I choose the clearest fix shape, or did I add abstraction that the next maintainer now has to reverse-engineer?
+5. Did I validate the real changed behavior, including the relevant edge case?
+6. Are code, tests, generated artifacts, and spec notes aligned with what I actually changed and verified?
+
+## Blocked Work
+If the approved spec, plan, or contract blocks implementation before code changes begin:
+- stop cleanly and say the work is blocked by a decision conflict or missing approval
+- name the exact approved artifact that blocks the change
+- do not present a blocked result through `Implemented Scope`, `Key Code Changes`, or other implementation headings
+- do not use `implemented`, `fixed`, or `ready` language for blocked work
+- write the minimum unblock decision needed to resume coding
 
 ## Deliverable Shape
 Return implementation work in this order:
@@ -142,16 +190,16 @@ Return implementation work in this order:
 - `Design Escalations`
 - `Residual Risks`
 
-Keep `Design Escalations` and `Residual Risks` explicit; write `none` when there are none.
+Keep `Design Escalations` and `Residual Risks` explicit. Write `none` when there are none.
 
 ## Escalate When
 Escalate when:
 - the correct implementation depends on a new or changed architecture decision (`go-architect-spec` or `go-design-spec`)
-- API-visible behavior, routing semantics, or error contract needs a decision (`api-contract-designer-spec` or `go-chi-spec`)
-- data ownership, transaction model, cache correctness, or schema evolution needs a decision (`go-data-architect-spec` or `go-db-cache-spec`)
+- API-visible behavior, routing semantics, or error contracts need a design choice (`api-contract-designer-spec` or `go-chi-spec`)
+- data ownership, transaction model, cache correctness, or schema evolution is still unresolved (`go-data-architect-spec` or `go-db-cache-spec`)
 - invariants or state transitions are unclear (`go-domain-invariant-spec`)
-- retries, timeouts, recovery, or distributed consistency semantics are unresolved (`go-reliability-spec` or `go-distributed-architect-spec`)
-- trust-boundary or authorization behavior needs a decision (`go-security-spec`)
-- observability expectations are unclear for a critical path (`go-observability-engineer-spec`)
+- retries, timeouts, recovery, or cross-service consistency semantics need a decision (`go-reliability-spec` or `go-distributed-architect-spec`)
+- trust-boundary, authorization, or isolation behavior is unclear (`go-security-spec`)
+- observability expectations for a critical path are missing (`go-observability-engineer-spec`)
 - performance work needs a measurement-backed design choice (`go-performance-spec`)
 - required test obligations are unclear or missing (`go-qa-tester-spec`)

@@ -1,0 +1,57 @@
+{
+  "skill_name": "go-chi-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prioritize chi-specific runtime behavior over style and recommend the smallest safe correction.",
+      "expected_output": "A review that catches chi startup panic risk from registering global middleware after routes.",
+      "files": [
+        "iteration-4/eval-0-use-after-routes-panic/inputs/router.go"
+      ],
+      "expectations": [
+        "The review flags that `Use(...)` is registered after routes on the same mux and that chi panics during router construction or startup.",
+        "The review explains why this is merge-risky runtime failure, not just a style or ordering preference.",
+        "The review suggests moving the global middleware registration before routes or making the middleware route-local on purpose."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prioritize HTTP method policy and chi context semantics over stylistic cleanup.",
+      "expected_output": "A review that catches live RouteContext mutation through Match and incorrect HEAD disclosure in custom Allow handling.",
+      "files": [
+        "iteration-4/eval-1-live-context-and-head-policy/inputs/router.go"
+      ],
+      "expectations": [
+        "The review flags that `root.Match(...)` is using the live `chi.RouteContext(r.Context())` and should probe with a fresh `chi.NewRouteContext()`.",
+        "The review flags that advertising `HEAD` because `GET` exists is unsafe unless the router has an explicit `Head(...)` route or `middleware.GetHead`.",
+        "The review suggests an Allow-computation fix that preserves request context and only discloses methods the router can actually serve."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prefer deterministic ownership fixes over stylistic refactors.",
+      "expected_output": "A review that catches chi mount conflict and startup panic risk caused by overlapping wildcard and mount ownership.",
+      "files": [
+        "iteration-4/eval-2-mount-conflict-panic/inputs/router.go"
+      ],
+      "expectations": [
+        "The review flags that `Mount(\"/files\", ...)` conflicts with existing `/files/*` ownership and can panic during router construction.",
+        "The review explains chi mount subtree or wildcard ownership semantics rather than describing the issue as a generic duplicate route.",
+        "The review suggests a single-owner fix instead of keeping both the wildcard handler and the mount on the same subtree."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Do not redesign the service; report the smallest safe fixes.",
+      "expected_output": "A review that catches route-context timing and observability labeling defects in chi middleware.",
+      "files": [
+        "iteration-4/eval-3-route-context-observability/inputs/router.go"
+      ],
+      "expectations": [
+        "The review flags that `RoutePattern()` is read before downstream handling resolves the final route context.",
+        "The review flags raw `r.URL.Path` fallback as a high-cardinality observability label risk.",
+        "The review suggests a safer route-template extraction strategy, such as post-handler extraction or an explicit bounded fallback."
+      ]
+    }
+  ]
+}

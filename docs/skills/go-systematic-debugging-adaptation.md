@@ -4,7 +4,7 @@
 
 - Репозиторий: `https://github.com/obra/superpowers`
 - Зафиксированный коммит: `e4a2375cb705ca5800f0833528ce36a3faf9017a`
-- Базовый skill: `skills/systematic-debugging/SKILL.md`
+- Базовый skill: `.agents/skills/go-systematic-debugging/SKILL.md`
 - Связанные материалы:
   - `root-cause-tracing.md`
   - `defense-in-depth.md`
@@ -49,12 +49,12 @@
 ## 5. Что Уже Сделано В Репозитории
 
 Создан новый runnable skill:
-- `skills/go-systematic-debugging/SKILL.md`
+- `.agents/skills/go-systematic-debugging/SKILL.md`
 
 Добавлены reference-файлы под Go:
-- `skills/go-systematic-debugging/references/root-cause-tracing-go.md`
-- `skills/go-systematic-debugging/references/defense-in-depth-go.md`
-- `skills/go-systematic-debugging/references/condition-based-waiting-go.md`
+- `.agents/skills/go-systematic-debugging/references/root-cause-tracing-go.md`
+- `.agents/skills/go-systematic-debugging/references/defense-in-depth-go.md`
+- `.agents/skills/go-systematic-debugging/references/condition-based-waiting-go.md`
 
 Ключевые изменения относительно оригинала:
 - интеграция со spec-first эскалацией (`Spec Clarification Request` / `Spec Reopen`);

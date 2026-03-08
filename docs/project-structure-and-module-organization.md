@@ -114,12 +114,6 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   │   └── setup.sh
 │   ├── gen.sh
 │   └── init-module.sh
-├── skills/
-│   ├── api-contract-designer-spec/
-│   │   └── SKILL.md
-│   ├── go-architect-spec/
-│   │   └── SKILL.md
-│   └── ... (other skill packs)
 ├── test/
 │   ├── README.md
 │   └── postgres_integration_test.go
@@ -202,13 +196,13 @@ Key scripts:
 Engineering documentation (including LLM instructions and this document).  
 Why: development rules and structure should be explicit and versioned, not scattered in code comments.
 
-### `skills/`
+### `.agents/skills`
 Canonical source of runnable `SKILL.md` definitions.  
-Why: this directory is the single source for skill content, which is mirrored to provider runtime directories via `make skills-sync`.
+Why: this is the repository-native authoring surface used as the source for skill mirror sync.
 
-### `.agents/skills`, `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`, `.opencode/skills`
+### `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`, `.opencode/skills`
 Provider runtime skill directories (`SKILL.md` files are stored here).  
-Why: these are the locations where agent tools actually load and execute skills.
+Why: these are the locations where agent tools actually load and execute mirrored skills.
 
 ### `.github/`
 CI workflow and dependency update automation (Dependabot).  

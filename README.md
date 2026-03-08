@@ -9,7 +9,7 @@ This repository is for people who code with Codex, Claude Code, Cursor, Gemini C
 - **Orchestrator-first**: frame, delegate, synthesize, plan, implement, verify.
 - **Go-native guidance**: the repository does not stop at language-agnostic workflow advice.
 - **Project-scoped agents**: Codex agents live in `.codex/agents/`, Claude Code agents live in `.claude/agents/`.
-- **Portable skills**: reusable workflow expertise lives in `skills/` and is mirrored to multiple agent runtimes.
+- **Portable skills**: reusable workflow expertise lives in `.agents/skills` and is mirrored to compatibility/runtime directories.
 - **Spec-first**: non-trivial work starts in `specs/<feature-id>/spec.md`, not in prompt spaghetti.
 - **Production stack underneath**: OpenAPI-first HTTP, PostgreSQL, `sqlc`, observability, tests, and CI gates are already wired.
 
@@ -127,8 +127,8 @@ claude -p --agent qa-agent -- "List the minimum regression obligations for chang
 
 ## Skill Library
 
-`skills/` is the canonical repository skill set. These skills are procedural building blocks, not autonomous owners of the workflow.
-Click a skill name to open its mirrored instruction file in `.agents/skills`.
+`.agents/skills` is the canonical repository skill set. These skills are procedural building blocks, not autonomous owners of the workflow.
+Click a skill name to open its canonical instruction file.
 
 ### Framing, Planning, Implementation, And Verification
 
@@ -182,9 +182,9 @@ Click a skill name to open its mirrored instruction file in `.agents/skills`.
 | [`go-reliability-review`](.agents/skills/go-reliability-review/SKILL.md) | retries, backpressure, startup, shutdown, degraded mode | failure-path behavior changed |
 | [`go-security-review`](.agents/skills/go-security-review/SKILL.md) | authz, isolation, injection/SSRF, secret handling | changed paths accept untrusted input or cross trust boundaries |
 
-### Skill Mirrors Across Runtimes
+### Skill Locations Across Runtimes
 
-These repository-native skills are mirrored to multiple runtimes so the workflow stays portable:
+These repository-native skill locations keep the workflow portable:
 
 - `.agents/skills`
 - `.claude/skills`
@@ -193,7 +193,7 @@ These repository-native skills are mirrored to multiple runtimes so the workflow
 - `.github/skills`
 - `.opencode/skills`
 
-The source of truth stays in `skills/`, so you do not have to hand-maintain separate skill instructions per tool.
+The source of truth stays in `.agents/skills`, so you do not have to hand-maintain separate skill instructions per tool.
 
 ## This Is An Orchestrator Project
 
@@ -258,7 +258,7 @@ Write decisions and the implementation plan to `specs/tenant-export-jobs/spec.md
 - `env/migrations` - SQL migrations for the local PostgreSQL environment
 - `internal/infra/postgres/sqlcgen` - generated `sqlc` artifacts
 - `specs/` - spec-first decision records and implementation history
-- `skills/` - canonical skill definitions mirrored into runtime-specific directories
+- `.agents/skills` - canonical skill definitions
 
 More detail: [docs/project-structure-and-module-organization.md](docs/project-structure-and-module-organization.md)
 

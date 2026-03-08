@@ -40,7 +40,7 @@ Non-goals:
 
 ## Open Questions / Assumptions
 
-- Corrected: active skill mirrors present in this repository for the affected surfaces are `skills/`, `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, `.gemini/skills/`, `.github/skills/`, and `.opencode/skills/`.
+- Corrected: active skill runtime surfaces present in this repository for the affected skills are `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, `.gemini/skills/`, `.github/skills/`, and `.opencode/skills/`.
 - Validated: adding the new agent to `.codex/config.toml` plus `.codex/agents/` and `.claude/agents/` is sufficient for the project-scoped agent surfaces visible in this repository.
 - Resolved: instead of rewriting older `docs/skills/*` design notes, mark the directly affected `docs/skills/spec-first-brainstorming-spec.md` as a historical note so it no longer competes with the active runtime contract.
 
@@ -60,8 +60,8 @@ Non-goals:
 
 3. Add a reusable `pre-spec-challenge` skill in canonical and mirrored locations, then update `spec-first-brainstorming` to hand off to it when readiness depends on challenge.
    Completion criteria:
-   - `skills/pre-spec-challenge/SKILL.md` exists
-   - mirrored copies exist in `.agents/skills/` and `.claude/skills/`
+   - `.agents/skills/pre-spec-challenge/SKILL.md` exists
+   - mirrored copies exist in `.claude/skills/` and other runtime directories
    - brainstorming instructions mention candidate synthesis / challenge routing without taking final design ownership
 
 4. Validate consistency with targeted searches and diffs, then update this spec `Validation` and `Outcome`.
@@ -80,15 +80,15 @@ Non-goals:
 
 Executed:
 - `rg -n "pre-spec challenge|pre-spec-challenge|challenger-agent|candidate synthesis|ritualized coverage|challenge-handoff" AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents .claude/agents skills .agents/skills .claude/skills specs/pre-spec-challenge-workflow/spec.md`
-- `rg -n "whether candidate synthesis|open-ended redesign|challenge resolutions or skip rationale|historical design note|pre-spec-challenge" AGENTS.md CLAUDE.md docs/spec-first-workflow.md README.md docs/skills/spec-first-brainstorming-spec.md skills/spec-first-brainstorming/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md skills/pre-spec-challenge/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md`
-- `git diff -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md skills/pre-spec-challenge/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md skills/spec-first-brainstorming/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
-- `git diff --stat -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md skills/pre-spec-challenge/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md skills/spec-first-brainstorming/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
-- `git status --short -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md skills/pre-spec-challenge/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md skills/spec-first-brainstorming/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
-- `git diff --check -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml skills/spec-first-brainstorming/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md`
-- `skills/pre-spec-challenge/evals/evals.json` plus `evals/files/*.md` created with three challenge scenarios: async export, cache migration, and admin deactivation
-- blind A/B run executed in `skills/pre-spec-challenge-workspace/iteration-1/` against `variant-a` and `variant-b`, with blind comparator fan-in over all three evals
+- `rg -n "whether candidate synthesis|open-ended redesign|challenge resolutions or skip rationale|historical design note|pre-spec-challenge" AGENTS.md CLAUDE.md docs/spec-first-workflow.md README.md docs/skills/spec-first-brainstorming-spec.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md`
+- `git diff -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
+- `git diff --stat -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
+- `git status --short -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
+- `git diff --check -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md`
+- `.agents/skills/pre-spec-challenge/evals/evals.json` plus `evals/files/*.md` created with three challenge scenarios: async export, cache migration, and admin deactivation
+- blind A/B run executed in the `pre-spec-challenge` skill workspace against `variant-a` and `variant-b`, with blind comparator fan-in over all three evals
 - blind comparison result: `variant-b` won `eval-1` and `eval-2`, `variant-a` won `eval-3`; overall winner `variant-b` by `2:1`
-- canonical `skills/pre-spec-challenge/SKILL.md` replaced with the winning `variant-b` and mirrored copies re-synced to `.agents/skills/` and `.claude/skills/`
+- canonical `.agents/skills/pre-spec-challenge/SKILL.md` replaced with the winning `variant-b` and mirrored copies re-synced to runtime directories
 - canonical `pre-spec-challenge` eval fixtures were mirrored into `.agents/skills/pre-spec-challenge/evals/` and `.claude/skills/pre-spec-challenge/evals/` so neighboring skill surfaces now carry the same test inputs
 - additional runtime skill mirrors discovered during follow-up review were synced too: `.cursor/skills/pre-spec-challenge/`, `.gemini/skills/pre-spec-challenge/`, `.github/skills/pre-spec-challenge/`, and `.opencode/skills/pre-spec-challenge/`, each including the same `SKILL.md` and `evals/` bundle
 

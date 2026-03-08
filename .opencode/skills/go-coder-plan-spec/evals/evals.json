@@ -1,0 +1,54 @@
+{
+  "skill_name": "go-coder-plan-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Need a short implementation plan for an already-approved Go change. Context: in this repo, the decision is already made to add request ID echo behavior for `/healthz` and `/readyz`: if incoming `X-Request-ID` exists, echo it back; otherwise keep current behavior. No API contract redesign, no architecture work. Please write only the planning output that should go into the `Implementation Plan` section of `spec.md`. Keep the plan lightweight and verification-proportional.",
+      "expected_output": "A compact plan suitable for the `Implementation Plan` section in `spec.md`, with minimal ceremony, explicit validation, and no invented design work.",
+      "files": [],
+      "expectations": [
+        "The plan anchors itself to `spec.md` or the `Implementation Plan` section rather than presenting a detached execution artifact.",
+        "The output stays lightweight and avoids heavyweight default headings such as `Task Graph`, `Coverage Matrix`, `Execution Mode`, or `Progress Status`.",
+        "When the prompt asks for only the `Implementation Plan` section, the response stays section-ready and does not append sibling sections such as `Validation Plan`, `Blockers / Assumptions`, or `Handoffs`.",
+        "The plan includes explicit validation or proof steps appropriate for the small change.",
+        "The plan does not reopen architecture or API redesign for this already-approved change."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Assume the design is already approved for adding soft-delete to `internal/users`: DB schema gets nullable `deleted_at`, read paths must exclude soft-deleted rows by default, admin restore path is allowed, public API contract stays backward-compatible, audit events must still emit on delete/restore. I need the implementation plan before coding. Default to `spec.md` unless you can justify a separate `plan.md`. Sequence schema, repo/service/API wiring, tests/validation, and any risk checkpoints. Keep it execution-ready for `go-coder`.",
+      "expected_output": "A dependency-ordered plan that stays anchored to canonical artifacts, sequences risky work correctly, and stays compact enough for direct handoff to `go-coder`.",
+      "files": [],
+      "expectations": [
+        "The plan defaults to `spec.md` or explicitly justifies a separate `plan.md`.",
+        "The plan orders schema or migration work before downstream repository, service, or API tasks.",
+        "The plan covers restore and audit obligations alongside soft-delete behavior.",
+        "The output avoids heavyweight generic headings such as `Execution Mode` or `Coverage Matrix` unless clearly justified."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We are not done with design: auth endpoint rate limiting is desired, but the team has not decided between gateway-side limiting and service-local middleware, and the exact `429` response contract is unresolved. Please produce only the plan portions that are safe to write now, make blockers explicit in plain language, and avoid pretending the undecided parts are ready for implementation.",
+      "expected_output": "A partial plan that keeps safe preparatory work separate from blocked work, makes blockers explicit, and does not invent unresolved architecture or contract decisions.",
+      "files": [],
+      "expectations": [
+        "The output makes the unresolved rate-limit architecture choice and `429` contract explicit blockers.",
+        "The blocker handling stays in plain language and does not require rigid fields such as `request_id` or `ambiguity_type`.",
+        "The plan separates any safe preparatory work from blocked work.",
+        "The plan does not present a concrete gateway-side or service-local implementation path as already approved."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The Go design is already approved for one tiny behavior change: `GET /version` should emit a `Last-Modified` header derived from the existing build timestamp, while preserving the current JSON body and status code. Write only the planning output that should be pasted under the `Implementation Plan` section in `spec.md`. Keep it short, section-ready, and verification-aware.",
+      "expected_output": "A short implementation-plan body suitable for direct paste into `spec.md`, with inline or lightweight verification guidance and no detached standalone-plan ceremony.",
+      "files": [],
+      "expectations": [
+        "The response reads like section-ready `Implementation Plan` content for `spec.md`, not a detached standalone planning memo.",
+        "The output stays compact and avoids sibling sections such as `Validation Plan`, `Checkpoint Plan`, `Blockers / Assumptions`, or `Handoffs`.",
+        "The plan includes explicit verification appropriate for a tiny header-only change.",
+        "The plan keeps scope narrow and does not widen into API redesign, route changes, or build-pipeline redesign."
+      ]
+    }
+  ]
+}

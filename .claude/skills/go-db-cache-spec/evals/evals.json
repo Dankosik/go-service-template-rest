@@ -1,0 +1,44 @@
+{
+  "skill_name": "go-db-cache-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We have a Go commerce API on PostgreSQL. `GET /v1/catalog/{slug}` and category pages are causing heavy DB load during product launches, and the team wants Redis. Writes happen in the same service from an admin panel. Stock counts can change every few seconds, marketing copy changes a few times per day, and tenant-specific price rules plus locale change the response shape. Write compact DB/cache spec content for `spec.md`, not code. Call out whether whole-response caching is safe, how query/access discipline should look, key shape, invalidation, stale-data behavior, and any downstream handoffs.",
+      "expected_output": "A section-ready DB/cache spec that distinguishes cacheable vs strong-consistency paths, defines key safety and invalidation, and names required handoffs.",
+      "files": [],
+      "expectations": [
+        "The spec explicitly separates strong-consistency stock or admin-sensitive reads from cacheable catalog content instead of treating the whole response as one cache class.",
+        "The cache-key design includes tenant, locale, price-rule dimensions or an equivalent complete set of response-shaping dimensions.",
+        "The output defines an invalidation, refresh, or ownership mechanism for both catalog content and stock-sensitive data.",
+        "The output includes at least one downstream handoff caused by API-visible freshness, async coordination, or source-of-truth ownership.",
+        "The output is section-ready spec content rather than generic advice."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "We run a Go billing API on PostgreSQL. `GET /accounts/{id}/invoices?status=open` got slower after adding filters, and somebody suggested putting Redis in front of it. Right now we only have one p95 latency screenshot and no query breakdown, no EXPLAIN, and no hit-rate estimate. Write the DB/cache spec content that decides whether cache is justified, what SQL access contract must be defined first, which missing facts should be marked as assumptions or blockers, and what validation evidence would be required before approving cache rollout.",
+      "expected_output": "A DB/cache spec that does not rubber-stamp Redis, defines the query-path contract first, surfaces missing evidence, and sets measurable proof obligations.",
+      "files": [],
+      "expectations": [
+        "The output does not approve Redis by default and states that cache approval is blocked or conditional on missing evidence.",
+        "The output defines a SQL access contract for the invoices query path before adding cache.",
+        "Missing facts are surfaced as assumptions or blockers rather than invented specifics.",
+        "The output defines validation evidence or acceptance boundaries required before cache rollout.",
+        "The output stays DB/cache-spec focused instead of turning into implementation code or benchmark instructions."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We have a Go SaaS app using PostgreSQL plus Redis. User profile reads are cached today. A new feature will let users rotate API keys and permissions from a separate worker after an audit event. The admin UI for the same tenant must reflect permission changes immediately, but the public profile page can be stale for up to 30 seconds. Write compact DB/cache spec content for `spec.md` that covers transaction scope, invalidation or update publication, strong vs eventual read paths, degraded-mode behavior if Redis is down, and any API/reliability/data handoffs this design creates.",
+      "expected_output": "A section-ready DB/cache spec that makes freshness classes, invalidation linkage, degraded behavior, and cross-domain handoffs explicit.",
+      "files": [],
+      "expectations": [
+        "The output differentiates immediately consistent admin permission reads from 30-second-stale public profile reads.",
+        "The output defines how invalidation or update publication links to the write path instead of relying on best-effort dual writes.",
+        "The output defines degraded-mode behavior for Redis outage.",
+        "The output names at least one API, reliability, or data handoff caused by the split freshness contract.",
+        "The output makes transaction ownership or boundary explicit."
+      ]
+    }
+  ]
+}

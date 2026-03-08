@@ -1,0 +1,47 @@
+{
+  "skill_name": "go-systematic-debugging",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Read the provided scenario file and produce a debugging report using the skill's deliverable shape. Focus on the smallest concrete experiments, the first broken boundary, and exact Go commands or artifacts you would use next. Do not rewrite the code yet.",
+      "expected_output": "A debugging report that characterizes the flake, proposes concrete Go repro commands, identifies the first broken boundary, and recommends condition-based waiting plus race/order diagnostics instead of timeout inflation.",
+      "files": [
+        "evals/files/flaky-worker-ci.md"
+      ],
+      "expectations": [
+        "Uses a repeated or shuffled go test command rather than a single vague test run",
+        "Calls out the flake as coordination, lifecycle, or shared-state sensitive instead of simply saying 'timing issue'",
+        "Recommends condition-based waiting or explicit completion instead of only raising sleep or timeout values",
+        "Includes a concrete verification command or evidence plan"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Read the provided scenario file and produce a debugging report using the skill's deliverable shape. Focus on concrete forensics steps before restart, the likely failure boundary, and the smallest next experiment. Do not rewrite the code yet.",
+      "expected_output": "A debugging report that asks for goroutine dump or runtime forensics, distinguishes stuck coordination from CPU work, and proposes concrete dump/profile commands before any speculative patch.",
+      "files": [
+        "evals/files/api-hang-goroutines.md"
+      ],
+      "expectations": [
+        "Recommends goroutine dump or runtime forensics before speculative code edits",
+        "Uses at least one concrete Go dump, profile, or trace command",
+        "Identifies the likely blocked boundary rather than only the symptom location",
+        "Includes a concrete verification or next experiment section"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Read the provided scenario file and produce a debugging report using the skill's deliverable shape. Focus on where the timeout budget is being spent, the likely first broken boundary, and the smallest proving commands. Do not rewrite the code yet.",
+      "expected_output": "A debugging report that separates timeout symptom from root cause, traces pool wait or long transaction behavior, and avoids simply increasing timeouts or retries.",
+      "files": [
+        "evals/files/db-timeout-pool.md"
+      ],
+      "expectations": [
+        "Treats the issue as budget, wait, or resource ownership analysis rather than only suggesting a larger timeout",
+        "Calls out DB pool wait, lock wait, or transaction scope as a likely diagnostic target",
+        "Uses concrete commands, metrics, or artifacts to prove where time is spent",
+        "States an escalation decision if the safe fix would change timeout or retry policy"
+      ]
+    }
+  ]
+}

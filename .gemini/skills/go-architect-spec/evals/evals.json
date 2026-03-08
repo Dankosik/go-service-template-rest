@@ -1,0 +1,57 @@
+{
+  "skill_name": "go-architect-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Our `catalog` service owns product mutations. Read traffic is now 35x write traffic, category pages need product + price + inventory summaries, and a team wants a new `catalog-read-service` that directly joins the `pricing` and `inventory` databases because 'it's only reads'. We can tolerate 90 seconds of staleness on category pages but not on checkout. Write only the architecture section of the spec before coding. Decide boundary/runtime topology, source-of-truth rules, read-path design, and what should stay out of scope for follow-up API/data work.",
+      "expected_output": "Architecture-first spec that distinguishes write authority from derived reads, uses workload and staleness evidence to choose read topology, and avoids direct cross-service DB coupling.",
+      "files": [],
+      "expectations": [
+        "Distinguishes write authority from read projections and rejects direct cross-service DB joins as steady-state architecture.",
+        "Uses tolerated staleness and workload shape to choose a projection, aggregator, BFF, or similar read-path design instead of a taste-driven service split.",
+        "Preserves stricter freshness or correctness needs for checkout separately from category-page read semantics.",
+        "Defines reopen conditions for a real read-service extraction or separate runtime if ownership later changes.",
+        "Keeps low-level API or physical schema detail out of the main answer."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "We need merchant refunds with partner reversals, 24-hour retry timers, finance approval for amounts over $10k, manual repair for ambiguous partner outcomes, and an auditable requester-visible status. One engineer wants Temporal immediately because 'durable workflows are what workflow engines are for'; another wants plain cron jobs plus status flags in the `payments` service. Write the architecture section only. Choose the workflow ownership model, orchestration vs choreography, and whether a workflow engine is justified now.",
+      "expected_output": "Architecture-first spec that makes a workload-driven workflow-ownership decision, identifies the process owner and pivot handling, and evaluates workflow engine introduction with explicit criteria.",
+      "files": [],
+      "expectations": [
+        "Identifies one authoritative owner for retries, timers, cancellation or repair, and distinguishes orchestration from choreography.",
+        "Evaluates workflow engine versus internal durable state machine with explicit criteria rather than tool preference alone.",
+        "Defines ambiguous-outcome handling, reconciliation or idempotency expectations, and the relevant pivot or irreversible step.",
+        "Uses an async or long-running-operation status model rather than stretching the request path to final completion.",
+        "Leaves low-level API, storage schema, or worker implementation details to follow-up specs."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our onboarding service currently mixes applicant profile capture, document verification, sanctions screening, and manual reviewer decisions in one codebase and one Postgres. The same team owns all of it for now. Another team argues we should split into four microservices immediately. Write the architecture-first spec before coding. I want the boundary and seam logic to be precise inside the modular monolith, clear rules for what can be async, and guidance on when separate runtimes would be enough versus a real service split.",
+      "expected_output": "Architecture-first spec that designs strong internal seams for a modular monolith, preserves local invariants where needed, and explains runtime split versus service split trade-offs clearly.",
+      "files": [],
+      "expectations": [
+        "Defines internal module seams by invariant ownership, change cadence, or failure isolation, not just by entity nouns.",
+        "Keeps orchestration or application flow separate from subdomain truth ownership.",
+        "Identifies where async boundaries are appropriate and where local transaction boundaries should stay intact.",
+        "Distinguishes separate runtimes or processes from true service extraction and provides reopen conditions.",
+        "Names any anti-corruption or boundary-protection need for external providers without drifting into code detail."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "We are extracting `pricing` out of `catalog`. For about six weeks, old checkout nodes, new pricing nodes, and lagging admin tooling will coexist. A PM proposes temporary dual writes from both old and new pricing paths plus a permanent compatibility event topic 'just in case'. Write only the architecture section of the spec. I need write-authority rules, mixed-version rollout and cutover strategy, rollback limits, and guidance that keeps us away from fake decoupling.",
+      "expected_output": "Architecture-first spec that chooses an authoritative owner during cutover, rejects unsafe migration crutches, and defines a mixed-version rollout with explicit cutover and rollback boundaries.",
+      "files": [],
+      "expectations": [
+        "Establishes one authoritative write owner during migration and rejects indefinite dual writes or permanent compatibility shims.",
+        "Defines mixed-version or cutover phases such as shadow, dual-read, canary, or strangler with explicit exit criteria or irreversible checkpoints.",
+        "Covers compatibility for old checkout and admin nodes without inventing endpoint or schema detail.",
+        "Addresses projection or event evolution and rollback limits as architecture concerns.",
+        "Keeps the answer architecture-first and names downstream follow-up work instead of low-level migration scripting."
+      ]
+    }
+  ]
+}

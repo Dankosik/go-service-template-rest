@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `skills/go-qa-tester/evals/files/api-idempotency-async-export.md` and return only the deliverable shape required by the skill.",
+      "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `.agents/skills/go-qa-tester/evals/files/api-idempotency-async-export.md` and return only the deliverable shape required by the skill.",
       "expected_output": "A concrete test-implementation answer that covers async API contract, idempotency-key behavior, strict boundary parsing, and validation commands.",
       "files": [
         "evals/files/api-idempotency-async-export.md"
@@ -16,7 +16,7 @@
     },
     {
       "id": 1,
-      "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `skills/go-qa-tester/evals/files/cache-migration-account-summary.md` and return only the deliverable shape required by the skill.",
+      "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `.agents/skills/go-qa-tester/evals/files/cache-migration-account-summary.md` and return only the deliverable shape required by the skill.",
       "expected_output": "A concrete test-implementation answer that covers cache correctness, degradation behavior, migration/backfill safety, and validation commands.",
       "files": [
         "evals/files/cache-migration-account-summary.md"
@@ -29,7 +29,7 @@
     },
     {
       "id": 2,
-      "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `skills/go-qa-tester/evals/files/concurrency-context-worker-shutdown.md` and return only the deliverable shape required by the skill.",
+      "prompt": "Use the go-qa-tester skill. Do not edit repository files. Read `.agents/skills/go-qa-tester/evals/files/concurrency-context-worker-shutdown.md` and return only the deliverable shape required by the skill.",
       "expected_output": "A concrete test-implementation answer that covers Go error semantics, context cancellation, worker shutdown, and race-aware validation.",
       "files": [
         "evals/files/concurrency-context-worker-shutdown.md"

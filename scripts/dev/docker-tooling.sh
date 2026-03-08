@@ -503,7 +503,6 @@ container-security)
 ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test

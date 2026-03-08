@@ -4,7 +4,7 @@
 
 - Репозиторий: `https://github.com/obra/superpowers`
 - Коммит: `e4a2375cb705ca5800f0833528ce36a3faf9017a`
-- Базовый файл: `skills/verification-before-completion/SKILL.md`
+- Базовый файл: `.agents/skills/go-verification-before-completion/SKILL.md`
 
 ## 2. Цель Интеграции
 
@@ -26,15 +26,15 @@
 ## 5. Внедренный Вариант
 
 Создан новый runnable skill:
-- `skills/go-verification-before-completion/SKILL.md`
+- `.agents/skills/go-verification-before-completion/SKILL.md`
 
 Добавлен reference:
-- `skills/go-verification-before-completion/references/claim-proof-matrix.md`
+- `.agents/skills/go-verification-before-completion/references/claim-proof-matrix.md`
 
 Интеграционные hook’и внесены в:
-- `skills/go-coder/SKILL.md`
-- `skills/go-qa-tester/SKILL.md`
-- `skills/go-systematic-debugging/SKILL.md`
+- `.agents/skills/go-coder/SKILL.md`
+- `.agents/skills/go-qa-tester/SKILL.md`
+- `.agents/skills/go-systematic-debugging/SKILL.md`
 
 ## 6. Как Skill Встраивается В Workflow
 

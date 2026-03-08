@@ -1,0 +1,41 @@
+{
+  "skill_name": "go-domain-invariant-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review this Go diff with `go-domain-invariant-review`. Focus only on merge-relevant domain findings and return the review in the skill's normal output shape.\n\nApproved behavior:\n- Only `authorized` orders may transition to `completed`.\n- Card capture is irreversible and must happen only after all domain preconditions pass.\n- If completion is rejected, the customer must not be charged.\n\nChanged file: `internal/order/service.go`\n\n```go\n40 func (s *Service) Complete(ctx context.Context, order *Order) error {\n41     if err := s.payments.Capture(ctx, order.PaymentID); err != nil {\n42         return err\n43     }\n44     if order.Status != StatusAuthorized {\n45         return ErrOrderNotAuthorized\n46     }\n47     order.Status = StatusCompleted\n48     return s.repo.Save(ctx, order)\n49 }\n```",
+      "expected_output": "Flags a blocking domain issue: the irreversible card capture happens before the `authorized` precondition, which can charge customers even when completion is rejected.",
+      "files": [],
+      "expectations": [
+        "The review identifies that `payments.Capture` runs before the `StatusAuthorized` precondition and treats it as a merge-relevant domain bug.",
+        "The review explains business impact as customer charge or other irreversible side effect despite rejected completion.",
+        "The review suggests validating the state or invariant before capture, or otherwise preventing capture on invalid status.",
+        "The review cites `internal/order/service.go:41` or a directly adjacent line as the defect location."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Review this Go diff with `go-domain-invariant-review`. Focus only on merge-relevant domain findings and return the review in the skill's normal output shape.\n\nApproved behavior:\n- `paid -> cancelled` may happen once.\n- Duplicate cancellation events must not trigger a second refund.\n- Replay or out-of-order events must not create additional irreversible side effects.\n\nChanged file: `internal/orders/consumer.go`\n\n```go\n18 func (h *Handler) HandleOrderCancelled(ctx context.Context, ev OrderCancelledEvent) error {\n19     ord, err := h.repo.Get(ctx, ev.OrderID)\n20     if err != nil { return err }\n21     ord.Status = StatusCancelled\n22     if err := h.repo.Save(ctx, ord); err != nil { return err }\n23     return h.refunds.Create(ctx, ord.PaymentID, ord.Total)\n24 }\n```",
+      "expected_output": "Flags a replay and transition bug: duplicate or out-of-order cancellation handling can save `cancelled` again and trigger a second refund.",
+      "files": [],
+      "expectations": [
+        "The review identifies missing state or idempotency guards around cancellation and refund handling, and treats duplicate or replayed events as domain-risky.",
+        "The review explains business impact as double refund or repeated irreversible side effect.",
+        "The review suggests guarding the allowed transition, for example only `paid -> cancelled` once, before persisting or refunding.",
+        "The review cites `internal/orders/consumer.go:21` or `internal/orders/consumer.go:23` as part of the defect location."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review this Go change with `go-domain-invariant-review`. Focus only on merge-relevant domain findings and return the review in the skill's normal output shape.\n\nNo approved spec or plan is attached. Infer only the smallest plausible domain intent from the code and tests below; do not invent extra rules.\n\nChanged files: `internal/subscription/service.go`, `internal/subscription/service_test.go`\n\n```go\n// internal/subscription/service.go\n52 func (s *Service) Reactivate(ctx context.Context, sub *Subscription) error {\n53     sub.Status = StatusActive\n54     if err := s.repo.Save(ctx, sub); err != nil { return err }\n55     if sub.CancelledAt.IsZero() {\n56         return nil\n57     }\n58     return s.billing.Resume(ctx, sub.BillingID)\n59 }\n```\n\n```go\n// internal/subscription/service_test.go\n20 func TestReactivateRejectedWhenNotCancelled(t *testing.T) {}\n21 func TestReactivateResumesBillingBeforeReturningSuccess(t *testing.T) {}\n```",
+      "expected_output": "Says the intent is inferred from code-visible behavior, then flags that the service persists `active` or returns success before proving the subscription can be reactivated or billing is resumed.",
+      "files": [],
+      "expectations": [
+        "The review explicitly says no approved domain artifact was provided and that intent is inferred from code or tests.",
+        "The review identifies that the code persists `StatusActive` or returns success before proving the subscription is cancelled or billing is resumed.",
+        "The review explains business impact as active subscription state without resumed billing, or reactivation of a non-cancelled subscription.",
+        "The review's `Reference:` names inferred intent from the test names or other code-visible behavior."
+      ]
+    }
+  ]
+}

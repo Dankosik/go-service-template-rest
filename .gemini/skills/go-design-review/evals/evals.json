@@ -1,0 +1,49 @@
+{
+  "skill_name": "go-design-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Please do a Go design review of this checkout change. Focus on merge-risk findings only. Use the approved design artifact when it exists, and keep the output structured as findings, handoffs, design escalations, residual risks, and validation commands.\n\nFiles:\n- fixtures/spec_boundary_drift/spec.md\n- fixtures/spec_boundary_drift/checkout_handler.go",
+      "expected_output": "The review should tie the handler's direct repo/payment/cache ownership back to the approved checkout boundary and treat the inline TODO as hidden design drift.",
+      "assertions": [
+        "Identifies direct repository, payment, or cache access from the HTTP handler as boundary or ownership drift",
+        "References the approved spec or design artifact as governing evidence",
+        "Calls out the TODO or implicit move of flow ownership as design drift or escalation",
+        "Includes at least one file:line finding for checkout_handler.go"
+      ],
+      "files": [
+        "fixtures/spec_boundary_drift/spec.md",
+        "fixtures/spec_boundary_drift/checkout_handler.go"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Generic PR review request: review this Go refactor for design-level merge blockers only. No approved spec was attached. Stay focused on ownership, accidental complexity, and whether the code is making design decisions implicitly.\n\nFiles:\n- fixtures/missing_intent_complexity/report_builder.go",
+      "expected_output": "The review should acknowledge the missing approved design artifact, flag speculative abstraction and interface-per-struct churn, and call out the TODO-driven policy branch as a hidden design decision.",
+      "assertions": [
+        "Explicitly states that no approved design artifact, spec, or plan was provided, or that the review is limited to code-visible intent",
+        "Identifies speculative abstraction, wrapper churn, or interface-per-struct indirection in report_builder.go",
+        "Calls out the TODO or hidden policy branch as design drift or an escalation candidate",
+        "Includes at least one file:line finding for report_builder.go"
+      ],
+      "files": [
+        "fixtures/missing_intent_complexity/report_builder.go"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review this changed Go read path for design-level merge blockers. Use the provided spec and keep deep cache, security, and reliability mechanics as handoffs when they are not the primary design call.\n\nFiles:\n- fixtures/tenant_cache_handoff/spec.md\n- fixtures/tenant_cache_handoff/account_reader.go",
+      "expected_output": "The review should catch tenant-scoping drift, call out the silent timeout fallback as an undeclared behavior decision, and hand off specialist depth to the appropriate review owners.",
+      "assertions": [
+        "Identifies tenant-scoping, tenant-isolation, or trust-boundary drift in the cache key or repository lookup",
+        "Identifies the silent timeout fallback or locally invented degrade semantics as design drift",
+        "Includes an explicit handoff to go-security-review, go-db-cache-review, or go-reliability-review",
+        "References the provided spec or boundary contract as governing evidence"
+      ],
+      "files": [
+        "fixtures/tenant_cache_handoff/spec.md",
+        "fixtures/tenant_cache_handoff/account_reader.go"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "skill_name": "go-observability-engineer-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Write the observability section for a Go billing API spec. Context: chi-based REST service. `POST /v1/payouts` writes a Postgres transaction, calls a fraud gRPC service with a 700ms deadline, writes a Redis idempotency key, and if the gRPC call times out it returns `202 Accepted` and schedules an async retry job. Clients poll `GET /v1/payouts/{id}` and some use `GET /v1/payouts/{id}/events` as an SSE stream. Multi-tenant SaaS, no raw tenant IDs in metrics. We need spec.md-ready guidance for logs, metrics, traces, correlation, SLOs, alerting, retry/fallback visibility, shutdown semantics, and safe debugging.",
+      "expected_output": "A spec-ready observability section that separates logical outcome from retries and covers synchronous plus asynchronous payout states without misleading SLIs.",
+      "files": [],
+      "expectations": [
+        "Separates logical request outcome from attempt-level retries or fallbacks instead of treating them as one flat success/failure signal.",
+        "Defines distinct observability treatment for `202 Accepted`, downstream completion, and SSE or long-lived stream behavior instead of one generic request latency view.",
+        "Makes the fraud gRPC timeout plus async retry path visible in logs, metrics, and traces.",
+        "Includes cardinality or privacy controls such as route templates over raw paths and avoids tenant IDs as default metric labels.",
+        "Specifies health, shutdown, or debug endpoint behavior beyond generic 'add logs/metrics/traces'."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Design the observability section for a Go Kafka invoice consumer. Each message may contain up to 500 invoice lines; the consumer batches lines by customer, deduplicates by `invoice_id`, writes Postgres with optimistic concurrency, emits webhook events, and sends poison messages to a DLQ after 5 attempts. Operators can see consumer lag but not whether the backlog is old or whether duplicates are being dropped. Produce a spec.md-ready observability section covering logs, metrics, traces, correlation, SLOs, alerting, redrive, and reconciliation telemetry.",
+      "expected_output": "A technically credible async observability contract covering batch semantics, lag and backlog age, idempotency, retries, DLQ, and completion-oriented SLIs.",
+      "files": [],
+      "expectations": [
+        "Separates producer/consumer/processing/retry/DLQ or batch/item boundaries instead of collapsing the whole flow into one worker metric.",
+        "Defines both backlog depth and oldest-age or lag semantics, not just a single lag graph.",
+        "Makes deduplication/idempotency and optimistic-concurrency retry outcomes observable.",
+        "Uses explicit async correlation guidance, such as message or correlation IDs preserved across retries, DLQ, or redrive, and span links when lineage is not single-parent.",
+        "Defines completion or workflow SLIs that reflect asynchronous success, not only consumer throughput."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review and rewrite this draft observability plan for a Go reconciliation service:\n- add more logs everywhere\n- metric labels: `tenant_id`, `user_id`, `request_path`\n- trace every retry and use `trace_id` as a metric label so we can pivot\n- readiness and liveness can both just check DB ping\n- pager on any 5xx > 0 in 5 minutes\n- expose pprof on the public admin port during incidents\nContext: the service runs scheduled reconciliation every minute, also exposes `POST /reconcile/{accountId}` for manual replays, fans out to 30 partner APIs, stores snapshots in S3, and emits a completion event when drift is resolved. Multi-region, low QPS, expensive incidents. Produce a corrected observability section with explicit rejected options.",
+      "expected_output": "A rewrite that rejects unsafe or misleading observability choices and replaces them with low-cardinality, low-traffic-safe, multi-region-aware guidance.",
+      "files": [],
+      "expectations": [
+        "Explicitly rejects unsafe metric labels or trace-as-metric-label proposals and replaces them with bounded alternatives.",
+        "Improves the paging strategy for low-QPS service behavior instead of keeping a naive 'any 5xx' page.",
+        "Differentiates readiness, liveness, startup, shutdown, or debug access semantics instead of one DB ping check.",
+        "Covers scheduled reconciliation, manual replay, fan-out attempts, and completion-event visibility with logical-versus-attempt boundaries.",
+        "Names rejected options or anti-patterns rather than only providing a clean-room replacement."
+      ]
+    }
+  ]
+}

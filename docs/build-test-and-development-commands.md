@@ -361,7 +361,6 @@ Bootstrap shortcuts:
   - Native composite check for beginner-friendly local parity:
     - `mod-check`
     - `guardrails-check`
-    - `skills-check`
     - `fmt-check`
     - `lint`
     - `test`
@@ -405,7 +404,6 @@ Bootstrap shortcuts:
   - Zero-setup composite check (closest local equivalent to CI gates):
     - `mod-check`
     - `guardrails-check`
-    - `skills-check`
     - `fmt-check`
     - `lint`
     - `test`
@@ -442,9 +440,8 @@ Bootstrap shortcuts:
 
 - `make skills-sync`
   - Runs: `scripts/dev/sync-skills.sh`
-  - Purpose: sync provider-specific skill directories from canonical source `skills/`.
+  - Purpose: sync runtime skill directories from canonical source `.agents/skills`.
   - Mirrors:
-    - `.agents/skills/`
     - `.claude/skills/`
     - `.gemini/skills/`
     - `.github/skills/`
@@ -454,7 +451,8 @@ Bootstrap shortcuts:
 
 - `make skills-check`
   - Runs: `scripts/dev/sync-skills.sh --check`
-  - Purpose: validate mirror sync with source `skills/`.
+  - Purpose: validate mirrors against canonical source `.agents/skills`.
+  - Note: manual maintenance helper; not a blocking CI gate.
 
 ### Run and build
 
@@ -524,7 +522,7 @@ Bootstrap shortcuts:
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)

@@ -1,0 +1,42 @@
+{
+  "skill_name": "go-chi-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We are refactoring a Go REST service on chi before coding. Public API routes under /v1 come from oapi-codegen strict handlers, but /internal/health and /debug/pprof are still wired manually. Right now everything sits on one root router, auth middleware is global even though /debug should stay internal-only, request logging runs before final route resolution so metrics are using raw URL paths, and we have duplicate OPTIONS behavior between cors.Handler and a couple of custom preflight handlers. I need a routing design note for spec.md. Give me the recommended router topology, exact middleware order and scope, generated vs manual route ownership, 404/405/OPTIONS/CORS policy, route observability semantics, validation hooks, and any adjacent handoffs. Also compare at least one rejected alternative.",
+      "expected_output": "A routing-focused design note that makes ownership, middleware order, fallback policy, observability semantics, rejected alternatives, validation hooks, and handoffs explicit.",
+      "files": [],
+      "expectations": [
+        "The output defines a selected router topology and also names at least one rejected alternative.",
+        "The output makes generated vs manual route ownership explicit and rejects collision-by-registration-order behavior.",
+        "The output defines middleware order and scope and explains route-resolution timing for observability.",
+        "The output defines explicit `404`, `405`, `OPTIONS`, and CORS behavior.",
+        "The output includes validation hooks and adjacent skill handoffs."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "I need to clean up a chi router before implementation. Logs and metrics currently label raw request paths like /users/123/orders/456, some auth middleware is route-local, Recoverer is global, and product wants JSON 404/405 responses with clear Allow headers for the API surface. Write the routing design note we should put into spec.md. Compare at least two middleware-order options, pick one, explain route-resolution timing for observability, call out assumptions, and say what later go-chi-review or tests must verify.",
+      "expected_output": "A decision-ready routing note that compares middleware-order options, chooses one, fixes route-label semantics, defines API-facing fallback behavior, and names downstream validation/review checks.",
+      "files": [],
+      "expectations": [
+        "The output compares at least two middleware-order options and selects one.",
+        "The output rejects raw request-path labels and prefers route-template observability with route-resolution timing.",
+        "The output defines JSON API fallback behavior for `404` and `405` and mentions `Allow` headers.",
+        "The output names assumptions plus later review or tests to verify the design."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We are adding /admin and /api route groups to a chi service before coding. Security wants auth only on /admin, frontend wants CORS only on /api, and platform wants unmatched OPTIONS behavior to stay predictable. There is also disagreement about whether this is just router wiring or whether we need adjacent spec skills because 405 semantics and telemetry rules might change. Produce a routing-focused design pass that stays in bounds, clearly hands off non-routing decisions, recommends middleware scope and route ownership, and lists reopen conditions.",
+      "expected_output": "A bounded routing design pass that handles scoped middleware and CORS safely, keeps routing ownership explicit, and clearly hands off non-routing decisions with reopen conditions.",
+      "files": [],
+      "expectations": [
+        "The output keeps routing ownership and middleware scope explicit for both `/admin` and `/api`.",
+        "The output defines how scoped CORS and unmatched `OPTIONS` behave.",
+        "The output clearly hands off non-routing decisions to adjacent skills instead of taking them over.",
+        "The output includes reopen conditions."
+      ]
+    }
+  ]
+}

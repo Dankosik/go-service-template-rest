@@ -1,0 +1,42 @@
+{
+  "skill_name": "go-devops-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We need the delivery and platform section of a Go service spec before coding. Context: the repo currently exposes `make fmt`, `make lint`, `go test ./...`, `go test -race ./...`, and `docker build -f build/Dockerfile .`. GitHub Actions currently runs `lint`, `unit`, `race`, and `docker` jobs; there is no SBOM or provenance step yet. Deployment is Kubernetes with two replicas and a canary progression of 10% -> 50% -> 100%. The change adds a nullable Postgres `processed_at` column now, then a backfill, then a later `NOT NULL` contract step. Release tags publish images to GHCR. Write spec-ready delivery/platform guidance that names blocking gates, migration rollout policy, release-trust evidence, runtime-hardening expectations, and exception handling. Keep it grounded in the provided repo state and mark missing facts as assumptions instead of inventing pipeline jobs.",
+      "expected_output": "A spec-ready devops section grounded in the provided repo and rollout facts, with explicit blocking gates, migration safety policy, release trust requirements, hardening baseline, and assumptions where facts are missing.",
+      "files": [],
+      "expectations": [
+        "The output ties delivery gates to the provided repository commands or existing CI jobs instead of inventing unsupported blockers as current-state facts.",
+        "The output specifies compatibility-first migration rollout guidance such as `expand -> backfill/migrate -> contract` or an equivalent phased sequence.",
+        "The output marks at least one missing fact as an assumption or open question instead of pretending certainty.",
+        "The output includes release-trust evidence requirements and treats missing evidence as a release concern rather than optional polish.",
+        "The output is structured as spec-ready guidance rather than freeform brainstorming."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Please review the draft delivery policy below for a Go service and return the review findings first, followed by a corrected policy outline only if needed. Repo facts: developers only run `make lint`, `go test ./...`, and `docker build .` locally; CI currently has `lint`, `unit`, and `docker` jobs; there is no SBOM, provenance, or CodeQL step yet. Draft policy: (1) merge is allowed when the unit job is red if a maintainer comments `ship it`; (2) migrations run on every pod startup; (3) branch protection is optional for admins; (4) Trivy and CodeQL are mandatory blocking checks immediately even though the repo has not wired them; (5) provenance and signing can wait until after GA; (6) rollback is `restore from backup if needed`; (7) any bypass is acceptable if approved in Slack by the EM; (8) spec/codegen drift can be checked manually later. Review this policy with repo-grounded delivery/platform reasoning.",
+      "expected_output": "A review that flags unenforceable or unsafe delivery policy, prioritizes concrete findings, and, if it proposes a corrected outline, keeps it grounded in current repository capabilities plus explicit future-state notes.",
+      "files": [],
+      "expectations": [
+        "The review flags red-CI merge allowance, migration-on-startup, and optional admin branch protection as serious delivery or release-safety defects.",
+        "The review flags mandatory gates that are not actually wired in the repo or CI as unenforceable current-state policy.",
+        "If a corrected policy is proposed, it distinguishes current blocking gates from future desired controls instead of presenting absent tooling as already enforceable.",
+        "The response is findings-first and stays grounded in the provided repo facts."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I only need the delivery/platform section content for a tiny approved Go change: echo incoming `X-Request-ID` on `/healthz` and `/readyz`, otherwise preserve current behavior. Repo validation already has `go test ./...`, `go test -race ./...`, and a container build in CI. There are no migrations, no new dependencies, no auth changes, and no rollout novelty. Write only compact section-ready devops-spec content for `spec.md`. Keep it proportional; do not invent release theater or a sprawling matrix, but do state what actually blocks merge versus what stays informational.",
+      "expected_output": "Compact section-ready devops guidance for a very small change, with proportional blocking gates and no unnecessary rollout or supply-chain ceremony.",
+      "files": [],
+      "expectations": [
+        "The output stays compact and section-ready instead of expanding into a broad detached delivery manifesto.",
+        "The output separates blocking versus informational checks appropriate to the tiny change.",
+        "The output avoids inventing migration, supply-chain, or complex rollout obligations that the prompt does not justify.",
+        "The output still anchors verification to the provided repo commands or CI artifacts."
+      ]
+    }
+  ]
+}

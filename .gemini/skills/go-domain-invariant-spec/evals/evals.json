@@ -1,0 +1,44 @@
+{
+  "skill_name": "go-domain-invariant-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We're adding order cancellation to a Go service used by marketplace sellers. Current states are `pending_payment`, `paid`, `packing`, `shipped`, `delivered`, `cancelled`. Business notes:\n- seller can cancel before parcel handoff, but finance insists refund only after payment is confirmed\n- payment provider webhooks can arrive late or duplicated\n- customer UI must not show `cancelled` before refund obligation is clear\n- API contract is mostly frozen; I only need domain sections ready to paste into `spec.md`\nWrite only the domain sections we need, not a full architecture doc. Make duplicate/replay semantics explicit and call out any follow-up handoffs if transport or data work is implied.",
+      "expected_output": "Section-ready domain spec content for order cancellation with explicit invariants, state transitions, duplicate/replay handling, and targeted handoffs.",
+      "files": [],
+      "expectations": [
+        "The output uses section-ready domain spec headings rather than a generic architecture or implementation plan.",
+        "The output includes explicit invariants with ownership or enforcement points.",
+        "The output makes duplicate, replay, or late webhook semantics explicit.",
+        "The output distinguishes request acceptance from completed business effect or refund completion.",
+        "The output names follow-up handoffs only where API, data, or other specialist work is genuinely implied."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "I'm trying to reconcile two drafts for subscription pause/resume behavior before planning. Draft A says pause is effective immediately once request is accepted. Draft B says pause only becomes active after billing confirms no in-flight charge is settling. We also allow retries from mobile clients, manual support overrides, and mixed-version rollout during the migration. I don't want implementation detail; I want a compact decision-oriented answer saying what the real domain semantics should be, what contradictions remain, and whether this is explicit enough for `go-coder-plan-spec`.",
+      "expected_output": "Compact reconciliation and readiness output that resolves or exposes the domain contradiction, covers retry/manual-override implications, and states planning readiness clearly.",
+      "files": [],
+      "expectations": [
+        "The output chooses or frames a coherent lifecycle meaning instead of only restating both drafts.",
+        "The output makes contradictions, blockers, or planning readiness explicit.",
+        "The output covers retries, manual overrides, or mixed-version implications on domain semantics.",
+        "The output stays compact and decision-oriented without drifting into low-level implementation mechanics.",
+        "The output names next handoffs only where unresolved depth remains."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I only need `Invariant Register` and `State Model And Transitions` for an expense-approval workflow in a multi-tenant Go service. Facts:\n- employee submits expense\n- manager approves or rejects\n- finance can place approved items on hold for audit\n- reimbursement event may be delivered twice by the payout provider\n- a tenant admin must never act on another tenant's expense\nDo not invent API payloads, schema, or rollout plan. Keep it scoped to those two sections, but make forbidden transitions explicit.",
+      "expected_output": "A tightly scoped invariant register and state model for expense approval with tenant isolation, duplicate reimbursement handling, and forbidden transitions.",
+      "files": [],
+      "expectations": [
+        "The output stays scoped to the requested sections rather than expanding into a full mini-spec.",
+        "The output includes a tenant or ownership invariant.",
+        "The output includes duplicate reimbursement or replay semantics as an invariant or transition rule.",
+        "The output makes forbidden transitions explicit.",
+        "The output avoids API, schema, or rollout digression."
+      ]
+    }
+  ]
+}

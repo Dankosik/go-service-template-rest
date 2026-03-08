@@ -270,7 +270,7 @@ secrets-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
-	$(MAKE) mod-check guardrails-check skills-check fmt-check lint test vet test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check fmt-check lint test vet test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \

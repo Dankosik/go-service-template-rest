@@ -1,0 +1,47 @@
+{
+  "skill_name": "spec-first-brainstorming",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Ops keeps seeing production mistakes when admins delete environments. I want to stop this by adding an Undo button for all destructive actions, maybe snapshots every 15 minutes plus a restore endpoint. We want it because people keep pressing delete by mistake. Can you help me move this forward quickly?",
+      "expected_output": "The brainstorming output should reframe the request around irreversible-damage reduction and destructive-action recovery rather than locking onto snapshots and restore endpoints, while surfacing the missing reversibility, ownership, and readiness semantics.",
+      "files": [],
+      "expectations": [
+        "Separates the desired outcome from the proposed implementation idea of snapshots, undo, or restore endpoint",
+        "Defines the actor, failure mode, and desired behavior delta for destructive admin actions",
+        "Surfaces hidden invariants or acceptance semantics such as reversibility limits, restore idempotency, authorization boundaries, tenant blast radius, or external dependency scope",
+        "Lists material constraints that would shape design, such as retention window, rollback objective, audit visibility, tenant isolation, or third-party resource ownership",
+        "Includes blocking questions with owner and unblock condition rather than generic follow-ups",
+        "Makes an explicit readiness decision grounded in the unresolved rollback and ownership semantics"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "We need \"Cancel now\" for paid subscriptions. Current flow cancels at period end. Product says just cancel plus disable tokens now and run refund in background; engineering says use async webhooks and retries. We need this by end of month with less support load. No architecture changes yet. Please turn this into a solid design-ready problem frame.",
+      "expected_output": "The brainstorming output should separate the user promise from implementation ideas, make the time-zero semantics of cancellation explicit, and expose billing and idempotency blockers before deeper design.",
+      "files": [],
+      "expectations": [
+        "Separates the requested business outcome from the provisional implementation ideas such as webhooks, retries, or background refund processing",
+        "Defines the behavior delta and acceptance semantics for `cancel now`, including immediate access or entitlement behavior and refund expectations",
+        "Flags hidden invariants or race conditions such as repeated cancel requests, webhook replay, double refunds, or status divergence across services",
+        "Lists material constraints such as provider event behavior, refund policy or compliance, time guarantees, or support-load objective",
+        "Includes blocking questions with owner and unblock condition for billing, legal, or product semantics",
+        "Makes an explicit readiness decision based on whether cancel semantics and refund policy are sufficiently defined"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Legal approved policy says users can request account deletion any time; personal data must be removed from user-facing systems within 7 days. Security policy says we must keep audit evidence for 7 years. Compliance says we can keep pseudonymous identifiers only in logs. We are adding account deletion in user-service only, no UI redesign, no data warehouse changes. Help us frame this request before design, and tell us if it’s ready.",
+      "expected_output": "The brainstorming output should frame the request as a deletion-vs-retention obligation problem, define the real scope boundary, and make data-class and policy blockers explicit without drifting into implementation.",
+      "files": [],
+      "expectations": [
+        "Frames the problem as concurrent obligations around user-visible erasure and long-term evidentiary retention rather than as a local delete implementation task",
+        "Separates policy interpretation and problem framing from implementation design choices",
+        "Surfaces hidden invariants or acceptance semantics such as no plaintext PII in retained artifacts, data-class boundaries, pseudonymization scope, or cross-service deletion boundary",
+        "Flags the scope gap created by `user-service only` and names cross-service or policy implications instead of treating the boundary as harmless",
+        "Includes blocking questions with owner and unblock condition, including at least one legal, security, or compliance dependency",
+        "Makes an explicit readiness decision with rationale grounded in the remaining policy and scope ambiguity"
+      ]
+    }
+  ]
+}

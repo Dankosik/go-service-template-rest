@@ -39,6 +39,19 @@
         "The output includes size/media or rate-limit error semantics such as `413`, `415`, `422`, or `429`.",
         "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view."
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "We are redesigning a Go service API for dispute-case review used by backoffice and mobile clients. Clients need `PATCH /v1/disputes/{dispute_id}` for partial updates, some fields are nullable while omitted fields must stay unchanged, exact money values matter, lifecycle transitions are constrained, and the detail endpoint is authoritative while the list endpoint is a lagging projection. Design the client-visible contract before coding: PATCH media semantics, read/write field shape, null-vs-omit rules, precise value encoding, state model and illegal transition handling, ETag/precondition rules, error model, authoritative-vs-projection read semantics, compatibility notes, and open questions.",
+      "expected_output": "A contract that makes representation semantics explicit, treats lifecycle and precision as contract surface, and avoids hiding projection lag or null/omit ambiguity behind implementation details.",
+      "files": [],
+      "expectations": [
+        "The output explicitly defines null-versus-omitted-field semantics for partial updates instead of leaving PATCH behavior implicit.",
+        "The output chooses or constrains an exact value encoding for money or high-precision values rather than relying on ambiguous floating-point JSON numbers.",
+        "The output models dispute lifecycle states and illegal transitions as API-visible behavior.",
+        "The output distinguishes the authoritative detail read from the lagging projection/list read and explains client recovery or freshness expectations.",
+        "The output treats enum, nullability, default, or representation-shape changes as compatibility concerns rather than harmless cleanup."
+      ]
     }
   ]
 }

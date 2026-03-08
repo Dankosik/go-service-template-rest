@@ -1,0 +1,46 @@
+{
+  "skill_name": "go-security-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review the supplied Go changes for security merge blockers. There is no approved spec attached, so stay in code-review mode and do not invent policy. Findings must come first.",
+      "expected_output": "Catches browser-session vulnerabilities: CSRF on cookie-authenticated state change, dangerous credentialed CORS behavior, and weak cookie settings.",
+      "files": [
+        "../go-security-review-workspace/fixtures/browser_session_cors/router.go",
+        "../go-security-review-workspace/fixtures/browser_session_cors/admin_session.go"
+      ],
+      "expectations": [
+        "Flags CSRF risk on the cookie-authenticated state-changing path",
+        "Flags credentialed CORS with reflective or wildcard origins as unsafe",
+        "Flags missing or weak cookie hardening such as Secure, HttpOnly, or SameSite"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Review the supplied Go auth changes for merge-blocking security issues. There is no approved spec attached, so stay in read-only code-review mode and separate independent defects instead of collapsing them into one vague finding.",
+      "expected_output": "Catches unsigned header identity trust, incomplete JWT verification, and tenant/object authorization drift.",
+      "files": [
+        "../go-security-review-workspace/fixtures/header_jwt_tenant/auth_middleware.go",
+        "../go-security-review-workspace/fixtures/header_jwt_tenant/invoice_handler.go"
+      ],
+      "expectations": [
+        "Flags X-User-ID or X-Tenant-ID as an untrusted identity source",
+        "Flags incomplete JWT verification such as missing algorithm, issuer, audience, expiry, or parse-error handling",
+        "Flags tenant binding or object-level authorization drift on invoice access"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review the supplied Go password-reset changes for security merge blockers. There is no approved spec attached, so stay in code-review mode and focus on concrete exploit paths rather than generic advice.",
+      "expected_output": "Catches crypto/token mistakes, password hashing weakness, and sensitive reset-token exposure or account enumeration.",
+      "files": [
+        "../go-security-review-workspace/fixtures/password_reset_crypto/password_reset.go"
+      ],
+      "expectations": [
+        "Flags non-cryptographic randomness for reset-token generation",
+        "Flags insecure password hashing for stored user passwords",
+        "Flags reset-token leakage or account-enumeration behavior"
+      ]
+    }
+  ]
+}

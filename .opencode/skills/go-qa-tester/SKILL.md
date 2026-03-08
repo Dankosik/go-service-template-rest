@@ -63,7 +63,7 @@ Load only the repository guidance that matches the changed surface:
 - If the prompt says a request must be rejected, deduplicated, or treated as equivalent but does not pin the exact transport mapping, test the behavior and explicitly escalate the missing status, header, or payload detail before making it exact.
 - Prefer scenario names and assertions phrased in contract terms such as `rejects missing key`, `reuses prior operation`, or `does not serve stale data` until the exact transport or storage mapping is approved.
 - Do not force one internal tactic when several implementations could satisfy the requirement; prove the externally visible behavior first and lock the internal mechanism only when the design already chose it.
-- Do not invent cache key dimensions, resume-checkpoint strategy, replay status codes, package layout, or file ownership unless approved docs or current repository code already pin them.
+- Do not invent cache key dimensions, resume-checkpoint strategy, replay status codes, exact diagnostics carrier fields, config symbol names, package layout, or file ownership unless approved docs or current repository code already pin them.
 - When the relevant implementation surface does not exist yet, mark file paths as proposed placements rather than pretending they are verified repository paths, and keep package-specific validation commands clearly conditional.
 
 ### Minimal Proving Layer
@@ -114,11 +114,13 @@ Load only the repository guidance that matches the changed surface:
 - Cover malformed input, unknown fields, trailing JSON, size-limit behavior, and exact status splits such as `400`, `413`, `414`, `415`, `422`, and `431` when relevant.
 - For conditional or concurrency-sensitive APIs, cover `304`, `409`, `412`, and `428` semantics only where the approved contract or existing code already uses them.
 - If clients may retry unsafe writes, test missing idempotency key behavior, same-key same-payload equivalence, and same-key different-payload conflict handling.
+- For retry-unsafe async start endpoints, add overlapping or concurrent same-key scenarios when single-side-effect behavior must survive races, not just sequential replay.
 - When missing-key or replay behavior is required but the exact status/body mapping is still open, keep unit or contract scenarios on the semantic outcome and move the exact numeric or header lock into `Design Escalations`.
 - If rate limit or overload behavior exists, assert `429` semantics and retry guidance such as `Retry-After` where applicable.
 - For async or long-running flows, test `202 Accepted`, operation-resource lifecycle and status transitions, and duplicate side-effect suppression.
 - When duplicate suppression matters, assert the observable side effect stays single, but do not assume a specific reservation, fingerprint, or dedup-storage model unless it already exists.
-- Verify request or correlation ID behavior when it is part of observable contract or diagnostics.
+- Verify request or correlation ID behavior when it is part of observable contract or diagnostics, but do not freeze exact header/body field names unless the contract already names them.
+- For size-limit handling, prove the size-limit path stays distinct from generic decode or validation failure without pinning internal config symbol names unless those are already part of the surfaced design.
 - Keep boundary tests strict enough to catch accidental contract drift.
 
 ### Data, Cache, And Migration Testing
@@ -143,6 +145,8 @@ Load only the repository guidance that matches the changed surface:
 - When a regression involved lost parent context, add a boundary test that proves context values, deadlines, or cancellation reach the helper or repository call that previously broke, rather than inferring propagation only from the top-level error.
 - When one worker fails fatally, assert both sibling shutdown and preservation of the original wrapped fatal cause when callers are expected to inspect it with `errors.Is` or `errors.As`.
 - Name the coordination primitive that makes the test deterministic, such as barrier channels, gated sinks, atomic in-flight counters, or already-canceled contexts, instead of only saying `avoid sleep`.
+- For blocked-send regressions, include a pre-send handshake such as `readyToSend` or an equivalent gate so cancellation happens while the sender is known to be parked at the publication boundary.
+- For bounded-concurrency tests, prefer an immediate fail-on-overflow guard inside the worker or gate in addition to tracking the max observed in-flight count.
 - Validate concurrency-sensitive changes with race-aware execution.
 - Ensure concurrent tests prove something meaningful, not just `did not panic`.
 - Keep timeout-sensitive tests bounded and diagnosable.
@@ -172,6 +176,7 @@ If a justified review finding is predictable, tighten the tests before handoff.
 - Common fast-loop commands are `make check`, `make test`, and `make vet`.
 - For test-addition plans, name focused `go test` commands with `-run` and `-count=1` for the proposed suite whenever the package surface is known; use repository `make` targets as the broader confidence pass that should also stay green.
 - Use targeted raw `go test` commands to narrow scope or accelerate diagnosis; they should supplement, not silently replace, the repository `make` path.
+- For concurrency-heavy paths, prefer at least one targeted `go test -race` command for the exact risky suite, and consider repeated `-count` runs when the purpose is to flush out coordination bugs rather than only verify a happy path.
 - Use stronger validation when risk requires it: `make test-race`, `make test-fuzz-smoke`, `make test-integration`, `make openapi-check`, `make migration-validate`, `make test-report`, or `make check-full`.
 - Report executed commands and actual outcomes, not expected ones.
 - Do not claim coverage or readiness without naming the concrete tests or commands that prove it.
@@ -183,6 +188,10 @@ If a justified review finding is predictable, tighten the tests before handoff.
 - Avoid: `TestAccountSummaryCacheKeyIncludesSummaryVersion` unless versioned keys are explicitly approved or already implemented.
 - Good: `TestRepoHelperReceivesParentContextDeadlineAndValue` when a prior bug swapped in `context.Background()`.
 - Good: `TestFatalWorkerErrorPreservesWrappedCauseAndCancelsSiblings` when workers race under a shared parent context.
+- Good: `TestAsyncStartConcurrentSameKeyCreatesSingleOperation` for async idempotent endpoints with overlap risk.
+- Good: `TestBlockedSendReadyToSendUnblocksOnCancel` when the regression hid a sender parked at publication time.
+- Good: `TestWorkerCapFailsImmediatelyAbove16` when bounded parallelism is part of the behavior.
+- Avoid: naming an internal config field such as `RouterConfig.MaxBodyBytes` unless that symbol is already part of the current code or spec surface the task points at.
 
 ## Test Quality Bar
 A strong result:

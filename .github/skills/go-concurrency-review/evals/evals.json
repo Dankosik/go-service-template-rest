@@ -1,0 +1,75 @@
+{
+  "skill_name": "go-concurrency-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review the Go change for concurrency-specific merge blockers only. Use the provided spec and code. Focus on findings, handoffs, design escalations, residual risks, and validation commands. Ignore unrelated style cleanup.\n\nFiles:\n- fixtures/context_shutdown/spec.md\n- fixtures/context_shutdown/service.go",
+      "expected_output": "The review should catch the lost caller context, the shutdown hang, and tie the finding back to the provided shutdown contract.",
+      "assertions": [
+        "Identifies the lost caller context or context.Background replacement in service.go",
+        "Identifies a shutdown hang, goroutine stall, or Close wait with no local exit path",
+        "References the provided shutdown contract or spec as governing evidence",
+        "Includes at least one file:line finding for service.go"
+      ],
+      "files": [
+        "fixtures/context_shutdown/spec.md",
+        "fixtures/context_shutdown/service.go"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "PR review request: this cache warmer was added for startup prefetch. Review only concurrency risks in the changed file. If some issue is local code drift versus a broader bounded-work or backpressure contract question, say so clearly.\n\nFiles:\n- fixtures/unbounded_fanout/cache_warmer.go",
+      "expected_output": "The review should catch unbounded goroutine fan-out, blocked send/backpressure risk on resultCh, and whether a broader handoff or escalation is warranted.",
+      "assertions": [
+        "Identifies unbounded goroutine fan-out or missing concurrency bounds",
+        "Identifies blocked send, undrained result channel, or backpressure risk on resultCh",
+        "Calls out a handoff or design escalation for broader bounded-work or backpressure policy"
+      ],
+      "files": [
+        "fixtures/unbounded_fanout/cache_warmer.go"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review this broker implementation and its new test for concurrency correctness. Call out merge-risk findings only. Treat tests as evidence, not proof.\n\nFiles:\n- fixtures/broker_race/broker.go\n- fixtures/broker_race/broker_test.go",
+      "expected_output": "The review should catch unsynchronized shared-state access, send-on-closed risk, and the weak sleep-based test / missing race evidence.",
+      "assertions": [
+        "Identifies unsynchronized shared-state access or concurrent map mutation on subs",
+        "Identifies send-on-closed or publish/unsubscribe race",
+        "Calls out the sleep-based test as weak evidence or recommends race-focused validation"
+      ],
+      "files": [
+        "fixtures/broker_race/broker.go",
+        "fixtures/broker_race/broker_test.go"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Generic PR review request: review this changed Go file for concurrency-specific merge blockers only. Stay focused on lifecycle, unblocking, and scheduler-sensitive risks; ignore non-concurrency cleanup.\n\nFiles:\n- fixtures/hotspot_scan/dispatcher.go",
+      "expected_output": "The review should catch WaitGroup misuse, the busy-spin default loop, and the missing ticker stop in the changed dispatcher.",
+      "assertions": [
+        "Identifies WaitGroup.Add after goroutine launch or another WaitGroup lifecycle misuse",
+        "Identifies the select default loop as busy-spin or as missing a real blocking or backpressure path",
+        "Identifies the missing ticker.Stop or ticker leak",
+        "Includes at least one file:line finding for dispatcher.go"
+      ],
+      "files": [
+        "fixtures/hotspot_scan/dispatcher.go"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Review this Go change for concurrency-specific merge blockers only. Focus on subtle synchronization and time-based coordination defects, not style cleanup.\n\nFiles:\n- fixtures/waitgroup_timer/poller.go",
+      "expected_output": "The review should catch the copied WaitGroup via value receiver, explain the resulting Stop/Wait mismatch, and call out time.After-in-loop timer churn or leak risk.",
+      "assertions": [
+        "Identifies that Poller.Start uses a value receiver or otherwise copies a WaitGroup-containing struct",
+        "Explains the Stop or Wait mismatch, copied synchronization state, or broken join semantics caused by the copied WaitGroup",
+        "Identifies time.After in the loop as timer churn, allocation growth, or leak-prone coordination",
+        "Includes at least one file:line finding for poller.go"
+      ],
+      "files": [
+        "fixtures/waitgroup_timer/poller.go"
+      ]
+    }
+  ]
+}

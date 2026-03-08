@@ -1,0 +1,44 @@
+{
+  "skill_name": "go-distributed-architect-spec",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We are adding a place-order flow in a Go-based commerce platform. `order-service` owns the order record and public API. `payment-service` can authorize and later void a payment authorization. `inventory-service` can reserve stock and reservations expire automatically after 15 minutes. `shipping-service` can buy a carrier label, and once the carrier accepts it we cannot fully undo the charge. The API should return quickly and let clients poll operation status instead of waiting for everything. Write a distributed-consistency spec for this flow. I need the orchestration vs choreography choice, process owner, pivot, compensation vs forward recovery, outbox/inbox/idempotency rules, and reconciliation strategy. Also call out what the client-visible success state really means.",
+      "expected_output": "A distributed-consistency spec that chooses a coordination model, defines process ownership and pivot, distinguishes compensable and irreversible steps, and makes API-visible async semantics, idempotency, and reconciliation explicit.",
+      "files": [],
+      "expectations": [
+        "The spec names the source-of-truth owner for payment authorization, inventory reservation, shipment or label purchase, and overall process state.",
+        "The spec compares at least two viable coordination options and states a chosen path with at least one rejection reason.",
+        "The spec defines a durable state model with a pivot and explicit compensation or forward-recovery behavior for pre-pivot and post-pivot steps.",
+        "The spec defines API-visible async semantics such as `202 + operation resource`, client completion expectations, or equivalent operation-status behavior.",
+        "The spec defines outbox/inbox, idempotency, dedup, and reconciliation behavior for side-effecting distributed steps."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "We need a distributed design for refunds in a Go service estate. `billing-service` owns the immutable money ledger and publishes refund events. `loyalty-service` subtracts points when a refund is finalized. `notification-service` sends the customer email. We had a real bug where duplicate Kafka deliveries reversed loyalty points twice because the retry came through with a different message envelope ID. Product still wants the customer API to return `refund accepted` synchronously, but finance says only the billing ledger is authoritative. Write the distributed-consistency spec. I care about invariant ownership, what 'accepted' vs 'completed' means, message dedup vs business idempotency, replay/ordering assumptions, and how reconciliation should detect and repair drift.",
+      "expected_output": "A distributed-consistency spec that distinguishes client acceptance from completion, separates message-envelope dedup from business idempotency, and defines replay-safe repair and reconciliation around the billing ledger as source of truth.",
+      "files": [],
+      "expectations": [
+        "The spec distinguishes transport-envelope dedup from stable business or step idempotency for refund retries or duplicate deliveries.",
+        "The spec defines what client-visible `refund accepted` means and what later completion or failure states are possible.",
+        "The spec names the authoritative source used for reconciliation and drift repair.",
+        "The spec defines replay, ordering, or competing-flow controls for loyalty reversal and other side effects.",
+        "The spec compares at least two viable distributed designs and explains why the chosen one is safer."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We're redesigning tenant provisioning for a B2B Go platform. `org-service` owns the tenant record. Today workspace creation synchronously calls `auth-service` to create the owner account, `billing-service` to open the subscription shell, and `email-service` to send the welcome email. Product wants a faster API. Engineering is split: some want a saga, some want to keep more work local to `org-service` and push only non-invariant work async. We cannot rely on coordinated deploys, and some read models lag by a few seconds. Write the distributed-consistency spec. First prove whether this workflow should stay local or become distributed. Then define the chosen boundary, invariants, completion semantics, and any reconciliation or handoff requirements.",
+      "expected_output": "A distributed-consistency spec that first proves whether the boundary really needs to be distributed, then defines the chosen ownership/transaction model, completion semantics, and reconciliation or handoff needs without relying on coordinated deploys.",
+      "files": [],
+      "expectations": [
+        "The spec explicitly evaluates whether tenant provisioning should stay local or become a distributed flow before choosing saga mechanics.",
+        "The spec explains the chosen ownership or transaction boundary and rejects at least one alternative with a concrete reason.",
+        "If the flow is distributed, the spec defines process state, idempotency, and reconciliation; if kept more local, it explicitly limits async work to non-invariant side effects.",
+        "The spec addresses read-model lag and coordinated-deploy avoidance in the chosen design.",
+        "The spec includes explicit assumptions or open questions and downstream handoffs where detailed API, data, or reliability work is still needed."
+      ]
+    }
+  ]
+}
