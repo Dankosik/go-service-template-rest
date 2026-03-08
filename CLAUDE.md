@@ -19,10 +19,11 @@ Main-loop objective:
 Short operating loop:
 1. Frame the task.
 2. Decide whether to keep research local or fan out.
-3. Synthesize research into final decisions.
-4. Write the implementation plan before coding.
-5. Implement in the main flow.
-6. Run review, recheck, and validation only as far as task risk requires.
+3. Synthesize research into candidate decisions.
+4. Run a pre-spec challenge pass when task risk or ambiguity justifies it.
+5. Write the implementation plan before coding.
+6. Implement in the main flow.
+7. Run review, recheck, and validation only as far as task risk requires.
 
 For very small, low-risk tasks, keep research local and avoid orchestration overhead. The invariants in this file still apply.
 
@@ -38,10 +39,12 @@ For very small, low-risk tasks, keep research local and avoid orchestration over
 8. Coding must not start until the implementation plan is explicit.
 9. `spec.md` stores final decisions. `research/*.md` stores validated research context and does not replace `spec.md`.
 10. High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
-11. Review findings are advisory until the orchestrator reconciles them.
-12. Never invent missing facts or fill irrelevant sections for “completeness”.
-13. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
-14. No readiness or completion claim without fresh validation evidence.
+11. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
+12. Review findings are advisory until the orchestrator reconciles them.
+13. Never invent missing facts or fill irrelevant sections for “completeness”.
+14. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
+15. No readiness or completion claim without fresh validation evidence.
+16. Do not treat a short subagent wait timeout as failure; when subagent output is required for fan-in, review, or user-requested agent work, use long waits of up to 20 minutes per wait cycle and continue polling without interrupting or abandoning the agent unless it is clearly hung, superseded, or explicitly canceled by the user.
 
 ## 3. Authoring and intake rules
 
@@ -69,10 +72,13 @@ Treat `mode/state` as internal workflow control, not as user input.
 
 `intake`, `research`, `synthesis`, `planning`, `implementation`, `review`, `reconciliation`, `validation`, `done`
 
+`pre-spec challenge` is a checkpoint inside `synthesis`, not a separate authority state.
+
 ### Typical paths
 
 - Small / low-risk: `intake -> research -> synthesis -> planning -> implementation -> validation -> done`
-- With review: `intake -> research -> synthesis -> planning -> implementation -> review -> reconciliation -> validation -> done`
+- Medium / high-risk: `intake -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> validation -> done`
+- With review: `intake -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> review -> reconciliation -> validation -> done`
 
 `review` and `reconciliation` are **optional, risk-driven states**, not mandatory ritual phases.
 
@@ -85,7 +91,7 @@ Treat `mode/state` as internal workflow control, not as user input.
 ### Gates
 
 - **Research gate:** no code changes; no planning or implementation skills.
-- **Synthesis gate:** do not adopt a single subagent claim without comparison, evidence, and applicability checks.
+- **Synthesis gate:** do not adopt a single subagent claim without comparison, evidence, and applicability checks. For medium/high-risk or ambiguous work, candidate synthesis is not stable until a pre-spec challenge pass is reconciled or explicitly waived.
 - **Planning gate:** implementation is blocked until an explicit plan exists.
 - **Write gate:** repository changes are allowed only in `implementation`, and only in the main flow.
 - **Review gate:** review stays read-only and domain-specific.
@@ -115,7 +121,8 @@ The orchestrator decides:
 - which questions can be handled directly in the main flow,
 - which questions need subagent research,
 - which tracks are independent and should run in parallel,
-- which high-impact or ambiguous topics need multi-angle coverage.
+- which high-impact or ambiguous topics need multi-angle coverage,
+- whether candidate synthesis needs a pre-spec challenge pass before planning.
 
 Use subagent fan-out when at least one is true:
 - the task crosses multiple domains,
@@ -133,6 +140,8 @@ When using subagents:
 - pass only the **minimum relevant slice of context**,
 - keep independent tracks parallel by default,
 - use multi-angle patterns for high-impact or ambiguous areas when needed.
+- if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, prefer long waits of up to 20 minutes over short polling and treat short timeouts as “still running”, not “no result”.
+- do not interrupt, close, or declare a subagent unavailable just because one or more wait cycles timed out; only stop it when there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
 
 Useful multi-angle patterns:
 - `primary + challenger`
@@ -145,8 +154,32 @@ At fan-in, the orchestrator must:
 - compare assumptions, evidence quality, and applicability,
 - record the chosen path and rejected alternatives when they materially affect execution,
 - trigger recheck when confidence is too low or the impact is too high.
+- not claim agent-backed synthesis, review coverage, or cross-checking if the needed subagents were interrupted, abandoned early, or never returned.
 
-### 5.4 Tie-break order
+For medium/high-risk or ambiguous work, candidate synthesis should be pressure-tested via a pre-spec challenge pass before planning.
+
+### 5.4 Run a pre-spec challenge pass
+
+Run this checkpoint when at least one is true:
+- the task is medium/high-risk or hard to reverse,
+- candidate synthesis still depends on under-evidenced assumptions,
+- ownership seams, exception policy, failure semantics, or rollout behavior are still fragile,
+- an independent challenger would materially reduce planning risk.
+
+Working model:
+- `research -> candidate synthesis -> pre-spec challenge -> (re-research if needed) -> final synthesis -> planning`
+
+Challenge rules:
+- pass only the minimum relevant slice of context: problem frame, candidate decisions, constraints, assumptions or open questions, and evidence links when needed
+- ask only discriminating questions or challenge only assumptions whose answers could change scope, correctness, ownership, failure semantics, or rollout
+- keep output compact: challenged assumption or question, why it matters now, what changes if answered differently, blocker level, next action
+- avoid checklist theater, generic “what about X?” prompts, or backdoor redesign
+
+Resolution rules:
+- the orchestrator must resolve each material challenge by answering with evidence, triggering targeted re-research, asking the user, explicitly deferring it, or explicitly rejecting it with rationale and accepted risk
+- `spec.md` stores the final resolutions and remaining open questions, not the raw challenge transcript
+
+### 5.5 Tie-break order
 
 When recommendations conflict:
 1. Honor explicit user priority first.
@@ -157,7 +190,7 @@ When recommendations conflict:
 
 Do not use one rigid global priority order for every task.
 
-### 5.5 Recheck and override
+### 5.6 Recheck and override
 
 Recheck is mandatory when:
 - a decision is high-impact and evidence is weak or incomplete,
@@ -212,6 +245,7 @@ A subagent must not:
 - change the global scope,
 - rewrite the orchestrator’s goals,
 - make final product or architecture decisions,
+- turn a challenge pass into open-ended redesign or approval theater,
 - write code, edit files, modify git state, or alter the implementation plan,
 - dump raw long-form reasoning into the main flow unless explicitly asked.
 
@@ -233,6 +267,7 @@ Rules:
 
 Supported modes:
 - `research` — recommendation + risks + confidence
+- `challenge` — discriminating questions + why + blocker level + next action
 - `review` — findings + recommendations in read-only mode
 - `adjudication` — verdict on a disputed point
 
@@ -386,7 +421,7 @@ Artifact rules:
 
 Update cadence:
 - After framing: update `Context`, `Scope / Non-goals`, and `Constraints` as needed.
-- After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material rejected paths or overrides.
+- After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material challenge resolutions, rejected paths, or overrides.
 - Before coding: make `Implementation Plan` explicit in `spec.md` or `plan.md`.
 - After validation: update `Validation` and `Outcome` to match reality.
 
@@ -409,6 +444,7 @@ Rules:
 For non-trivial tasks, keep a compact audit trail that is sufficient to reconstruct the path:
 - intake summary,
 - research questions or subagent tracks,
+- challenge resolutions or skip rationale when the checkpoint was material,
 - decision log,
 - material overrides or rejected paths,
 - open questions with owner and unblock condition,
@@ -446,6 +482,7 @@ Anti-patterns:
 - letting subagents write code or mutate repository files,
 - starting implementation before the planning step is explicit,
 - filling optional sections or artifacts with placeholder text,
+- turning pre-spec challenge into ritualized coverage or fixed-question theater,
 - turning review into ritual coverage instead of real risk reduction,
 - allowing a local fix to create an unexamined cross-domain regression,
 - letting legacy workflow jargon override the orchestrator/subagent-first model.

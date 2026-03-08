@@ -23,6 +23,7 @@ The workflow is intentionally simple:
 8. `research/*.md` stores validated research context and does not replace `spec.md`.
 9. Coding starts only after an explicit implementation plan exists.
 10. Any single subagent conclusion is advisory until the orchestrator synthesizes it and, when needed, rechecks it.
+11. For medium/high-risk or ambiguous work, candidate synthesis is pressure-tested before planning or explicitly waived with rationale.
 
 For very small and low-risk tasks, the orchestrator may keep research local and skip subagent fan-out.
 The invariants above still apply.
@@ -53,6 +54,7 @@ Artifact rules:
 4. Use `plan.md` only when the implementation plan becomes too large or parallelized to stay readable inside `spec.md`.
 5. Use `test-plan.md` only when test obligations are large enough to hide the core plan.
 6. Do not duplicate decision text across files; link instead.
+7. Keep raw pre-spec challenge transcripts out of `spec.md`; record only the resolved decisions and remaining open questions.
 
 ## 4. Default `spec.md` Shape
 
@@ -133,7 +135,7 @@ Subagents:
 There is no single rigid response schema for every subagent task.
 The orchestrator defines the output shape needed for the current question.
 
-### Step 4. Synthesis And Decision Logging
+### Step 4. Candidate Synthesis, Pre-Spec Challenge, And Decision Logging
 
 Owner: Orchestrator
 
@@ -141,15 +143,25 @@ The orchestrator:
 1. compares subagent outputs,
 2. separates terminology noise from real conflicts,
 3. checks evidence quality, assumptions, and applicability,
-4. resolves conflicts against user priorities inside non-negotiable correctness and safety boundaries,
-5. records final decisions and unresolved items in `spec.md`,
-6. writes validated research memory to `research/*.md` when it is worth preserving,
-7. triggers a targeted recheck or second opinion when confidence is too low or the impact is too high.
+4. produces candidate decisions and the remaining open assumptions,
+5. for medium/high-risk or ambiguous work, runs a pre-spec challenge pass before treating candidate decisions as stable,
+6. resolves conflicts against user priorities inside non-negotiable correctness and safety boundaries,
+7. resolves each material challenge by answering with evidence, triggering targeted re-research, asking the user, explicitly deferring it, or explicitly accepting risk,
+8. records final decisions and unresolved items in `spec.md`,
+9. writes validated research memory to `research/*.md` when it is worth preserving,
+10. triggers a targeted recheck or second opinion when confidence is too low or the impact is too high.
 
 Decision discipline:
 1. Final decisions always stay with the orchestrator.
-2. Rejected alternatives and overrides should be recorded when they materially affect the path forward.
-3. If uncertainty remains important, keep it as an open question with owner and unblock condition.
+2. `pre-spec challenge` is a checkpoint inside synthesis, not a separate authority phase.
+3. Rejected alternatives, challenge rejections, and overrides should be recorded when they materially affect the path forward.
+4. If uncertainty remains important, keep it as an open question with owner and unblock condition.
+
+Pre-spec challenge expectations:
+1. Pass only the minimum relevant slice of context: problem frame, candidate decisions, constraints, assumptions/open questions, and evidence links when needed.
+2. Ask only discriminating questions whose answers could change scope, correctness, ownership, failure semantics, or rollout.
+3. Prefer a few high-signal questions over checklist coverage.
+4. Keep the output compact and resolution-oriented rather than turning it into a second design document.
 
 ### Step 5. Implementation Planning
 
@@ -208,7 +220,7 @@ Any readiness or completion claim must include fresh command evidence.
 For day-to-day work, use this short loop:
 1. Frame the task in the main flow.
 2. Spawn only the subagent tracks that reduce real uncertainty or review risk.
-3. Synthesize the outputs into final decisions.
+3. Synthesize candidate decisions and run pre-spec challenge when the task risk or ambiguity justifies it.
 4. Write the implementation plan before coding.
 5. Implement in the main flow.
 6. Run review, recheck, and validation only as far as the task risk requires.
@@ -241,7 +253,8 @@ Small work stays small inside the same workflow.
 Definition of Ready:
 1. `spec.md` or the active spec note has clear scope, constraints, and current decisions.
 2. Critical unknowns are either resolved, delegated for research, or tracked explicitly.
-3. An implementation plan exists before coding starts.
+3. For medium/high-risk or ambiguous work, the pre-spec challenge checkpoint is reconciled or explicitly waived.
+4. An implementation plan exists before coding starts.
 
 Definition of Done:
 1. Implementation matches the recorded decisions.
@@ -268,4 +281,5 @@ When a legacy reference conflicts with this document, prefer the orchestrator/su
 4. Letting subagents write code or mutate repository files.
 5. Starting implementation before the planning step is explicit.
 6. Filling optional sections or artifacts with placeholder text.
-7. Treating review coverage as more important than solving the real delivery risk.
+7. Turning pre-spec challenge into ritualized checklist coverage or fixed question quotas.
+8. Treating review coverage as more important than solving the real delivery risk.

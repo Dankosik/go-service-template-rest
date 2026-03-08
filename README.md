@@ -26,7 +26,7 @@ This template is built from the opposite assumption: if you want agents to be us
 That is why this repository is opinionated in four places:
 
 1. **The workflow is explicit.**
-   Non-trivial work starts with framing, research, synthesis, planning, implementation, review, and validation. The loop is visible, not implied.
+   Non-trivial work starts with framing, research, synthesis, pre-spec challenge, planning, implementation, review, and validation. The loop is visible, not implied.
 2. **The specialists are real.**
    Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
 3. **The skills are Go-native.**
@@ -51,16 +51,19 @@ The fix is not a single block of text. It shapes the whole repository:
 This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
 
 ```text
-intake -> research -> synthesis -> planning -> implementation -> review -> validation
+intake -> research -> synthesis -> pre-spec challenge -> planning -> implementation -> review -> validation
 ```
 
 - `intake`: frame the change, scope it, and record assumptions.
 - `research`: keep simple work local or fan out to read-only subagents.
-- `synthesis`: compare specialist output and keep final decisions with the orchestrator.
+- `synthesis`: compare specialist output and produce candidate decisions.
+- `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
 - `planning`: write the implementation plan before code changes start.
 - `implementation`: change the service in the main flow, not inside research agents.
 - `review`: run targeted review agents only where the risk justifies them.
 - `validation`: do not claim "done" without fresh command evidence.
+
+`pre-spec challenge` is a risk-driven checkpoint inside the synthesis boundary, not a separate approval authority.
 
 The full contract lives in [AGENTS.md](AGENTS.md) and the supporting workflow doc lives in [docs/spec-first-workflow.md](docs/spec-first-workflow.md).
 
@@ -79,6 +82,7 @@ Click an agent name to open its project-scoped instruction file in `.claude/agen
 | [`architecture-agent`](.claude/agents/architecture-agent.md) | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
 | [`api-agent`](.claude/agents/api-agent.md) | client-visible contract behavior and transport semantics | endpoints, statuses, errors, idempotency, or async acknowledgment change | contract recommendation, compatibility notes |
 | [`concurrency-agent`](.claude/agents/concurrency-agent.md) | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
+| [`challenger-agent`](.claude/agents/challenger-agent.md) | pre-spec challenge, hidden assumptions, corner cases, and planning-risk pressure tests | candidate decisions exist but need an independent challenger before planning | discriminating questions, blocker calls, next actions |
 | [`data-agent`](.claude/agents/data-agent.md) | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
 | [`delivery-agent`](.claude/agents/delivery-agent.md) | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
 | [`design-integrator-agent`](.claude/agents/design-integrator-agent.md) | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
@@ -116,6 +120,7 @@ claude -p --agent qa-agent -- "List the minimum regression obligations for chang
 ### Common Fan-Out Patterns
 
 - New endpoint or contract change: `api-agent` + `domain-agent` + `qa-agent`
+- Pre-spec pressure-test on ambiguous work: `challenger-agent` + the specialist whose decision still feels under-evidenced
 - Storage, cache, or migration change: `data-agent` + `reliability-agent`
 - Cross-service or async workflow: `architecture-agent` + `distributed-agent` + `security-agent`
 - Pre-merge cleanup on a larger diff: `quality-agent` + the domain reviewer that matches the risk
@@ -129,7 +134,8 @@ Click a skill name to open its mirrored instruction file in `.agents/skills`.
 
 | Skill | What it does | Load when |
 |---|---|---|
-| [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a raw request into scope, constraints, assumptions, and design-readiness | the task is still fuzzy and needs framing before design |
+| [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a raw request into a challenge-ready problem frame with scope, constraints, assumptions, and design-readiness | the task is still fuzzy and needs framing before challenge or deeper design |
+| [`pre-spec-challenge`](.agents/skills/pre-spec-challenge/SKILL.md) | pressure-tests candidate decisions with discriminating questions before planning | research is done but hidden assumptions or edge cases could still change the spec |
 | [`go-coder-plan-spec`](.agents/skills/go-coder-plan-spec/SKILL.md) | turns approved decisions into atomic coding steps, checkpoints, and evidence expectations | planning is complete enough to prepare implementation, but coding has not started |
 | [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift | the implementation plan is explicit and code work is next |
 | [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
@@ -237,6 +243,7 @@ Example kickoff prompt:
 ```text
 Frame a change to add tenant-aware export jobs.
 Fan out to `architecture-agent`, `data-agent`, and `qa-agent` only if needed.
+Run `challenger-agent` before planning if material assumptions remain.
 Write decisions and the implementation plan to `specs/tenant-export-jobs/spec.md` before coding.
 ```
 

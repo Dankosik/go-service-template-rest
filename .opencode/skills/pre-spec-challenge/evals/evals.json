@@ -1,0 +1,44 @@
+{
+  "skill_name": "pre-spec-challenge",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Read the scenario file and run a pre-spec challenge pass on the candidate decisions. Return only the challenge output in the skill's expected format.",
+      "expected_output": "A compact, high-signal challenge pass that surfaces the most planning-relevant ambiguities in the async export flow without devolving into generic API or security checklists.",
+      "files": [
+        "evals/files/async-export-candidate.md"
+      ],
+      "expectations": [
+        "The output challenges hidden assumptions rather than restating the candidate design.",
+        "The output identifies planning-relevant blockers or non-blockers explicitly.",
+        "The output avoids generic checklist questions and focuses on concrete seams."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Read the scenario file and run a pre-spec challenge pass on the candidate decisions. Return only the challenge output in the skill's expected format.",
+      "expected_output": "A pressure test that focuses on source-of-truth ownership, cache invalidation, rollout, and correctness risk in the cache migration plan rather than broad architecture brainstorming.",
+      "files": [
+        "evals/files/cache-migration-candidate.md"
+      ],
+      "expectations": [
+        "The output pressures source-of-truth and invalidation assumptions directly.",
+        "The output distinguishes what blocks planning from lower-priority concerns.",
+        "The output stays advisory and resolution-oriented."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Read the scenario file and run a pre-spec challenge pass on the candidate decisions. Return only the challenge output in the skill's expected format.",
+      "expected_output": "A challenge pass that catches reversibility, actor boundaries, side effects, and auditability gaps in the admin deactivation flow while staying compact and concrete.",
+      "files": [
+        "evals/files/admin-deactivation-candidate.md"
+      ],
+      "expectations": [
+        "The output questions irreversible or destructive semantics when they are underdefined.",
+        "The output names concrete side-effect or ownership seams instead of broad abstractions.",
+        "The output recommends actionable next steps for each important question."
+      ]
+    }
+  ]
+}

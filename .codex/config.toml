@@ -10,6 +10,10 @@ config_file = "agents/architecture-agent.toml"
 description = "Read-only concurrency review subagent for goroutines, channels, and shutdown safety."
 config_file = "agents/concurrency-agent.toml"
 
+[agents."challenger-agent"]
+description = "Read-only pre-spec challenge subagent for hidden assumptions, corner cases, and planning-risk pressure tests."
+config_file = "agents/challenger-agent.toml"
+
 [agents."data-agent"]
 description = "Read-only data subagent for ownership, schema, transactions, and cache rules."
 config_file = "agents/data-agent.toml"
