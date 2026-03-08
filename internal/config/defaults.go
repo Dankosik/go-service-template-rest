@@ -58,11 +58,6 @@ func defaultValues() map[string]any {
 		"observability.otel.exporter.otlp_headers":         "",
 		"observability.otel.exporter.otlp_protocol":        "http/protobuf",
 
-		"observability.metrics.enabled":             true,
-		"observability.metrics.path":                "/metrics",
-		"observability.grafana.enabled":             false,
-		"observability.grafana.cloud_otlp_endpoint": "",
-
 		"feature_flags.postgres_readiness_probe": true,
 		"feature_flags.mongo_readiness_probe":    false,
 		"feature_flags.redis_readiness_probe":    false,

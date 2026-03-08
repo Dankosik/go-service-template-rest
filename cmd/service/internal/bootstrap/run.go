@@ -71,7 +71,6 @@ func Run(args []string) (runErr error) {
 	slog.SetDefault(bootstrapLog)
 
 	metrics := telemetry.New()
-	deployTelemetry := newDeployTelemetryRecorder(bootstrapLog, metrics, "unknown")
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	defer func() {
@@ -106,7 +105,7 @@ func Run(args []string) (runErr error) {
 	loadOptions.LoadBudget = startupConfigLoadBudget
 	loadOptions.ValidateBudget = startupConfigValidateBudget
 
-	bootstrap, err := bootstrapRuntime(startupCtx, loadOptions, metrics, deployTelemetry, startupLifecycleStartedAt)
+	bootstrap, err := bootstrapRuntime(startupCtx, loadOptions, metrics, startupLifecycleStartedAt)
 	if err != nil {
 		return err
 	}
@@ -121,7 +120,6 @@ func Run(args []string) (runErr error) {
 		cfg:                       bootstrap.cfg,
 		metrics:                   metrics,
 		log:                       bootstrap.log,
-		deployTelemetry:           deployTelemetry,
 		networkPolicy:             bootstrap.networkPolicy,
 		startupLifecycleStartedAt: startupLifecycleStartedAt,
 	})
@@ -134,8 +132,8 @@ func Run(args []string) (runErr error) {
 
 	healthSvc := health.New(probeOutcome.probes...)
 	pingSvc := ping.New()
-	startupAdmission := newStartupAdmissionController(bootstrapSpan, metrics, deployTelemetry)
-	ingressGuard := newRuntimeIngressAdmissionGuard(bootstrap.networkPolicy, deployTelemetry)
+	startupAdmission := newStartupAdmissionController(bootstrapSpan, metrics)
+	ingressGuard := newRuntimeIngressAdmissionGuard(bootstrap.networkPolicy)
 	readinessCheck := func(ctx context.Context) error {
 		if err := ingressGuard.Check(ctx); err != nil {
 			return err
@@ -170,7 +168,6 @@ func Run(args []string) (runErr error) {
 		bootstrap.cfg,
 		bootstrap.log,
 		metrics,
-		deployTelemetry,
 		healthSvc,
 		srv,
 		readinessCheck,

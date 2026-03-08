@@ -26,7 +26,6 @@ func bootstrapRuntime(
 	startupCtx context.Context,
 	loadOptions config.LoadOptions,
 	metrics *telemetry.Metrics,
-	deployTelemetry *deployTelemetryRecorder,
 	startupLifecycleStartedAt time.Time,
 ) (result startupBootstrap, err error) {
 	telemetryCleanup := func(context.Context) {}
@@ -40,14 +39,13 @@ func bootstrapRuntime(
 		startupCtx,
 		loadOptions,
 		metrics,
-		deployTelemetry,
 		startupLifecycleStartedAt,
 	)
 	if err != nil {
 		return startupBootstrap{}, err
 	}
 
-	log := bootstrapLoggerStage(cfg, deployTelemetry)
+	log := bootstrapLoggerStage(cfg)
 	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
 	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
 	spanOwnedByCaller := false
@@ -57,13 +55,12 @@ func bootstrapRuntime(
 		}
 	}()
 
-	bootstrapReportStage(bootstrapCtx, tracer, log, deployTelemetry, cfg, loadOptions, configReport, telemetryInitErr)
+	bootstrapReportStage(bootstrapCtx, tracer, log, cfg, loadOptions, configReport, telemetryInitErr)
 	netPolicy, err := bootstrapNetworkPolicyStage(
 		bootstrapCtx,
 		bootstrapSpan,
 		metrics,
 		log,
-		deployTelemetry,
 		startupLifecycleStartedAt,
 	)
 	if err != nil {
@@ -90,7 +87,6 @@ func bootstrapConfigStage(
 	startupCtx context.Context,
 	loadOptions config.LoadOptions,
 	metrics *telemetry.Metrics,
-	deployTelemetry *deployTelemetryRecorder,
 	startupLifecycleStartedAt time.Time,
 ) (config.Config, config.LoadReport, error) {
 	slog.Info(
@@ -124,7 +120,6 @@ func bootstrapConfigStage(
 				"error.type", errorType,
 			)...,
 		)
-		recordAdmissionFailure(startupCtx, deployTelemetry, "startup_error", "startup")
 		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
@@ -136,7 +131,7 @@ func bootstrapConfigStage(
 	return cfg, configReport, nil
 }
 
-func bootstrapLoggerStage(cfg config.Config, deployTelemetry *deployTelemetryRecorder) *slog.Logger {
+func bootstrapLoggerStage(cfg config.Config) *slog.Logger {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.Log.Level}))
 	log = log.With(
 		"service.name", cfg.Observability.OTel.ServiceName,
@@ -144,8 +139,6 @@ func bootstrapLoggerStage(cfg config.Config, deployTelemetry *deployTelemetryRec
 		"deployment.environment.name", cfg.App.Env,
 	)
 	slog.SetDefault(log)
-	deployTelemetry.SetLogger(log)
-	deployTelemetry.SetEnvironment(cfg.App.Env)
 	return log
 }
 
@@ -226,7 +219,6 @@ func bootstrapReportStage(
 	bootstrapCtx context.Context,
 	tracer trace.Tracer,
 	log *slog.Logger,
-	deployTelemetry *deployTelemetryRecorder,
 	cfg config.Config,
 	loadOptions config.LoadOptions,
 	configReport config.LoadReport,
@@ -303,49 +295,39 @@ func bootstrapNetworkPolicyStage(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	deployTelemetry *deployTelemetryRecorder,
 	startupLifecycleStartedAt time.Time,
 ) (networkPolicy, error) {
 	netPolicy, netPolicyErr := loadNetworkPolicyFromEnv()
 	if netPolicyErr != nil {
-		policyClass, reasonClass := networkPolicyErrorLabels(netPolicyErr)
-		if policyClass == "egress" {
-			deployTelemetry.RecordNetworkEgressPolicyViolation(bootstrapCtx, reasonClass, "deny")
-		} else {
-			deployTelemetry.RecordNetworkIngressPolicyViolation(bootstrapCtx, reasonClass, "deny")
-		}
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
 			log,
-			deployTelemetry,
 			startupLifecycleStartedAt,
 			"network_policy",
 			fmt.Errorf("%w: invalid network policy configuration: %w", config.ErrDependencyInit, netPolicyErr),
 		)
 	}
 
-	if ingressErr := netPolicy.EnforceIngress(bootstrapCtx, deployTelemetry); ingressErr != nil {
+	if ingressErr := netPolicy.EnforceIngress(); ingressErr != nil {
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
 			log,
-			deployTelemetry,
 			startupLifecycleStartedAt,
 			"ingress_policy",
 			ingressErr,
 		)
 	}
 
-	if egressErr := netPolicy.EmitEgressExceptionState(bootstrapCtx, deployTelemetry); egressErr != nil {
+	if egressErr := netPolicy.EmitEgressExceptionState(); egressErr != nil {
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
 			log,
-			deployTelemetry,
 			startupLifecycleStartedAt,
 			"egress_exception",
 			egressErr,

@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -10,25 +9,19 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
-func (p networkPolicy) EnforceIngress(ctx context.Context, recorder *deployTelemetryRecorder) error {
+func (p networkPolicy) EnforceIngress() error {
 	if !p.ingressPublicEnabled {
-		recorder.RecordNetworkExceptionStateChange(ctx, "ingress", "closed", "deny", p.ingressException.ID)
 		return nil
 	}
 
 	if !p.ingressException.Active {
-		recorder.RecordNetworkExceptionStateChange(ctx, "ingress", "denied", "deny", p.ingressException.ID)
-		recorder.RecordNetworkIngressPolicyViolation(ctx, "missing_exception", "deny")
 		return fmt.Errorf("%w: public ingress denied without approved exception", config.ErrDependencyInit)
 	}
 
 	if p.isExceptionExpired(p.ingressException) {
-		recorder.RecordNetworkExceptionStateChange(ctx, "ingress", "expired", "deny", p.ingressException.ID)
-		recorder.RecordNetworkIngressPolicyViolation(ctx, "expired_exception", "deny")
 		return fmt.Errorf("%w: ingress exception is expired", config.ErrDependencyInit)
 	}
 
-	recorder.RecordNetworkExceptionStateChange(ctx, "ingress", "active", "allow", p.ingressException.ID)
 	return nil
 }
 
@@ -45,31 +38,25 @@ func (p networkPolicy) ValidateIngressRuntime() error {
 	return nil
 }
 
-func (p networkPolicy) EmitEgressExceptionState(ctx context.Context, recorder *deployTelemetryRecorder) error {
+func (p networkPolicy) EmitEgressExceptionState() error {
 	if !p.egressException.Active {
-		recorder.RecordNetworkExceptionStateChange(ctx, "egress", "closed", "deny", p.egressException.ID)
 		return nil
 	}
 	if p.isExceptionExpired(p.egressException) {
-		recorder.RecordNetworkExceptionStateChange(ctx, "egress", "expired", "deny", p.egressException.ID)
-		recorder.RecordNetworkEgressPolicyViolation(ctx, "expired_exception", "deny")
 		return fmt.Errorf("%w: egress exception is expired", config.ErrDependencyInit)
 	}
 
-	recorder.RecordNetworkExceptionStateChange(ctx, "egress", "active", "allow", p.egressException.ID)
 	return nil
 }
 
-func (p networkPolicy) EnforceEgressTarget(ctx context.Context, recorder *deployTelemetryRecorder, target, scheme string) error {
+func (p networkPolicy) EnforceEgressTarget(target, scheme string) error {
 	normalizedScheme := strings.ToLower(strings.TrimSpace(scheme))
 	if !p.isSchemeAllowed(normalizedScheme) {
-		recorder.RecordNetworkEgressPolicyViolation(ctx, "scheme_denied", "deny")
 		return fmt.Errorf("%w: egress scheme denied by policy", config.ErrDependencyInit)
 	}
 
 	host, err := extractHost(target)
 	if err != nil {
-		recorder.RecordNetworkEgressPolicyViolation(ctx, "invalid_configuration", "deny")
 		return fmt.Errorf("%w: invalid egress target", config.ErrDependencyInit)
 	}
 
@@ -81,17 +68,13 @@ func (p networkPolicy) EnforceEgressTarget(ctx context.Context, recorder *deploy
 	}
 
 	if p.egressException.Active && !p.isExceptionExpired(p.egressException) && matchesHost(host, p.egressException.scopeMatcher) {
-		recorder.RecordNetworkExceptionStateChange(ctx, "egress", "active", "allow", p.egressException.ID)
 		return nil
 	}
 
 	if p.egressException.Active && p.isExceptionExpired(p.egressException) {
-		recorder.RecordNetworkExceptionStateChange(ctx, "egress", "expired", "deny", p.egressException.ID)
-		recorder.RecordNetworkEgressPolicyViolation(ctx, "expired_exception", "deny")
 		return fmt.Errorf("%w: egress exception is expired", config.ErrDependencyInit)
 	}
 
-	recorder.RecordNetworkEgressPolicyViolation(ctx, "public_target_denied", "deny")
 	return fmt.Errorf("%w: egress target denied by policy", config.ErrDependencyInit)
 }
 

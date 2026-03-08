@@ -22,7 +22,6 @@ type dependencyProbeRuntime struct {
 	cfg                       config.Config
 	metrics                   *telemetry.Metrics
 	log                       *slog.Logger
-	deployTelemetry           *deployTelemetryRecorder
 	networkPolicy             networkPolicy
 	startupLifecycleStartedAt time.Time
 }
@@ -111,20 +110,18 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 			runtime.bootstrapSpan,
 			runtime.metrics,
 			runtime.log,
-			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"postgres",
 			"startup.resolve.postgres",
 			addressErr,
 		)
 	}
-	if err := runtime.networkPolicy.EnforceEgressTarget(bootstrapCtx, runtime.deployTelemetry, postgresProbeAddress, "tcp"); err != nil {
+	if err := runtime.networkPolicy.EnforceEgressTarget(postgresProbeAddress, "tcp"); err != nil {
 		return nil, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.metrics,
 			runtime.log,
-			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"postgres",
 			err,
@@ -165,7 +162,6 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 					"dependency", "postgres",
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres")
 			return nil, fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, probeResult.err)
 		}
 
@@ -190,7 +186,6 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 				"dependency", "postgres",
 			)...,
 		)
-		recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "postgres")
 		return nil, sanitizedErr
 	}
 
@@ -221,20 +216,18 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			runtime.bootstrapSpan,
 			runtime.metrics,
 			runtime.log,
-			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"redis",
 			"startup.resolve.redis",
 			addressErr,
 		)
 	}
-	if err := runtime.networkPolicy.EnforceEgressTarget(bootstrapCtx, runtime.deployTelemetry, redisProbeAddress, "tcp"); err != nil {
+	if err := runtime.networkPolicy.EnforceEgressTarget(redisProbeAddress, "tcp"); err != nil {
 		return nil, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.metrics,
 			runtime.log,
-			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"redis",
 			err,
@@ -277,7 +270,6 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", redisMode,
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis")
 			return nil, dependencyInitAbortFailure("redis", probeResult)
 		}
 		if redisMode == "store" {
@@ -302,7 +294,6 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", redisMode,
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "redis")
 			return nil, rejectErr
 		}
 
@@ -350,20 +341,18 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			runtime.bootstrapSpan,
 			runtime.metrics,
 			runtime.log,
-			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"mongo",
 			"startup.resolve.mongo",
 			addressErr,
 		)
 	}
-	if err := runtime.networkPolicy.EnforceEgressTarget(bootstrapCtx, runtime.deployTelemetry, mongoProbeAddress, "tcp"); err != nil {
+	if err := runtime.networkPolicy.EnforceEgressTarget(mongoProbeAddress, "tcp"); err != nil {
 		return nil, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.metrics,
 			runtime.log,
-			runtime.deployTelemetry,
 			runtime.startupLifecycleStartedAt,
 			"mongo",
 			err,
@@ -402,7 +391,6 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 					"mode", "degraded_read_only_or_stale",
 				)...,
 			)
-			recordAdmissionFailure(bootstrapCtx, runtime.deployTelemetry, "dependency_init", "mongo")
 			return nil, dependencyInitAbortFailure("mongo", probeResult)
 		}
 		runtime.log.Warn(

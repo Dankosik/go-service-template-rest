@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -107,7 +109,7 @@ func TestRecordConfigHelpers(t *testing.T) {
 func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	t.Parallel()
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
+	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
@@ -117,7 +119,6 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 		span,
 		metrics,
 		logger,
-		recorder,
 		time.Now(),
 		"redis",
 		errors.New("blocked"),
@@ -134,17 +135,12 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"}`) {
 		t.Fatalf("metrics output missing rejected startup outcome:\n%s", metricsText)
 	}
-	if strings.Contains(metricsText, `rollback_execution_total`) {
-		t.Fatalf("metrics output unexpectedly contains rollback execution telemetry:\n%s", metricsText)
-	}
-
-	recordAdmissionFailure(context.Background(), nil, "x", "y")
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	t.Parallel()
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
+	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
@@ -155,7 +151,6 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 		span,
 		metrics,
 		logger,
-		recorder,
 		time.Now(),
 		"network_policy",
 		rootCause,
@@ -177,12 +172,12 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", "not-rfc3339")
 	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
+	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, recorder, time.Now())
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, time.Now())
 	span.End()
 	if err == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
@@ -193,4 +188,16 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	if !strings.Contains(err.Error(), "RFC3339") {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want original parse detail", err)
 	}
+}
+
+func collectServiceMetricsText(t *testing.T, metrics *telemetry.Metrics) string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	resp := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("metrics handler status = %d, want %d", resp.Code, http.StatusOK)
+	}
+	return resp.Body.String()
 }

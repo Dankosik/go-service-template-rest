@@ -180,6 +180,31 @@ unknown:
 	}
 }
 
+func TestRemovedObservabilityKeysRejectInStrictMode(t *testing.T) {
+	resetConfigEnv(t)
+
+	configPath := writeTempConfig(t, `
+observability:
+  metrics:
+    enabled: true
+    path: /internal/metrics
+  grafana:
+    enabled: true
+    cloud_otlp_endpoint: "https://example.invalid"
+`)
+
+	_, _, err := LoadDetailed(LoadOptions{
+		ConfigPath: configPath,
+		Strict:     true,
+	})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected strict unknown key error")
+	}
+	if !errors.Is(err, ErrStrictUnknownKey) {
+		t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+	}
+}
+
 func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
 	resetConfigEnv(t)
 

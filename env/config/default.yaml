@@ -61,12 +61,6 @@ observability:
       otlp_endpoint: ""
       otlp_headers: ""
       otlp_protocol: http/protobuf
-  metrics:
-    enabled: true
-    path: /metrics
-  grafana:
-    enabled: false
-    cloud_otlp_endpoint: ""
 
 feature_flags:
   postgres_readiness_probe: true

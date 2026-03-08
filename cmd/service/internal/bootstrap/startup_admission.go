@@ -9,22 +9,19 @@ import (
 )
 
 type startupAdmissionController struct {
-	ready           atomic.Bool
-	readyOnce       sync.Once
-	startupSpan     *startupSpanController
-	metrics         *telemetry.Metrics
-	deployTelemetry *deployTelemetryRecorder
+	ready       atomic.Bool
+	readyOnce   sync.Once
+	startupSpan *startupSpanController
+	metrics     *telemetry.Metrics
 }
 
 func newStartupAdmissionController(
 	startupSpan *startupSpanController,
 	metrics *telemetry.Metrics,
-	deployTelemetry *deployTelemetryRecorder,
 ) *startupAdmissionController {
 	return &startupAdmissionController{
-		startupSpan:     startupSpan,
-		metrics:         metrics,
-		deployTelemetry: deployTelemetry,
+		startupSpan: startupSpan,
+		metrics:     metrics,
 	}
 }
 
@@ -41,9 +38,6 @@ func (c *startupAdmissionController) MarkReady(ctx context.Context) {
 		if c.startupSpan != nil {
 			c.startupSpan.MarkReady()
 		}
-		if c.deployTelemetry != nil {
-			c.deployTelemetry.RecordAdmission(ctx, "success", "ready", "readiness")
-		}
 	})
 }
 
@@ -55,15 +49,13 @@ func (c *startupAdmissionController) Ready() bool {
 }
 
 type runtimeIngressAdmissionGuard struct {
-	policy          networkPolicy
-	deployTelemetry *deployTelemetryRecorder
-	violationOnce   sync.Once
+	policy        networkPolicy
+	violationOnce sync.Once
 }
 
-func newRuntimeIngressAdmissionGuard(policy networkPolicy, deployTelemetry *deployTelemetryRecorder) *runtimeIngressAdmissionGuard {
+func newRuntimeIngressAdmissionGuard(policy networkPolicy) *runtimeIngressAdmissionGuard {
 	return &runtimeIngressAdmissionGuard{
-		policy:          policy,
-		deployTelemetry: deployTelemetry,
+		policy: policy,
 	}
 }
 
@@ -74,14 +66,7 @@ func (g *runtimeIngressAdmissionGuard) Check(ctx context.Context) error {
 
 	if err := g.policy.ValidateIngressRuntime(); err != nil {
 		g.violationOnce.Do(func() {
-			if !g.policy.ingressException.Active {
-				g.deployTelemetry.RecordNetworkExceptionStateChange(ctx, "ingress", "denied", "deny", g.policy.ingressException.ID)
-				g.deployTelemetry.RecordNetworkIngressPolicyViolation(ctx, "missing_exception", "deny")
-				return
-			}
-
-			g.deployTelemetry.RecordNetworkExceptionStateChange(ctx, "ingress", "expired", "deny", g.policy.ingressException.ID)
-			g.deployTelemetry.RecordNetworkIngressPolicyViolation(ctx, "expired_exception", "deny")
+			_ = ctx
 		})
 		return err
 	}

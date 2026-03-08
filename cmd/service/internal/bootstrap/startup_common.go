@@ -52,11 +52,11 @@ func rejectStartupForPolicyViolation(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	deployTelemetry *deployTelemetryRecorder,
 	startupLifecycleStartedAt time.Time,
 	dependency string,
 	err error,
 ) error {
+	_ = startupLifecycleStartedAt
 	bootstrapSpan.RecordError(err)
 	bootstrapSpan.SetAttributes(
 		attribute.String("result", "error"),
@@ -77,7 +77,6 @@ func rejectStartupForPolicyViolation(
 			"err", err,
 		)...,
 	)
-	recordAdmissionFailure(ctx, deployTelemetry, "policy_violation", strings.ToLower(strings.TrimSpace(dependency)))
 	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
 }
 
@@ -86,12 +85,12 @@ func rejectStartupForDependencyInit(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	deployTelemetry *deployTelemetryRecorder,
 	startupLifecycleStartedAt time.Time,
 	dependency string,
 	stage string,
 	err error,
 ) error {
+	_ = startupLifecycleStartedAt
 	dep := strings.ToLower(strings.TrimSpace(dependency))
 	if dep == "" {
 		dep = "dependency"
@@ -122,21 +121,7 @@ func rejectStartupForDependencyInit(
 			"err", rejectErr,
 		)...,
 	)
-	recordAdmissionFailure(ctx, deployTelemetry, "dependency_init", dep)
 	return rejectErr
-}
-
-func recordAdmissionFailure(
-	ctx context.Context,
-	deployTelemetry *deployTelemetryRecorder,
-	reasonClass string,
-	probeType string,
-) {
-	if deployTelemetry == nil {
-		return
-	}
-
-	deployTelemetry.RecordAdmission(ctx, "failure", reasonClass, probeType)
 }
 
 func startupLogArgs(ctx context.Context, component, operation, outcome string, extra ...any) []any {

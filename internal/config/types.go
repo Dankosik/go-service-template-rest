@@ -38,9 +38,7 @@ type LogConfig struct {
 }
 
 type ObservabilityConfig struct {
-	OTel    OTelConfig    `koanf:"otel"`
-	Metrics MetricsConfig `koanf:"metrics"`
-	Grafana GrafanaConfig `koanf:"grafana"`
+	OTel OTelConfig `koanf:"otel"`
 }
 
 type OTelConfig struct {
@@ -55,16 +53,6 @@ type OTelExporterConfig struct {
 	OTLPTracesEndpoint string `koanf:"otlp_traces_endpoint"`
 	OTLPHeaders        string `koanf:"otlp_headers"`
 	OTLPProtocol       string `koanf:"otlp_protocol"`
-}
-
-type MetricsConfig struct {
-	Enabled bool   `koanf:"enabled"`
-	Path    string `koanf:"path"`
-}
-
-type GrafanaConfig struct {
-	Enabled           bool   `koanf:"enabled"`
-	CloudOTLPEndpoint string `koanf:"cloud_otlp_endpoint"`
 }
 
 type PostgresConfig struct {

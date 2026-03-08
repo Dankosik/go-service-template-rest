@@ -80,13 +80,11 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
 	runtime := dependencyProbeRuntime{
 		tracer:                    otel.Tracer("test"),
 		bootstrapSpan:             trace.SpanFromContext(context.Background()),
 		metrics:                   metrics,
 		log:                       logger,
-		deployTelemetry:           recorder,
 		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		startupLifecycleStartedAt: time.Now(),
 		cfg: config.Config{
@@ -112,12 +110,6 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 	if strings.Contains(metricsText, `config_validation_failures_total{reason="policy_violation"}`) {
 		t.Fatalf("metrics output unexpectedly contains policy_violation classification:\n%s", metricsText)
 	}
-	if strings.Contains(metricsText, `network_policy_violation_total`) {
-		t.Fatalf("metrics output unexpectedly contains network policy violation telemetry:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `deploy_health_admission_total{environment="test",reason_class="dependency_init",result="failure"} 1`) {
-		t.Fatalf("metrics output missing dependency_init admission failure:\n%s", metricsText)
-	}
 }
 
 func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
@@ -125,13 +117,11 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
 	runtime := dependencyProbeRuntime{
 		tracer:                    otel.Tracer("test"),
 		bootstrapSpan:             trace.SpanFromContext(context.Background()),
 		metrics:                   metrics,
 		log:                       logger,
-		deployTelemetry:           recorder,
 		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		startupLifecycleStartedAt: time.Now(),
 		cfg: config.Config{
@@ -154,12 +144,6 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 	metricsText := collectServiceMetricsText(t, metrics)
 	if !strings.Contains(metricsText, `config_validation_failures_total{reason="policy_violation"} 1`) {
 		t.Fatalf("metrics output missing policy_violation classification:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `network_policy_violation_total{environment="test",policy_class="egress",reason_class="public_target_denied"} 1`) {
-		t.Fatalf("metrics output missing egress policy violation telemetry:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `deploy_health_admission_total{environment="test",reason_class="policy_violation",result="failure"} 1`) {
-		t.Fatalf("metrics output missing policy_violation admission failure:\n%s", metricsText)
 	}
 }
 
@@ -191,7 +175,6 @@ func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) 
 		bootstrapSpan:             trace.SpanFromContext(context.Background()),
 		metrics:                   metrics,
 		log:                       logger,
-		deployTelemetry:           newDeployTelemetryRecorder(logger, metrics, "test"),
 		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		startupLifecycleStartedAt: time.Now(),
 		cfg: config.Config{
@@ -229,7 +212,6 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 		cfg:                       config.Config{},
 		metrics:                   metrics,
 		log:                       slog.New(slog.NewJSONHandler(io.Discard, nil)),
-		deployTelemetry:           newDeployTelemetryRecorder(slog.New(slog.NewJSONHandler(io.Discard, nil)), metrics, "test"),
 		networkPolicy:             networkPolicy{},
 		startupLifecycleStartedAt: time.Now(),
 	}
@@ -262,13 +244,11 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
 	runtime := dependencyProbeRuntime{
 		tracer:                    otel.Tracer("test"),
 		bootstrapSpan:             trace.SpanFromContext(context.Background()),
 		metrics:                   metrics,
 		log:                       logger,
-		deployTelemetry:           recorder,
 		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		startupLifecycleStartedAt: time.Now(),
 	}
@@ -318,13 +298,11 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
 	runtime := dependencyProbeRuntime{
 		tracer:                    otel.Tracer("test"),
 		bootstrapSpan:             trace.SpanFromContext(context.Background()),
 		metrics:                   metrics,
 		log:                       logger,
-		deployTelemetry:           recorder,
 		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		startupLifecycleStartedAt: time.Now(),
 	}
@@ -371,13 +349,11 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
 	runtime := dependencyProbeRuntime{
 		tracer:                    otel.Tracer("test"),
 		bootstrapSpan:             trace.SpanFromContext(context.Background()),
 		metrics:                   metrics,
 		log:                       logger,
-		deployTelemetry:           recorder,
 		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		startupLifecycleStartedAt: time.Now(),
 	}

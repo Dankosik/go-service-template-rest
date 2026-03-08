@@ -54,15 +54,6 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	cfg.Observability.OTel.Exporter.OTLPHeaders = readString(k, "observability.otel.exporter.otlp_headers")
 	cfg.Observability.OTel.Exporter.OTLPProtocol = readString(k, "observability.otel.exporter.otlp_protocol")
 
-	if err := readBoolInto(k, "observability.metrics.enabled", &cfg.Observability.Metrics.Enabled); err != nil {
-		return Config{}, err
-	}
-	cfg.Observability.Metrics.Path = readString(k, "observability.metrics.path")
-	if err := readBoolInto(k, "observability.grafana.enabled", &cfg.Observability.Grafana.Enabled); err != nil {
-		return Config{}, err
-	}
-	cfg.Observability.Grafana.CloudOTLPEndpoint = readString(k, "observability.grafana.cloud_otlp_endpoint")
-
 	if err := readBoolInto(k, "postgres.enabled", &cfg.Postgres.Enabled); err != nil {
 		return Config{}, err
 	}

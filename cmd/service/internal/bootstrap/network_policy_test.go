@@ -1,16 +1,8 @@
 package bootstrap
 
 import (
-	"context"
-	"io"
-	"log/slog"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
-
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
 func TestLoadNetworkPolicyFromEnvRequiresExceptionMetadata(t *testing.T) {
@@ -38,21 +30,9 @@ func TestNetworkPolicyEnforceIngressFailClosedWithoutException(t *testing.T) {
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	err = policy.EnforceIngress(context.Background(), recorder)
+	err = policy.EnforceIngress()
 	if err == nil {
 		t.Fatal("EnforceIngress() error = nil, want non-nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `network_policy_violation_total`) {
-		t.Fatalf("metrics output does not contain network policy violations:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `policy_class="ingress"`) {
-		t.Fatalf("metrics output does not contain ingress policy class:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `reason_class="missing_exception"`) {
-		t.Fatalf("metrics output does not contain missing_exception reason:\n%s", metricsText)
 	}
 }
 
@@ -73,14 +53,8 @@ func TestNetworkPolicyEnforceIngressAllowsActiveException(t *testing.T) {
 	}
 	policy.now = func() time.Time { return now }
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	if err := policy.EnforceIngress(context.Background(), recorder); err != nil {
+	if err := policy.EnforceIngress(); err != nil {
 		t.Fatalf("EnforceIngress() error = %v, want nil", err)
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `network_exception_active{environment="test",policy_class="ingress"} 1`) {
-		t.Fatalf("metrics output does not contain active ingress exception gauge:\n%s", metricsText)
 	}
 }
 
@@ -101,18 +75,9 @@ func TestNetworkPolicyEnforceIngressRejectsExpiredException(t *testing.T) {
 	}
 	policy.now = func() time.Time { return now }
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	err = policy.EnforceIngress(context.Background(), recorder)
+	err = policy.EnforceIngress()
 	if err == nil {
 		t.Fatal("EnforceIngress() error = nil, want non-nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `policy_class="ingress"`) {
-		t.Fatalf("metrics output does not contain ingress policy class:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `reason_class="expired_exception"`) {
-		t.Fatalf("metrics output does not contain expired_exception reason:\n%s", metricsText)
 	}
 }
 
@@ -122,18 +87,9 @@ func TestNetworkPolicyEnforceEgressTargetDeniesPublicHost(t *testing.T) {
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	err = policy.EnforceEgressTarget(context.Background(), recorder, "api.example.com:443", "tcp")
+	err = policy.EnforceEgressTarget("api.example.com:443", "tcp")
 	if err == nil {
 		t.Fatal("EnforceEgressTarget() error = nil, want non-nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `policy_class="egress"`) {
-		t.Fatalf("metrics output does not contain egress policy class:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `reason_class="public_target_denied"`) {
-		t.Fatalf("metrics output does not contain public_target_denied reason:\n%s", metricsText)
 	}
 }
 
@@ -144,21 +100,19 @@ func TestNetworkPolicyEnforceEgressTargetAllowsPrivateAndAllowlistedHosts(t *tes
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	recorder, _ := newTestDeployTelemetryRecorder()
-
-	privateTargetErr := policy.EnforceEgressTarget(context.Background(), recorder, "10.0.0.12:5432", "tcp")
+	privateTargetErr := policy.EnforceEgressTarget("10.0.0.12:5432", "tcp")
 	if privateTargetErr != nil {
 		t.Fatalf("EnforceEgressTarget(private) error = %v, want nil", privateTargetErr)
 	}
-	allowlistedErr := policy.EnforceEgressTarget(context.Background(), recorder, "api.example.com:443", "tcp")
+	allowlistedErr := policy.EnforceEgressTarget("api.example.com:443", "tcp")
 	if allowlistedErr != nil {
 		t.Fatalf("EnforceEgressTarget(allowlisted exact) error = %v, want nil", allowlistedErr)
 	}
-	allowlistedSuffixErr := policy.EnforceEgressTarget(context.Background(), recorder, "service.allowed.example:443", "tcp")
+	allowlistedSuffixErr := policy.EnforceEgressTarget("service.allowed.example:443", "tcp")
 	if allowlistedSuffixErr != nil {
 		t.Fatalf("EnforceEgressTarget(allowlisted suffix) error = %v, want nil", allowlistedSuffixErr)
 	}
-	allowlistedApexErr := policy.EnforceEgressTarget(context.Background(), recorder, "allowed.example:443", "tcp")
+	allowlistedApexErr := policy.EnforceEgressTarget("allowed.example:443", "tcp")
 	if allowlistedApexErr == nil {
 		t.Fatal("EnforceEgressTarget(wildcard apex) error = nil, want non-nil")
 	}
@@ -171,12 +125,10 @@ func TestNetworkPolicyEnforceEgressTargetLeadingDotMatchesApexAndSubdomain(t *te
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	recorder, _ := newTestDeployTelemetryRecorder()
-
-	if err := policy.EnforceEgressTarget(context.Background(), recorder, "allowed.example:443", "tcp"); err != nil {
+	if err := policy.EnforceEgressTarget("allowed.example:443", "tcp"); err != nil {
 		t.Fatalf("EnforceEgressTarget(leading-dot apex) error = %v, want nil", err)
 	}
-	if err := policy.EnforceEgressTarget(context.Background(), recorder, "service.allowed.example:443", "tcp"); err != nil {
+	if err := policy.EnforceEgressTarget("service.allowed.example:443", "tcp"); err != nil {
 		t.Fatalf("EnforceEgressTarget(leading-dot subdomain) error = %v, want nil", err)
 	}
 }
@@ -187,15 +139,9 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	err = policy.EnforceEgressTarget(context.Background(), recorder, "10.0.0.12:5432", "udp")
+	err = policy.EnforceEgressTarget("10.0.0.12:5432", "udp")
 	if err == nil {
 		t.Fatal("EnforceEgressTarget() error = nil, want non-nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `reason_class="scheme_denied"`) {
-		t.Fatalf("metrics output does not contain scheme_denied reason:\n%s", metricsText)
 	}
 }
 
@@ -215,18 +161,9 @@ func TestNetworkPolicyEmitEgressExceptionStateRejectsExpiredException(t *testing
 	}
 	policy.now = func() time.Time { return now }
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	err = policy.EmitEgressExceptionState(context.Background(), recorder)
+	err = policy.EmitEgressExceptionState()
 	if err == nil {
 		t.Fatal("EmitEgressExceptionState() error = nil, want non-nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `policy_class="egress"`) {
-		t.Fatalf("metrics output does not contain egress policy class:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `reason_class="expired_exception"`) {
-		t.Fatalf("metrics output does not contain expired_exception reason:\n%s", metricsText)
 	}
 }
 
@@ -259,34 +196,8 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testi
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	recorder, metrics := newTestDeployTelemetryRecorder()
-	err = policy.EnforceEgressTarget(context.Background(), recorder, "redis:6379", "tcp")
+	err = policy.EnforceEgressTarget("redis:6379", "tcp")
 	if err == nil {
 		t.Fatal("EnforceEgressTarget(single label) error = nil, want non-nil")
 	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `reason_class="public_target_denied"`) {
-		t.Fatalf("metrics output does not contain public_target_denied reason:\n%s", metricsText)
-	}
-}
-
-func newTestDeployTelemetryRecorder() (*deployTelemetryRecorder, *telemetry.Metrics) {
-	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	recorder := newDeployTelemetryRecorder(logger, metrics, "test")
-	recorder.SetEnvironment("test")
-	return recorder, metrics
-}
-
-func collectServiceMetricsText(t *testing.T, metrics *telemetry.Metrics) string {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	resp := httptest.NewRecorder()
-	metrics.Handler().ServeHTTP(resp, req)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("metrics handler status = %d, want %d", resp.Code, http.StatusOK)
-	}
-	return resp.Body.String()
 }
