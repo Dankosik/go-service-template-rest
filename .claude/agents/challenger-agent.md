@@ -54,6 +54,7 @@ Return
 - challenge findings
 - blocker versus non-blocker calls
 - handoff or escalation recommendations
+- explicit re-research recommendations when a blocker belongs to a specialist lane rather than to local orchestrator judgment
 
 Escalate when
 - candidate synthesis is too vague to attack

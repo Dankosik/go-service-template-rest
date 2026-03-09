@@ -68,6 +68,10 @@ require_regex '^# - per-replica baseline: 2 vCPU / 2 GiB$' "railway.toml" "railw
 require_regex 'docker build' ".github/workflows/cd.yml" "cd workflow must build with docker build"
 require_regex '-f build/docker/Dockerfile' ".github/workflows/cd.yml" "cd workflow must explicitly use build/docker/Dockerfile"
 
+# Keep the runtime bridge from AGENTS.md to the detailed workflow reference.
+require_regex 'docs/spec-first-workflow\.md' "AGENTS.md" "AGENTS.md must point to docs/spec-first-workflow.md for non-trivial workflow execution"
+require_regex 'follow `AGENTS\.md`' "docs/spec-first-workflow.md" "spec-first-workflow doc must declare AGENTS.md as the controlling contract"
+
 # Keep branch protection required checks aligned with CI job contexts.
 required_contexts=(
   "repo-integrity"

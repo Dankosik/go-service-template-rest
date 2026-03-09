@@ -26,7 +26,7 @@ This template is built from the opposite assumption: if you want agents to be us
 That is why this repository is opinionated in four places:
 
 1. **The workflow is explicit.**
-   Non-trivial work starts with framing, research, synthesis, pre-spec challenge, planning, implementation, review, and validation. The loop is visible, not implied.
+   Non-trivial work starts with framing, workflow planning, research, synthesis, pre-spec challenge, implementation planning, implementation, review, and validation. The loop is visible, not implied.
 2. **The specialists are real.**
    Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
 3. **The skills are Go-native.**
@@ -40,7 +40,7 @@ If you want a Go backend template that feels natural inside Codex or Claude Code
 
 The fix is not a single block of text. It shapes the whole repository:
 
-- **Specs before edits**: `specs/<feature-id>/spec.md` is where decisions, assumptions, implementation steps, and validation evidence live.
+- **Specs before edits**: `specs/<feature-id>/spec.md` keeps final decisions and validation evidence; `specs/<feature-id>/workflow-plan.md` captures the orchestration; when implementation is non-trivial, `specs/<feature-id>/plan.md` gives the coder a phased execution ladder.
 - **Go-aware subagents**: the agent portfolio is organized around real backend concerns instead of generic brainstorming personas.
 - **Go-native skills**: the skill library gives the orchestrator and subagents concrete playbooks for Go design, implementation, review, and verification.
 - **Verification as a first-class rule**: “done” is tied to fresh command evidence, not to confident prose from an LLM.
@@ -51,19 +51,21 @@ The fix is not a single block of text. It shapes the whole repository:
 This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
 
 ```text
-intake -> research -> synthesis -> pre-spec challenge -> planning -> implementation -> review -> validation
+intake -> workflow planning -> research -> synthesis -> pre-spec challenge -> planning -> implementation -> review -> validation
 ```
 
 - `intake`: frame the change, scope it, and record assumptions.
-- `research`: keep simple work local or fan out to read-only subagents.
+- `workflow planning`: choose the execution shape, decide whether work stays local or fans out, map the subagent lanes and their order or parallelism, record that in `workflow-plan.md`, and state whether later `plan.md` or `test-plan.md` artifacts will be required.
+- `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains.
 - `synthesis`: compare specialist output and produce candidate decisions.
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
-- `planning`: write the implementation plan before code changes start.
+- `planning`: write the coder-facing implementation plan before code changes start; for non-trivial implementation, that plan lives in a phased `plan.md`.
 - `implementation`: change the service in the main flow, not inside research agents.
 - `review`: run targeted review agents only where the risk justifies them.
 - `validation`: do not claim "done" without fresh command evidence.
 
 `pre-spec challenge` is a risk-driven checkpoint inside the synthesis boundary, not a separate approval authority.
+Write-capable delegate agents are out of policy for this workflow; if a tool surface cannot reliably stay read-only, keep that track in the main flow instead of delegating it.
 
 The full contract lives in [AGENTS.md](AGENTS.md) and the supporting workflow doc lives in [docs/spec-first-workflow.md](docs/spec-first-workflow.md).
 
@@ -94,7 +96,7 @@ Click an agent name to open its project-scoped instruction file in `.claude/agen
 | [`reliability-agent`](.claude/agents/reliability-agent.md) | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
 | [`security-agent`](.claude/agents/security-agent.md) | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
 
-All of these agents stay advisory and read-only. Final decisions always stay with the orchestrator in the main flow.
+All of these agents stay advisory and read-only. Write-capable delegates are not part of this subagent model. Final decisions always stay with the orchestrator in the main flow.
 
 ### How They Are Called
 
@@ -205,15 +207,17 @@ The repository is designed so the main agent acts like an orchestrator, not like
 - `spec.md` is the canonical decisions artifact.
 - `research/*.md` is optional supporting evidence, not a competing source of truth.
 
-For non-trivial work, the artifact shape is intentionally simple:
+For non-trivial implementation work, the artifact shape is intentionally simple:
 
 ```text
 specs/<feature-id>/
   spec.md
+  workflow-plan.md
+  plan.md
   research/
 ```
 
-If you want the short version: plan first, delegate only where it reduces uncertainty, keep decisions in `spec.md`, and always close with fresh validation evidence.
+If you want the short version: frame first, persist the orchestration in `workflow-plan.md`, fan out broadly enough to cover the real domains, keep decisions in `spec.md`, give the coder a phased `plan.md` when execution is non-trivial, and move phase by phase with review and validation between increments.
 
 ## Quickstart
 
@@ -311,7 +315,8 @@ Typical next steps:
 
 1. Open the repository in Codex or Claude Code.
 2. Read [AGENTS.md](AGENTS.md). Claude-facing compatibility is mirrored in [CLAUDE.md](CLAUDE.md).
-3. Start with a spec-driven prompt, not with direct code generation.
+3. For non-trivial or agent-backed work, open [docs/spec-first-workflow.md](docs/spec-first-workflow.md) before workflow planning or subagent fan-out.
+4. Start with a spec-driven prompt, not with direct code generation.
 
 Example kickoff prompt:
 

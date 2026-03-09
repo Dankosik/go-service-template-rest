@@ -16,35 +16,44 @@ Main-loop objective:
 - Keep the main context focused on problem framing, decisions, open questions, implementation plan, validation evidence, and links to preserved research.
 - Keep `spec.md` as the canonical decisions artifact.
 
+Companion reference loading:
+- For non-trivial or agent-backed work, open `docs/spec-first-workflow.md` before workflow planning or subagent fan-out. Use it for the detailed execution pattern, sequence examples, and artifact interplay that this file keeps concise.
+- If `AGENTS.md` and `docs/spec-first-workflow.md` ever diverge, follow `AGENTS.md` and then repair the drift.
+
 Short operating loop:
 1. Frame the task.
-2. Choose the smallest execution shape that fits and decide whether to keep research local or fan out.
-3. Synthesize research into candidate decisions.
-4. Run a pre-spec challenge pass when task risk or ambiguity justifies it.
-5. Write the implementation plan before coding.
-6. Implement in the main flow.
-7. Run review, recheck, and validation only as far as task risk requires.
+2. Plan the workflow: choose the execution shape, research mode, subagent lanes, and whether later `plan.md` or `test-plan.md` artifacts are expected.
+3. Run local research or read-only fan-out as planned.
+4. Synthesize research into candidate decisions.
+5. Run a pre-spec challenge pass when task risk or ambiguity justifies it.
+6. Write the implementation plan before coding.
+7. Implement in the main flow.
+8. Run review, recheck, and validation only as far as task risk requires.
 
-For very small, low-risk tasks, keep both research and planning local and avoid orchestration overhead. The explicit plan may be 1-3 concise lines in the main flow. The invariants in this file still apply.
+For very small, low-risk tasks, keep workflow planning, research, synthesis, and implementation planning local and avoid orchestration overhead. The explicit plan may be 1-3 concise lines in the main flow. The invariants in this file still apply.
 
 ## 2. Hard invariants
 
 1. Final decisions always belong to the **orchestrator**.
 2. Subagents are always **research-only/read-only**.
 3. Subagents must never write code, edit repository files, mutate git state, or change the implementation plan.
-4. The main flow must **not** become a mandatory linear skill chain.
-5. Skills are invoked **on demand**, not as ritual steps.
-6. Planning skills may be used only during **planning**.
-7. Implementation skills may be used only during **implementation**.
-8. Coding must not start until the implementation plan is explicit.
-9. `spec.md` stores final decisions. `research/*.md` stores validated research context and does not replace `spec.md`.
-10. High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
-11. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
-12. Review findings are advisory until the orchestrator reconciles them.
-13. Never invent missing facts or fill irrelevant sections for “completeness”.
-14. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
-15. No readiness or completion claim without fresh validation evidence.
-16. Do not treat a short subagent wait timeout as failure; when subagent output is required for fan-in, review, or user-requested agent work, use long waits of up to 20 minutes per wait cycle and continue polling without interrupting or abandoning the agent unless it is clearly hung, superseded, or explicitly canceled by the user.
+4. Read-only is enforced by execution choice, not prompt wording alone: if a tool or agent surface cannot reliably stay read-only, keep that work in the main flow instead of delegating it.
+5. For non-trivial implementation work or implementation-skill handoff, `plan.md` is the dedicated coder-facing execution artifact; `spec.md` is not a substitute for ordered coding steps.
+6. For non-trivial or agent-backed work, workflow planning is explicit and persisted in `workflow-plan.md`; do not rely on implicit orchestration kept only in chat or short-term memory.
+7. Phased implementation is the default for non-trivial work: `phase -> review/reconcile -> validate -> next phase`. Big-bang implementation requires explicit rationale.
+8. The main flow must **not** become a mandatory linear skill chain.
+9. Skills are invoked **on demand**, not as ritual steps.
+10. Planning skills may be used only during **planning**.
+11. Implementation skills may be used only during **implementation**.
+12. Coding must not start until the implementation plan is explicit.
+13. `spec.md` stores final decisions. `research/*.md` stores validated research context and does not replace `spec.md`.
+14. High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
+15. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
+16. Review findings are advisory until the orchestrator reconciles them.
+17. Never invent missing facts or fill irrelevant sections for “completeness”.
+18. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
+19. No readiness or completion claim without fresh validation evidence.
+20. Do not treat a short subagent wait timeout as failure; when subagent output is required for fan-in, review, or user-requested agent work, use long waits of up to 20 minutes per wait cycle and continue polling without interrupting or abandoning the agent unless it is clearly hung, superseded, or explicitly canceled by the user.
 
 ## 3. Authoring and intake rules
 
@@ -70,7 +79,7 @@ Treat `mode/state` as internal workflow control, not as user input.
 
 ### States
 
-`intake`, `research`, `synthesis`, `planning`, `implementation`, `review`, `reconciliation`, `validation`, `done`
+`intake`, `workflow planning`, `research`, `synthesis`, `planning`, `implementation`, `review`, `reconciliation`, `validation`, `done`
 
 `pre-spec challenge` is a checkpoint inside `synthesis`, not a separate authority state.
 
@@ -82,26 +91,28 @@ Treat `mode/state` as internal workflow control, not as user input.
 
 ### Typical paths
 
-- Direct / lightweight local: `intake -> research -> synthesis -> planning -> implementation -> validation -> done`
-- Full orchestrated: `intake -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> validation -> done`
-- With review: `intake -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> review -> reconciliation -> validation -> done`
+- Direct / lightweight local: `intake -> workflow planning -> research -> synthesis -> planning -> implementation -> validation -> done`
+- Full orchestrated: `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> validation -> done`
+- With review: `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> review -> reconciliation -> validation -> done`
 
-For `direct path` and `lightweight local` work, `research`, `synthesis`, and `planning` may collapse into one local pass once minimum viable framing is explicit.
+For `direct path` and `lightweight local` work, `workflow planning`, `research`, `synthesis`, and `planning` may collapse into one local pass once minimum viable framing is explicit.
 
 `review` and `reconciliation` are **optional, risk-driven states**, not mandatory ritual phases.
 
 ### Allowed loops
 
 - `synthesis -> research` for recheck or second opinion
+- `pre-spec challenge -> targeted research -> synthesis` when the challenger exposes an under-evidenced seam that needs specialist follow-up
 - `reconciliation -> review` for post-fix re-review
 - `validation -> planning` if implementation exposed a real plan or design gap
 
 ### Gates
 
+- **Workflow-planning gate:** before any subagent call, the orchestrator must write `workflow-plan.md` with the execution shape, research mode (`local` or `fan-out`), the planned subagent lanes plus order/parallelism, the fan-in/challenge path, the implementation control loop (`phased` by default), and whether later `plan.md` or `test-plan.md` artifacts are expected. For tiny local work, a brief explicit skip rationale in the main flow is enough.
 - **Research gate:** no code changes; no planning or implementation skills.
 - **Synthesis gate:** do not adopt a single subagent claim without comparison, evidence, and applicability checks. For medium/high-risk or ambiguous work, candidate synthesis is not stable until a pre-spec challenge pass is reconciled or explicitly waived.
-- **Planning-entry gate:** planning may begin only after minimum viable framing is explicit and the orchestrator has made an explicit research-mode decision (`local` or `fan-out`). Non-trivial tasks may not jump directly from `intake` to planning. For `full orchestrated` work, planning also requires stable synthesis and pre-spec challenge reconciled or explicitly waived.
-- **Planning gate:** implementation is blocked until an explicit plan exists in the main flow, `spec.md`, or `plan.md`, depending on execution shape.
+- **Planning-entry gate:** planning may begin only after minimum viable framing is explicit and the orchestrator has completed workflow planning with an explicit research-mode decision (`local` or `fan-out`). Non-trivial tasks may not jump directly from `intake` to planning. For `full orchestrated` work, planning also requires stable synthesis and pre-spec challenge reconciled or explicitly waived.
+- **Planning gate:** implementation is blocked until an explicit coder-facing plan exists. For `direct path` work that plan may stay in the main flow; for non-trivial implementation work or implementation-skill handoff, it must live in a separate `plan.md` with the corresponding control summary kept in `spec.md`.
 - **Write gate:** repository changes are allowed only in `implementation`, and only in the main flow.
 - **Review gate:** review stays read-only and domain-specific.
 - **Closeout gate:** no readiness or completion claim without fresh validation evidence.
@@ -124,14 +135,22 @@ Rules:
 - If uncertainty is material, record it as an assumption or open question instead of inventing data.
 - If critical uncertainty blocks a safe or durable decision, do research before deciding.
 
-### 5.2 Decide whether to keep research local or fan out
+### 5.2 Plan the workflow and choose the research mode
 
 The orchestrator decides:
+- which execution shape fits the task,
+- whether research mode is `local` or `fan-out`,
 - which questions can be handled directly in the main flow,
 - which questions need subagent research,
 - which tracks are independent and should run in parallel,
 - which high-impact or ambiguous topics need multi-angle coverage,
-- whether candidate synthesis needs a pre-spec challenge pass before planning.
+- whether candidate synthesis needs a pre-spec challenge pass before planning,
+- whether later `plan.md` or `test-plan.md` artifacts will be required.
+
+For non-trivial or agent-backed work, record the workflow plan in a separate `workflow-plan.md` before any subagent call.
+Preferred shape: a detailed sequence diagram or equivalent ordered lane list. Keep it explicit enough that the orchestration can be resumed from the file rather than from memory.
+The workflow plan is routing and control, not a second design document.
+If the number of implementation phases is not known yet, say so directly and record the execution policy anyway: phased delivery, one phase at a time, with review and validation between phases.
 
 Use subagent fan-out when at least one is true:
 - the task crosses multiple domains,
@@ -142,13 +161,19 @@ Use subagent fan-out when at least one is true:
 - the task is long enough to benefit from preserved validated research.
 
 Do not fan out when orchestration overhead adds more noise than clarity.
-For non-trivial tasks, record the chosen research mode (`local` or `fan-out`) before planning.
+If a planned track cannot be executed with read-only guarantees, keep that track local instead of delegating it.
+For non-trivial tasks, record the chosen research mode (`local` or `fan-out`) and whether later separate `plan.md` or `test-plan.md` artifacts are required before planning.
+When research mode is `fan-out`, optimize for domain coverage, not for minimizing subagent calls. Enumerate the materially affected domains and add enough subagent lanes to cover each one.
+Once a task is in `fan-out` mode, prefer subagent-owned domain research. The orchestrator should stay focused on routing, synthesis, challenge, reconciliation, and repository fact gathering rather than quietly replacing specialist research with its own local analysis.
 If any trigger for the next-higher execution shape becomes true during local work, escalate instead of staying on the smaller path.
 
 ### 5.3 Run subagents and synthesize research
 
 When using subagents:
 - pass only the **minimum relevant slice of context**,
+- use only read-only agent or tool surfaces for delegated work; write-capable delegate agents are out of policy for this workflow,
+- fan out enough lanes to cover every materially affected domain seam; do not optimize for the smallest possible subagent count when that would leave a blind spot,
+- parallel calls to different subagents for different question slices are normal and expected when the task touches multiple domains,
 - keep independent tracks parallel by default,
 - use multi-angle patterns for high-impact or ambiguous areas when needed.
 - if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, prefer long waits of up to 20 minutes over short polling and treat short timeouts as “still running”, not “no result”.
@@ -188,6 +213,8 @@ Challenge rules:
 
 Resolution rules:
 - the orchestrator must resolve each material challenge by answering with evidence, triggering targeted re-research, asking the user, explicitly deferring it, or explicitly rejecting it with rationale and accepted risk
+- if the challenge result says `re-research` or `blocks_specific_domain`, prefer reopening research through the relevant specialist lane instead of silently resolving the point with local orchestrator reasoning
+- after targeted re-research, return through synthesis and rerun challenge when the reopened seam is still planning-critical
 - `spec.md` stores the final resolutions and remaining open questions, not the raw challenge transcript
 
 ### 5.5 Tie-break order
@@ -231,6 +258,7 @@ Each subagent task should specify, in free-form language if needed:
 - what must be checked,
 - relevant constraints and risks,
 - expected output shape,
+- the explicit read-only boundary: no code, file, git-state, or implementation-plan changes,
 - where evidence is required.
 
 Optional context when useful:
@@ -351,6 +379,9 @@ Rules:
 ### 8.1 Planning-before-code
 
 Implementation planning is mandatory before coding.
+For non-trivial or agent-backed work, keep two distinct planning moments:
+- `workflow planning` happens before research and produces `workflow-plan.md`: which subagents run, in what order or parallelism, how fan-in and challenge happen, and what the phase execution loop will be.
+- `implementation planning` happens after synthesis and challenge resolution and produces the coder-facing execution plan.
 
 Minimum plan content:
 - ordered implementation steps,
@@ -369,9 +400,14 @@ Do not force production-style rollout or compatibility work for prototypes, pre-
 Rules:
 - Planning skills are allowed only in this phase.
 - For `direct path` work, the explicit plan may be 1-3 concise lines in the main flow.
-- Use `plan.md` or a planning skill only when producing the plan is itself non-trivial because the work is long, parallelized, or ambiguity-heavy.
+- For non-trivial work, phased execution is the default. `plan.md` should assume `phase -> review/reconcile -> validate -> next phase`. A single-pass implementation plan requires explicit rationale in both `workflow-plan.md` and `plan.md`.
+- For non-trivial implementation work, long or parallelized execution, or any implementation-skill handoff, create a separate `plan.md` for the coder. `spec.md` keeps the decision log and a control summary; it should not force the coder to reverse-engineer execution order from the spec alone.
+- For non-trivial work, `plan.md` should usually be phase-oriented: each phase is a small reviewable increment with explicit tasks, planned verification, and exit criteria before the next phase starts.
+- Each phase should also name the review/reconciliation checkpoint that must complete before the next phase starts.
+- Prefer sequential phases by default. Use parallel lanes only when the change surfaces are truly disjoint and the review/validation story stays clear.
+- The workflow plan should call out up front whether a later separate `plan.md` will be required.
 - Planning must remain consistent with the decision log and open risks.
-- Implementation is blocked until the plan is explicit in the main flow, `spec.md`, or `plan.md`, depending on execution shape.
+- Implementation is blocked until the coder-facing plan is explicit in the main flow or `plan.md`, depending on execution shape.
 
 ### 8.2 Implementation
 
@@ -420,6 +456,7 @@ Optional artifacts when they remove real risk or clutter:
 
 ```text
 specs/<feature-id>/
+  workflow-plan.md
   research/
     <topic>.md
   plan.md
@@ -428,16 +465,19 @@ specs/<feature-id>/
 
 Artifact rules:
 - `spec.md` is the canonical decisions artifact.
+- `workflow-plan.md` is the orchestrator's routing artifact for non-trivial or agent-backed work. It captures the subagent fan-out, order/parallelism, fan-in/challenge path, and the default phase execution loop.
 - `research/*.md` stores validated research context and reusable evidence, not final authority on decisions.
-- `plan.md` is for long or parallelized implementation plans.
+- `plan.md` is the dedicated coder-facing execution plan when the workflow plan says implementation should not be driven from `spec.md` alone, especially for non-trivial implementation work, implementation-skill handoff, or parallelized execution.
+- For non-trivial work, `plan.md` should usually be organized into phases or increments rather than one undifferentiated task dump.
 - `test-plan.md` is for materially large test obligations.
 - Do not duplicate decision text across files; link instead.
 - Create `research/*.md` only when the task is long, ambiguous, or likely to benefit from reusable validated context.
 
 Update cadence:
 - After framing: update `Context`, `Scope / Non-goals`, and `Constraints` as needed.
+- After workflow planning: write or update `workflow-plan.md` with the execution shape, research mode, planned subagent tracks, order/parallelism, fan-in/challenge path, phased execution policy, and whether later `plan.md` or `test-plan.md` artifacts are expected.
 - After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material challenge resolutions, rejected paths, or overrides.
-- Before coding: make `Implementation Plan` explicit in the main flow, `spec.md`, or `plan.md`, depending on execution shape.
+- Before coding: make the coder-facing implementation plan explicit in the main flow or `plan.md`, and keep the corresponding control summary in `spec.md`.
 - After validation: update `Validation` and `Outcome` to match reality.
 
 Default `spec.md` sections:
@@ -459,6 +499,7 @@ Rules:
 For non-trivial tasks, keep a compact audit trail that is sufficient to reconstruct the path:
 - intake summary,
 - execution shape and research-mode decision (`local` or `fan-out`),
+- `workflow-plan.md` or an equivalent workflow record, including subagent lanes, order/parallelism, fan-in/challenge path, and phase execution policy,
 - research questions or subagent tracks,
 - challenge resolutions or skip rationale when the checkpoint was material,
 - decision log,
@@ -494,9 +535,13 @@ Anti-patterns:
 - forcing structured user intake before understanding the task,
 - running a long linear chain of skills in the main flow,
 - jumping into planning or planning-skill use before framing and research routing are explicit,
+- under-fanning-out to “save” subagent calls while leaving materially affected domains unexamined,
+- spawning write-capable delegate agents under the subagent role instead of keeping those tasks in the main flow,
 - treating a single subagent output as truth,
 - copying raw subagent reasoning into `spec.md`,
 - letting subagents write code or mutate repository files,
+- running non-trivial implementation as one big-bang pass without explicit phase checkpoints,
+- forcing the coder to reconstruct execution order from `spec.md` when the task already needs a separate `plan.md`,
 - starting implementation before the planning step is explicit,
 - filling optional sections or artifacts with placeholder text,
 - turning pre-spec challenge into ritualized coverage or fixed-question theater,

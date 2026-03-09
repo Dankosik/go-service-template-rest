@@ -91,6 +91,11 @@ Use:
 - `defer` when the point is real but can stay explicit without blocking planning
 - `accept_risk` when the current path is still coherent and the remaining issue is a conscious trade-off
 
+When `Next Action` is `re-research`:
+- name the specialist lane or fact pattern that should be reopened
+- state why local orchestrator reasoning is not enough for this seam
+- say whether the orchestrator should rerun challenge after the new research returns
+
 ## Stop Condition
 - Stop once the remaining unresolved questions no longer change planning safety materially.
 - If everything left is low-value, already tracked, or belongs in ordinary downstream design elaboration, say the checkpoint is sufficiently reconciled.
@@ -115,6 +120,7 @@ For each item in `Questions`, include:
 - `What Changes`
 - `Blocker Level`
 - `Next Action`
+- `Research Reopen` when `Next Action = re-research`
 
 ## Escalate Or Reject
 - a request to nitpick rather than improve planning quality
