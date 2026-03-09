@@ -226,6 +226,81 @@ make check
 make run
 ```
 
+### Create Your Own Repository From This Template
+
+Recommended flow:
+
+1. Create a new empty GitHub repository under your account or organization. It may be `private` or `public`, but do not initialize it with `README`, `.gitignore`, or `LICENSE`.
+2. Clone this template into the directory you want to use for the new service.
+3. Rename the template remote to `upstream` and point `origin` to your repository.
+4. Run template initialization before the first push.
+
+```bash
+git clone https://github.com/Dankosik/go-service-template-rest.git my-service
+cd my-service
+
+git remote rename origin upstream
+git remote add origin git@github.com:<your-user>/<your-repo>.git
+# or: git remote add origin https://github.com/<your-user>/<your-repo>.git
+
+git remote -v
+
+make bootstrap
+make template-init
+make check
+
+git add .
+git commit -m "chore: initialize service from template"
+git push -u origin main
+```
+
+What this does:
+
+- `origin` becomes your repository, so normal `git push` goes to your project.
+- `upstream` keeps a reference to the original template repository in case you want to compare or pull template updates later.
+- `make template-init` rewires the Go module path, `CODEOWNERS`, and skill mirrors for the new repository.
+- `git push -u origin main` publishes the first `main` branch to your repository and makes future plain `git push` / `git pull` work against `origin/main`.
+
+If `git push` says `Everything up-to-date` but your GitHub repository is still empty, your local branch is probably still tracking the template branch instead of your own repository. Check:
+
+```bash
+git remote -v
+git branch -vv
+```
+
+Expected state:
+
+- `origin` points to your repository.
+- `upstream` points to `go-service-template-rest`.
+- `main` tracks `origin/main`, not `upstream/main`.
+
+If needed, publish the branch explicitly:
+
+```bash
+git push -u origin main
+```
+
+If SSH push fails with `Permission denied (publickey)`, either configure your GitHub SSH key or switch `origin` to HTTPS:
+
+```bash
+git remote set-url origin https://github.com/<your-user>/<your-repo>.git
+git push -u origin main
+```
+
+If you use GitHub's **Use this template** button instead of the manual clone flow, clone your generated repository normally and still run:
+
+```bash
+make bootstrap
+make template-init
+```
+
+For production-style GitHub setup after the first push:
+
+```bash
+gh auth login
+make gh-protect BRANCH=main
+```
+
 Typical next steps:
 
 1. Copy `env/.env.example` to `.env` if `make bootstrap` did not already do it.
