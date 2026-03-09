@@ -358,10 +358,17 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 		startupLifecycleStartedAt: time.Now(),
 	}
 
-	lowBudgetCtx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
+	newLowBudgetCtx := func(t *testing.T) (context.Context, context.CancelFunc) {
+		t.Helper()
+		// Use a fresh per-subtest deadline that is below the fail-fast threshold
+		// without already being expired under slower race/package-parallel runs.
+		return context.WithDeadline(context.Background(), time.Now().Add(startupFailFastThreshold-time.Millisecond))
+	}
 
 	t.Run("redis cache", func(t *testing.T) {
+		lowBudgetCtx, cancel := newLowBudgetCtx(t)
+		defer cancel()
+
 		runtime.cfg = config.Config{
 			Redis: config.RedisConfig{
 				Enabled: true,
@@ -382,6 +389,9 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 	})
 
 	t.Run("mongo degraded", func(t *testing.T) {
+		lowBudgetCtx, cancel := newLowBudgetCtx(t)
+		defer cancel()
+
 		runtime.cfg = config.Config{
 			Mongo: config.MongoConfig{
 				Enabled: true,
