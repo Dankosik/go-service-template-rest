@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Dankosik/privacy-sanitization-service/cmd/service/internal/bootstrap"
+	"github.com/example/go-service-template-rest/cmd/service/internal/bootstrap"
 )
 
 func main() {

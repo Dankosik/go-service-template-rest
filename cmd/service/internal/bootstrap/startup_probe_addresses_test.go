@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Dankosik/privacy-sanitization-service/internal/config"
+	"github.com/example/go-service-template-rest/internal/config"
 )
 
 func TestStartupProbeAddresses(t *testing.T) {

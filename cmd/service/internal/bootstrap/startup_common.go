@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dankosik/privacy-sanitization-service/internal/config"
-	"github.com/Dankosik/privacy-sanitization-service/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )

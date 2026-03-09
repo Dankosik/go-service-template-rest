@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package service.v1;
 
-option go_package = "github.com/Dankosik/privacy-sanitization-service/internal/api/service/v1;servicev1";
+option go_package = "github.com/example/go-service-template-rest/internal/api/service/v1;servicev1";
 
 service TemplateService {
   rpc Ping (PingRequest) returns (PingResponse);
