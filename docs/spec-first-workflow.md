@@ -4,7 +4,7 @@
 
 This document defines the repository-level spec-first workflow.
 It keeps one universal loop for small and large changes while moving execution away from skill-centric choreography and toward orchestrator/subagent-first execution.
-`AGENTS.md` should explicitly load this file for non-trivial or agent-backed work; this document is the companion runtime reference for detailed workflow mechanics, while `AGENTS.md` remains the controlling contract.
+`AGENTS.md` should explicitly load this file for non-trivial or agent-backed work; this document is the companion runtime reference for detailed workflow mechanics. If this file and this repository contract ever diverge, follow `AGENTS.md`.
 
 The workflow is intentionally simple:
 - no mandatory phase matrix,
