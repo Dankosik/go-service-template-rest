@@ -154,6 +154,7 @@ Bootstrap shortcuts:
   - Purpose: manual fallback/override for module bootstrap after clone; updates `go.mod`, internal Go imports, proto `go_package` module prefix, and optionally replaces CODEOWNERS placeholder.
   - If `MODULE` is omitted, script auto-detects module path from `git remote origin`.
   - Includes: `go mod tidy` at the end.
+  - Module-path invariant: keep `go.mod`, Go import prefixes, and `api/proto/**` `go_package` values aligned to the same module path. Do not manually point runtime code or proto contracts at another service module.
   - Note: script no longer requires Perl.
 
 - `make docker-init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
