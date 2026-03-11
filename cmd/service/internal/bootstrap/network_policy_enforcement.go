@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/Dankosik/search-service/internal/config"
 )
 
 func (p networkPolicy) EnforceIngress() error {

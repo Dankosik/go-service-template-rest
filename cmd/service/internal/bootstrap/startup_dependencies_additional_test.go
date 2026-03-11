@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/search-service/internal/config"
+	"github.com/Dankosik/search-service/internal/infra/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )

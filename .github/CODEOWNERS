@@ -1,9 +1,9 @@
-# Replace @your-org/your-team before enabling "Require review from Code Owners".
+# Replace @Dankosik before enabling "Require review from Code Owners".
 # Example: * @acme/backend-platform
-* @your-org/your-team
+* @Dankosik
 
 # Critical areas requiring explicit ownership.
-/api/ @your-org/your-team
-/internal/ @your-org/your-team
-/.github/workflows/ @your-org/your-team
-/env/migrations/ @your-org/your-team
+/api/ @Dankosik
+/internal/ @Dankosik
+/.github/workflows/ @Dankosik
+/env/migrations/ @Dankosik

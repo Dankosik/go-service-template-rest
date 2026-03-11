@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/Dankosik/search-service/internal/config"
+	"github.com/Dankosik/search-service/internal/infra/postgres"
 )
 
 func TestStartupProbeHelperBasics(t *testing.T) {

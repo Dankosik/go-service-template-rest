@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/search-service/internal/infra/telemetry"
 )
 
 type startupAdmissionController struct {

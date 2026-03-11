@@ -62,6 +62,15 @@ Out of scope:
 - Front-load tasks that unblock other work, expose risky assumptions, or establish cross-cutting scaffolding.
 - Avoid sequences based on function-by-function trivia or guessed implementation aesthetics.
 
+### Incremental Phase Planning
+- For non-trivial work, prefer a phased plan over one flat task list.
+- Treat phased execution as the default. A single-pass big-bang implementation plan should be rare and should say why phased delivery would be misleading or unsafe.
+- Each phase should be the smallest reviewable increment that can end at a real checkpoint: code compiles, targeted validation passes, and the result can be reviewed before the next phase starts.
+- Each phase should usually land one coherent slice: enabling seam, contract wire-up, persistence slice, behavior slice, or cleanup/follow-up.
+- If a phase is not independently mergeable or testable, say why it is coupled to the next phase instead of pretending it is safely standalone.
+- Prefer sequential phases by default. Use parallel lanes only when the change surfaces are truly disjoint and the review/validation story stays clear.
+- Make it explicit where the orchestrator may stop after a completed phase, review the result, and only then continue.
+
 ### Traceability
 For each meaningful task or task group, carry forward:
 - source requirement, approved decision, or invariant
@@ -106,13 +115,31 @@ Return plan text that can drop directly into `Implementation Plan` in `spec.md` 
 
 Use the smallest structure that stays clear. A strong default is:
 - `Execution Context`
-- `Implementation Plan`
-- `Validation Plan`
+- `Phase Plan`
+- `Cross-Phase Validation Plan`
 - `Blockers / Assumptions`
 - `Checkpoint Plan` only when the work is large enough to need it
 - `Handoffs / Reopen Conditions` only when they materially matter
 
-For medium or large work, task cards should usually include:
+For medium or large work, phase blocks should usually include:
+- `Phase`
+- `Objective`
+- `Depends On` when nontrivial
+- `Tasks`
+- `Traceability`
+- `Change Surface`
+- `Planned Verification`
+- `Review / Checkpoint`
+- `Exit Criteria`
+- `Done Evidence`
+- `Ambiguity / Stop Conditions`
+
+The `Review / Checkpoint` field should say what happens before the next phase starts:
+- targeted review lanes
+- targeted validation commands
+- reconcile or reopen conditions if the phase uncovers drift
+
+If a phase needs task cards inside it, those task cards should usually include:
 - `Task ID`
 - `Objective`
 - `Depends On` when nontrivial
