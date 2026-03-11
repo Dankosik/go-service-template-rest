@@ -1,4 +1,4 @@
-module github.com/Dankosik/search-service
+module github.com/example/go-service-template-rest
 
 go 1.26.1
 

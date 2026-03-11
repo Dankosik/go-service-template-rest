@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dankosik/search-service/internal/infra/postgres/sqlcgen"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"

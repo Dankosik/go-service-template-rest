@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Dankosik/search-service/internal/app/health"
-	"github.com/Dankosik/search-service/internal/app/ping"
-	"github.com/Dankosik/search-service/internal/config"
-	httpx "github.com/Dankosik/search-service/internal/infra/http"
-	"github.com/Dankosik/search-service/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/app/health"
+	"github.com/example/go-service-template-rest/internal/app/ping"
+	"github.com/example/go-service-template-rest/internal/config"
+	httpx "github.com/example/go-service-template-rest/internal/infra/http"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
 const (

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dankosik/search-service/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
