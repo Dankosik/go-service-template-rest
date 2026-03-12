@@ -1,6 +1,6 @@
 ---
 name: go-idiomatic-review
-description: "Review Go code changes for language-level correctness, error contracts, receiver and method-set safety, nil and zero-value behavior, ownership leaks, and standard-library contract misuse with real merge-risk impact. Use whenever a Go PR, diff, refactor, or incident fix may hide Go-semantic defects, even if the request is phrased as a generic code review or another review lane also applies."
+description: "Review Go code changes for language-level correctness, toolchain-aware language-native or standard-library reinvention, error contracts, receiver and method-set safety, nil and zero-value behavior, ownership leaks, and standard-library contract misuse with real merge-risk impact. Use whenever a Go PR, diff, refactor, or incident fix may hide Go-semantic defects, even if the request is phrased as a generic code review or another review lane also applies."
 ---
 
 # Go Idiomatic Review
@@ -20,12 +20,14 @@ Protect changed Go code from language-level, standard-library, and public-surfac
 - Do not invent policy when those artifacts are missing; still report clear Go-level defects visible in the code.
 - Findings come first and must be ordered by merge risk, not by section order or style preference.
 - Green tests are not proof that Go semantics, nil behavior, or exported contracts are safe.
+- Always run a toolchain-aware language-native and stdlib-first pass; unnecessary reinvention of current Go capabilities is part of idiomatic review, not optional polish.
 
 ## Scope
 - review error semantics, context propagation, control flow, and lifetime handling
 - review receiver choice, method sets, must-not-copy state, and zero-value friendliness
 - review slice, map, and `[]byte` ownership, aliasing, and exported-surface safety
 - review package globals, `init` side effects, stdlib wrapper correctness, naming, and docs
+- review whether changed code reimplements builtins or standard-library behavior that the repository's current Go toolchain already provides
 - review whether validation matches the changed Go-risk surface
 
 ## Boundaries
@@ -40,6 +42,7 @@ Do not:
 - Correctness comes before style.
 - Prefer explicit, readable, toolchain-compatible Go over clever abstraction.
 - If a claim depends on Go version or stdlib contract details, say so instead of applying folklore.
+- Treat builtins and the standard library as the default baseline. Repo-local reinvention is review-worthy when it adds drift surface without carrying extra contract semantics.
 - Errors are contract values, not logs-only side effects.
 - Request-scoped work must preserve caller-owned context and cancellation.
 - Export the smallest surface you can defend.
@@ -59,6 +62,14 @@ Do not:
 - State when a finding depends on Go version, compiler behavior, or a standard-library semantic guarantee.
 - Do not repeat outdated folklore. Example: the classic `for range` loop-variable capture warning changed materially in Go 1.22; only raise it when the actual version and escape pattern still make it a bug.
 - Prefer citing the specific semantic rule over cargo-cult advice.
+
+### Language-Native And Standard-Library First Findings
+- Check the repository's declared Go version before tolerating compatibility helpers, wrapper utilities, or older pre-generic patterns.
+- Treat custom helpers or wrappers as idiomatic-review findings when current Go builtins or the standard library already express the same contract and the local code adds no real semantic value.
+- This lane is broad on purpose: value selection, min/max logic, slice or map operations, sorting, comparison, cloning, error inspection, context helpers, path or URL handling, string or byte transforms, time helpers, and stdlib-wrapper utilities should all default to language-native or stdlib solutions first.
+- Do not demand a builtin or stdlib replacement when the helper carries real contract meaning: ownership isolation, nil-versus-empty preservation, bounds policy, normalization policy, error identity, repeated business meaning, or actual compatibility with an older supported Go version.
+- If the builtin or stdlib version is almost enough, check whether the remaining semantic gap is real and externally relevant. If not, prefer the native form and report the wrapper as unnecessary drift.
+- When raising this kind of finding, explain both the simpler native replacement and why the local reinvention increases maintenance, review, or semantic-drift risk.
 
 ### Control Flow And Readability
 - Prefer guard clauses and early returns for the happy path.
@@ -153,6 +164,7 @@ Each finding should include:
 - the smallest safe correction
 - a validation command when useful
 - whether the issue is local code drift, a specialist handoff, or needs design escalation
+- when the finding depends on a builtin or stdlib alternative, cite the relevant Go-version or standard-library capability if that makes the recommendation materially clearer
 
 Severity is merge-risk based:
 - `critical`: confirmed Go-level defect with direct correctness, panic, data corruption, or operational risk

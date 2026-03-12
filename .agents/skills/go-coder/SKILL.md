@@ -1,6 +1,6 @@
 ---
 name: go-coder
-description: "Implement production-grade Go changes from approved requirements and task plans with review-clean defaults: explicit design, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
+description: "Implement production-grade Go changes from approved requirements and task plans with review-clean defaults: explicit design, language-native and stdlib-first choices, seam-named same-package source-of-truth extraction when stable policy starts to spread, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
 ---
 
 # Go Coder
@@ -21,7 +21,9 @@ Implement approved Go changes as production-grade, review-clean code that preser
 ## Core Stance
 - Treat the approved spec or plan as the source of truth for behavior.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
-- Prefer explicit, boring, review-clean Go over clever abstraction.
+- Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
+- When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.
+- Avoid both kinds of helper drift: scattered policy duplicated across files, and generic `util/common/shared` buckets that hide ownership instead of clarifying it.
 - If the spec is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
 - Escalate when correctness depends on a new product or architecture decision; do not hide that decision inside code.
 
@@ -36,12 +38,27 @@ Strong implementation work usually gets these details right before review:
 
 ## Engineering Defaults
 
+### Language And Standard Library First
+- Check the repository's declared Go version before writing compatibility code or helper functions. Do not code to an older Go than the repository actually uses.
+- Prefer builtins and standard-library packages whenever they already express the needed behavior. Reach for language-native facilities before inventing helpers, wrappers, or utility packages.
+- Do not reimplement trivial language or stdlib operations just out of habit, to avoid one import, or because older Go versions lacked them.
+- This rule applies broadly, not just to one class of examples: value selection, min/max logic, slice or map operations, cloning, sorting, comparison, error inspection, context handling, path or URL handling, string or byte transforms, HTTP helpers, time handling, and test utilities should all default to builtins or stdlib first.
+- If a custom helper remains necessary, it must add real domain or contract value beyond the builtin or stdlib equivalent: ownership boundaries, normalization policy, nil-versus-empty semantics, error identity, bounds policy, or repeated business meaning across multiple call sites.
+- If the builtin or stdlib version is almost enough but misses one contract-critical semantic, prefer a small amount of explicit local code over a vague generic helper, and be able to explain what semantic gap required it.
+- When touching existing code, opportunistically collapse obsolete wrappers or one-off helpers into builtins or stdlib calls when that reduces code and preserves behavior.
+- Avoid repo-local utility wrappers around obvious stdlib calls unless they encode policy the caller should not have to reconstruct.
+
 ### Make The Diff Tell One Story
 - Keep the change shaped around one bug class or requirement, not a side quest of adjacent cleanup.
 - Prefer direct edits in the owning code over new wrappers, helper layers, or abstractions that only move code around.
+- Before extracting a helper, check whether one direct builtin or stdlib call would be clearer at the call site.
+- Before extracting a helper, ask whether the real problem is repeated stable same-package policy. If yes, prefer one seam-named owner file over several file-local near-copies.
 - If a helper is used once and hides the main control flow, inline it.
 - If a helper only saves a couple of lines in one file, especially in tests, prefer the repeated lines over another jump in the reader's mental stack.
 - If a helper is worth extracting, let its name capture policy or ownership, not mechanics.
+- Prefer same-package seam files such as `*_mapping.go`, `*_normalization.go`, `*_validation.go`, `route_*.go`, or `*_config.go` before inventing broader helpers or packages.
+- Do not create `util`, `utils`, `common`, `shared`, or similarly vague helpers unless the abstraction has one explicit owner and one stable contract that callers should not have to reconstruct.
+- Be suspicious of extracted helpers that need booleans, callbacks, mode strings, or option bags just to serve several call sites; they often merge policies that should stay separate.
 - Keep one clear abstraction level per function when practical; do not mix boundary parsing, business policy, persistence, and formatting in one dense block.
 - Avoid flag-heavy or positionally confusing signatures when named helpers, local structs, or clearer call sites would read better.
 
@@ -51,6 +68,7 @@ Strong implementation work usually gets these details right before review:
 - Keep composition explicit at the composition root; avoid hidden package globals, `init` surprises, and ambient mutable state.
 - Prefer concrete types by default. Introduce interfaces at consumer seams where real substitution exists and keep them narrow.
 - Keep package responsibility focused and import direction obvious. Do not create junk-drawer helpers or boundary-spanning utility packages.
+- When a package starts owning one stable local policy in several files, move that policy to one same-package seam before reaching for a cross-package abstraction.
 - Prefer zero-value-usable types when practical. Require constructors only when invariants, resources, or mandatory dependencies make that necessary.
 - Make exported behavior easy to reason about: stable naming, minimal surface area, and comments that explain why or constraints, not the syntax already visible in code.
 - Be careful with interface-typed returns and typed `nil`: if `nil` is part of the contract, make sure callers actually observe `nil`.
@@ -171,6 +189,8 @@ Before handoff, ask:
 4. Did I choose the clearest fix shape, or did I add abstraction that the next maintainer now has to reverse-engineer?
 5. Did I validate the real changed behavior, including the relevant edge case?
 6. Are code, tests, generated artifacts, and spec notes aligned with what I actually changed and verified?
+7. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
+8. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
 ## Blocked Work
 If the approved spec, plan, or contract blocks implementation before code changes begin:

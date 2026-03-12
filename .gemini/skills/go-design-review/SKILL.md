@@ -1,6 +1,6 @@
 ---
 name: go-design-review
-description: "Review Go code changes for architecture alignment, boundary integrity, accidental complexity, and maintainability drift."
+description: "Review Go code changes for architecture alignment, boundary integrity, source-of-truth seam integrity, accidental complexity, and maintainability drift."
 ---
 
 # Go Design Review
@@ -13,6 +13,7 @@ Protect approved design intent in code so boundaries, ownership, maintainability
 - detect boundary violations, dependency-direction breaks, and hidden coupling
 - detect accidental complexity and maintainability regressions
 - detect new design decisions introduced implicitly in code
+- detect stable policy scattered across files when one same-package seam should own it
 - detect seam drift across API, data, security, reliability, observability, delivery, and testing when it changes system shape
 
 ## Boundaries
@@ -26,6 +27,7 @@ Do not:
 - Approved design intent is the source of truth for code structure and boundary ownership.
 - Review changed code and directly impacted seams first.
 - Treat hidden new decisions in code as design drift until proven deliberate.
+- Prefer one explicit same-package source-of-truth seam for stable local policy over both repeated file-local copies and vague helper buckets.
 - Prefer the smallest correction that restores explicit ownership and maintainability.
 - Escalate design change instead of smuggling it through local code review.
 
@@ -36,6 +38,7 @@ Do not:
 - Flag hidden cross-layer coupling and implementation shortcuts that redefine ownership.
 - Reject undeclared new dependencies that change architecture shape.
 - Treat bypass of intended seams as design drift even if tests still pass.
+- When normalization, mapping, validation, classification, or section-reading policy is stable inside one package, treat scattering that policy across files as ownership drift unless there is a clear reason to keep it local.
 
 ### Approved Decision Conformance
 - Review changed behavior against the approved architecture, implementation strategy, and signed design intent.
@@ -45,12 +48,14 @@ Do not:
 ### Complexity Control
 - Flag speculative abstractions, wrapper layers, and ceremony that do not remove real duplication or risk.
 - Flag duplicated responsibility spread across packages or components.
+- Flag vague `util/common/shared/helpers` abstractions that blur ownership instead of giving one seam a clear home.
 - Prefer explicit local logic over design that forces readers through multiple indirection layers for basic reasoning.
 - Treat complexity as a cost when it increases future change risk, debugging burden, or review ambiguity.
 
 ### Maintainability And Evolvability
 - Review whether the changed structure keeps ownership obvious and the blast radius of future change bounded.
 - Flag code paths that become hard to reason about because control flow, invariants, or side effects are no longer local and explicit.
+- Flag stable local policy that remains duplicated across multiple files when one seam-named same-package owner would bound future change more clearly.
 - Prefer design that remains testable, operable, and extendable without hidden coupling.
 
 ### Cross-Domain Seam Integrity
@@ -78,6 +83,7 @@ Each finding should include:
 - the smallest safe correction
 - the relevant contract or decision when one exists
 - whether the issue is local code drift or needs design escalation
+- whether the drift is scattered source-of-truth ownership or over-broad helper abstraction
 
 Severity is merge-risk based:
 - `critical`: boundary or ownership violation that makes merge unsafe

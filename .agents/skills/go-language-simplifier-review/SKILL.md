@@ -1,6 +1,6 @@
 ---
 name: go-language-simplifier-review
-description: "Review Go code changes for lower cognitive complexity, false-simplification risk, clearer naming, safer control-flow cleanup, and easier maintenance without collapsing semantics. Use whenever a Go diff claims cleanup/refactor/readability improvement or touches helper extraction, nested control flow, boolean flags, option bags, or error-path deduplication, even if another review lane also applies."
+description: "Review Go code changes for lower cognitive complexity, false-simplification risk, missed same-package source-of-truth extraction, junk-drawer helper risk, clearer naming, safer control-flow cleanup, and easier maintenance without collapsing semantics. Use whenever a Go diff claims cleanup/refactor/readability improvement or touches helper extraction, nested control flow, boolean flags, option bags, or error-path deduplication, even if another review lane also applies."
 ---
 
 # Go Language Simplifier Review
@@ -19,11 +19,14 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 - If `spec.md`, `plan.md`, or approved design notes exist, treat them as governing intent.
 - Findings come first and must be ordered by merge risk, not by section order or taste.
 - Green tests do not prove a cleanup preserved local reasoning safety.
+- Always run a source-of-truth helper pass: flag both stable same-package policy still scattered across files and bogus extraction into vague helper buckets.
 
 ## Scope
 - review control flow, state shape, and predicate clarity
 - review abstraction cost, helper economics, and call-site burden
 - review false simplification in error paths, ownership seams, and thin policy wrappers
+- review whether stable same-package policy is scattered across files when one seam-named helper file should own it
+- review whether a new helper actually reduces reasoning or just hides policy in a `util/common/shared` bucket
 - review naming and test readability when they materially affect safe future changes
 - review whether touched validation is enough to protect subtle precedence or branch behavior
 
@@ -38,6 +41,7 @@ Do not:
 ## Core Defaults
 - Simpler means less reasoning required, not fewer lines.
 - Duplication can be cheaper than hiding distinct policy or error semantics behind one generic helper.
+- Repeated stable policy across several files in one package is also simplification debt; one seam-named same-package owner can be simpler than several near-copies.
 - Keep one clear abstraction level per function when practical.
 - Prefer local, behavior-preserving simplification over broad rewrites.
 - If a wrapper protects ownership, cleanup, or contract shape, do not remove it just because it is short.
@@ -56,6 +60,16 @@ Do not:
 - Keep helpers when they isolate stable policy, ownership, defaulting, lock scope, cleanup scope, stdlib quirks, or error normalization.
 - Distinguish dead wrappers from thin policy seams. A helper can be only a few lines long and still matter because it clones data, preserves `errors.Is/As`, applies operation labels, or owns cleanup.
 - Prefer inlining when the helper name adds no semantic compression and the body is the only place the logic is used.
+
+### Source-Of-Truth Extraction Judgment
+- Flag under-extraction when the same package carries repeated stable policy across files, especially normalization, mapping, validation, classification, section-reading, or label-shaping rules that are likely to drift if left file-local.
+- Prefer one seam-named same-package helper file over multiple file-local copies when all three are true:
+  - the logic names one stable domain noun or seam
+  - the failure or ownership contract stays the same across call sites
+  - the extraction reduces future drift without requiring mode flags, callbacks, or caller branching
+- Flag over-extraction when helpers are named `util`, `utils`, `common`, `shared`, `helpers`, or similarly vague terms and the reader still has to rediscover the real policy elsewhere.
+- Be skeptical of extracted helpers that need booleans, strings, callbacks, or option bags just to serve several call sites; they often merge distinct policy while pretending to simplify.
+- Keep orchestration local. Response lifecycle, request flow, startup flow, and other phase-ordering logic should not be pulled into generic helpers just to reduce line count.
 
 ### Control Flow, State Shape, And Temporal Coupling
 - Prefer a straight-line happy path with guard clauses when side-effect ordering remains explicit.
@@ -118,6 +132,7 @@ Each finding should include:
 - the smallest safe correction
 - a validation command when useful
 - whether the change is behavior-preserving, a specialist handoff, or needs design escalation
+- whether the issue is under-extraction of a same-package source-of-truth seam or over-extraction into a vague helper
 
 Severity is merge-risk based:
 - `critical`: the cleanup obscures critical behavior or contract semantics enough that safe change is unlikely
