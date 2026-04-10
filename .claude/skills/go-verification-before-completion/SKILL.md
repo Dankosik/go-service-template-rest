@@ -20,12 +20,15 @@ Do not:
 - treat design or code review findings as verified just because an agent reported them
 - force full-repository verification for every narrow claim when smaller proof is sufficient
 - soften missing or failing proof with optimistic wording
+- create new workflow/process/planning/design/temp artifacts to compensate for missing proof inputs
 
 ## Core Defaults
 - Evidence first, wording second.
 - Fresh run required for every positive claim in current scope.
 - Use the smallest sufficient command set, but never weaker than the claim.
 - If verification fails or was not run, say so explicitly.
+- Verification is an artifact-consuming phase: consume existing `spec.md`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, existing workflow-control artifacts, and fresh command output instead of authoring new process artifacts.
+- If proof depends on a missing expected artifact or missing planning/design context, report the reopen target instead of inventing replacement artifacts during verification.
 
 ## Expertise
 

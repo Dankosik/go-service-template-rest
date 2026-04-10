@@ -101,6 +101,7 @@ Recommended future shape:
      - approved `plan.md`
      - optional `test-plan.md`
      - optional `rollout.md`
+     - any `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` files that the approved phase structure will later consume
      - updated `workflow-plan.md`
    - must not:
      - start implementation
@@ -109,9 +110,10 @@ Recommended future shape:
    - new orchestrator-facing wrapper
    - session output:
      - implementation of exactly one planned phase or one explicit checkpoint
-     - updated artifact status
+     - updated status in pre-created control artifacts
      - phase-local validation evidence
    - must not:
+     - create new workflow/process artifacts mid-implementation
      - begin the next implementation phase in the same session unless that was explicitly the session goal and remains within one bounded checkpoint
 
 7. `validation-closeout-session`
@@ -120,7 +122,9 @@ Recommended future shape:
      - final validation evidence
      - updated `Outcome`
      - updated `workflow-plan.md`
+     - updated existing `workflow-plans/validation-phase-N.md` when one was pre-created
    - must not:
+     - create new workflow/process artifacts during closeout
      - reopen implementation silently
 
 ## Guardrails
@@ -129,6 +133,7 @@ If this direction is implemented later:
 
 - do not duplicate file-format rules in every skill
 - keep artifact contracts in one repository-level place, preferably `docs/spec-first-workflow.md` or another explicit artifact-contract reference
+- treat planning as the last artifact-producing phase before code; post-code phase wrappers should consume and update pre-created control artifacts instead of inventing them later
 - let each phase/session skill focus on:
   - allowed inputs
   - allowed writes

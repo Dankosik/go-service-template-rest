@@ -12,7 +12,7 @@ This repository is for people who code with Codex, Claude Code, Cursor, Gemini C
 - **Go-native guidance**: the repository does not stop at language-agnostic workflow advice.
 - **Project-scoped agents**: Codex agents live in `.codex/agents/`, Claude Code agents live in `.claude/agents/`.
 - **Portable skills**: reusable workflow expertise lives in `.agents/skills` and is mirrored to compatibility/runtime directories.
-- **Artifact-driven for non-trivial work**: master `workflow-plan.md` plus `workflow-plans/<phase>.md` separate cross-phase control from phase-local orchestration, while `spec.md`, `design/`, and `plan.md` keep decisions, technical design, and execution distinct.
+- **Artifact-driven for non-trivial work**: master `workflow-plan.md` plus `workflow-plans/<phase>.md` separate cross-phase control from phase-local orchestration, while `spec.md`, `design/`, and `plan.md` keep decisions, technical design, and execution distinct. Pre-code phases produce that bundle; implementation and validation consume it and do not create new workflow/process artifacts.
 - **Production stack underneath**: OpenAPI-first HTTP, PostgreSQL, `sqlc`, observability, tests, and CI gates are already wired.
 
 ## Why This Template Exists
@@ -64,12 +64,12 @@ intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
 - `specification`: stabilize final decisions, constraints, and open questions in `spec.md` before technical design or task breakdown begins.
 - `technical design`: for non-trivial work, turn approved decisions into a task-local `design/` bundle. Load [`docs/repo-architecture.md`](docs/repo-architecture.md) first when stable repository boundaries or runtime flows matter.
-- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn approved `spec.md + design/` into phased, verifiable execution work; for non-trivial implementation, that plan lives in `plan.md`.
-- `implementation`: change the service in the main flow, not inside research agents.
+- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn approved `spec.md + design/` into phased, verifiable execution work; for non-trivial implementation, that plan lives in `plan.md`, and any later implementation/review/validation phase workflow files are created here before code starts.
+- `implementation`: change the service in the main flow, not inside research agents. New code/test files are fine when the approved plan requires them; new workflow/process artifacts are not.
 - `review`: run targeted review agents only where the risk justifies them.
-- `validation`: do not claim "done" without fresh command evidence.
+- `validation`: do not claim "done" without fresh command evidence, and do not create new planning/process artifacts during closeout.
 
-For non-trivial work, `one session = one phase` by default: master `workflow-plan.md` tracks the current phase, artifact status, next session, blockers, and links to phase workflow plans; the current `workflow-plans/<phase>.md` carries phase-local orchestration. Finish that phase, update both workflow-control files plus the owning phase artifacts, and stop before the next phase. Start the next phase in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
+For non-trivial work, `one session = one phase` by default: master `workflow-plan.md` tracks the current phase, artifact status, next session, blockers, and links to phase workflow plans; the current `workflow-plans/<phase>.md` carries phase-local orchestration. Finish that phase, update both workflow-control files plus the owning phase artifacts, and stop before the next phase. Start the next phase in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded. If later implementation/review/validation phase files are part of the plan, create them before implementation begins and let post-code sessions update them rather than inventing them mid-execution.
 
 When a task benefits from explicit session boundaries, use the phase/session wrappers that match the current checkpoint:
 
@@ -77,8 +77,8 @@ When a task benefits from explicit session boundaries, use the phase/session wra
 - `research-session`: own evidence gathering and optional preserved `research/*.md` only.
 - `specification-session`: own `spec.md` approval and `workflow-plans/specification.md` only.
 - `technical-design-session`: own the task-local `design/` bundle and `workflow-plans/technical-design.md` only.
-- `planning-session`: own `plan.md` plus optional `test-plan.md` or `rollout.md`, and `workflow-plans/planning.md` only.
-- `validation-closeout-session`: own fresh proof, `spec.md` closeout updates, and dedicated validation-phase routing only.
+- `planning-session`: own `plan.md`, optional `test-plan.md` or `rollout.md`, any later phase workflow files the approved plan already requires, and `workflow-plans/planning.md` only.
+- `validation-closeout-session`: own fresh proof, `spec.md` closeout updates, and existing validation-phase routing only.
 
 Think of the workflow-control artifacts as complementary, not competing:
 
@@ -167,8 +167,8 @@ The catalog has two layers:
 | [`research-session`](.agents/skills/research-session/SKILL.md) | owns the research checkpoint only and keeps evidence gathering, optional `research/*.md`, and routing updates separate from spec writing | the task already has framing and workflow routing, but one bounded research session is needed before specification |
 | [`specification-session`](.agents/skills/specification-session/SKILL.md) | owns the specification checkpoint only and updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into design or planning | research or bounded local analysis is strong enough that the next honest step is finalizing the decision record |
 | [`technical-design-session`](.agents/skills/technical-design-session/SKILL.md) | owns the technical-design checkpoint only and turns approved `spec.md` into a planning-ready `design/` bundle plus `workflow-plans/technical-design.md` | non-trivial work needs task-local technical design before implementation planning |
-| [`planning-session`](.agents/skills/planning-session/SKILL.md) | owns the planning checkpoint only and produces `plan.md` plus optional `test-plan.md` or `rollout.md`, while updating `workflow-plans/planning.md` | approved `spec.md + design/` are ready to turn into ordered, coder-facing execution work |
-| [`validation-closeout-session`](.agents/skills/validation-closeout-session/SKILL.md) | owns final validation and closeout only, refreshes `spec.md` `Validation` and `Outcome`, and closes or reopens routing honestly | implementation is finished and you need fresh proof before saying a phase or task is complete |
+| [`planning-session`](.agents/skills/planning-session/SKILL.md) | owns the planning checkpoint only and produces `plan.md`, optional `test-plan.md` or `rollout.md`, and any later phase workflow files the approved plan already requires, while updating `workflow-plans/planning.md` | approved `spec.md + design/` are ready to turn into ordered, coder-facing execution work |
+| [`validation-closeout-session`](.agents/skills/validation-closeout-session/SKILL.md) | owns final validation and closeout only, refreshes `spec.md` `Validation` and `Outcome`, and updates existing validation-phase routing honestly | implementation is finished and you need fresh proof before saying a phase or task is complete |
 
 ### Core Workflow, Implementation, And Verification Skills
 
@@ -179,10 +179,10 @@ The catalog has two layers:
 | [`pre-spec-challenge`](.agents/skills/pre-spec-challenge/SKILL.md) | pressure-tests candidate decisions with discriminating questions before planning | research is done but hidden assumptions or edge cases could still change the spec |
 | [`spec-document-designer`](.agents/skills/spec-document-designer/SKILL.md) | designs and normalizes repository-native `spec.md` decision records with the right section depth, decision placement, and handoff into design and planning | framing or research is already in place and the orchestrator needs a clean decision record instead of a PRD, research dump, or task list |
 | [`planning-and-task-breakdown`](.agents/skills/planning-and-task-breakdown/SKILL.md) | turns approved `spec.md + design/` into phased tasks, checkpoints, acceptance criteria, and verification steps | the decisions and task-local technical design are stable and implementation needs a real `plan.md` instead of ad hoc execution |
-| [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift | the implementation plan is explicit and code work is next |
-| [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
+| [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift or new workflow-artifact sprawl | the implementation plan is explicit and code work is next |
+| [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations as implementation work, not new planning | test code itself needs to be added or upgraded |
 | [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
-| [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence | you are about to say “fixed”, “ready”, or “done” |
+| [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence without inventing missing process artifacts | you are about to say “fixed”, “ready”, or “done” |
 
 ### Prompt Composition And Tooling
 

@@ -88,6 +88,7 @@ Do not:
 - If `fan-out` is expected, enumerate lanes by owned question, role, and one chosen skill or explicit `no-skill`.
 - Decide whether a later pre-spec challenge pass is expected.
 - Decide whether later `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are expected.
+- Decide whether later implementation, review, or validation phase workflow files will be expected, with the rule that planning must create them before implementation starts if they will be used.
 
 ### 4. Set Session Routing
 - Treat this session's local checkpoint as `workflow-planning`.
@@ -100,6 +101,7 @@ Do not:
 - Record research mode when later research is expected.
 - Record current phase, phase status, session-boundary state, next-session routing, blockers, and phase workflow plan links or status.
 - Record artifact status for `spec.md`, `design/`, `plan.md`, and conditional later artifacts as `approved`, `draft`, `missing`, or explicit not-expected.
+- Record whether later post-code phase workflow files are expected and must be created during planning, rather than mid-implementation or mid-validation.
 - If implementation-phase count is not known yet, say so instead of guessing.
 
 ### 6. Write Or Repair `workflow-plans/workflow-planning.md`

@@ -18,6 +18,15 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - speculative cleanup that widens scope without helping correctness, clarity, or safety
 - hand-editing generated artifacts instead of changing the owning source and regenerating
 
+## Artifact Boundary
+Implementation is an artifact-consuming phase.
+
+- Consume the approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created implementation or later phase workflow files.
+- New code files, test files, migrations, configs, generation inputs, and generated artifacts are allowed when the approved plan requires them.
+- Do not create new workflow/process/planning/design/temp artifacts such as `workflow-plan.md`, new `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, `test-plan.md`, `rollout.md`, or ad hoc scratch markdown once implementation starts.
+- Update only existing control and progress surfaces needed by the active phase, such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress notes in existing `plan.md`.
+- If an expected artifact is missing or the plan or design context is insufficient, stop and reopen the right earlier phase in a new session instead of inventing replacement artifacts here.
+
 ## Core Stance
 - Treat the approved spec and current phase/task breakdown as the source of truth for behavior.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
@@ -26,6 +35,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - Avoid both kinds of helper drift: scattered policy duplicated across files, and generic `util/common/shared` buckets that hide ownership instead of clarifying it.
 - If the spec is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
 - Escalate when correctness depends on a new product or architecture decision; do not hide that decision inside code.
+- If implementation exposes a real planning or design gap, record the reopen in the existing control artifacts and stop instead of authoring new workflow/process docs inside the implementation session.
 
 ## Hard-Skill Bar
 Strong implementation work usually gets these details right before review:

@@ -51,6 +51,8 @@ Every future implementation prompt in this pack assumes these rules:
 - the session skill for phase `X` must not silently start phase `Y`
 - every phase session must update the master `workflow-plan.md`
 - phase-specific `workflow-plans/<phase>.md` are local routing/control artifacts for one phase only
+- planning is the last artifact-producing phase before code, so any later implementation/review/validation phase workflow files must be created before implementation starts if they will be used
+- post-code sessions may update existing control artifacts, but they must not create new workflow/process artifacts mid-implementation or mid-validation
 
 ## Prompt 1: Update The Contract For Session-Phase Workflow Plans
 
@@ -321,6 +323,7 @@ Skill purpose:
   - `plan.md`
   - optional `test-plan.md`
   - optional `rollout.md`
+  - any `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` files that the approved phase structure will later consume
   - master `workflow-plan.md`
   - `workflow-plans/planning.md`
 
@@ -334,6 +337,7 @@ The skill must define:
 Hard boundaries:
 - do not implement code
 - do not reopen spec or design silently
+- do not leave later phase-control files to be invented during implementation or validation
 
 Constraints:
 - keep the wrapper focused on one planning session
@@ -368,7 +372,7 @@ Skill purpose:
 - produce or update:
   - code and related artifacts for one phase only
   - master `workflow-plan.md`
-  - `workflow-plans/implementation-phase-<n>.md`
+  - an existing `workflow-plans/implementation-phase-<n>.md`
 
 The skill must define:
 - how to select one explicit phase/checkpoint
@@ -381,6 +385,7 @@ Hard boundaries:
 - do not begin the next implementation phase in the same session by default
 - do not silently rewrite planning
 - do not skip validation for the implemented phase
+- do not create new workflow/process artifacts; if the expected implementation-phase control file is missing, reopen planning instead
 
 Constraints:
 - this is an orchestrator-facing phase wrapper, not a replacement for `go-coder`
@@ -416,7 +421,7 @@ Skill purpose:
   - final validation evidence
   - `Outcome`
   - master `workflow-plan.md`
-  - `workflow-plans/validation-phase-<n>.md` when phase-local validation is used
+  - an existing `workflow-plans/validation-phase-<n>.md` when phase-local validation is used
 
 The skill must define:
 - required proof inputs
@@ -427,6 +432,7 @@ The skill must define:
 Hard boundaries:
 - do not implement new code as part of closeout
 - do not claim completion without fresh evidence
+- do not create missing validation-phase workflow files during closeout; reopen planning or the relevant earlier phase instead
 
 Constraints:
 - keep it aligned with `go-verification-before-completion`

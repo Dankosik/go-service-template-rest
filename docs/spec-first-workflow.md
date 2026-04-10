@@ -93,12 +93,28 @@ Artifact rules:
 - `workflow-plan.md` is the master cross-phase control artifact. It is not just a pre-research note and it stays live through research, synthesis, `technical design`, planning, implementation, and validation.
 - `workflow-plans/<phase>.md` is the phase-local orchestration layer. It does not replace the master file and it must not turn into a second `design/` bundle or a second `plan.md`.
 - Pre-code phases normally get `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`.
-- Post-code phases are conditional: create `workflow-plans/implementation-phase-N.md` for each named implementation phase from `plan.md`, and create `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` only when those phases run as dedicated post-code phases.
+- Post-code phases are conditional, but their control artifacts are still pre-code artifacts: when the approved phase structure will use them, planning creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` before implementation starts, and later post-code sessions update those files instead of creating them mid-execution.
 - `spec.md` stores decisions, not raw research transcripts and not full technical design.
 - `design/` stores task-specific technical context. For non-trivial work, planning should not proceed from `spec.md` alone.
 - `plan.md` stores execution order. It should not become an architecture reconstruction document.
 - `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template.
 - Do not duplicate the same authority across artifacts. Link instead.
+
+### Artifact-Producing Vs Artifact-Consuming Phases
+
+Pre-code phases are artifact-producing:
+- `workflow planning`, `research`, `specification`, `technical design`, and `planning` may create new workflow/process artifacts.
+- The allowed pre-code artifact set is `workflow-plan.md`, `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, and optional `rollout.md`.
+- If later implementation, review, or validation phase-control files will be used, planning creates them before implementation starts.
+
+Post-code phases are artifact-consuming:
+- `implementation`, `review`, `reconciliation`, and `validation` consume the approved artifact bundle.
+- They may still create approved codebase files such as code, tests, migrations, configs, generation inputs, and generated output when the approved plan requires them.
+- They must not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown once implementation has started.
+- Allowed post-code artifact updates are limited to existing control and closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/<phase>.md`, checkpoint or progress state in existing `plan.md`, and `spec.md` `Validation` or `Outcome` during validation or closeout.
+- If a required artifact is missing or post-code work exposes missing context, stop, record the reopen in the existing control artifacts, and reopen the appropriate earlier phase in a new session instead of inventing new artifacts in the current post-code session.
+
+Direct-path exceptions may skip parts of the pre-code artifact bundle with explicit rationale, but they do not authorize creating new workflow/process artifacts mid-implementation or mid-validation.
 
 ## 4. Default `spec.md` Shape
 
@@ -299,6 +315,8 @@ Planning rules:
 - for non-trivial work, `plan.md` is the dedicated coder-facing artifact,
 - for `direct path` work, the explicit plan may stay as 1-3 concise lines in the main flow,
 - for non-trivial work, the default phase order is `specification -> technical-design -> planning -> implementation-phase-N`, with optional `review-phase-N` and `validation-phase-N` when the control loop explicitly calls for them,
+- for non-trivial work, planning is the last artifact-producing phase before code; the workflow/design/planning bundle that implementation will consume must already exist or be explicitly waived before the first implementation session starts,
+- if the workflow will use `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`, create them during planning from the approved phase structure so post-code sessions only update them,
 - do not move from one pre-code phase to the next in the same session unless an upfront `direct path` or `lightweight local` waiver was recorded before crossing the boundary,
 - phased execution is the default for non-trivial work: `phase -> review/reconcile -> validate -> next phase`,
 - single-pass big-bang implementation needs explicit rationale.
@@ -328,9 +346,20 @@ If the phase cannot be finished honestly, end with the same phase still `in_prog
 ### 6.6 Implementation, Review, and Validation
 
 Implementation happens in the main flow under orchestrator control.
-If coding exposes a real plan or design gap, loop back to the relevant artifact instead of silently drifting.
+Treat implementation as artifact-consuming:
+- consume approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created post-code phase workflow files,
+- allow new code files, test files, migrations, configs, generation inputs, and generated artifacts only when the approved plan requires them,
+- update only existing control and checkpoint artifacts such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and progress state in existing `plan.md`,
+- do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown once implementation has started,
+- if coding exposes a real plan or design gap, stop, record the reopen in the existing control artifacts, and reopen the relevant earlier phase in a new session instead of silently drifting.
 
 Review stays read-only and risk-driven.
+Validation is also artifact-consuming:
+- use fresh evidence against the approved artifact bundle,
+- update only existing closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/validation-phase-N.md` when one was created before implementation, progress state in existing `plan.md` when needed, and `spec.md` `Validation` or `Outcome`,
+- do not create new workflow/process/planning/design/temp artifacts during validation,
+- if proof exposes a real upstream gap or an expected control artifact is missing, reopen the right earlier phase instead of inventing a new artifact during closeout.
+
 Validation must use fresh evidence.
 Closeout is not complete until the artifacts reflect reality:
 - master `workflow-plan.md` shows the current phase or completion state,
@@ -382,10 +411,10 @@ Recommended update cadence:
 - After workflow planning: update the master file with current phase, next session, blockers, and phase workflow plan links/status; update the current phase file with local orchestration, lanes, completion marker, and stop rule.
 - After synthesis: update `spec.md` status in the master file and record any blocker that prevents leaving `workflow-plans/specification.md`.
 - After `technical design`: record approved design artifacts in the master file and `workflow-plans/technical-design.md`.
-- After planning: mark `plan.md` status in the master file and `workflow-plans/planning.md`, then point the next session at `workflow-plans/implementation-phase-N.md` or the relevant post-code phase.
-- After each implementation checkpoint: update the current phase workflow plan with findings, reopen conditions, next action, and stop rule; update the master file with current phase, blockers, and next-session routing.
+- After planning: mark `plan.md` status in the master file and `workflow-plans/planning.md`, create any implementation/review/validation phase workflow files that the approved phase structure will use, and then point the next session at the first post-code phase.
+- After each implementation checkpoint: update only the existing current phase workflow plan with findings, reopen conditions, next action, and stop rule; update the master file with current phase, blockers, and next-session routing. If a needed workflow/process artifact is missing, reopen planning or the relevant earlier phase instead of creating it mid-implementation.
 - After any phase-complete handoff: mark `Session boundary reached`, `Ready for next session`, and `Next session starts with` in the master file and close the current phase workflow plan.
-- After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one exists.
+- After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof. If an expected validation control file is missing, reopen the relevant earlier phase instead of creating it during closeout.
 
 Concise split example:
 
@@ -506,6 +535,7 @@ Avoid:
 - finishing one non-trivial phase and casually starting the next one in the same session without an upfront recorded waiver,
 - planning non-trivial work from `spec.md` alone after the design-bundle stage exists,
 - letting `design/` turn into a second `spec.md` or a second `plan.md`,
+- creating new workflow/process markdown during implementation or validation instead of reopening the correct earlier phase,
 - creating `test-plan.md`, `rollout.md`, or conditional design files "just in case",
 - forgetting to record the skip rationale when bypassing `design/`,
 - re-deriving repository architecture every session instead of loading [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md),

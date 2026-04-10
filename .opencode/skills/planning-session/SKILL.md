@@ -1,6 +1,6 @@
 ---
 name: planning-session
-description: "Own a session dedicated only to implementation planning for this repository. Use when approved `spec.md + design/` are ready to turn into `plan.md` plus optional `test-plan.md` or `rollout.md`, and the orchestrator must update task-local `workflow-plan.md` plus `workflow-plans/planning.md` without drifting into implementation. Skip tiny direct-path work and tasks whose spec or design are still unstable."
+description: "Own a session dedicated only to implementation planning for this repository. Use when approved `spec.md + design/` are ready to turn into `plan.md` plus optional `test-plan.md` or `rollout.md`, and when any later implementation/review/validation phase workflow files must be created before code starts, with task-local `workflow-plan.md` plus `workflow-plans/planning.md` updated without drifting into implementation. Skip tiny direct-path work and tasks whose spec or design are still unstable."
 ---
 
 # Planning Session
@@ -65,6 +65,9 @@ This session may write or update only:
 - task-local `plan.md`
 - task-local `test-plan.md` when validation obligations do not fit cleanly inside `plan.md`
 - task-local `rollout.md` when migration or delivery choreography needs a dedicated artifact
+- task-local `workflow-plans/implementation-phase-N.md` when the approved phase structure says those implementation checkpoints will be used
+- task-local `workflow-plans/review-phase-N.md` when the approved phase structure says those review checkpoints will be used
+- task-local `workflow-plans/validation-phase-N.md` when the approved phase structure says those validation checkpoints will be used
 - task-local `workflow-plan.md`
 - task-local `workflow-plans/planning.md`
 - the `workflow-plans/` directory only when it must be created to hold the phase-local planning file
@@ -74,7 +77,7 @@ Do not:
 - write production code, tests, migrations, generated artifacts, or runtime configuration changes
 - write or finalize `spec.md`
 - create or edit `design/`
-- create `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` in this session
+- create surprise post-code phase files that the approved phase structure did not call for
 - start implementation, review, validation, rollout execution, or closeout work
 - reopen specification or technical design silently when planning exposes a missing decision or missing context
 - make new architecture, API, data, security, reliability, or rollout decisions that belong in `spec.md` or `design/`
@@ -96,8 +99,8 @@ Do not:
 - do not duplicate the full planning method in this wrapper
 
 ## Boundary With Future `implementation-phase-session`
-- `planning-session` may write `plan.md`, optional `test-plan.md`, optional `rollout.md`, `workflow-plan.md`, and `workflow-plans/planning.md`
-- the future `implementation-phase-session` owns code changes, test changes, migrations, implementation-phase workflow files, and phase-local validation evidence
+- `planning-session` may write `plan.md`, optional `test-plan.md`, optional `rollout.md`, the later phase workflow files already required by the approved phase structure, `workflow-plan.md`, and `workflow-plans/planning.md`
+- the future `implementation-phase-session` owns code changes, test changes, migrations, updates to pre-created implementation-phase workflow files, and phase-local validation evidence
 - if planning is complete, record `Next session starts with` as the first named implementation phase or explicit implementation checkpoint, then stop instead of beginning it here
 
 ## Workflow
@@ -124,13 +127,14 @@ Do not:
 - write or update `plan.md` as the coder-facing execution artifact
 - create `test-plan.md` only when test obligations are too large or multi-layered for `plan.md`
 - create `rollout.md` only when migration sequencing, backfill, compatibility, deploy order, or failback notes need a dedicated artifact
+- create any implementation, review, or validation phase workflow files that the approved phase structure already names, so post-code sessions update existing control artifacts instead of inventing them mid-execution
 - keep blocked work separate from ready work
 - keep reopen conditions explicit when implementation must hand back to `specification` or `technical design`
 
 ### 5. Write Or Repair `workflow-plans/planning.md`
 - record only the phase-local orchestration for this planning session
 - include planning status, completion marker, stop rule, next action, blockers, artifact outputs, and what can run in parallel later
-- record whether companion artifacts such as `test-plan.md` or `rollout.md` were required or explicitly not needed
+- record whether companion artifacts such as `test-plan.md`, `rollout.md`, or later implementation/review/validation phase workflow files were required, created, or explicitly not needed
 - keep this file routing-only; do not turn it into `spec.md`, `design/`, or `plan.md`
 
 ### 6. Write Or Repair `workflow-plan.md`
@@ -153,7 +157,7 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - link or status for `workflow-plans/planning.md`
 - status for `plan.md`
 - status for `test-plan.md` and `rollout.md` as `approved`, `draft`, `missing`, or not expected
-- whether later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` are expected or still unknown
+- whether later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` were created now, are explicitly not expected, or still remain blocked on a reopen
 - blockers, accepted assumptions, and reopen conditions that still affect implementation readiness
 - `Session boundary reached`
 - `Ready for next session`
@@ -166,6 +170,9 @@ A finished planning session may produce only:
 - updated or newly created `plan.md`
 - optional `test-plan.md`
 - optional `rollout.md`
+- optional `workflow-plans/implementation-phase-N.md`
+- optional `workflow-plans/review-phase-N.md`
+- optional `workflow-plans/validation-phase-N.md`
 - updated or newly created `workflow-plan.md`
 - updated or newly created `workflow-plans/planning.md`
 - an honest `complete`, `blocked`, or `reopened` planning-phase state when the task cannot move cleanly into implementation yet
@@ -178,6 +185,7 @@ Planning is complete when:
 - meaningful phases or tasks have acceptance criteria and planned verification
 - blocked work is clearly separated from ready work
 - `test-plan.md` and `rollout.md` exist only when their triggers are real, and their status is explicit when not needed
+- any implementation, review, or validation phase workflow files that the approved phase structure requires were created before implementation begins, or their absence is recorded as a reopen blocker
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
 - the next session can begin the first implementation phase or explicit implementation checkpoint without silently reopening spec or design
 
@@ -197,6 +205,7 @@ Escalate instead of forcing output when:
 - using this wrapper as a way to silently reopen `spec.md` or `design/`
 - copying the whole spec into `plan.md` instead of turning it into execution work
 - forcing `test-plan.md` or `rollout.md` when their triggers are not real
+- leaving later implementation/review/validation phase workflow files to be invented mid-implementation or mid-validation
 - hiding blockers inside optimistic task wording
 - updating `workflow-plan.md` as if implementation already started
 - writing "phase 1" and then immediately coding it in the same session

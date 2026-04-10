@@ -23,6 +23,15 @@ Do not:
 - normalize flaky timing, shared-state coupling, or nondeterministic failures as acceptable noise
 - claim readiness when critical scenarios remain unimplemented, flaky, or unverified
 
+## Artifact Boundary
+Test authoring is still implementation work, not a new planning or validation phase.
+
+- Consume the approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created implementation or later phase workflow files.
+- New test files, test fixtures, testdata, mocks, and other codebase files required by the approved plan are allowed.
+- Do not create new workflow/process/planning/design/temp artifacts such as `workflow-plan.md`, new `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, `test-plan.md`, `rollout.md`, or ad hoc scratch markdown once implementation has started.
+- Update only existing control and progress surfaces needed by the active phase, such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress notes in existing `plan.md`.
+- If test obligations, design context, or expected control artifacts are missing, stop and reopen the right earlier phase in a new session instead of inventing replacement artifacts here.
+
 ## Core Defaults
 - Obligations first: test what must be true, not what is easiest to assert.
 - Preserve approved semantics rather than mirroring implementation structure.
@@ -31,6 +40,7 @@ Do not:
 - Prefer explicit Go assertions and failure messages over opaque helper stacks.
 - Do not hardcode unresolved transport, storage, or rollout mechanics just to make a test look precise.
 - Escalate ambiguity instead of encoding product decisions in test code.
+- If testing exposes a real planning or design gap, record the reopen in the existing control artifacts and stop instead of authoring new workflow/process docs inside the implementation session.
 
 ## Load Relevant Guidance
 Load only the current repository guidance that matches the changed surface:

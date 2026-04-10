@@ -36,6 +36,7 @@ Escalate if:
 ## Core Defaults
 - `spec.md` is for decisions, `design/` is for technical context, and `plan.md` is for execution.
 - For non-trivial work, plan from approved `spec.md + design/`, not from `spec.md` alone.
+- Planning is the last artifact-producing phase before code. If later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` are part of the approved execution shape, plan for them to exist before implementation starts instead of being invented later.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
@@ -112,6 +113,7 @@ For each phase, include:
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `plan.md` for a tiny change just to satisfy ceremony.
 - For non-trivial work, default to `plan.md` and consume approved `spec.md + design/`.
+- When later implementation, review, or validation phase-control files are part of the execution shape, planning should leave them ready to be created or linked before implementation begins; post-code phases should not need to invent new workflow/process artifacts.
 - If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
@@ -125,6 +127,7 @@ The planning pass is complete when:
 - each meaningful task has acceptance criteria and planned verification
 - checkpoints exist where the risk actually changes
 - blocked work is clearly separated from ready work
+- the next implementation or validation session can start without creating new workflow/process artifacts to compensate for missing planning output
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - the plan is specific enough for `go-coder` to execute without recreating the strategy or reverse-engineering missing design context
 
