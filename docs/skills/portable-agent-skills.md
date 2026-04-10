@@ -28,7 +28,7 @@ Documentation-only location:
 docs/skills/
 ```
 
-`docs/skills/` is for guides, specifications, and writing rules only.
+`docs/skills/` is for guides, catalogs, and writing rules only.
 Do not store runnable `SKILL.md` files there.
 
 `make skills-sync` copies `.agents/skills` into runtime mirrors.

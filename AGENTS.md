@@ -581,12 +581,10 @@ Anti-patterns:
 - filling optional sections or artifacts with placeholder text,
 - turning pre-spec challenge into ritualized coverage or fixed-question theater,
 - turning review into ritual coverage instead of real risk reduction,
-- allowing a local fix to create an unexamined cross-domain regression,
-- letting legacy workflow jargon override the orchestrator/subagent-first model.
+- allowing a local fix to create an unexamined cross-domain regression.
 
 ## 11. Maintenance notes
 
-- If older repository docs mention phase matrices, `freeze/reopen` choreography, or skill-first execution, treat them as legacy guidance. Prefer this file when they conflict.
 - Keep this file **short, stable, and high-signal**. Move deep rationale to supporting docs instead of growing prompt bulk indefinitely.
 - Put the most behavior-shaping rules near the top.
 - Prefer multi-step execution over one-shot monolith behavior.

@@ -23,7 +23,7 @@
         "The output explicitly chooses `PUT` or `PATCH` and justifies the choice.",
         "The output defines concurrency or precondition behavior such as `ETag`, `If-Match`, `412`, or `428`.",
         "The output gives a compatibility strategy for replacing the old `POST /v1/profile/update` endpoint.",
-        "The output places the decision into `30-api-contract.md` or an equivalent spec artifact instead of treating it as implementation detail.",
+        "The output places the decision into `spec.md` or an equivalent current spec artifact instead of treating it as implementation detail.",
         "The output uses one stable error-model choice such as `application/problem+json`."
       ]
     },

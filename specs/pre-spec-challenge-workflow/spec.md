@@ -17,7 +17,7 @@ Non-goals:
 - changing implementation/review/validation semantics outside what the challenge checkpoint requires
 - introducing a mandatory ritual phase for every small task
 - adding code generation or evaluation harnesses for the new skill in this iteration
-- rewriting legacy deep-dive docs unless they are directly needed to prevent active contradiction
+- rewriting unrelated deep-dive docs outside the active workflow surfaces needed for this change
 
 ## Constraints
 
@@ -42,7 +42,6 @@ Non-goals:
 
 - Corrected: active skill runtime surfaces present in this repository for the affected skills are `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, `.gemini/skills/`, `.github/skills/`, and `.opencode/skills/`.
 - Validated: adding the new agent to `.codex/config.toml` plus `.codex/agents/` and `.claude/agents/` is sufficient for the project-scoped agent surfaces visible in this repository.
-- Resolved: instead of rewriting older `docs/skills/*` design notes, mark the directly affected `docs/skills/spec-first-brainstorming-spec.md` as a historical note so it no longer competes with the active runtime contract.
 
 ## Implementation Plan
 
@@ -80,11 +79,11 @@ Non-goals:
 
 Executed:
 - `rg -n "pre-spec challenge|pre-spec-challenge|challenger-agent|candidate synthesis|ritualized coverage|challenge-handoff" AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents .claude/agents skills .agents/skills .claude/skills specs/pre-spec-challenge-workflow/spec.md`
-- `rg -n "whether candidate synthesis|open-ended redesign|challenge resolutions or skip rationale|historical design note|pre-spec-challenge" AGENTS.md CLAUDE.md docs/spec-first-workflow.md README.md docs/skills/spec-first-brainstorming-spec.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md`
+- `rg -n "whether candidate synthesis|open-ended redesign|challenge resolutions or skip rationale|pre-spec-challenge" AGENTS.md CLAUDE.md docs/spec-first-workflow.md README.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md`
 - `git diff -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
-- `git diff --stat -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
-- `git status --short -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
-- `git diff --check -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md docs/skills/spec-first-brainstorming-spec.md .codex/config.toml .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md`
+- `git diff --stat -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
+- `git status --short -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .codex/agents/challenger-agent.toml .claude/agents/challenger-agent.md .agents/skills/pre-spec-challenge/SKILL.md .claude/skills/pre-spec-challenge/SKILL.md .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md specs/pre-spec-challenge-workflow/spec.md`
+- `git diff --check -- AGENTS.md CLAUDE.md README.md docs/spec-first-workflow.md .codex/config.toml .agents/skills/spec-first-brainstorming/SKILL.md .claude/skills/spec-first-brainstorming/SKILL.md`
 - `.agents/skills/pre-spec-challenge/evals/evals.json` plus `evals/files/*.md` created with three challenge scenarios: async export, cache migration, and admin deactivation
 - blind A/B run executed in the `pre-spec-challenge` skill workspace against `variant-a` and `variant-b`, with blind comparator fan-in over all three evals
 - blind comparison result: `variant-b` won `eval-1` and `eval-2`, `variant-a` won `eval-3`; overall winner `variant-b` by `2:1`
@@ -100,7 +99,6 @@ Completed repository integration for the risk-driven `pre-spec challenge` checkp
 - a reusable `pre-spec-challenge` skill exists in canonical and mirrored skill locations
 - the agent/skill split is explicit: the agent owns role boundaries and the skill owns challenge behavior
 - `spec-first-brainstorming` now routes to challenge when framing is clear but candidate decisions are still fragile
-- the directly affected legacy design note now explicitly defers to the active runtime contract
 - blind A/B evaluation of two prompt variants is complete; `variant-b` won `2:1` and is now the canonical skill text
 - the promoted skill version tightens the question budget, makes falsification and question filtering more explicit, and keeps blocker/next-action guidance sharper
 - mirror skill copies were re-synced after promotion so project runtimes now point at the same winning instructions

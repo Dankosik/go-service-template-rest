@@ -419,19 +419,7 @@ Definition of Done:
 2. Validation was run with fresh evidence.
 3. `Outcome` reflects what was actually shipped and what remains open.
 
-## 10. Legacy Compatibility
-
-This document and `AGENTS.md` are the current repository-level source of truth for spec-first execution.
-
-If older skill or workflow documents still mention:
-- phase or gate choreography,
-- `freeze/reopen` language,
-- linear skill-first execution,
-
-treat those references as legacy guidance until the skill refactor is complete.
-When a legacy reference conflicts with this document, prefer the orchestrator/subagent-first model defined here.
-
-## 11. Anti-Patterns
+## 10. Anti-Patterns
 
 1. Forcing structured user intake before understanding the task.
 2. Running a long linear chain of skills in the main flow.

@@ -4,7 +4,7 @@ This repository already has a strong Go-native agent and skill portfolio, but th
 
 The requested change is to bring the workflow, AGENTS contract, and skill/subagent system up to comparable rigor while keeping the result Go-native and explicitly adapted to this repository's orchestrator/subagent-first model.
 
-The work also needs to absorb the useful ideas behind the upstream `agent-skills` skills `idea-refine`, `spec-driven-development`, and `planning-and-task-breakdown` without importing their skill-driven ownership model, slash-command flow, or non-Go repository assumptions verbatim.
+The work also needs to absorb the useful ideas behind the upstream `agent-skills` framing, specification, and planning patterns without importing their skill-driven ownership model, slash-command flow, or non-Go repository assumptions verbatim.
 
 ## Scope / Non-goals
 
@@ -19,7 +19,7 @@ Non-goals:
 - importing Gonka product/domain rules, TypeScript-specific workflow details, or unrelated repo invariants
 - installing or depending on the upstream plugin runtime directly
 - creating one-to-one clones of upstream skills when a cleaner adaptation or documentation pattern is better
-- rewriting historical deep-dive docs unless they directly compete with active runtime guidance
+- rewriting unrelated deep-dive docs outside the active runtime surfaces needed for the workflow cleanup
 - touching unrelated implementation code outside the workflow, documentation, skill, or mirror/tooling surfaces needed for this change
 
 ## Constraints
@@ -36,7 +36,7 @@ Non-goals:
 2. Treat this as `fan-out` research after the initial local comparison pass, because the task spans workflow contract design, skill-catalog ownership, mirror/tooling behavior, and validation/discoverability.
 3. Create and maintain [workflow-plan.md](/Users/daniil/Projects/Opensource/go-service-template-rest/specs/workflow-rigor-alignment/workflow-plan.md) before any subagent fan-out, and create a separate [plan.md](/Users/daniil/Projects/Opensource/go-service-template-rest/specs/workflow-rigor-alignment/plan.md) before coding because the implementation will span several documentation and tooling surfaces.
 4. Port Gonka workflow rigor selectively: keep workflow-system improvements that strengthen orchestration quality here, but reject Gonka-specific domain, stack, or runtime assumptions.
-5. Adapt the upstream `idea-refine`, `spec-driven-development`, and `planning-and-task-breakdown` ideas into this repository's orchestrator/subagent-first system rather than installing them as literal workflow owners.
+5. Adapt the upstream framing, specification, and planning ideas into this repository's orchestrator/subagent-first system rather than installing them as literal workflow owners.
 
 ## Open Questions / Assumptions
 
@@ -44,4 +44,3 @@ Non-goals:
 - [assumption] Existing untracked `*-workspace` directories under `.agents/skills` and mirrored runtime directories are local workbench artifacts, not canonical runnable skills that should drive repository policy.
 - [assumption] The repo's active discoverability surfaces for this change are the root docs, skill catalog/distribution docs, the canonical skill tree, the runtime mirrors, and the skill-sync tooling.
 - [open question] Whether this change should tighten the skill-sync script so only top-level runnable skill directories are mirrored, instead of copying every directory beneath `.agents/skills`.
-- [open question] Which existing historical docs still present legacy `60-implementation-plan.md` / `70-test-plan.md` conventions as active guidance rather than archival design notes.
