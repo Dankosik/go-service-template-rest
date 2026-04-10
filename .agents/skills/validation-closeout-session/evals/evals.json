@@ -3,12 +3,12 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Implementation and review are complete for a non-trivial task that added tenant-scoped export jobs. The active workflow artifacts say the next session is `validation-phase-1`. `spec.md` still needs final `Validation` and `Outcome`, and the proof obligations are: rerun the scoped package tests, rerun the OpenAPI drift check, and rerun the migration validation command. Use only the validation-closeout-session wrapper to finish the task.",
-      "expected_output": "A closeout-only result that uses fresh evidence to update `spec.md`, closes `workflow-plan.md`, updates `workflow-plans/validation-phase-1.md`, and stops without implementing code.",
+      "prompt": "Implementation and review are complete for a non-trivial task that added tenant-scoped export jobs. The active workflow artifacts say the next session is `validation-phase-1`, and existing `tasks.md` has ledger items T001-T006 ready for proof-based checkbox updates. `spec.md` still needs final `Validation` and `Outcome`, and the proof obligations are: rerun the scoped package tests, rerun the OpenAPI drift check, and rerun the migration validation command. Use only the validation-closeout-session wrapper to finish the task.",
+      "expected_output": "A closeout-only result that uses fresh evidence to update `spec.md`, closes `workflow-plan.md`, updates existing `tasks.md` progress, updates `workflow-plans/validation-phase-1.md`, and stops without implementing code.",
       "files": [],
       "expectations": [
         "The output binds the final closeout claim to the stated scope and uses fresh commands rather than prior summaries as proof.",
-        "The output updates `spec.md` `Validation` and `Outcome`, plus `workflow-plan.md` and the active `workflow-plans/validation-phase-1.md` artifact.",
+        "The output updates `spec.md` `Validation` and `Outcome`, plus `workflow-plan.md`, existing `tasks.md` progress, and the active `workflow-plans/validation-phase-1.md` artifact.",
         "The output closes the task only if the fresh evidence supports it and keeps the boundary clear that no new code is written during closeout."
       ]
     },
@@ -25,13 +25,24 @@
     },
     {
       "id": 2,
-      "prompt": "This is the final pass for a lightweight local change. There is `spec.md` and `workflow-plan.md`, but no dedicated `workflow-plans/validation-phase-1.md`. Yesterday's `go test` output is already in chat. Use only the validation-closeout-session wrapper and finish the closeout without inventing extra ceremony.",
-      "expected_output": "A proportional closeout result that still requires fresh proof, updates the existing closeout artifacts honestly, and does not invent a phase-local validation file when the task is not using one.",
+      "prompt": "This is the final pass for a lightweight local change. There is `spec.md` and `workflow-plan.md`, but no dedicated `workflow-plans/validation-phase-1.md` and no `tasks.md` because the waiver says a separate ledger was not used. Yesterday's `go test` output is already in chat. Use only the validation-closeout-session wrapper and finish the closeout without inventing extra ceremony.",
+      "expected_output": "A proportional closeout result that still requires fresh proof, updates the existing closeout artifacts honestly, and does not invent a phase-local validation file or `tasks.md` when the task is not using one.",
       "files": [],
       "expectations": [
         "The output reruns or requires fresh proof now instead of trusting yesterday's command output.",
-        "The output updates `spec.md` and `workflow-plan.md` while avoiding a made-up `workflow-plans/validation-phase-1.md` artifact.",
+        "The output updates `spec.md` and `workflow-plan.md` while avoiding a made-up `workflow-plans/validation-phase-1.md` artifact or `tasks.md` ledger.",
         "The output stops after honest closeout handling and does not drift into implementation."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use only the validation-closeout-session wrapper. The workflow says this non-trivial task used `tasks.md`, but the ledger is missing in the workspace during closeout. Do not create it. Report the honest validation routing.",
+      "expected_output": "A blocked closeout result that refuses to invent missing required `tasks.md`, records a planning reopen target, and avoids claiming completion.",
+      "files": [],
+      "expectations": [
+        "The output treats missing required `tasks.md` as a planning or earlier-phase reopen instead of creating it during validation.",
+        "The output does not add task entries or rewrite planning artifacts during closeout.",
+        "The output avoids `done` or `ready` language for the blocked closeout."
       ]
     }
   ]

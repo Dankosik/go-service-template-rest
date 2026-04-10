@@ -74,6 +74,17 @@
         "The implementation updates `specs/tx-cache-commit-order/spec.md` so `Validation` and `Outcome` reflect the commands actually run.",
         "The scoped Go tests in the workdir pass after the change."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "Use the go-coder skill for a non-trivial implementation task whose approved `plan.md` says `tasks.md` is required, but the workdir only has `spec.md` and `plan.md`. Do not create planning artifacts during implementation. Return the correct blocked handoff behavior.",
+      "expected_output": "A blocked implementation handoff that refuses to create a missing required `tasks.md` during coding, routes back to planning, and avoids success or implementation-complete language.",
+      "files": [],
+      "expectations": [
+        "The output identifies missing required `tasks.md` as a planning repair blocker.",
+        "The output does not create or propose creating `tasks.md` inside the implementation phase.",
+        "The output avoids claiming the implementation is ready, fixed, or done."
+      ]
     }
   ]
 }

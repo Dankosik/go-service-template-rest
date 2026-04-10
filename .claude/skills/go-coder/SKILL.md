@@ -19,7 +19,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - hand-editing generated artifacts instead of changing the owning source and regenerating
 
 ## Specialist Stance
-- Treat the approved requirement, spec, or implementation plan as the source of truth for behavior.
+- Treat the approved requirement, spec, implementation plan, and existing task ledger as the source of truth for behavior and execution scope.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
 - Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
 - When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.
@@ -29,9 +29,11 @@ Implement approved Go changes as production-grade, review-clean code that preser
 
 ## Boundaries And Handoffs
 Keep workflow ownership outside this skill:
-- consume existing task artifacts or an explicit user plan when they are present; do not create or repair workflow, research, specification, design, or planning artifacts as a side effect of coding
+- consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, read existing `tasks.md` alongside `plan.md` when present or expected
+- do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
+- update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
-- if the safe implementation depends on a missing decision, stop and name the smallest unblock decision instead of inventing behavior
+- if the safe implementation depends on a missing decision or required `tasks.md` is absent, stop and name the smallest unblock decision or planning repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
 
 ## Hard-Skill Bar
@@ -195,7 +197,7 @@ Before handoff, ask:
 3. What can still alias, leak, block, go stale, be retried twice, or collapse a contract?
 4. Did I choose the clearest fix shape, or did I add abstraction that the next maintainer now has to reverse-engineer?
 5. Did I validate the real changed behavior, including the relevant edge case?
-6. Are code, tests, generated artifacts, and task notes aligned with what I actually changed and verified?
+6. Are code, tests, generated artifacts, `tasks.md` progress when present, and task notes aligned with what I actually changed and verified?
 7. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
 8. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
@@ -203,6 +205,7 @@ Before handoff, ask:
 If the approved spec, plan, or contract blocks implementation before code changes begin:
 - stop cleanly and say the work is blocked by a decision conflict or missing approval
 - name the exact approved artifact that blocks the change
+- if expected `tasks.md` is missing, route back to planning instead of creating it during implementation
 - do not present a blocked result through `Implemented Scope`, `Key Code Changes`, or other implementation headings
 - do not use `implemented`, `fixed`, or `ready` language for blocked work
 - write the minimum unblock decision needed to resume coding
