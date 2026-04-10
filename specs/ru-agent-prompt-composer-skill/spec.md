@@ -3,7 +3,7 @@
 The repository already has a native, version-controlled skill system:
 - `.agents/skills` is the canonical authoring surface for runnable `SKILL.md` definitions.
 - `scripts/dev/sync-skills.sh` mirrors canonical skills into `.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills`, and `.opencode/skills`.
-- `docs/skills/` is documentation-only and should not become a parallel runtime surface.
+- `README.md` is the human-facing overview for local repository skills.
 
 The requested capability is a repository-local skill that turns rough Russian text into a strong English prompt for another coding agent working in this same repository. This is not generic translation. The skill must reconstruct intent, classify the task, select only relevant repository context, and compose a coding-agent-ready prompt that assumes repo access and tool competence.
 
@@ -79,9 +79,8 @@ Non-goals:
    - The skill will not inject template-only caveats, sample-domain trivia, or broad project summaries unless the current request needs them.
    - Exact technical identifiers from the raw input must be preserved verbatim where relevant.
 
-6. Discoverability will be updated in both human-facing indexes that matter today.
+6. Discoverability will be updated in the human-facing overview that matters today.
    - Update `README.md` because it is the visible skill library overview.
-   - Update `docs/skills/skills-catalog.md` because it declares itself the canonical list of local repository skills.
 
 7. Examples and evals will have distinct roles to minimize drift.
    - `references/example-transformations.md` will be a thin human-facing guide that links to fixture files and shows curated final prompts.
@@ -117,7 +116,7 @@ Completed:
 - implemented the canonical skill bundle under `.agents/skills/ru-agent-prompt-composer/`
 - added compact repo references for stable repo profile and task-specific context selection
 - added curated example transformations plus raw eval fixtures and `evals/evals.json`
-- updated `README.md` and `docs/skills/skills-catalog.md` for discoverability
+- updated `README.md` for discoverability
 - synced the skill into all runtime mirror directories with the repository-maintained sync flow
 
 Residual risk:

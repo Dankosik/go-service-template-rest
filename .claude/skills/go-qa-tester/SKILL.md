@@ -33,13 +33,13 @@ Do not:
 - Escalate ambiguity instead of encoding product decisions in test code.
 
 ## Load Relevant Guidance
-Load only the repository guidance that matches the changed surface:
-- always useful for test work: `docs/llm/go-instructions/40-go-testing-and-quality.md`, `docs/build-test-and-development-commands.md`
-- error or context behavior: `docs/llm/go-instructions/10-go-errors-and-context.md`
-- goroutines, channels, worker pools, shutdown, or cancellation: `docs/llm/go-instructions/20-go-concurrency.md`
-- transport or client-visible API behavior: `docs/llm/api/10-rest-api-design.md`, `docs/llm/api/30-api-cross-cutting-concerns.md`
-- SQL, cache, or migration behavior: `docs/llm/data/10-sql-modeling-and-oltp.md`, `docs/llm/data/20-sql-access-from-go.md`, `docs/llm/data/40-migrations-schema-evolution-and-data-reliability.md`, `docs/llm/data/50-caching-strategy.md`
-- auth, tenant isolation, or trust-boundary behavior: `docs/llm/security/10-secure-coding.md`, `docs/llm/security/20-authn-authz-and-service-identity.md`
+Load only the current repository guidance that matches the changed surface:
+- always useful for test work: `docs/build-test-and-development-commands.md`, approved decisions in `spec.md`, and optional validation detail in `test-plan.md`
+- error or context behavior: the touched code paths, nearby tests, and the approved behavior captured in `spec.md`
+- goroutines, channels, worker pools, shutdown, or cancellation: the touched runtime code and tests, plus the approved concurrency or lifecycle expectations in `spec.md`
+- transport or client-visible API behavior: `api/openapi/service.yaml`, `internal/api/README.md`, and the approved contract in `spec.md`
+- SQL, cache, or migration behavior: touched query or repository code, `env/migrations/`, and the approved data behavior in `spec.md`
+- auth, tenant isolation, or trust-boundary behavior: touched auth or boundary code and the approved security expectations in `spec.md`
 
 ## Expertise
 

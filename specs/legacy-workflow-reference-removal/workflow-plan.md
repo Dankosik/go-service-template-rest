@@ -10,7 +10,7 @@
 
 - Keep the work focused on active workflow instructions and directly conflicting documentation surfaces.
 - Do not silently preserve old wording behind "historical" or "legacy" disclaimers.
-- Treat runnable `SKILL.md` files as the canonical skill surface and keep `docs/skills/` documentation-only.
+- Treat runnable `SKILL.md` files as the canonical skill surface.
 
 ## Local Work Sequence
 
@@ -19,12 +19,9 @@
    - `AGENTS.md`
    - `docs/spec-first-workflow.md`
 3. Remove obsolete documentation-only workflow/design-note files:
-   - `docs/agent-centric-rewrite/`
-   - legacy per-skill and adaptation docs under `docs/skills/`
+   - the workflow rewrite notes
+   - the old skill-doc and adaptation layer
 4. Update remaining discoverability and runtime docs:
-   - `docs/skills/skills-catalog.md`
-   - `docs/skills/portable-agent-skills.md`
-   - `docs/skills/skill-writing-guide.md`
    - `.agents/skills/api-contract-designer-spec/SKILL.md`
    - `.agents/skills/api-contract-designer-spec/evals/evals.json`
 5. Clean affected spec records that still point at the removed layer.

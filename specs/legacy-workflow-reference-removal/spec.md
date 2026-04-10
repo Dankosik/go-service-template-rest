@@ -20,7 +20,6 @@ Non-goals:
 ## Constraints
 
 - The canonical runtime contract must stay in `AGENTS.md`, `docs/spec-first-workflow.md`, and `.agents/skills/*/SKILL.md`.
-- `docs/skills/` must remain documentation-only and must not become a competing instruction surface.
 - The resulting documentation should not rely on "legacy" disclaimers; it should simply describe the current workflow.
 - Keep the artifact model consistent across all touched files: `spec.md` is canonical, `workflow-plan.md` captures orchestration when needed, `plan.md` is the coder-facing execution plan for non-trivial work, and `test-plan.md` stays optional.
 
@@ -31,17 +30,17 @@ Non-goals:
    - Delete the `Legacy Compatibility` section from `docs/spec-first-workflow.md`.
 
 2. Remove the obsolete documentation-only design-note layer instead of preserving it behind caveats.
-   - Delete `docs/agent-centric-rewrite/`.
-   - Delete outdated skill-spec and adaptation notes under `docs/skills/` that still teach the old workflow model.
+   - Delete the obsolete workflow rewrite notes.
+   - Delete outdated skill-spec and adaptation notes that still teach the old workflow model.
 
-3. Keep only current documentation surfaces in `docs/skills/`.
-   - Preserve `skills-catalog.md`, `portable-agent-skills.md`, and `skill-writing-guide.md`.
-   - Update those files so they describe only the current canonical surfaces and artifact model.
+3. Keep only current documentation surfaces.
+   - Preserve the active root workflow docs and repository overview.
+   - Remove docs-only skill indexes and guides that no longer exist.
 
 4. Align runnable and discoverability surfaces to the current artifact model.
    - Update `.agents/skills/api-contract-designer-spec/SKILL.md` to point only at `spec.md`.
    - Update its eval expectations accordingly.
-   - Update `docs/skills/skills-catalog.md` descriptions that still reference removed numbered artifacts or retired review/escalation wording.
+   - Update remaining discoverability wording so it no longer points at removed documentation files.
 
 5. Clean the nearest repository specs that would otherwise preserve removed-file references or old workflow wording.
    - Update the affected spec records in `specs/pre-spec-challenge-workflow/` and `specs/workflow-rigor-alignment/`.
@@ -49,7 +48,7 @@ Non-goals:
 ## Open Questions / Assumptions
 
 - Assumption: deleting the documentation-only legacy files is preferable to keeping short redirect stubs because the user explicitly asked to remove the old system as though it never existed.
-- Assumption: keeping the general `docs/skills/` guides while deleting the old per-skill design notes preserves discoverability without leaving a competing instruction layer.
+- Assumption: `README.md` is enough as the human-facing discoverability surface after removing the docs-only skill index layer.
 
 ## Plan Summary / Link
 
@@ -58,26 +57,23 @@ Execution follows [`plan.md`](plan.md).
 Control summary:
 1. Update the active contract surfaces first.
 2. Remove the obsolete documentation-only layers.
-3. Align remaining docs, runnable skills, and nearby spec records.
+3. Align remaining runnable skills and nearby spec records.
 4. Re-scan for the removed markers and record the validation evidence.
 
 ## Validation
 
 Executed:
-- `find docs/skills -maxdepth 1 -type f | sort`
-- `find docs/agent-centric-rewrite -maxdepth 1 -type f`
+- `git diff --name-only --diff-filter=D -- docs`
 - targeted `rg` scan for the retired workflow vocabulary across `AGENTS.md`, `README.md`, `docs/`, `.agents/`, `specs/`, and `.codex/`
-- targeted `rg` scan for references to the deleted `docs/skills/` design-note files
-- targeted `rg` scan for references to `docs/agent-centric-rewrite/`
+- targeted `rg` scan for references to the deleted documentation paths
 - `git diff --check`
 
 ## Outcome
 
 Completed:
 - removed the transition-era compatibility wording from `AGENTS.md` and `docs/spec-first-workflow.md`
-- deleted the obsolete documentation-only workflow/design-note layer under `docs/agent-centric-rewrite/`
-- deleted outdated per-skill and adaptation docs under `docs/skills/`, leaving only the general catalog and authoring guides
-- aligned `docs/skills/skills-catalog.md` with the current artifact model and removed old numbered-artifact/review-gate language
+- deleted the obsolete documentation-only workflow/design-note layer and the old skill-doc layer
+- aligned remaining discoverability wording with the current artifact model and removed references to files that no longer exist
 - updated `.agents/skills/api-contract-designer-spec/SKILL.md` and its evals so the runnable skill points only at `spec.md`
 - cleaned the directly affected spec records so they no longer point at removed files or preserve the retired workflow wording
 

@@ -85,7 +85,6 @@ Non-goals:
 
 8. Discoverability will be updated where users already look for local skills.
    - `README.md`
-   - `docs/skills/skills-catalog.md`
 
 ## Open Questions / Assumptions
 
@@ -118,7 +117,7 @@ Completed:
 - added the canonical orchestrator-facing skill bundle under `.agents/skills/spec-document-designer/`
 - added a compact reference that maps external spec patterns onto this repository's `spec.md`/`plan.md` model
 - added eval prompts covering fresh spec assembly, draft normalization, and upstream-boundary escalation
-- updated `README.md` and `docs/skills/skills-catalog.md`
+- updated `README.md`
 - synced the new skill into all runtime mirror directories
 
 Residual risk:

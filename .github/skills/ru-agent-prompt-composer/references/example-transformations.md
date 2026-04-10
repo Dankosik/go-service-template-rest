@@ -81,14 +81,11 @@ Confirmed Signals And Exact Identifiers
 Relevant Repository Context
 - Canonical local skills live under `.agents/skills/`.
 - Runtime mirrors are maintained by `scripts/dev/sync-skills.sh` and the corresponding `make skills-sync` / `make skills-check` flows.
-- `docs/skills/` is documentation-only.
 - This repo uses a spec-first workflow with `specs/<feature-id>/spec.md`, optional `workflow-plan.md`, and explicit validation evidence.
 
 Inspect First
 - `.agents/skills/`
 - `scripts/dev/sync-skills.sh`
-- `docs/skills/skill-writing-guide.md`
-- `docs/skills/portable-agent-skills.md`
 - `README.md`
 - `AGENTS.md`
 

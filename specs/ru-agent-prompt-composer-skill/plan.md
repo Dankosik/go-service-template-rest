@@ -26,7 +26,6 @@ Review / reconciliation checkpoint:
 
 Tasks:
 - Update `README.md` skill library with the new skill.
-- Update `docs/skills/skills-catalog.md`.
 - Run `bash ./scripts/dev/sync-skills.sh` to create/update runtime mirrors.
 
 Planned verification:

@@ -31,7 +31,7 @@ Do not:
 Escalate if resource ownership, client audience, consistency model, retry expectations, or rollout compatibility cannot be made explicit, or if API-visible behavior depends on unresolved routing, security, distributed, or data/cache decisions.
 
 ## Core Defaults
-- REST over HTTP with JSON payloads; approved API decisions live in `30-api-contract.md` or the API section of `spec.md`, and OpenAPI must mirror that approved wire contract rather than outrank it.
+- REST over HTTP with JSON payloads; approved API decisions live in `spec.md`, and OpenAPI must mirror that approved wire contract rather than outrank it.
 - Keep API major version in the URI prefix.
 - Use `application/problem+json` as the default HTTP error model.
 - Prefer resource or operation resources over action-RPC endpoints.
@@ -39,7 +39,7 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 - Prefer honest async acknowledgement over fake synchronous success.
 - Treat the prompt's stated client problem as the contract budget. Do not widen media types, enum values, flows, or control surfaces unless they remove a concrete ambiguity.
 - Missing contract facts become explicit assumptions or blockers, not implementation guesses.
-- Keep final API decisions in `30-api-contract.md` or the API section of `spec.md`.
+- Keep final API decisions in `spec.md`.
 
 ## Expertise
 
@@ -166,7 +166,7 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 - Admin, debug, or override controls should not piggyback on general client endpoints unless they are explicitly part of the public contract.
 
 ### Artifact Alignment And Adjacent Handoffs
-- Keep final API decisions in `30-api-contract.md` or the API section of `spec.md`; sync only the deltas that materially change adjacent specs.
+- Keep final API decisions in `spec.md`; sync only the deltas that materially change adjacent specs.
 - Keep artifact updates and adjacent handoffs concise and secondary unless the prompt explicitly asks for full spec-package propagation.
 - Recommend which artifacts must change, but do not claim a spec, OpenAPI file, or generated surface was already updated unless the task explicitly included those edits or tool evidence confirms it.
 - Hand off when routing, domain invariants, security, data/cache ownership, or distributed completion semantics become primary. Adjacent skills inform the contract; they do not replace ownership of client-visible API semantics.

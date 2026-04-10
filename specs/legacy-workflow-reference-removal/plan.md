@@ -19,12 +19,12 @@ Review / reconciliation checkpoint:
 ## Phase 2: Documentation-Layer Pruning
 
 Tasks:
-- Delete the obsolete `docs/agent-centric-rewrite/` files.
-- Delete outdated per-skill design notes and adaptation/problem-statement docs under `docs/skills/`.
-- Keep only the current documentation-only guides and catalog in `docs/skills/`.
+- Delete the obsolete workflow rewrite notes.
+- Delete outdated per-skill design notes and adaptation/problem-statement docs.
+- Remove docs-only skill indexes and guides that are no longer part of the repository.
 
 Planned verification:
-- List the remaining files under `docs/skills/`.
+- List the remaining files under `docs/`.
 - Confirm no surviving docs point at removed files.
 
 Exit criteria:
@@ -32,12 +32,12 @@ Exit criteria:
 - No deleted-file references remain in the touched surfaces.
 
 Review / reconciliation checkpoint:
-- Confirm the remaining `docs/skills/` files are enough for discoverability and authoring guidance.
+- Confirm the remaining repository docs are enough for discoverability and authoring guidance.
 
 ## Phase 3: Alignment And Validation
 
 Tasks:
-- Update `docs/skills/skills-catalog.md`, `docs/skills/portable-agent-skills.md`, and `docs/skills/skill-writing-guide.md`.
+- Update the remaining discoverability and runtime references.
 - Update `.agents/skills/api-contract-designer-spec/SKILL.md` and its eval file.
 - Clean the directly affected spec records under `specs/`.
 - Run the final validation scans and record the results in `spec.md`.

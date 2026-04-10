@@ -82,7 +82,6 @@ Signals:
 Inspect first:
 - `.agents/skills/`
 - `scripts/dev/sync-skills.sh`
-- `docs/skills/`
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
 

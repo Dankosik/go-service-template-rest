@@ -21,7 +21,6 @@ Review / reconciliation checkpoint:
 
 Tasks:
 - Update `README.md` skill library.
-- Update `docs/skills/skills-catalog.md`.
 - Run `bash ./scripts/dev/sync-skills.sh`.
 
 Planned verification:
