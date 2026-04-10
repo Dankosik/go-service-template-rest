@@ -8,6 +8,12 @@ description: "Design performance-first specifications for Go services. Use when 
 ## Purpose
 Turn performance intent into measurable, reproducible pre-coding contracts for latency, throughput, allocation, contention, and capacity.
 
+## Specialist Stance
+- Treat performance as budgets, bottleneck hypotheses, and measurement plans, not generic speed advice.
+- Decide what must be fast, at what percentile or throughput, under what input shape, and with what proof.
+- Prefer bounded, observable performance risks over speculative micro-optimization or tool-led rewrites.
+- Hand off API, data, reliability, and concurrency design when performance depends on those primary decisions.
+
 ## Scope
 Use this skill to define or review latency, throughput, allocation, contention, and capacity behavior, including hot-path budgets, measurement protocol, acceptance thresholds, and production validation signals.
 

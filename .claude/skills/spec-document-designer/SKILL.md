@@ -1,6 +1,6 @@
 ---
 name: spec-document-designer
-description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable `spec.md` with the right section depth, decision placement, audit trail, and technical-design handoff before non-trivial planning. Skip raw ideation, technical-design-bundle assembly, full task breakdown, and implementation coding."
+description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable `spec.md` with the right section depth, decision placement, clarification-gate reconciliation, audit trail, and technical-design handoff before non-trivial planning. Skip raw ideation, technical-design-bundle assembly, full task breakdown, and implementation coding."
 ---
 
 # Spec Document Designer
@@ -13,7 +13,7 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 - normalize existing drafts that are too thin, too bloated, or shaped like a foreign template
 - choose the right section depth for the task while staying inside the repository's artifact model
 - translate useful coverage prompts from external spec workflows into repo-native sections
-- keep blockers, assumptions, validation hooks, and plan-summary links visible before handoff to `technical design`
+- keep blockers, assumptions, clarification outcomes, validation hooks, and plan-summary links visible before handoff to `technical design`
 
 ## Boundaries
 Do not:
@@ -23,6 +23,7 @@ Do not:
 - assemble the task-local `design/` bundle; that belongs to `go-design-spec`
 - produce task breakdown, execution sequencing, or coder instructions; that belongs to `planning-and-task-breakdown`
 - silently skip `technical design` for non-trivial work by smuggling design detail into `spec.md`
+- mark non-trivial `spec.md` approved while the autonomous `spec-clarification-challenge` gate is unresolved or blocked; if the gate is blocked, leave the spec unapproved with a reopen target
 - copy BMAD, Spec Kit, Superpowers, or SDD templates directly into this repository's `spec.md`
 
 ## Escalate When
@@ -30,12 +31,14 @@ Escalate if:
 - the request is still idea-shaped, solution-led, or missing its behavior delta
 - current external guidance materially affects the design and has not been researched yet
 - the draft still contains unresolved domain contradictions that would make `spec.md` dishonest
+- the clarification challenge returns `blocks_spec_approval`, `blocks_specific_domain`, or `requires_user_decision` items that the orchestrator has not reconciled
 - the work is tiny enough that a separate spec pass would be ceremony instead of risk reduction
 - non-trivial work still lacks a stable decisions record that `go-design-spec` can carry into `design/` without reopening core framing
 
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
 - For non-trivial work, the handoff path is `spec.md -> design/ -> plan.md`.
+- For non-trivial work, `spec.md` approval requires the autonomous `spec-clarification-challenge` gate before handoff to `technical design`.
 - For non-trivial work, this pass ends the current session at approved `spec.md`; `technical design` begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
@@ -56,6 +59,7 @@ Load by trigger:
 - existing spec rewrite or continuation: the active `spec.md`
 - non-trivial work: the matching `workflow-plan.md`
 - research-backed synthesis: the relevant `research/*.md`
+- non-trivial spec approval: `.agents/skills/spec-clarification-challenge/SKILL.md`
 - handoff drift check: the matching `plan.md`
 - existing technical-design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author design in this pass
 
@@ -117,6 +121,13 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Preserve non-goals and scope cuts so technical design does not re-expand the change.
 - Keep only the planning summary or plan link in `spec.md` when a separate `plan.md` will exist.
 
+### Clarification-Gate Competency
+- Before approving non-trivial `spec.md`, ensure the orchestrator has run a read-only `spec-clarification-challenge` lane, preferably through `challenger-agent`, using exactly that one skill.
+- The challenge returns questions for orchestrator reconciliation; it does not write files or make final decisions.
+- Resolve each planning-critical item from existing evidence, targeted research, an expert subagent lane, explicit risk acceptance, design deferral, or `requires_user_decision`.
+- Store only final resolved outcomes in `spec.md`: stable outcomes in `Decisions`, remaining assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`.
+- Do not copy raw clarification transcripts into `spec.md`.
+
 ### Spec Review Competency
 - Scan for placeholders, `TODO`, `TBD`, contradictions, duplicated content, scope spread, implementation leakage, and research dumped into `Decisions`.
 - Remove decorative sections that do not help the reader or the planner.
@@ -165,7 +176,15 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Keep `Decisions` authoritative and compact.
 - Link out instead of duplicating detail when preserved evidence already exists elsewhere.
 
-### 6. Run A Technical-Design-Handoff Review
+### 6. Run Or Enforce The Clarification Gate
+- For non-trivial work, confirm the `spec-clarification-challenge` gate ran after candidate decisions existed and before approval.
+- If the gate has not run, prepare the compact bundle and route one read-only subagent lane, preferably `challenger-agent`, using only `spec-clarification-challenge`.
+- If the gate returns material questions, keep `spec.md` draft or blocked until the orchestrator reconciles them.
+- If targeted expert research is required, route the appropriate upstream research or expert lane instead of inventing an answer in the spec.
+- If a question is truly external product or business policy, record `requires_user_decision` and leave the spec blocked or partially draft.
+- If material decisions changed or a major seam reopened and then resolved, rerun the clarification challenge once on the updated candidate synthesis.
+
+### 7. Run A Technical-Design-Handoff Review
 - Ask whether non-trivial work can proceed into `technical design` without reopening the problem frame.
 - If yes, finalize the spec, keep the downstream design handoff explicit, and stop at the handoff boundary instead of beginning `technical design` in the same session.
 - If no, escalate to the missing upstream skill or specialist lane.
@@ -191,11 +210,12 @@ Rules:
 ## Definition Of Done
 The pass is complete when:
 - the spec is honest about what is decided and what is not
+- the clarification gate is reconciled, explicitly waived by an eligible direct/local exception, or left blocked with rationale
 - stable decisions are separated from raw evidence
 - scope cuts and non-goals are explicit
 - validation expectations are visible early enough for technical design and later planning
 - the session stops at approved `spec.md` for non-trivial work unless an explicit waiver already allows phase collapse
-- the next technical-design step is clear without turning the spec into a design bundle or a plan
+- the next technical-design or reopen step is clear without turning the spec into a design bundle or a plan
 
 ## Anti-Patterns
 - copying external template headings directly into the repo default shape

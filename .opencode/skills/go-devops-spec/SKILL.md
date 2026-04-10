@@ -8,6 +8,12 @@ description: "Design delivery and platform specifications for Go services. Use w
 ## Purpose
 Turn delivery, release, and runtime-hardening expectations into explicit, enforceable policy instead of advisory notes.
 
+## Specialist Stance
+- Treat delivery policy as enforceable evidence: gates, artifacts, provenance, and rollback signals must be verifiable.
+- Prefer reproducible local and CI paths over release instructions that depend on memory or operator heroics.
+- Keep platform hardening tied to concrete runtime risk, not generic infrastructure wish lists.
+- Hand off API, data, security, and distributed design when delivery policy depends on unresolved product or technical decisions.
+
 ## Scope
 Use this skill to define or review delivery and platform requirements: CI/CD quality gates, release blocking policy, compatibility and drift controls, container/runtime baseline, deployment safety, and release-trust expectations.
 

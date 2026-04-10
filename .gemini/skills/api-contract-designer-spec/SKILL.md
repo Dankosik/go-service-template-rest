@@ -8,6 +8,12 @@ description: "Design API-contract-first specifications for Go services. Use when
 ## Purpose
 Turn product and behavior changes into one client-visible API contract that is explicit enough for OpenAPI, implementation, tests, and rollout to converge without semantic drift.
 
+## Specialist Stance
+- Treat the API as a client-visible compatibility contract, not a handler sketch.
+- Trace every nontrivial recommendation through request parsing, response shape, error semantics, retry behavior, and client migration impact.
+- Prefer the smallest contract surface that solves the caller problem and keeps future compatibility honest.
+- Hand off routing, storage, security, distributed completion, and worker-runtime decisions when they become the primary owner of the hard question.
+
 ## Scope
 Use this skill to define or review REST API behavior before coding:
 - resource and URI model
@@ -31,7 +37,7 @@ Do not:
 Escalate if resource ownership, client audience, consistency model, retry expectations, or rollout compatibility cannot be made explicit, or if API-visible behavior depends on unresolved routing, security, distributed, or data/cache decisions.
 
 ## Core Defaults
-- REST over HTTP with JSON payloads; approved API decisions live in `spec.md`, and OpenAPI must mirror that approved wire contract rather than outrank it.
+- REST over HTTP with JSON payloads; OpenAPI must mirror the approved wire contract rather than outrank it.
 - Keep API major version in the URI prefix.
 - Use `application/problem+json` as the default HTTP error model.
 - Prefer resource or operation resources over action-RPC endpoints.
@@ -39,7 +45,6 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 - Prefer honest async acknowledgement over fake synchronous success.
 - Treat the prompt's stated client problem as the contract budget. Do not widen media types, enum values, flows, or control surfaces unless they remove a concrete ambiguity.
 - Missing contract facts become explicit assumptions or blockers, not implementation guesses.
-- Keep final API decisions in `spec.md`.
 
 ## Expertise
 
@@ -165,10 +170,10 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 - Rate-limit behavior should define `429` semantics and `Retry-After` guidance when throttling is temporary.
 - Admin, debug, or override controls should not piggyback on general client endpoints unless they are explicitly part of the public contract.
 
-### Artifact Alignment And Adjacent Handoffs
-- Keep final API decisions in `spec.md`; sync only the deltas that materially change adjacent specs.
-- Keep artifact updates and adjacent handoffs concise and secondary unless the prompt explicitly asks for full spec-package propagation.
-- Recommend which artifacts must change, but do not claim a spec, OpenAPI file, or generated surface was already updated unless the task explicitly included those edits or tool evidence confirms it.
+### Boundaries And Handoffs
+- Own client-visible API semantics; do not turn this into chi routing, SQL schema, worker runtime, or service-decomposition design.
+- When used inside a repository workflow, hand final API decisions back to the orchestrator's chosen decision artifact; this skill does not own artifact propagation.
+- Recommend OpenAPI or generated-surface updates only when they follow from the contract decision, and do not claim they were updated without tool evidence.
 - Hand off when routing, domain invariants, security, data/cache ownership, or distributed completion semantics become primary. Adjacent skills inform the contract; they do not replace ownership of client-visible API semantics.
 
 ### Compatibility And Evolution
@@ -197,7 +202,7 @@ For every major API recommendation, include:
 - deterministic validation semantics and any legacy-surface coexistence rules when they affect callers
 - if old and new surfaces coexist, a short comparison of which semantics are shared versus temporarily divergent
 - any invented status, media type, or companion surface only when it has an explicit client-facing reason
-- artifact updates and adjacent-skill handoffs
+- adjacent-skill handoffs when the contract depends on another seam
 - compatibility class, assumptions, risks, and reopen conditions
 
 ## Deliverable Shape

@@ -1,0 +1,45 @@
+{
+  "skill_name": "spec-clarification-challenge",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Read the scenario file and run the spec-clarification-challenge pass. Return only the skill's expected deliverable shape.",
+      "expected_output": "A compact approval-focused clarification challenge that surfaces non-obvious export-job questions before `spec.md` approval, with blocker classifications and next actions for orchestrator reconciliation.",
+      "files": [
+        "evals/files/async-export-spec-bundle.md"
+      ],
+      "expectations": [
+        "The output asks questions that could change spec approval, not generic API/security checklist prompts.",
+        "Each question uses one of `blocks_spec_approval`, `blocks_specific_domain`, or `non_blocking_but_record`.",
+        "Each question recommends one of the allowed next actions, such as `answer_from_existing_evidence`, `expert_subagent`, `targeted_research`, `accept_risk`, `defer_to_design`, or `requires_user_decision`.",
+        "The output stays read-only and leaves final decisions to the orchestrator."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Read the scenario file and run the spec-clarification-challenge pass. Return only the skill's expected deliverable shape.",
+      "expected_output": "A spec-approval clarification pass that catches destructive admin-account semantics, audit and session-revocation gaps, and any truly external support-policy decision without inventing a human-only answer.",
+      "files": [
+        "evals/files/admin-deactivation-spec-bundle.md"
+      ],
+      "expectations": [
+        "The output distinguishes repo-answerable approval blockers from policy questions that should use `requires_user_decision`.",
+        "The output avoids approving or redesigning the admin flow itself.",
+        "The output ties audit, reversibility, and active-session questions to concrete approval impact."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Read the scenario file and run the spec-clarification-challenge pass. Return only the skill's expected deliverable shape.",
+      "expected_output": "A targeted clarification challenge that identifies cache ownership, tenant keying, invalidation, and validation-strategy seams that could block or constrain `spec.md` approval.",
+      "files": [
+        "evals/files/account-summary-cache-spec-bundle.md"
+      ],
+      "expectations": [
+        "The output focuses on source-of-truth and acceptance semantics instead of broad performance brainstorming.",
+        "The output uses `blocks_specific_domain` when one expert lane should reopen a bounded data or reliability question.",
+        "The output allows downstream design deferral only for details that do not change spec approval."
+      ]
+    }
+  ]
+}

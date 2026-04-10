@@ -1,18 +1,19 @@
 ---
 name: specification-session
-description: "Own a session dedicated only to specification for this repository. Use when the orchestrator already has framing plus enough researched or explicitly bounded input to finalize an approved `spec.md`, and must update task-local `workflow-plan.md` plus `workflow-plans/specification.md` without drifting into `design/`, `plan.md`, or implementation. Skip tiny direct-path work and tasks that are still in workflow planning or research."
+description: "Own a session dedicated only to specification for this repository. Use when the orchestrator already has framing plus enough researched or explicitly bounded input to finalize `spec.md`, must run or reconcile the non-trivial spec-clarification challenge before approval, and must update task-local `workflow-plan.md` plus `workflow-plans/specification.md` without drifting into `design/`, `plan.md`, or implementation. Skip tiny direct-path work and tasks that are still in workflow planning or research."
 ---
 
 # Specification Session
 
 ## Purpose
 Run only the specification checkpoint for one task-local session.
-This wrapper makes spec-ready input, allowed writes, handoff, and stop conditions explicit; it does not assemble `design/`, produce `plan.md`, or start implementation.
+This wrapper makes spec-ready input, the autonomous clarification gate, allowed writes, handoff, and stop conditions explicit; it does not assemble `design/`, produce `plan.md`, or start implementation.
 
 ## Use When
 - the task already has minimum viable framing and enough evidence or bounded assumptions to support an honest `spec.md`
 - prior workflow routing says the next session starts with `specification`
 - research, challenge, or direct local analysis already narrowed the open questions enough that stable `Decisions` can now be written
+- non-trivial candidate decisions are ready for the required `spec-clarification-challenge` pass before approval
 - task-local `spec.md`, `workflow-plan.md`, or `workflow-plans/specification.md` is missing, stale, or inconsistent and the active session should repair the specification checkpoint only
 
 ## Skip When
@@ -27,6 +28,7 @@ Need only the minimum phase-ready inputs from earlier work:
 - current workflow routing and task-local artifact location
 - the latest upstream phase output that made specification the next checkpoint
 - relevant research findings, comparison notes, or explicit rationale for why more research is not needed
+- candidate decisions compact enough to give a read-only clarification challenger a useful input bundle
 - unresolved assumptions, blockers, or challenge outcomes that still affect spec honesty
 - existing `spec.md`, if this is a continuation or repair rather than a fresh pass
 
@@ -38,6 +40,7 @@ Treat the session as spec-ready only when all of the following are true:
 - material constraints, risks, and validation expectations are visible
 - the current evidence is strong enough to avoid fiction, or the remaining uncertainty is small enough to live honestly in `Open Questions / Assumptions`
 - prior research or direct analysis already answered the must-answer-now questions, or the workflow plan explicitly records why more research is not required
+- for non-trivial work, the `spec-clarification-challenge` gate can be run and reconciled before `spec.md` is marked approved
 - the task can hand off to `technical design` without reopening core framing by default
 
 If those conditions are not met, do not force an approval. Reopen the right upstream phase instead.
@@ -47,6 +50,7 @@ Always read:
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
 - `.agents/skills/spec-document-designer/SKILL.md`
+- `.agents/skills/spec-clarification-challenge/SKILL.md`
 
 Then read current phase context in this order:
 1. task-local `workflow-plan.md`, if present
@@ -80,6 +84,7 @@ Do not:
 - use planning or implementation skills as a backdoor into later phases
 - turn `workflow-plans/specification.md` into a second `spec.md`, a design bundle, or a task list
 - approve `spec.md` when the input is still under-evidenced, contradictory, or idea-shaped
+- approve non-trivial `spec.md` before the clarification challenge is complete, reconciled, or explicitly waived by a direct/local exception; if the gate is blocked, leave `spec.md` unapproved with rationale
 - silently continue into `technical design` once the spec feels close enough
 
 ## Core Defaults
@@ -87,6 +92,8 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the artifact mechanics
 - this wrapper owns specification-session protocol only and must not redefine spec shape, design rules, or planning behavior
 - use `spec-document-designer` as the deeper method for writing or normalizing `spec.md`
+- for non-trivial work, run the clarification challenge with a read-only subagent lane, preferably `challenger-agent`, using exactly one skill: `spec-clarification-challenge`
+- the clarification subagent returns questions for orchestrator reconciliation; it never edits files or makes final decisions
 - keep the wrapper focused on session readiness, allowed writes, handoff, and stop rules
 - a finished specification session ends at approved `spec.md` for non-trivial work unless an earlier recorded waiver already allows phase collapse
 
@@ -115,11 +122,25 @@ Do not:
 - keep technical detail out of `spec.md` when it belongs in a later `design/` artifact
 - keep execution sequencing out of `spec.md`; that belongs to later planning
 
-### 4. Write Or Repair `workflow-plans/specification.md`
+### 4. Run The Autonomous Clarification Gate
+- for non-trivial work, prepare a compact input bundle: problem frame, scope and non-goals, candidate decisions, constraints, validation expectations, known assumptions or open questions, and relevant research links
+- invoke one read-only subagent lane, preferably `challenger-agent`, with exactly one skill: `spec-clarification-challenge`
+- answer each returned question from existing evidence when possible
+- if an answer requires expert work, reopen targeted research or fan-out with one read-only lane per expert question and one skill per lane; in a dedicated specification session, record the reopen and stop unless an upfront direct/local waiver already allowed same-session collapse
+- if a question is truly external product or business policy and cannot be answered from repo evidence or safe assumptions, record `requires_user_decision` and leave `spec.md` blocked or partially draft instead of inventing the answer
+- if material decisions changed or a major seam was reopened and then resolved, rerun the clarification challenge once on the updated candidate synthesis
+- store final resolved outcomes in `spec.md` sections: stable outcomes in `Decisions`, remaining assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`; do not paste raw subagent transcript into `spec.md`
+
+### 5. Write Or Repair `workflow-plans/specification.md`
 - record phase-local orchestration only:
   - readiness check outcome
   - input sources used
   - whether the pass is fresh, continuation, or repair
+  - clarification challenge status
+  - subagent lane used for the clarification challenge, or the direct/local waiver rationale
+  - whether targeted research was reopened
+  - clarification resolution status
+  - why `spec.md` is approved, draft, or blocked
   - phase status
   - completion marker
   - stop rule
@@ -128,13 +149,13 @@ Do not:
   - what can run in parallel
 - keep this file routing-only; do not turn it into `spec.md`, `design/`, or `plan.md`
 
-### 5. Write Or Repair `workflow-plan.md`
+### 6. Write Or Repair `workflow-plan.md`
 - update master phase status, artifact status, blockers, and next-session routing
 - make it explicit whether `spec.md` is approved, still draft, or blocked
-- record whether `technical design` is the next session or whether upstream re-research or challenge reopened the flow
+- record clarification gate status and whether `technical design` is the next session or whether upstream re-research, expert subagent work, or challenge reopened the flow
 - keep the handoff ready for the future `technical-design` session without beginning that work here
 
-### 6. Stop At The Boundary
+### 7. Stop At The Boundary
 - once `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` agree on state and handoff, stop
 - do not start `design/`, `plan.md`, or implementation in the same session
 
@@ -142,7 +163,7 @@ Do not:
 When specification completes successfully, the handoff is:
 - approved `spec.md` as the canonical decisions artifact
 - updated `workflow-plan.md` with the next session routed to `technical-design`
-- updated `workflow-plans/specification.md` showing the specification checkpoint is complete and why the session stopped
+- updated `workflow-plans/specification.md` showing the specification checkpoint is complete, the clarification gate is resolved or explicitly waived, and why the session stopped
 - explicit blockers, accepted assumptions, and reopen conditions that technical design must honor instead of rediscover
 
 Do not hand off a hidden design bundle, task breakdown, or implementation starter patch.
@@ -152,7 +173,8 @@ Every completed or blocked pass must update the master file with:
 - current phase set to this specification checkpoint and current phase status
 - link or status for `workflow-plans/specification.md`
 - status for `spec.md` as `approved`, `draft`, or `blocked`
-- whether the task is spec-ready for `technical design`, or whether research or challenge reopened
+- clarification gate status
+- whether the task is spec-ready for `technical design`, or whether research, expert subagent work, or challenge reopened
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
@@ -173,6 +195,7 @@ It does not produce `design/`, `plan.md`, or implementation output.
 ## Stop Condition
 The session is complete when:
 - the spec-ready check is satisfied or explicitly failed with an honest reopen point
+- the clarification gate is resolved, explicitly waived by an eligible direct/local exception, or clearly blocked
 - `spec.md` is approved or clearly left unapproved for a documented reason
 - master and phase-local workflow artifacts agree on phase status, blockers, and handoff
 - the next session start point is explicit, including whether it is `technical-design`, challenge, or more research
@@ -182,6 +205,7 @@ The session is complete when:
 Escalate instead of forcing output when:
 - the task is still idea-shaped, under-framed, or under-researched
 - material contradictions remain unresolved across domains
+- the clarification challenge produces a planning-critical question that needs targeted research, expert subagent work, or a `requires_user_decision` answer before approval
 - the request tries to combine specification with `design/`, planning, or implementation
 - the task already advanced to `technical design` or later
 - the task is so small that a dedicated specification session would be ceremony
@@ -191,6 +215,7 @@ Escalate instead of forcing output when:
 - turning this wrapper into a second copy of `spec-document-designer`
 - restating full `spec.md` section rules here instead of reusing the deeper skill
 - approving a spec that still depends on invented answers
+- treating the clarification challenge as optional ceremony for non-trivial work
 - hiding research or challenge gaps under generic wording
 - stuffing design detail, task sequencing, or implementation hints into `spec.md` to avoid later phases
 - treating `workflow-plans/specification.md` as a second decision record instead of a phase-control artifact

@@ -8,6 +8,12 @@ description: "Review Go code changes for goroutine lifecycle, cancellation, chan
 ## Purpose
 Protect changed concurrent paths from merge-risk race, deadlock, goroutine leak, send or receive stall, memory-visibility bug, timer leak, shutdown hang, and unbounded-work defects.
 
+## Specialist Stance
+- Demand concrete happens-before, ownership, cancellation, and shutdown evidence instead of scheduler intuition.
+- Treat every goroutine, channel, timer, worker, and shared state path as needing an owner and exit story.
+- Prefer simple synchronization and bounded work over clever lock-free or timing-based fixes.
+- Hand off broader workflow, reliability, performance, or DB/cache design when concurrency is only a symptom surface.
+
 ## Scope
 - review goroutines, channels, mutexes, `sync.RWMutex`, `sync.WaitGroup`, `sync.Cond`, `sync/atomic`, `errgroup`, worker pools, pipelines, fan-out or fan-in paths
 - review goroutine lifecycle, stop ownership, and explicit termination behavior

@@ -11,6 +11,12 @@ Turn rough Russian input into a strong English prompt that another coding agent 
 This skill is for intent reconstruction, task classification, repo-aware context selection, and prompt composition.
 It is not for literal translation.
 
+## Specialist Stance
+- Recover the engineering task behind messy wording without erasing exact user signals.
+- Preserve identifiers, commands, paths, errors, and mixed Russian/English technical terms verbatim.
+- Add repository context only when it materially sharpens the downstream agent's first moves.
+- Make uncertainty explicit in the prompt instead of inventing confident repo facts or asking broad clarification by default.
+
 ## Scope
 - reconstruct the user's actual task from repetitive, nonlinear, dictation-style Russian text
 - preserve exact technical identifiers, filenames, package names, commands, endpoints, API names, and error strings

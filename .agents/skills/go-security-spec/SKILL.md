@@ -8,6 +8,12 @@ description: "Design security requirements for Go services: trust boundaries, id
 ## Purpose
 Define or review security requirements so trust boundaries, identity rules, authorization boundaries, data protection, and failure behavior are explicit, enforceable, and testable.
 
+## Specialist Stance
+- Treat security as explicit trust boundaries, identity rules, denial behavior, and abuse controls.
+- Separate authentication, authorization, tenant isolation, sensitive-data handling, and resource-exhaustion defenses.
+- Prefer fail-closed, least-privilege, standard-library-friendly controls with clear negative-path proof.
+- Hand off architecture, API, physical schema, reliability, observability, or delivery policy when they stop being security-owned decisions.
+
 ## Scope
 - define trust boundaries, security assumptions, and threat exposure for affected flows
 - define identity and access rules, including caller/subject separation, tenant isolation, and object-level authorization

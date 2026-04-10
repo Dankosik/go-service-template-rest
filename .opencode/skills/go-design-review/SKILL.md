@@ -8,6 +8,12 @@ description: "Review Go code changes for architecture alignment, boundary integr
 ## Purpose
 Protect approved design intent in code so boundaries, ownership, maintainability, and cross-domain seams do not drift silently.
 
+## Specialist Stance
+- Review design drift as ownership, dependency direction, source-of-truth spread, and accidental complexity.
+- Prioritize hidden new decisions and boundary bypasses over subjective cleanup.
+- Prefer one explicit same-package seam for stable local policy over both scattered copies and vague helper buckets.
+- Hand off deep API, data, security, reliability, performance, or QA issues when design review only detects the seam.
+
 ## Scope
 - review implementation against approved architecture and design intent
 - detect boundary violations, dependency-direction breaks, and hidden coupling

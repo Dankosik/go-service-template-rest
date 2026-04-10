@@ -30,6 +30,10 @@ More artifacts do not change ownership:
 
 The added artifacts provide control and technical context around `spec.md`, not another authority chain.
 
+The `workflow-status` skill is a read-only status and next-action helper over those artifacts. It can summarize current phase, blockers, allowed writes, stop rule, and implementation-start status, but it is not a session phase, gate, approval record, or replacement for `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `plan.md`, or future `tasks.md`.
+
+The `workflow-plan-adequacy-challenge` skill is a read-only challenger for generated workflow-control artifacts. It helps the orchestrator decide whether `workflow-plan.md` and the active `workflow-plans/<phase>.md` are sufficient for the actual task before handoff; it does not approve the handoff or edit files.
+
 ## 3. Artifact Model
 
 ### Layout
@@ -184,12 +188,12 @@ Design-bundle rules:
 
 Typical path:
 
-- `intake -> workflow planning -> research -> synthesis -> specification -> technical design -> planning -> implementation -> validation -> done`
+- `intake -> workflow planning -> research -> synthesis -> specification(clarification when non-trivial) -> technical design -> planning -> implementation -> validation -> done`
 
 Path variations:
 
 - **Idea-shaped work:** Adds `idea refinement` after `intake`.
-- **Full orchestrated work:** Adds `synthesis(candidate -> challenge -> final)` and may add `review -> reconciliation` before validation.
+- **Full orchestrated work:** Adds `synthesis(candidate -> challenge -> final)` and `specification(candidate -> clarification -> approved)`, and may add `review -> reconciliation` before validation.
 
 Very small work may collapse several stages into one local pass, but stage names still drive artifact expectations and resume logic.
 
@@ -244,6 +248,17 @@ The phase file owns only local orchestration:
 
 Section 7 defines the minimum shape in more detail.
 
+For non-trivial or agent-backed work, the orchestrator runs a workflow plan adequacy challenge after generating or substantially repairing the master and active phase workflow plans, before treating the phase plan as sufficient for handoff. Tiny/direct-path work may skip this with an explicit rationale.
+
+Adequacy gate mechanics:
+
+- The gate reviews `workflow-plan.md`, the active `workflow-plans/<phase>.md`, and any generated post-code phase-control files whose sufficiency affects handoff.
+- The orchestrator invokes one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`.
+- The challenger checks task-specific sufficiency: routing, research mode, lane ownership, artifact expectations, blockers, stop rules, completion marker, next action, next-session handoff, and master/phase consistency.
+- Findings must say what is insufficient, why it matters, what could fail, whether it blocks phase handoff or is recordable, and exactly what the orchestrator should add or clarify.
+- The challenger must not edit artifacts, approve readiness, create a second `spec.md`, `design/`, or `plan.md`, or turn the pass into generic checklist coverage.
+- The orchestrator reconciles findings by repairing workflow-control artifacts, recording accepted risk or an eligible waiver, or reopening the appropriate earlier phase. Blocking findings prevent phase-complete handoff until reconciled.
+
 For tiny local work, a brief explicit skip rationale in the main flow is enough instead of a full master `workflow-plan.md` plus `workflow-plans/`.
 
 ### 6.3 Research, Synthesis, and Specification
@@ -255,14 +270,27 @@ After research:
 - synthesize comparable claims,
 - resolve or track key assumptions,
 - run pre-spec challenge when risk or ambiguity justifies it,
-- stabilize final decisions in `spec.md`,
+- run the autonomous `spec-clarification-challenge` gate before non-trivial `spec.md` approval,
+- stabilize final decisions in `spec.md` only after planning-critical clarification items are reconciled,
 - preserve reusable evidence in `research/*.md` when worth keeping.
 
 `spec.md` should be stable enough that `technical design` can derive task-local context without reopening core problem framing by default.
 
+Clarification gate mechanics:
+
+- The gate is inside `specification`, not a new workflow phase.
+- The orchestrator prepares a compact bundle with problem frame, scope and non-goals, candidate decisions, constraints, validation expectations, assumptions or open questions, and relevant research links.
+- The orchestrator invokes one read-only subagent lane, preferably `challenger-agent`, using exactly one skill: `spec-clarification-challenge`.
+- The subagent returns approval-focused questions classified as `blocks_spec_approval`, `blocks_specific_domain`, or `non_blocking_but_record`, with next actions such as `answer_from_existing_evidence`, `targeted_research`, `expert_subagent`, `accept_risk`, `defer_to_design`, or `requires_user_decision`.
+- The orchestrator answers from existing evidence where possible, or reopens one read-only targeted research or expert lane per question when evidence is missing.
+- Do not ask the human during the normal loop. If the point is truly external product or business policy, record `requires_user_decision` and leave `spec.md` blocked or partially draft.
+- If material decisions changed or a major seam reopened and was resolved, rerun the clarification challenge once.
+- Store final answers in existing `spec.md` sections only: stable outcomes in `Decisions`, assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`. Do not add raw subagent transcripts to `spec.md`.
+- `workflow-plans/specification.md` records clarification status, lane used, targeted research status, resolution status, and approval or block rationale. `workflow-plan.md` records `spec.md` status and clarification gate status.
+
 ### 6.4 Technical Design
 
-`technical design` begins after `spec.md` is stable enough to support design work.
+`technical design` begins after `spec.md` is stable enough to support design work and any required clarification gate is resolved or explicitly waived by an eligible direct/local exception. If the clarification gate is blocked, route to the recorded upstream reopen target instead of starting design.
 
 It:
 
@@ -282,6 +310,7 @@ Enter planning only when:
 - minimum viable framing is explicit,
 - workflow planning chose `local` or `fan-out`,
 - `spec.md` is stable,
+- non-trivial specification clarification is reconciled or explicitly waived by an eligible direct/local exception,
 - required `design/` artifacts are approved or an explicit design-skip rationale exists,
 - higher-risk pre-spec challenge is reconciled or explicitly waived.
 
@@ -308,6 +337,7 @@ For non-trivial work, a session may advance only the `Current phase` recorded in
 
 At completion:
 
+- reconcile blocking workflow plan adequacy challenge findings, or record the eligible direct/local skip rationale,
 - update the owning artifact, current phase workflow plan, and master `workflow-plan.md`,
 - mark `Session boundary reached: yes`,
 - set `Ready for next session` appropriately,
@@ -366,6 +396,7 @@ At minimum, it answers:
 - artifact status (`approved`, `draft`, or `missing`),
 - blockers,
 - phase workflow plan status,
+- workflow plan adequacy challenge status when required,
 - default resume order.
 
 ### 7.2 `workflow-plans/<phase>.md`
@@ -379,17 +410,18 @@ At minimum, it answers:
 - stop rule,
 - next action,
 - parallelizable work,
-- local blockers.
+- local blockers,
+- workflow plan adequacy challenge status and resolution when required.
 
 It is phase-local routing, not a replacement for `spec.md`, `design/`, or `plan.md`.
 
 Recommended update cadence:
 
-- After framing or workflow planning: update the master file with execution shape, current phase, blockers, next-session routing, phase-plan links/status, and artifact expectations; update the current phase file with local orchestration, lanes, completion marker, and stop rule.
-- After synthesis: update `spec.md` status in the master file and record any blocker that prevents leaving `workflow-plans/specification.md`.
+- After framing or workflow planning: update the master file with execution shape, current phase, blockers, next-session routing, phase-plan links/status, and artifact expectations; update the current phase file with local orchestration, lanes, completion marker, and stop rule; run or explicitly waive the workflow plan adequacy challenge before handoff.
+- After synthesis/specification: update `spec.md` status in the master file, record clarification gate status, and record any blocker that prevents leaving `workflow-plans/specification.md`.
 - After `technical design` or planning: record approved design artifacts or `plan.md` status in the master file and current phase file; during planning, also create any implementation/review/validation phase workflow files that the approved phase structure will use.
 - After each implementation checkpoint: update only the existing current phase workflow plan plus the master file. If a needed workflow/process artifact is missing, reopen the relevant earlier phase instead of creating it mid-implementation.
-- After any phase-complete handoff: mark `Session boundary reached`, `Ready for next session`, and `Next session starts with` in the master file and close the current phase workflow plan.
+- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, and `Next session starts with` in the master file, and close the current phase workflow plan.
 - After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof. If an expected validation control file is missing, reopen the relevant earlier phase instead of creating it during closeout.
 
 Minimal split example:
@@ -428,6 +460,7 @@ If the task was intentionally small enough to skip some artifacts, read the reco
 Use artifacts, not memory:
 
 - no approved `spec.md` means framing or specification is still incomplete
+- draft or blocked `spec.md` with unresolved clarification gate status means specification is still incomplete
 - approved `spec.md` but no approved design bundle means `technical design` is still incomplete
 - approved design bundle but no approved `plan.md` means planning is still incomplete
 - approved `plan.md` means the task is implementation-ready; `workflow-plan.md` then shows whether implementation is still ahead or already in progress
@@ -468,6 +501,7 @@ Avoid:
 - **Competing phase files:** Letting `workflow-plans/<phase>.md` replace the master `workflow-plan.md` or grow into a competing design or execution artifact.
 - **Phase-boundary drift:** Finishing one non-trivial phase and casually starting the next one in the same session without an upfront recorded waiver.
 - **Planning from `spec.md` alone:** Planning non-trivial work from `spec.md` alone after the design-bundle stage exists.
+- **Skipping clarification approval:** Marking non-trivial `spec.md` approved while the autonomous clarification gate is unresolved or blocked, instead of reconciling it, waiving it through an eligible direct/local exception, or leaving `spec.md` blocked with a reopen target.
 - **Design bundle drift:** Letting `design/` turn into a second `spec.md` or a second `plan.md`.
 - **New process artifacts after code starts:** Creating new workflow/process markdown during implementation or validation instead of reopening the correct earlier phase.
 - **Just-in-case artifacts:** Creating `test-plan.md`, `rollout.md`, or conditional design files "just in case".

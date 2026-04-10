@@ -28,7 +28,7 @@ This template is built from the opposite assumption: if you want agents to be us
 That is why this repository is opinionated in four places:
 
 1. **The workflow is explicit.**
-   Non-trivial work starts with optional idea refinement, then framing, workflow planning, research, synthesis, pre-spec challenge, specification, technical design, implementation planning, implementation, review, and validation. The loop is visible, not implied, one session normally owns one phase, and session wrappers such as `workflow-planning-session`, `research-session`, `specification-session`, `technical-design-session`, `planning-session`, and `validation-closeout-session` keep those handoffs explicit.
+   Non-trivial work starts with optional idea refinement, then framing, workflow planning, research, synthesis, pre-spec challenge, specification with an autonomous clarification gate, technical design, implementation planning, implementation, review, and validation. The loop is visible, not implied, one session normally owns one phase, and session wrappers such as `workflow-planning-session`, `research-session`, `specification-session`, `technical-design-session`, `planning-session`, and `validation-closeout-session` keep those handoffs explicit.
 2. **The specialists are real.**
    Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
 3. **The skills are Go-native.**
@@ -53,7 +53,7 @@ The fix is not a single block of text. It shapes the whole repository:
 This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
 
 ```text
-intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec challenge -> specification -> technical design -> planning -> implementation -> review -> validation
+intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec challenge -> specification + clarification challenge -> technical design -> planning -> implementation -> review -> validation
 ```
 
 - `intake`: frame the change, scope it, and record assumptions.
@@ -62,7 +62,7 @@ intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec
 - `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains. When in doubt on a complex task, prefer more lanes over fewer.
 - `synthesis`: compare specialist output and produce candidate decisions.
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
-- `specification`: stabilize final decisions, constraints, and open questions in `spec.md` before technical design or task breakdown begins.
+- `specification`: stabilize final decisions, constraints, and open questions in `spec.md`; for non-trivial work, run the autonomous `spec-clarification-challenge` gate through a read-only challenger before approval.
 - `technical design`: for non-trivial work, turn approved decisions into a task-local `design/` bundle. Load [`docs/repo-architecture.md`](docs/repo-architecture.md) first when stable repository boundaries or runtime flows matter.
 - `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn approved `spec.md + design/` into phased, verifiable execution work; for non-trivial implementation, that plan lives in `plan.md`, and any later implementation/review/validation phase workflow files are created here before code starts.
 - `implementation`: change the service in the main flow, not inside research agents. New code/test files are fine when the approved plan requires them; new workflow/process artifacts are not.
@@ -75,7 +75,7 @@ When a task benefits from explicit session boundaries, use the phase/session wra
 
 - `workflow-planning-session`: own the pre-research routing pass only.
 - `research-session`: own evidence gathering and optional preserved `research/*.md` only.
-- `specification-session`: own `spec.md` approval and `workflow-plans/specification.md` only.
+- `specification-session`: own `spec.md` approval, the clarification gate, and `workflow-plans/specification.md` only.
 - `technical-design-session`: own the task-local `design/` bundle and `workflow-plans/technical-design.md` only.
 - `planning-session`: own `plan.md`, optional `test-plan.md` or `rollout.md`, any later phase workflow files the approved plan already requires, and `workflow-plans/planning.md` only.
 - `validation-closeout-session`: own fresh proof, `spec.md` closeout updates, and existing validation-phase routing only.
@@ -85,7 +85,10 @@ Think of the workflow-control artifacts as complementary, not competing:
 - `workflow-plan.md`: master cross-phase routing, artifact status, blockers, and next-session handoff.
 - `workflow-plans/<phase>.md`: one phase only, with local orchestration, completion marker, stop rule, and next action.
 
+Use `workflow-status` when you only need a compact read-only status or next-action check from existing artifacts. It reports state; it does not repair artifacts, approve readiness, or replace the workflow-control files.
+
 `pre-spec challenge` is a risk-driven checkpoint inside the synthesis boundary, not a separate approval authority.
+`spec-clarification-challenge` is a required non-trivial approval gate inside `specification`: a read-only challenger surfaces high-impact questions for the orchestrator to answer from evidence, route to targeted research, accept as risk, defer with rationale, or mark `requires_user_decision` without inventing an answer.
 For tiny or direct-path fixes, several of these stages can collapse into one short local pass instead of turning into mandatory ceremony.
 Write-capable delegate agents are out of policy for this workflow; if a tool surface cannot reliably stay read-only, keep that track in the main flow instead of delegating it.
 
@@ -106,7 +109,7 @@ Click an agent name to open its project-scoped instruction file in `.claude/agen
 | [`architecture-agent`](.claude/agents/architecture-agent.md) | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
 | [`api-agent`](.claude/agents/api-agent.md) | client-visible contract behavior and transport semantics | endpoints, statuses, errors, idempotency, or async acknowledgment change | contract recommendation, compatibility notes |
 | [`concurrency-agent`](.claude/agents/concurrency-agent.md) | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
-| [`challenger-agent`](.claude/agents/challenger-agent.md) | pre-spec challenge, hidden assumptions, corner cases, and planning-risk pressure tests | candidate decisions exist but need an independent challenger before planning | discriminating questions, blocker calls, next actions |
+| [`challenger-agent`](.claude/agents/challenger-agent.md) | pre-spec challenge, spec clarification challenge, hidden assumptions, corner cases, and planning-risk pressure tests | candidate decisions exist but need an independent challenger before planning or before non-trivial `spec.md` approval | discriminating questions, blocker calls, next actions |
 | [`data-agent`](.claude/agents/data-agent.md) | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
 | [`delivery-agent`](.claude/agents/delivery-agent.md) | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
 | [`design-integrator-agent`](.claude/agents/design-integrator-agent.md) | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
@@ -145,6 +148,7 @@ claude -p --agent qa-agent -- "List the minimum regression obligations for chang
 
 - New endpoint or contract change: `api-agent` + `domain-agent` + `qa-agent`
 - Pre-spec pressure-test on ambiguous work: `challenger-agent` + the specialist whose decision still feels under-evidenced
+- Spec approval clarification: `challenger-agent` with exactly one skill, `spec-clarification-challenge`
 - Storage, cache, or migration change: `data-agent` + `reliability-agent`
 - Cross-service or async workflow: `architecture-agent` + `distributed-agent` + `security-agent`
 - Pre-merge cleanup on a larger diff: `quality-agent` + the domain reviewer that matches the risk
@@ -165,7 +169,7 @@ The catalog has two layers:
 |---|---|---|
 | [`workflow-planning-session`](.agents/skills/workflow-planning-session/SKILL.md) | owns the workflow-planning checkpoint only and writes or repairs `workflow-plan.md` plus `workflow-plans/workflow-planning.md` | non-trivial or agent-backed work needs explicit routing, research mode, lane planning, and artifact expectations before research starts |
 | [`research-session`](.agents/skills/research-session/SKILL.md) | owns the research checkpoint only and keeps evidence gathering, optional `research/*.md`, and routing updates separate from spec writing | the task already has framing and workflow routing, but one bounded research session is needed before specification |
-| [`specification-session`](.agents/skills/specification-session/SKILL.md) | owns the specification checkpoint only and updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into design or planning | research or bounded local analysis is strong enough that the next honest step is finalizing the decision record |
+| [`specification-session`](.agents/skills/specification-session/SKILL.md) | owns the specification checkpoint only, runs or reconciles the non-trivial clarification gate, and updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into design or planning | research or bounded local analysis is strong enough that the next honest step is finalizing the decision record |
 | [`technical-design-session`](.agents/skills/technical-design-session/SKILL.md) | owns the technical-design checkpoint only and turns approved `spec.md` into a planning-ready `design/` bundle plus `workflow-plans/technical-design.md` | non-trivial work needs task-local technical design before implementation planning |
 | [`planning-session`](.agents/skills/planning-session/SKILL.md) | owns the planning checkpoint only and produces `plan.md`, optional `test-plan.md` or `rollout.md`, and any later phase workflow files the approved plan already requires, while updating `workflow-plans/planning.md` | approved `spec.md + design/` are ready to turn into ordered, coder-facing execution work |
 | [`validation-closeout-session`](.agents/skills/validation-closeout-session/SKILL.md) | owns final validation and closeout only, refreshes `spec.md` `Validation` and `Outcome`, and updates existing validation-phase routing honestly | implementation is finished and you need fresh proof before saying a phase or task is complete |
@@ -177,12 +181,14 @@ The catalog has two layers:
 | [`idea-refine`](.agents/skills/idea-refine/SKILL.md) | turns a raw idea into one concrete direction with explicit user problem, assumptions, MVP boundary, and not-doing list | the request is still product- or solution-ambiguous and is not ready for engineering framing yet |
 | [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a refined idea or rough change request into an engineering-ready problem frame with scope, constraints, assumptions, and design-readiness | the task is close to spec work but still needs crisp framing before challenge or deeper design |
 | [`pre-spec-challenge`](.agents/skills/pre-spec-challenge/SKILL.md) | pressure-tests candidate decisions with discriminating questions before planning | research is done but hidden assumptions or edge cases could still change the spec |
+| [`spec-clarification-challenge`](.agents/skills/spec-clarification-challenge/SKILL.md) | surfaces non-obvious spec-approval questions for orchestrator reconciliation before non-trivial `spec.md` is marked approved | candidate decisions exist inside `specification` and the orchestrator needs a read-only clarification gate before approval |
 | [`spec-document-designer`](.agents/skills/spec-document-designer/SKILL.md) | designs and normalizes repository-native `spec.md` decision records with the right section depth, decision placement, and handoff into design and planning | framing or research is already in place and the orchestrator needs a clean decision record instead of a PRD, research dump, or task list |
 | [`planning-and-task-breakdown`](.agents/skills/planning-and-task-breakdown/SKILL.md) | turns approved `spec.md + design/` into phased tasks, checkpoints, acceptance criteria, and verification steps | the decisions and task-local technical design are stable and implementation needs a real `plan.md` instead of ad hoc execution |
 | [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift or new workflow-artifact sprawl | the implementation plan is explicit and code work is next |
 | [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations as implementation work, not new planning | test code itself needs to be added or upgraded |
 | [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
 | [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence without inventing missing process artifacts | you are about to say “fixed”, “ready”, or “done” |
+| [`workflow-status`](.agents/skills/workflow-status/SKILL.md) | reports the current task path, phase, blockers, allowed writes, next action, stop rule, and implementation-start status from existing artifacts only | you need a compact read-only workflow status or next-action check without creating a new source of truth |
 
 ### Prompt Composition And Tooling
 
@@ -380,6 +386,7 @@ Use `idea-refine` only if the request is still too raw.
 Frame a change to add tenant-aware export jobs.
 Fan out to `architecture-agent`, `data-agent`, and `qa-agent` only if needed.
 Run `challenger-agent` before `specification-session` if material assumptions remain.
+During `specification-session`, run `challenger-agent` with `spec-clarification-challenge` before approving non-trivial `spec.md`.
 Load `docs/repo-architecture.md` before `technical-design-session` if repository boundaries matter.
 Write master control to `specs/tenant-export-jobs/workflow-plan.md`.
 Start the current checkpoint in `specs/tenant-export-jobs/workflow-plans/workflow-planning.md`, then advance one session-bounded phase at a time through `research.md`, `specification.md`, `technical-design.md`, `planning.md`, and any needed post-code phase files.

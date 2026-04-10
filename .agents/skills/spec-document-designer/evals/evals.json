@@ -4,12 +4,13 @@
     {
       "id": 0,
       "prompt": "We already did framing for a Go service change and I need help hardening the actual `spec.md`, not writing a PRD and not doing task breakdown yet.\n\nCurrent state:\n- Problem: admins need an async CSV export for usage data because the current synchronous endpoint times out.\n- Scope: admin-only, no self-serve user exports yet.\n- Product wants one export at a time per workspace and a download link that expires after 24 hours.\n- Reliability notes say job status must survive restarts and users need a clear `queued -> running -> ready -> failed` state.\n- Security notes say exports may contain tenant-sensitive data, so download access must stay workspace-scoped.\n- We already researched storage and signed URL patterns.\n- We want the resulting spec to be stable enough for planning in this repository.\n\nDesign the repo-native `spec.md` shape and content focus for this change.",
-      "expected_output": "A repository-native spec pass that keeps the default section model, captures the behavior and validation contract, and avoids drifting into PRD or task-list form.",
+      "expected_output": "A repository-native spec pass that keeps the default section model, captures the behavior and validation contract, requires the non-trivial clarification gate before approval, and avoids drifting into PRD or task-list form.",
       "files": [],
       "expectations": [
         "Uses the repository-native `spec.md` sections or a clear merged variant rather than copying a foreign template",
         "Captures the async export behavior, scope cuts, and material security/reliability constraints as decisions or constraints",
         "Keeps execution sequencing out of the spec and leaves planning as a separate next step",
+        "Requires `spec-clarification-challenge` reconciliation before the non-trivial spec is marked approved",
         "Makes validation expectations visible, such as status behavior, expiry semantics, or scoped download proof"
       ]
     },
@@ -22,7 +23,8 @@
         "Removes or relocates task sequencing and file-edit detail out of `spec.md`",
         "Keeps raw research out of `Decisions` and points it toward `research/*.md` or a summary link",
         "Replaces placeholder text with explicit open questions, assumptions, or blockers",
-        "Preserves the bounded scope of webhook retry and dead-letter visibility instead of re-expanding the change"
+        "Preserves the bounded scope of webhook retry and dead-letter visibility instead of re-expanding the change",
+        "Does not mark the normalized non-trivial spec approved until clarification-gate blockers are reconciled or explicitly routed"
       ]
     },
     {
@@ -34,7 +36,8 @@
         "Recognizes that the request is not mature enough for a real spec pass",
         "Escalates toward framing or specialist design instead of pretending the spec is ready",
         "Names the missing semantics that block an honest `spec.md`, such as actor boundary, provisioning model, tenant isolation, or protocol choice",
-        "Does not output a fake complete spec structure with invented decisions"
+        "Does not output a fake complete spec structure with invented decisions",
+        "Does not use the clarification challenge as a substitute for missing framing or specialist research"
       ]
     }
   ]

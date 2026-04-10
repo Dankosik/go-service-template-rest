@@ -69,6 +69,7 @@ Do not:
 - This skill owns session protocol only. It must not redefine later artifact ownership or phase behavior.
 - Use `workflow-planning-session` only when a dedicated workflow-planning session is the intended control shape.
 - Later phase-local files from the repository contract still matter: this wrapper does not replace `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, `workflow-plans/planning.md`, or conditional post-code phase files.
+- Before handoff on non-trivial or agent-backed work, run or record the read-only `workflow-plan-adequacy-challenge`; tiny/direct-path work may skip it only with an explicit rationale.
 - For non-trivial work, stop after the workflow artifacts are updated. Research or another recorded next phase begins in a new session unless an approved waiver already exists.
 
 ## Workflow
@@ -109,7 +110,13 @@ Do not:
 - Include research mode when relevant, planned subagent lanes, order or parallelism, fan-in or challenge path, phase status, completion marker, next action, blockers, what can run in parallel, and the local stop rule.
 - Keep this file routing-only. Do not turn it into `spec.md`, `design/`, or `plan.md`.
 
-### 7. Stop At The Boundary
+### 7. Run Or Record The Workflow Plan Adequacy Challenge
+- For non-trivial or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`.
+- Give it the task frame, execution shape, master workflow plan, `workflow-plans/workflow-planning.md`, planned lanes, artifact expectations, and next-session handoff.
+- Reconcile blocking findings by repairing the workflow-control artifacts, recording an accepted risk or waiver, or leaving the session blocked.
+- For tiny/direct-path work, record the skip rationale instead of forcing the challenge.
+
+### 8. Stop At The Boundary
 - Once the two workflow artifacts are consistent and the next session can start without re-planning, stop.
 - Do not begin research, specification, technical design, planning, or implementation in this session.
 
@@ -123,6 +130,7 @@ Every completed pass must update the master file with:
 - `Next session starts with`
 - blockers and accepted assumptions that still affect routing
 - phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
+- workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale
 - artifact status for `spec.md`, `design/`, `plan.md`, and any triggered `test-plan.md` or `rollout.md`
 - phased-delivery policy, including whether later implementation, review, and validation phase files are expected or still unknown
 
@@ -142,6 +150,7 @@ The session is complete when:
 - the current workflow-planning checkpoint has a written completion marker and stop rule
 - the next session start point is explicit
 - master and phase-local workflow artifacts agree on phase status, blockers, and handoff
+- required workflow plan adequacy challenge findings are reconciled, or an eligible skip rationale is explicit
 - later required artifacts are marked as expected, draft, missing, or not expected instead of guessed into existence
 - no research, specification, technical design, planning, or implementation work has started
 
@@ -160,4 +169,5 @@ Escalate instead of forcing output when:
 - creating `workflow-plans/workflow-planning.md` plus another active pre-research control file for the same checkpoint
 - inventing artifact status or blocker resolution for completeness theater
 - selecting fan-out lanes without naming the question each lane owns
+- marking the workflow-planning handoff ready while blocking adequacy challenge findings are unreconciled
 - starting research "just to get ahead" before closing the session

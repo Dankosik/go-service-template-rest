@@ -8,6 +8,12 @@ description: "Design domain-invariant-first specifications for Go services. Use 
 ## Purpose
 Turn product behavior into explicit, falsifiable domain rules so that invariants, state transitions, and acceptance behavior are testable before implementation begins.
 
+## Specialist Stance
+- Treat the domain model as the source of allowed behavior, not a shadow of transport or storage shape.
+- Name invariants, actors, states, transitions, side effects, and rejection rules explicitly.
+- Prefer crisp acceptance semantics and forbidden-state handling over broad “business logic” prose.
+- Hand off API encoding, data modeling, reliability, and test strategy when they become implementation of the domain decision rather than the decision itself.
+
 ## Scope
 Use this skill to define or review business invariants, state-transition rules, acceptance criteria, corner cases, and the traceability of those rules into API, data, reliability, and testing decisions.
 

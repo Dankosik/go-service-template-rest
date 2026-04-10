@@ -8,6 +8,12 @@ description: "Design test-strategy-first specifications for Go services. Use whe
 ## Purpose
 Turn changed behavior into explicit, risk-based test obligations before coding so that implementation and review do not need to invent coverage later.
 
+## Specialist Stance
+- Treat test strategy as risk selection and proof design, not a coverage checklist.
+- Choose the smallest level that can honestly prove each invariant, contract, failure mode, or regression risk.
+- Make scenarios executable, deterministic, and traceable to approved behavior.
+- Hand off domain, API, data, reliability, security, or performance decisions when test obligations depend on unresolved semantics.
+
 ## Scope
 Use this skill to define or review risk-based test strategy: level selection, scenario matrix, invariant traceability, fail-path obligations, contract coverage, and executable quality checks.
 

@@ -8,6 +8,12 @@ description: "Review Go code changes for test coverage quality, scenario traceab
 ## Purpose
 Protect merge confidence by making sure changed behavior is covered by meaningful, deterministic, reviewable tests.
 
+## Specialist Stance
+- Review proof quality, not test volume.
+- Prioritize missing fail paths, weak assertions, nondeterminism, untraceable scenarios, and validation commands that do not prove the changed risk.
+- Treat flaky, sleep-driven, or over-helpered tests as review risk even when they sometimes pass.
+- Hand off domain, security, reliability, DB/cache, or performance depth when the missing proof depends on those specialist semantics.
+
 ## Scope
 - review tests against approved obligations or other explicit behavior expectations
 - review critical happy-path, fail-path, and edge-path scenario coverage

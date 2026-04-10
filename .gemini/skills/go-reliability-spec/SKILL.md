@@ -8,6 +8,12 @@ description: "Design reliability requirements for Go services: timeouts, deadlin
 ## Purpose
 Define or review reliability behavior so failure handling, timeout policy, retry policy, overload response, degradation, and shutdown behavior are explicit, bounded, and testable.
 
+## Specialist Stance
+- Treat reliability as explicit failure contracts, budgets, backpressure, and lifecycle behavior.
+- Prefer bounded retries, deadlines, concurrency limits, degradation rules, and rollback-safe defaults over optimistic recovery.
+- Make caller-visible and operator-visible failure semantics testable before implementation.
+- Hand off service decomposition, API modeling, data/cache mechanics, and security policy when reliability is only a dependent seam.
+
 ## Scope
 - define per-dependency failure contracts and criticality classes
 - define timeout and deadline policy, including propagation and fail-fast behavior

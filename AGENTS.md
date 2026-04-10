@@ -32,11 +32,12 @@ Default to **orchestrator** behavior unless work was clearly delegated.
 4. Run local research or read-only fan-out as planned.
 5. Synthesize research into candidate decisions.
 6. Run a pre-spec challenge pass when task risk or ambiguity justifies it.
-7. Finalize the decision record in `spec.md`.
-8. Produce the task-local technical design bundle when the task size and risk require it.
-9. Break the approved `spec.md + design/` into phased tasks before coding.
-10. Implement in the main flow.
-11. Run review, recheck, and validation only as far as task risk requires.
+7. During `specification`, run the autonomous spec clarification challenge before approving non-trivial `spec.md`.
+8. Finalize the decision record in `spec.md`.
+9. Produce the task-local technical design bundle when the task size and risk require it.
+10. Break the approved `spec.md + design/` into phased tasks before coding.
+11. Implement in the main flow.
+12. Run review, recheck, and validation only as far as task risk requires.
 
 For very small, low-risk tasks, keep workflow planning, research, synthesis, technical design, and implementation planning local. The plan may be 1-3 concise lines in the main flow, with a design-skip rationale when needed. The invariants still apply.
 
@@ -54,14 +55,15 @@ For very small, low-risk tasks, keep workflow planning, research, synthesis, tec
 10. **Coding gate:** Coding must not start until the implementation plan is explicit.
 11. **High-impact decisions:** High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
 12. **Synthesis gate:** Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
-13. **Review authority:** Review findings are advisory until the orchestrator reconciles them.
-14. **No invented completeness:** Never invent missing facts or fill irrelevant sections for “completeness”.
-15. **Structure discipline:** Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
-16. **Validation before claims:** No readiness or completion claim without fresh validation evidence.
-17. **Subagent waits:** Do not treat a short subagent wait timeout as failure. When a subagent result is required for fan-in, review, or user-requested agent work, wait up to 20 minutes per cycle and keep polling unless the agent is clearly hung, superseded, or explicitly canceled by the user.
-18. **One skill per pass:** A subagent pass uses **at most one skill**. If a question would benefit from multiple skills, split it into multiple lanes or keep synthesis local in the orchestrator.
-19. **Fan-out coverage:** In `fan-out` mode, use as many read-only lanes as needed, including duplicate-role lanes when scope, question, or chosen skill differs; prefer slight over-coverage to leaving a material seam unexamined.
-20. **One named phase per session:** For non-trivial work, one session owns one named phase. When it reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, mark the boundary, and stop. Start the next phase in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
+13. **Spec approval clarification gate:** Non-trivial `spec.md` approval requires the autonomous `spec-clarification-challenge` loop inside `specification`; the orchestrator must reconcile all planning-critical questions before marking `spec.md` approved.
+14. **Review authority:** Review findings are advisory until the orchestrator reconciles them.
+15. **No invented completeness:** Never invent missing facts or fill irrelevant sections for “completeness”.
+16. **Structure discipline:** Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
+17. **Validation before claims:** No readiness or completion claim without fresh validation evidence.
+18. **Subagent waits:** Do not treat a short subagent wait timeout as failure. When a subagent result is required for fan-in, review, or user-requested agent work, wait up to 20 minutes per cycle and keep polling unless the agent is clearly hung, superseded, or explicitly canceled by the user.
+19. **One skill per pass:** A subagent pass uses **at most one skill**. If a question would benefit from multiple skills, split it into multiple lanes or keep synthesis local in the orchestrator.
+20. **Fan-out coverage:** In `fan-out` mode, use as many read-only lanes as needed, including duplicate-role lanes when scope, question, or chosen skill differs; prefer slight over-coverage to leaving a material seam unexamined.
+21. **One named phase per session:** For non-trivial work, one session owns one named phase. When it reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, mark the boundary, and stop. Start the next phase in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
 
 ### Artifact phase boundary
 
@@ -120,6 +122,10 @@ Workflow states:
 
 `pre-spec challenge` is a checkpoint inside `synthesis`, not a separate authority state.
 
+`spec clarification challenge` is a gate inside `specification`, not a separate workflow phase.
+
+`workflow plan adequacy challenge` is a read-only challenge gate on generated workflow-control artifacts, not a separate workflow phase or authority.
+
 ### Execution shapes
 
 - `direct path` — tiny, reversible, single-surface work with high confidence after a first read. No subagents by default. Research and planning stay local.
@@ -128,10 +134,10 @@ Workflow states:
 
 ### Typical paths
 
-- **Direct / lightweight local:** `intake -> workflow planning -> research -> synthesis -> specification -> technical design -> planning -> implementation -> validation -> done`
-- **Idea-shaped work:** `intake -> idea refinement -> workflow planning -> research -> synthesis -> specification -> technical design -> planning -> implementation -> validation -> done`
-- **Full orchestrated:** `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> specification -> technical design -> planning -> implementation -> validation -> done`
-- **With review:** `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> specification -> technical design -> planning -> implementation -> review -> reconciliation -> validation -> done`
+- **Direct / lightweight local:** `intake -> workflow planning -> research -> synthesis -> specification(clarification when non-trivial) -> technical design -> planning -> implementation -> validation -> done`
+- **Idea-shaped work:** `intake -> idea refinement -> workflow planning -> research -> synthesis -> specification(clarification when non-trivial) -> technical design -> planning -> implementation -> validation -> done`
+- **Full orchestrated:** `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> specification(candidate -> clarification -> approved) -> technical design -> planning -> implementation -> validation -> done`
+- **With review:** `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> specification(candidate -> clarification -> approved) -> technical design -> planning -> implementation -> review -> reconciliation -> validation -> done`
 
 ### Session-bounded phases
 
@@ -156,6 +162,7 @@ For `direct path` and `lightweight local` work, `workflow planning`, `research`,
 
 - `synthesis -> research` for recheck or second opinion
 - `pre-spec challenge -> targeted research -> synthesis` when the challenger exposes an under-evidenced seam that needs specialist follow-up
+- `specification clarification -> targeted research -> specification` when the clarification gate exposes a spec-approval question that needs expert evidence
 - `technical design -> specification` if design work exposes a missing decision or unstable spec boundary
 - `planning -> technical design` if task breakdown exposes a missing technical context or unstable ownership/sequence boundary
 - `reconciliation -> review` for post-fix re-review
@@ -177,6 +184,12 @@ The phase file records only phase-local orchestration: research mode (`local` or
 
 For each lane, record the role, owned question, and single chosen skill (or `no-skill`). For tiny local work, a brief skip rationale in the main flow is enough.
 
+For non-trivial or agent-backed work, run a read-only workflow plan adequacy challenge before treating a generated `workflow-plan.md` plus active `workflow-plans/<phase>.md` as sufficient for phase handoff. This gate can be skipped only for tiny or explicitly waived direct/local work with a recorded rationale.
+
+The adequacy challenger inspects whether the workflow-control artifacts contain enough task-specific routing, lane ownership, research mode, artifact expectations, blockers, stop rules, completion criteria, and next-session handoff detail for the actual task and execution shape. It must return compact findings to the orchestrator: what is insufficient, why it matters, what could fail, whether it blocks phase completion or is only recordable, and exactly what the orchestrator should add or clarify.
+
+The challenger stays read-only and advisory. It does not edit artifacts, approve plans, create a second `spec.md`, `design/`, or `plan.md`, or become a second authority. The orchestrator reconciles the findings and updates `workflow-plan.md` and the phase-local workflow plan when needed.
+
 #### Research gate
 
 No code changes; no planning or implementation skills.
@@ -189,6 +202,21 @@ Do not adopt a single subagent claim without comparison, evidence, and applicabi
 
 Technical design may begin only after final decisions, constraints, and remaining open questions are written to `spec.md`. For non-trivial work, `spec.md` must be stable enough that the task-local design bundle can be derived from it without reopening core problem framing by default.
 
+Non-trivial `spec.md` approval requires an autonomous clarification loop inside `specification`:
+
+1. The orchestrator prepares a compact input bundle: problem frame, scope and non-goals, candidate decisions, constraints and validation expectations, known assumptions or open questions, and links to relevant research artifacts.
+2. The orchestrator invokes one read-only subagent lane, preferably `challenger-agent`, using exactly one skill: `spec-clarification-challenge`.
+3. The subagent returns high-impact questions for the orchestrator, not for the human by default. It must not make final decisions, edit files, or produce a design document.
+4. The orchestrator answers each question from existing evidence when possible.
+5. If an answer needs expert work, the orchestrator reopens targeted research or fan-out with one read-only lane per expert question and one skill per lane.
+6. If a question is truly external product or business policy and cannot be answered from repository evidence or safe assumptions, record it as `requires_user_decision` and leave `spec.md` blocked or partially draft. Do not invent a human-only answer to unblock approval.
+7. The orchestrator reconciles answers into candidate decisions and reruns the clarification challenge once if material decisions changed or a major seam was reopened.
+8. `spec.md` may be approved only when all planning-critical clarification items are answered, explicitly deferred with rationale, accepted as risk, or routed to an upstream blocker.
+
+Store final resolved answers in existing `spec.md` sections: stable outcomes in `Decisions`, remaining assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`. Do not add raw subagent transcripts to `spec.md`.
+
+`workflow-plans/specification.md` records clarification challenge status, the subagent lane used, whether targeted research was reopened, resolution status, and why `spec.md` is approved or blocked. `workflow-plan.md` records `spec.md` status and clarification gate status.
+
 #### Technical-design gate
 
 Non-trivial implementation planning requires approved `spec.md + design/`. The required core design artifacts are `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md`.
@@ -199,7 +227,7 @@ Add conditional design artifacts only when their trigger is real. Tiny or `direc
 
 Planning may begin only after minimum viable framing is explicit, the orchestrator has completed workflow planning with an explicit research-mode decision (`local` or `fan-out`), and the decision/design record is stable enough for task breakdown.
 
-Non-trivial tasks may not jump directly from `intake` to planning. For `full orchestrated` work, planning also requires stable synthesis and pre-spec challenge reconciled or explicitly waived.
+Non-trivial tasks may not jump directly from `intake` to planning. For `full orchestrated` work, planning also requires stable synthesis and pre-spec challenge reconciled or explicitly waived. For non-trivial work, planning also requires the specification clarification gate reconciled or explicitly waived by an eligible direct/local exception; a blocked clarification gate routes back upstream and does not allow planning.
 
 #### Planning gate
 
@@ -210,6 +238,8 @@ For `direct path` work that plan may stay in the main flow. For non-trivial impl
 #### Session-boundary gate
 
 For non-trivial work, a session may advance only the `Current phase` recorded in master `workflow-plan.md` and the matching `workflow-plans/<phase>.md`.
+
+Before marking the phase as complete or ready for next session, the orchestrator must reconcile any blocking workflow plan adequacy challenge findings, or record the eligible direct/local skip rationale.
 
 When that phase's completion marker is satisfied, update the owning artifact, the current phase workflow plan, and master `workflow-plan.md`; mark `Session boundary reached: yes`, set `Ready for next session`, record `Next session starts with`, and stop.
 
@@ -277,6 +307,27 @@ The orchestrator decides:
 #### Workflow control
 
 For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation. The master owns cross-phase control; the phase file owns phase-local orchestration. If implementation phase count is unknown, record that and the phased-delivery policy. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when used. Plan by lane, not unique role name: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes.
+
+#### Workflow plan adequacy challenge
+
+Run this gate when non-trivial or agent-backed work has generated or substantially repaired `workflow-plan.md` plus the active `workflow-plans/<phase>.md`, before the orchestrator treats that workflow-control pair as handoff-ready.
+
+Skip it only when the work is tiny/direct-path or an upfront `lightweight local` waiver makes the full artifact chain unnecessary; record the skip rationale in the main flow or relevant workflow artifact.
+
+Challenge rules:
+
+- invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`,
+- pass the task frame, execution shape, current phase, master workflow plan, active phase workflow plan, and any generated phase-control files whose sufficiency affects the handoff,
+- ask only whether the workflow-control artifacts are sufficient for this task's risk and execution shape, not for generic checklist completeness,
+- require findings to identify the insufficiency, why it matters, what could fail if left as-is, blocker classification, and the exact orchestrator addition or clarification needed,
+- prevent the pass from rewriting decisions, duplicating `spec.md`, `design/`, or `plan.md`, or approving the handoff.
+
+Resolution rules:
+
+- the orchestrator must reconcile every blocking finding by updating workflow-control artifacts, recording an accepted risk or waiver, or reopening the appropriate earlier phase,
+- non-blocking findings may be recorded or explicitly accepted without blocking handoff,
+- if the challenge finds the phase plan lacks enough information to solve the task, return the artifacts to the orchestrator for repair instead of moving to the next phase,
+- record challenge status and resolution in the active `workflow-plans/<phase>.md` and, when it affects cross-phase readiness, in `workflow-plan.md`.
 
 #### Fan-out triggers
 
@@ -350,7 +401,32 @@ Resolution rules:
 - after targeted re-research, return through synthesis and rerun challenge when the reopened seam is still planning-critical
 - `spec.md` stores the final resolutions and remaining open questions, not the raw challenge transcript
 
-### 5.5 Produce the technical design bundle
+### 5.5 Run a spec clarification challenge before approval
+
+Run this gate for non-trivial work after candidate decisions exist in `specification` and before `spec.md` is marked approved.
+
+Working model:
+
+- `specification(candidate decisions -> clarification challenge -> orchestrator reconciliation -> approved or blocked spec)`
+
+Clarification rules:
+
+- prepare the compact input bundle: problem frame, scope and non-goals, candidate decisions, constraints and validation expectations, known assumptions or open questions, and relevant research links
+- invoke a read-only subagent lane, preferably `challenger-agent`, with exactly one skill: `spec-clarification-challenge`
+- ask for high-impact questions that could change scope, acceptance semantics, architecture boundaries, source-of-truth ownership, data/API/security/reliability behavior, failure semantics, rollout, or validation strategy
+- require the classification values `blocks_spec_approval`, `blocks_specific_domain`, or `non_blocking_but_record`
+- require the next-action values `answer_from_existing_evidence`, `targeted_research`, `expert_subagent`, `accept_risk`, `defer_to_design`, or `requires_user_decision`
+- do not ask the human during the normal loop; if a question is external product or business policy, record `requires_user_decision` and leave the spec blocked or partially draft
+- avoid generic checklist questions and prevent the pass from becoming architecture authorship or a second design document
+
+Resolution rules:
+
+- the orchestrator must answer every planning-critical clarification question from evidence, route it to targeted expert research, explicitly defer it, accept the risk, or block the spec with an upstream owner
+- if expert work is needed, reopen one read-only lane per expert question with one skill per lane; no code edits or implementation-plan changes
+- if material decisions changed or a major seam reopened and was resolved, rerun the clarification challenge once on the updated candidate synthesis
+- store final resolved answers in `spec.md` sections and raw challenge status in workflow-control artifacts only: `workflow-plans/specification.md` records challenge status, lane used, targeted research status, resolution status, and approval or block rationale; `workflow-plan.md` records `spec.md` status and clarification gate status
+
+### 5.6 Produce the technical design bundle
 
 After `spec.md` is stable, produce the task-local design bundle whenever implementation should not proceed from `spec.md` alone.
 
@@ -383,7 +459,7 @@ Rules:
 - treat `spec.md + design/` as the planning input for non-trivial work,
 - allow tiny or `direct path` work to skip the design bundle only when the change is local, the behavior delta is obvious, no ownership/data/sequence ambiguity exists, and the orchestrator records the skip rationale.
 
-### 5.6 Tie-break order
+### 5.7 Tie-break order
 
 When recommendations conflict:
 
@@ -395,7 +471,7 @@ When recommendations conflict:
 
 Do not use one rigid global priority order for every task.
 
-### 5.7 Recheck and override
+### 5.8 Recheck and override
 
 Recheck is mandatory when:
 
@@ -552,6 +628,10 @@ Examples, if present in the toolchain: `idea-refine` / `spec-first-brainstorming
 - Do not copy full skill logs into the main flow unless needed as evidence.
 - If a relevant skill is missing or stale, proceed best-effort and record the limitation.
 
+### Read-only status helper
+
+`workflow-status` is an operational helper only. It may read task-local artifacts to report the current path, phase, blockers, allowed writes, next action, stop rule, and implementation-start status, but it must not edit artifacts, create missing workflow files, mutate git state, approve readiness, or replace `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `plan.md`, or future `tasks.md`. If no task-local path is provided and no active task is obvious from artifacts, ask for the task path instead of guessing from chat memory.
+
 ## 8. Planning, implementation, review, and validation
 
 ### 8.1 Planning-before-code
@@ -664,8 +744,10 @@ specs/<feature-id>/
 
 - **Stable repository architecture:** `docs/repo-architecture.md` is the stable repository architecture baseline. Use it when task-local design would otherwise need to re-derive stable boundaries, ownership, or major runtime flows.
 - **Canonical decisions:** `spec.md` is the canonical decisions artifact.
+- **Clarification gate:** Non-trivial `spec.md` approval requires a resolved `spec-clarification-challenge` gate inside `specification`; `spec.md` keeps final reconciled answers while `workflow-plans/specification.md` and `workflow-plan.md` keep gate status.
 - **Master workflow control:** `workflow-plan.md` is the orchestrator's master control artifact for non-trivial or agent-backed work. It owns cross-phase routing, current phase, artifact status, next session, blockers, and phase-plan links/status.
 - **Phase-local workflow control:** `workflow-plans/<phase>.md` is the phase-local plan for one named phase only. It owns phase-local orchestration, order/parallelism, fan-in/challenge path when relevant, completion marker, stop rule, next action, and parallelizable work.
+- **Workflow plan adequacy gate:** Non-trivial or agent-backed phase handoff requires a reconciled `workflow-plan-adequacy-challenge` pass or an explicit direct/local skip rationale. The challenge status belongs in workflow-control artifacts; final decisions remain with the orchestrator.
 - **Design bundle:** The required core design bundle for non-trivial work is `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md`; conditional artifacts are `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, and `rollout.md`.
 - **Task-local design:** `design/` stores task-specific technical design context. For non-trivial work, planning should not proceed from `spec.md` alone.
 - **Research context:** `research/*.md` stores reusable validated research context, not final authority on decisions.
@@ -678,11 +760,12 @@ specs/<feature-id>/
 ### Update cadence
 
 - After framing: update `Context`, `Scope / Non-goals`, and `Constraints` as needed.
-- After workflow planning: update master `workflow-plan.md` and the current `workflow-plans/<phase>.md` with the fields listed in the Workflow-planning gate, including phase status, artifact expectations, blockers, and parallelizable work.
-- After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material challenge resolutions, rejected paths, or overrides, then stabilize the decision record in `spec.md`.
+- After workflow planning: update master `workflow-plan.md` and the current `workflow-plans/<phase>.md` with the fields listed in the Workflow-planning gate, including phase status, artifact expectations, blockers, and parallelizable work; run or explicitly waive the workflow plan adequacy challenge before handoff.
+- After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material pre-spec challenge resolutions, rejected paths, or overrides, then enter the specification clarification gate before marking non-trivial `spec.md` approved.
+- After specification clarification: update `spec.md` with final reconciled outcomes only, update `workflow-plans/specification.md` with clarification challenge status and resolution status, and update `workflow-plan.md` with `spec.md` status and clarification gate status.
 - After technical design: add or update required core and triggered conditional design artifacts, then record their approval state in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
 - Before coding: make the coder-facing implementation plan explicit in the main flow or `plan.md`; for non-trivial work, derive it from approved `spec.md + design/`, keep the planning summary or link in `spec.md`, and create any planned implementation/review/validation phase-control files.
-- After any phase reaches its completion marker: update the owning artifact, the current `workflow-plans/<phase>.md`, and master `workflow-plan.md`; set `Session boundary reached: yes`, set `Ready for next session` appropriately, record `Next session starts with`, and stop instead of beginning the next phase in the same session.
+- After any phase reaches its completion marker: reconcile any blocking workflow plan adequacy challenge findings, then update the owning artifact, the current `workflow-plans/<phase>.md`, and master `workflow-plan.md`; set `Session boundary reached: yes`, set `Ready for next session` appropriately, record `Next session starts with`, and stop instead of beginning the next phase in the same session.
 - After each implementation checkpoint: update only the existing phase-control artifacts and checkpoint state that the current phase already owns. If a needed workflow/process artifact is missing, reopen planning or the relevant earlier phase instead of creating it mid-implementation.
 - After validation: update existing closeout artifacts, including `spec.md` `Validation` and `Outcome`, to match reality. If the expected validation-phase control file is missing, reopen the appropriate earlier phase instead of creating it during closeout.
 
@@ -703,7 +786,7 @@ specs/<feature-id>/
 - infer stage from artifacts, not memory,
 - use `Current phase`, `Phase status`, `Session boundary reached`, and `Ready for next session` from master `workflow-plan.md` as the first session-control signals,
 - if the current phase points at a missing `workflow-plans/<phase>.md`, treat the phase workflow record as incomplete rather than silently reconstructing it from memory,
-- no approved `spec.md` means framing/specification is incomplete; approved `spec.md` without an approved design bundle means `technical design` is incomplete; approved design bundle without an approved `plan.md` means planning is incomplete; approved `plan.md` means implementation-ready,
+- no approved `spec.md` means framing/specification is incomplete; draft or blocked `spec.md` with unresolved clarification gate status means specification is still incomplete; approved `spec.md` without an approved design bundle means `technical design` is incomplete; approved design bundle without an approved `plan.md` means planning is incomplete; approved `plan.md` means implementation-ready,
 - if `Session boundary reached: yes`, start a new session for the recorded next phase instead of continuing in the same session,
 - if `Ready for next session: no`, resume the same session-bounded phase rather than jumping forward,
 - if a tiny or `direct path` task intentionally skips `workflow-plan.md`, `workflow-plans/`, `design/`, or a separate `plan.md`, record that skip rationale in the main flow so later resume does not guess.
@@ -730,7 +813,7 @@ For non-trivial tasks, keep a compact audit trail sufficient to reconstruct the 
 
 - intake/refinement result or skip rationale, execution shape, and research-mode decision (`local` or `fan-out`),
 - master `workflow-plan.md` plus the relevant `workflow-plans/<phase>.md`, including lanes, order/parallelism, fan-in/challenge path, current phase, next action, blockers, session-boundary state, and artifact status,
-- `docs/repo-architecture.md` when it materially shaped task-local design, plus research/subagent tracks and material challenge resolutions or skip rationale,
+- `docs/repo-architecture.md` when it materially shaped task-local design, plus research/subagent tracks, material pre-spec challenge resolutions, and clarification gate resolution or skip rationale,
 - decision log, design-bundle status, material overrides or rejected paths, open questions with owner and unblock condition, plan/task-breakdown status, validation evidence, and outcome.
 
 ## 10. Context hygiene, scaling, and anti-patterns

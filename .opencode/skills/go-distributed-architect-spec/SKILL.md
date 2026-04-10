@@ -8,6 +8,12 @@ description: "Design distributed-consistency-first specifications for Go service
 ## Purpose
 Turn ambiguous cross-service behavior into explicit flow, consistency, and failure-handling contracts that remain correct under partial failure, at-least-once delivery, replay, and mixed-version rollout.
 
+## Specialist Stance
+- Treat distributed flows as ownership and recovery problems before transport or broker selection.
+- Require explicit command/event intent, invariant owner, durable boundary, idempotency contract, and reconciliation path.
+- Prefer forward recovery and observable convergence over implicit exactly-once assumptions.
+- Hand off local architecture, physical schema, API payloads, and CI mechanics when they are not the distributed seam.
+
 ## Scope
 Use this skill to define or review cross-service consistency behavior: saga shape, orchestration vs choreography, outbox/inbox requirements, idempotency, ordering assumptions, compensation or forward recovery, and reconciliation strategy.
 

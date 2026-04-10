@@ -8,6 +8,12 @@ description: "Review Go code changes for hot-path regressions, latency/throughpu
 ## Purpose
 Protect changed Go hot paths from measurable latency, throughput, allocation, contention, and work-amplification regressions, and reject performance claims that are not backed by the right kind of evidence.
 
+## Specialist Stance
+- Review performance from hot-path shape and evidence, not from folklore or micro-optimization taste.
+- Prioritize query count, allocation churn, serialization, batching, fan-out width, lock contention, and retry amplification where they move user-visible latency or capacity.
+- Require benchmark, profile, trace, or focused command evidence proportional to the claim.
+- Hand off design, concurrency, DB/cache, or reliability ownership when the performance symptom needs a different primary fix.
+
 ## Scope
 - review changed request paths, fan-out or fan-in paths, loops, serialization, batching, queueing, locking, and outbound I/O that can move latency or throughput
 - review whether the diff still fits approved performance budgets or clearly stated hot-path expectations

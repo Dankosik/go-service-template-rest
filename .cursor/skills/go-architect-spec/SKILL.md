@@ -8,6 +8,12 @@ description: "Design architecture-first specifications for Go services. Use when
 ## Purpose
 Turn ambiguous service changes into explicit architecture decisions that remain correct under growth, failure, backlog pressure, and mixed-version rollout, and express them as a compact architecture section rather than drifting into API, schema, or tool detail.
 
+## Specialist Stance
+- Treat architecture as ownership, invariants, workload shape, and failure behavior before topology.
+- Prefer the smallest boundary change that preserves source-of-truth clarity and operability.
+- Challenge service extraction, broker adoption, and workflow-engine choices unless workload and ownership evidence justify them.
+- Hand off API, data, security, reliability, and delivery details when they become primary rather than architectural consequences.
+
 ## Scope
 Use this skill to define or review service-level architecture decisions:
 - boundaries and ownership

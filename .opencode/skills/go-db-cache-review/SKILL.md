@@ -8,6 +8,12 @@ description: "Review Go code changes for SQL access discipline, transaction boun
 ## Purpose
 Protect changed data-access and cache paths from consistency, isolation, timeout, invalidation, and origin-protection defects.
 
+## Specialist Stance
+- Review DB and cache code as correctness surfaces, not performance decorations.
+- Prioritize transaction scope, context propagation, cursor/resource cleanup, cache key dimensions, and invalidation timing.
+- Treat stale, aliased, cross-tenant, and fail-open cache behavior as merge risk when callers can observe it.
+- Hand off schema ownership, migration strategy, API semantics, and broad reliability design when local DB/cache review cannot own the fix.
+
 ## Scope
 - review SQL query discipline and request-path round-trip amplification
 - review transaction boundaries and partial-side-effect risk

@@ -8,6 +8,12 @@ description: "Review Go code changes for business-invariant preservation, state-
 ## Purpose
 Protect approved business rules in code so critical invariants, forbidden transitions, and acceptance behavior do not drift silently.
 
+## Specialist Stance
+- Review behavior through business invariants and legal transitions, not through implementation shape alone.
+- Prioritize invalid state acceptance, side effects before preconditions, duplicate effects, and silent invariant drift.
+- Treat domain wording, state names, and acceptance semantics as correctness surfaces when code changes them.
+- Hand off API, data, reliability, or security depth when the domain issue depends on those seams.
+
 ## Scope
 - review invariant enforcement in changed code paths
 - review allowed and forbidden state transitions

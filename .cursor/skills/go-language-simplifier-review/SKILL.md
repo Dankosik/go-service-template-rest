@@ -8,6 +8,12 @@ description: "Review Go code changes for lower cognitive complexity, false-simpl
 ## Purpose
 Protect local reasoning quality in changed Go code without endorsing refactors that only reduce line count while hiding policy, state transitions, ownership, or caller-visible semantics.
 
+## Specialist Stance
+- Treat simplicity as reduced reasoning load, not lower line count.
+- Flag false simplifications that merge distinct semantics, hide ownership, or push policy into generic helpers.
+- Also flag missed same-package source-of-truth extraction when stable local policy is visibly starting to drift.
+- Hand off deep Go-semantic, domain, concurrency, or design ownership when simplification review only identifies the risk.
+
 ## When To Use
 - review Go PRs, diffs, refactors, and cleanup commits where the stated goal is simpler or more readable code
 - use even on generic review requests when the change touches helper extraction, nested branching, delayed state interpretation, boolean mode flags, option bags, or error-path "deduplication"
@@ -16,7 +22,7 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 ## Review Posture
 - Stay read-only and advisory.
 - Review changed files and directly affected tests first.
-- If `spec.md`, `plan.md`, or approved design notes exist, treat them as governing intent.
+- If approved task artifacts exist, treat them as governing intent.
 - Findings come first and must be ordered by merge risk, not by section order or taste.
 - Green tests do not prove a cleanup preserved local reasoning safety.
 - Always run a source-of-truth helper pass: flag both stable same-package policy still scattered across files and bogus extraction into vague helper buckets.

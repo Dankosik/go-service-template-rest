@@ -8,6 +8,12 @@ description: "Design DB-access and cache specifications for Go services. Use whe
 ## Purpose
 Turn runtime DB and cache behavior into explicit, measurable contracts before coding so that performance, correctness, and failure handling are not left to implementation guesswork.
 
+## Specialist Stance
+- Treat DB access and cache behavior as runtime correctness contracts, not just implementation tuning.
+- Decide transaction ownership, query shape, cache role, staleness, invalidation, fallback, and observability together.
+- Keep caches as accelerators unless the approved behavior deliberately makes them part of observable semantics.
+- Hand off primary schema ownership, API contract shape, delivery rollout, and low-level code fixes when they leave this seam.
+
 ## Scope
 Use this skill to define or review DB access discipline, query-shape controls, transaction boundaries, cache strategy, staleness contracts, invalidation rules, fallback behavior, and DB/cache telemetry expectations.
 

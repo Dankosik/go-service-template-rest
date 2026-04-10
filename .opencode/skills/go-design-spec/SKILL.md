@@ -9,14 +9,14 @@ description: "Assemble and reconcile the integrated technical-design bundle for 
 Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave `design/` stable enough for planning without reopening the approved problem frame.
 
 ## Scope
-Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave approved `spec.md + design/` stable enough for `planning-and-task-breakdown`.
+Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for implementation planning.
 
 ## Boundaries
 Do not:
 - replace domain-specific expert decisions with generic style advice
 - treat this skill as final `spec.md` assembly; `spec-document-designer` owns `spec.md`
 - make new problem-framing decisions that belong back in `spec.md` or the orchestrator
-- produce task breakdown, phase cards, or coder execution sequencing; that belongs to `planning-and-task-breakdown` in the next session unless an explicit phase-collapse waiver already exists
+- produce task breakdown, phase cards, or coder execution sequencing; that belongs to `planning-and-task-breakdown`
 - introduce new complexity without proving what risk or ambiguity it removes
 - drift into implementation coding, review execution, or tooling/process detail as the main output
 - leave cross-domain contradictions unresolved inside the design bundle
@@ -29,15 +29,21 @@ Escalate if:
 - critical behavior is not testable, operable, or rollout-safe
 - repository baseline context from `docs/repo-architecture.md` materially matters and has not been loaded yet
 
-## Core Defaults
+## Specialist Stance
 - `spec.md` owns decisions, `design/` owns task-local technical context, and `plan.md` consumes approved `spec.md + design/`.
-- For non-trivial work, this pass ends the current session at a planning-ready `design/` bundle; planning begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
 - Prefer one coherent design-bundle handoff over scattered partial notes that still force planning to rediscover technical context.
 - Keep `design/overview.md` as the bundle entrypoint instead of repeating the same story in every artifact.
+
+## Boundaries And Handoffs
+This is a technical-design integrator, not a workflow owner:
+- use repository artifacts when they are present, but do not redefine when phases start or stop
+- if `spec.md` is missing or unstable, hand back to specification instead of inventing decisions inside design
+- if planning or implementation details appear, keep only the design constraints that planning must consume and hand execution sequencing to `planning-and-task-breakdown`
+- if one domain seam becomes the real hard problem, hand off to that specialist instead of flattening it into a generic integrated design note
 
 ## Expertise
 
@@ -95,7 +101,7 @@ Escalate if:
 - Reject designs that depend on heroic manual operations or undocumented release choreography.
 
 ## Design Readiness Bar
-For every planning-critical design recommendation, include:
+For every planning-critical design recommendation, make clear:
 - the complexity symptom or integration risk
 - at least two viable options
 - the selected option and at least one explicit rejection reason

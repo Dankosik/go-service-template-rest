@@ -37,6 +37,7 @@ Escalate if:
 - `spec.md` is for decisions, `design/` is for technical context, and `plan.md` is for execution.
 - For non-trivial work, plan from approved `spec.md + design/`, not from `spec.md` alone.
 - Planning is the last artifact-producing phase before code. If later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` are part of the approved execution shape, plan for them to exist before implementation starts instead of being invented later.
+- When the planning pass generates or materially changes workflow-control files, expect a read-only `workflow-plan-adequacy-challenge` before handoff; do not treat `plan.md` detail as a substitute for adequate `workflow-plan.md` and `workflow-plans/<phase>.md` routing.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
@@ -114,6 +115,7 @@ For each phase, include:
 - For direct-path work, a short inline plan may still be enough; do not force `plan.md` for a tiny change just to satisfy ceremony.
 - For non-trivial work, default to `plan.md` and consume approved `spec.md + design/`.
 - When later implementation, review, or validation phase-control files are part of the execution shape, planning should leave them ready to be created or linked before implementation begins; post-code phases should not need to invent new workflow/process artifacts.
+- The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, artifact expectations, and generated post-code phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
 - If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
@@ -128,6 +130,7 @@ The planning pass is complete when:
 - checkpoints exist where the risk actually changes
 - blocked work is clearly separated from ready work
 - the next implementation or validation session can start without creating new workflow/process artifacts to compensate for missing planning output
+- the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - the plan is specific enough for `go-coder` to execute without recreating the strategy or reverse-engineering missing design context
 
@@ -137,4 +140,5 @@ The planning pass is complete when:
 - a phase list with no acceptance criteria or verification
 - a generic task like `implement the feature`
 - horizontal slicing that hides risk and postpones integration until the end
+- planning output that leaves workflow-control routing too vague for adequacy review before handoff
 - planning output that duplicates the entire spec instead of turning it into execution work

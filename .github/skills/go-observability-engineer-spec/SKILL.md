@@ -8,6 +8,12 @@ description: "Design observability-first specifications for Go services. Use whe
 ## Purpose
 Make diagnosability, alertability, and telemetry cost explicit before coding so that changed runtime behavior is observable, operable, and safe to roll out.
 
+## Specialist Stance
+- Treat observability as an operability contract: logs, metrics, traces, correlation, and SLOs must answer concrete questions.
+- Prefer low-cardinality, privacy-safe, action-oriented signals over “log more” or dashboard sprawl.
+- Tie async, degraded, and failure-path visibility to the operator decisions they support.
+- Hand off API, data, security, reliability, and delivery design when observability is only a dependent concern.
+
 ## Scope
 Use this skill to define or review telemetry behavior: logs, metrics, traces, correlation, debuggability, async observability, SLI/SLO expectations, and telemetry-cost guardrails.
 

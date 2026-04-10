@@ -8,6 +8,12 @@ description: "Review Go code changes for trust-boundary enforcement, authorizati
 ## Purpose
 Protect changed code from exploitable vulnerabilities and security-contract drift at trust boundaries, data boundaries, and side-effecting operations.
 
+## Specialist Stance
+- Review exploitability and fail-closed behavior before generic hardening advice.
+- Prioritize trust-boundary validation, object-level authorization, tenant isolation, injection/SSRF/path risks, secret exposure, and abuse controls.
+- Treat internal callers, async messages, and caches as untrusted unless a clear trust contract proves otherwise.
+- Hand off performance, QA, reliability, or data depth when they support security but do not own the primary risk.
+
 ## Scope
 - review untrusted-input handling and strict boundary validation
 - review authentication, authorization, tenant isolation, and object-level access checks

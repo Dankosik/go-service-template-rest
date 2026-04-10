@@ -8,6 +8,12 @@ description: "Review Go code changes for timeout and deadline propagation, retry
 ## Purpose
 Protect changed failure paths from outage, cascading-failure, retry-amplification, overload, shutdown, and degraded-mode defects.
 
+## Specialist Stance
+- Review failure behavior before happy-path success.
+- Prioritize unbounded waits, retries, queues, goroutines, degraded-mode correctness, and rollout/rollback traps.
+- Treat timeout, retry, overload, readiness, and shutdown semantics as caller- and operator-visible behavior.
+- Hand off concurrency, DB/cache, security, performance, or distributed design when reliability is not the primary owner of the fix.
+
 ## Scope
 - review timeouts, deadlines, and cancellation behavior in changed critical paths
 - review retry eligibility, retry budget, idempotency expectations, and jitter or backoff behavior

@@ -89,13 +89,14 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics
 - `planning-and-task-breakdown` remains the deeper planning method for dependency ordering, task sizing, acceptance criteria, checkpoints, and verification detail
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
+- before non-trivial handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, and any generated implementation/review/validation phase-control files
 - for non-trivial work, the session ends at approved planning artifacts; implementation starts in a new session unless an upfront repository-approved waiver already exists
 
 ## Boundary With `planning-and-task-breakdown`
 - use `planning-session` to control one planning-only session
 - use `planning-and-task-breakdown` inside this session when detailed phase and task decomposition is needed
 - keep the deeper skill responsible for execution slicing, acceptance criteria, verification shape, and checkpoint quality
-- keep this wrapper responsible for phase readiness, allowed writes, master and phase-local workflow updates, and stopping before implementation
+- keep this wrapper responsible for phase readiness, allowed writes, master and phase-local workflow updates, adequacy-challenge reconciliation, and stopping before implementation
 - do not duplicate the full planning method in this wrapper
 
 ## Boundary With Future `implementation-phase-session`
@@ -146,6 +147,10 @@ Do not:
 - if planning is complete, set `Next session starts with` to the first named implementation phase or explicit implementation checkpoint from `plan.md`
 - record whether later implementation, review, or validation phase files are expected
 - keep implementation entry prerequisites visible so the next session does not need to re-plan
+- for non-trivial or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`
+- pass the task frame, execution shape, master workflow plan, `workflow-plans/planning.md`, generated post-code phase-control files, planning artifact status, blockers, and proposed next-session handoff
+- reconcile blocking findings before marking planning complete; leave planning blocked or reopened when the workflow-control artifacts are not sufficient for implementation handoff
+- for tiny/direct-path work, record the explicit skip rationale instead of forcing the challenge
 
 ### 8. Stop At The Boundary
 - once planning artifacts and workflow handoff are consistent, stop
@@ -159,6 +164,7 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - status for `test-plan.md` and `rollout.md` as `approved`, `draft`, `missing`, or not expected
 - whether later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` were created now, are explicitly not expected, or still remain blocked on a reopen
 - blockers, accepted assumptions, and reopen conditions that still affect implementation readiness
+- workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
@@ -177,7 +183,7 @@ A finished planning session may produce only:
 - updated or newly created `workflow-plans/planning.md`
 - an honest `complete`, `blocked`, or `reopened` planning-phase state when the task cannot move cleanly into implementation yet
 
-It does not produce code, tests, migrations, generated artifacts, or implementation-phase workflow files.
+It does not produce code, tests, migrations, generated artifacts, or implementation execution output.
 
 ## Planning Completion Criteria
 Planning is complete when:
@@ -187,10 +193,11 @@ Planning is complete when:
 - `test-plan.md` and `rollout.md` exist only when their triggers are real, and their status is explicit when not needed
 - any implementation, review, or validation phase workflow files that the approved phase structure requires were created before implementation begins, or their absence is recorded as a reopen blocker
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
+- required workflow plan adequacy challenge findings are reconciled, or an eligible skip rationale is explicit
 - the next session can begin the first implementation phase or explicit implementation checkpoint without silently reopening spec or design
 
 ## Stop Condition
-The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, and no implementation work has started in the current one.
+The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.
 
 ## Escalate When
 Escalate instead of forcing output when:
@@ -207,5 +214,6 @@ Escalate instead of forcing output when:
 - forcing `test-plan.md` or `rollout.md` when their triggers are not real
 - leaving later implementation/review/validation phase workflow files to be invented mid-implementation or mid-validation
 - hiding blockers inside optimistic task wording
+- marking implementation handoff ready while blocking workflow plan adequacy findings remain unresolved
 - updating `workflow-plan.md` as if implementation already started
 - writing "phase 1" and then immediately coding it in the same session

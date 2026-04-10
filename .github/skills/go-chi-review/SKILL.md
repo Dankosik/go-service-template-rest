@@ -8,6 +8,12 @@ description: "Review Go chi routing changes for router ownership, chi-specific m
 ## Purpose
 Protect changed `github.com/go-chi/chi/v5` transport code from routing, middleware, and HTTP-policy regressions, with emphasis on chi-specific runtime traps that can silently change behavior or panic at startup.
 
+## Specialist Stance
+- Review chi behavior as runtime semantics, not framework trivia.
+- Prioritize route ownership, middleware scope, fallback policy, and low-cardinality observability over style-only comments.
+- Treat startup panics, route-context mutation, and generated/manual route drift as merge-risk signals.
+- Hand off payload contracts, business invariants, DB/cache, and broad security or reliability design when they become primary.
+
 ## Scope
 - review router topology, path ownership, and subrouter boundaries
 - review chi-specific registration semantics such as `Use`, `Group`, `Route`, `With`, and `Mount`

@@ -23,16 +23,7 @@ Do not:
 - normalize flaky timing, shared-state coupling, or nondeterministic failures as acceptable noise
 - claim readiness when critical scenarios remain unimplemented, flaky, or unverified
 
-## Artifact Boundary
-Test authoring is still implementation work, not a new planning or validation phase.
-
-- Consume the approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created implementation or later phase workflow files.
-- New test files, test fixtures, testdata, mocks, and other codebase files required by the approved plan are allowed.
-- Do not create new workflow/process/planning/design/temp artifacts such as `workflow-plan.md`, new `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, `test-plan.md`, `rollout.md`, or ad hoc scratch markdown once implementation has started.
-- Update only existing control and progress surfaces needed by the active phase, such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress notes in existing `plan.md`.
-- If test obligations, design context, or expected control artifacts are missing, stop and reopen the right earlier phase in a new session instead of inventing replacement artifacts here.
-
-## Core Defaults
+## Specialist Stance
 - Obligations first: test what must be true, not what is easiest to assert.
 - Preserve approved semantics rather than mirroring implementation structure.
 - Prefer the smallest proving layer that can catch the real regression.
@@ -40,16 +31,21 @@ Test authoring is still implementation work, not a new planning or validation ph
 - Prefer explicit Go assertions and failure messages over opaque helper stacks.
 - Do not hardcode unresolved transport, storage, or rollout mechanics just to make a test look precise.
 - Escalate ambiguity instead of encoding product decisions in test code.
-- If testing exposes a real planning or design gap, record the reopen in the existing control artifacts and stop instead of authoring new workflow/process docs inside the implementation session.
+
+## Boundaries And Handoffs
+Keep test expertise separate from workflow ownership:
+- test files, fixtures, testdata, mocks, and other codebase assets are in scope only when they are the approved implementation work
+- consume existing requirements, specs, plans, and test plans when they are present, but do not create or repair workflow, research, specification, design, or planning artifacts from this skill
+- if test obligations or expected behavior are missing, stop and name the smallest unblock question instead of encoding a guessed answer in tests
+- hand off unclear API, data, security, reliability, performance, or domain semantics to the relevant specialist instead of freezing them in assertions
 
 ## Load Relevant Guidance
 Load only the current repository guidance that matches the changed surface:
-- always useful for test work: `docs/build-test-and-development-commands.md`, approved decisions in `spec.md`, and optional validation detail in `test-plan.md`
-- error or context behavior: the touched code paths, nearby tests, and the approved behavior captured in `spec.md`
-- goroutines, channels, worker pools, shutdown, or cancellation: the touched runtime code and tests, plus the approved concurrency or lifecycle expectations in `spec.md`
-- transport or client-visible API behavior: `api/openapi/service.yaml`, `internal/api/README.md`, and the approved contract in `spec.md`
-- SQL, cache, or migration behavior: touched query or repository code, `env/migrations/`, and the approved data behavior in `spec.md`
-- auth, tenant isolation, or trust-boundary behavior: touched auth or boundary code and the approved security expectations in `spec.md`
+- always useful for test work: `docs/build-test-and-development-commands.md`, touched code, nearby tests, and any approved task artifact that defines expected behavior
+- goroutines, channels, worker pools, shutdown, or cancellation: the touched runtime code and tests, plus the approved concurrency or lifecycle expectations
+- transport or client-visible API behavior: `api/openapi/service.yaml`, `internal/api/README.md`, and the approved contract source
+- SQL, cache, or migration behavior: touched query or repository code, `env/migrations/`, and the approved data behavior
+- auth, tenant isolation, or trust-boundary behavior: touched auth or boundary code and the approved security expectations
 
 ## Expertise
 
@@ -210,17 +206,12 @@ A strong result:
 - remains deterministic, readable, and maintainable
 - would give `go-qa-review` little justified criticism beyond truly missing product intent
 
-## Deliverable Shape
-Return test implementation work in this order:
-- `Implemented Test Scope`
-- `Scenario Coverage`
-- `Key Test Files`
-- `Validation Commands`
-- `Observed Result`
-- `Design Escalations`
-- `Residual Risks`
-
-Keep `Scenario Coverage` concrete. Name the scenarios or test groups; do not use vague statements like `added more tests`.
+## Handoff Notes
+When reporting test work, keep it concrete:
+- implemented test scope and key test files
+- scenario coverage by behavior, not vague "more tests" wording
+- validation commands and observed results
+- design escalations and residual risks, if any
 
 ## Escalate When
 Escalate when:

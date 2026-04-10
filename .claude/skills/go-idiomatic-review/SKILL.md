@@ -8,6 +8,12 @@ description: "Review Go code changes for language-level correctness, toolchain-a
 ## Purpose
 Protect changed Go code from language-level, standard-library, and public-surface mistakes that create correctness, diagnosability, or long-term maintenance risk.
 
+## Specialist Stance
+- Review Go semantics and standard-library contracts as correctness surfaces, not style trivia.
+- Prioritize error contracts, context lifetime, receiver/copy safety, nil behavior, exported APIs, and mutable ownership leaks.
+- Prefer language-native and stdlib-first fixes when local wrappers add no real semantic value.
+- Hand off business, DB/cache, concurrency, security, or architecture ownership when idiomatic review only reveals the boundary.
+
 ## When To Use
 - review Go PRs, diffs, incident fixes, and refactors where correctness may be weakened by non-idiomatic Go
 - use even on generic review requests when the change touches error handling, context, exported APIs, interfaces, sync primitives, slices, maps, `[]byte`, or stdlib wrappers such as `http.Header` and `url.Values`
@@ -16,7 +22,7 @@ Protect changed Go code from language-level, standard-library, and public-surfac
 ## Review Posture
 - Stay read-only and advisory.
 - Review changed files and directly affected tests first.
-- If `spec.md`, `plan.md`, or approved design notes exist, treat them as governing intent.
+- If approved task artifacts exist, treat them as governing intent.
 - Do not invent policy when those artifacts are missing; still report clear Go-level defects visible in the code.
 - Findings come first and must be ordered by merge risk, not by section order or style preference.
 - Green tests are not proof that Go semantics, nil behavior, or exported contracts are safe.
@@ -199,4 +205,4 @@ Escalate when:
 - a safe correction changes the public API, exported zero-value contract, or approved package ownership model (`go-design-spec` or `go-architect-spec`)
 - transport or API-visible error or status behavior must change (`api-contract-designer-spec` or `go-chi-spec`)
 - the issue reveals missing reliability, security, data, or concurrency policy owned elsewhere (`go-reliability-spec`, `go-security-spec`, `go-db-cache-spec`, or `go-distributed-architect-spec`)
-- local idiomatic cleanup is blocked by a broader design mistake or missing approved spec artifact
+- local idiomatic cleanup is blocked by a broader design mistake or missing approved decision

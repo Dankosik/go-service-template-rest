@@ -10,7 +10,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 
 ## Use This Skill For
 - implementing approved Go features, fixes, refactors, integrations, regenerations, and targeted test updates
-- translating an approved spec and current phase/task block into code without changing the decision that was already made
+- translating an approved requirement or explicit implementation plan into code without changing the decision that was already made
 - keeping code, tests, generated artifacts, and verification evidence aligned with the approved change
 
 ## Do Not Use This Skill For
@@ -18,24 +18,21 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - speculative cleanup that widens scope without helping correctness, clarity, or safety
 - hand-editing generated artifacts instead of changing the owning source and regenerating
 
-## Artifact Boundary
-Implementation is an artifact-consuming phase.
-
-- Consume the approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created implementation or later phase workflow files.
-- New code files, test files, migrations, configs, generation inputs, and generated artifacts are allowed when the approved plan requires them.
-- Do not create new workflow/process/planning/design/temp artifacts such as `workflow-plan.md`, new `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, `test-plan.md`, `rollout.md`, or ad hoc scratch markdown once implementation starts.
-- Update only existing control and progress surfaces needed by the active phase, such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress notes in existing `plan.md`.
-- If an expected artifact is missing or the plan or design context is insufficient, stop and reopen the right earlier phase in a new session instead of inventing replacement artifacts here.
-
-## Core Stance
-- Treat the approved spec and current phase/task breakdown as the source of truth for behavior.
+## Specialist Stance
+- Treat the approved requirement, spec, or implementation plan as the source of truth for behavior.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
 - Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
 - When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.
 - Avoid both kinds of helper drift: scattered policy duplicated across files, and generic `util/common/shared` buckets that hide ownership instead of clarifying it.
-- If the spec is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
+- If the approved source is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
 - Escalate when correctness depends on a new product or architecture decision; do not hide that decision inside code.
-- If implementation exposes a real planning or design gap, record the reopen in the existing control artifacts and stop instead of authoring new workflow/process docs inside the implementation session.
+
+## Boundaries And Handoffs
+Keep workflow ownership outside this skill:
+- consume existing task artifacts or an explicit user plan when they are present; do not create or repair workflow, research, specification, design, or planning artifacts as a side effect of coding
+- create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
+- if the safe implementation depends on a missing decision, stop and name the smallest unblock decision instead of inventing behavior
+- if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
 
 ## Hard-Skill Bar
 Strong implementation work usually gets these details right before review:
@@ -198,7 +195,7 @@ Before handoff, ask:
 3. What can still alias, leak, block, go stale, be retried twice, or collapse a contract?
 4. Did I choose the clearest fix shape, or did I add abstraction that the next maintainer now has to reverse-engineer?
 5. Did I validate the real changed behavior, including the relevant edge case?
-6. Are code, tests, generated artifacts, and spec notes aligned with what I actually changed and verified?
+6. Are code, tests, generated artifacts, and task notes aligned with what I actually changed and verified?
 7. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
 8. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
@@ -210,17 +207,12 @@ If the approved spec, plan, or contract blocks implementation before code change
 - do not use `implemented`, `fixed`, or `ready` language for blocked work
 - write the minimum unblock decision needed to resume coding
 
-## Deliverable Shape
-Return implementation work in this order:
-- `Implemented Scope`
-- `Key Code Changes`
-- `Behavior Preserved Or Changed`
-- `Validation Commands`
-- `Observed Result`
-- `Design Escalations`
-- `Residual Risks`
-
-Keep `Design Escalations` and `Residual Risks` explicit. Write `none` when there are none.
+## Handoff Notes
+When reporting implementation work, keep it proportional to the change:
+- what changed and what behavior was preserved or intentionally changed
+- validation commands and observed results
+- design escalations, if any
+- residual risks, if any
 
 ## Escalate When
 Escalate when:

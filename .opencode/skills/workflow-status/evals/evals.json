@@ -1,0 +1,49 @@
+{
+  "skill_name": "workflow-status",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `planning`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, and `Next session starts with: implementation-phase-1`. `spec.md`, required `design/`, and `plan.md` are approved, and no blockers are recorded. Report the status only.",
+      "expected_output": "A compact read-only status report that identifies the task path, reports planning complete with the session boundary reached, summarizes approved artifacts, and says implementation may start in the recorded next session.",
+      "files": [],
+      "expectations": [
+        "The output does not edit or propose editing artifacts, code, git state, or implementation plans.",
+        "The output lists allowed writes for the recorded implementation handoff while making clear the workflow-status helper itself writes nothing.",
+        "The output says implementation may start only because the approved artifact chain and next-session routing point to implementation."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Use workflow-status. I do not know the task path, but tell me what our current workflow phase is from the previous chat.",
+      "expected_output": "A short refusal to guess from chat memory that asks for the task-local path before reporting workflow status.",
+      "files": [],
+      "expectations": [
+        "The output asks for a task-local path such as `specs/<feature-id>` and stops.",
+        "The output does not infer the active task from conversation memory or repository recency.",
+        "The output does not invent artifact status, blockers, next action, or implementation readiness."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use workflow-status for `specs/admin-soft-delete`. The master file says `spec.md` is approved and the current phase is `planning`, but `design/sequence.md` is missing and there is no direct-path or lightweight-local design-skip waiver. Tell me whether implementation can start.",
+      "expected_output": "A conservative read-only status report that treats the missing required design artifact as an incomplete gate and says implementation may not start.",
+      "files": [],
+      "expectations": [
+        "The output identifies the missing required design artifact or design gate as the blocker.",
+        "The output does not waive the missing artifact merely because the user wants a status answer.",
+        "The output routes the next action toward repairing or reopening the appropriate earlier phase rather than starting implementation."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use workflow-status for `specs/request-id-healthz`. The task record explicitly says this is direct-path work with an inline plan and design-skip rationale. `workflow-plan.md` and `workflow-plans/` are intentionally skipped by that waiver. Report status only and do not create artifacts.",
+      "expected_output": "A read-only status report that accepts the explicit direct-path waiver, reports skipped workflow-control artifacts as waived rather than missing, and still avoids creating any files.",
+      "files": [],
+      "expectations": [
+        "The output treats missing workflow-control artifacts as waived only because the prompt provides an explicit recorded direct-path waiver.",
+        "The output still says workflow-status is read-only and does not create the missing artifacts.",
+        "The output keeps implementation readiness tied to the explicit inline plan and waiver instead of task size alone."
+      ]
+    }
+  ]
+}

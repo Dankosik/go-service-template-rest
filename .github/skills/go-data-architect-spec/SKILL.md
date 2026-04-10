@@ -8,6 +8,12 @@ description: "Design data-architecture-first specifications for Go services. Use
 ## Purpose
 Turn ambiguous data requirements into explicit decisions about source of truth, invariant locality, schema shape, lifecycle, online evolution, and recovery before implementation begins.
 
+## Specialist Stance
+- Treat persisted state as source-of-truth ownership first, storage mechanics second.
+- Separate OLTP rows, append-only facts, audit logs, events, and projections instead of flattening them into “data”.
+- Prefer online, compatibility-safe evolution and explicit retention/deletion semantics over schema convenience.
+- Hand off endpoint contracts, service decomposition, cache implementation, and delivery mechanics when they become primary.
+
 ## Scope
 Use this skill to define or review:
 - data ownership and source-of-truth boundaries

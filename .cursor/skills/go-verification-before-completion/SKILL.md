@@ -20,15 +20,15 @@ Do not:
 - treat design or code review findings as verified just because an agent reported them
 - force full-repository verification for every narrow claim when smaller proof is sufficient
 - soften missing or failing proof with optimistic wording
-- create new workflow/process/planning/design/temp artifacts to compensate for missing proof inputs
+- create or repair workflow, research, specification, design, planning, or temp artifacts to compensate for missing proof inputs
 
-## Core Defaults
+## Specialist Stance
 - Evidence first, wording second.
 - Fresh run required for every positive claim in current scope.
 - Use the smallest sufficient command set, but never weaker than the claim.
 - If verification fails or was not run, say so explicitly.
-- Verification is an artifact-consuming phase: consume existing `spec.md`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, existing workflow-control artifacts, and fresh command output instead of authoring new process artifacts.
-- If proof depends on a missing expected artifact or missing planning/design context, report the reopen target instead of inventing replacement artifacts during verification.
+- Consume existing task artifacts and fresh command output when they exist; do not author new process artifacts from this skill.
+- If proof depends on missing expected context, report the proof gap and the smallest unblock action instead of inventing replacement context.
 
 ## Expertise
 
@@ -82,15 +82,14 @@ A correct verification report:
 - keeps conclusion wording proportional to proof strength
 
 ## Deliverable Shape
-Return verification work in this order:
-- `Claim`
-- `Scope`
-- `Verification Commands`
-- `Observed Result`
-- `Conclusion`
-- `Next Action`
+Return a compact verification note with:
+- claim and scope
+- commands actually executed
+- observed pass/fail signal
+- conclusion proportional to the evidence
+- next action when not verified
 
-`Conclusion` may be positive only when the evidence supports it. Otherwise state `not verified`.
+The conclusion may be positive only when the evidence supports it. Otherwise state `not verified`.
 
 ## Escalate When
 Escalate if:

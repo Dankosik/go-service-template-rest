@@ -8,6 +8,12 @@ description: "Design chi-based HTTP routing for Go services: router topology, mi
 ## Purpose
 Define or review chi-based transport routing so router topology, middleware behavior, fallback behavior, and route observability are explicit, stable, and testable.
 
+## Specialist Stance
+- Treat routing design as path ownership, middleware order, fallback behavior, and observability semantics.
+- Keep OpenAPI as the contract owner and make chi integration serve that contract rather than re-owning it.
+- Prefer explicit `net/http` composition and deterministic fallback rules over implicit framework defaults.
+- Hand off API payload semantics, storage, security architecture, and reliability policy when routing no longer owns the hard decision.
+
 ## Scope
 - define `chi` router topology and ownership of root vs subrouter composition
 - define middleware layering, scope, and order-sensitive behavior

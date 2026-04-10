@@ -10,6 +10,8 @@ Pressure-test candidate decisions before planning so the orchestrator learns whi
 
 When used from a project agent such as `challenger-agent`, let the agent own ownership, trigger rules, boundaries, and handoffs. This skill owns the challenge behavior: how to falsify assumptions, prune low-value questions, classify blocker severity, and stop once planning risk is well bounded.
 
+This is distinct from `spec-clarification-challenge`: use this skill in synthesis when risk or ambiguity justifies a pre-spec pressure test; use `spec-clarification-challenge` inside `specification` as the non-trivial `spec.md` approval gate.
+
 ## Scope
 - inspect candidate synthesis, not a blank request
 - challenge only seams that could still change scope, correctness, ownership, failure semantics, or rollout

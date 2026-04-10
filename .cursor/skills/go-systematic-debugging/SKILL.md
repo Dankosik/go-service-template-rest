@@ -23,12 +23,13 @@ Do not:
 - keep permanent debugging scaffolding when short-lived diagnostics were enough
 - default to raising timeouts, adding retries, or widening sleeps before proving the actual bottleneck
 
-## Core Defaults
+## Specialist Stance
 - Evidence over intuition.
 - Fix the source of bad state, not only the crash site.
 - One primary hypothesis at a time; only parallelize evidence capture when the tracks are independent.
 - Match the diagnostic tool to the failure class; do not reach for profiles, traces, or dump capture out of habit.
 - Keep the blast radius small and the proof fresh.
+- Keep workflow and product decisions outside the debugging lane; debugging proves the failure mode and the smallest safe fix.
 
 ## Debugging Modes
 Default to the smallest mode that can prove the bug:
@@ -219,12 +220,11 @@ Validation guidance:
 
 Fresh command evidence is required before any positive completion language.
 
-## Repo Integration
-Keep workflow touchpoints minimal but explicit:
-- If the confirmed safe fix changes API, data, security, reliability, or architecture semantics, stop at root-cause proof and hand the change back into the repo’s normal spec/planning flow.
-- Put final behavior or risk decisions in `spec.md` only when debugging changed a decision, contract, or accepted risk.
-- Put long-lived debugging evidence in `research/*.md` only when the investigation is complex or reusable.
-- For a local fix that stays within approved behavior, keep the artifact footprint small and focus on the debug envelope below.
+## Boundaries And Handoffs
+Keep workflow touchpoints minimal:
+- if the confirmed safe fix changes API, data, security, reliability, rollout, or architecture semantics, stop at root-cause proof and hand the decision back to the orchestrator or the relevant specialist
+- preserve short-lived diagnostic evidence in the debug note or command output; only ask for preserved research/artifact updates when the investigation is complex enough that the evidence must survive the current task
+- for a local fix that stays within approved behavior, keep the artifact footprint small and focus on the debug envelope below
 
 ## Debugging Quality Bar
 Each debugging conclusion should make the following explicit:
@@ -238,18 +238,13 @@ Each debugging conclusion should make the following explicit:
 - escalation decision
 - residual risk or next evidence step if still uncertain
 
-## Deliverable Shape
-Return debugging work in this order:
-- `Debug Lane`
-- `Symptom`
-- `Reproduction`
-- `Evidence`
-- `Hypotheses`
-- `Root Cause`
-- `Fix Scope`
-- `Verification`
-- `Escalation Decision`
-- `Residual Risks`
+## Handoff Notes
+When reporting debugging work, keep the debug envelope explicit:
+- debug lane, symptom, and reproducer
+- key evidence and rejected hypotheses
+- root cause and minimal fix scope
+- verification commands and observed results
+- escalation decision and residual risk
 
 If root cause is not proven yet, end with the next concrete experiment, not a speculative patch list.
 
