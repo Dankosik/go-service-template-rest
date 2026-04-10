@@ -52,7 +52,7 @@ For very small, low-risk tasks, keep workflow planning, research, synthesis, tec
 7. **Phased implementation default:** Phased implementation is the default for non-trivial work: `phase -> review/reconcile -> validate -> next phase`. Big-bang implementation requires explicit rationale.
 8. **No mandatory skill chain:** The main flow must **not** become a mandatory linear skill chain; skills are invoked **on demand**, not as ritual steps.
 9. **Skill timing:** Planning skills may be used only during **planning**; implementation skills may be used only during **implementation**.
-10. **Coding gate:** Coding must not start until the implementation plan is explicit.
+10. **Coding gate:** Coding must not start until the implementation plan is explicit and implementation readiness allows handoff.
 11. **High-impact decisions:** High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
 12. **Synthesis gate:** Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
 13. **Spec approval clarification gate:** Non-trivial `spec.md` approval requires the autonomous `spec-clarification-challenge` loop inside `specification`; the orchestrator must reconcile all planning-critical questions before marking `spec.md` approved.
@@ -657,7 +657,7 @@ Examples, if present in the toolchain: `idea-refine` / `spec-first-brainstorming
 
 ### Read-only status helper
 
-`workflow-status` is an operational helper only. It may read task-local artifacts to report the current path, phase, blockers, allowed writes, next action, stop rule, and implementation-start status, but it must not edit artifacts, create missing workflow files, mutate git state, approve readiness, or replace `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `plan.md`, or `tasks.md`. If no task-local path is provided and no active task is obvious from artifacts, ask for the task path instead of guessing from chat memory.
+`workflow-status` is an operational helper only. It may read task-local artifacts to report the current path, phase, blockers, allowed writes, next action, stop rule, implementation-readiness status, and implementation-start status, but it must not edit artifacts, create missing workflow files, mutate git state, approve readiness, or replace `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `plan.md`, or `tasks.md`. If no task-local path is provided and no active task is obvious from artifacts, ask for the task path instead of guessing from chat memory.
 
 ## 8. Planning, implementation, review, and validation
 

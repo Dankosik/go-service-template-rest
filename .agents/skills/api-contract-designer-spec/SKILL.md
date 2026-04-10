@@ -46,6 +46,20 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 - Treat the prompt's stated client problem as the contract budget. Do not widen media types, enum values, flows, or control surfaces unless they remove a concrete ambiguity.
 - Missing contract facts become explicit assumptions or blockers, not implementation guesses.
 
+## Reference Files
+Use reference files lazily. Read only the file that matches the contract symptom in front of you, then synthesize the guidance into the task's `spec.md` or API decision output. Do not paste reference examples wholesale into deliverables.
+
+| Task symptom | Read |
+| --- | --- |
+| Error payloads, Problem Details, validation errors, auth/concealment status policy, field-level errors, sanitized negative paths | `references/problem-details-errors.md` |
+| HTTP method selection, `PUT` vs `PATCH`, create/update/delete status codes, `201`/`202`/`204`, `Location`, `ETag`, content negotiation status codes | `references/http-method-status-semantics.md` |
+| List endpoints, cursor or offset pagination, filters, sort syntax, sparse fields, `total_count`, collection links, multi-item result semantics | `references/pagination-filtering-sorting.md` |
+| Write retries, `Idempotency-Key`, timeout recovery, idempotency TTL/scope, `If-Match`, `If-None-Match`, `409` vs `412` vs `428` | `references/idempotency-preconditions-retries.md` |
+| Long-running work, `202 Accepted`, operation resources, polling, retention, bulk operations, callbacks, webhooks, event deduplication | `references/async-operations-and-webhooks.md` |
+| Compatibility class, status/error behavior changes, pagination changes, enum/nullability/default changes, URI versioning, Deprecation/Sunset, coexistence | `references/compatibility-and-versioning.md` |
+
+If several symptoms apply, read the smallest set of references that covers the contract risk. Keep the final recommendation contract-first and hand off chi routing, SQL schema, worker runtime, distributed orchestration, and implementation details to their owners.
+
 ## Expertise
 
 ### Contract Framing And Consumer Model

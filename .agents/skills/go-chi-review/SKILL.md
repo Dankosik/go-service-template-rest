@@ -39,6 +39,17 @@ Do not:
 - When multiple chi defects coexist, prioritize the one that corrupts live route state, startup safety, or advertised HTTP capability most directly.
 - Prefer the smallest safe routing fix that restores deterministic behavior.
 
+## Reference Files
+Load these files lazily when a finding needs chi-specific examples or validation shape:
+- [references/chi-router-registration-hazards.md](references/chi-router-registration-hazards.md): route registration, startup panic, `Use`, duplicate `Mount`, and subtree ownership hazards.
+- [references/middleware-order-and-scope.md](references/middleware-order-and-scope.md): middleware order, route identity timing, and `Use`/`With`/`Group`/`Route`/`Mount` scope mistakes.
+- [references/route-context-and-match-probing.md](references/route-context-and-match-probing.md): `RouteContext`, `RoutePattern`, `Match`, and `Find` probing hazards.
+- [references/http-fallback-head-options-cors.md](references/http-fallback-head-options-cors.md): `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, and CORS review checks.
+- [references/generated-and-manual-route-drift.md](references/generated-and-manual-route-drift.md): OpenAPI/generated handler wiring, manual route overlap, and generated-route drift.
+- [references/route-observability-labels.md](references/route-observability-labels.md): low-cardinality route labels, span names, metrics, and log route identity.
+
+Keep findings review-oriented after reading references: exact file/line, runtime impact, smallest safe fix, and a validation command. Do not turn these references into design-spec output.
+
 ## Expertise
 
 ### Chi Runtime Semantics

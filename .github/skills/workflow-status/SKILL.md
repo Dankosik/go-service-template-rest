@@ -13,7 +13,7 @@ This helper reads existing artifacts and summarizes what they already say. It do
 ## Use When
 - the user asks "where are we?", "what is next?", "can implementation start?", or "what is blocked?"
 - a session needs a compact task handoff before deciding whether to resume, stop, or reopen an earlier phase
-- the orchestrator needs to identify the current phase, artifact status, missing gate, allowed writes, next action, or stop rule from task-local artifacts
+- the orchestrator needs to identify the current phase, artifact status, implementation-readiness status, missing gate, allowed writes, next action, or stop rule from task-local artifacts
 - a task may be using direct-path or lightweight-local shortcuts and the helper needs to check whether the waiver is explicitly recorded
 
 ## Skip When
@@ -67,25 +67,28 @@ When `workflow-plan.md` is missing, infer only the minimum state from the artifa
 
 ## Status Inference Rules
 - Prefer `workflow-plan.md` for current phase, phase status, session-boundary state, blockers, artifact status, and next-session routing.
-- Prefer the current `workflow-plans/<phase>.md` for phase-local next action, stop rule, completion marker, and local blockers.
+- Prefer the current `workflow-plans/<phase>.md` for phase-local next action, stop rule, completion marker, local blockers, and the planning-phase implementation-readiness gate result when the current or completed phase is `planning`.
 - Use `spec.md`, `design/`, and `plan.md` only to confirm artifact presence and approval signals, not to invent a different phase than the master file records.
 - Treat absent required artifacts as incomplete unless an explicit waiver covers that exact artifact.
 - Treat present artifacts with unclear approval state as `present / status unclear`, not `approved`.
+- Treat a missing implementation-readiness status as incomplete for non-trivial planned work unless an explicit eligible direct-path, lightweight-local, or prototype waiver covers it.
 - If the master and phase-local file conflict, report the conflict as the blocker instead of choosing a winner silently.
 - If `Session boundary reached: yes`, report that the next action belongs to the recorded next session or reopen target; do not continue the prior phase in the same session.
 - If `Ready for next session: no`, report the active phase as still needing work unless the artifacts clearly say the master is stale.
-- `tasks.md` may be read when present or expected by the workflow. This helper reports its status but must not create, repair, or enforce a separate implementation-readiness feature.
+- `tasks.md` may be read when present or expected by the workflow. This helper reports its status but must not create, repair, or approve `tasks.md` or the implementation-readiness gate.
 
 ## Implementation Start Rule
 Answer `Implementation may start` conservatively:
 
-- `Yes` only when the artifact chain says the task is implementation-ready: required decisions are approved, required design is approved or explicitly skipped, the implementation plan is explicit, there are no blocking gates, and workflow routing points to implementation or the first implementation phase.
-- `Yes, in the recorded next session` when planning is complete, `Session boundary reached: yes`, and `Next session starts with` points at implementation.
-- `No` when `spec.md`, required `design/`, `plan.md`, expected `tasks.md`, phase control, or a required post-code phase file is missing without an explicit waiver.
+- `Yes` only when readiness is `PASS`, the required artifact chain is approved or explicitly waived, there are no blocking gates, and workflow routing points to implementation or the first implementation phase.
+- `Yes, in the recorded next session` when readiness is `PASS`, planning is complete, `Session boundary reached: yes`, and `Next session starts with` points at implementation.
+- `Yes, with recorded concerns` only when readiness is `CONCERNS`, named accepted risks and proof obligations are explicit, and routing points to implementation.
+- `No` when readiness is `FAIL`, or when `spec.md`, required `design/`, `plan.md`, expected `tasks.md`, phase control, readiness status, or a required post-code phase file is missing without an explicit waiver.
 - `No` when the current phase is workflow planning, research, specification, technical design, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
+- `No` when readiness is `CONCERNS` but accepted risks or proof obligations are unnamed.
 - `Unknown` only when the task path is identified but the artifacts are too contradictory to make a safe yes or no call; name the contradiction as the blocker.
 
-For direct-path or lightweight-local work, implementation may start only if the waiver and the inline implementation plan are explicit in the current task record. Do not infer a waiver from task size alone.
+For direct-path, lightweight-local, or prototype work, `WAIVED` allows implementation only if the waiver, rationale, scope, and inline implementation plan are explicit in the current task record. Do not infer a waiver from task size alone.
 
 ## Allowed Writes Reference
 Report the phase's allowed write surface using the repository contract, while making clear that this helper writes nothing:
@@ -112,11 +115,12 @@ Workflow Status
 - Phase status: <status or unknown>
 - Session boundary: <reached / not reached / unknown, plus next-session signal if present>
 - Artifact status: <compact list>
+- Implementation readiness: <PASS / CONCERNS / FAIL / WAIVED / missing / unknown, with one reason>
 - Missing gate or blocker: <first meaningful blocker, or none found>
 - Allowed writes for current phase: <phase write surface; status helper writes nothing>
 - Next action: <from artifacts, or first safe action>
 - Stop rule: <from phase file or inferred contract stop>
-- Implementation may start: <yes / yes in recorded next session / no / unknown, with one reason>
+- Implementation may start: <yes / yes in recorded next session / yes with recorded concerns / no / unknown, with one reason>
 ```
 
 ## Stop Rules

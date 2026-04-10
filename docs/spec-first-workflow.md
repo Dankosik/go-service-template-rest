@@ -30,7 +30,7 @@ More artifacts do not change ownership:
 
 The added artifacts provide control and technical context around `spec.md`, not another authority chain.
 
-The `workflow-status` skill is a read-only status and next-action helper over those artifacts. It can summarize current phase, blockers, allowed writes, stop rule, and implementation-start status, but it is not a session phase, gate, approval record, or replacement for `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `plan.md`, or `tasks.md`.
+The `workflow-status` skill is a read-only status and next-action helper over those artifacts. It can summarize current phase, blockers, allowed writes, stop rule, implementation-readiness status, and implementation-start status, but it is not a session phase, gate, approval record, or replacement for `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `plan.md`, or `tasks.md`.
 
 The `workflow-plan-adequacy-challenge` skill is a read-only challenger for generated workflow-control artifacts. It helps the orchestrator decide whether `workflow-plan.md` and the active `workflow-plans/<phase>.md` are sufficient for the actual task before handoff; it does not approve the handoff or edit files.
 
@@ -79,6 +79,7 @@ specs/<feature-id>/
 - **`design/`:** Task-local technical design bundle between `spec.md` and `plan.md`. It explains how the approved change fits the repository architecture and what implementation must preserve. Required for non-trivial work unless explicitly skipped with rationale.
 - **`plan.md`:** Execution strategy derived from approved `spec.md + design/`. It owns phases, dependencies, checkpoints, validation plan, risk notes, and reopen conditions. Required when the work is non-trivial, long-running, parallelized, or handed to an implementation skill.
 - **`tasks.md`:** Executable task ledger derived from approved `spec.md + design/ + plan.md`. It owns markdown checkboxes with stable task IDs, phase/checkpoint labels, optional `[P]` markers only for safe parallel work, concrete action and file/package surfaces, dependency markers when nontrivial, and proof expectations. Expected by default for non-trivial implementation work with `plan.md`; direct-path or tiny work may skip it only with an explicit waiver.
+- **Implementation readiness:** Planning-phase exit gate recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. The status belongs in `workflow-plan.md`, the result and stop or handoff rule belong in `workflow-plans/planning.md`, and `plan.md` carries only a compact summary.
 - **`research/*.md`:** Preserved evidence, comparisons, and validated research context. These files support decisions but do not own them. Create only when the task is long, ambiguous, or benefits from reusable research memory.
 - **`test-plan.md`:** Expanded validation strategy when test obligations are too large or too layered to fit cleanly inside `plan.md`. Conditional.
 - **`rollout.md`:** Operational rollout and migration notes when delivery order, compatibility, or recovery choreography matters. Conditional.
@@ -347,6 +348,34 @@ Minimum `tasks.md` content:
 
 Prefer vertical, reviewable slices and avoid generic tasks such as "implement feature." If exact tasking requires a missing design decision, reopen `technical design` instead of inventing the task.
 
+Implementation readiness is the planning exit check, not a separate workflow phase. It runs after `plan.md` and expected `tasks.md` are ready and before handoff to implementation.
+
+Status values:
+
+- `PASS`: implementation may start.
+- `CONCERNS`: implementation may start only with named accepted risks and proof obligations.
+- `FAIL`: implementation must not start; route to the named earlier phase.
+- `WAIVED`: allowed only for tiny, direct-path, or prototype work with explicit rationale and scope.
+
+Gate checks:
+
+- `spec.md` is approved, or explicitly waived for eligible tiny/direct-path work.
+- Required `design/` artifacts are approved, or a design-skip rationale is recorded.
+- `plan.md` is approved when non-trivial.
+- `tasks.md` is approved when non-trivial, unless an explicit eligible waiver exists.
+- Triggered `test-plan.md` and `rollout.md` exist, or are explicitly not expected.
+- Required implementation, review, or validation phase workflow files were created during planning when the phase structure requires them.
+- Material blockers are resolved, or explicitly accepted under `CONCERNS`.
+- The validation and proof path is explicit.
+- No unresolved high-impact open question remains that could change correctness, ownership, rollout, or validation.
+
+Artifact placement:
+
+- `workflow-plan.md` records the readiness status.
+- `workflow-plans/planning.md` records the gate result and stop or handoff rule.
+- `plan.md` carries a compact summary only.
+- `tasks.md` may carry a short reference when useful.
+
 ### Session-Boundary Gate
 
 For non-trivial work, a session may advance only the `Current phase` recorded in master `workflow-plan.md` and the matching `workflow-plans/<phase>.md`.
@@ -413,6 +442,7 @@ At minimum, it answers:
 - artifact status (`approved`, `draft`, or `missing`),
 - blockers,
 - phase workflow plan status,
+- implementation-readiness status,
 - workflow plan adequacy challenge status when required,
 - default resume order.
 
@@ -428,6 +458,7 @@ At minimum, it answers:
 - next action,
 - parallelizable work,
 - local blockers,
+- implementation-readiness gate result and stop or handoff rule when the phase is `planning`,
 - workflow plan adequacy challenge status and resolution when required.
 
 It is phase-local routing, not a replacement for `spec.md`, `design/`, `plan.md`, or `tasks.md`.
@@ -436,7 +467,7 @@ Recommended update cadence:
 
 - After framing or workflow planning: update the master file with execution shape, current phase, blockers, next-session routing, phase-plan links/status, and artifact expectations; update the current phase file with local orchestration, lanes, completion marker, and stop rule; run or explicitly waive the workflow plan adequacy challenge before handoff.
 - After synthesis/specification: update `spec.md` status in the master file, record clarification gate status, and record any blocker that prevents leaving `workflow-plans/specification.md`.
-- After `technical design` or planning: record approved design artifacts, `plan.md` status, and expected `tasks.md` status in the master file and current phase file; during planning, also create or repair `tasks.md` and any implementation/review/validation phase workflow files that the approved phase structure will use.
+- After `technical design` or planning: record approved design artifacts, `plan.md` status, expected `tasks.md` status, and implementation-readiness status in the master file and current phase file; during planning, also create or repair `tasks.md`, add the compact readiness summary in `plan.md`, and create any implementation/review/validation phase workflow files that the approved phase structure will use.
 - After each implementation checkpoint: update only the existing current phase workflow plan plus the master file, and update existing `tasks.md` checkbox/progress state when the task ledger is in use. If a needed workflow/process artifact is missing, reopen the relevant earlier phase instead of creating it mid-implementation.
 - After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, and `Next session starts with` in the master file, and close the current phase workflow plan.
 - After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof; update existing `tasks.md` checkbox/progress state only when already in use. If an expected validation control file or required `tasks.md` is missing, reopen the relevant earlier phase instead of creating it during closeout.
@@ -482,7 +513,8 @@ Use artifacts, not memory:
 - approved `spec.md` but no approved design bundle means `technical design` is still incomplete
 - approved design bundle but no approved `plan.md` means planning is still incomplete
 - approved `plan.md` with expected but missing `tasks.md` means planning needs repair before implementation consumes the task bundle
-- approved `plan.md` plus expected `tasks.md` or an explicit `tasks.md` waiver means the workflow can follow the recorded implementation routing; `workflow-plan.md` then shows whether implementation is still ahead or already in progress
+- approved `plan.md` plus expected `tasks.md` or an explicit `tasks.md` waiver still requires implementation readiness of `PASS`, eligible `CONCERNS`, or eligible `WAIVED` before the workflow can follow the recorded implementation routing
+- implementation readiness of `FAIL` routes to the named earlier phase instead of implementation
 - validation evidence plus updated `Outcome` means the task has reached validation or done
 
 Use session control from the master file before doing any work:
@@ -523,6 +555,7 @@ Avoid:
 - **Skipping clarification approval:** Marking non-trivial `spec.md` approved while the autonomous clarification gate is unresolved or blocked, instead of reconciling it, waiving it through an eligible direct/local exception, or leaving `spec.md` blocked with a reopen target.
 - **Design bundle drift:** Letting `design/` turn into a second `spec.md` or a second `plan.md`.
 - **Task ledger drift:** Letting `tasks.md` become a second spec, second design bundle, competing plan, or a place to invent missing technical decisions.
+- **Readiness bypass:** Treating implementation as ready when implementation readiness is missing or `FAIL`, using `CONCERNS` without named accepted risks and proof obligations, or treating `WAIVED` as the default for work that is not tiny, direct-path, or prototype-scoped.
 - **New process artifacts after code starts:** Creating new workflow/process markdown during implementation or validation instead of reopening the correct earlier phase.
 - **Just-in-case artifacts:** Creating `test-plan.md`, `rollout.md`, or conditional design files "just in case".
 - **Missing skip rationale:** Forgetting to record the skip rationale when bypassing `design/`.

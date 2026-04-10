@@ -30,11 +30,22 @@ Implement approved Go changes as production-grade, review-clean code that preser
 ## Boundaries And Handoffs
 Keep workflow ownership outside this skill:
 - consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, read existing `tasks.md` alongside `plan.md` when present or expected
+- for non-trivial planned work, check the recorded implementation-readiness status in `workflow-plan.md` and the planning handoff when those artifacts exist
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
-- if the safe implementation depends on a missing decision or required `tasks.md` is absent, stop and name the smallest unblock decision or planning repair instead of inventing behavior
+- if the safe implementation depends on a missing decision, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or planning repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
+
+## Implementation-Readiness Gate
+For non-trivial planned work, treat implementation readiness as mandatory before code edits:
+- `PASS`: proceed within the approved plan and task ledger.
+- `CONCERNS`: proceed only when named accepted risks and proof obligations are explicitly recorded; keep verification aligned with those obligations.
+- `FAIL`: do not start implementation; route to the named earlier phase.
+- `WAIVED`: proceed only for tiny, direct-path, or prototype work with explicit rationale and scope.
+- missing readiness status: do not start non-trivial implementation; route back to planning for the gate to be recorded.
+
+Do not turn readiness repair into a coding task. This skill consumes the gate; it does not create it.
 
 ## Hard-Skill Bar
 Strong implementation work usually gets these details right before review:
@@ -206,6 +217,8 @@ If the approved spec, plan, or contract blocks implementation before code change
 - stop cleanly and say the work is blocked by a decision conflict or missing approval
 - name the exact approved artifact that blocks the change
 - if expected `tasks.md` is missing, route back to planning instead of creating it during implementation
+- if implementation readiness is missing or `FAIL`, route back to planning or the named earlier phase instead of starting code work
+- if readiness is `CONCERNS` without named accepted risks and proof obligations, route back to planning for an explicit handoff
 - do not present a blocked result through `Implemented Scope`, `Key Code Changes`, or other implementation headings
 - do not use `implemented`, `fixed`, or `ready` language for blocked work
 - write the minimum unblock decision needed to resume coding

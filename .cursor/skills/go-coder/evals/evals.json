@@ -77,13 +77,36 @@
     },
     {
       "id": 5,
-      "prompt": "Use the go-coder skill for a non-trivial implementation task whose approved `plan.md` says `tasks.md` is required, but the workdir only has `spec.md` and `plan.md`. Do not create planning artifacts during implementation. Return the correct blocked handoff behavior.",
-      "expected_output": "A blocked implementation handoff that refuses to create a missing required `tasks.md` during coding, routes back to planning, and avoids success or implementation-complete language.",
+      "prompt": "Use the go-coder skill for a non-trivial implementation task whose approved `plan.md` says `tasks.md` is required, but the workdir only has `spec.md` and `plan.md`; no implementation-readiness status is recorded. Do not create planning artifacts during implementation. Return the correct blocked handoff behavior.",
+      "expected_output": "A blocked implementation handoff that refuses to create a missing required `tasks.md` or readiness gate during coding, routes back to planning, and avoids success or implementation-complete language.",
       "files": [],
       "expectations": [
         "The output identifies missing required `tasks.md` as a planning repair blocker.",
+        "The output identifies missing implementation readiness as a planning repair blocker for non-trivial work.",
         "The output does not create or propose creating `tasks.md` inside the implementation phase.",
         "The output avoids claiming the implementation is ready, fixed, or done."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Use the go-coder skill for a non-trivial task whose `workflow-plan.md` records `Implementation readiness: FAIL` and says to reopen `technical design` because rollout ownership is unresolved. Do not edit code. Return the correct handoff behavior.",
+      "expected_output": "A blocked implementation handoff that refuses to start code work, names the readiness `FAIL`, routes to the recorded earlier phase, and avoids implemented or ready language.",
+      "files": [],
+      "expectations": [
+        "The output treats readiness `FAIL` as a hard block before code edits.",
+        "The output routes to the named earlier phase, `technical design`, instead of trying to repair workflow artifacts in go-coder.",
+        "The output does not claim the task is implemented, fixed, or ready."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Use the go-coder skill for a non-trivial task whose `workflow-plan.md` records `Implementation readiness: CONCERNS` with named accepted risk `temporary duplicate telemetry during rollout` and proof obligation `run targeted telemetry assertions plus full package tests`. Explain the allowed implementation stance before editing.",
+      "expected_output": "A go-coder handoff stance that may proceed only because the `CONCERNS` risks and proof obligations are named, and keeps verification tied to those obligations.",
+      "files": [],
+      "expectations": [
+        "The output treats `CONCERNS` as allowed only because accepted risks and proof obligations are explicitly recorded.",
+        "The output names the recorded risk and proof obligation as constraints on implementation and verification.",
+        "The output would block if those risks or proof obligations were missing."
       ]
     }
   ]

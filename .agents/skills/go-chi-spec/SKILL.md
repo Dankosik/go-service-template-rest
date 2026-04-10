@@ -37,80 +37,39 @@ Do not:
 - Keep observability labels route-template-based and low-cardinality.
 - Keep OpenAPI as the source of truth; adapt routing integration rather than re-owning the contract.
 
-## Expertise
+## Reference Files
+Load only the files needed for the routing design question.
 
-### Chi Framing And Philosophy
-- Treat `chi` as a stdlib-first router, not a full-stack framework.
-- Keep business logic and domain rules out of router concerns.
-- Use `chi` for composability:
-  - route grouping and modular mounting
-  - local middleware scoping
-  - `net/http` ecosystem compatibility
-- Preserve `http.Handler` interoperability for testing and lifecycle integration.
-- Choose `chi` for routing and middleware clarity, not for trend alone.
+- `references/router-topology-patterns.md`: path ownership, root router vs subrouter shape, manual/generated route coexistence, mount/group/route tradeoffs, route conflict and shadowing controls.
+- `references/middleware-layering-patterns.md`: global vs route-local middleware scope, order-sensitive stacks, request context mutation, panic recovery, logging, body limits, and generated middleware order compatibility.
+- `references/notfound-methodnotallowed-options-cors.md`: `NotFound`, `MethodNotAllowed`, `Allow` headers, `OPTIONS`, CORS preflight, and top-level vs scoped CORS placement.
+- `references/openapi-oapi-codegen-integration.md`: OpenAPI source-of-truth routing, `oapi-codegen` chi server or strict server wiring, generated/manual route boundaries, generated-code ownership, and codegen compatibility settings.
+- `references/route-template-observability.md`: route-template labels, `RoutePattern()` timing, `Find`/`Match` tradeoffs, raw-path rejection, and safe fallback labels.
+- `references/router-validation-test-patterns.md`: route table validation, conflict and fallback tests, middleware-order probes, CORS preflight tests, OpenAPI route coverage, and observability-label assertions.
 
-### Chi Behavioral Semantics
-- Make framework-sensitive behavior explicit:
-  - global `Use(...)` middleware runs before final route-match context is fully resolved
-  - `RoutePattern()` is reliable only after downstream handling has established the route context
-  - default `405` and `OPTIONS` behavior must be pinned to an explicit policy
-  - duplicate route registrations can silently override by registration order unless guarded against
-- Treat route conflict, fallback behavior, CORS preflight, and route labeling as semantics, not implementation trivia.
-- For framework-sensitive claims, rely on repository tests or official chi documentation rather than memory.
-
-### Router Topology
-- Require one deterministic ownership point for each affected path set.
-- Make root router, mounted subrouter, and direct handler coexistence rules explicit.
-- Prevent generated and manual routes from colliding silently.
-- Reject route plans that allow hidden override behavior without tests or explicit guardrails.
-
-### Middleware Order And Scope
-- Define exact middleware order and explain why order matters for:
-  - request or correlation ID
-  - security headers
-  - body and framing limits
-  - access logging and route-label extraction
-  - panic recovery
-- Make `global` vs route-local scope explicit.
-- Reject reorder proposals that do not analyze behavioral impact.
-
-### OpenAPI And Code Generation Integration
-- Keep OpenAPI as the contract source of truth.
-- Make the `oapi-codegen` mode and strict-wrapper behavior explicit.
-- Ensure generated and manual routes can coexist without collision ambiguity.
-- Generated files are not for manual editing.
-
-### 404, 405, OPTIONS, And CORS Policy
-- Define explicit behavior for:
-  - `NotFound`
-  - `MethodNotAllowed`
-  - `Allow` header behavior
-  - `OPTIONS` handling
-  - preflight CORS behavior
-- Treat CORS placement as an architecture decision:
-  - top-level middleware by default
-  - scoped placement only with a clear `OPTIONS` strategy
-- Do not leave API-facing fallback behavior to framework defaults when clients depend on it.
-
-### Observability Route Semantics
-- Prefer route-template extraction via chi route context.
-- Define safe fallback behavior when a route template is unavailable.
-- Make timing rules for route extraction explicit so logs, metrics, and spans stay aligned.
-- Never use raw request paths, user IDs, or request IDs as metric labels.
-
-### Resilience And Lifecycle Interface
-- Preserve graceful startup and shutdown behavior of `http.Server`.
-- Define transport behavior for unmatched and method-disallowed requests.
-- Make router-level degradation or policy-mismatch behavior explicit where it affects clients or operators.
+## Design Method
+- Start from the affected route surfaces and list the routing decisions that are still implicit.
+- Load the relevant reference files and reuse their options, rejected alternatives, examples, and acceptance boundaries.
+- Make selected and rejected options explicit for nontrivial routing choices.
+- Treat framework-sensitive behavior as testable policy. Cite the reference source or require repository proof instead of relying on memory.
+- Keep the output focused on chi routing and transport composition. Hand off payload schema, persistence, security architecture, broad reliability policy, and SLI/SLO ownership unless routing behavior directly depends on them.
 
 ## Decision Quality Bar
 Major routing recommendations should make the following explicit:
 - the routing or middleware problem being solved
-- at least two viable options when the decision is nontrivial
-- selected and rejected options
-- behavior-sensitive framework implications
+- selected and rejected options when the decision is nontrivial
+- behavior-sensitive chi or `net/http` implications
+- generated vs manual route ownership when OpenAPI is involved
 - acceptance boundaries that can be tested
-- reopen conditions
+- adjacent handoffs and reopen conditions
+
+## Decision Quality Bar
+Reject designs that:
+- rely on implicit fallback or CORS defaults for client-visible API behavior
+- use raw request paths, user IDs, request IDs, or other high-cardinality values as metrics labels
+- allow generated and manual route ownership to collide without a validation hook
+- change middleware order without explaining the behavior impact
+- turn routing work into payload schema, storage, security architecture, or broad reliability design
 
 ## Deliverable Shape
 Return routing work in a compact, reviewable form:

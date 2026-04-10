@@ -64,8 +64,8 @@ intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
 - `specification`: stabilize final decisions, constraints, and open questions in `spec.md`; for non-trivial work, run the autonomous `spec-clarification-challenge` gate through a read-only challenger before approval.
 - `technical design`: for non-trivial work, turn approved decisions into a task-local `design/` bundle. Load [`docs/repo-architecture.md`](docs/repo-architecture.md) first when stable repository boundaries or runtime flows matter.
-- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn approved `spec.md + design/` into phased, verifiable execution work; for non-trivial implementation, phase strategy lives in `plan.md` and the executable checkbox ledger lives in `tasks.md`, and any later implementation/review/validation phase workflow files are created here before code starts.
-- `implementation`: change the service in the main flow, not inside research agents. New code/test files are fine when the approved plan requires them; new workflow/process artifacts are not. Existing `tasks.md` checkbox/progress state may be updated; missing required `tasks.md` routes back to planning instead of being invented mid-code.
+- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn approved `spec.md + design/` into phased, verifiable execution work; for non-trivial implementation, phase strategy lives in `plan.md` and the executable checkbox ledger lives in `tasks.md`, any later implementation/review/validation phase workflow files are created here before code starts, and the planning exit records implementation readiness as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`.
+- `implementation`: change the service in the main flow, not inside research agents. New code/test files are fine when the approved plan requires them; new workflow/process artifacts are not. Existing `tasks.md` checkbox/progress state may be updated; missing required `tasks.md` or implementation readiness of `FAIL` routes back to planning or the named earlier phase instead of being invented mid-code.
 - `review`: run targeted review agents only where the risk justifies them.
 - `validation`: do not claim "done" without fresh command evidence, and do not create new planning/process artifacts during closeout. Existing `tasks.md` may be progress-updated only when it already belongs to the task.
 
@@ -86,6 +86,7 @@ Think of the workflow-control artifacts as complementary, not competing:
 - `workflow-plans/<phase>.md`: one phase only, with local orchestration, completion marker, stop rule, and next action.
 - `plan.md`: execution strategy, phases, dependencies, checkpoints, validation plan, risk notes, and reopen conditions.
 - `tasks.md`: executable task ledger with markdown checkboxes, stable IDs such as `T001`, phase labels, optional `[P]` only for safe parallel work, dependency markers when needed, concrete file/package surfaces, and proof expectations.
+- Implementation readiness: a planning-phase gate. `PASS` allows implementation, `CONCERNS` requires named accepted risks and proof obligations, `FAIL` routes earlier, and `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
 
 Use `workflow-status` when you only need a compact read-only status or next-action check from existing artifacts. It reports state; it does not repair artifacts, approve readiness, or replace the workflow-control files.
 
@@ -186,7 +187,7 @@ The catalog has two layers:
 | [`spec-clarification-challenge`](.agents/skills/spec-clarification-challenge/SKILL.md) | surfaces non-obvious spec-approval questions for orchestrator reconciliation before non-trivial `spec.md` is marked approved | candidate decisions exist inside `specification` and the orchestrator needs a read-only clarification gate before approval |
 | [`spec-document-designer`](.agents/skills/spec-document-designer/SKILL.md) | designs and normalizes repository-native `spec.md` decision records with the right section depth, decision placement, and handoff into design and planning | framing or research is already in place and the orchestrator needs a clean decision record instead of a PRD, research dump, or task list |
 | [`planning-and-task-breakdown`](.agents/skills/planning-and-task-breakdown/SKILL.md) | turns approved `spec.md + design/` into `plan.md` phase strategy plus a `tasks.md` checkbox ledger with checkpoints, acceptance criteria, and verification steps | the decisions and task-local technical design are stable and implementation needs real planning artifacts instead of ad hoc execution |
-| [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift or new workflow-artifact sprawl | the implementation plan is explicit and code work is next |
+| [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift or new workflow-artifact sprawl | the implementation plan is explicit, readiness allows code work, and code work is next |
 | [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations as implementation work, not new planning | test code itself needs to be added or upgraded |
 | [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
 | [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence without inventing missing process artifacts | you are about to say “fixed”, “ready”, or “done” |
@@ -265,6 +266,7 @@ The repository is designed so the main agent acts like an orchestrator, not like
 - `design/` is the task-local technical design bundle for non-trivial work.
 - `plan.md` is the execution strategy artifact, not a second spec.
 - `tasks.md` is the executable task ledger, not a second spec, second design bundle, or competing plan.
+- Implementation readiness is the planning exit gate, not a phase. It is recorded in `workflow-plan.md`, with the result and stop or handoff rule in `workflow-plans/planning.md`.
 - `research/*.md` is optional supporting evidence, not a competing source of truth.
 
 For non-trivial implementation work, the artifact shape is intentionally simple:

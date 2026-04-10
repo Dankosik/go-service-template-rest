@@ -40,6 +40,7 @@ Escalate if:
 - For non-trivial work, plan from approved `spec.md + design/`, not from `spec.md` alone.
 - For non-trivial work with `plan.md`, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
 - Planning is the last artifact-producing phase before code. If later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` are part of the approved execution shape, plan for them to exist before implementation starts instead of being invented later.
+- Planning must leave an implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
 - When the planning pass generates or materially changes workflow-control files, expect a read-only `workflow-plan-adequacy-challenge` before handoff; do not treat `plan.md` detail as a substitute for adequate `workflow-plan.md` and `workflow-plans/<phase>.md` routing.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
@@ -78,6 +79,7 @@ Escalate if:
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
 - Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface instead of vague subsystem labels.
 - Do not add a task if tasking it requires inventing a missing design decision; reopen `technical design` instead.
+- Include a compact implementation-readiness summary in `plan.md`; add only a short readiness reference in `tasks.md` when useful.
 
 ### 5. Add Checkpoints
 - Add review and validation checkpoints at natural risk boundaries.
@@ -103,6 +105,7 @@ Use this structure by default:
 - `Execution Context`
 - `Phase Plan`
 - `Cross-Phase Validation Plan`
+- `Implementation Readiness`
 - `Blockers / Assumptions`
 - `Handoffs / Reopen Conditions` when relevant
 
@@ -118,6 +121,14 @@ For each phase, include:
 - `Exit Criteria`
 
 Keep executable checkbox detail in `tasks.md` instead of expanding `plan.md` into a task ledger.
+
+For `Implementation Readiness`, keep it compact:
+- status: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
+- accepted risks and proof obligations when status is `CONCERNS`
+- earlier phase to reopen when status is `FAIL`
+- waiver rationale and scope when status is `WAIVED`
+
+Do not duplicate the full gate reasoning from `workflow-plan.md` or `workflow-plans/planning.md`.
 
 ## Preferred `tasks.md` Shape
 Return ledger text that can drop directly into `tasks.md` with minimal rewriting.
@@ -145,6 +156,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - For non-trivial work, default to `plan.md` plus `tasks.md` and consume approved `spec.md + design/`.
 - When later implementation, review, or validation phase-control files are part of the execution shape, planning should leave them ready to be created or linked before implementation begins; post-code phases should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, `tasks.md` status, artifact expectations, and generated post-code phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
+- The implementation-readiness handoff must be explicit: `PASS` may proceed, `CONCERNS` may proceed only with named risks and proof obligations, `FAIL` must route to the named earlier phase, and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
 - If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
@@ -159,6 +171,7 @@ The planning pass is complete when:
 - checkpoints exist where the risk actually changes
 - blocked work is clearly separated from ready work
 - the next implementation or validation session can start without creating new workflow/process artifacts or missing `tasks.md` to compensate for incomplete planning output
+- implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - the plan and task ledger are specific enough for `go-coder` to execute without recreating the strategy or reverse-engineering missing design context

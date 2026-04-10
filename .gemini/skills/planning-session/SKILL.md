@@ -1,6 +1,6 @@
 ---
 name: planning-session
-description: "Own a session dedicated only to implementation planning for this repository. Use when approved `spec.md + design/` are ready to turn into `plan.md` and `tasks.md`, plus optional `test-plan.md` or `rollout.md`, and when any later implementation/review/validation phase workflow files must be created before code starts, with task-local `workflow-plan.md` plus `workflow-plans/planning.md` updated without drifting into implementation. Skip tiny direct-path work and tasks whose spec or design are still unstable."
+description: "Own a session dedicated only to implementation planning for this repository. Use when approved `spec.md + design/` are ready to turn into `plan.md` and `tasks.md`, plus optional `test-plan.md` or `rollout.md`, and when any later implementation/review/validation phase workflow files and the implementation-readiness gate must be completed before code starts, with task-local `workflow-plan.md` plus `workflow-plans/planning.md` updated without drifting into implementation. Skip tiny direct-path work and tasks whose spec or design are still unstable."
 ---
 
 # Planning Session
@@ -14,6 +14,7 @@ This wrapper makes implementation planning explicit and stoppable; it does not r
 - the orchestrator must turn approved `spec.md + design/` into executable planning artifacts for a non-trivial change
 - `plan.md` should become the phase-strategy artifact before any implementation session starts
 - `tasks.md` should become the executable task ledger before any non-trivial implementation session starts
+- implementation readiness must be checked and recorded before handoff to implementation
 - `test-plan.md` or `rollout.md` may be needed because validation or rollout obligations are too large to fit cleanly inside `plan.md`
 - master `workflow-plan.md` and `workflow-plans/planning.md` need the planning checkpoint completed or repaired before handoff into implementation
 
@@ -92,6 +93,7 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics
 - `planning-and-task-breakdown` remains the deeper planning method for dependency ordering, task sizing, acceptance criteria, checkpoints, and verification detail
 - `plan.md` owns execution strategy; `tasks.md` owns the executable checkbox ledger derived from `spec.md + design/ + plan.md`
+- implementation readiness is the planning-phase exit gate; it uses `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` and is not a separate workflow phase
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - before non-trivial handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, and any generated implementation/review/validation phase-control files
 - for non-trivial work, the session ends at approved planning artifacts; implementation starts in a new session unless an upfront repository-approved waiver already exists
@@ -165,6 +167,12 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - if planning is complete, set `Next session starts with` to the first named implementation phase or explicit implementation checkpoint from `plan.md`
 - record whether later implementation, review, or validation phase files are expected
 - record whether `tasks.md` is approved, draft, missing, or explicitly waived for a tiny/direct-path exception
+- run the implementation-readiness gate after `plan.md` and expected `tasks.md` are ready
+- set readiness to `PASS` only when required decisions, design, planning artifacts, triggered `test-plan.md` or `rollout.md`, required phase workflow files, blockers, proof path, and high-impact open questions are all resolved for implementation
+- set readiness to `CONCERNS` only when implementation may start with named accepted risks and explicit proof obligations
+- set readiness to `FAIL` when implementation must not start, and name the earlier phase to reopen
+- set readiness to `WAIVED` only for tiny, direct-path, or prototype work with explicit rationale and scope
+- record readiness status in `workflow-plan.md`, the gate result and stop or handoff rule in `workflow-plans/planning.md`, a compact summary in `plan.md`, and a short reference in `tasks.md` when useful
 - keep implementation entry prerequisites visible so the next session does not need to re-plan
 - for non-trivial or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`
 - pass the task frame, execution shape, master workflow plan, `workflow-plans/planning.md`, generated post-code phase-control files, planning artifact status, blockers, and proposed next-session handoff
@@ -183,6 +191,10 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - status for `tasks.md` as `approved`, `draft`, `missing`, explicitly waived, or not expected only for an eligible tiny/direct-path exception
 - status for `test-plan.md` and `rollout.md` as `approved`, `draft`, `missing`, or not expected
 - whether later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` were created now, are explicitly not expected, or still remain blocked on a reopen
+- implementation-readiness status as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
+- named accepted risks and proof obligations when readiness is `CONCERNS`
+- named earlier phase when readiness is `FAIL`
+- waiver rationale and scope when readiness is `WAIVED`
 - blockers, accepted assumptions, and reopen conditions that still affect implementation readiness
 - workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale
 - `Session boundary reached`
@@ -214,12 +226,13 @@ Planning is complete when:
 - blocked work is clearly separated from ready work
 - `test-plan.md` and `rollout.md` exist only when their triggers are real, and their status is explicit when not needed
 - any implementation, review, or validation phase workflow files that the approved phase structure requires were created before implementation begins, or their absence is recorded as a reopen blocker
+- implementation-readiness gate is `PASS`, `CONCERNS` with named accepted risks and proof obligations, or eligible `WAIVED`; `FAIL` leaves planning blocked or reopened
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
 - required workflow plan adequacy challenge findings are reconciled, or an eligible skip rationale is explicit
 - the next session can begin the first implementation phase or explicit implementation checkpoint without silently reopening spec or design
 
 ## Stop Condition
-The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.
+The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.
 
 ## Escalate When
 Escalate instead of forcing output when:
@@ -227,6 +240,7 @@ Escalate instead of forcing output when:
 - required core design artifacts are missing without an approved design-skip rationale
 - a conditional design artifact is clearly triggered but missing
 - rollout, compatibility, migration, or ownership questions remain unresolved and change the implementation order
+- implementation readiness is `FAIL` or would require accepting unnamed risk
 - the request tries to combine planning with implementation, validation, or review execution
 - the work is so small that a dedicated planning session would be ceremony
 
