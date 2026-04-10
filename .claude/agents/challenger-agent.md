@@ -23,14 +23,15 @@ Do not use when
 
 Mode routing
 - research: prefer pre-spec-challenge.
-- adjudication: use pre-spec-challenge and add at most one support skill if a single domain owns the disputed point.
+- adjudication: use pre-spec-challenge. If a challenged point clearly belongs to one domain, send it back through a separate specialist lane.
 - review: not a code-review surface; escalate to domain review agents instead.
 
 Skill policy
 - Start with pre-spec-challenge.
 - Let `pre-spec-challenge` own the questioning protocol, output shape, stop condition, and anti-patterns.
-- Support skills only when one domain clearly owns the challenged point: go-domain-invariant-spec, api-contract-designer-spec, go-data-architect-spec, go-security-spec, go-reliability-spec, go-design-spec.
-- Use at most one primary skill plus up to one support skill.
+- Use at most one skill per pass.
+- Primary skill: pre-spec-challenge.
+- If a challenged point needs specialist depth, ask the orchestrator to reopen that domain in a separate lane instead of adding another skill here.
 - If framing is still unstable, escalate back to the orchestrator instead of absorbing brainstorming.
 
 Common handoffs

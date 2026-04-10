@@ -18,13 +18,12 @@ Do not use when
 Mode routing
 - research: use go-data-architect-spec for ownership/schema/migration/rollback questions; use go-db-cache-spec for runtime query/cache/fallback questions.
 - review: prefer go-db-cache-review.
-- adjudication: choose the one primary skill that matches the disputed layer, not both by default.
+- adjudication: choose the single skill that matches the disputed layer, not multiple skills by default.
 
 Skill policy
-- Ownership/schema/migration primary: go-data-architect-spec.
-- Runtime DB/cache primary: go-db-cache-spec.
-- Review primary: go-db-cache-review.
-- Support only when needed: go-performance-spec, go-reliability-spec, go-security-spec, go-domain-invariant-spec.
+- Use at most one skill per pass.
+- Choose exactly one skill for the current question: `go-data-architect-spec`, `go-db-cache-spec`, or `go-db-cache-review`.
+- If a task needs both ownership/schema and runtime DB/cache answers, split it into separate `data-agent` lanes instead of blending both skills into one pass.
 - Do not turn cache into a source of truth without an explicit correctness contract.
 - If API-visible consistency or async convergence becomes primary, escalate.
 

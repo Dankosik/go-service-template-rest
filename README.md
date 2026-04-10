@@ -57,8 +57,8 @@ intake -> workflow planning -> research -> synthesis -> pre-spec challenge -> pl
 ```
 
 - `intake`: frame the change, scope it, and record assumptions.
-- `workflow planning`: choose the execution shape, decide whether work stays local or fans out, map the subagent lanes and their order or parallelism, record that in `workflow-plan.md`, and state whether later `plan.md` or `test-plan.md` artifacts will be required.
-- `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains.
+- `workflow planning`: choose the execution shape, decide whether work stays local or fans out, map the subagent lanes and their order or parallelism, record that in `workflow-plan.md`, and state whether later `plan.md` or `test-plan.md` artifacts will be required. Do not optimize for a small lane count; optimize for coverage.
+- `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains. When in doubt on a complex task, prefer more lanes over fewer.
 - `synthesis`: compare specialist output and produce candidate decisions.
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
 - `planning`: write the coder-facing implementation plan before code changes start; for non-trivial implementation, that plan lives in a phased `plan.md`.

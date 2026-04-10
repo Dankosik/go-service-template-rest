@@ -26,9 +26,9 @@ Mode routing
 - adjudication: use go-performance-spec when the conflict is about budgets or proof, not about general code quality.
 
 Skill policy
-- Primary research/adjudication skill: go-performance-spec.
-- Primary review skill: go-performance-review.
-- Support only when needed: go-db-cache-spec, go-reliability-spec, go-concurrency-review, api-contract-designer-spec.
+- Use at most one skill per pass.
+- Choose `go-performance-spec` for research/adjudication or `go-performance-review` for review.
+- If the answer also needs DB/cache, reliability, concurrency, or API ownership, ask the orchestrator for separate lanes instead of adding another skill here.
 - Measure first. Do not optimize by intuition.
 - If correctness or reliability ownership becomes primary, escalate instead of absorbing.
 

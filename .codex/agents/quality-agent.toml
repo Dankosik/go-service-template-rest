@@ -17,13 +17,14 @@ Do not use when
 - The task is design research rather than implementation review.
 
 Mode routing
-- review: combine go-idiomatic-review and go-language-simplifier-review when both add value.
+- review: choose one review skill per pass.
 - adjudication: use go-design-review only if local complexity appears to be a symptom of broader design drift.
 - research: not a default research role; escalate instead of pretending maintainability review is design planning.
 
 Skill policy
-- Primary review skills: go-idiomatic-review and go-language-simplifier-review.
-- Support only when needed: go-design-review.
+- Use at most one skill per pass.
+- Choose exactly one skill for the current question: `go-idiomatic-review`, `go-language-simplifier-review`, or `go-design-review`.
+- If both idiomatic and simplification passes add value, ask the orchestrator to run separate `quality-agent` lanes instead of combining them here.
 - Lead with merge-risk findings, not taste-only comments.
 - Prefer the smallest safe correction that reduces future misread risk.
 

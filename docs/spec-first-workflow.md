@@ -27,6 +27,9 @@ The workflow is intentionally simple:
 11. Coding starts only after an explicit implementation plan exists.
 12. Any single subagent conclusion is advisory until the orchestrator synthesizes it and, when needed, rechecks it.
 13. For medium/high-risk or ambiguous work, candidate synthesis is pressure-tested before planning or explicitly waived with rationale.
+14. One subagent pass uses at most one skill. If a lane needs multiple skills, split it into multiple lanes or keep that synthesis in the orchestrator.
+15. Parallel lanes may reuse the same subagent role; role duplication is normal when the question or chosen skill differs.
+16. In `fan-out` mode, do not optimize for low subagent count; prefer enough lanes to cover the real seams, even if that means duplicate or overlapping reads.
 
 For very small and low-risk tasks, the orchestrator may keep research local and skip subagent fan-out.
 The invariants above still apply.
@@ -120,9 +123,13 @@ The orchestrator decides:
 2. whether research mode is `local` or `fan-out`,
 3. which questions can be solved directly in the main flow,
 4. which questions need subagent research,
-5. which tracks are independent and should run in parallel,
-6. which high-impact or ambiguous topics need multi-angle research or a challenger pass,
-7. whether later `plan.md` or `test-plan.md` artifacts will be required.
+5. which single skill each planned subagent lane should use, if any,
+6. which tracks are independent and should run in parallel,
+7. which high-impact or ambiguous topics need multi-angle research or a challenger pass,
+8. whether later `plan.md` or `test-plan.md` artifacts will be required.
+
+The orchestrator should not treat subagent count as a budget to minimize.
+In `fan-out` mode, it is better to over-cover the task with extra read-only lanes than to leave a material seam unexamined.
 
 For non-trivial or agent-backed work, write `workflow-plan.md` before any subagent call.
 Preferred shape: a detailed sequence diagram or an equivalent ordered lane list.
@@ -158,13 +165,41 @@ loop for each phase in plan.md
 end
 ```
 
+Example: same subagent role, different skills, different research questions
+
+```text
+task: add workspace credit accounting with an authoritative Postgres ledger plus a Redis summary cache
+
+orchestrator -> workflow-plan.md : record duplicate-role fan-out with one skill per lane
+orchestrator -> data-agent[ledger-ownership | go-data-architect-spec] : research authoritative tables, replay rules, migration/backfill safety
+orchestrator -> data-agent[runtime-cache-contract | go-db-cache-spec] : research cache keys, invalidation, staleness, stampede, fallback
+data-agent[ledger-ownership | go-data-architect-spec] -> orchestrator : findings
+data-agent[runtime-cache-contract | go-db-cache-spec] -> orchestrator : findings
+orchestrator -> challenger-agent[pre-spec-challenge] : challenge the combined candidate decisions
+challenger-agent[pre-spec-challenge] -> orchestrator : blocker questions / next action
+```
+
+Why this example matters:
+1. The same `data-agent` role is called more than once, and that is intentional.
+2. Each `data-agent` lane uses exactly one skill.
+3. Each lane researches a different seam of the same task.
+4. This is preferred over one `data-agent` trying to use both skills in one pass.
+
+Lane planning rules:
+1. Plan by lane, not by unique role name.
+2. A lane owns one question and uses one skill or explicit `no-skill`.
+3. Multiple parallel lanes may reuse the same subagent role when that keeps the questions sharp.
+4. Do not force a single lane to mix skills just to avoid duplicate role names.
+5. If you are unsure whether a material seam deserves its own lane, bias toward opening the lane.
+
 Each subagent task should state:
 1. the goal and scope,
 2. what must be checked,
 3. relevant constraints and risks,
 4. the expected output shape,
-5. the explicit read-only boundary: no code, file, git-state, or implementation-plan changes,
-6. where evidence is required.
+5. the one skill to use for that pass, or explicit `no-skill`,
+6. the explicit read-only boundary: no code, file, git-state, or implementation-plan changes,
+7. where evidence is required.
 
 ### Step 3. Local Or Parallel Research
 
@@ -172,15 +207,17 @@ Owner: Subagents
 
 Subagents:
 1. analyze only their assigned domain,
-2. may use relevant skills locally,
-3. return concise synthesis-ready output,
-4. separate facts, recommendations, risks, confidence, and open points when relevant,
-5. never change repository files, code, or the implementation plan.
+2. own one question per lane,
+3. may use one relevant skill locally or explicit `no-skill`,
+4. return concise synthesis-ready output,
+5. separate facts, recommendations, risks, confidence, and open points when relevant,
+6. never change repository files, code, or the implementation plan.
 
 There is no single rigid response schema for every subagent task.
 The orchestrator defines the output shape needed for the current question.
 If a planned track cannot be executed with read-only guarantees, keep it in the main flow instead of delegating it.
 When research mode is `fan-out`, optimize for domain coverage rather than for the smallest possible number of subagent calls.
+If one question seems to need multiple skills, split it into multiple lanes instead of turning one subagent into a mini workflow.
 
 ### Step 4. Candidate Synthesis, Pre-Spec Challenge, And Decision Logging
 
@@ -309,7 +346,7 @@ Any readiness or completion claim must include fresh command evidence.
 For day-to-day work, use this short loop:
 1. Frame the task in the main flow.
 2. Write `workflow-plan.md` before any non-trivial fan-out.
-3. Spawn the read-only subagent tracks needed to cover the materially affected domains.
+3. Spawn all read-only subagent tracks needed to cover the materially affected domains, including duplicate-role lanes when they keep one-skill ownership clean.
 4. Synthesize candidate decisions and run pre-spec challenge when the task risk or ambiguity justifies it.
 5. Write `plan.md` before coding when implementation is non-trivial.
 6. Execute one phase at a time.
@@ -328,6 +365,9 @@ Use subagent fan-out when at least one is true:
 Do not fan out when the extra orchestration would add more overhead than clarity.
 Do not fan out to a write-capable delegate surface just because the prompt says "read-only"; if the surface is not reliably read-only, keep the work local.
 Do not optimize for minimal subagent count on a materially cross-domain task; optimize for coverage of the real affected domains.
+Subagent count is not a success metric in this workflow. Use as many read-only lanes as needed, and when coverage and economy conflict, choose coverage.
+Prefer more lanes over fewer when the extra lanes buy independent opinions, seam isolation, or stronger fan-in evidence.
+Do not treat duplicate-role lanes as a smell by themselves; the smell is a lane that tries to answer multiple skill-shaped questions at once.
 
 ## 8. Scaling Rule
 
@@ -380,3 +420,5 @@ When a legacy reference conflicts with this document, prefer the orchestrator/su
 10. Filling optional sections or artifacts with placeholder text.
 11. Turning pre-spec challenge into ritualized checklist coverage or fixed question quotas.
 12. Treating review coverage as more important than solving the real delivery risk.
+13. Packing multiple skills into one subagent pass instead of splitting the work into separate lanes.
+14. Treating low subagent count as a virtue on a task that actually needs broader specialist coverage.

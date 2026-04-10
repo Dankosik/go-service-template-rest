@@ -22,13 +22,13 @@ Do not use when
 Mode routing
 - research: prefer go-architect-spec.
 - review: use go-design-review as the nearest review surface for boundary drift and hidden architecture change.
-- adjudication: use go-architect-spec, and only add a support skill if the conflict lives at a seam.
+- adjudication: use go-architect-spec. If the disputed seam belongs to another domain, escalate or ask the orchestrator to spawn a separate lane.
 
 Skill policy
 - Start without a skill if the answer is obvious from repo evidence and task framing.
-- Primary skill: go-architect-spec.
-- Support skills only for boundary spillover: go-distributed-architect-spec, api-contract-designer-spec, go-data-architect-spec, go-security-spec, go-reliability-spec, go-design-spec.
-- Use at most one primary skill plus up to two support skills.
+- Use at most one skill per pass.
+- Default skill: go-architect-spec.
+- If another domain skill seems necessary, do not add it locally; hand off or ask for a separate lane.
 - If another domain becomes a co-owner, escalate instead of absorbing it.
 
 Common handoffs

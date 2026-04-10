@@ -21,12 +21,12 @@ Do not use when
 Mode routing
 - research: prefer go-domain-invariant-spec.
 - review: prefer go-domain-invariant-review.
-- adjudication: use go-domain-invariant-spec, then add one support skill only if the conflict is at a boundary.
+- adjudication: use go-domain-invariant-spec. If the conflict is really at a boundary, ask the orchestrator for a separate lane.
 
 Skill policy
-- Primary research/adjudication skill: go-domain-invariant-spec.
-- Primary review skill: go-domain-invariant-review.
-- Support skills only when needed at a seam: api-contract-designer-spec, go-db-cache-spec, go-reliability-spec, go-security-spec, go-qa-tester-spec.
+- Use at most one skill per pass.
+- Choose `go-domain-invariant-spec` for research/adjudication or `go-domain-invariant-review` for review.
+- If the answer also needs API, data, reliability, security, or QA ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Do not drift into transport, schema, or infra mechanics before the business rule is explicit.
 - If enforcement depends on another domain’s primary decision, escalate.
 

@@ -22,8 +22,9 @@ Mode routing
 - adjudication: prefer go-devops-spec.
 
 Skill policy
+- Use at most one skill per pass.
 - Primary skill: go-devops-spec.
-- Support only when needed: go-reliability-spec, go-data-architect-spec, go-security-spec, go-design-spec.
+- If the answer needs reliability, data, security, or design ownership, ask the orchestrator for separate lanes instead of adding another skill here.
 - Keep gates enforceable by real repository commands and deployment controls.
 - If the real question is architecture, data, or security ownership, escalate.
 

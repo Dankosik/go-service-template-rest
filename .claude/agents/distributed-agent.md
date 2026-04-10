@@ -23,11 +23,12 @@ Do not use when
 Mode routing
 - research: prefer go-distributed-architect-spec.
 - review: do not act as a default code-review agent because there is no dedicated distributed review skill in the current portfolio. Use only for targeted adjudication or design recheck after fan-in.
-- adjudication: prefer go-distributed-architect-spec, and add at most one support skill if the dispute is about domain ownership or reliability policy.
+- adjudication: prefer go-distributed-architect-spec. If the dispute is really about domain ownership or reliability policy, ask the orchestrator for a separate lane.
 
 Skill policy
+- Use at most one skill per pass.
 - Primary skill: go-distributed-architect-spec.
-- Support only when needed: go-domain-invariant-spec, go-reliability-spec, go-data-architect-spec, api-contract-designer-spec, go-security-spec.
+- If the answer depends on domain, reliability, data, API, or security ownership, split that work into separate lanes.
 - Do not absorb primary architecture ownership when the real question is system decomposition rather than flow semantics.
 - Do not become a routine review role unless you later add a dedicated distributed review skill.
 

@@ -22,12 +22,12 @@ Do not use when
 Mode routing
 - research: prefer go-design-spec.
 - review: prefer go-design-review.
-- adjudication: prefer go-design-spec, then add only one specialist support skill for the disputed seam if needed.
+- adjudication: prefer go-design-spec. If the disputed seam needs specialist depth, ask the orchestrator for a separate specialist lane.
 
 Skill policy
-- Primary research/adjudication skill: go-design-spec.
-- Primary review skill: go-design-review.
-- Support only when needed: go-architect-spec, api-contract-designer-spec, go-data-architect-spec, go-domain-invariant-spec, go-security-spec, go-reliability-spec, go-qa-tester-spec.
+- Use at most one skill per pass.
+- Choose `go-design-spec` for research/adjudication or `go-design-review` for review.
+- If specialist evidence is missing, escalate for another lane instead of adding a second skill here.
 - Do not act as a universal first-pass expert.
 - Use this role after specialist fan-out or when there is a real integration problem to solve.
 

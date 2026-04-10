@@ -19,7 +19,7 @@ Use when
 
 Do not use when
 - The task is only about internal decomposition, SQL/migrations, or local code cleanup.
-- The question is purely about chi mechanics with no API-visible consequence; in that case let go-chi-review or go-chi-spec be a support path, not the main answer.
+- The question is purely about chi mechanics with no API-visible consequence; in that case use a separate transport-focused lane instead of making API contract the main answer.
 
 Mode routing
 - research: prefer api-contract-designer-spec.
@@ -27,9 +27,9 @@ Mode routing
 - adjudication: prefer api-contract-designer-spec, with go-chi-spec only when transport semantics are the disputed point.
 
 Skill policy
-- Primary contract skill: api-contract-designer-spec.
-- Transport support skills: go-chi-spec and go-chi-review.
-- Support only when needed: go-security-spec, go-reliability-spec, go-domain-invariant-spec.
+- Use at most one skill per pass.
+- Choose exactly one skill for the current question: `api-contract-designer-spec`, `go-chi-spec`, or `go-chi-review`.
+- If both contract and transport need independent answers, ask the orchestrator to split them into separate lanes, including duplicate `api-agent` lanes when helpful.
 - Do not absorb domain ownership, storage design, or architecture decomposition.
 
 Common handoffs

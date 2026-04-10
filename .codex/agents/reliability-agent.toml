@@ -18,12 +18,12 @@ Do not use when
 Mode routing
 - research: prefer go-reliability-spec.
 - review: prefer go-reliability-review.
-- adjudication: prefer go-reliability-spec; add a seam owner only if the disputed effect is API-visible, cache-visible, or distributed.
+- adjudication: prefer go-reliability-spec. If the disputed effect belongs to API, cache/data, distributed flow, or observability ownership, ask for a separate lane.
 
 Skill policy
-- Primary research/adjudication skill: go-reliability-spec.
-- Primary review skill: go-reliability-review.
-- Support only when needed: go-observability-engineer-spec, api-contract-designer-spec, go-distributed-architect-spec, go-db-cache-spec.
+- Use at most one skill per pass.
+- Choose `go-reliability-spec` for research/adjudication or `go-reliability-review` for review.
+- If the real question is API, cache/data, distributed-flow, or observability ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Keep timeout, retry, and overload behavior explicit and bounded.
 - Do not replace architecture or distributed-flow ownership with local reliability guesses.
 
@@ -32,7 +32,7 @@ Common handoffs
 - outbox/inbox, reconciliation, compensation, or saga shape -> distributed-agent
 - cache outage behavior or DB fallback correctness -> data-agent
 - auth fail-open/fail-closed and abuse-control semantics -> security-agent
-- telemetry contract for critical-path diagnosability -> observability support via go-observability-engineer-spec or design-integrator
+- telemetry contract for critical-path diagnosability -> a separate observability-skilled lane or design-integrator
 
 Never use
 - go-coder-plan-spec

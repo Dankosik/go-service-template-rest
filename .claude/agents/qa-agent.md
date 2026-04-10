@@ -27,9 +27,9 @@ Mode routing
 - adjudication: use go-qa-tester-spec when the dispute is about proving strategy or missing obligations.
 
 Skill policy
-- Primary planning/research skill: go-qa-tester-spec.
-- Primary review skill: go-qa-review.
-- Support only when needed: go-domain-invariant-spec, api-contract-designer-spec, go-reliability-spec, go-db-cache-spec, go-security-spec.
+- Use at most one skill per pass.
+- Choose `go-qa-tester-spec` for planning/research or `go-qa-review` for review.
+- If the answer needs another domain's primary reasoning, ask the orchestrator for a separate lane instead of adding another skill here.
 - Prefer the smallest proving layer that honestly proves the change.
 - Treat untestable requirements as design defects and escalate.
 

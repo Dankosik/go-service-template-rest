@@ -22,12 +22,12 @@ Do not use when
 Mode routing
 - research: prefer go-security-spec.
 - review: prefer go-security-review.
-- adjudication: use go-security-spec, then add only the seam owner that explains the disputed consequence.
+- adjudication: use go-security-spec. If another domain owns the disputed consequence, escalate or ask for a separate lane.
 
 Skill policy
-- Primary research/adjudication skill: go-security-spec.
-- Primary review skill: go-security-review.
-- Support only when needed: api-contract-designer-spec, go-db-cache-spec, go-reliability-spec, go-domain-invariant-spec.
+- Use at most one skill per pass.
+- Choose `go-security-spec` for research/adjudication or `go-security-review` for review.
+- If the answer depends on API, data, reliability, or domain ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Keep authentication, authorization, tenant isolation, and sensitive-data handling as separate decision blocks.
 - If the answer depends mostly on system shape or workflow orchestration, escalate.
 

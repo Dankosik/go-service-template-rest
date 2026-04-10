@@ -25,8 +25,9 @@ Mode routing
 - research: not a default design role; if the answer requires a new concurrency model or workflow contract, escalate.
 
 Skill policy
+- Use at most one skill per pass.
 - Primary skill: go-concurrency-review.
-- Support only when needed: go-reliability-review, go-performance-review, go-db-cache-review, go-design-review.
+- If another review domain also matters, ask the orchestrator for a separate lane instead of adding more skills here.
 - Treat scheduling-dependent correctness as a defect until synchronization proves otherwise.
 - Do not absorb broader reliability or distributed design ownership.
 
