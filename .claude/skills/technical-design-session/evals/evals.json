@@ -1,0 +1,39 @@
+{
+  "skill_name": "technical-design-session",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We already have an approved `spec.md` for tenant-scoped async export jobs with persisted job state, signed download URLs, an admin control surface, and an outbox-backed completion event. The current `workflow-plan.md` says the next session starts with `technical-design`. Use only the technical-design-session wrapper. Produce the task-local design bundle and update the workflow control artifacts so planning can start next. This change touches HTTP transport, app orchestration, persistence, async flow, and generated contracts.",
+      "expected_output": "A technical-design-only result that loads the right phase context, uses the repository architecture baseline because the change touches stable boundaries and runtime flow, writes the required design artifacts plus triggered conditional ones, updates `workflow-plan.md` and `workflow-plans/technical-design.md`, and stops before `plan.md`.",
+      "files": [],
+      "expectations": [
+        "The output keeps the session inside technical design and does not draft `plan.md`, implementation code, or tests.",
+        "The output treats `docs/repo-architecture.md` as required context for this cross-boundary design pass.",
+        "The output includes the required core design artifacts and calls for triggered conditional artifacts such as `design/data-model.md`, `design/contracts/`, and any real `rollout.md` or `test-plan.md` need without treating `design/contracts/` as runtime authority.",
+        "The output updates the planning handoff in both workflow files, including `Session boundary reached`, `Ready for next session`, and `Next session starts with`."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "The spec is approved for adding a new admin bulk-retry endpoint plus a retry-state machine, and we are in the technical-design phase. While you are doing that, go ahead and write `plan.md`, sketch the implementation steps, and start the contract-generation edits too. Use only the technical-design-session wrapper and keep moving if the boundary seems obvious.",
+      "expected_output": "A boundary-aware technical-design response that produces only the design-phase outputs, refuses to cross into planning or implementation, and records the next-session handoff instead of writing `plan.md` or code.",
+      "files": [],
+      "expectations": [
+        "The output explicitly refuses to write `plan.md` or start implementation work in the same session.",
+        "The output keeps allowed writes limited to design artifacts plus `workflow-plan.md` and `workflow-plans/technical-design.md`.",
+        "The output leaves a clear next-session route to planning instead of using technical design as a shortcut into execution."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use only the technical-design-session wrapper. The task has a draft `spec.md`, but it still contradicts itself: one section says invoice finalization is synchronous and durable on `201`, another says the event publish is best-effort in a background goroutine, and the ownership of invoice status between DB and cache is unresolved. I still want the design bundle written now so we can move faster.",
+      "expected_output": "A contract-aware response that refuses to force a dishonest design bundle, makes the technical-design/specification boundary explicit, and routes the task back to specification or a blocked technical-design state instead of inventing design certainty.",
+      "files": [],
+      "expectations": [
+        "The output recognizes that the design cannot complete honestly while `spec.md` remains planning-critically unstable.",
+        "The output records a `reopened-to-specification` or blocked technical-design state instead of pretending planning can start.",
+        "The output does not draft `plan.md`, implementation work, or fake 'approved' design artifacts to paper over the contradiction."
+      ]
+    }
+  ]
+}

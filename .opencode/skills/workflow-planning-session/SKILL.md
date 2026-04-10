@@ -1,0 +1,161 @@
+---
+name: workflow-planning-session
+description: "Own a session dedicated only to workflow planning for this repository. Use when the orchestrator needs to choose execution shape, research mode, subagent lanes, current-phase routing, and later artifact expectations before research begins, and must write or update task-local `workflow-plan.md` plus `workflow-plans/workflow-planning.md` without drifting into research, `spec.md`, `design/`, `plan.md`, or implementation. Skip tiny direct-path work and any task whose approved pre-research control artifact already lives under a different phase file."
+---
+
+# Workflow Planning Session
+
+## Purpose
+Run only the workflow-planning checkpoint for one task-local session.
+This wrapper makes the pre-research control pass explicit and stoppable; it does not perform research, specification, technical design, implementation planning, or coding.
+
+## Use When
+- non-trivial or agent-backed work needs explicit workflow control before any subagent call or deeper research
+- the orchestrator must choose `direct path`, `lightweight local`, or `full orchestrated`
+- research mode, subagent lanes, challenge expectations, and later artifact expectations must be written down before the next session
+- task-local `workflow-plan.md` or `workflow-plans/workflow-planning.md` is missing, stale, or inconsistent
+
+## Skip When
+- the work is tiny enough that `AGENTS.md` allows a short inline workflow-planning note and explicit skip rationale instead of dedicated workflow artifacts
+- the task is already in research or a later phase and the current session should not reopen routing
+- the active task already has an approved pre-research control artifact under another phase file and creating `workflow-plans/workflow-planning.md` would create a competing source of truth
+
+## Required Inputs
+Need only the minimum framing required to route the work:
+- task goal or requested change
+- known scope and non-goals
+- known constraints, risks, and success checks
+- whether the task is tiny/direct-path or non-trivial/agent-backed
+- task-local artifact location when one already exists
+
+If a routing fact is missing, record it as an assumption or blocker instead of inventing detail.
+
+## Read First
+Always read:
+- `AGENTS.md`
+- `docs/spec-first-workflow.md`
+
+Then load only the smallest task-local context that affects workflow control:
+- existing `workflow-plan.md`, if present
+- existing `workflow-plans/workflow-planning.md`, if present
+- the user request and any already-approved task-local artifact needed to confirm current stage, scope, or blockers
+
+Rules:
+- follow `AGENTS.md` if it conflicts with other workflow guidance
+- read the master `workflow-plan.md` before the phase-local file when both exist
+- do not broad-read the repository or domain references unless workflow routing truly depends on them
+
+## Allowed Writes
+This session may write or update only:
+- task-local `workflow-plan.md`
+- task-local `workflow-plans/workflow-planning.md`
+- the `workflow-plans/` directory only when it must be created to hold the phase-local file
+
+## Prohibited Actions
+Do not:
+- run local or subagent research
+- write `research/*.md`
+- write or finalize `spec.md`
+- write `design/`
+- write `plan.md`, `test-plan.md`, or `rollout.md`
+- start implementation, tests, migrations, or review work
+- use planning or implementation skills as a backdoor into later phases
+- make final domain, architecture, API, data, security, reliability, or rollout decisions that belong to later phases
+- create a second active pre-research control artifact when the task already uses another approved phase file for that checkpoint
+
+## Core Defaults
+- This is an orchestrator-facing wrapper, not a domain specialist.
+- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics.
+- This skill owns session protocol only. It must not redefine later artifact ownership or phase behavior.
+- Use `workflow-planning-session` only when a dedicated workflow-planning session is the intended control shape.
+- Later phase-local files from the repository contract still matter: this wrapper does not replace `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, `workflow-plans/planning.md`, or conditional post-code phase files.
+- For non-trivial work, stop after the workflow artifacts are updated. Research or another recorded next phase begins in a new session unless an approved waiver already exists.
+
+## Workflow
+
+### 1. Confirm This Session Owns Workflow Planning Only
+- Check whether the task is still at the routing stage.
+- If the task is already in research or later, stop and hand back the correct reopen point instead of rewriting phase control.
+- If the work is tiny enough for inline workflow planning only, say so directly and stop instead of forcing this wrapper.
+
+### 2. Normalize Minimum Framing
+- Capture what must change, scope cuts, constraints, risk hotspots, success checks, blockers, and visible assumptions.
+- Keep missing facts visible instead of filling them in.
+
+### 3. Choose Execution Shape And Research Mode
+- Choose `direct path`, `lightweight local`, or `full orchestrated`.
+- Decide whether the next research pass should be `local` or `fan-out`.
+- If `fan-out` is expected, enumerate lanes by owned question, role, and one chosen skill or explicit `no-skill`.
+- Decide whether a later pre-spec challenge pass is expected.
+- Decide whether later `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are expected.
+
+### 4. Set Session Routing
+- Treat this session's local checkpoint as `workflow-planning`.
+- Record the completion marker, stop rule, next action, blockers, and what can run in parallel.
+- Record what the next session starts with. Default to `research` when workflow planning completes and no earlier waiver allows same-session collapse.
+- Keep the wrapper narrow: it prepares later phase work, it does not begin that work.
+
+### 5. Write Or Repair `workflow-plan.md`
+- Record the execution shape and why it fits.
+- Record research mode when later research is expected.
+- Record current phase, phase status, session-boundary state, next-session routing, blockers, and phase workflow plan links or status.
+- Record artifact status for `spec.md`, `design/`, `plan.md`, and conditional later artifacts as `approved`, `draft`, `missing`, or explicit not-expected.
+- If implementation-phase count is not known yet, say so instead of guessing.
+
+### 6. Write Or Repair `workflow-plans/workflow-planning.md`
+- Record only the local orchestration for this session.
+- Include research mode when relevant, planned subagent lanes, order or parallelism, fan-in or challenge path, phase status, completion marker, next action, blockers, what can run in parallel, and the local stop rule.
+- Keep this file routing-only. Do not turn it into `spec.md`, `design/`, or `plan.md`.
+
+### 7. Stop At The Boundary
+- Once the two workflow artifacts are consistent and the next session can start without re-planning, stop.
+- Do not begin research, specification, technical design, planning, or implementation in this session.
+
+## Required Master `workflow-plan.md` Updates
+Every completed pass must update the master file with:
+- execution shape and why
+- research mode, or an explicit note that later research is not expected
+- current phase for this session and current phase status
+- `Session boundary reached`
+- `Ready for next session`
+- `Next session starts with`
+- blockers and accepted assumptions that still affect routing
+- phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
+- artifact status for `spec.md`, `design/`, `plan.md`, and any triggered `test-plan.md` or `rollout.md`
+- phased-delivery policy, including whether later implementation, review, and validation phase files are expected or still unknown
+
+Do not leave those fields implicit in chat.
+
+## Expected Outputs
+Produce only workflow-control output:
+- updated or newly created `workflow-plan.md`
+- updated or newly created `workflow-plans/workflow-planning.md`
+- an honest blocked state when routing cannot be completed without contradicting the repository contract
+
+No research notes, `spec.md`, `design/`, `plan.md`, or implementation output belongs to this session.
+
+## Stop Condition
+The session is complete when:
+- execution shape and research mode are explicit
+- the current workflow-planning checkpoint has a written completion marker and stop rule
+- the next session start point is explicit
+- master and phase-local workflow artifacts agree on phase status, blockers, and handoff
+- later required artifacts are marked as expected, draft, missing, or not expected instead of guessed into existence
+- no research, specification, technical design, planning, or implementation work has started
+
+## Escalate When
+Escalate instead of forcing output when:
+- the work is so small that a dedicated workflow-planning session would be pure ceremony
+- the task is already in research or a later phase
+- critical routing facts are missing and cannot be safely assumed
+- the requested `workflow-plans/workflow-planning.md` would conflict with an already-approved current control file such as `workflow-plans/specification.md`
+- the task needs real domain research before execution shape or lane planning can be chosen honestly
+- the request tries to combine workflow planning with research, specification, technical design, planning, or implementation in one session
+
+## Anti-Patterns
+- using this wrapper as a substitute for domain research or `spec.md` authoring
+- turning workflow planning into a hidden implementation plan
+- creating `workflow-plans/workflow-planning.md` plus another active pre-research control file for the same checkpoint
+- inventing artifact status or blocker resolution for completeness theater
+- selecting fan-out lanes without naming the question each lane owns
+- starting research "just to get ahead" before closing the session

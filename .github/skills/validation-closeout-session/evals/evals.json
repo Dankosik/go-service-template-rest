@@ -1,0 +1,38 @@
+{
+  "skill_name": "validation-closeout-session",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Implementation and review are complete for a non-trivial task that added tenant-scoped export jobs. The active workflow artifacts say the next session is `validation-phase-1`. `spec.md` still needs final `Validation` and `Outcome`, and the proof obligations are: rerun the scoped package tests, rerun the OpenAPI drift check, and rerun the migration validation command. Use only the validation-closeout-session wrapper to finish the task.",
+      "expected_output": "A closeout-only result that uses fresh evidence to update `spec.md`, closes `workflow-plan.md`, updates `workflow-plans/validation-phase-1.md`, and stops without implementing code.",
+      "files": [],
+      "expectations": [
+        "The output binds the final closeout claim to the stated scope and uses fresh commands rather than prior summaries as proof.",
+        "The output updates `spec.md` `Validation` and `Outcome`, plus `workflow-plan.md` and the active `workflow-plans/validation-phase-1.md` artifact.",
+        "The output closes the task only if the fresh evidence supports it and keeps the boundary clear that no new code is written during closeout."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Use only the validation-closeout-session wrapper. The team wants to close the task, but the final contract check now fails and one scoped test is red. If that happens, just patch the failing code quickly and keep going so we can still say the task is complete today.",
+      "expected_output": "A boundary-aware closeout result that records the failed proof, reopens the right earlier phase, and refuses to patch code during validation.",
+      "files": [],
+      "expectations": [
+        "The output does not claim completion or readiness without fresh successful evidence.",
+        "The output records the failing proof and names an explicit reopen target and next session instead of silently implementing fixes.",
+        "The output keeps `Outcome` and workflow routing honest about the blocked or reopened state."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "This is the final pass for a lightweight local change. There is `spec.md` and `workflow-plan.md`, but no dedicated `workflow-plans/validation-phase-1.md`. Yesterday's `go test` output is already in chat. Use only the validation-closeout-session wrapper and finish the closeout without inventing extra ceremony.",
+      "expected_output": "A proportional closeout result that still requires fresh proof, updates the existing closeout artifacts honestly, and does not invent a phase-local validation file when the task is not using one.",
+      "files": [],
+      "expectations": [
+        "The output reruns or requires fresh proof now instead of trusting yesterday's command output.",
+        "The output updates `spec.md` and `workflow-plan.md` while avoiding a made-up `workflow-plans/validation-phase-1.md` artifact.",
+        "The output stops after honest closeout handling and does not drift into implementation."
+      ]
+    }
+  ]
+}

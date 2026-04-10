@@ -1,15 +1,15 @@
 ---
 name: planning-and-task-breakdown
-description: "Turn an approved spec into phased, dependency-ordered, verifiable execution work for this repository. Use after `spec.md` is stable and pre-spec challenge is reconciled, whenever implementation should be driven from `plan.md` rather than improvised from the spec. Reach for this when the work is large enough that execution order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
+description: "Turn approved `spec.md + design/` into phased, dependency-ordered, verifiable execution work for this repository. Use after `spec.md` is stable, required technical-design artifacts are approved or explicitly skipped, and pre-spec challenge is reconciled, whenever implementation should be driven from `plan.md` rather than improvised from the decision/design record. Reach for this when the work is large enough that execution order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
 ---
 
 # Planning And Task Breakdown
 
 ## Purpose
-Turn a stable spec into a coder-facing execution plan that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations.
+Turn stable decisions plus approved technical design into a coder-facing execution plan that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations.
 
 ## Scope
-- convert approved decisions from `spec.md` into dependency-ordered phases and tasks
+- convert approved decisions from `spec.md` and task-local technical context from `design/` into dependency-ordered phases and tasks
 - make `plan.md` explicit when the work is non-trivial
 - attach acceptance criteria, planned verification, checkpoints, and change-surface hints
 - expose blockers, assumptions, and reopen conditions before coding starts
@@ -18,6 +18,7 @@ Turn a stable spec into a coder-facing execution plan that is small-slice, phase
 ## Boundaries
 Do not:
 - make new architecture, API, data, security, reliability, or rollout decisions
+- reconstruct missing architecture, ownership, data, or sequence context from `spec.md` alone when `design/` should supply it
 - write production code, tests, or migrations as the main deliverable
 - dump raw research or repeat the whole spec in planning form
 - treat `spec.md` as the place for full task breakdown by default
@@ -26,26 +27,34 @@ Do not:
 ## Escalate When
 Escalate if:
 - `spec.md` is not stable enough to derive tasks without reopening design
+- non-trivial work is missing `design/overview.md`, the required core design artifacts, or an explicit design-skip rationale
+- a conditional design artifact is clearly triggered but missing
 - core behavior is still undecided across architecture, API, data, security, reliability, or domain semantics
 - the right implementation order depends on a missing migration, compatibility, or ownership decision
 - the change cannot be decomposed without inventing detail the spec does not actually approve
 
 ## Core Defaults
-- `spec.md` is for decisions; `plan.md` is for execution.
+- `spec.md` is for decisions, `design/` is for technical context, and `plan.md` is for execution.
+- For non-trivial work, plan from approved `spec.md + design/`, not from `spec.md` alone.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
+- For non-trivial work, this pass ends the current session at approved `plan.md`; implementation begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
+- Do not let `plan.md` become an architecture reconstruction document.
 
 ## Planning Workflow
 
 ### 1. Confirm Planning Readiness
-- Read the stable spec, not just the chat.
-- Confirm that the main decisions and open questions are explicit.
-- If the spec is not stable enough, stop and escalate instead of guessing.
+- Read the stable `spec.md` and the relevant design bundle, not just the chat.
+- Confirm that the main decisions, design constraints, ownership boundaries, and open questions are explicit.
+- For non-trivial work, require `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip rationale.
+- If the design or spec is not stable enough, stop and escalate instead of guessing.
 
-### 2. Map The Dependency Graph
+### 2. Load Execution-Critical Design Context
+- Use `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` to understand what must land first and what may move in parallel.
+- Load triggered conditional artifacts such as `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md` when they affect sequencing.
 - Identify what must exist first: schema or config changes, generated artifacts, interfaces, handlers, background workers, tests, docs, or migration controls.
 - Make the ordering explicit when one task truly depends on another.
 - Do not confuse implementation taste with real dependency.
@@ -55,6 +64,7 @@ Escalate if:
 - When possible, use vertical slices that land observable behavior.
 - If the work must start with enabling seams or migration groundwork, say so directly.
 - If two tasks must land together to remain safe, explain the coupling.
+- Use the design bundle's ownership and sequence constraints to decide where slices can and cannot be separated.
 
 ### 4. Write The Task Breakdown
 - For each phase, list the concrete tasks.
@@ -101,11 +111,13 @@ For each phase, include:
 
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `plan.md` for a tiny change just to satisfy ceremony.
-- For non-trivial work, default to `plan.md`.
+- For non-trivial work, default to `plan.md` and consume approved `spec.md + design/`.
+- If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
 - Prefer sequential phases unless change surfaces are truly disjoint.
-- State what should trigger a reopen back into specification instead of letting coding discover it silently.
+- Make the handoff explicit: the planning session stops at approved `plan.md`, and the first implementation phase starts in a new session unless a recorded waiver says otherwise.
+- State what should trigger a reopen back into specification or technical design instead of letting coding discover it silently.
 
 ## Definition Of Done
 The planning pass is complete when:
@@ -113,10 +125,12 @@ The planning pass is complete when:
 - each meaningful task has acceptance criteria and planned verification
 - checkpoints exist where the risk actually changes
 - blocked work is clearly separated from ready work
-- the plan is specific enough for `go-coder` to execute without recreating the strategy from scratch
+- the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
+- the plan is specific enough for `go-coder` to execute without recreating the strategy or reverse-engineering missing design context
 
 ## Escalate Or Reject
 - task breakdown derived from an unstable spec
+- task breakdown that assumes missing `design/` context instead of escalating
 - a phase list with no acceptance criteria or verification
 - a generic task like `implement the feature`
 - horizontal slicing that hides risk and postpones integration until the end

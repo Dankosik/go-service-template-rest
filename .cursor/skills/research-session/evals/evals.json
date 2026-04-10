@@ -1,0 +1,38 @@
+{
+  "skill_name": "research-session",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We already finished workflow planning for a non-trivial feature: tenant-scoped async export jobs with persisted job state, signed download URLs, and admin controls. `workflow-plan.md` says the next session starts with research. Use only the research-session wrapper to run the research checkpoint. We need answers on API and state ownership, download-link security, retry and failure handling, and rollout risk. Preserve reusable evidence when it would help later specification.",
+      "expected_output": "A research-only result that reads current phase context, chooses read-only fan-out coverage where appropriate, updates `workflow-plan.md` and `workflow-plans/research.md`, preserves `research/*.md` only when useful, and stops before `spec.md`.",
+      "files": [],
+      "expectations": [
+        "The output reads the existing phase context first and keeps the session inside the research boundary.",
+        "The output plans fan-out lanes with named questions, roles, and one chosen skill or explicit `no-skill` per lane, while keeping subagent work read-only.",
+        "The output updates the handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and whether the next session starts with `specification`, challenge, or more research, without drafting `spec.md`, `design/`, `plan.md`, or code."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "The active task already has framing and workflow routing, and the next checkpoint is research for a bounded change: add strong ETag support to one GET endpoint backed by a single repository method. Use only the research-session wrapper. We need one research-only pass to confirm HTTP precondition semantics, repository evidence sources, and whether local research is enough.",
+      "expected_output": "A boundary-aware research result that chooses `local` research, narrows the questions to what affects spec readiness, updates `workflow-plan.md` plus `workflow-plans/research.md`, and avoids unnecessary fan-out or preserved-note sprawl.",
+      "files": [],
+      "expectations": [
+        "The output can choose `local` research when the task is bounded instead of forcing fan-out.",
+        "The output names the specific research questions and evidence targets that matter for later specification.",
+        "The output stops after research routing and handoff, rather than drafting `spec.md` or continuing into later phases."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I know this task is in research, but while you are there go ahead and finalize `spec.md` and create `workflow-plans/specification.md` too. Use only the research-session wrapper and keep moving if the answers seem obvious.",
+      "expected_output": "A session-bounded response that refuses to cross into the future specification session, makes the research/spec split explicit, and updates routing instead of writing spec artifacts.",
+      "files": [],
+      "expectations": [
+        "The output distinguishes research-session outputs from the future `specification-session` outputs.",
+        "The output does not write or recommend writing approved `spec.md`, `workflow-plans/specification.md`, `design/`, or `plan.md` in the same session.",
+        "The output records the correct next-session routing or escalation instead of silently continuing into specification."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "skill_name": "workflow-planning-session",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We have a non-trivial feature request to add tenant-scoped async report exports with persisted job state, signed download URLs, and an admin-only control surface. Nothing is researched yet. Use only the workflow-planning session for this task and produce the control outputs that should exist before any research starts.",
+      "expected_output": "A workflow-planning-only result that sets execution shape, research mode, routing, and artifact expectations in `workflow-plan.md` and `workflow-plans/workflow-planning.md`, then stops before research.",
+      "files": [],
+      "expectations": [
+        "The output limits itself to workflow control and does not draft `spec.md`, `design/`, `plan.md`, or code.",
+        "The output chooses an execution shape and a research mode, with planned fan-out lanes or an explicit local-research choice when appropriate.",
+        "The output includes next-session routing and the required master `workflow-plan.md` handoff fields such as `Session boundary reached`, `Ready for next session`, and `Next session starts with`."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "The change is tiny: echo an incoming `X-Request-ID` header back on `/healthz` if present. I still asked for a workflow-planning session skill. Give me the session output that is appropriate now.",
+      "expected_output": "A boundary-aware response that refuses to force heavyweight workflow artifacts for tiny direct-path work and instead points to the inline skip-rationale path.",
+      "files": [],
+      "expectations": [
+        "The output recognizes that a dedicated workflow-planning session would be ceremony for this tiny change.",
+        "The output does not invent heavyweight workflow artifacts, research lanes, or later design/planning artifacts for the header echo task.",
+        "The output keeps the boundary clear that this skill should not drift into implementation even when the task is small."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The active task already uses `workflow-plan.md` plus `workflow-plans/specification.md` as the approved pre-research control artifact under the current repository contract. Someone now asks you to create `workflow-plans/workflow-planning.md` for the same checkpoint. Apply this skill only.",
+      "expected_output": "A contract-aware response that surfaces the source-of-truth conflict and refuses to create a competing pre-research control file.",
+      "files": [],
+      "expectations": [
+        "The output treats `AGENTS.md` as authoritative and flags the competing control-file risk.",
+        "The output does not create or recommend two active phase-control files for the same pre-research checkpoint.",
+        "The output escalates or points back to the approved artifact path instead of redefining the workflow locally."
+      ]
+    }
+  ]
+}

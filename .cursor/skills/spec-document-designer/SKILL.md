@@ -1,26 +1,28 @@
 ---
 name: spec-document-designer
-description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable `spec.md` with the right section depth, decision placement, audit trail, and plan handoff before `planning-and-task-breakdown`. Skip raw ideation, specialist domain design, full task breakdown, and implementation coding."
+description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable `spec.md` with the right section depth, decision placement, audit trail, and technical-design handoff before non-trivial planning. Skip raw ideation, technical-design-bundle assembly, full task breakdown, and implementation coding."
 ---
 
 # Spec Document Designer
 
 ## Purpose
-Turn a framed request or synthesized design work into a planning-ready repository-native `spec.md` without turning it into a PRD, a task list, or a research dump.
+Turn a framed request or synthesized research into a repository-native `spec.md` that is honest, stable, and ready to hand off into `technical design` without turning it into a PRD, a design bundle, or a task list.
 
 ## Scope
 - draft a fresh `spec.md` when the task is mature enough for specification
 - normalize existing drafts that are too thin, too bloated, or shaped like a foreign template
 - choose the right section depth for the task while staying inside the repository's artifact model
 - translate useful coverage prompts from external spec workflows into repo-native sections
-- keep planning blockers, assumptions, and validation hooks visible before handoff to `planning-and-task-breakdown`
+- keep blockers, assumptions, validation hooks, and plan-summary links visible before handoff to `technical design`
 
 ## Boundaries
 Do not:
 - refine a raw product idea; use `idea-refine`
 - perform engineering framing on an under-shaped request; use `spec-first-brainstorming`
 - absorb unresolved cross-domain design contradictions that belong in `go-design-spec` or specialist `*-spec` skills
+- assemble the task-local `design/` bundle; that belongs to `go-design-spec`
 - produce task breakdown, execution sequencing, or coder instructions; that belongs to `planning-and-task-breakdown`
+- silently skip `technical design` for non-trivial work by smuggling design detail into `spec.md`
 - copy BMAD, Spec Kit, Superpowers, or SDD templates directly into this repository's `spec.md`
 
 ## Escalate When
@@ -29,13 +31,15 @@ Escalate if:
 - current external guidance materially affects the design and has not been researched yet
 - the draft still contains unresolved domain contradictions that would make `spec.md` dishonest
 - the work is tiny enough that a separate spec pass would be ceremony instead of risk reduction
-- planning would still need to reopen core design after the spec pass
+- non-trivial work still lacks a stable decisions record that `go-design-spec` can carry into `design/` without reopening core framing
 
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
+- For non-trivial work, the handoff path is `spec.md -> design/ -> plan.md`.
+- For non-trivial work, this pass ends the current session at approved `spec.md`; `technical design` begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
-- Put execution detail in `plan.md`, preserved evidence in `research/*.md`, and stable decisions in `spec.md`.
+- Put stable decisions in `spec.md`, task-local technical context in `design/`, execution detail in `plan.md`, and preserved evidence in `research/*.md`.
 - Prefer short explicit bullets over template sludge.
 - Omit empty sections instead of padding the document for completeness theater.
 
@@ -52,8 +56,8 @@ Load by trigger:
 - existing spec rewrite or continuation: the active `spec.md`
 - non-trivial work: the matching `workflow-plan.md`
 - research-backed synthesis: the relevant `research/*.md`
-- planning drift or handoff check: the matching `plan.md`
-- conflicting specialist notes: the smallest set of affected design artifacts
+- handoff drift check: the matching `plan.md`
+- existing technical-design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author design in this pass
 
 Conflict resolution:
 - repository contract beats the reference file
@@ -66,7 +70,7 @@ Unknowns:
 ## Hard Skills
 
 ### Mission
-Make `spec.md` stable enough for planning while preserving the repository's single-source-of-truth discipline.
+Make `spec.md` stable enough for `technical design` while preserving the repository's single-source-of-truth discipline.
 
 ### Default Posture
 - decision-first
@@ -102,14 +106,16 @@ Make `spec.md` stable enough for planning while preserving the repository's sing
 ### Artifact Ownership Competency
 - Stable decisions belong in `Decisions`.
 - Evidence history, comparisons, and raw external research belong in `research/*.md`.
+- Task-local technical design context belongs in `design/`.
 - Task sequencing and execution detail belong in `plan.md`.
 - Unresolved but visible gaps belong in `Open Questions / Assumptions`.
-- Do not force the planner to recover execution order from `spec.md` when a separate `plan.md` is warranted.
+- Do not force `go-design-spec` or the planner to recover ownership, sequence, or execution order from `spec.md` when separate artifacts are warranted.
 
-### Planning Readiness Competency
-- A planning-ready spec must let `planning-and-task-breakdown` derive phases without silently reopening core design.
+### Technical-Design Handoff Competency
+- A non-trivial spec must let `go-design-spec` derive the task-local `design/` bundle without silently reopening core problem framing.
 - Keep blockers, accepted risks, and reopen conditions explicit.
-- Preserve non-goals and scope cuts so planning does not re-expand the change.
+- Preserve non-goals and scope cuts so technical design does not re-expand the change.
+- Keep only the planning summary or plan link in `spec.md` when a separate `plan.md` will exist.
 
 ### Spec Review Competency
 - Scan for placeholders, `TODO`, `TBD`, contradictions, duplicated content, scope spread, implementation leakage, and research dumped into `Decisions`.
@@ -159,9 +165,9 @@ Make `spec.md` stable enough for planning while preserving the repository's sing
 - Keep `Decisions` authoritative and compact.
 - Link out instead of duplicating detail when preserved evidence already exists elsewhere.
 
-### 6. Run A Planning-Readiness Review
-- Ask whether planning can proceed without reopening the design.
-- If yes, finalize the spec and keep the plan handoff explicit.
+### 6. Run A Technical-Design-Handoff Review
+- Ask whether non-trivial work can proceed into `technical design` without reopening the problem frame.
+- If yes, finalize the spec, keep the downstream design handoff explicit, and stop at the handoff boundary instead of beginning `technical design` in the same session.
 - If no, escalate to the missing upstream skill or specialist lane.
 
 ## Output Expectations
@@ -179,6 +185,7 @@ Rules:
 - Merge sections when clearer.
 - Do not create empty sections.
 - Do not dump full task lists or execution steps into `spec.md`.
+- Do not use `spec.md` as a substitute for `design/`.
 - When blocked, say what upstream skill or research pass must reopen and why.
 
 ## Definition Of Done
@@ -186,12 +193,14 @@ The pass is complete when:
 - the spec is honest about what is decided and what is not
 - stable decisions are separated from raw evidence
 - scope cuts and non-goals are explicit
-- validation expectations are visible early enough for planning
-- the next planning step is clear without turning the spec into a plan
+- validation expectations are visible early enough for technical design and later planning
+- the session stops at approved `spec.md` for non-trivial work unless an explicit waiver already allows phase collapse
+- the next technical-design step is clear without turning the spec into a design bundle or a plan
 
 ## Anti-Patterns
 - copying external template headings directly into the repo default shape
 - turning `spec.md` into a PRD, audit report, or task board
+- smuggling component maps, sequence design, or ownership maps into `spec.md` to avoid `design/`
 - filling every possible NFR category whether it matters or not
 - hiding contradictions under generic wording
 - treating raw research notes as final decisions

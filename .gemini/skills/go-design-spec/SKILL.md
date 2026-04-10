@@ -1,35 +1,57 @@
 ---
 name: go-design-spec
-description: "Run design-integrity and final-spec-assembly passes for Go services. Use when specialist outputs exist but the repository still needs one coherent, simpler, spec-ready decision record before `planning-and-task-breakdown`. Skip when the task is a local code fix, endpoint/schema-only editing, implementation coding, review execution, or CI/container setup."
+description: "Assemble and reconcile the integrated technical-design bundle for Go services. Use when `spec.md` is approved but non-trivial work still needs coherent task-local `design/` artifacts and cross-domain reconciliation before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work with an explicit design-skip rationale, implementation coding, review execution, or CI/container setup."
 ---
 
 # Go Design Spec
 
 ## Purpose
-Act as the integrator for design quality and final spec assembly: reduce accidental complexity, preserve change locality, and make sure important decisions across architecture, API, data, reliability, and testing do not contradict each other before planning starts.
+Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave `design/` stable enough for planning without reopening the approved problem frame.
 
 ## Scope
-Use this skill to run an integrated design-integrity pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, and testing decisions coherent, and leave `spec.md` stable enough for `planning-and-task-breakdown`.
+Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave approved `spec.md + design/` stable enough for `planning-and-task-breakdown`.
 
 ## Boundaries
 Do not:
 - replace domain-specific expert decisions with generic style advice
-- produce task breakdown, phase cards, or coder execution sequencing; that belongs to `planning-and-task-breakdown`
+- treat this skill as final `spec.md` assembly; `spec-document-designer` owns `spec.md`
+- make new problem-framing decisions that belong back in `spec.md` or the orchestrator
+- produce task breakdown, phase cards, or coder execution sequencing; that belongs to `planning-and-task-breakdown` in the next session unless an explicit phase-collapse waiver already exists
 - introduce new complexity without proving what risk or ambiguity it removes
 - drift into implementation coding, review execution, or tooling/process detail as the main output
-- leave cross-domain contradictions unresolved
+- leave cross-domain contradictions unresolved inside the design bundle
 
 ## Escalate When
-Escalate if the design is internally inconsistent, key assumptions differ across domains, critical behavior is not testable or operable, or the design cannot be simplified without first resolving missing decisions.
+Escalate if:
+- `spec.md` is missing, unstable, or still contradicts itself in planning-critical ways
+- the design is internally inconsistent or key assumptions differ across domains
+- a required design artifact cannot be completed honestly without reopening `spec.md`
+- critical behavior is not testable, operable, or rollout-safe
+- repository baseline context from `docs/repo-architecture.md` materially matters and has not been loaded yet
 
 ## Core Defaults
+- `spec.md` owns decisions, `design/` owns task-local technical context, and `plan.md` consumes approved `spec.md + design/`.
+- For non-trivial work, this pass ends the current session at a planning-ready `design/` bundle; planning begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
-- Prefer one coherent spec handoff over scattered partial notes that still force planning to rediscover design decisions.
+- Prefer one coherent design-bundle handoff over scattered partial notes that still force planning to rediscover technical context.
+- Keep `design/overview.md` as the bundle entrypoint instead of repeating the same story in every artifact.
 
 ## Expertise
+
+### Design Bundle Assembly
+- Produce or tighten the required core artifacts for non-trivial work:
+  - `design/overview.md` for chosen approach, artifact index, unresolved seams, and readiness summary
+  - `design/component-map.md` for affected packages, modules, or components; responsibilities; and what changes versus what stays stable
+  - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior
+  - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, and responsibility boundaries
+- Add conditional artifacts only when their trigger is real:
+  - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
+  - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit
+  - `design/contracts/` when API, event, generated, or material internal interface contracts change
+- Call out when `test-plan.md` or `rollout.md` must exist before planning can start, but do not turn this skill into execution planning.
 
 ### Complexity And Maintainability
 - Avoid speculative abstractions, indirection layers, interface-per-struct patterns, and service-manager-factory chains that do not remove concrete present-day complexity.
@@ -72,8 +94,8 @@ Escalate if the design is internally inconsistent, key assumptions differ across
 - Require per-dependency timeout, retry, fallback, overload, and rollback assumptions for critical paths.
 - Reject designs that depend on heroic manual operations or undocumented release choreography.
 
-## Decision Quality Bar
-For every nontrivial design recommendation, include:
+## Design Readiness Bar
+For every planning-critical design recommendation, include:
 - the complexity symptom or integration risk
 - at least two viable options
 - the selected option and at least one explicit rejection reason
@@ -82,16 +104,21 @@ For every nontrivial design recommendation, include:
 - assumptions, blockers, and reopen conditions
 
 ## Deliverable Shape
-When writing a design-integrity pass or review, cover:
+When writing or reviewing the integrated technical-design bundle, cover:
+- the required core `design/` artifacts and any triggered conditional artifacts
 - contradictions across domains
 - simplification opportunities
 - abstractions or layers that should be removed, merged, or made explicit
+- what changes versus what remains stable
+- runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
 - downstream consequences for API, data, reliability, security, observability, and testing
-- what must be written or tightened in `spec.md` before planning can safely begin
-- whether the design is stable enough for `planning-and-task-breakdown`
+- what must loop back into `spec.md` before planning can safely begin
+- whether `design/` is stable enough for `planning-and-task-breakdown`
+- the planning handoff boundary and any reason the next session must reopen `spec.md` instead of moving forward
 - unresolved design risks that should block implementation
 
 ## Escalate Or Reject
+- missing or unstable `spec.md`
 - any hidden “decide later in coding” system-level gap
 - contradictory assumptions left unresolved across domain specs
 - a new abstraction or layer with no measurable simplification outcome

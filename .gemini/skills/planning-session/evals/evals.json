@@ -1,0 +1,49 @@
+{
+  "skill_name": "planning-session",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We already have approved `spec.md + design/` for tenant-scoped async report exports with persisted job state, admin retry/cancel, signed download URLs, and audit events. Use only the planning-session wrapper to produce the planning outputs for this task. The work is non-trivial and will need phased implementation, strong validation coverage, and explicit rollout notes for mixed-version deploys and backfill safety.",
+      "expected_output": "A planning-only result that turns approved `spec.md + design/` into `plan.md`, adds `test-plan.md` or `rollout.md` only where triggered, updates `workflow-plan.md` plus `workflow-plans/planning.md`, and stops at the handoff into implementation.",
+      "files": [],
+      "expectations": [
+        "The output stays inside the planning boundary and does not reopen spec or design or start implementation.",
+        "The output treats `plan.md` as the main execution artifact and creates `test-plan.md` or `rollout.md` only because the prompt actually triggers them.",
+        "The output updates the implementation handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with` pointing at the first implementation phase or explicit implementation checkpoint."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Use only the planning-session wrapper. The spec is approved for adding soft-delete plus restore with audit events across the admin API, but the design bundle is missing `design/sequence.md` and there is no approved migration or rollout artifact for a live backfill that must remain safe during mixed-version traffic. Produce only the planning-session output that is honest right now.",
+      "expected_output": "A blocked planning result that refuses to invent missing design context, routes back to the appropriate earlier phase, and keeps implementation unopened.",
+      "files": [],
+      "expectations": [
+        "The output calls out the missing required design input and the unresolved rollout or migration gap as blockers to planning readiness.",
+        "The output does not silently reopen design by writing a pretend-complete `plan.md` that guesses the missing sequencing or rollout behavior.",
+        "The output updates routing toward `technical design` or another earlier phase instead of handing off to implementation."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Approved `spec.md + design/` already exist for a bounded feature. Use the planning-session wrapper to write the plan, and then go ahead and start phase 1 implementation in the same session so we do not lose momentum.",
+      "expected_output": "A session-bounded planning result that writes or repairs the planning artifacts, records the implementation handoff, and refuses to start coding in the same session.",
+      "files": [],
+      "expectations": [
+        "The output makes the planning-session stop boundary explicit and keeps implementation for the next session.",
+        "The output records `Next session starts with` as the first implementation phase or explicit implementation checkpoint rather than beginning it inline.",
+        "The output does not produce code, test changes, migrations, or implementation-phase workflow files."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The change is tiny: echo an incoming `X-Request-ID` header back on `/healthz` if present. I still asked for the planning-session wrapper. Give me the planning-session output that is appropriate now.",
+      "expected_output": "A boundary-aware response that recognizes a dedicated planning session would be ceremony for this tiny direct-path change and points to the lightweight inline-planning path instead of forcing heavyweight planning artifacts.",
+      "files": [],
+      "expectations": [
+        "The output recognizes that a dedicated planning session is not the right control shape for this tiny task.",
+        "The output does not invent heavyweight `plan.md`, `test-plan.md`, `rollout.md`, or planning-phase workflow artifacts for the header echo change.",
+        "The output still keeps the no-implementation boundary clear instead of drifting into code."
+      ]
+    }
+  ]
+}
