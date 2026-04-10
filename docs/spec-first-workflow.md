@@ -2,17 +2,37 @@
 
 ## 1. Purpose
 
-This document is the detailed runtime companion to [AGENTS.md](/Users/daniil/Projects/Opensource/go-service-template-rest/AGENTS.md) for tasks that need more than a quick local fix: non-trivial or agent-backed work, preserved research, multi-session resume, or `technical design` and later. It explains artifact placement, timing, relationships, and resume order.
+This document is the detailed runtime companion to [AGENTS.md](/Users/daniil/Projects/Opensource/go-service-template-rest/AGENTS.md) for tasks that need more than a quick local fix:
+
+- non-trivial or agent-backed work,
+- preserved research,
+- multi-session resume,
+- `technical design` and later.
+
+It explains artifact placement, timing, relationships, and resume order.
+
+### Authority
 
 `AGENTS.md` stays authoritative for role ownership, invariants, subagent protocol, and stage gates. If the two documents diverge, follow `AGENTS.md` and then repair this file.
+
+### Repository Baseline
 
 When the task depends on stable repository boundaries or runtime flows, load [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) before writing task-local design.
 
 ## 2. What This Workflow Does Not Change
 
-More artifacts do not change ownership: the orchestrator owns framing, routing, final decisions, implementation, validation, and artifact authority; subagents stay read-only and advisory; skills remain optional tools; and `spec.md` remains the canonical decisions artifact. The added artifacts provide control and technical context around `spec.md`, not another authority chain.
+More artifacts do not change ownership:
+
+- **Orchestrator:** owns framing, routing, final decisions, implementation, validation, and artifact authority.
+- **Subagents:** stay read-only and advisory.
+- **Skills:** remain optional tools.
+- **`spec.md`:** remains the canonical decisions artifact.
+
+The added artifacts provide control and technical context around `spec.md`, not another authority chain.
 
 ## 3. Artifact Model
+
+### Layout
 
 Smallest valid task-local layout: `specs/<feature-id>/spec.md`
 
@@ -46,39 +66,60 @@ specs/<feature-id>/
   rollout.md               # conditional
 ```
 
-Artifact purposes:
+### Artifact Purposes
 
-| Artifact | Purpose | When it matters |
-| --- | --- | --- |
-| `workflow-plan.md` | Master routing and control artifact. It tracks cross-phase status: execution shape, current phase, artifact status, blockers, next session, links to phase workflow plans, and resume order. | Required for non-trivial or agent-backed work. |
-| `workflow-plans/<phase>.md` | Phase-local workflow plan for one named phase only. It tracks that phase's local orchestration, order/parallelism, fan-in/challenge path when relevant, completion marker, stop rule, next action, and local blockers. | Required for each named non-trivial phase that the task actually uses. |
-| `spec.md` | Canonical decision record: approved framing, scope, constraints, decisions, and accepted open questions. | Always. |
-| `design/` | Task-local technical design bundle between `spec.md` and `plan.md`. It explains how the approved change fits the repository architecture and what implementation must preserve. | Required for non-trivial work unless explicitly skipped with rationale. |
-| `plan.md` | Coder-facing execution plan derived from approved `spec.md + design/`. It owns ordered implementation steps, checkpoints, and proof obligations. | Required when the work is non-trivial, long-running, parallelized, or handed to an implementation skill. |
-| `research/*.md` | Preserved evidence, comparisons, and validated research context. These files support decisions but do not own them. | Create only when the task is long, ambiguous, or benefits from reusable research memory. |
-| `test-plan.md` | Expanded validation strategy when test obligations are too large or too layered to fit cleanly inside `plan.md`. | Conditional. |
-| `rollout.md` | Operational rollout and migration notes when delivery order, compatibility, or recovery choreography matters. | Conditional. |
+- **`workflow-plan.md`:** Master routing and control artifact. It tracks cross-phase status: execution shape, current phase, artifact status, blockers, next session, links to phase workflow plans, and resume order. Required for non-trivial or agent-backed work.
+- **`workflow-plans/<phase>.md`:** Phase-local workflow plan for one named phase only. It tracks that phase's local orchestration, order/parallelism, fan-in/challenge path when relevant, completion marker, stop rule, next action, and local blockers. Required for each named non-trivial phase that the task actually uses.
+- **`spec.md`:** Canonical decision record: approved framing, scope, constraints, decisions, and accepted open questions. Always.
+- **`design/`:** Task-local technical design bundle between `spec.md` and `plan.md`. It explains how the approved change fits the repository architecture and what implementation must preserve. Required for non-trivial work unless explicitly skipped with rationale.
+- **`plan.md`:** Coder-facing execution plan derived from approved `spec.md + design/`. It owns ordered implementation steps, checkpoints, and proof obligations. Required when the work is non-trivial, long-running, parallelized, or handed to an implementation skill.
+- **`research/*.md`:** Preserved evidence, comparisons, and validated research context. These files support decisions but do not own them. Create only when the task is long, ambiguous, or benefits from reusable research memory.
+- **`test-plan.md`:** Expanded validation strategy when test obligations are too large or too layered to fit cleanly inside `plan.md`. Conditional.
+- **`rollout.md`:** Operational rollout and migration notes when delivery order, compatibility, or recovery choreography matters. Conditional.
 
-Artifact rules:
-- [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) is the stable repository baseline, not a task-local design file.
-- `workflow-plan.md` stays live through research, synthesis, `technical design`, planning, implementation, and validation; `workflow-plans/<phase>.md` stays phase-local and must not turn into a second `design/` bundle or `plan.md`.
-- Pre-code phases normally get `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`.
-- Post-code phase-control files are still pre-code artifacts: if the approved phase structure will use them, planning creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` before implementation starts, and post-code sessions only update them.
-- `spec.md` stores decisions, `design/` stores task-specific technical context, and `plan.md` stores execution order. Do not make any of them absorb another artifact's job.
-- `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template.
-- Do not duplicate the same authority across artifacts. Link instead.
+### Artifact Rules
+
+- **Repository baseline:** [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) is the stable repository baseline, not a task-local design file.
+- **Workflow control:** `workflow-plan.md` stays live through research, synthesis, `technical design`, planning, implementation, and validation; `workflow-plans/<phase>.md` stays phase-local and must not turn into a second `design/` bundle or `plan.md`.
+- **Pre-code phase plans:** Pre-code phases normally get `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`.
+- **Post-code phase-control files:** Post-code phase-control files are still pre-code artifacts: if the approved phase structure will use them, planning creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` before implementation starts, and post-code sessions only update them.
+- **Artifact ownership:** `spec.md` stores decisions, `design/` stores task-specific technical context, and `plan.md` stores execution order. Do not make any of them absorb another artifact's job.
+- **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template.
+- **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
 
 ### Artifact-Producing Vs Artifact-Consuming Phases
 
-Pre-code phases (`workflow planning`, `research`, `specification`, `technical design`, and `planning`) may create only the approved workflow/process artifact set: `workflow-plan.md`, `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, and optional `rollout.md`. If later implementation, review, or validation phase-control files will be used, planning creates them before implementation starts.
+#### Pre-code phases
 
-Post-code phases (`implementation`, `review`, `reconciliation`, and `validation`) consume that bundle. They may still create approved codebase files such as code, tests, migrations, configs, generation inputs, and generated output when the plan requires them, but they may update only existing control or closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/<phase>.md`, checkpoint state in existing `plan.md`, and `spec.md` `Validation` or `Outcome`. If required context is missing, stop, record the reopen in existing control artifacts, and reopen the appropriate earlier phase in a new session instead of inventing new artifacts here.
+Pre-code phases (`workflow planning`, `research`, `specification`, `technical design`, and `planning`) may create only the approved workflow/process artifact set:
+
+- `workflow-plan.md`
+- `workflow-plans/<phase>.md`
+- `research/*.md`
+- `spec.md`
+- `design/`
+- `plan.md`
+- optional `test-plan.md`
+- optional `rollout.md`
+
+If later implementation, review, or validation phase-control files will be used, planning creates them before implementation starts.
+
+#### Post-code phases
+
+Post-code phases (`implementation`, `review`, `reconciliation`, and `validation`) consume that bundle.
+
+They may still create approved codebase files such as code, tests, migrations, configs, generation inputs, and generated output when the plan requires them, but they may update only existing control or closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/<phase>.md`, checkpoint state in existing `plan.md`, and `spec.md` `Validation` or `Outcome`.
+
+If required context is missing, stop, record the reopen in existing control artifacts, and reopen the appropriate earlier phase in a new session instead of inventing new artifacts here.
+
+#### Direct-path exceptions
 
 Direct-path exceptions may skip parts of the pre-code artifact bundle with explicit rationale, but they do not authorize creating new workflow/process artifacts mid-implementation or mid-validation.
 
 ## 4. Default `spec.md` Shape
 
 The default sections are:
+
 1. `Context`
 2. `Scope / Non-goals`
 3. `Constraints`
@@ -89,6 +130,7 @@ The default sections are:
 8. `Outcome`
 
 Rules:
+
 - Merge sections when that makes the file clearer.
 - Do not create empty headings.
 - Keep final decisions in `Decisions`.
@@ -97,21 +139,33 @@ Rules:
 
 ## 5. The Design Bundle Between `spec.md` And `plan.md`
 
-For non-trivial work, `technical design` is an explicit stage between `specification` and `planning`. The design bundle carries task-specific technical context that `spec.md` should not absorb: repository fit, participating components, runtime sequence, ownership and source-of-truth boundaries, stable areas, and correctness or rollout risks.
+For non-trivial work, `technical design` is an explicit stage between `specification` and `planning`.
+
+The design bundle carries task-specific technical context that `spec.md` should not absorb:
+
+- repository fit,
+- participating components,
+- runtime sequence,
+- ownership and source-of-truth boundaries,
+- stable areas,
+- correctness or rollout risks.
 
 Load order for design work:
+
 1. Read [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) when stable repository boundaries or flows matter.
 2. Read the approved `spec.md`.
 3. Produce the task-local `design/` bundle.
 4. Plan from approved `spec.md + design/`.
 
 Required core design artifacts for non-trivial work:
+
 - `design/overview.md` — design entrypoint, chosen approach, artifact index, unresolved seams, and readiness summary.
 - `design/component-map.md` — affected packages, modules, or components; what changes; what remains stable.
 - `design/sequence.md` — call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior.
 - `design/ownership-map.md` — source-of-truth ownership, allowed dependency direction, and responsibility boundaries.
 
 Conditional artifacts and trigger rules:
+
 - `design/data-model.md` — create when the task changes persisted state, schema, cache contract, projections, replay behavior, or migration shape.
 - `design/dependency-graph.md` — create when the task changes module or package dependency shape, generated-code dependency flow, or introduces a coupling risk that must be made explicit.
 - `design/contracts/` — create when the task changes API contracts, event contracts, generated contracts, or material internal interfaces between subsystems. This folder is design-only context for the task, not an authoritative runtime contract source; canonical sources like `api/openapi/service.yaml`, generation inputs, and other repository-owned contract artifacts still win.
@@ -119,6 +173,7 @@ Conditional artifacts and trigger rules:
 - `rollout.md` — create when the task needs migration sequencing, backfill and verify choreography, mixed-version compatibility, or explicit deploy and failback notes.
 
 Design-bundle rules:
+
 - `design/overview.md` is the entrypoint and link surface for the bundle.
 - Create conditional artifacts only when their trigger is real.
 - Keep technical design in `design/`; do not push it back into `spec.md`.
@@ -127,7 +182,14 @@ Design-bundle rules:
 
 ## 6. Execution Loop
 
-Typical paths run through `intake -> workflow planning -> research -> synthesis -> specification -> technical design -> planning -> implementation -> validation -> done`. Idea-shaped work adds `idea refinement` after `intake`; full orchestrated work adds `synthesis(candidate -> challenge -> final)` and may add `review -> reconciliation` before validation.
+Typical path:
+
+- `intake -> workflow planning -> research -> synthesis -> specification -> technical design -> planning -> implementation -> validation -> done`
+
+Path variations:
+
+- **Idea-shaped work:** Adds `idea refinement` after `intake`.
+- **Full orchestrated work:** Adds `synthesis(candidate -> challenge -> final)` and may add `review -> reconciliation` before validation.
 
 Very small work may collapse several stages into one local pass, but stage names still drive artifact expectations and resume logic.
 
@@ -135,29 +197,79 @@ Very small work may collapse several stages into one local pass, but stage names
 
 For non-trivial work, sessions are phase-scoped by default. Named phases map to `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, `workflow-plans/planning.md`, and, when used, `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`.
 
-Rule: one session = one phase for non-trivial work unless an upfront `direct path` or `lightweight local` waiver was recorded before the boundary is crossed. When the phase reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, then stop; begin the next phase in a new session.
+**Rule:** One session = one phase for non-trivial work unless an upfront `direct path` or `lightweight local` waiver was recorded before the boundary is crossed.
+
+When the phase reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, then stop; begin the next phase in a new session.
 
 This is a control rule, not a second state machine: the workflow states stay the same, and the session-bounded phase tells later sessions where to resume and where not to drift.
 
 ### 6.1 Idea Refinement and Framing
 
-If the request is idea-shaped, refine it before treating it as implementation-ready. If it is already concrete, frame what must change, scope and non-goals, constraints or risk hotspots, success checks, and missing facts.
+If the request is idea-shaped, refine it before treating it as implementation-ready.
+
+If it is already concrete, frame:
+
+- what must change,
+- scope and non-goals,
+- constraints or risk hotspots,
+- success checks,
+- missing facts.
 
 ### 6.2 Workflow Planning
 
-Before any subagent call on non-trivial or agent-backed work, the orchestrator writes master `workflow-plan.md` plus the current phase workflow plan at `workflow-plans/<phase>.md`. The master file owns cross-phase control such as execution shape, current phase, artifact status, blockers, next-session routing, phase-plan links/status, and whether later `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are expected. The phase file owns only local orchestration such as research mode, lanes, order or parallelism, fan-in or challenge path, status, completion marker, stop rule, next action, blockers, and parallelizable work. Section 7 defines the minimum shape in more detail.
+Before any subagent call on non-trivial or agent-backed work, the orchestrator writes master `workflow-plan.md` plus the current phase workflow plan at `workflow-plans/<phase>.md`.
+
+The master file owns cross-phase control:
+
+- execution shape,
+- current phase,
+- artifact status,
+- blockers,
+- next-session routing,
+- phase-plan links/status,
+- whether later `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are expected.
+
+The phase file owns only local orchestration:
+
+- research mode,
+- lanes,
+- order or parallelism,
+- fan-in or challenge path,
+- status,
+- completion marker,
+- stop rule,
+- next action,
+- blockers,
+- parallelizable work.
+
+Section 7 defines the minimum shape in more detail.
 
 For tiny local work, a brief explicit skip rationale in the main flow is enough instead of a full master `workflow-plan.md` plus `workflow-plans/`.
 
 ### 6.3 Research, Synthesis, and Specification
 
-Research may stay local or fan out to read-only subagents, depending on the workflow plan. After research, synthesize comparable claims, resolve or track key assumptions, run pre-spec challenge when risk or ambiguity justifies it, stabilize final decisions in `spec.md`, and preserve reusable evidence in `research/*.md` when worth keeping.
+Research may stay local or fan out to read-only subagents, depending on the workflow plan.
+
+After research:
+
+- synthesize comparable claims,
+- resolve or track key assumptions,
+- run pre-spec challenge when risk or ambiguity justifies it,
+- stabilize final decisions in `spec.md`,
+- preserve reusable evidence in `research/*.md` when worth keeping.
 
 `spec.md` should be stable enough that `technical design` can derive task-local context without reopening core problem framing by default.
 
 ### 6.4 Technical Design
 
-`technical design` begins after `spec.md` is stable enough to support design work. It uses [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) when repository baseline context matters, produces the required core `design/` artifacts, adds conditional design artifacts only when triggered, and records approval state in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
+`technical design` begins after `spec.md` is stable enough to support design work.
+
+It:
+
+- uses [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) when repository baseline context matters,
+- produces the required core `design/` artifacts,
+- adds conditional design artifacts only when triggered,
+- records approval state in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
 
 If design work exposes a missing decision or unstable problem boundary, loop back to `spec.md` instead of silently letting design redefine the task.
 
@@ -165,27 +277,77 @@ If design work exposes a missing decision or unstable problem boundary, loop bac
 
 Planning is separate from workflow planning: workflow planning decides orchestration and artifact expectations; implementation planning decides execution order after decisions and design are stable.
 
-Enter planning only when minimum viable framing is explicit, workflow planning chose `local` or `fan-out`, `spec.md` is stable, required `design/` artifacts are approved or an explicit design-skip rationale exists, and higher-risk pre-spec challenge is reconciled or explicitly waived.
+Enter planning only when:
 
-For non-trivial work, `planning-and-task-breakdown` should consume approved `spec.md + design/` and produce the dedicated coder-facing `plan.md`; for `direct path` work, the explicit plan may stay as 1-3 concise lines in the main flow. Planning is the last artifact-producing phase before code: the workflow/design/planning bundle must exist or be explicitly waived before the first implementation session starts, and any `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` must be created during planning from the approved phase structure. Phased execution (`phase -> review/reconcile -> validate -> next phase`) is the default; single-pass big-bang implementation needs explicit rationale.
+- minimum viable framing is explicit,
+- workflow planning chose `local` or `fan-out`,
+- `spec.md` is stable,
+- required `design/` artifacts are approved or an explicit design-skip rationale exists,
+- higher-risk pre-spec challenge is reconciled or explicitly waived.
 
-Minimum `plan.md` content: ordered implementation steps, completion criteria for each meaningful step or phase, relevant checkpoints and dependencies, validation expectations, and rollback or mitigation notes only when needed.
+For non-trivial work, `planning-and-task-breakdown` should consume approved `spec.md + design/` and produce the dedicated coder-facing `plan.md`; for `direct path` work, the explicit plan may stay as 1-3 concise lines in the main flow.
+
+Planning is the last artifact-producing phase before code:
+
+- the workflow/design/planning bundle must exist or be explicitly waived before the first implementation session starts,
+- any `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` must be created during planning from the approved phase structure,
+- phased execution (`phase -> review/reconcile -> validate -> next phase`) is the default,
+- single-pass big-bang implementation needs explicit rationale.
+
+Minimum `plan.md` content:
+
+- ordered implementation steps,
+- completion criteria for each meaningful step or phase,
+- relevant checkpoints and dependencies,
+- validation expectations,
+- rollback or mitigation notes only when needed.
 
 ### Session-Boundary Gate
 
-For non-trivial work, a session may advance only the `Current phase` recorded in master `workflow-plan.md` and the matching `workflow-plans/<phase>.md`. At completion, update the owning artifact, current phase workflow plan, and master `workflow-plan.md`; mark `Session boundary reached: yes`; set `Ready for next session` appropriately; record `Next session starts with`; and stop. If unfinished, leave the phase `in_progress` or `blocked`. `Direct path` work and any upfront `lightweight local` waiver may collapse boundaries only when recorded before the boundary is crossed.
+For non-trivial work, a session may advance only the `Current phase` recorded in master `workflow-plan.md` and the matching `workflow-plans/<phase>.md`.
+
+At completion:
+
+- update the owning artifact, current phase workflow plan, and master `workflow-plan.md`,
+- mark `Session boundary reached: yes`,
+- set `Ready for next session` appropriately,
+- record `Next session starts with`,
+- stop.
+
+If unfinished, leave the phase `in_progress` or `blocked`. `Direct path` work and any upfront `lightweight local` waiver may collapse boundaries only when recorded before the boundary is crossed.
 
 ### 6.6 Implementation, Review, and Validation
 
-Implementation happens in the main flow under orchestrator control and consumes approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created post-code phase workflow files. Create code, tests, migrations, configs, generation inputs, and generated artifacts only when the approved plan requires them; update only existing control and checkpoint artifacts; do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown; and if coding exposes a real plan or design gap, stop, record the reopen in existing control artifacts, and reopen the relevant earlier phase in a new session instead of silently drifting.
+Implementation happens in the main flow under orchestrator control and consumes approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created post-code phase workflow files.
 
-Review stays read-only and risk-driven. Validation is also artifact-consuming: use fresh evidence against the approved artifact bundle; update only existing closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/validation-phase-N.md` when one was created before implementation, progress state in existing `plan.md` when needed, and `spec.md` `Validation` or `Outcome`; do not create new workflow/process/planning/design/temp artifacts; and if proof exposes an upstream gap or expected control artifact is missing, reopen the right earlier phase instead of inventing a closeout artifact.
+Implementation rules:
 
-Closeout is not complete until the artifacts reflect reality: `workflow-plan.md` shows the current phase or completion state, the current `workflow-plans/<phase>.md` shows the local handoff state, `plan.md` or `workflow-plan.md` reflects what phase completed or remains, `spec.md` records actual outcome and remaining open questions, and `Validation`/`Outcome` reflect what was actually proved.
+- Create code, tests, migrations, configs, generation inputs, and generated artifacts only when the approved plan requires them.
+- Update only existing control and checkpoint artifacts.
+- Do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown.
+- If coding exposes a real plan or design gap, stop, record the reopen in existing control artifacts, and reopen the relevant earlier phase in a new session instead of silently drifting.
+
+Review stays read-only and risk-driven.
+
+Validation is also artifact-consuming:
+
+- use fresh evidence against the approved artifact bundle,
+- update only existing closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/validation-phase-N.md` when one was created before implementation, progress state in existing `plan.md` when needed, and `spec.md` `Validation` or `Outcome`,
+- do not create new workflow/process/planning/design/temp artifacts,
+- if proof exposes an upstream gap or expected control artifact is missing, reopen the right earlier phase instead of inventing a closeout artifact.
+
+Closeout is not complete until the artifacts reflect reality:
+
+- `workflow-plan.md` shows the current phase or completion state,
+- the current `workflow-plans/<phase>.md` shows the local handoff state,
+- `plan.md` or `workflow-plan.md` reflects what phase completed or remains,
+- `spec.md` records actual outcome and remaining open questions,
+- `Validation`/`Outcome` reflect what was actually proved.
 
 ## 7. Master `workflow-plan.md` And Phase Workflow Plans
 
 The repository uses two workflow-control layers for non-trivial work:
+
 - master `workflow-plan.md` for cross-phase control
 - `workflow-plans/<phase>.md` for one phase only
 
@@ -193,13 +355,36 @@ Read the master file first, then the current phase workflow plan.
 
 ### 7.1 Master `workflow-plan.md`
 
-`workflow-plan.md` owns runtime control across phases. At minimum, it answers: current phase, phase status (`in_progress`, `blocked`, or `complete`), session-boundary state, next-session readiness and starting phase, artifact status (`approved`, `draft`, or `missing`), blockers, phase workflow plan status, and default resume order.
+`workflow-plan.md` owns runtime control across phases.
+
+At minimum, it answers:
+
+- current phase,
+- phase status (`in_progress`, `blocked`, or `complete`),
+- session-boundary state,
+- next-session readiness and starting phase,
+- artifact status (`approved`, `draft`, or `missing`),
+- blockers,
+- phase workflow plan status,
+- default resume order.
 
 ### 7.2 `workflow-plans/<phase>.md`
 
-`workflow-plans/<phase>.md` owns one phase's local orchestration: lanes or tracks, order or parallelism, completion marker, explicit out-of-scope work, stop rule, next action, parallelizable work, and local blockers. It is phase-local routing, not a replacement for `spec.md`, `design/`, or `plan.md`.
+`workflow-plans/<phase>.md` owns one phase's local orchestration:
+
+- lanes or tracks,
+- order or parallelism,
+- completion marker,
+- explicit out-of-scope work,
+- stop rule,
+- next action,
+- parallelizable work,
+- local blockers.
+
+It is phase-local routing, not a replacement for `spec.md`, `design/`, or `plan.md`.
 
 Recommended update cadence:
+
 - After framing or workflow planning: update the master file with execution shape, current phase, blockers, next-session routing, phase-plan links/status, and artifact expectations; update the current phase file with local orchestration, lanes, completion marker, and stop rule.
 - After synthesis: update `spec.md` status in the master file and record any blocker that prevents leaving `workflow-plans/specification.md`.
 - After `technical design` or planning: record approved design artifacts or `plan.md` status in the master file and current phase file; during planning, also create any implementation/review/validation phase workflow files that the approved phase structure will use.
@@ -225,6 +410,7 @@ Next action: finish sequence and ownership mapping; Stop rule: do not begin plan
 ### Resume order
 
 In a later session, read artifacts in this order:
+
 1. `workflow-plan.md`
 2. current `workflow-plans/<phase>.md`
 3. phase artifacts in the order the current phase needs them:
@@ -240,6 +426,7 @@ If the task was intentionally small enough to skip some artifacts, read the reco
 ### How to infer the current stage from artifacts
 
 Use artifacts, not memory:
+
 - no approved `spec.md` means framing or specification is still incomplete
 - approved `spec.md` but no approved design bundle means `technical design` is still incomplete
 - approved design bundle but no approved `plan.md` means planning is still incomplete
@@ -247,6 +434,7 @@ Use artifacts, not memory:
 - validation evidence plus updated `Outcome` means the task has reached validation or done
 
 Use session control from the master file before doing any work:
+
 - if the current phase points at a missing `workflow-plans/<phase>.md`, treat the phase workflow record as incomplete rather than reconstructing it from memory
 - if `Session boundary reached: yes`, start a new session for the recorded next phase
 - if `Ready for next session: no`, resume the same session-bounded phase instead of jumping forward
@@ -256,7 +444,15 @@ For exceptions, the skip rationale must explain skipped `workflow-plan.md`, `wor
 
 ## 9. Direct-Path And Lightweight-Local Exceptions
 
-Direct-path and lightweight-local work still exists; the workflow is not trying to force the full artifact bundle onto tiny fixes. These shapes may collapse workflow planning, research, synthesis, specification, `technical design`, and planning into one local pass; skip a separate `workflow-plan.md`, `workflow-plans/`, or `plan.md` when tiny; and skip `design/` only when the change is local, the behavior delta is obvious, and no ownership, data, or sequence ambiguity exists. Same-session phase collapse still requires an upfront recorded waiver.
+Direct-path and lightweight-local work still exists; the workflow is not trying to force the full artifact bundle onto tiny fixes.
+
+These shapes may:
+
+- collapse workflow planning, research, synthesis, specification, `technical design`, and planning into one local pass,
+- skip a separate `workflow-plan.md`, `workflow-plans/`, or `plan.md` when tiny,
+- skip `design/` only when the change is local, the behavior delta is obvious, and no ownership, data, or sequence ambiguity exists.
+
+Same-session phase collapse still requires an upfront recorded waiver.
 
 Never skip explicit planning-before-code, clear decision ownership, fresh validation evidence, or design-skip rationale when `design/` would otherwise be expected.
 
@@ -267,14 +463,15 @@ If a supposedly small task uncovers a larger seam, escalate to the fuller artifa
 ## 10. Artifact-Focused Anti-Patterns
 
 Avoid:
-- treating `workflow-plan.md` as a one-time pre-research note instead of the live master control artifact,
-- letting `workflow-plans/<phase>.md` replace the master `workflow-plan.md` or grow into a competing design or execution artifact,
-- finishing one non-trivial phase and casually starting the next one in the same session without an upfront recorded waiver,
-- planning non-trivial work from `spec.md` alone after the design-bundle stage exists,
-- letting `design/` turn into a second `spec.md` or a second `plan.md`,
-- creating new workflow/process markdown during implementation or validation instead of reopening the correct earlier phase,
-- creating `test-plan.md`, `rollout.md`, or conditional design files "just in case",
-- forgetting to record the skip rationale when bypassing `design/`,
-- re-deriving repository architecture every session instead of loading [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md),
-- forcing the coder to reconstruct execution order from technical prose when `plan.md` should exist,
-- leaving artifact status stale so resume requires chat archaeology.
+
+- **Stale master control:** Treating `workflow-plan.md` as a one-time pre-research note instead of the live master control artifact.
+- **Competing phase files:** Letting `workflow-plans/<phase>.md` replace the master `workflow-plan.md` or grow into a competing design or execution artifact.
+- **Phase-boundary drift:** Finishing one non-trivial phase and casually starting the next one in the same session without an upfront recorded waiver.
+- **Planning from `spec.md` alone:** Planning non-trivial work from `spec.md` alone after the design-bundle stage exists.
+- **Design bundle drift:** Letting `design/` turn into a second `spec.md` or a second `plan.md`.
+- **New process artifacts after code starts:** Creating new workflow/process markdown during implementation or validation instead of reopening the correct earlier phase.
+- **Just-in-case artifacts:** Creating `test-plan.md`, `rollout.md`, or conditional design files "just in case".
+- **Missing skip rationale:** Forgetting to record the skip rationale when bypassing `design/`.
+- **Architecture re-derivation:** Re-deriving repository architecture every session instead of loading [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md).
+- **Execution-order archaeology:** Forcing the coder to reconstruct execution order from technical prose when `plan.md` should exist.
+- **Stale artifact status:** Leaving artifact status stale so resume requires chat archaeology.
