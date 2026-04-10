@@ -47,22 +47,19 @@ For very small, low-risk tasks, keep workflow planning, research, synthesis, tec
 7. For non-trivial or agent-backed work, workflow planning must be explicit in master `workflow-plan.md` plus one `workflow-plans/<phase>.md` per named non-trivial phase; do not rely on orchestration kept only in chat or short-term memory.
 8. `workflow-plan.md` is the only cross-phase control artifact. `workflow-plans/<phase>.md` is phase-local orchestration only and must not replace `spec.md`, `design/`, or `plan.md`; `spec.md` stores final decisions, `design/` stores task-local technical design context, and `research/*.md` stores validated research context.
 9. Phased implementation is the default for non-trivial work: `phase -> review/reconcile -> validate -> next phase`. Big-bang implementation requires explicit rationale.
-10. The main flow must **not** become a mandatory linear skill chain.
-11. Skills are invoked **on demand**, not as ritual steps.
-12. Planning skills may be used only during **planning**.
-13. Implementation skills may be used only during **implementation**.
-14. Coding must not start until the implementation plan is explicit.
-15. High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
-16. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
-17. Review findings are advisory until the orchestrator reconciles them.
-18. Never invent missing facts or fill irrelevant sections for “completeness”.
-19. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
-20. No readiness or completion claim without fresh validation evidence.
-21. Do not treat a short subagent wait timeout as failure. When subagent output is required for fan-in, review, or user-requested agent work, wait up to 20 minutes per cycle and keep polling unless the agent is clearly hung, superseded, or explicitly canceled by the user.
-22. A subagent pass uses **at most one skill**. If a question would benefit from multiple skills, split it into multiple lanes or keep synthesis local in the orchestrator.
-23. Parallel lanes may reuse the same subagent role when each lane has its own scope, question, and chosen skill.
-24. In `fan-out` mode, use as many read-only lanes as needed and prefer slight over-coverage to leaving a material seam unexamined.
-25. For non-trivial work, one session owns one named phase. When it reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, mark the boundary, and stop. The next phase starts in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
+10. The main flow must **not** become a mandatory linear skill chain; skills are invoked **on demand**, not as ritual steps.
+11. Planning skills may be used only during **planning**; implementation skills may be used only during **implementation**.
+12. Coding must not start until the implementation plan is explicit.
+13. High-impact decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
+14. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge pass is reconciled or explicitly waived with rationale.
+15. Review findings are advisory until the orchestrator reconciles them.
+16. Never invent missing facts or fill irrelevant sections for “completeness”.
+17. Add structure only when it measurably improves execution quality, synthesis, traceability, or risk control.
+18. No readiness or completion claim without fresh validation evidence.
+19. Do not treat a short subagent wait timeout as failure. When subagent output is required for fan-in, review, or user-requested agent work, wait up to 20 minutes per cycle and keep polling unless the agent is clearly hung, superseded, or explicitly canceled by the user.
+20. A subagent pass uses **at most one skill**. If a question would benefit from multiple skills, split it into multiple lanes or keep synthesis local in the orchestrator.
+21. In `fan-out` mode, use as many read-only lanes as needed, including multiple lanes of the same subagent role when each has its own scope, question, and chosen skill; prefer slight over-coverage to leaving a material seam unexamined.
+22. For non-trivial work, one session owns one named phase. When it reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, mark the boundary, and stop. The next phase starts in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
 
 Artifact phase boundary:
 - Pre-code phases (`workflow planning`, `research`, `specification`, `technical design`, and `planning`) are the only artifact-producing phases for workflow/process artifacts. The allowed pre-code artifact set is `workflow-plan.md`, `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, and optional `rollout.md`.
@@ -134,7 +131,7 @@ These phases normally map to phase-local workflow plans under `workflow-plans/`:
 
 Rule: for non-trivial work, `one session = one phase` unless an upfront `direct path` or `lightweight local` waiver was recorded before the boundary is crossed.
 
-This does not create new authority states. It defines when a session must stop and hand off.
+This is a session-control rule, not a new authority state.
 
 For `direct path` and `lightweight local` work, `workflow planning`, `research`, `synthesis`, `specification`, `technical design`, and `planning` may collapse into one local pass once minimum viable framing is explicit.
 
@@ -201,11 +198,7 @@ The orchestrator decides:
 - whether any upfront phase-collapse waiver is justified for `lightweight local` work,
 - whether later `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts will be required.
 
-For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation.
-Preferred shape for `workflow-plans/<phase>.md`: a detailed sequence diagram or equivalent ordered lane list that is resumable from the file rather than memory.
-The master workflow plan is cross-phase control: current phase, session-boundary state, approved vs draft vs missing artifacts, blockers, next session, and phase-plan links. The phase workflow plan is phase-local control: local orchestration, completion marker, stop rule, next action, blockers, and parallel lanes. It must not become a second design bundle or `plan.md`.
-If the number of implementation phases is not known yet, say so in the master file and record the execution policy anyway: phased delivery, one phase at a time, with review and validation between phases. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when those phases are used.
-The unit of planning is the lane, not unique role names: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes.
+For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation. Prefer `workflow-plans/<phase>.md` as a resumable sequence diagram or ordered lane list. The master file owns cross-phase control: current phase, session-boundary state, artifact status, blockers, next session, and phase-plan links. The phase file owns only phase-local orchestration: local orchestration, completion marker, stop rule, next action, blockers, and parallel lanes; it must not become a second design bundle or `plan.md`. If the number of implementation phases is not known yet, say so and record the phased-delivery policy anyway. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when those phases are used. Plan by lane, not by unique role name: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes.
 
 Use subagent fan-out when at least one is true:
 - the task crosses multiple domains,
@@ -215,16 +208,7 @@ Use subagent fan-out when at least one is true:
 - a review wave would reduce meaningful delivery risk,
 - the task is long enough to benefit from preserved validated research.
 
-Do not fan out when orchestration overhead adds more noise than clarity.
-If a planned track cannot be executed with read-only guarantees, keep that track local instead of delegating it.
-For non-trivial tasks, record the chosen research mode (`local` or `fan-out`) and whether later separate `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are required before planning.
-When research mode is `fan-out`, optimize for domain coverage, not call minimization: enumerate materially affected domains, add enough lanes to cover them, and if coverage and economy conflict, choose coverage.
-If you are unsure whether a material seam deserves its own lane, bias toward spawning it.
-Duplicate or partially overlapping lanes are acceptable when they provide a second opinion, isolate another seam, or let the same role run different one-skill passes.
-Do not merge unrelated questions into one subagent just to avoid duplicate role names. If two lanes need the same role with different skills or different evidence questions, plan both lanes explicitly.
-Once a task is in `fan-out` mode, prefer subagent-owned domain research. The orchestrator should stay focused on routing, synthesis, challenge, reconciliation, and repository fact gathering rather than quietly replacing specialist research with its own local analysis.
-If any trigger for the next-higher execution shape becomes true during local work, escalate instead of staying on the smaller path.
-If the task already depends on stable repository structure or ownership context, load `docs/repo-architecture.md` before rebuilding that context inside a task-local design bundle.
+Do not fan out when orchestration overhead adds more noise than clarity, or when a planned track cannot be executed with read-only guarantees. For non-trivial tasks, record the chosen research mode (`local` or `fan-out`) and whether later separate `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are required before planning. In `fan-out`, optimize for domain coverage, not call minimization: enumerate materially affected domains, add enough lanes to cover them, and if coverage and economy conflict, choose coverage. If you are unsure whether a material seam deserves its own lane, bias toward spawning it. Duplicate or partially overlapping lanes are acceptable when they provide a second opinion, isolate another seam, or let the same role run different one-skill passes; if two lanes need the same role with different skills or evidence questions, plan both lanes explicitly. Once a task is in `fan-out` mode, prefer subagent-owned domain research. The orchestrator should stay focused on routing, synthesis, challenge, reconciliation, and repository fact gathering rather than quietly replacing specialist research with local analysis. If any trigger for the next-higher execution shape becomes true during local work, escalate instead of staying on the smaller path. If the task already depends on stable repository structure or ownership context, load `docs/repo-architecture.md` before rebuilding that context inside a task-local design bundle.
 
 ### 5.3 Run subagents and synthesize research
 
@@ -232,13 +216,9 @@ When using subagents:
 - pass only the **minimum relevant slice of context**,
 - use only read-only agent or tool surfaces for delegated work; write-capable delegate agents are out of policy for this workflow,
 - keep each subagent pass scoped to one question and one skill,
-- use enough lanes to cover every materially affected domain seam; do not minimize subagent count when that would leave a blind spot,
-- parallel calls to different subagents for different question slices are normal and expected when the task touches multiple domains,
-- parallel calls to the same subagent role are also normal when each lane has a different question, evidence target, or chosen skill,
-- keep independent tracks parallel by default,
+- use enough lanes to cover every materially affected domain seam; keep independent tracks parallel by default, including multiple lanes of the same subagent role when scope, evidence target, or chosen skill differs,
 - use multi-angle patterns for high-impact or ambiguous areas when needed,
-- if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, prefer waits of up to 20 minutes over short polling and treat short timeouts as “still running”, not “no result”,
-- do not interrupt, close, or declare a subagent unavailable just because one or more wait cycles timed out; only stop it when there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
+- if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, prefer waits of up to 20 minutes over short polling and treat short timeouts as “still running”, not “no result”; do not interrupt, close, or declare a subagent unavailable just because one or more wait cycles timed out unless there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
 
 Useful multi-angle patterns:
 - `primary + challenger`
@@ -360,8 +340,7 @@ Optional context when useful:
 - depth/time/cost budget,
 - brevity preference.
 
-Subagents must not demand extra mandatory fields beyond what is needed to do the work.
-If a critical parameter is missing, proceed with an explicit assumption and visible risk note, or escalate back to the orchestrator.
+Subagents must not demand extra mandatory fields beyond what is needed to do the work. If a critical parameter is missing, proceed with an explicit assumption and visible risk note, or escalate back to the orchestrator.
 
 ### 6.2 Execution rules
 
@@ -462,9 +441,8 @@ Examples, if present in the toolchain:
 
 Rules:
 - Default to no skill when local reasoning is sufficient.
-- A subagent pass may use **zero or one** skill, never more.
+- A subagent pass may use **zero or one** skill, never more; do not chain skills inside one subagent pass.
 - Framing skills may be used only before `spec.md` is stable, or when a reopen shows that the problem frame itself is incomplete.
-- Do not chain skills inside one subagent pass.
 - If a question naturally splits across skills, split it into separate subagent lanes instead, including multiple lanes of the same role when useful.
 - Record duplicate-role lanes in the current phase workflow plan by lane purpose and chosen skill rather than trying to make every role name unique.
 - Planning skills consume an approved frame, research-routing decision, and when required the approved design bundle; they do not create them.
@@ -499,19 +477,14 @@ Do not force production-style rollout or compatibility work for prototypes, pre-
 Rules:
 - Planning skills are allowed only in this phase.
 - `planning-and-task-breakdown` is the preferred planning skill when a non-trivial `plan.md` must be derived from approved `spec.md + design/`.
-- For `direct path` work, the explicit plan may be 1-3 concise lines in the main flow.
-- For tiny or `direct path` work, `technical design` may collapse locally or be skipped with an explicit rationale when the design bundle would add no real clarity.
-- For non-trivial work, planning is the last artifact-producing phase before code. The workflow/design/planning bundle that execution will consume must already exist or be explicitly waived.
-- For non-trivial work, the default phase order is `specification -> technical-design -> planning -> implementation-phase-N`, with optional `review-phase-N` and `validation-phase-N` when the control loop explicitly calls for them.
+- For `direct path` work, the explicit plan may be 1-3 concise lines in the main flow. For tiny or `direct path` work, `technical design` may collapse locally or be skipped with an explicit rationale when the design bundle would add no real clarity.
+- For non-trivial work, planning is the last artifact-producing phase before code. The default phase order is `specification -> technical-design -> planning -> implementation-phase-N`, with optional `review-phase-N` and `validation-phase-N` when the control loop explicitly calls for them, and the workflow/design/planning bundle that execution will consume must already exist or be explicitly waived.
 - Do not move from one pre-code moment to the next in the same session unless an upfront `direct path` or `lightweight local` waiver was recorded before the boundary is crossed.
-- For non-trivial work, phased execution is the default. `plan.md` should assume `phase -> review/reconcile -> validate -> next phase`. A single-pass implementation plan requires explicit rationale in both `workflow-plan.md` and `plan.md`.
 - For non-trivial implementation work, long or parallelized execution, or any implementation-skill handoff, create a separate `plan.md` for the coder. `spec.md` keeps the decision log, `design/` keeps task-local technical context, and neither should force the coder to reverse-engineer execution order alone.
-- For non-trivial work, `plan.md` should usually be phase-oriented: each phase is a small reviewable increment with explicit tasks, acceptance criteria, planned verification, and exit criteria before the next phase starts.
+- For non-trivial work, phased execution is the default. `plan.md` should usually be phase-oriented: each phase is a small reviewable increment with explicit tasks, acceptance criteria, planned verification, exit criteria, and the review/reconciliation checkpoint required before the next phase starts. A single-pass implementation plan requires explicit rationale in both `workflow-plan.md` and `plan.md`.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when the work can be structured either way.
 - Use task sizing and checkpointing to keep each task small enough to implement, verify, and review without re-planning the whole feature.
-- Each phase should also name the review/reconciliation checkpoint that must complete before the next phase starts.
-- If the workflow will use `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`, create them during planning from the approved phase structure. Post-code phases may update them, but they must not create them for the first time.
-- For non-trivial implementation work, each named implementation phase should usually consume its own session. Start the next implementation phase in a new session after the prior phase's checkpoint closes.
+- If the workflow will use `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`, create them during planning from the approved phase structure. Post-code phases may update them, but they must not create them for the first time. Each named implementation phase should usually consume its own session; start the next implementation phase in a new session after the prior phase's checkpoint closes.
 - Prefer sequential phases by default. Use parallel lanes only when the change surfaces are truly disjoint and the review/validation story stays clear.
 - The master workflow plan should call out up front whether later `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts will be required.
 - Planning must remain consistent with the decision log and open risks.
@@ -523,8 +496,7 @@ Implementation happens in the main flow under orchestrator control.
 
 Rules:
 - treat implementation as an artifact-consuming phase: consume approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created phase-control files,
-- new code files, test files, migrations, configs, generation inputs, and generated artifacts required by the approved plan are allowed,
-- follow the approved decisions and plan,
+- create code, test, migration, config, generation-input, and generated artifacts only when the approved plan requires them, and follow the approved decisions and plan,
 - keep code and existing phase-control artifacts aligned as work progresses,
 - use implementation skills only in this phase,
 - allowed post-code artifact updates are limited to existing control/progress surfaces such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress status in existing `plan.md`,
