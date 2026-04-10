@@ -26,10 +26,11 @@ The workflow is intentionally simple:
 10. `research/*.md` stores validated research context and does not replace `spec.md`.
 11. Coding starts only after an explicit implementation plan exists.
 12. Any single subagent conclusion is advisory until the orchestrator synthesizes it and, when needed, rechecks it.
-13. For medium/high-risk or ambiguous work, candidate synthesis is pressure-tested before planning or explicitly waived with rationale.
-14. One subagent pass uses at most one skill. If a lane needs multiple skills, split it into multiple lanes or keep that synthesis in the orchestrator.
-15. Parallel lanes may reuse the same subagent role; role duplication is normal when the question or chosen skill differs.
-16. In `fan-out` mode, do not optimize for low subagent count; prefer enough lanes to cover the real seams, even if that means duplicate or overlapping reads.
+13. If the request is still idea-shaped, refine it before pretending it is already spec-ready.
+14. For medium/high-risk or ambiguous work, candidate synthesis is pressure-tested before specification/planning or explicitly waived with rationale.
+15. One subagent pass uses at most one skill. If a lane needs multiple skills, split it into multiple lanes or keep that synthesis in the orchestrator.
+16. Parallel lanes may reuse the same subagent role; role duplication is normal when the question or chosen skill differs.
+17. In `fan-out` mode, do not optimize for low subagent count; prefer enough lanes to cover the real seams, even if that means duplicate or overlapping reads.
 
 For very small and low-risk tasks, the orchestrator may keep research local and skip subagent fan-out.
 The invariants above still apply.
@@ -74,7 +75,7 @@ The default sections are:
 3. `Constraints`
 4. `Decisions`
 5. `Open Questions / Assumptions`
-6. `Implementation Plan`
+6. `Plan Summary / Link`
 7. `Validation`
 8. `Outcome`
 
@@ -83,23 +84,40 @@ Rules:
 2. Do not create empty sections or filler text for completeness.
 3. Record final decisions in `Decisions`; do not dump raw research there.
 4. Link to `research/*.md` when evidence history matters.
-5. If implementation should be executed from a separate coder plan, keep only the control summary in `spec.md` and link to `plan.md`.
+5. Use `spec.md` for decisions, not for full task breakdown; keep only the planning summary or link there when `plan.md` exists.
 6. If the test strategy becomes too large, move that material to `test-plan.md` and keep only the control summary in `spec.md`.
 
 For non-trivial tasks, keep a compact audit trail in `spec.md` and linked artifacts:
 1. intake summary,
-2. `workflow-plan.md` or equivalent workflow record, including subagent lanes, order/parallelism, fan-in/challenge path, and phase execution policy,
-3. research questions or subagent tracks,
-4. decision log,
-5. material overrides or rejected paths,
-6. open questions with owner and unblock condition,
-7. implementation plan,
-8. validation evidence,
-9. outcome.
+2. idea-refinement result or explicit skip rationale when the request started as a raw concept,
+3. `workflow-plan.md` or equivalent workflow record, including subagent lanes, order/parallelism, fan-in/challenge path, and phase execution policy,
+4. research questions or subagent tracks,
+5. decision log,
+6. material overrides or rejected paths,
+7. open questions with owner and unblock condition,
+8. plan/task-breakdown status,
+9. validation evidence,
+10. outcome.
 
 ## 5. Universal Execution Loop
 
-### Step 1. Intake And Framing
+### Step 1. Optional Idea Refinement
+
+Owner: Orchestrator
+
+If the request is still idea-shaped, solution-led, or ambiguous at the user/problem level, refine it before deeper design.
+
+Use `idea-refine` or equivalent local reasoning to make these explicit:
+1. who the user or operator is,
+2. what problem is actually worth solving,
+3. what success looks like,
+4. what the MVP boundary is,
+5. what is intentionally not being done yet.
+
+This step is optional.
+Skip it when the request is already concrete enough for engineering framing.
+
+### Step 2. Intake And Framing
 
 Owner: Orchestrator
 
@@ -114,19 +132,20 @@ Rules:
 1. User input stays free-form; no mandatory YAML or JSON intake is required.
 2. Missing facts become explicit assumptions or open questions, not invented structure.
 
-### Step 2. Workflow Planning And Research Routing
+### Step 3. Workflow Planning And Research Routing
 
 Owner: Orchestrator
 
 The orchestrator decides:
 1. which execution shape fits the task,
-2. whether research mode is `local` or `fan-out`,
-3. which questions can be solved directly in the main flow,
-4. which questions need subagent research,
-5. which single skill each planned subagent lane should use, if any,
-6. which tracks are independent and should run in parallel,
-7. which high-impact or ambiguous topics need multi-angle research or a challenger pass,
-8. whether later `plan.md` or `test-plan.md` artifacts will be required.
+2. whether additional engineering framing with `spec-first-brainstorming` is needed before specialist design,
+3. whether research mode is `local` or `fan-out`,
+4. which questions can be solved directly in the main flow,
+5. which questions need subagent research,
+6. which single skill each planned subagent lane should use, if any,
+7. which tracks are independent and should run in parallel,
+8. which high-impact or ambiguous topics need multi-angle research or a challenger pass,
+9. whether later `plan.md` or `test-plan.md` artifacts will be required.
 
 The orchestrator should not treat subagent count as a budget to minimize.
 In `fan-out` mode, it is better to over-cover the task with extra read-only lanes than to leave a material seam unexamined.
@@ -201,7 +220,7 @@ Each subagent task should state:
 6. the explicit read-only boundary: no code, file, git-state, or implementation-plan changes,
 7. where evidence is required.
 
-### Step 3. Local Or Parallel Research
+### Step 4. Local Or Parallel Research
 
 Owner: Subagents
 
@@ -219,7 +238,7 @@ If a planned track cannot be executed with read-only guarantees, keep it in the 
 When research mode is `fan-out`, optimize for domain coverage rather than for the smallest possible number of subagent calls.
 If one question seems to need multiple skills, split it into multiple lanes instead of turning one subagent into a mini workflow.
 
-### Step 4. Candidate Synthesis, Pre-Spec Challenge, And Decision Logging
+### Step 5. Candidate Synthesis, Pre-Spec Challenge, And Specification Logging
 
 Owner: Orchestrator
 
@@ -249,14 +268,14 @@ Pre-spec challenge expectations:
 5. If the challenger returns a research-needed seam, reopen specialist research rather than letting the orchestrator silently answer the domain question alone.
 6. After targeted re-research, come back through synthesis and rerun challenge if that seam is still planning-critical.
 
-### Step 5. Implementation Planning
+### Step 6. Implementation Planning And Task Breakdown
 
 Owner: Orchestrator
 
 This step is mandatory before coding.
-It is distinct from `workflow planning`: the early phase decides orchestration and artifact expectations, while this phase produces the coder-facing execution plan after research and challenge resolution.
+It is distinct from `workflow planning`: the early phase decides orchestration and artifact expectations, while this phase produces the coder-facing execution plan after research, challenge resolution, and final specification.
 
-The orchestrator turns decisions into:
+The orchestrator turns stable spec decisions into:
 1. ordered execution steps,
 2. dependencies and checkpoints when relevant,
 3. minimal validation per meaningful slice,
@@ -266,6 +285,7 @@ Planning is context-driven, not template-driven.
 Only include rollout, backward-compatibility, migration, or rollback detail when the task actually needs it.
 For non-trivial implementation work, long or parallelized execution, or any implementation-skill handoff, this plan should live in `plan.md` rather than being reconstructed from `spec.md`.
 Phased implementation is the default for non-trivial work: `phase -> review/reconcile -> validate -> next phase`. A single-pass big-bang plan needs explicit rationale.
+`planning-and-task-breakdown` is the preferred planning skill for this step when the work is large enough to justify a separate `plan.md`.
 
 Recommended `plan.md` shape for non-trivial work:
 
@@ -280,6 +300,7 @@ Recommended `plan.md` shape for non-trivial work:
 - Objective
 - Depends On
 - Tasks
+- Acceptance Criteria
 - Change Surface
 - Planned Verification
 - Review / Checkpoint
@@ -300,13 +321,15 @@ Recommended `plan.md` shape for non-trivial work:
 Phase rules:
 1. Each phase should usually be the smallest reviewable increment rather than one large subsystem rewrite.
 2. A completed phase should give the orchestrator a natural stop point for review, targeted testing, and decision to continue.
-3. Prefer sequential phases by default; parallel phase lanes are for truly disjoint work only.
-4. If a phase is not independently mergeable or testable, name the coupling explicitly instead of pretending it is standalone.
-5. Each phase should name the review/reconciliation checkpoint that gates the next phase.
+3. Prefer dependency-ordered vertical slices over horizontal subsystem dumps when the work can be structured either way.
+4. Keep each task small enough to implement, verify, and review without reopening the whole feature.
+5. Prefer sequential phases by default; parallel phase lanes are for truly disjoint work only.
+6. If a phase is not independently mergeable or testable, name the coupling explicitly instead of pretending it is standalone.
+7. Each phase should name the review/reconciliation checkpoint that gates the next phase.
 
 Planning skills may be used only in this step.
 
-### Step 6. Implementation
+### Step 7. Implementation
 
 Owner: Orchestrator in the main flow
 
@@ -316,7 +339,7 @@ Implementation:
 3. may use implementation skills only in this step,
 4. escalates back to planning if coding reveals a real design gap.
 
-### Step 7. Parallel Domain Review
+### Step 8. Parallel Domain Review
 
 Owner: Review subagents, orchestrated by the orchestrator
 
@@ -328,7 +351,7 @@ Review rules:
 2. Findings are advisory until reconciled by the orchestrator.
 3. The goal is risk reduction, not procedural coverage.
 
-### Step 8. Reconciliation, Validation, And Closeout
+### Step 9. Reconciliation, Validation, And Closeout
 
 Owner: Orchestrator
 
@@ -344,13 +367,14 @@ Any readiness or completion claim must include fresh command evidence.
 ## 6. Daily Operating Loop
 
 For day-to-day work, use this short loop:
-1. Frame the task in the main flow.
-2. Write `workflow-plan.md` before any non-trivial fan-out.
-3. Spawn all read-only subagent tracks needed to cover the materially affected domains, including duplicate-role lanes when they keep one-skill ownership clean.
-4. Synthesize candidate decisions and run pre-spec challenge when the task risk or ambiguity justifies it.
-5. Write `plan.md` before coding when implementation is non-trivial.
-6. Execute one phase at a time.
-7. Run phase review, reconciliation, and phase validation before moving to the next phase.
+1. If the request is still idea-shaped, refine it before engineering framing.
+2. Frame the task in the main flow.
+3. Write `workflow-plan.md` before any non-trivial fan-out.
+4. Spawn all read-only subagent tracks needed to cover the materially affected domains, including duplicate-role lanes when they keep one-skill ownership clean.
+5. Synthesize candidate decisions, run pre-spec challenge when the task risk or ambiguity justifies it, and stabilize the result in `spec.md`.
+6. Write `plan.md` before coding when implementation is non-trivial.
+7. Execute one phase at a time.
+8. Run phase review, reconciliation, and phase validation before moving to the next phase.
 
 ## 7. When To Fan Out
 
@@ -375,7 +399,7 @@ The workflow does not change by feature size.
 Only these things scale:
 1. the number of subagent tracks,
 2. the amount of preserved research,
-3. the detail of the implementation plan,
+3. the detail of the plan/task breakdown,
 4. the depth of review and validation.
 
 Small work stays small inside the same workflow.
@@ -384,10 +408,11 @@ Small work stays small inside the same workflow.
 
 Definition of Ready:
 1. `spec.md` or the active spec note has clear scope, constraints, and current decisions.
-2. For non-trivial or agent-backed work, `workflow-plan.md` exists and makes the research mode, subagent lanes, fan-in path, and later artifact expectations explicit.
-3. Critical unknowns are either resolved, delegated for research, or tracked explicitly.
-4. For medium/high-risk or ambiguous work, the pre-spec challenge checkpoint is reconciled or explicitly waived.
-5. An implementation plan exists before coding starts.
+2. If the work started as a raw concept, idea refinement either exists or was explicitly skipped with rationale.
+3. For non-trivial or agent-backed work, `workflow-plan.md` exists and makes the research mode, subagent lanes, fan-in path, and later artifact expectations explicit.
+4. Critical unknowns are either resolved, delegated for research, or tracked explicitly.
+5. For medium/high-risk or ambiguous work, the pre-spec challenge checkpoint is reconciled or explicitly waived.
+6. A task breakdown or implementation plan exists before coding starts.
 
 Definition of Done:
 1. Implementation matches the recorded decisions.

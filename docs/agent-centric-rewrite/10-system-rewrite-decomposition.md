@@ -7,7 +7,7 @@
 - субагенты выполняют узкий ресерч и возвращают синтезируемые выводы по task-level output contract;
 - skills используются внутри субагентов по требованию, а не как линейный сценарий главного потока;
 - после синтеза оркестратор формирует implementation plan в основном потоке;
-- на этапе планирования основной поток может использовать planning skill (`go-coder-plan-spec`);
+- на этапе планирования основной поток может использовать planning skill (`planning-and-task-breakdown`);
 - на этапе имплементации основной поток может использовать implementation skill (`go-coder`) для изменения кода.
 - для длинных/неоднозначных задач оркестратор может вести отдельные `research/*.md` как validated memory, сохраняя `spec.md` источником финальных решений.
 
@@ -185,7 +185,7 @@ DoD:
 Задачи:
 1. Определить целевую taxonomy skills:
    - `subagent-internal` (по умолчанию),
-   - `orchestrator-planning` (для формирования implementation plan в основном потоке, например `go-coder-plan-spec`),
+   - `orchestrator-planning` (для формирования implementation plan в основном потоке, например `planning-and-task-breakdown`),
    - `orchestrator-implementation` (для изменения кода в основном потоке, например `go-coder`),
    - `direct-use` (редко, по явному запросу).
 2. Сократить обязательные шаблоны output внутри skill-инструкций.

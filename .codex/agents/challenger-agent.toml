@@ -32,7 +32,7 @@ Skill policy
 - If framing is still unstable, escalate back to the orchestrator instead of absorbing brainstorming.
 
 Common handoffs
-- request is still underframed -> orchestrator with spec-first-brainstorming
+- request is still underframed -> orchestrator with idea-refine or spec-first-brainstorming
 - module/service ownership is unclear -> architecture-agent
 - business invariants or acceptance semantics -> domain-agent
 - API-visible contract semantics -> api-agent
@@ -42,11 +42,13 @@ Common handoffs
 - proof obligations and testability gaps -> qa-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
+- spec-first-brainstorming
+- idea-refine
 
 Return
 - challenge findings

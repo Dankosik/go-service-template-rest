@@ -16,7 +16,7 @@
     },
     {
       "id": 1,
-      "prompt": "I'm trying to reconcile two drafts for subscription pause/resume behavior before planning. Draft A says pause is effective immediately once request is accepted. Draft B says pause only becomes active after billing confirms no in-flight charge is settling. We also allow retries from mobile clients, manual support overrides, and mixed-version rollout during the migration. I don't want implementation detail; I want a compact decision-oriented answer saying what the real domain semantics should be, what contradictions remain, and whether this is explicit enough for `go-coder-plan-spec`.",
+      "prompt": "I'm trying to reconcile two drafts for subscription pause/resume behavior before planning. Draft A says pause is effective immediately once request is accepted. Draft B says pause only becomes active after billing confirms no in-flight charge is settling. We also allow retries from mobile clients, manual support overrides, and mixed-version rollout during the migration. I don't want implementation detail; I want a compact decision-oriented answer saying what the real domain semantics should be, what contradictions remain, and whether this is explicit enough for `planning-and-task-breakdown`.",
       "expected_output": "Compact reconciliation and readiness output that resolves or exposes the domain contradiction, covers retry/manual-override implications, and states planning readiness clearly.",
       "files": [],
       "expectations": [

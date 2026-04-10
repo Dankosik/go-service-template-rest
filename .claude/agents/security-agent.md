@@ -39,12 +39,13 @@ Common handoffs
 - CI/release trust or runtime hardening policy -> delivery-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - security decision or finding set

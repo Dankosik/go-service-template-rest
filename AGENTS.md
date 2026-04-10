@@ -13,7 +13,7 @@ Role model:
 
 Main-loop objective:
 - Solve tasks through **agent orchestration**, not a long linear skill chain in the main context.
-- Keep the main context focused on problem framing, decisions, open questions, implementation plan, validation evidence, and links to preserved research.
+- Keep the main context focused on refined problem framing, decisions, open questions, plan/task-breakdown status, validation evidence, and links to preserved research.
 - Keep `spec.md` as the canonical decisions artifact.
 
 Companion reference loading:
@@ -21,14 +21,16 @@ Companion reference loading:
 - If `AGENTS.md` and `docs/spec-first-workflow.md` ever diverge, follow `AGENTS.md` and then repair the drift.
 
 Short operating loop:
-1. Frame the task.
-2. Plan the workflow: choose the execution shape, research mode, subagent lanes, and whether later `plan.md` or `test-plan.md` artifacts are expected.
-3. Run local research or read-only fan-out as planned.
-4. Synthesize research into candidate decisions.
-5. Run a pre-spec challenge pass when task risk or ambiguity justifies it.
-6. Write the implementation plan before coding.
-7. Implement in the main flow.
-8. Run review, recheck, and validation only as far as task risk requires.
+1. If the request is still idea-shaped, refine it into one concrete direction.
+2. Frame the task.
+3. Plan the workflow: choose the execution shape, research mode, subagent lanes, and whether later `plan.md` or `test-plan.md` artifacts are expected.
+4. Run local research or read-only fan-out as planned.
+5. Synthesize research into candidate decisions.
+6. Run a pre-spec challenge pass when task risk or ambiguity justifies it.
+7. Finalize the decision record in `spec.md`.
+8. Break the approved spec into phased tasks before coding.
+9. Implement in the main flow.
+10. Run review, recheck, and validation only as far as task risk requires.
 
 For very small, low-risk tasks, keep workflow planning, research, synthesis, and implementation planning local and avoid orchestration overhead. The explicit plan may be 1-3 concise lines in the main flow. The invariants in this file still apply.
 
@@ -82,8 +84,9 @@ Treat `mode/state` as internal workflow control, not as user input.
 
 ### States
 
-`intake`, `workflow planning`, `research`, `synthesis`, `planning`, `implementation`, `review`, `reconciliation`, `validation`, `done`
+`intake`, `idea refinement`, `workflow planning`, `research`, `synthesis`, `specification`, `planning`, `implementation`, `review`, `reconciliation`, `validation`, `done`
 
+`idea refinement` is an optional checkpoint inside intake/framing, not a mandatory phase for every task.
 `pre-spec challenge` is a checkpoint inside `synthesis`, not a separate authority state.
 
 ### Execution shapes
@@ -94,11 +97,12 @@ Treat `mode/state` as internal workflow control, not as user input.
 
 ### Typical paths
 
-- Direct / lightweight local: `intake -> workflow planning -> research -> synthesis -> planning -> implementation -> validation -> done`
-- Full orchestrated: `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> validation -> done`
-- With review: `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> planning -> implementation -> review -> reconciliation -> validation -> done`
+- Direct / lightweight local: `intake -> workflow planning -> research -> synthesis -> specification -> planning -> implementation -> validation -> done`
+- Idea-shaped work: `intake -> idea refinement -> workflow planning -> research -> synthesis -> specification -> planning -> implementation -> validation -> done`
+- Full orchestrated: `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> specification -> planning -> implementation -> validation -> done`
+- With review: `intake -> workflow planning -> research -> synthesis(candidate -> challenge -> final) -> specification -> planning -> implementation -> review -> reconciliation -> validation -> done`
 
-For `direct path` and `lightweight local` work, `workflow planning`, `research`, `synthesis`, and `planning` may collapse into one local pass once minimum viable framing is explicit.
+For `direct path` and `lightweight local` work, `workflow planning`, `research`, `synthesis`, `specification`, and `planning` may collapse into one local pass once minimum viable framing is explicit.
 
 `review` and `reconciliation` are **optional, risk-driven states**, not mandatory ritual phases.
 
@@ -106,15 +110,18 @@ For `direct path` and `lightweight local` work, `workflow planning`, `research`,
 
 - `synthesis -> research` for recheck or second opinion
 - `pre-spec challenge -> targeted research -> synthesis` when the challenger exposes an under-evidenced seam that needs specialist follow-up
+- `planning -> specification` if task breakdown exposes a missing decision or unstable spec boundary
 - `reconciliation -> review` for post-fix re-review
 - `validation -> planning` if implementation exposed a real plan or design gap
 
 ### Gates
 
+- **Framing gate:** if the request is still idea-shaped, solution-led, or ambiguous at the user/problem level, run local idea refinement before deeper design or specialist research. Do not pretend a raw concept is already spec-ready.
 - **Workflow-planning gate:** before any subagent call, the orchestrator must write `workflow-plan.md` with the execution shape, research mode (`local` or `fan-out`), the planned subagent lanes plus order/parallelism, the fan-in/challenge path, the implementation control loop (`phased` by default), and whether later `plan.md` or `test-plan.md` artifacts are expected. For each planned subagent lane, record the role, the question it owns, and the single chosen skill (or explicit `no-skill`) for that pass. For tiny local work, a brief explicit skip rationale in the main flow is enough.
 - **Research gate:** no code changes; no planning or implementation skills.
 - **Synthesis gate:** do not adopt a single subagent claim without comparison, evidence, and applicability checks. For medium/high-risk or ambiguous work, candidate synthesis is not stable until a pre-spec challenge pass is reconciled or explicitly waived.
-- **Planning-entry gate:** planning may begin only after minimum viable framing is explicit and the orchestrator has completed workflow planning with an explicit research-mode decision (`local` or `fan-out`). Non-trivial tasks may not jump directly from `intake` to planning. For `full orchestrated` work, planning also requires stable synthesis and pre-spec challenge reconciled or explicitly waived.
+- **Specification gate:** planning may begin only after final decisions, constraints, and remaining open questions are written to `spec.md`. For non-trivial work, `spec.md` must be stable enough that `plan.md` can be derived from it without reopening core design by default.
+- **Planning-entry gate:** planning may begin only after minimum viable framing is explicit, the orchestrator has completed workflow planning with an explicit research-mode decision (`local` or `fan-out`), and the decision record is stable enough for task breakdown. Non-trivial tasks may not jump directly from `intake` to planning. For `full orchestrated` work, planning also requires stable synthesis and pre-spec challenge reconciled or explicitly waived.
 - **Planning gate:** implementation is blocked until an explicit coder-facing plan exists. For `direct path` work that plan may stay in the main flow; for non-trivial implementation work or implementation-skill handoff, it must live in a separate `plan.md` with the corresponding control summary kept in `spec.md`.
 - **Write gate:** repository changes are allowed only in `implementation`, and only in the main flow.
 - **Review gate:** review stays read-only and domain-specific.
@@ -133,6 +140,7 @@ Before decomposition, clarify the minimum viable framing:
 - which assumptions are currently being made.
 
 Rules:
+- If the request is still idea-shaped, use `idea-refine` or equivalent local refinement to make the user/problem, success criteria, MVP, and not-doing boundary explicit before deeper design.
 - Do not force a structured intake template on the user.
 - Do not ask for fields that are not needed.
 - If uncertainty is material, record it as an assumption or open question instead of inventing data.
@@ -142,6 +150,7 @@ Rules:
 
 The orchestrator decides:
 - which execution shape fits the task,
+- whether local idea refinement or engineering framing is needed before specialist design,
 - whether research mode is `local` or `fan-out`,
 - which questions can be handled directly in the main flow,
 - which questions need subagent research,
@@ -205,7 +214,7 @@ At fan-in, the orchestrator must:
 - trigger recheck when confidence is too low or the impact is too high.
 - not claim agent-backed synthesis, review coverage, or cross-checking if the needed subagents were interrupted, abandoned early, or never returned.
 
-For medium/high-risk or ambiguous work, candidate synthesis should be pressure-tested via a pre-spec challenge pass before planning.
+For medium/high-risk or ambiguous work, candidate synthesis should be pressure-tested via a pre-spec challenge pass before specification and planning.
 
 ### 5.4 Run a pre-spec challenge pass
 
@@ -216,7 +225,7 @@ Run this checkpoint when at least one is true:
 - an independent challenger would materially reduce planning risk.
 
 Working model:
-- `research -> candidate synthesis -> pre-spec challenge -> (re-research if needed) -> final synthesis -> planning`
+- `research -> candidate synthesis -> pre-spec challenge -> (re-research if needed) -> final synthesis -> specification -> planning`
 
 Challenge rules:
 - pass only the minimum relevant slice of context: problem frame, candidate decisions, constraints, assumptions or open questions, and evidence links when needed
@@ -371,17 +380,21 @@ Skills are part of the tool library, not the top-level choreography.
 
 Taxonomy:
 - **subagent-internal** — default; used inside research or review subagents as needed
+- **orchestrator-framing** — optional before research/specification when the request is still idea-shaped or needs engineering framing
 - **orchestrator-planning** — allowed only during planning
 - **orchestrator-implementation** — allowed only during implementation
 - **direct-use** — rare; use only when explicitly requested or when delegation clearly adds more overhead than value
 
 Examples, if present in the toolchain:
-- `go-coder-plan-spec` = **orchestrator-planning**
+- `idea-refine` = **orchestrator-framing**
+- `spec-first-brainstorming` = **orchestrator-framing**
+- `planning-and-task-breakdown` = **orchestrator-planning**
 - `go-coder` = **orchestrator-implementation**
 
 Rules:
 - Default to no skill when local reasoning is sufficient.
 - A subagent pass may use **zero or one** skill, never more.
+- Framing skills may be used only before `spec.md` is stable, or when a reopen shows that the problem frame itself is incomplete.
 - Do not chain skills inside one subagent pass.
 - If a question naturally splits across skills, split it into separate subagent lanes instead, including multiple lanes of the same role when useful.
 - Record duplicate-role lanes in `workflow-plan.md` by lane purpose and chosen skill rather than trying to make every role name unique.
@@ -397,7 +410,7 @@ Rules:
 Implementation planning is mandatory before coding.
 For non-trivial or agent-backed work, keep two distinct planning moments:
 - `workflow planning` happens before research and produces `workflow-plan.md`: which subagents run, in what order or parallelism, how fan-in and challenge happen, and what the phase execution loop will be.
-- `implementation planning` happens after synthesis and challenge resolution and produces the coder-facing execution plan.
+- `implementation planning` happens after synthesis, challenge resolution, and specification finalization and produces the coder-facing execution plan.
 
 Minimum plan content:
 - ordered implementation steps,
@@ -415,10 +428,13 @@ Do not force production-style rollout or compatibility work for prototypes, pre-
 
 Rules:
 - Planning skills are allowed only in this phase.
+- `planning-and-task-breakdown` is the preferred planning skill when a non-trivial `plan.md` must be derived from a stable spec.
 - For `direct path` work, the explicit plan may be 1-3 concise lines in the main flow.
 - For non-trivial work, phased execution is the default. `plan.md` should assume `phase -> review/reconcile -> validate -> next phase`. A single-pass implementation plan requires explicit rationale in both `workflow-plan.md` and `plan.md`.
 - For non-trivial implementation work, long or parallelized execution, or any implementation-skill handoff, create a separate `plan.md` for the coder. `spec.md` keeps the decision log and a control summary; it should not force the coder to reverse-engineer execution order from the spec alone.
-- For non-trivial work, `plan.md` should usually be phase-oriented: each phase is a small reviewable increment with explicit tasks, planned verification, and exit criteria before the next phase starts.
+- For non-trivial work, `plan.md` should usually be phase-oriented: each phase is a small reviewable increment with explicit tasks, acceptance criteria, planned verification, and exit criteria before the next phase starts.
+- Prefer dependency-ordered vertical slices over horizontal subsystem dumps when the work can be structured either way.
+- Use task sizing and checkpointing to keep each task small enough to implement, verify, and review without re-planning the whole feature.
 - Each phase should also name the review/reconciliation checkpoint that must complete before the next phase starts.
 - Prefer sequential phases by default. Use parallel lanes only when the change surfaces are truly disjoint and the review/validation story stays clear.
 - The workflow plan should call out up front whether a later separate `plan.md` will be required.
@@ -492,8 +508,8 @@ Artifact rules:
 Update cadence:
 - After framing: update `Context`, `Scope / Non-goals`, and `Constraints` as needed.
 - After workflow planning: write or update `workflow-plan.md` with the execution shape, research mode, planned subagent tracks, order/parallelism, fan-in/challenge path, phased execution policy, and whether later `plan.md` or `test-plan.md` artifacts are expected.
-- After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material challenge resolutions, rejected paths, or overrides.
-- Before coding: make the coder-facing implementation plan explicit in the main flow or `plan.md`, and keep the corresponding control summary in `spec.md`.
+- After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material challenge resolutions, rejected paths, or overrides, then stabilize the decision record in `spec.md`.
+- Before coding: make the coder-facing implementation plan explicit in the main flow or `plan.md`, and keep the corresponding planning summary or link in `spec.md`.
 - After validation: update `Validation` and `Outcome` to match reality.
 
 Default `spec.md` sections:
@@ -502,7 +518,7 @@ Default `spec.md` sections:
 3. `Constraints`
 4. `Decisions`
 5. `Open Questions / Assumptions`
-6. `Implementation Plan`
+6. `Plan Summary / Link`
 7. `Validation`
 8. `Outcome`
 
@@ -514,6 +530,7 @@ Rules:
 
 For non-trivial tasks, keep a compact audit trail that is sufficient to reconstruct the path:
 - intake summary,
+- idea-refinement result or explicit skip rationale when the request started as a raw concept,
 - execution shape and research-mode decision (`local` or `fan-out`),
 - `workflow-plan.md` or an equivalent workflow record, including subagent lanes, order/parallelism, fan-in/challenge path, and phase execution policy,
 - research questions or subagent tracks,
@@ -521,7 +538,7 @@ For non-trivial tasks, keep a compact audit trail that is sufficient to reconstr
 - decision log,
 - material overrides or rejected paths,
 - open questions with owner and unblock condition,
-- implementation plan,
+- plan/task-breakdown status,
 - validation evidence,
 - outcome.
 
@@ -531,7 +548,7 @@ The main flow should contain only what helps the current decision and execution:
 - task framing,
 - final or candidate decisions,
 - open questions,
-- implementation plan,
+- plan/task-breakdown status,
 - validation evidence,
 - references to preserved research.
 
@@ -544,7 +561,7 @@ This repository uses one universal workflow vocabulary for small and large work.
 Only these things scale:
 - number of subagent tracks,
 - amount of preserved research,
-- detail of the implementation plan,
+- detail of the plan/task breakdown,
 - depth of review and validation.
 
 Anti-patterns:

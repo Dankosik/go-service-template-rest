@@ -1,0 +1,39 @@
+{
+  "skill_name": "planning-and-task-breakdown",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "The spec is approved for adding soft-delete to `internal/users`: nullable `deleted_at`, read paths exclude soft-deleted rows by default, admin restore is allowed, API remains backward-compatible, and audit events must still emit on delete/restore. Break this into phased execution work for `plan.md`. Sequence schema, repo/service/API wiring, tests/validation, and any real checkpoints.",
+      "expected_output": "A phased `plan.md`-style execution plan with dependency order, acceptance criteria, verification, and explicit checkpoints.",
+      "files": [],
+      "expectations": [
+        "The output defaults to a `plan.md`-style plan instead of trying to keep full task breakdown inside `spec.md`.",
+        "Schema or migration work appears before downstream repository, service, or API work.",
+        "Restore and audit obligations are included in the task breakdown.",
+        "The plan includes acceptance criteria and planned verification for meaningful phases."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Design is approved for adding request ID echo behavior on `/healthz` and `/readyz`: if incoming `X-Request-ID` exists, echo it back; otherwise preserve current behavior. This is tiny. Write only the planning output that is appropriate now, and avoid forcing a heavyweight `plan.md` if the change does not need it.",
+      "expected_output": "A compact direct-path planning answer that stays proportional and does not invent unnecessary phases.",
+      "files": [],
+      "expectations": [
+        "The output explicitly keeps planning lightweight for this tiny change.",
+        "The output still includes verification.",
+        "The plan does not force a heavyweight multi-phase `plan.md` for a tiny header echo change."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We want auth endpoint rate limiting, but the team still has not decided between gateway-side limiting and service-local middleware, and the exact `429` response contract is unresolved. Produce only the task breakdown portions that are safe to write now, make blockers explicit, and do not pretend the undecided parts are implementation-ready.",
+      "expected_output": "A partial planning result that separates ready preparatory work from blocked work and makes spec gaps explicit.",
+      "files": [],
+      "expectations": [
+        "The unresolved architecture choice and `429` contract are called out as blockers.",
+        "Any safe preparatory work is separated from blocked work.",
+        "The output does not invent a concrete implementation path for the unresolved rate-limit design."
+      ]
+    }
+  ]
+}

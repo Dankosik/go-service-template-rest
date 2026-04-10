@@ -38,12 +38,13 @@ Common handoffs
 - hot-path or benchmark-led bottlenecks -> performance-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - ownership/source-of-truth decision

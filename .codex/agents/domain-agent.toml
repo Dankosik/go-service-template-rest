@@ -38,12 +38,13 @@ Common handoffs
 - test-obligation traceability -> qa-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - invariant register or narrowed invariant set

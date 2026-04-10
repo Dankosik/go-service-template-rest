@@ -1,5 +1,7 @@
 # Skill Spec: `go-design-spec` (Expertise-First)
 
+> Status: historical design note. The active runtime contract now lives in `AGENTS.md`, `docs/spec-first-workflow.md`, and `.agents/skills/go-design-spec/SKILL.md`. References below to numbered artifact files such as `20-architecture.md` or `60-implementation-plan.md` reflect an older spec-pack model rather than the current `spec.md` + `plan.md` split.
+
 ## 1. Назначение
 
 `go-design-spec` — эксперт по design integrity в spec-first процессе для Go-сервисов.

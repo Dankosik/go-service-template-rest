@@ -28,7 +28,7 @@ This template is built from the opposite assumption: if you want agents to be us
 That is why this repository is opinionated in four places:
 
 1. **The workflow is explicit.**
-   Non-trivial work starts with framing, workflow planning, research, synthesis, pre-spec challenge, implementation planning, implementation, review, and validation. The loop is visible, not implied.
+   Non-trivial work starts with optional idea refinement, then framing, workflow planning, research, synthesis, pre-spec challenge, specification, implementation planning, implementation, review, and validation. The loop is visible, not implied.
 2. **The specialists are real.**
    Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
 3. **The skills are Go-native.**
@@ -53,15 +53,17 @@ The fix is not a single block of text. It shapes the whole repository:
 This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
 
 ```text
-intake -> workflow planning -> research -> synthesis -> pre-spec challenge -> planning -> implementation -> review -> validation
+intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec challenge -> specification -> planning -> implementation -> review -> validation
 ```
 
 - `intake`: frame the change, scope it, and record assumptions.
+- `idea refine`: when the request is still a raw concept, use `idea-refine` to make the user, problem, success criteria, MVP, and not-doing boundary explicit before engineering framing.
 - `workflow planning`: choose the execution shape, decide whether work stays local or fans out, map the subagent lanes and their order or parallelism, record that in `workflow-plan.md`, and state whether later `plan.md` or `test-plan.md` artifacts will be required. Do not optimize for a small lane count; optimize for coverage.
 - `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains. When in doubt on a complex task, prefer more lanes over fewer.
 - `synthesis`: compare specialist output and produce candidate decisions.
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
-- `planning`: write the coder-facing implementation plan before code changes start; for non-trivial implementation, that plan lives in a phased `plan.md`.
+- `specification`: stabilize final decisions, constraints, and open questions in `spec.md` before task breakdown begins.
+- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn the approved spec into phased, verifiable execution work; for non-trivial implementation, that plan lives in a phased `plan.md`.
 - `implementation`: change the service in the main flow, not inside research agents.
 - `review`: run targeted review agents only where the risk justifies them.
 - `validation`: do not claim "done" without fresh command evidence.
@@ -138,9 +140,10 @@ Click a skill name to open its canonical instruction file.
 
 | Skill | What it does | Load when |
 |---|---|---|
-| [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a raw request into a challenge-ready problem frame with scope, constraints, assumptions, and design-readiness | the task is still fuzzy and needs framing before challenge or deeper design |
+| [`idea-refine`](.agents/skills/idea-refine/SKILL.md) | turns a raw idea into one concrete direction with explicit user problem, assumptions, MVP boundary, and not-doing list | the request is still product- or solution-ambiguous and is not ready for engineering framing yet |
+| [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a refined idea or rough change request into an engineering-ready problem frame with scope, constraints, assumptions, and design-readiness | the task is close to spec work but still needs crisp framing before challenge or deeper design |
 | [`pre-spec-challenge`](.agents/skills/pre-spec-challenge/SKILL.md) | pressure-tests candidate decisions with discriminating questions before planning | research is done but hidden assumptions or edge cases could still change the spec |
-| [`go-coder-plan-spec`](.agents/skills/go-coder-plan-spec/SKILL.md) | turns approved decisions into atomic coding steps, checkpoints, and evidence expectations | planning is complete enough to prepare implementation, but coding has not started |
+| [`planning-and-task-breakdown`](.agents/skills/planning-and-task-breakdown/SKILL.md) | turns an approved spec into phased tasks, checkpoints, acceptance criteria, and verification steps | the spec is stable and implementation needs a real `plan.md` instead of ad hoc execution |
 | [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift | the implementation plan is explicit and code work is next |
 | [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
 | [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
@@ -157,7 +160,7 @@ Click a skill name to open its canonical instruction file.
 | Skill | Focus | Load when |
 |---|---|---|
 | [`go-architect-spec`](.agents/skills/go-architect-spec/SKILL.md) | service boundaries, ownership, sync vs async interaction style | system shape or module ownership may change |
-| [`go-design-spec`](.agents/skills/go-design-spec/SKILL.md) | integrated pre-coding design pass across domains | the draft design feels contradictory, layered, or overly complex |
+| [`go-design-spec`](.agents/skills/go-design-spec/SKILL.md) | integrated pre-coding design pass and final spec assembly across domains | the draft design feels contradictory, layered, or not yet stable enough for task breakdown |
 | [`go-devops-spec`](.agents/skills/go-devops-spec/SKILL.md) | CI/CD policy, rollout controls, runtime hardening, release trust | delivery or release behavior is part of the change |
 | [`go-observability-engineer-spec`](.agents/skills/go-observability-engineer-spec/SKILL.md) | logs, metrics, traces, correlation, telemetry cost | observability behavior needs an explicit contract |
 | [`go-performance-spec`](.agents/skills/go-performance-spec/SKILL.md) | latency, throughput, contention, benchmark strategy | performance budgets or hot paths drive the design |
@@ -329,10 +332,11 @@ Typical next steps:
 Example kickoff prompt:
 
 ```text
+Use `idea-refine` only if the request is still too raw.
 Frame a change to add tenant-aware export jobs.
 Fan out to `architecture-agent`, `data-agent`, and `qa-agent` only if needed.
 Run `challenger-agent` before planning if material assumptions remain.
-Write decisions and the implementation plan to `specs/tenant-export-jobs/spec.md` before coding.
+Write decisions to `specs/tenant-export-jobs/spec.md` and the task breakdown to `specs/tenant-export-jobs/plan.md` before coding.
 ```
 
 ## Repository Layout

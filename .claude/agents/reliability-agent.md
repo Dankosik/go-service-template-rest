@@ -38,12 +38,13 @@ Common handoffs
 - telemetry contract for critical-path diagnosability -> a separate observability-skilled lane or design-integrator
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - reliability contract or findings

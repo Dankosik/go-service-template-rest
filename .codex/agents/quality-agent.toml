@@ -34,12 +34,13 @@ Common handoffs
 - concurrency, performance, security, DB/cache, or reliability depth -> corresponding domain review agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - findings

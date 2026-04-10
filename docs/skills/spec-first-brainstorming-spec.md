@@ -1,6 +1,6 @@
 # Спецификация Skill `spec-first-brainstorming`
 
-> Status: historical design note. The active runtime contract now lives in `AGENTS.md`, `docs/spec-first-workflow.md`, `.agents/skills/spec-first-brainstorming/SKILL.md`, and `.agents/skills/pre-spec-challenge/SKILL.md`. References below to `Phase 0` or `Gate B0` reflect legacy framing language rather than the current pre-spec challenge checkpoint model.
+> Status: historical design note. The active runtime contract now lives in `AGENTS.md`, `docs/spec-first-workflow.md`, `.agents/skills/idea-refine/SKILL.md`, `.agents/skills/spec-first-brainstorming/SKILL.md`, and `.agents/skills/pre-spec-challenge/SKILL.md`. References below to `Phase 0` or `Gate B0` reflect legacy framing language rather than the current idea-refine -> framing -> challenge model.
 
 ## 1. Цель
 

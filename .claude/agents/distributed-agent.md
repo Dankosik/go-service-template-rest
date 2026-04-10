@@ -41,12 +41,13 @@ Common handoffs
 - API-visible async acknowledgement contract -> api-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - flow model and invariant ownership

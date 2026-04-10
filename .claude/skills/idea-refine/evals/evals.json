@@ -1,0 +1,29 @@
+{
+  "skill_name": "idea-refine",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "We keep getting paged because incidents are hard to understand fast. Maybe we need an incident cockpit with AI summaries, timeline reconstruction, service maps, and maybe Slack integration. I want something that genuinely reduces time-to-diagnosis, not just another dashboard. Help me refine the idea before we turn it into engineering work.",
+      "expected_output": "A converged ideation result that reframes the problem around faster operator diagnosis, recommends one direction, surfaces assumptions, and makes a concrete MVP and not-doing boundary explicit.",
+      "files": [],
+      "expectations": [
+        "The output states the target operator or user rather than talking only about tooling.",
+        "The output recommends one direction instead of keeping all suggested features equally alive.",
+        "The output includes explicit assumptions to validate.",
+        "The output includes both an MVP scope and a Not Doing list."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Admins keep deleting the wrong environment. My first thought is snapshots every 15 minutes plus an undo button plus a restore endpoint. I need help figuring out the right direction before we move into specs.",
+      "expected_output": "A refined idea that focuses on destructive-action recovery and operator safety, does not lock onto snapshots too early, and ends with a clear handoff to engineering framing.",
+      "files": [],
+      "expectations": [
+        "The output reframes the request around the real operator problem instead of treating snapshots as already chosen.",
+        "The output converges on one recommended direction.",
+        "The output includes a Not Doing list that narrows scope.",
+        "The output ends with an explicit next handoff into engineering framing."
+      ]
+    }
+  ]
+}

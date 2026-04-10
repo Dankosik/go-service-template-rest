@@ -40,12 +40,13 @@ Common handoffs
 - rollout gates and release-trust policy -> delivery-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - boundary/ownership call

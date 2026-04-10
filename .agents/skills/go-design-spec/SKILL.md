@@ -1,19 +1,20 @@
 ---
 name: go-design-spec
-description: "Run design-integrity passes for Go services. Use when a draft design needs an integrated pre-coding pass to reduce accidental complexity, preserve maintainability, and keep architecture, API, data, reliability, and testing decisions coherent. Skip when the task is a local code fix, endpoint/schema-only editing, implementation coding, review execution, or CI/container setup."
+description: "Run design-integrity and final-spec-assembly passes for Go services. Use when specialist outputs exist but the repository still needs one coherent, simpler, spec-ready decision record before `planning-and-task-breakdown`. Skip when the task is a local code fix, endpoint/schema-only editing, implementation coding, review execution, or CI/container setup."
 ---
 
 # Go Design Spec
 
 ## Purpose
-Act as the integrator for design quality: reduce accidental complexity, preserve change locality, and make sure important decisions across architecture, API, data, reliability, and testing do not contradict each other.
+Act as the integrator for design quality and final spec assembly: reduce accidental complexity, preserve change locality, and make sure important decisions across architecture, API, data, reliability, and testing do not contradict each other before planning starts.
 
 ## Scope
-Use this skill to run an integrated design-integrity pass: reduce accidental complexity, remove contradictions, preserve maintainability, and keep architecture, API, data, reliability, and testing decisions coherent.
+Use this skill to run an integrated design-integrity pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, and testing decisions coherent, and leave `spec.md` stable enough for `planning-and-task-breakdown`.
 
 ## Boundaries
 Do not:
 - replace domain-specific expert decisions with generic style advice
+- produce task breakdown, phase cards, or coder execution sequencing; that belongs to `planning-and-task-breakdown`
 - introduce new complexity without proving what risk or ambiguity it removes
 - drift into implementation coding, review execution, or tooling/process detail as the main output
 - leave cross-domain contradictions unresolved
@@ -26,6 +27,7 @@ Escalate if the design is internally inconsistent, key assumptions differ across
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
+- Prefer one coherent spec handoff over scattered partial notes that still force planning to rediscover design decisions.
 
 ## Expertise
 
@@ -85,6 +87,8 @@ When writing a design-integrity pass or review, cover:
 - simplification opportunities
 - abstractions or layers that should be removed, merged, or made explicit
 - downstream consequences for API, data, reliability, security, observability, and testing
+- what must be written or tightened in `spec.md` before planning can safely begin
+- whether the design is stable enough for `planning-and-task-breakdown`
 - unresolved design risks that should block implementation
 
 ## Escalate Or Reject

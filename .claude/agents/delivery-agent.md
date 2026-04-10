@@ -38,12 +38,13 @@ Common handoffs
 - cross-domain enforceability/simplification -> design-integrator-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - delivery/platform policy recommendation

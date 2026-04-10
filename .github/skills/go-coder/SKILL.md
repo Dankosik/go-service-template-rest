@@ -10,7 +10,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 
 ## Use This Skill For
 - implementing approved Go features, fixes, refactors, integrations, regenerations, and targeted test updates
-- translating an approved spec, plan, or task list into code without changing the decision that was already made
+- translating an approved spec and current phase/task block into code without changing the decision that was already made
 - keeping code, tests, generated artifacts, and verification evidence aligned with the approved change
 
 ## Do Not Use This Skill For
@@ -19,7 +19,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - hand-editing generated artifacts instead of changing the owning source and regenerating
 
 ## Core Stance
-- Treat the approved spec or plan as the source of truth for behavior.
+- Treat the approved spec and current phase/task breakdown as the source of truth for behavior.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
 - Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
 - When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.

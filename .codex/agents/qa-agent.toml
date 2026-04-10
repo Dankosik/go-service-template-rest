@@ -39,12 +39,13 @@ Common handoffs
 - broad maintainability/readability of tests -> quality-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - test obligations

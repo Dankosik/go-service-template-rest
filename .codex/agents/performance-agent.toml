@@ -37,12 +37,13 @@ Common handoffs
 - broad system-shape trade-offs -> design-integrator-agent or architecture-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - hot-path map or narrowed hotspot

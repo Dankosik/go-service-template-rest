@@ -1,12 +1,12 @@
 ---
 name: spec-first-brainstorming
-description: "Turn raw feature, refactor, or behavior-change requests into a challenge-ready problem frame with scope, constraints, assumptions, prioritized questions, and an explicit design-readiness decision. Use whenever the task is still fuzzy and needs framing before pre-spec challenge or deeper design, even if the user only says 'let's think through this' or suggests an implementation too early."
+description: "Turn a refined idea or rough feature, refactor, or behavior-change request into an engineering-ready problem frame with scope, constraints, assumptions, prioritized questions, and an explicit design-readiness decision. Use after `idea-refine`, or whenever the direction is mostly chosen but the task still needs crisp framing before specialist spec work or pre-spec challenge. Skip raw ideation, final architecture/API/data/security decisions, and task breakdown."
 ---
 
 # Spec-First Brainstorming
 
 ## Purpose
-Turn ambiguous requests into a concrete, falsifiable, challenge-ready problem frame before deeper design starts.
+Turn a mostly chosen request into a concrete, falsifiable, challenge-ready problem frame before deeper design starts.
 
 ## Scope
 - normalize feature, refactor, or behavior-change requests into a precise problem statement
@@ -17,6 +17,7 @@ Turn ambiguous requests into a concrete, falsifiable, challenge-ready problem fr
 
 ## Boundaries
 Do not:
+- run open-ended ideation when the real problem is that no concrete direction has been chosen yet; use `idea-refine` first
 - make final architecture, API, data, security, reliability, or rollout decisions that belong to downstream specialists
 - jump into implementation design, code, or test-writing
 - hide ambiguity behind generic wording or unexamined assumptions
@@ -25,6 +26,7 @@ Do not:
 
 ## Escalate When
 Escalate if:
+- multiple product directions are still live and no recommended direction has been chosen yet
 - goals, actors, or behavior change remain ambiguous after focused clarification
 - the request sounds local but actually touches money, identity, destructive actions, privacy, or irreversible state
 - critical constraints are missing but materially affect design direction
@@ -33,6 +35,7 @@ Escalate if:
 
 ## Core Defaults
 - Prefer outcome over proposed solution.
+- Prefer one chosen direction over carrying several product directions into engineering framing.
 - Keep statements concrete and testable.
 - Prefer explicit blockers over hidden assumptions.
 - Separate the desired behavior from any suggested mechanism.
@@ -89,7 +92,7 @@ A request is not ready when:
 - the output is too generic to guide challenge or design work
 
 ### Handoff
-- For a ready request, produce a compact handoff package: normalized problem, behavior delta, scope, constraints, assumptions, priority questions, and challenge recommendation.
+- For a ready request, produce a compact handoff package: normalized problem, behavior delta, scope, constraints, assumptions, priority questions, challenge recommendation, and the next specialist design lanes that should start from this frame.
 - For a blocked request, state the minimum additional data needed to get it ready.
 
 ## Readiness Bar
@@ -115,6 +118,7 @@ Optional when multiple directions are plausible:
 - `Approaches`
 
 ## Escalate Or Reject
+- a request that is still raw ideation rather than engineering framing
 - a proposed implementation being mistaken for the problem statement
 - a “simple” request that hides money, privacy, auth, destructive-action, or long-running-state semantics
 - contradictory constraints with no owner to resolve them

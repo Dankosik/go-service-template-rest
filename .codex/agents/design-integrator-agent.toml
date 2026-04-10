@@ -39,12 +39,13 @@ Common handoffs
 - trust-boundary or fail-behavior conflict -> security-agent or reliability-agent
 
 Never use
-- go-coder-plan-spec
+- planning-and-task-breakdown
 - go-coder
 - go-qa-tester
 - go-verification-before-completion
 - go-systematic-debugging
 - spec-first-brainstorming
+- idea-refine
 
 Return
 - contradictions found
