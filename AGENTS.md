@@ -17,8 +17,8 @@ Main-loop objective:
 - Keep `spec.md` as the canonical decisions artifact.
 
 Companion reference loading:
-- For non-trivial or agent-backed work, open `docs/spec-first-workflow.md` before workflow planning or subagent fan-out. It holds the detailed execution pattern, sequence examples, and artifact interplay that this file keeps concise.
-- For non-trivial work that reaches `technical design` or later, load `docs/repo-architecture.md` before rebuilding task-local design so stable repository architecture does not get re-derived every session.
+- For non-trivial or agent-backed work, open `docs/spec-first-workflow.md` before workflow planning or subagent fan-out. It holds the detailed execution pattern, sequence examples, and artifact interplay.
+- For non-trivial work that reaches `technical design` or later, load `docs/repo-architecture.md` before rebuilding task-local design so stable repository architecture is not re-derived every session.
 - If `AGENTS.md` and `docs/spec-first-workflow.md` ever diverge, follow `AGENTS.md` and then repair the drift.
 
 Short operating loop:
@@ -34,16 +34,16 @@ Short operating loop:
 10. Implement in the main flow.
 11. Run review, recheck, and validation only as far as task risk requires.
 
-For very small, low-risk tasks, keep workflow planning, research, synthesis, technical design, and implementation planning local. The explicit plan may be 1-3 concise lines in the main flow, with a design-skip rationale when needed. The invariants in this file still apply.
+For very small, low-risk tasks, keep workflow planning, research, synthesis, technical design, and implementation planning local. The plan may be 1-3 concise lines in the main flow, with a design-skip rationale when needed. The invariants still apply.
 
 ## 2. Hard invariants
 
 1. Final decisions always belong to the **orchestrator**.
 2. Subagents are always **research-only/read-only**: they must never write code, edit repository files, mutate git state, or change the implementation plan.
 3. Read-only is enforced by execution choice, not prompt wording alone: if a tool or agent surface cannot reliably stay read-only, keep that work in the main flow instead of delegating it.
-4. For non-trivial implementation work or implementation-skill handoff, the default artifact model is master `workflow-plan.md`, phase-local `workflow-plans/<phase>.md`, and the decision/design/execution chain `spec.md -> design/ -> plan.md`.
+4. For non-trivial implementation work or implementation-skill handoff, use master `workflow-plan.md`, phase-local `workflow-plans/<phase>.md`, and the chain `spec.md -> design/ -> plan.md`.
 5. `plan.md` is the dedicated coder-facing execution artifact for non-trivial work; `spec.md` alone is not a substitute for ordered coding steps.
-6. For non-trivial or agent-backed work, workflow planning must be explicit in master `workflow-plan.md` plus one `workflow-plans/<phase>.md` per named non-trivial phase; do not rely on orchestration kept only in chat or short-term memory.
+6. For non-trivial or agent-backed work, make workflow planning explicit in master `workflow-plan.md` plus one `workflow-plans/<phase>.md` per named non-trivial phase; do not keep orchestration only in chat or short-term memory.
 7. `workflow-plan.md` is the only cross-phase control artifact. `workflow-plans/<phase>.md` is phase-local only and must not replace `spec.md`, `design/`, or `plan.md`; `spec.md` stores final decisions, `design/` task-local technical design, and `research/*.md` validated research context.
 8. Phased implementation is the default for non-trivial work: `phase -> review/reconcile -> validate -> next phase`. Big-bang implementation requires explicit rationale.
 9. The main flow must **not** become a mandatory linear skill chain; skills are invoked **on demand**, not as ritual steps.
@@ -57,15 +57,15 @@ For very small, low-risk tasks, keep workflow planning, research, synthesis, tec
 17. No readiness or completion claim without fresh validation evidence.
 18. Do not treat a short subagent wait timeout as failure. When a subagent result is required for fan-in, review, or user-requested agent work, wait up to 20 minutes per cycle and keep polling unless the agent is clearly hung, superseded, or explicitly canceled by the user.
 19. A subagent pass uses **at most one skill**. If a question would benefit from multiple skills, split it into multiple lanes or keep synthesis local in the orchestrator.
-20. In `fan-out` mode, use as many read-only lanes as needed, including multiple lanes of the same subagent role when each has its own scope, question, and chosen skill; prefer slight over-coverage to leaving a material seam unexamined.
-21. For non-trivial work, one session owns one named phase. When it reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, mark the boundary, and stop. The next phase starts in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
+20. In `fan-out` mode, use as many read-only lanes as needed, including duplicate-role lanes when scope, question, or chosen skill differs; prefer slight over-coverage to leaving a material seam unexamined.
+21. For non-trivial work, one session owns one named phase. When it reaches its completion marker, update the owning artifact, current `workflow-plans/<phase>.md`, and master `workflow-plan.md`, mark the boundary, and stop. Start the next phase in a new session unless an upfront `direct path` or `lightweight local` waiver was recorded.
 
 Artifact phase boundary:
 - Pre-code phases (`workflow planning`, `research`, `specification`, `technical design`, and `planning`) are the only artifact-producing phases for workflow/process artifacts. The allowed pre-code artifact set is `workflow-plan.md`, `workflow-plans/<phase>.md`, `research/*.md`, `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, and optional `rollout.md`.
 - If the approved phase structure will use `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`, planning creates those phase-control files before implementation starts.
-- Post-code phases (`implementation`, `review`, `reconciliation`, and `validation`) are artifact-consuming. They may create approved codebase files when the approved plan requires them.
+- Post-code phases (`implementation`, `review`, `reconciliation`, and `validation`) are artifact-consuming. They may create approved codebase files when the plan requires them.
 - Once implementation begins, do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown. Post-code sessions may update only existing control/closeout surfaces such as `workflow-plan.md`, the current `workflow-plans/<phase>.md`, progress state in existing `plan.md`, and `spec.md` `Validation` or `Outcome`.
-- If a required artifact is missing or post-code work exposes missing context, stop, record the reopen target in existing control artifacts, and reopen the appropriate earlier phase in a new session instead of inventing new artifacts there.
+- If a required artifact is missing or post-code work exposes missing context, stop, record the reopen target in existing control artifacts, and reopen the appropriate earlier phase in a new session instead of inventing new artifacts.
 - Tiny or `direct path` work may skip parts of the pre-code artifact bundle with explicit rationale, but that exception does not authorize creating new workflow/process artifacts mid-implementation or mid-validation.
 
 ## 3. Authoring and intake rules
@@ -176,8 +176,7 @@ Before decomposition, clarify the minimum viable framing:
 
 Rules:
 - If the request is still idea-shaped, use `idea-refine` or equivalent local refinement to make the user/problem, success criteria, MVP, and not-doing boundary explicit before deeper design.
-- Do not force a structured intake template on the user.
-- Do not ask for fields that are not needed.
+- Do not force a structured intake template on the user or ask for fields that are not needed.
 - If uncertainty is material, record it as an assumption or open question instead of inventing data.
 - If critical uncertainty blocks a safe or durable decision, do research before deciding.
 
@@ -197,7 +196,7 @@ The orchestrator decides:
 - whether any upfront phase-collapse waiver is justified for `lightweight local` work,
 - whether later `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts will be required.
 
-For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation. The master file owns cross-phase control; the phase file owns phase-local orchestration only and must not become a second design bundle or `plan.md`. If the number of implementation phases is not known yet, say so and record the phased-delivery policy. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when used. Plan by lane, not by unique role name: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes.
+For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation. The master file owns cross-phase control; the phase file owns phase-local orchestration only. If the number of implementation phases is not known yet, say so and record the phased-delivery policy. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when used. Plan by lane, not by unique role name: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes.
 
 Use subagent fan-out when at least one is true:
 - the task crosses multiple domains,
@@ -207,7 +206,7 @@ Use subagent fan-out when at least one is true:
 - a review wave would reduce meaningful delivery risk,
 - the task is long enough to benefit from preserved validated research.
 
-Do not fan out when orchestration overhead adds more noise than clarity or when a planned track cannot be executed with read-only guarantees. For non-trivial tasks, record the chosen research mode (`local` or `fan-out`) and whether later separate `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are required before planning. In `fan-out`, optimize for domain coverage, not call minimization: enumerate materially affected domains, add enough lanes to cover them, and bias toward spawning when unsure. Duplicate or partially overlapping lanes are acceptable when they add a second opinion, isolate another seam, or let the same role run different one-skill passes; if two lanes need the same role with different skills or evidence questions, plan both explicitly. Once a task is in `fan-out` mode, prefer subagent-owned domain research and keep the orchestrator focused on routing, synthesis, challenge, reconciliation, and repository fact gathering. If any trigger for the next-higher execution shape becomes true during local work, escalate instead of staying on the smaller path. If the task already depends on stable repository structure or ownership context, load `docs/repo-architecture.md` before rebuilding that context inside a task-local design bundle.
+Do not fan out when orchestration overhead adds more noise than clarity or when a planned track cannot be kept read-only. For non-trivial tasks, record the chosen research mode (`local` or `fan-out`) and whether later separate `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are required before planning. In `fan-out`, optimize for domain coverage, not call minimization: enumerate materially affected domains, add enough lanes to cover them, and bias toward spawning when unsure. Duplicate or partially overlapping lanes are acceptable when they add a second opinion, isolate another seam, or let the same role run different one-skill passes; if two lanes need the same role with different skills or evidence questions, plan both explicitly. Once a task is in `fan-out` mode, prefer subagent-owned domain research and keep the orchestrator focused on routing, synthesis, challenge, reconciliation, and repository fact gathering. If a next-higher execution-shape trigger appears during local work, escalate. If the task depends on stable repository structure or ownership context, load `docs/repo-architecture.md` before rebuilding that context inside task-local design.
 
 ### 5.3 Run subagents and synthesize research
 
@@ -215,9 +214,9 @@ When using subagents:
 - pass only the **minimum relevant slice of context**,
 - use only read-only agent or tool surfaces for delegated work; write-capable delegate agents are out of policy for this workflow,
 - keep each subagent pass scoped to one question and one skill,
-- use enough lanes to cover every materially affected domain seam; keep independent tracks parallel by default, including multiple lanes of the same subagent role when scope, evidence target, or chosen skill differs,
+- use enough lanes to cover every materially affected domain seam; keep independent tracks parallel, including duplicate-role lanes when scope, evidence target, or chosen skill differs,
 - use multi-angle patterns for high-impact or ambiguous areas when needed,
-- if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, wait up to 20 minutes per cycle and treat short timeouts as “still running”; do not interrupt, close, or declare the subagent unavailable unless there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
+- if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, wait up to 20 minutes per cycle and treat short timeouts as “still running”; do not interrupt, close, or declare failure unless there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
 
 Useful multi-angle patterns:
 - `primary + challenger`
@@ -233,7 +232,7 @@ At fan-in, the orchestrator must:
 - trigger recheck when confidence is too low or the impact is too high,
 - not claim agent-backed synthesis, review coverage, or cross-checking if the needed subagents were interrupted, abandoned early, or never returned.
 
-For medium/high-risk or ambiguous work, candidate synthesis should be pressure-tested via a pre-spec challenge pass before specification and technical design.
+For medium/high-risk or ambiguous work, pressure-test candidate synthesis with a pre-spec challenge pass before specification and technical design.
 
 ### 5.4 Run a pre-spec challenge pass
 
@@ -247,24 +246,24 @@ Working model:
 - `research -> candidate synthesis -> pre-spec challenge -> (re-research if needed) -> final synthesis -> specification -> technical design -> planning`
 
 Challenge rules:
-- pass only the minimum relevant slice of context: problem frame, candidate decisions, constraints, assumptions or open questions, and evidence links when needed
+- pass only the minimum relevant context: problem frame, candidate decisions, constraints, assumptions or open questions, and evidence links when needed
 - ask only discriminating questions or challenge only assumptions whose answers could change scope, correctness, ownership, failure semantics, or rollout
-- keep output compact: challenged assumption or question, why it matters now, what changes if answered differently, blocker level, next action
+- keep output compact: challenged assumption or question, why it matters, what changes if answered differently, blocker level, next action
 - avoid checklist theater, generic “what about X?” prompts, or backdoor redesign
 
 Resolution rules:
 - the orchestrator must resolve each material challenge by answering with evidence, triggering targeted re-research, asking the user, explicitly deferring it, or explicitly rejecting it with rationale and accepted risk
-- if the challenge result says `re-research` or `blocks_specific_domain`, prefer reopening research through the relevant specialist lane instead of silently resolving the point with local orchestrator reasoning
+- if the challenge result says `re-research` or `blocks_specific_domain`, prefer reopening research through the relevant specialist lane instead of resolving the point only with local orchestrator reasoning
 - after targeted re-research, return through synthesis and rerun challenge when the reopened seam is still planning-critical
 - `spec.md` stores the final resolutions and remaining open questions, not the raw challenge transcript
 
 ### 5.5 Produce the technical design bundle
 
-After `spec.md` is stable, produce the task-local design bundle whenever the task is non-trivial enough that implementation should not proceed from `spec.md` alone.
+After `spec.md` is stable, produce the task-local design bundle whenever implementation should not proceed from `spec.md` alone.
 
 Load order:
-- start from `docs/repo-architecture.md` when stable repository boundaries or runtime flows matter,
-- then write only the task-local design context that changes or constrains this task.
+- start from `docs/repo-architecture.md` when stable repository boundaries or runtime flows matter
+- then write only the task-local design context that changes or constrains this task
 
 Required core design artifacts for non-trivial work:
 - `design/overview.md` — design entrypoint, chosen approach, artifact index, unresolved seams, and readiness summary
@@ -280,7 +279,7 @@ Conditional design artifacts:
 - `rollout.md` — create when the task needs migration sequencing, backfill/verify/contract choreography, mixed-version compatibility, or deploy/failback notes
 
 Rules:
-- keep `design/overview.md` as the bundle entrypoint instead of repeating each artifact in full,
+- keep `design/overview.md` as the bundle entrypoint instead of repeating each artifact,
 - keep artifact responsibilities sharp; do not push technical design back into `spec.md`,
 - use conditional artifacts only when triggered,
 - record artifact approval state and next action in the current phase workflow plan and master `workflow-plan.md`,
@@ -339,7 +338,7 @@ Optional context when useful:
 - depth/time/cost budget,
 - brevity preference.
 
-Subagents must not demand extra mandatory fields beyond what is needed to do the work. If a critical parameter is missing, proceed with an explicit assumption and visible risk note, or escalate back to the orchestrator.
+Subagents must not demand extra mandatory fields. If a critical parameter is missing, proceed with an explicit assumption and visible risk note, or escalate back to the orchestrator.
 
 ### 6.2 Execution rules
 
@@ -433,8 +432,7 @@ Taxonomy:
 - **direct-use** — rare; use only when explicitly requested or when delegation clearly adds more overhead than value
 
 Examples, if present in the toolchain:
-- `idea-refine` = **orchestrator-framing**
-- `spec-first-brainstorming` = **orchestrator-framing**
+- `idea-refine` / `spec-first-brainstorming` = **orchestrator-framing**
 - `planning-and-task-breakdown` = **orchestrator-planning**
 - `go-coder` = **orchestrator-implementation**
 
@@ -477,13 +475,13 @@ Rules:
 - Planning skills are allowed only in this phase.
 - `planning-and-task-breakdown` is the preferred planning skill when a non-trivial `plan.md` must be derived from approved `spec.md + design/`.
 - For `direct path` work, the explicit plan may be 1-3 concise lines in the main flow, and `technical design` may collapse locally or be skipped with an explicit rationale when the design bundle adds no real clarity.
-- For non-trivial work, planning is the last artifact-producing phase before code. The default phase order is `specification -> technical-design -> planning -> implementation-phase-N`, with optional `review-phase-N` and `validation-phase-N` when the control loop explicitly calls for them; the workflow/design/planning bundle consumed by execution must already exist or be explicitly waived.
+- For non-trivial work, planning is the last artifact-producing phase before code. The default phase order is `specification -> technical-design -> planning -> implementation-phase-N`, with optional `review-phase-N` and `validation-phase-N` when the control loop calls for them; the workflow/design/planning bundle consumed by execution must already exist or be explicitly waived.
 - Do not move from one pre-code moment to the next in the same session unless an upfront `direct path` or `lightweight local` waiver was recorded before the boundary is crossed.
-- For non-trivial implementation work, long or parallelized execution, or any implementation-skill handoff, create a separate `plan.md` for the coder. `spec.md` and `design/` must not force the coder to reverse-engineer execution order alone.
-- For non-trivial work, phased execution is the default. `plan.md` should usually use small reviewable phases with explicit tasks, acceptance criteria, planned verification, exit criteria, and any review/reconciliation checkpoint before the next phase. A single-pass implementation plan requires explicit rationale in both `workflow-plan.md` and `plan.md`.
+- For non-trivial implementation work, long or parallelized execution, or any implementation-skill handoff, create a separate `plan.md`. `spec.md` and `design/` must not force the coder to reverse-engineer execution order alone.
+- For non-trivial work, phased execution is the default. `plan.md` should usually use small reviewable phases with explicit tasks, acceptance criteria, planned verification, exit criteria, and any review/reconciliation checkpoint. A single-pass implementation plan requires explicit rationale in both `workflow-plan.md` and `plan.md`.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when the work can be structured either way.
 - Use task sizing and checkpointing to keep each task small enough to implement, verify, and review without re-planning the whole feature.
-- If the workflow will use `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`, create them during planning from the approved phase structure. Post-code phases may update them, but must not create them. Each named implementation phase should usually consume its own session; start the next in a new session after the prior checkpoint closes.
+- If the workflow will use `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md`, create them during planning from the approved phase structure. Post-code phases may update them, not create them. Each named implementation phase should usually consume its own session.
 - Prefer sequential phases by default. Use parallel lanes only when the change surfaces are truly disjoint and the review/validation story stays clear.
 - The master workflow plan should call out up front whether later `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts will be required.
 - Planning must remain consistent with the decision log and open risks.
@@ -494,13 +492,13 @@ Rules:
 Implementation happens in the main flow under orchestrator control.
 
 Rules:
-- treat implementation as an artifact-consuming phase: consume approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created phase-control files,
-- create code, test, migration, config, generation-input, and generated artifacts only when the approved plan requires them,
-- keep code and existing phase-control artifacts aligned as work progresses,
-- use implementation skills only in this phase,
-- allowed post-code artifact updates are limited to existing control/progress surfaces such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress status in existing `plan.md`,
-- do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown once implementation has started,
-- if implementation reveals a real design or planning gap, stop, record the reopen in existing control artifacts, and return to the appropriate earlier phase in a new session instead of silently drifting or inventing new artifacts here,
+- treat implementation as an artifact-consuming phase: consume approved `spec.md`, `design/`, `plan.md`, optional `test-plan.md`, optional `rollout.md`, and any pre-created phase-control files
+- create code, test, migration, config, generation-input, and generated artifacts only when the approved plan requires them
+- keep code and existing phase-control artifacts aligned as work progresses
+- use implementation skills only in this phase
+- allowed post-code artifact updates are limited to existing control/progress surfaces such as the current `workflow-plan.md`, the active `workflow-plans/implementation-phase-N.md`, and checkpoint or progress status in existing `plan.md`
+- do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown once implementation has started
+- if implementation reveals a real design or planning gap, stop, record the reopen in existing control artifacts, and return to the appropriate earlier phase in a new session instead of silently drifting or inventing new artifacts here
 - keep changes scoped to the agreed problem unless scope is intentionally expanded and recorded.
 
 ### 8.3 Review and reconciliation
@@ -521,29 +519,19 @@ When change size or risk justifies it:
 Validation must be the **smallest sufficient proof set** that matches task risk.
 
 Rules:
-- treat validation as an artifact-consuming phase that uses approved artifacts plus fresh proof,
-- run fresh commands or checks,
-- prefer evidence over narrative,
-- allowed post-code artifact updates are limited to existing closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/validation-phase-N.md` when one was created before implementation, checkpoint or progress state in existing `plan.md` when needed, and `spec.md` `Validation` or `Outcome`,
+- treat validation as an artifact-consuming phase that uses approved artifacts plus fresh proof
+- run fresh commands or checks
+- prefer evidence over narrative
+- allowed post-code artifact updates are limited to existing closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/validation-phase-N.md` when one was created before implementation, checkpoint or progress state in existing `plan.md` when needed, and `spec.md` `Validation` or `Outcome`
 - do not create new workflow/process/planning/design/temp artifacts during validation; if a required control file or context is missing, reopen planning or the relevant earlier phase instead of creating it here,
 - do not claim readiness or completion without fresh command evidence,
 - update `Outcome` so it reflects reality, not intent.
 
 ## 9. Artifacts, audit trail, and traceability
 
-Default layout:
+Default layout: `specs/<feature-id>/spec.md`
 
-```text
-specs/<feature-id>/
-  spec.md
-```
-
-Repository-wide stable architecture baseline:
-
-```text
-docs/
-  repo-architecture.md
-```
+Repository-wide stable architecture baseline: `docs/repo-architecture.md`
 
 Non-trivial task-local artifact bundle:
 
@@ -578,23 +566,21 @@ Artifact rules:
 - `spec.md` is the canonical decisions artifact.
 - `workflow-plan.md` is the orchestrator's master control artifact for non-trivial or agent-backed work. It owns cross-phase routing, current phase, artifact status, next session, blockers, and phase-plan links/status.
 - `workflow-plans/<phase>.md` is the phase-local plan for one named phase only. It owns phase-local orchestration, order/parallelism, fan-in/challenge path when relevant, completion marker, stop rule, next action, and parallelizable work.
-- The required core design bundle for non-trivial work is `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md`.
-- Conditional artifacts are `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, and `rollout.md`.
+- The required core design bundle for non-trivial work is `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md`; conditional artifacts are `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, and `rollout.md`.
 - `design/` stores task-specific technical design context. For non-trivial work, planning should not proceed from `spec.md` alone.
 - `research/*.md` stores reusable validated research context, not final authority on decisions.
 - `plan.md` is the dedicated coder-facing execution plan when implementation should not be driven from `spec.md` alone, especially for non-trivial implementation work, implementation-skill handoff, or parallelized execution. For non-trivial work, derive it from approved `spec.md + design/` and usually organize it into phases or increments.
-- Pre-code phases normally get their own `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`.
-- Post-code phases are conditional, but their control artifacts are still pre-code artifacts: when the approved phase structure uses them, planning creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` before implementation starts, and later post-code sessions update those files instead of creating them mid-execution.
+- Pre-code phases normally get `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`. If the approved phase structure uses post-code control files, planning creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` before implementation starts; later post-code sessions only update them.
 - `workflow-plans/<phase>.md` must not replace the master `workflow-plan.md`, must not become a second design bundle, and must not become a second `plan.md`.
 - Do not duplicate decision text across files; link instead.
 - Create `research/*.md` only when the task is long, ambiguous, or likely to benefit from reusable validated context.
 
 Update cadence:
 - After framing: update `Context`, `Scope / Non-goals`, and `Constraints` as needed.
-- After workflow planning: update master `workflow-plan.md` with the execution shape, current phase, artifact status, next session, blockers, phase-plan links/status, phased execution policy, and whether later `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are expected. Update the current `workflow-plans/<phase>.md` with phase-local orchestration, research mode when relevant, lanes, order/parallelism, fan-in/challenge path, phase status, completion marker, stop rule, next action, blockers, and parallelizable work.
+- After workflow planning: update master `workflow-plan.md` with execution shape, current phase, artifact status, next session, blockers, phase-plan links/status, phased execution policy, and whether later `workflow-plans/`, `design/`, `plan.md`, `test-plan.md`, or `rollout.md` artifacts are expected. Update the current `workflow-plans/<phase>.md` with phase-local orchestration, research mode when relevant, lanes, order/parallelism, fan-in/challenge path, phase status, completion marker, stop rule, next action, blockers, and parallelizable work.
 - After synthesis: update `Decisions`, `Open Questions / Assumptions`, and any material challenge resolutions, rejected paths, or overrides, then stabilize the decision record in `spec.md`.
 - After technical design: add or update the required core design artifacts plus any triggered conditional artifacts, and record their approval state in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
-- Before coding: make the coder-facing implementation plan explicit in the main flow or `plan.md`. For non-trivial work, plan from approved `spec.md + design/`, keep the corresponding planning summary or link in `spec.md`, and create any later implementation/review/validation phase workflow files the approved phase structure will use.
+- Before coding: make the coder-facing implementation plan explicit in the main flow or `plan.md`. For non-trivial work, plan from approved `spec.md + design/`, keep the planning summary or link in `spec.md`, and create any later implementation/review/validation phase workflow files the approved phase structure will use.
 - After any phase reaches its completion marker: update the owning artifact, the current `workflow-plans/<phase>.md`, and master `workflow-plan.md`; set `Session boundary reached: yes`, set `Ready for next session` appropriately, record `Next session starts with`, and stop instead of beginning the next phase in the same session.
 - After each implementation checkpoint: update only the existing phase-control artifacts and checkpoint state that the current phase already owns. If a needed workflow/process artifact is missing, reopen planning or the relevant earlier phase instead of creating it mid-implementation.
 - After validation: update existing closeout artifacts, including `spec.md` `Validation` and `Outcome`, to match reality. If the expected validation-phase control file is missing, reopen the appropriate earlier phase instead of creating it during closeout.
@@ -614,7 +600,7 @@ Resume rules:
 - infer stage from artifacts, not memory,
 - use `Current phase`, `Phase status`, `Session boundary reached`, and `Ready for next session` from master `workflow-plan.md` as the first session-control signals,
 - if the current phase points at a missing `workflow-plans/<phase>.md`, treat the phase workflow record as incomplete rather than silently reconstructing it from memory,
-- no approved `spec.md` means framing/specification is not complete; approved `spec.md` without an approved design bundle means `technical design` is not complete; approved design bundle without an approved `plan.md` means planning is not complete; approved `plan.md` means implementation-ready,
+- no approved `spec.md` means framing/specification is incomplete; approved `spec.md` without an approved design bundle means `technical design` is incomplete; approved design bundle without an approved `plan.md` means planning is incomplete; approved `plan.md` means implementation-ready,
 - if `Session boundary reached: yes`, start a new session for the recorded next phase instead of continuing in the same session,
 - if `Ready for next session: no`, resume the same session-bounded phase rather than jumping forward,
 - if a tiny or `direct path` task intentionally skips `workflow-plan.md`, `workflow-plans/`, `design/`, or a separate `plan.md`, record that skip rationale in the main flow so later resume does not guess.
@@ -635,15 +621,13 @@ Rules:
 - Put final decisions in `Decisions`, not raw research narratives.
 - Link to `research/*.md` when evidence history matters.
 
-For non-trivial tasks, keep a compact audit trail that is sufficient to reconstruct the path:
+For non-trivial tasks, keep a compact audit trail sufficient to reconstruct the path:
 - intake summary plus idea-refinement result or explicit skip rationale when the request started as a raw concept,
 - execution shape and research-mode decision (`local` or `fan-out`),
 - master `workflow-plan.md` plus the relevant `workflow-plans/<phase>.md`, including subagent lanes, order/parallelism, fan-in/challenge path, current phase, next action, blockers, session-boundary state, and artifact status,
 - `docs/repo-architecture.md` when the repository baseline materially shaped the task-local design,
 - research questions or subagent tracks, plus challenge resolutions or skip rationale when the checkpoint was material,
-- decision log,
-- design-bundle status,
-- material overrides or rejected paths,
+- decision log, design-bundle status, and any material overrides or rejected paths,
 - open questions with owner and unblock condition,
 - plan/task-breakdown status,
 - validation evidence,
@@ -680,16 +664,13 @@ Anti-patterns:
 - treating `workflow-plan.md` as a one-time pre-research note instead of the live master control artifact,
 - letting `workflow-plans/<phase>.md` replace the master `workflow-plan.md` or grow into a competing design or execution artifact,
 - finishing one non-trivial phase and casually starting the next one in the same session without an upfront recorded waiver,
-- spawning write-capable delegate agents under the subagent role instead of keeping those tasks in the main flow,
-- treating a single subagent output as truth,
-- copying raw subagent reasoning into `spec.md`,
-- letting subagents write code or mutate repository files,
+- spawning write-capable delegate agents under the subagent role, or otherwise letting subagents write code or mutate repository files,
+- treating a single subagent output as truth or copying raw subagent reasoning into `spec.md`,
 - running non-trivial implementation as one big-bang pass without explicit phase checkpoints,
 - forcing the coder to reconstruct technical context or execution order from `spec.md` alone when the task already needs `design/` and a separate `plan.md`,
 - starting implementation before the planning step is explicit,
 - filling optional sections or artifacts with placeholder text,
-- turning pre-spec challenge into ritualized coverage or fixed-question theater,
-- turning review into ritual coverage instead of real risk reduction,
+- turning pre-spec challenge or review into ritual coverage instead of targeted risk reduction,
 - allowing a local fix to create an unexamined cross-domain regression.
 
 ## 11. Maintenance notes
