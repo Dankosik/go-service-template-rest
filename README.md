@@ -1,5 +1,7 @@
 # Go Service Template REST
 
+Hello from claude code
+
 AI-native Go REST template for solo developers who want coding agents that can work inside real Go constraints.
 
 Generic AI-native repos are good at teaching agents how to spec, plan, and delegate. They are usually much weaker at teaching them how to operate inside idiomatic Go boundaries, preserve invariants, work with `context`, respect generated artifacts, reason about `chi` and `sqlc`, and ship code that survives review. `go-service-template-rest` is built around that exact gap.
@@ -143,6 +145,12 @@ Click a skill name to open its canonical instruction file.
 | [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations | test code itself needs to be added or upgraded |
 | [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
 | [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence | you are about to say “fixed”, “ready”, or “done” |
+
+### Prompt Composition And Tooling
+
+| Skill | What it does | Load when |
+|---|---|---|
+| [`ru-agent-prompt-composer`](.agents/skills/ru-agent-prompt-composer/SKILL.md) | turns messy Russian task descriptions into a strong English prompt for coding agents working in this repository | rough Russian or mixed-language notes need intent reconstruction, repo-aware context selection, and a downstream-agent-ready prompt instead of plain translation |
 
 ### System Design And Control Surfaces
 

@@ -558,3 +558,5 @@ Anti-patterns:
 - Validate structured outputs and tool-backed claims before acting.
 - For knowledge-intensive claims, prefer repository evidence, retrieval, or explicit command/tool evidence over memory.
 - Long reasoning is not evidence; evidence, tests, and validation logs are.
+
+@RTK.md

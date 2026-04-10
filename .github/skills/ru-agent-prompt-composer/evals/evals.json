@@ -1,0 +1,47 @@
+{
+  "skill_name": "ru-agent-prompt-composer",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Use the ru-agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/ru-agent-prompt-composer/evals/files/http-options-cors-ru.md` and return only the final English prompt.",
+      "expected_output": "An English prompt that frames a focused HTTP policy bugfix around OPTIONS, Allow headers, preflight/CORS behavior, and problem+json stability, using the repo's HTTP surfaces instead of generic translation.",
+      "files": [
+        "evals/files/http-options-cors-ru.md"
+      ],
+      "expectations": [
+        "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
+        "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
+        "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
+        "The response includes a realistic scoped verification path rather than only generic repository-wide checks."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Use the ru-agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/ru-agent-prompt-composer/evals/files/skill-tooling-ru.md` and return only the final English prompt.",
+      "expected_output": "An English prompt that frames a repo-local skill/tooling task, points to the canonical skill surfaces and mirror sync flow, and makes it clear this is not plain translation work.",
+      "files": [
+        "evals/files/skill-tooling-ru.md"
+      ],
+      "expectations": [
+        "The response makes the skill local to this repository and does not drift into a global solution.",
+        "The response names `.agents/skills` and the existing mirror sync flow such as `scripts/dev/sync-skills.sh` or `make skills-sync`.",
+        "The response explicitly treats the task as intent reconstruction / prompt composition rather than literal translation.",
+        "The response includes examples, evals, or validation expectations as part of the deliverable."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use the ru-agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/ru-agent-prompt-composer/evals/files/flaky-shutdown-ru.md` and return only the final English prompt.",
+      "expected_output": "An English prompt that frames a shutdown/drain flake as an investigation-first bugfix, points to bootstrap and readiness surfaces, and favors race/integration-aware proof over timeout inflation.",
+      "files": [
+        "evals/files/flaky-shutdown-ru.md"
+      ],
+      "expectations": [
+        "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
+        "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
+        "The response does not treat increasing timeouts as the primary solution.",
+        "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit."
+      ]
+    }
+  ]
+}
