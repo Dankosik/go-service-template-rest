@@ -71,7 +71,7 @@ When you load a reference, translate the example into the current diff's concret
 ### Determinism And Isolation
 - Flag uncontrolled time, randomness, shared global state, environment leakage, and nondeterministic external dependencies.
 - Reject sleep-based synchronization when deterministic coordination is required.
-- Require `t.Parallel()` only when isolation is explicit.
+- Ask for or accept `t.Parallel()` only when isolation is explicit.
 - Expect race validation when changed code or tests are concurrency-sensitive.
 
 ### Validation Readiness

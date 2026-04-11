@@ -14,6 +14,7 @@ Load when the proof type is still a decision: benchmark, scenario test, profile,
 - Mutex/block profile or runtime trace: use when CPU is idle, goroutines block, fan-out is suspicious, or scheduler/queueing timeline matters.
 - Canary or production telemetry: use when real traffic mix, tenant skew, deployment shape, DB/cache state, or network behavior dominates.
 - Require the same workload labels, environment/runtime class, repeat count, and thresholds for baseline and candidate.
+- Collect one profiler or trace class per proof run unless the spec explicitly accepts diagnostic interference; if block or mutex profiles are selected, name the sampling or test flag that enables them.
 
 ## Imitate
 - Allocation regression: require `go test -bench` with `-benchmem -count=20`, `benchstat`, and heap profile comparison only if allocation/op or bytes/op worsens above the accepted threshold. Copy the escalation rule.
@@ -24,7 +25,7 @@ Load when the proof type is still a decision: benchmark, scenario test, profile,
 ## Reject
 - Microbenchmark-only approval for a user-visible p99 request path with DB, cache, network, and JSON.
 - Rerunning benchmarks until `benchstat` looks favorable. The count and comparison rule must be fixed in the spec.
-- Capturing CPU, heap, mutex, and block profiles together and treating all outputs as precise.
+- Capturing multiple interference-prone profiles together and treating all outputs as precise.
 - A runtime trace as primary proof for CPU-bound compression.
 
 ## Agent Traps
@@ -40,8 +41,10 @@ Use commands like these only after substituting the repository package, benchmar
 go test -run='^$' -bench='BenchmarkTarget$' -benchmem -count=20 ./internal/pkg > old.txt
 go test -run='^$' -bench='BenchmarkTarget$' -benchmem -count=20 ./internal/pkg > new.txt
 benchstat old.txt new.txt
-go test -run='^$' -bench='BenchmarkTarget$' -cpuprofile cpu.pprof -memprofile mem.pprof ./internal/pkg
+go test -run='^$' -bench='BenchmarkTarget$' -cpuprofile cpu.pprof ./internal/pkg
 go tool pprof -top cpu.pprof
+go test -run='^$' -bench='BenchmarkTarget$' -memprofile mem.pprof ./internal/pkg
+go tool pprof -top mem.pprof
 go test -run='^$' -bench='BenchmarkTarget$' -trace trace.out ./internal/pkg
 go tool trace trace.out
 ```

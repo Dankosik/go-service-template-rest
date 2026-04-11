@@ -12,9 +12,9 @@ Keep findings local: review whether this changed call is safe to retry and bound
 - Retries are added for all errors, all HTTP 5xx statuses, or all `net.Error`s without checking the operation class.
 - Mutating operations retry without an idempotency key, conditional write, dedup key, or safe natural idempotency.
 - Retries ignore `ctx.Err()` and keep going after cancellation.
-- Backoff has no cap, no jitter, or no maximum attempt count.
+- Backoff has no cap, no maximum attempt count, or no jitter where repeated/correlated retries can align.
 - A new retry wraps a client library that already retries, creating layered retry amplification.
-- Retry loops include validation, auth, not-found, conflict, or caller-canceled failures.
+- Retry loops include validation, auth, caller-canceled, or unqualified not-found/conflict failures.
 - The retry budget resets inside a loop, goroutine, or recursive helper.
 - Logs report every failed attempt at error level and can flood during partial outages.
 
@@ -101,6 +101,7 @@ Reject when the nested client retry makes the actual attempt budget multiplicati
 ## Agent Traps
 - Do not recommend retries before proving the error class and operation are retry-safe.
 - Do not treat all `5xx`, `net.Error`, or timeout errors as retryable; caller cancellation and overloaded dependencies can be made worse by retry.
+- Do not treat `404` or conflict as permanently non-retryable when the repository has an explicit eventual-consistency, read-after-write, or optimistic-concurrency retry contract. Require that contract instead of relying on the status class alone.
 - Do not ask for idempotency keys on naturally idempotent reads; focus the finding on duplicate effects.
 - Do not over-focus on jitter if the larger defect is replay safety or an unbounded budget.
 - Do not report every verbose per-attempt log as reliability risk unless partial outages can flood logs or alerts.

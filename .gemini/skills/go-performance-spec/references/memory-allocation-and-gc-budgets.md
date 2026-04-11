@@ -22,7 +22,7 @@ Load when the performance spec must define allocation rate, bytes/op, live heap,
 ## Reject
 - "Reduce allocations" with no path, workload, bytes/op target, or user/system consequence.
 - Lowering `GOGC` to reduce peak memory without stating the expected GC CPU and latency trade-off.
-- Approving `GOMEMLIMIT` as a safety net while the expected live heap can exceed the limit.
+- Approving `GOMEMLIMIT` as a hard OOM guard while expected live heap plus runtime overhead is already close to the limit.
 - Using a heap profile alone to prove request latency improvement when the acceptance budget is p99 latency under load.
 
 ## Agent Traps

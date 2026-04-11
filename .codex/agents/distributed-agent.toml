@@ -1,3 +1,5 @@
+name = "distributed-agent"
+description = "Read-only distributed systems subagent for cross-service consistency and recovery."
 sandbox_mode = "read-only"
 
 developer_instructions = """

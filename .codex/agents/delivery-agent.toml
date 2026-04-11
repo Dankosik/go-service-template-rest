@@ -1,3 +1,5 @@
+name = "delivery-agent"
+description = "Read-only delivery subagent for CI/CD gates, rollout policy, and release safety."
 sandbox_mode = "read-only"
 
 developer_instructions = """

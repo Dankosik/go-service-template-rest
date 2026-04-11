@@ -1,3 +1,5 @@
+name = "concurrency-agent"
+description = "Read-only concurrency review subagent for goroutines, channels, and shutdown safety."
 sandbox_mode = "read-only"
 
 developer_instructions = """

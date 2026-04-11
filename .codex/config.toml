@@ -1,55 +1,45 @@
+[agents]
+max_threads = 20
+max_depth = 1
+
 [agents."api-agent"]
-description = "Read-only API contract subagent for client-visible REST and transport semantics."
 config_file = "agents/api-agent.toml"
 
 [agents."architecture-agent"]
-description = "Read-only architecture subagent for boundaries, ownership, and interaction style."
 config_file = "agents/architecture-agent.toml"
 
 [agents."concurrency-agent"]
-description = "Read-only concurrency review subagent for goroutines, channels, and shutdown safety."
 config_file = "agents/concurrency-agent.toml"
 
 [agents."challenger-agent"]
-description = "Read-only pre-spec challenge subagent for hidden assumptions, corner cases, and planning-risk pressure tests."
 config_file = "agents/challenger-agent.toml"
 
 [agents."data-agent"]
-description = "Read-only data subagent for ownership, schema, transactions, and cache rules."
 config_file = "agents/data-agent.toml"
 
 [agents."delivery-agent"]
-description = "Read-only delivery subagent for CI/CD gates, rollout policy, and release safety."
 config_file = "agents/delivery-agent.toml"
 
 [agents."design-integrator-agent"]
-description = "Read-only design integration subagent for reconciling multi-domain design tradeoffs."
 config_file = "agents/design-integrator-agent.toml"
 
 [agents."distributed-agent"]
-description = "Read-only distributed systems subagent for cross-service consistency and recovery."
 config_file = "agents/distributed-agent.toml"
 
 [agents."domain-agent"]
-description = "Read-only domain subagent for business invariants and state transitions."
 config_file = "agents/domain-agent.toml"
 
 [agents."performance-agent"]
-description = "Read-only performance subagent for budgets, bottlenecks, and measurement-driven guidance."
 config_file = "agents/performance-agent.toml"
 
 [agents."qa-agent"]
-description = "Read-only QA subagent for test obligations and validation readiness."
 config_file = "agents/qa-agent.toml"
 
 [agents."quality-agent"]
-description = "Read-only maintainability review subagent for idiomatic Go and simplification risk."
 config_file = "agents/quality-agent.toml"
 
 [agents."reliability-agent"]
-description = "Read-only reliability subagent for timeouts, retries, degradation, and lifecycle safety."
 config_file = "agents/reliability-agent.toml"
 
 [agents."security-agent"]
-description = "Read-only security subagent for trust boundaries, auth, isolation, and fail-closed behavior."
 config_file = "agents/security-agent.toml"

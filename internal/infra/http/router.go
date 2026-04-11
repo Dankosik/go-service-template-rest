@@ -81,13 +81,15 @@ func applyHTTPPolicy(root chi.Router) {
 
 	root.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		allowMethods := allowedMethodsForPath(root, r.URL.Path)
+		if len(allowMethods) > 0 {
+			allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
+		}
 
 		if r.Method == http.MethodOptions {
 			if len(allowMethods) == 0 {
 				writeProblem(w, r, http.StatusNotFound, "not found", "resource not found")
 				return
 			}
-			allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
 			setAllowHeader(w, allowMethods)
 
 			if isCORSPreflightRequest(r) {

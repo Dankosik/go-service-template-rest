@@ -31,7 +31,9 @@ type statusWriter struct {
 }
 
 func (w *statusWriter) WriteHeader(code int) {
-	w.status = code
+	if code >= 200 && w.status == 0 {
+		w.status = code
+	}
 	w.ResponseWriter.WriteHeader(code)
 }
 
@@ -40,6 +42,10 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 		w.status = http.StatusOK
 	}
 	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func RequestCorrelation(next http.Handler) http.Handler {

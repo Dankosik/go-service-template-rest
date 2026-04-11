@@ -6,7 +6,7 @@ description: "Review Go code changes for lower cognitive complexity, false-simpl
 # Go Language Simplifier Review
 
 ## Purpose
-Protect local reasoning quality in changed Go code without endorsing refactors that only reduce line count while hiding policy, state transitions, ownership, or caller-visible semantics.
+Protect local reasoning quality in changed Go code without endorsing refactors that only reduce line count while hiding policy, state transitions, ownership, cleanup, error contracts, or caller-visible semantics.
 
 ## Specialist Stance
 - Treat simplicity as reduced reasoning load, not lower line count.
@@ -25,16 +25,34 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 - If approved task artifacts exist, treat them as governing intent.
 - Findings come first and must be ordered by merge risk, not by section order or taste.
 - Green tests do not prove a cleanup preserved local reasoning safety.
-- Always run a source-of-truth helper pass: flag both stable same-package policy still scattered across files and bogus extraction into vague helper buckets.
+- Always check touched helper or policy changes for source-of-truth drift: flag stable same-package policy still scattered across files and bogus extraction into vague helper buckets only when there is concrete future-change risk.
+- Prefer official Go docs, Go Code Review Comments, Go module/package organization docs, and repository-local review patterns over external clean-code advice. Treat Effective Go as enduring core-language idiom guidance, not sole authority for modules, generics, or newer standard-library behavior; treat generic clean-code material as calibration only.
 
 ## Scope
 - review control flow, state shape, and predicate clarity
 - review abstraction cost, helper economics, and call-site burden
 - review false simplification in error paths, ownership seams, and thin policy wrappers
-- review whether stable same-package policy is scattered across files when one seam-named helper file should own it
+- review whether stable same-package policy is scattered across files when one seam-named helper or local owner should own it
 - review whether a new helper actually reduces reasoning or just hides policy in a `util/common/shared` bucket
 - review naming and test readability when they materially affect safe future changes
 - review whether touched validation is enough to protect subtle precedence or branch behavior
+
+## Reference Files Selector
+References are compact rubrics and example banks, not exhaustive checklists or Go documentation. Load at most one reference by default: choose the file whose symptom best matches the primary review pressure. Load a second reference only when the diff clearly spans multiple independent decision pressures, and name both references in the finding only if each materially shaped the review judgment.
+
+Use `false-simplification-patterns.md` as broad challenge/smell triage only when no narrower positive reference owns the risk.
+
+| Reference | Symptom | Behavior Change |
+| --- | --- | --- |
+| `references/false-simplification-patterns.md` | broad cleanup, deduplication, readability, or DRY claim spans several axes and no narrower reference dominates | makes the model challenge line-count reduction and identify hidden semantics instead of accepting shorter code as simpler |
+| `references/helper-extraction-economics.md` | helpers, wrappers, interfaces, option bags, callbacks, or helper buckets were added, removed, renamed, or generalized | makes the model judge whether a helper compresses stable policy at the call site instead of treating wrappers as automatically good or bad |
+| `references/source-of-truth-extraction.md` | stable same-package policy is repeated, drifting, or moved away from its owner | makes the model choose a seam-named local owner instead of tolerating drift-prone copies or extracting to global `common` code |
+| `references/control-flow-and-temporal-coupling.md` | branching, guard clauses, sentinels, named returns, defer, cleanup, rollback, audit, or phase ordering changed | makes the model protect explicit side-effect and error precedence instead of praising flatter control flow that hides temporal coupling |
+| `references/predicate-condition-and-mode-clarity.md` | compound predicates, negative conditions, boolean clusters, raw modes, same-typed args, or option decoding make a decision hard to read | makes the model preserve call-site decision clarity instead of accepting shorter conditions or generic predicate helpers |
+| `references/error-path-simplification.md` | error handling was deduplicated, wrapped, normalized, mapped, logged, joined, or reordered | makes the model protect inspectability, status mapping, cancellation, and cleanup precedence instead of accepting generic error helpers |
+| `references/test-readability-and-proof-shape.md` | tests were simplified with tables, helpers, assertions, fixtures, or terse failure messages that may hide proof intent | makes the model protect readable setup, trigger, and assertion shape instead of approving test shortcuts that obscure what behavior is proven |
+| `references/naming-and-intent-exposure.md` | names, receiver names, helper names, comments, exported identifiers, or feature vocabulary drift obscure role, phase, ownership, or policy | makes the model treat naming as merge-risk only when it changes intent exposure instead of raising taste-only rename comments |
+| `references/go-semantic-stop-signs.md` | simplification touches clone/copy isolation, nil versus empty behavior, receiver or method-set shape, zero-value usability, cleanup ownership, or stdlib wrapper contracts | makes the model stop before flagging protective Go semantics as clutter and route deep semantic questions to `go-idiomatic-review` |
 
 ## Boundaries
 Do not:
@@ -54,68 +72,17 @@ Do not:
 - Prefer the smallest change that makes intent obvious on first read.
 
 ## Expertise
-
-### Risk Calibration And False Simplification
-- Prioritize cases where a cleanup merges distinct behaviors, changes precedence, or makes side effects harder to trace.
-- Treat line-count reduction, helper extraction, and deduplication as non-wins unless the reader now tracks fewer branches, locals, or hidden modes.
-- Separate structural duplication from semantic duplication. Repeated shape is acceptable when each branch still owns different policy or externally visible behavior.
-- Flag "refactors" that mostly move complexity out of sight rather than removing it.
-
-### Abstraction Judgment And Helper Economics
-- Flag single-use helpers, pass-through wrappers, and extract-method fan-out that force the reader to bounce across functions just to reconstruct one local decision.
-- Keep helpers when they isolate stable policy, ownership, defaulting, lock scope, cleanup scope, stdlib quirks, or error normalization.
-- Distinguish dead wrappers from thin policy seams. A helper can be only a few lines long and still matter because it clones data, preserves `errors.Is/As`, applies operation labels, or owns cleanup.
-- Prefer inlining when the helper name adds no semantic compression and the body is the only place the logic is used.
-
-### Source-Of-Truth Extraction Judgment
-- Flag under-extraction when the same package carries repeated stable policy across files, especially normalization, mapping, validation, classification, section-reading, or label-shaping rules that are likely to drift if left file-local.
-- Prefer one seam-named same-package helper file over multiple file-local copies when all three are true:
-  - the logic names one stable domain noun or seam
-  - the failure or ownership contract stays the same across call sites
-  - the extraction reduces future drift without requiring mode flags, callbacks, or caller branching
-- Flag over-extraction when helpers are named `util`, `utils`, `common`, `shared`, `helpers`, or similarly vague terms and the reader still has to rediscover the real policy elsewhere.
-- Be skeptical of extracted helpers that need booleans, strings, callbacks, or option bags just to serve several call sites; they often merge distinct policy while pretending to simplify.
-- Keep orchestration local. Response lifecycle, request flow, startup flow, and other phase-ordering logic should not be pulled into generic helpers just to reduce line count.
-
-### Control Flow, State Shape, And Temporal Coupling
-- Prefer a straight-line happy path with guard clauses when side-effect ordering remains explicit.
-- Flag delayed interpretation via cross-branch sentinels such as `status`, `action`, `mode`, booleans, or shared `err` values that are only decoded at the tail.
-- Narrow lifetimes of mutable locals. The more facts a reader must carry until the end of the function, the higher the merge risk.
-- Treat manual phase machines encoded in locals or strings as simplification debt when explicit branch outcomes would be clearer.
-- When flattening control flow, verify that side-effect order, deferred cleanup, and which error wins stay unchanged.
-
-### Predicate And Condition Clarity
-- Flag compound and negative predicates that force mental De Morgan expansion or hidden mode decoding.
-- Treat clusters of booleans as hidden modes. Several flags often encode state that should be named explicitly.
-- Prefer predicates that expose the decision being made, not the mechanics of how the inputs were derived.
-- Be careful with extracted predicate helpers that hide policy terms the reader must still unpack elsewhere.
-
-### API Surface And Call-Site Burden
-- Flag flag-heavy signatures, same-typed positional parameters, raw strings with hidden meaning, `map[string]any` option blobs, and config decoding spread across the callee.
-- Reject "simplifications" that replace useful small types, enums, or named options with shorter but more opaque call sites.
-- For exported symbols, distinguish local cleanup from contract-shape change. If the public surface must move, escalate instead of treating it as casual simplification.
-- Prefer one obvious way to call the function over highly configurable but cognitively heavy surfaces.
-
-### Error-Path Simplification And Semantic Preservation
-- Keep distinct failure classes distinct when callers or operators must reason about them differently.
-- Flag helpers that collapse validation, conflict, retryable, not-found, or timeout errors into one generic bucket just to reduce duplication.
-- Preserve inspectable contracts. If a refactor destroys `errors.Is/As`, caller-visible classification, or step identity, it is not behavior-preserving simplification.
-- Prefer a little repetition over a generic error helper when each branch carries different semantics or status mapping.
-- Keep which error wins explicit when cleanup, audit, rollback, or notification can also fail.
-
-### Naming And Intent Exposure
-- Require names that reveal role, phase, or policy, not generic mechanism words like `data`, `process`, `result`, or `do` when a sharper term exists.
-- Flag vocabulary drift inside one feature area and booleans that do not read clearly at the call site.
-- Prefer comments that explain why, constraints, or invariants; remove comments that merely narrate the code.
-
-### Test Readability And Proof Shape
-- Prefer tests whose setup, trigger, and expected failure or success are obvious on first read.
-- Flag helper layers or giant tables that hide which branch, precedence rule, or invariant is actually being proven.
-- Suggest simplification only when diagnosis improves. Terse tests that obscure the failure signal are not wins.
-- If a refactor relies on subtle precedence or branch preservation, ask for focused tests or explicit validation commands.
+- Risk calibration: prioritize cleanups that merge distinct behaviors, change precedence, hide side effects, or force readers to track hidden modes.
+- Helper economics: prefer helpers that name stable policy, ownership, defaulting, cleanup scope, stdlib quirks, or error normalization; flag wrappers that only move complexity out of sight.
+- Source-of-truth extraction: flag repeated stable same-package policy that is likely to drift, but avoid global helper buckets and mode-heavy extraction.
+- Control flow: prefer guard clauses and straight-line happy paths only when side-effect ordering, cleanup, and which error wins stay explicit.
+- Predicate clarity: flag compound negatives, boolean clusters, and hidden mode decoding when the decision no longer reads at the call site.
+- API and call-site burden: flag same-typed positional parameters, raw strings with hidden meaning, `map[string]any` option blobs, and exported-surface changes that need design escalation.
+- Error paths: preserve distinct failure classes, `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` inspectability when the module supports it, while keeping `errors.As` where a non-error interface target is intentional; preserve status mapping, context cancellation, and cleanup/audit precedence.
+- Naming and tests: suggest naming or test simplification only when it lowers future reasoning and diagnosis load.
 
 ### Go-Semantic Stop-Signs
-- Do not recommend simplification that removes code protecting ownership, lifetime, or public contract just because it looks ceremonial.
+- Do not recommend simplification that removes code protecting ownership, lifetime, or public contract just because it looks ceremonial. Load `references/go-semantic-stop-signs.md` when this risk is central to the review.
 Stop-sign examples:
 - slice or map alias isolation such as `slices.Clone`, `maps.Clone`, or copy-before-store
 - `nil` versus empty behavior that is externally observable
@@ -139,6 +106,7 @@ Each finding should include:
 - a validation command when useful
 - whether the change is behavior-preserving, a specialist handoff, or needs design escalation
 - whether the issue is under-extraction of a same-package source-of-truth seam or over-extraction into a vague helper
+- the reference file used when one materially shaped the finding
 
 Severity is merge-risk based:
 - `critical`: the cleanup obscures critical behavior or contract semantics enough that safe change is unlikely

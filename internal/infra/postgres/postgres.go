@@ -34,7 +34,7 @@ type Pool struct {
 
 func New(ctx context.Context, opts Options) (*Pool, error) {
 	if strings.TrimSpace(opts.DSN) == "" {
-		return nil, fmt.Errorf("postgres dsn is empty")
+		return nil, fmt.Errorf("%w: postgres dsn is empty", ErrConfig)
 	}
 	if opts.ConnectTimeout <= 0 {
 		return nil, fmt.Errorf("%w: connect timeout must be > 0", ErrConfig)

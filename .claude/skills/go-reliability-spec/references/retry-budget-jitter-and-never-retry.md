@@ -8,14 +8,14 @@ Load when the spec needs retry eligibility, retry budgets, jitter, transient fau
 
 ## Decision Rubric
 - Default to no retry until the operation is retry-safe, idempotent, or protected by an idempotency key and deduplication contract.
-- Never retry validation failure, authorization failure, business conflict, caller cancellation, known poison input, or a retry-unsafe mutation.
-- Retry transient 502/503/timeouts only inside the caller deadline, with bounded attempts, randomized delay, and retry exhaustion signal.
+- Never retry validation failure, authorization failure, business conflict, caller cancellation, known poison input, not-found that is terminal by contract, or a retry-unsafe mutation.
+- Retry only named transient classes, such as 502/503/504/timeouts or 429 with usable rate-limit semantics, inside the caller deadline, with bounded attempts, randomized delay, and retry exhaustion signal.
 - Assign one owner layer for retries. Nested independent retries require an explicit reason and combined attempt budget.
 - Use a retry budget when many clients call the same dependency or failure can cascade; stop retries when primary and retry traffic cannot be measured separately.
 - For durable async retry, state max attempts, backoff cap, poison classification, terminal state or DLQ, diagnostics, and reconciliation owner.
 
 ## Imitate
-- "Retry inventory reads on transient 502/503/timeouts only while request deadline and retry budget remain; use exponential backoff with jitter; stop after `<max attempts>` or budget exhaustion."
+- "Retry inventory reads on named transient 502/503/504/timeouts, or 429 with usable `Retry-After`, only while request deadline and retry budget remain; use exponential backoff with jitter; stop after `<max attempts>` or budget exhaustion."
 - "Do not retry order creation unless the request carries an idempotency key and storage can deduplicate repeated attempts."
 - "Async email delivery retries with capped backoff until `<max attempts>`; non-retryable template errors go directly to terminal failed state with diagnostics."
 
@@ -31,7 +31,7 @@ Load when the spec needs retry eligibility, retry budgets, jitter, transient fau
 - Do not put sync and async retry under the same rule; they have different caller-visible contracts.
 
 ## Validation Shape
-- Given validation, authorization, not-found, business conflict, caller cancellation, or poison input, no retry is attempted.
+- Given validation, authorization, not-found that is terminal by contract, business conflict, caller cancellation, or poison input, no retry is attempted.
 - Given a transient failure and sufficient deadline/budget, retries occur within specified attempt and delay bounds.
 - Given retry budget exhaustion, retries stop and the flow returns the selected fail-fast or degraded contract.
 - Given an idempotency key is absent for a retry-unsafe mutation, the spec blocks automatic retry.

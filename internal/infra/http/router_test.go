@@ -123,6 +123,9 @@ func TestRouterHTTPPolicy(t *testing.T) {
 		if !containsString(allowMethods, http.MethodGet) {
 			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodGet)
 		}
+		if !containsString(allowMethods, http.MethodOptions) {
+			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodOptions)
+		}
 	})
 
 	t.Run("method not allowed allow header includes trace when route exists", func(t *testing.T) {
@@ -356,6 +359,49 @@ func TestAccessLogIncludesCorrelationFields(t *testing.T) {
 	}
 	if got := event["route"]; got != "GET /api/v1/ping" {
 		t.Fatalf("route = %v, want %q", got, "GET /api/v1/ping")
+	}
+}
+
+func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	handler := AccessLog(log, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out.String())), &event); err != nil {
+		t.Fatalf("unmarshal access log: %v", err)
+	}
+	if got := int(event["status"].(float64)); got != http.StatusNoContent {
+		t.Fatalf("logged status = %d, want %d", got, http.StatusNoContent)
+	}
+}
+
+func TestAccessLogResponseControllerCanReachWrappedWriter(t *testing.T) {
+	var flushErr error
+	handler := AccessLog(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flushErr = http.NewResponseController(w).Flush()
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/flush", nil)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+
+	if flushErr != nil {
+		t.Fatalf("ResponseController.Flush() error = %v, want nil", flushErr)
+	}
+	if !resp.Flushed {
+		t.Fatalf("ResponseRecorder.Flushed = false, want true")
 	}
 }
 

@@ -20,6 +20,7 @@ Protect approved business rules in code so critical invariants, forbidden transi
 - review preconditions, postconditions, and side-effect safety
 - review happy-path, fail-path, and corner-case acceptance semantics
 - review domain error behavior for invariant violations
+- review domain-language drift when changed terminology alters business meaning
 - review whether critical invariant and transition behavior remains testable
 
 ## Boundaries
@@ -35,6 +36,29 @@ Do not:
 - Observable behavior matters, not only internal state shape.
 - Preconditions should protect side effects, not explain them afterward.
 - Prefer the smallest safe fix that restores invariant enforcement and deterministic behavior.
+
+## Source Authority
+Use repo-local evidence before general domain modeling advice:
+- approved `spec.md`, domain docs, plans, task artifacts, and task-local design files
+- existing tests, fixtures, and accepted behavior examples
+- changed code and adjacent code when no approved artifact is attached
+
+If no approved artifact is present, say the rule is inferred from code-visible behavior, tests, names, or caller expectations. Do not treat external DDD or workflow sources as business-rule authority; use them only to calibrate review questions and finding quality.
+
+## Lazy-Loaded Review References
+References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the one that best matches the changed risk. Load a second only when the diff clearly spans independent decision pressures, such as side-effect ordering plus missing proof.
+
+| Reference | Symptom | Behavior change |
+| --- | --- | --- |
+| `references/invariant-preservation-review.md` | Mutation, construction, repository save, handler guard, or direct field update may accept impossible business state. | Makes the model prove a local invariant bypass instead of asking for generic DDD reshaping. |
+| `references/state-transition-review.md` | Status enum, lifecycle guard, transition table, terminal state, or event-driven state update changed. | Makes the model check legal movement and terminal-state semantics instead of redesigning a state machine. |
+| `references/acceptance-and-rejection-semantics.md` | Command, domain error, no-op, duplicate, event consumer, or validation placement changes whether input is accepted, rejected, ignored, or already applied. | Makes the model preserve deterministic business acceptance semantics instead of commenting on error style. |
+| `references/preconditions-side-effects-and-partial-failure.md` | Payment, refund, inventory, entitlement, event, webhook, email, or save can outlive a rejected operation. | Makes the model review guard-before-effect ordering and mixed outcomes instead of prescribing sagas by default. |
+| `references/retry-duplicate-and-reorder-domain-risks.md` | Retry, replay, idempotency key, stale event, backfill, optimistic concurrency, or out-of-order consumer path changed. | Makes the model tie duplicate/reorder handling to a concrete business effect instead of saying "add dedupe." |
+| `references/domain-language-and-meaning-drift.md` | Renames or vocabulary changes touch domain states, obligations, ownership, eligibility, totals, or lifecycle terms. | Makes the model distinguish behavior-changing semantic drift from pure naming taste. |
+| `references/domain-test-traceability.md` | A changed invariant, transition, rejection, duplicate path, or side-effect rule has missing or weak proof. | Makes the model report missing proof only when a specific business regression can slip through instead of asking for more tests generally. |
+
+The examples are not reusable business rules. Adapt only the review lens and finding shape, then cite the local contract or state the local inference.
 
 ## Expertise
 
@@ -54,6 +78,11 @@ Do not:
 - Review externally visible behavior on success, failure, and corner cases.
 - Verify domain errors remain deterministic and semantics-preserving.
 - Flag behavior that changes business meaning without an explicit contract or decision.
+
+### Domain Language And Meaning Drift
+- Treat domain vocabulary as evidence only when a changed term alters state, obligation, ownership, eligibility, amount meaning, or caller interpretation.
+- Flag collapses of distinct business concepts, such as turning `cancelled` and `expired` into one branch, only when the local contract keeps them distinct.
+- Avoid taste-only naming findings; hand off readability-only naming issues to `go-language-simplifier-review`.
 
 ### Invariant Violation Semantics
 - Invariant violation must fail predictably; it must not silently continue.
@@ -85,6 +114,8 @@ Each finding should include:
 - the smallest safe correction
 - a relevant contract or decision when one exists
 - whether the issue is local code drift or needs design escalation
+
+Keep findings local and review-shaped. Do not redesign the domain model unless the smallest safe correction cannot preserve the approved rule. If the only honest fix changes the invariant set, transition model, acceptance contract, or ownership boundary, escalate instead of smuggling a redesign into a review comment.
 
 Severity is merge-risk based:
 - `critical`: confirmed invariant violation or forbidden transition

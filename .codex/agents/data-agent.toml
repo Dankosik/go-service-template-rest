@@ -1,3 +1,5 @@
+name = "data-agent"
+description = "Read-only data subagent for ownership, schema, transactions, and cache rules."
 sandbox_mode = "read-only"
 
 developer_instructions = """

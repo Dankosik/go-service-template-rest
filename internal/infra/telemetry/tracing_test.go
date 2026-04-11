@@ -142,6 +142,14 @@ func TestParseOTLPEndpointOptions(t *testing.T) {
 		t.Fatalf("options len = 0, want > 0")
 	}
 
+	options, err = parseOTLPEndpointOptions("localhost:4318")
+	if err != nil {
+		t.Fatalf("parseOTLPEndpointOptions() scheme-less error = %v", err)
+	}
+	if len(options) == 0 {
+		t.Fatalf("scheme-less options len = 0, want > 0")
+	}
+
 	_, err = parseOTLPEndpointOptions("://bad-endpoint")
 	if err == nil {
 		t.Fatalf("parseOTLPEndpointOptions() error = nil, want non-nil")

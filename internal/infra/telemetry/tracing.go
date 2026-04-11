@@ -163,17 +163,34 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 }
 
 func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
+	if !strings.Contains(raw, "://") {
+		parsedURL, err := url.Parse("//" + raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
+		}
+		if parsedURL.Host == "" {
+			return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
+		}
+
+		options := []otlptracehttp.Option{
+			otlptracehttp.WithEndpoint(parsedURL.Host),
+		}
+		path := strings.TrimSpace(parsedURL.EscapedPath())
+		if path != "" && path != "/" {
+			options = append(options, otlptracehttp.WithURLPath(path))
+		}
+		if parsedURL.RawQuery != "" {
+			return nil, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
+		}
+		return options, nil
+	}
+
 	parsedURL, err := url.Parse(raw)
 	if err != nil {
 		return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
 	}
 
 	options := make([]otlptracehttp.Option, 0, 3)
-	if parsedURL.Scheme == "" {
-		options = append(options, otlptracehttp.WithEndpoint(raw))
-		return options, nil
-	}
-
 	if parsedURL.Host == "" {
 		return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
 	}

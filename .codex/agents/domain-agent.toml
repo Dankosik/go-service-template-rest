@@ -1,3 +1,5 @@
+name = "domain-agent"
+description = "Read-only domain subagent for business invariants and state transitions."
 sandbox_mode = "read-only"
 
 developer_instructions = """

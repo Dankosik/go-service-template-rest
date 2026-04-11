@@ -1,3 +1,5 @@
+name = "security-agent"
+description = "Read-only security subagent for trust boundaries, auth, isolation, and fail-closed behavior."
 sandbox_mode = "read-only"
 
 developer_instructions = """

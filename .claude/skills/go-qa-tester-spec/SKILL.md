@@ -34,6 +34,25 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Treat untestable requirements as design defects that must be escalated.
 - Keep validation realistic: use repository commands and CI-compatible environments.
 
+## Source And Reference Policy
+- Prefer approved task artifacts, repository docs, nearby tests, `docs/build-test-and-development-commands.md`, `Makefile`, and CI workflows as the local source of truth for executable checks.
+- Treat reference files as compact rubrics and example banks, not exhaustive checklists or domain documentation.
+- Load at most one reference by default. Load multiple only when the task clearly spans independent decision pressures, such as API contract proof and migration execution gates.
+- Use the selector below by symptom and behavior change. If two references seem to match the same symptom, pick the narrower one and explain the residual issue locally.
+- Do not open every reference file by default.
+- Keep this skill strategy-only: define test obligations, proof levels, pass/fail observables, and validation commands. Do not write test code, review implementation details, or decide API/data/security/reliability semantics that belong to another specialist.
+
+## Reference Files Selector
+| Symptom | Load | Behavior Change |
+| --- | --- | --- |
+| The strategy needs a proof level choice or is drifting toward broad integration/e2e "for safety" | `references/test-level-selection.md` | Makes the model choose the smallest boundary that proves the risk and name rejected weaker/broader levels. |
+| The matrix is happy-path-only, generic, or missing fail/edge/abuse/retry/concurrency observables | `references/scenario-matrix-patterns.md` | Makes the model write compact scenario rows with data shape, selected proof level, and pass/fail observables. |
+| Invariants, acceptance criteria, or state transitions are not traceable to explicit proof obligations | `references/invariant-and-acceptance-traceability.md` | Makes the model map each claim to owner/source, proof level, scenario rows, observable, and reopen trigger. |
+| Timeout, cancellation, retry, poison, backpressure, shutdown, degradation, or async recovery semantics must be proven | `references/reliability-fail-path-test-obligations.md` | Makes the model require deterministic fail-path triggers, failure classes, and side-effect/lifecycle observables. |
+| REST/OpenAPI, generated API, HTTP status/problem details, validation, idempotency key, auth/tenant/object boundary, or async `202` behavior changed | `references/api-contract-and-boundary-tests.md` | Makes the model choose boundary-observable contract proof and treat missing HTTP semantics as API-spec blockers. |
+| Durable state, SQL, cache, tenant-scoped storage, migration, outbox/inbox, dedup, replay, ordering, compensation, or reconciliation proof is needed | `references/data-cache-security-distributed-test-obligations.md` | Makes the model choose stateful/cache/message observables instead of mocks or successful API responses as proof. |
+| The strategy must name executable local/CI validation commands or proof limits | `references/quality-gates-and-execution.md` | Makes the model map obligations to repository-supported commands and honestly state skips, artifacts, and residual limits. |
+
 ## Expertise
 
 ### Test-Level Selection
@@ -67,7 +86,7 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Keep cancellation and deadline errors recognizable.
 - Verify request context is propagated rather than replaced.
 - Avoid brittle string-based assertions unless exact text is part of the public contract.
-- When API behavior changes, cover status codes, problem details, idempotency keys, conflict semantics, async `202 + operation resource` behavior, validation, limits, and request/correlation IDs.
+- When API behavior changes, cover status codes, problem details, idempotency keys, conflict or mismatch semantics, async `202` status-monitor or operation-identity behavior, validation, limits, and request/correlation IDs.
 
 ### Data, Cache, Security, And Distributed Concerns
 - Cover transaction behavior, optimistic/pessimistic conflicts, deterministic pagination, and N+1/chatty query risk when the change is data-heavy.

@@ -62,9 +62,9 @@ Reject this because it treats a symptom as the defect and recommends a command t
 
 ## Agent Traps
 - Some sleeps intentionally wait for external propagation and may be acceptable if the assertion does not depend on precise timing.
-- `t.Setenv`, `t.TempDir`, and `t.Cleanup` are usually evidence of isolation, not automatic risk.
+- `t.Setenv`, `t.TempDir`, and `t.Cleanup` are usually evidence of isolation, not automatic risk; still flag `t.Setenv` in parallel tests or tests with parallel ancestors.
 - Leak checks prove lifecycle cleanup, not ordering or protocol progress.
-- A race-free run does not prove no goroutine is stuck or that shutdown ordering is correct.
+- A race-free run only covers executed paths and does not prove no goroutine is stuck or that shutdown ordering is correct.
 - Do not suggest `synctest` for code that uses real network I/O, external processes, or goroutines outside the controlled bubble.
 
 ## Validation Shape

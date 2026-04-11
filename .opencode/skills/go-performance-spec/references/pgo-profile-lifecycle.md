@@ -15,9 +15,9 @@ Load when the spec is considering profile-guided optimization, production CPU pr
 - Require a disable/rollback path when canary or benchmark evidence shows regression, build risk, or profile-source mismatch.
 
 ## Imitate
-- Read-heavy API binary may use PGO after CPU profiles are sampled from at least three busy canary or production instances during peak read traffic, each for the same wall duration. Copy the representative-source gate and `-pgo=off` rollback build.
+- Read-heavy API binary may use PGO after CPU profiles are sampled from multiple busy canary or production instances during peak read traffic, each for the same wall duration. Copy the representative-source gate and `-pgo=off` rollback build.
 - Worker binary runs import and reconciliation modes. The spec compares merged weighted profiles against workload-specific builds and selects merged PGO only if neither mode regresses beyond threshold. Copy the workload-mix comparison.
-- After a large package move or function rename, the old profile is treated as stale and a new profile is required before relying on PGO for the moved hot path. Copy the source-skew reopen rule.
+- After a large package move or hot function rename, the old profile is treated as suspect: Go PGO should degrade gracefully, but the spec plans a fresh profile before relying on PGO for the moved hot path. Copy the source-skew reopen rule without overstating the failure mode.
 
 ## Reject
 - Microbenchmark CPU profile used as `default.pgo` for an HTTP service binary.

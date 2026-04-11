@@ -145,7 +145,7 @@ Use heavier forensics only when the symptom justifies them.
   - when stack depth is truncated or multiple goroutines matter, capture a fuller traceback such as `GOTRACEBACK=all`
 
 - `stuck process or deadlock suspicion`
-  - capture a goroutine dump, often via `SIGQUIT`, before restarting the process when that is safe
+  - capture a goroutine dump before editing; prefer local or protected pprof when the process must stay alive, and use `SIGQUIT` only when its default exit-with-stack-dump behavior is acceptable
   - identify repeated blocked locations, ownership cycles, or shutdown waits
 
 - `contention or queueing suspicion`

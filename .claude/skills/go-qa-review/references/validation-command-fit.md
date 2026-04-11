@@ -64,7 +64,7 @@ Reject this because it turns validation into ceremony and does not say what regr
 - `go test ./...` can be broad and still miss integration tags, generated artifacts, OpenAPI drift, fuzz targets, and race-only failures.
 - A targeted command without `-count=1` may be fine for local iteration but weak as freshness evidence after a change.
 - Coverage output is not validation unless coverage policy or a named untested behavior is the issue.
-- Fuzz smoke is relevant only when fuzz targets or fuzz-suitable parser/input hardening are touched.
+- Fuzz smoke is relevant only when fuzz targets or fuzz-suitable parser/input hardening are touched; keep the command to one package and one matching fuzz target.
 
 ## Validation Shape
-Map command to risk: package `go test ... -run ... -count=1` for narrow behavior; `go test -race` or `make test-race` for shared-memory proof; `make test-integration` for integration-tag/Docker-backed behavior; `make openapi-check` for OpenAPI generation and drift; fuzz commands only for fuzz targets; CI-local commands only for cross-cutting parity.
+Map command to risk: package `go test ... -run ... -count=1` for narrow behavior; `go test -race` or `make test-race` for shared-memory proof; `make test-integration` for integration-tag/Docker-backed behavior; `make openapi-check` for OpenAPI generation and drift; fuzz commands only for one target in one package; CI-local commands only for cross-cutting parity.

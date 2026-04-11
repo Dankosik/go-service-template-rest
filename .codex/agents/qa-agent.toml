@@ -1,3 +1,5 @@
+name = "qa-agent"
+description = "Read-only QA subagent for test obligations and validation readiness."
 sandbox_mode = "read-only"
 
 developer_instructions = """

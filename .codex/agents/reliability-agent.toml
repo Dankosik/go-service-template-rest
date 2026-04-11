@@ -1,3 +1,5 @@
+name = "reliability-agent"
+description = "Read-only reliability subagent for timeouts, retries, degradation, and lifecycle safety."
 sandbox_mode = "read-only"
 
 developer_instructions = """

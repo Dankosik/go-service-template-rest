@@ -23,6 +23,22 @@ Protect changed data-access and cache paths from consistency, isolation, timeout
 - review stampede suppression, fallback behavior, and origin protection
 - review test and validation signals for DB/cache-sensitive behavior
 
+## Lazy Reference Loading
+Keep this `SKILL.md` as the decision guide. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the diff clearly spans independent decision pressures, such as a transaction-boundary defect plus a cache-stampede defect.
+
+Choose references by symptom and expected behavior change:
+
+| Symptom in the diff | Load | Behavior change |
+| --- | --- | --- |
+| Query construction, dynamic identifiers, value binding, query loops, `QueryContext` vs `QueryRowContext`, or cursor cleanup in the query path | `references/sql-query-and-resource-safety-review.md` | Choose a local bind/allowlist/batch/close-check finding instead of generic SQL advice, driver switching, or schema redesign. |
+| Transaction starts, moves, retries, split writes, isolation options, commit handling, or cache work around commit boundaries | `references/transaction-boundary-review.md` | Choose the atomic DB boundary and post-commit cache decision instead of stretching a transaction across Redis or inventing outbox/saga policy in review. |
+| Dropped caller context, operation timeout, missing `cancel`, prepared statement or reserved connection lifecycle, or row/transaction cleanup as the primary symptom | `references/context-timeout-and-rows-cleanup.md` | Choose caller-derived cancellation and explicit cleanup instead of `context.Background`, arbitrary global budgets, or treating `QueryContext` alone as sufficient. |
+| Cache key construction, tenant/auth/locale/feature scoping, deterministic key material, cached payload versioning, or corrupt decode behavior | `references/cache-key-isolation-and-serialization.md` | Choose complete key dimensions and safe decode/version handling instead of "just hash it" or silently treating corrupt/aliased values as misses. |
+| Write-driven invalidation, TTL behavior, negative caching, stale serving, cache-aside freshness, or Redis `SET` overwrites | `references/invalidation-ttl-and-staleness-review.md` | Choose exact freshness ownership and TTL/negative-cache correction instead of TTL-only handwaving, wildcard deletes, or caching transient failures as truth. |
+| Hot cache misses, cache outage fallback, local `singleflight`, Redis locks, stale fallback, or origin DB protection | `references/stampede-fallback-and-origin-protection.md` | Choose bounded miss/fallback behavior and correctly scoped coalescing/locks instead of unbounded origin fallback or pretending process-local coalescing is distributed protection. |
+
+Do not load a reference just because it mentions a keyword; load it when its examples would change the finding you write. Escalate instead of solving here when the smallest safe correction changes schema ownership, API-visible consistency, tenant security policy, distributed locking policy, or broad reliability policy.
+
 ## Boundaries
 Do not:
 - turn DB/cache review into a broad architecture rewrite
@@ -33,7 +49,7 @@ Do not:
 ## Core Defaults
 - Correctness comes before optimization.
 - Treat cache as an accelerator, not the source of truth, unless an explicit contract says otherwise.
-- Require explicit deadlines and explicit cleanup for blocking DB or cache calls.
+- Require propagated cancellation, explicit cleanup, and operation deadlines when the caller or package owns a budget.
 - Require cache keys to encode every dimension needed for correctness and isolation.
 - Prefer the smallest safe fix that restores consistency and predictable fallback behavior.
 

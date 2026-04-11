@@ -25,6 +25,9 @@ func TestNewRejectsEmptyDSN(t *testing.T) {
 	if !strings.Contains(err.Error(), "postgres dsn is empty") {
 		t.Fatalf("New() error = %q, want to contain %q", err.Error(), "postgres dsn is empty")
 	}
+	if !errors.Is(err, ErrConfig) {
+		t.Fatalf("New() error = %v, want ErrConfig", err)
+	}
 }
 
 func TestNewRejectsInvalidOptions(t *testing.T) {

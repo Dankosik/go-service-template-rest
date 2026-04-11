@@ -7,12 +7,13 @@ When loaded for symptom "the proof type is known but the spec needs concrete Go 
 Load after the measurement category is chosen and the spec needs exact Go proof obligations, fixture labels, thresholds, or B.Loop/b.N/profile/trace command shape.
 
 ## Decision Rubric
-- Prefer the repository's existing benchmark style. Use `testing.B.Loop` only when the repo Go version supports it or local style has moved there.
-- Allow `b.N` style for older Go versions or existing benchmarks; require timer handling when setup or cleanup would pollute measured work.
+- Prefer `testing.B.Loop` for new benchmarks when the repo Go version supports it; it excludes setup before the loop and cleanup after the loop from timing.
+- Preserve `b.N` style for older Go versions or existing benchmark families; require `ResetTimer`, `StopTimer`, or equivalent timer handling when setup or cleanup would pollute measured work.
 - Use `RunParallel` only when the operation models concurrent callers; it does not prove production boundedness.
 - Require `-benchmem` when allocations, bytes/op, or GC pressure matter.
 - Require `benchstat` for A/B comparison of repeated Go benchmark output.
 - Choose CPU, heap, allocs, mutex, block, goroutine profile, or runtime trace according to the symptom.
+- When mutex or block profiles are selected, name the `go test` profile flag or runtime sampling setting; runtime trace sync/sched profiles are related but not a substitute by default.
 - Treat PGO command examples as lifecycle obligations only after representative CPU profiles are available.
 
 ## Imitate

@@ -16,7 +16,7 @@ Keep findings local: ask for startup, health, and drain semantics in the changed
 - Shutdown calls `Server.Shutdown` from a goroutine, but `main` exits when `ListenAndServe` returns `http.ErrServerClosed`.
 - Shutdown tears down dependencies before the server stops accepting new requests.
 - Long-lived or hijacked connections are ignored when the code depends on them draining.
-- The service does not mark itself not-ready before teardown.
+- The service tears down before traffic is removed, either by app-owned not-ready state or by a proven platform-owned drain path.
 - Health checks perform expensive work on every probe and can create their own overload.
 
 ## Imitate
@@ -77,7 +77,7 @@ if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 return nil
 ```
 
-Good correction shape: mark not-ready, call bounded `Shutdown`, and wait for completion.
+Good correction shape: mark not-ready when the app owns readiness, call bounded `Shutdown`, and wait for completion.
 
 ```go
 shutdownDone := make(chan error, 1)
@@ -138,4 +138,4 @@ Reject because in-flight handlers may still need the dependency being torn down.
 - `go test -race ./...` when readiness flags, shutdown channels, or goroutine lifecycle changed.
 - `kubectl describe pod <pod>` and `kubectl get endpoints <service>` only when validating a live Kubernetes deployment.
 
-Prefer unit or integration tests that assert readiness flips to false before shutdown closes dependencies.
+Prefer unit or integration tests that assert traffic is removed before shutdown closes dependencies. In app-owned readiness paths, assert readiness flips to false first.

@@ -29,6 +29,20 @@ Escalate if:
 - critical behavior is not testable, operable, or rollout-safe
 - repository baseline context from `docs/repo-architecture.md` materially matters and has not been loaded yet
 
+## Reference Files
+Use references lazily. Load repo-native task artifacts and repository docs first, then open at most one reference by default: the one that matches the active design pressure. Load multiple references only when the task clearly spans independent pressures, such as both runtime failure sequencing and a new abstraction boundary.
+
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Each file exists to change a likely design choice. If a reference exposes a missing final decision, escalate to the orchestrator or the appropriate specialist instead of deciding inside this integrator skill. If a reference exposes missing execution sequencing, hand off to `planning-and-task-breakdown` instead of writing `plan.md` or `tasks.md`.
+
+| Symptom | Load | Behavior change |
+| --- | --- | --- |
+| The design bundle shape is unclear, conditional artifacts are being created "for completeness", or `spec.md`, `design/`, `plan.md`, and `tasks.md` are starting to absorb each other's jobs. | [design-bundle-assembly.md](references/design-bundle-assembly.md) | Makes the model produce a minimal, indexed design bundle with real artifact triggers instead of filler artifacts or disguised spec/planning content. |
+| `design/component-map.md` or `design/ownership-map.md` needs package responsibility, source-of-truth, generated-code, or dependency-direction decisions. | [component-and-ownership-maps.md](references/component-and-ownership-maps.md) | Makes the model name concrete owners and stable boundaries instead of inventing shared helpers, treating generated files as authorities, or hiding ownership in "common" packages. |
+| `design/sequence.md` needs runtime order, failure points, side effects, retries, sync/async boundaries, or partial-failure policy. | [runtime-sequence-and-failure-points.md](references/runtime-sequence-and-failure-points.md) | Makes the model write scenario-level runtime flow with failure ownership instead of a happy-path arrow chain or ambiguous sync/async finality. |
+| Specialist outputs or design artifacts disagree across architecture, API, data, security, reliability, observability, delivery, or QA. | [cross-domain-reconciliation.md](references/cross-domain-reconciliation.md) | Makes the model reconcile by selected option, rejected options, and proof obligations instead of smoothing contradictions into a vague compromise. |
+| The bundle is about to be marked planning-ready or handed to `planning-and-task-breakdown`. | [design-readiness-and-planning-handoff.md](references/design-readiness-and-planning-handoff.md) | Makes the model block or qualify readiness with artifact status, risks, and reopen conditions instead of saying "done enough" while planning must rediscover design. |
+| A proposed layer, interface, helper, adapter, shared package, or simplification may change ownership or widen impact radius. | [complexity-and-abstraction-tradeoffs.md](references/complexity-and-abstraction-tradeoffs.md) | Makes the model require present-day complexity reduction and contract preservation instead of future-proof indirection or simplification that weakens guarantees. |
+
 ## Specialist Stance
 - `spec.md` owns decisions, `design/` owns task-local technical context, and `plan.md` consumes approved `spec.md + design/`.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
@@ -76,20 +90,20 @@ This is a technical-design integrator, not a workflow owner:
 
 ### Sync And API Seams
 - Verify sync vs async choice before discussing transports or endpoints.
-- For sync seams, require explicit deadline budgets, retry classes, idempotency policy, error model, and pagination behavior.
+- For sync seams, require explicit deadline budgets, retry or no-retry classes, side-effect idempotency policy, and error model; add pagination behavior only for collection or list semantics.
 - Guard against action-RPC drift hiding inside nominally resource-oriented APIs.
 - Make eventual-consistency disclosure explicit when sync read behavior depends on async convergence.
 
 ### Async And Distributed Seams
 - Require explicit event vs command intent and a justified choice of pub/sub vs queue.
-- Require outbox/inbox or equivalent atomic and dedup guarantees for side-effecting async flows.
+- For side-effecting async flows, require a named atomicity and idempotency or dedup model, such as transactional outbox plus idempotent consumer or an equivalent guarantee.
 - When cross-service invariants exist, require an explicit process or saga state model.
 - Make compensation or forward-recovery semantics explicit for each critical distributed step.
-- Reject dual writes and implicit exactly-once assumptions.
+- Reject dual writes and unscoped exactly-once assumptions. If a platform claims exactly-once behavior, state the guarantee boundary and require idempotent handling for external side effects.
 
 ### Data, Cache, And Evolution Integrity
 - Keep local transaction boundaries explicit and aligned with ownership boundaries.
-- Require behavior-changing data evolution to use `expand -> backfill/verify -> contract` with a mixed-version compatibility window.
+- Require rollout-sensitive persisted-state evolution to use `expand -> backfill/verify -> contract` with a mixed-version compatibility window.
 - Require cache decisions to preserve correctness: clear staleness contract, tenant-safe keying, invalidation/fallback behavior, and no hidden dependency on exact TTL timing.
 - Do not allow data/cache assumptions to silently break domain behavior during rollout.
 
@@ -101,7 +115,7 @@ This is a technical-design integrator, not a workflow owner:
 - Reject designs that depend on heroic manual operations or undocumented release choreography.
 
 ## Design Readiness Bar
-For every planning-critical design recommendation, make clear:
+For each planning-critical design recommendation that chooses between real trade-offs, make clear:
 - the complexity symptom or integration risk
 - at least two viable options
 - the selected option and at least one explicit rejection reason

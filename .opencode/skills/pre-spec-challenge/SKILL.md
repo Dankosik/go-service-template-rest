@@ -40,6 +40,19 @@ Escalate if:
 - Ask about categories like security, performance, or rollout only through a concrete seam already present in the candidate synthesis.
 - Stay advisory. The orchestrator decides.
 
+## Reference Files
+Load references lazily. Use repository workflow docs, especially `docs/spec-first-workflow.md`, as the authority for phase placement; these references are compact rubrics and example banks, not exhaustive checklists or design guidance.
+
+Load at most one reference by default. Load more than one only when the candidate synthesis spans independent decision pressures, such as both async ownership and mixed-version rollout.
+
+| Symptom | Behavior Change | Load |
+| --- | --- | --- |
+| The input bundle may be too thin or blank-page design is tempting | Makes the model route to framing or targeted research instead of inventing challenge questions from missing decisions | `references/input-sufficiency-and-challenge-readiness.md` |
+| Candidate decisions lean on convenience assumptions like frontend dedupe, TTL cleanup, UUID secrecy, or manual fixes | Makes the model ask falsifying failure questions instead of generic "what about retries/security/scale?" prompts | `references/falsifying-candidate-assumptions.md` |
+| Source-of-truth, actor authority, side effects, async handoff, cache, or destructive admin seams are underdefined | Makes the model challenge durable ownership and recovery instead of vague ownership/auth questions or implementation advice | `references/ownership-boundary-and-failure-seams.md` |
+| Rollout, migration, compatibility, feature flags, canaries, backfills, global enablement, or rollback are material | Makes the model test mixed-version and rollback state instead of forcing ceremony or ignoring hard-to-reverse release risk | `references/rollout-compatibility-and-risk-questions.md` |
+| Strong questions exist but severity or resolution route is unclear | Makes the model classify by what changes planning and choose a concrete next action instead of overblocking or reflexively asking for more research | `references/triage-and-next-action-routing.md` |
+
 ## Challenge Loop
 1. Confirm the input is challenge-ready rather than underframed.
 2. Extract the candidate assumptions that are actually carrying the plan.
@@ -57,35 +70,20 @@ Keep a question only if all are true:
 
 If any of those fail, do not ask it.
 
-## Expertise
+## Lenses
+- **Input sufficiency:** expect a problem frame, candidate decisions, constraints, assumptions or open questions, and evidence links that matter. If the bundle is missing, escalate instead of guessing.
+- **Falsification:** look for assumptions disguised as convenience, policy, or `v1` simplification, especially around client behavior, operator workarounds, TTLs, UUID secrecy, natural expiry, or future cleanup.
+- **Failure semantics:** test denial, retry, timeout, duplicate request, partial success, stale state, irreversibility, and manual follow-up only when they could change planning.
+- **Ownership seams:** challenge unclear source-of-truth ownership, actor boundaries, privilege boundaries, and cross-domain side effects that would otherwise be decided later in code.
+- **Rollout and compatibility:** ask about migration, backward compatibility, launch cohort, canary, or rollback only when the answer can materially change implementation order or risk controls.
 
-### Input Sufficiency
-- Expect a minimum input bundle: problem frame, candidate decisions, constraints, assumptions or open questions, and any evidence links that matter.
-- If that bundle is missing, say so directly and escalate instead of guessing.
-
-### Falsification Targets
-- Look first for assumptions disguised as convenience, policy, or “v1 simplification.”
-- Pressure-test statements that rely on client behavior, operator workarounds, natural expiry, UUID secrecy, TTLs, or future cleanup.
-
-### Corner Cases And Failure Semantics
-- Look for denial, retry, timeout, duplicate request, partial success, stale state, irreversibility, and manual follow-up semantics when they could change the design.
-- Ask what the user-visible or operator-visible meaning becomes when the edge condition occurs.
-
-### Ownership And Boundary Seams
-- Challenge unclear source-of-truth ownership, actor boundaries, privilege boundaries, and cross-domain side effects.
-- Surface when planning would force implementation to “decide later in code.”
-
-### Rollout And Compatibility Pressure Test
-- Ask about rollout, migration, backward compatibility, or launch cohort only when the answer can materially change the path.
-- Avoid speculative rollout bikeshedding on local or reversible work.
-
-### Blocker Classification
+## Blocker Classification
 Use:
 - `blocks_planning` when planning would be unsafe or misleading without resolution
 - `blocks_specific_domain` when the question should reopen only one specialist area
 - `non_blocking` when the point is real but can stay as explicit accepted risk or open question
 
-### Next Action Selection
+## Next Action Selection
 Use:
 - `answer` when the orchestrator likely already has enough evidence
 - `re-research` when a specialist or retrieval pass should reopen

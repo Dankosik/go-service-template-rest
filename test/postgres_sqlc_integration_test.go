@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 )
 
-const migrationPathInitUp = "../env/migrations/000001_init.up.sql"
+const migrationGlobUp = "../env/migrations/*.up.sql"
 
 func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	pool := setupPostgresPoolWithMigrations(t)
@@ -114,7 +115,7 @@ func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
 
 	t.Cleanup(pool.Close)
 
-	if err := applyMigrationFile(ctx, pool.DB(), migrationPathInitUp); err != nil {
+	if err := applyMigrationFiles(ctx, pool.DB(), migrationGlobUp); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
 
@@ -123,6 +124,24 @@ func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
 
 type pgExec interface {
 	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+}
+
+func applyMigrationFiles(ctx context.Context, db pgExec, migrationGlob string) error {
+	paths, err := filepath.Glob(migrationGlob)
+	if err != nil {
+		return fmt.Errorf("glob migration files %q: %w", migrationGlob, err)
+	}
+	if len(paths) == 0 {
+		return fmt.Errorf("no migration files match %q", migrationGlob)
+	}
+
+	sort.Strings(paths)
+	for _, path := range paths {
+		if err := applyMigrationFile(ctx, db, path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func applyMigrationFile(ctx context.Context, db pgExec, migrationPath string) error {

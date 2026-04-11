@@ -11,7 +11,7 @@ If the primary issue is only request body size, load the abuse reference. If the
 ## Decision Rubric
 - Identify the operation first: read, write, extract, serve, scan, transform, delete, or temporary-file creation.
 - Treat `filepath.Join(base, userPath)`, `filepath.Clean`, and `filepath.Abs` as lexical helpers, not confinement proof.
-- Prefer `os.Root` or `os.OpenInRoot` for untrusted filenames when available and appropriate.
+- Prefer `os.Root`/`Root.OpenFile` or `os.OpenInRoot` for untrusted filename access when the repo toolchain supports them; check operation-specific limitations before using root APIs as proof for metadata mutation.
 - Use `filepath.IsLocal` or `filepath.Localize` only for lexical validation; do not claim they solve symlink races.
 - Generate server-side storage keys; do not reuse uploaded filenames as durable keys or public paths.
 - Enforce request body and per-file limits before parsing or processing uploads.
@@ -65,6 +65,8 @@ Reject because lexical cleanup alone does not prove root confinement or symlink 
 
 ## Agent Traps
 - Do not trust `header.Filename`, `Content-Type`, or extension alone.
+- Do not treat `http.Dir` as a hard serving boundary for user-writable trees; it follows symlinks out of its root and serves dotfiles unless wrapped.
+- Do not overclaim `os.Root`: it prevents ordinary path and symlink escape, but not bind mounts, `/proc` special files, device files, or OS-specific metadata-operation races called out by the Go docs.
 - Do not forget Windows path forms and reserved names when the code claims cross-platform support.
 - Do not assume temp directories are safe if attacker-controlled names or permissions are introduced.
 - Do not expose internal absolute paths in client-visible errors.

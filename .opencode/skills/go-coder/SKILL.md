@@ -56,6 +56,20 @@ Strong implementation work usually gets these details right before review:
 - resource lifetime, transactions, cancellation, retries, and partial-failure behavior stay explicit
 - tests prove the changed behavior with deterministic evidence at the smallest sufficient layer
 
+## Reference Files
+References are compact rubrics and example banks, not exhaustive checklists or Go documentation dumps. Load at most one reference by default, chosen by the decision pressure that is most likely to change the implementation. Load multiple references only when the task clearly spans independent pressures, such as generated SQL plus transaction lifetime.
+
+| Symptom / Decision Pressure | Reference | Behavior Change |
+| --- | --- | --- |
+| A custom helper, dependency, or older idiom may duplicate a builtin, `slices`, `maps`, `cmp`, `errors`, or another current stdlib feature. | [references/stdlib-first-modern-go.md](references/stdlib-first-modern-go.md) | Choose language or stdlib facilities when they preserve the contract instead of writing wrapper helpers or adding dependencies by habit. |
+| The change may extract helpers, move code across packages, introduce interfaces, export for tests, or centralize repeated package policy. | [references/helper-extraction-and-package-ownership.md](references/helper-extraction-and-package-ownership.md) | Choose direct code or a seam-named same-package owner instead of generic `util` buckets, provider-side interfaces, or test-only exports. |
+| The change touches wrapped errors, cancellation, request context, domain-to-transport mapping, repository translation, or log-and-return behavior. | [references/errors-context-and-boundary-mapping.md](references/errors-context-and-boundary-mapping.md) | Preserve inspectable error identity and caller context at the right boundary instead of string-matching, status-code leakage, or accidental detachment. |
+| The change touches `Rows`, scanners, bodies, files, locks, timers, derived contexts, transactions, or cleanup helper extraction. | [references/resource-lifetime-io-and-transactions.md](references/resource-lifetime-io-and-transactions.md) | Keep acquisition, cleanup, terminal errors, and transaction scope explicit instead of hiding ownership or leaving partial resource handling. |
+| The change stores or returns slices, maps, `[]byte`, snapshots, cache entries, pointer receivers, nil/empty API shape, or mutex-bearing structs. | [references/mutable-state-aliasing.md](references/mutable-state-aliasing.md) | Clone or use pointer identity at the ownership boundary instead of leaking aliases, copying locks, or changing observable nil/empty semantics. |
+| The change starts goroutines, uses channels, adds fan-out or worker pools, changes shutdown, timers/tickers, or async request-scoped work. | [references/concurrency-and-background-work.md](references/concurrency-and-background-work.md) | Make lifecycle, cancellation, bounds, and proof visible instead of hiding unbounded background work or synchronizing with sleeps. |
+| The change adds or revises tests, fuzzing, benchmarks, deterministic seams, failure messages, or final verification commands. | [references/testing-verification-patterns.md](references/testing-verification-patterns.md) | Prove the changed behavior at the smallest reliable layer instead of adding broad, brittle, stale, or ceremonial tests. |
+| The change touches OpenAPI, sqlc, mockgen, stringer, generated files, generation configs, or drift checks. | [references/generated-source-of-truth-and-drift.md](references/generated-source-of-truth-and-drift.md) | Change the owning source and regenerate/check drift instead of hand-editing generated output or leaving source and artifacts half-updated. |
+
 ## Engineering Defaults
 
 ### Language And Standard Library First
@@ -120,7 +134,7 @@ Strong implementation work usually gets these details right before review:
 - Make side-effect ordering intentional. If a write, publish, cache invalidation, or callback happens in the wrong order, treat that as a correctness issue.
 - Do not let retries, duplicates, re-entry, or partial failure silently widen business effects.
 - Return errors with enough operation context to explain where failure happened, while keeping sentinel or typed errors inspectable with `%w`.
-- Use `errors.Is` and `errors.As` where callers need semantic branching.
+- Use `errors.Is` and Go-version-appropriate `errors.AsType` or `errors.As` where callers need semantic branching.
 - Do not log and return the same error at the same layer unless the additional log materially improves diagnosis and is not already guaranteed upstream.
 - Keep request context flowing through request-scoped work. Avoid `context.Background()` inside request paths unless the work is explicitly detached and approved.
 - Preserve `context.Canceled` and `context.DeadlineExceeded` semantics instead of collapsing them into generic internal errors.
@@ -132,9 +146,9 @@ Strong implementation work usually gets these details right before review:
 - Avoid `defer` inside long-running loops when per-iteration cleanup timing matters.
 - Close readers, bodies, rows, files, and network handles exactly once and check terminal error surfaces such as `rows.Err()` or scanner errors.
 - Stop tickers, timers, streams, subscriptions, and derived contexts when their lifecycle ends.
-- Use context-aware datastore calls such as `QueryContext`, `ExecContext`, and `BeginTx` so cancellation and deadlines reach the datastore.
+- Use the datastore's context-aware API, such as `database/sql` `QueryContext`, `ExecContext`, and `BeginTx`, or pgx/sqlc `Query(ctx, ...)`, `Exec(ctx, ...)`, and `BeginTx(ctx, ...)`, so cancellation and deadlines reach the datastore.
 - Keep network calls, blocking RPCs, and unrelated side effects outside transactions unless the approved design explicitly requires otherwise.
-- Use the standard transaction pattern: begin, `defer tx.Rollback()`, do work, then `Commit()` once success is certain.
+- Use the standard transaction pattern for the active driver: begin, defer rollback with the driver's context/signature, do work, then commit once success is certain.
 
 ## Bug-Class Playbooks
 
@@ -168,6 +182,7 @@ Strong implementation work usually gets these details right before review:
 - Make ownership of each goroutine, channel, worker pool, and cancel function obvious.
 - Do not start background work without a clear stop condition, error path, and lifecycle owner.
 - Use `errgroup.WithContext` when related goroutines share cancellation and outcome.
+- For Go 1.25+ wait-only goroutines, use `sync.WaitGroup.Go` when panic handling, error propagation, and cancellation are not part of the contract.
 - Bound concurrency and queue growth; unbounded fan-out is a defect, not an optimization.
 - Preserve ordering when callers or tests depend on it.
 - Close channels from the sender side, not the receiver side.

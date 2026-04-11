@@ -6,13 +6,14 @@ Load this when a contract change affects existing clients, status codes, error s
 ## Decision Rubric
 - Classify each change as `additive`, `behavior-change`, or `breaking`, and name the client assumption that makes it so.
 - Treat status codes, problem types, retry/idempotency/precondition behavior, async behavior, pagination, sorting, and consistency as compatibility surface, not cleanup.
-- Keep the major API version in the URI prefix by this skill's default. Do not put minor or patch versions in REST paths unless the API already does.
+- Keep the major API version in the URI prefix by this skill's default, but preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it. Do not put minor or patch versions in REST paths unless the API already does.
 - Distinguish OpenAPI document version from API product version. `openapi: 3.1.1` is not `/v2`.
 - Adding response fields is safer only when clients are expected to ignore unknown fields. Strict decoders and generated SDKs can still break.
 - Adding enum values is a compatibility decision. Document unknown-value tolerance or avoid expanding a closed enum in place.
 - Tightening validation, making optional fields required, changing defaults, changing null-vs-omitted behavior, or changing timestamp precision can be breaking.
 - Adding pagination to an unpaginated collection can be breaking because old clients may silently miss data.
-- Deprecation means "do not use"; Sunset means "may become unavailable." Use both only when both meanings are true.
+- Deprecation means "discourage new dependence and plan migration"; Sunset means "may become unavailable." Use both only when both meanings are true.
+- `Deprecation` uses an RFC 9745 Structured Field Date such as `@1688169599`; `Sunset` uses an RFC 8594 HTTP-date. Do not normalize them to the same timestamp syntax.
 - When old and new endpoints coexist, define which is authoritative for validation, state transitions, idempotency key scope, `ETag` space, error mapping, and consistency.
 
 ## Imitate

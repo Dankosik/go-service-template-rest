@@ -4,8 +4,8 @@
 Load this when work may outlive the request, completion time is variable, bulk processing is involved, clients need polling or callbacks, a webhook contract is requested, or `202 Accepted` is being considered.
 
 ## Decision Rubric
-- Use async semantics when completion is slow, variable, fan-out heavy, or uncertain at request time.
-- `202 Accepted` means the service accepted durable responsibility for later processing. It is not business success and not merely "enqueue attempted."
+- Use async semantics when completion exceeds the caller's request-timeout or UX budget, is variable, is fan-out heavy, or is uncertain at request time. If no repo policy exists, treat `10s` as a rough trigger rather than a hard rule.
+- RFC 9110 makes `202 Accepted` intentionally noncommittal about final outcome; this skill uses it only when the API also accepts durable recovery or reporting responsibility. It is not business success and not merely "enqueue attempted."
 - Provide one durable client recovery path: operation resource, authoritative business resource with lifecycle state, webhook plus reconciliation read, or a documented combination.
 - Prefer one control-plane resource per lifecycle unless a second resource removes a concrete client ambiguity.
 - Operation resources should expose `id`, reachable `status`, `created_at`, `updated_at`, result reference, structured failure problem, and retention or expiry.

@@ -37,6 +37,21 @@ Do not:
 ## Escalate When
 Escalate if ownership is unclear, hard invariants are not yet approved, workload or retention evidence is materially missing, datastore choice is underconstrained, or destructive migration risk lacks a safe rollout and verification plan.
 
+## Reference Loading
+Load at most one reference by default, and only when its symptom matches the task. Load more than one only when the prompt clearly spans multiple independent data-decision pressures, such as live schema migration plus PII deletion. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps; they should change the data-architecture decision, not restate this `SKILL.md`.
+
+Keep the main output data-architecture-first. Route endpoint contracts, cache tuning, low-level query implementation, and local code mechanics to specialist skills instead of expanding data references to cover them.
+
+| Symptom in the prompt | Load | Behavior change |
+| --- | --- | --- |
+| Audit log, outbox, CDC, event stream, materialized view, dashboard table, export, search index, projection, or uncertainty about which surface is authoritative | [source-of-truth-and-derived-surfaces.md](references/source-of-truth-and-derived-surfaces.md) | Choose one invariant-bearing write authority and classify other surfaces as evidence, integration, or derived views instead of letting a stream, dashboard, or audit table become accidental truth. |
+| Tenant isolation, public IDs, partner references, idempotency keys, local business dates, event/effective/processed time, money, balances, credits, quotas, or user-visible amounts | [tenant-identity-time-and-money-modeling.md](references/tenant-identity-time-and-money-modeling.md) | Scope identity, tenancy, time, and money types deliberately instead of using global uniqueness, reused IDs, overloaded timestamps, or floating-point amounts. |
+| Uniqueness, foreign keys, `CHECK` constraints, partial indexes, exclusion or temporal-overlap constraints, composite index order, JSONB placement, partitioned uniqueness, or operational-list pagination | [sql-constraints-indexes-and-pagination.md](references/sql-constraints-indexes-and-pagination.md) | Encode enforceable invariants and access-pattern indexes in SQL instead of application-only checks, invariant-bearing JSONB, offset pagination, or broad untethered indexes. |
+| Transaction boundary, isolation level, optimistic concurrency, row or advisory locks, work claiming, duplicate callbacks, retries, idempotency records, holds, leases, scarce capacity, or outbox/inbox linkage | [transactions-concurrency-and-idempotency.md](references/transactions-concurrency-and-idempotency.md) | Select the smallest transaction, constraint, lock, lease, and idempotency mechanism that preserves the invariant instead of blanket isolation, cache counters, or unscoped locks. |
+| New datastore engine, JSONB-as-flexibility, event sourcing, document or key-value stores, Redis/search as truth, time-series or columnar storage, or datastore choice driven by scale or auditability claims | [datastore-fit-and-event-sourcing.md](references/datastore-fit-and-event-sourcing.md) | Require an access-pattern and recovery fit test before changing truth storage instead of adopting a fashionable engine, event sourcing, or flexible JSON model by default. |
+| Live schema change, added or tightened constraint, column rename or split, type/source-of-truth change, live index creation, partitioned index, or backfill | [schema-evolution-and-backfills.md](references/schema-evolution-and-backfills.md) | Plan expand, migrate or backfill, verify, and contract with rollback class instead of one-shot DDL, giant transactions, or fake reversibility. |
+| Retention window, deletion, legal hold, PII erasure, anonymization, soft delete, history tables, archives, PITR, partition pruning, projections with residual data, exports, or rebuild/replay policy | [retention-deletion-history-and-projections.md](references/retention-deletion-history-and-projections.md) | Name lifecycle action and recovery limits for every surface instead of treating soft delete, primary-row deletion, or "keep forever" as a complete policy. |
+
 ## Core Defaults
 - Default to SQL OLTP (`PostgreSQL`-compatible) as the primary system of record for service business data.
 - Default to one service-owned schema or database boundary and local ACID within that boundary.
@@ -82,13 +97,14 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Prefer stable surrogate primary keys. Keep natural or business keys explicit through `UNIQUE` constraints instead of using mutable business identifiers as the primary key.
 - Distinguish internal identity, public reference, partner reference, idempotency key, and correlation ID. They are not interchangeable.
 - Every unique, foreign-key, and index decision should say whether it is tenant-scoped.
-- For shared-table multi-tenancy, require `tenant_id` to participate in the relevant uniqueness and indexing strategy. Use centralized isolation controls such as RLS where appropriate.
+- For shared-table multi-tenancy, require `tenant_id` to participate in the relevant uniqueness and indexing strategy. Use centralized isolation controls such as RLS only when tenant context, bypassing roles, and bypass or side-channel surfaces are explicit.
 - Use a version column or equivalent optimistic-concurrency token for mutable rows that are updated by competing writers.
 - Model time deliberately:
   - use timestamp-with-time-zone semantics for real instants
+  - persist the original named zone separately when policy or rendering must reconstruct it
   - use a separate business date or effective timestamp when policy depends on local dates or retroactive effect
   - if event time and processing time differ, define late or out-of-order handling explicitly
-- Use exact numeric types for money, rates, quotas, or billable usage. Do not use floating-point types for money.
+- Use exact numeric types for money, rates, quotas, or billable usage. Do not use floating-point types for money. Avoid PostgreSQL `money` unless locale, precision, and division semantics are an explicit fit.
 - Choose enum, lookup-table, or constrained-text modeling based on change cadence and compatibility needs. Do not let unstable partner statuses leak into the canonical domain state.
 - `JSONB` is acceptable for sparse or adjunct attributes with weak relational invariants and bounded query needs. It is a poor default for invariant-bearing fields, multi-column uniqueness, or heavily filtered operational data.
 
@@ -97,10 +113,11 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Treat constraints as contracts:
   - primary key on every table
   - `UNIQUE` or composite `UNIQUE` for business uniqueness
+  - explicit null behavior for nullable unique keys, either `NULLS DISTINCT`, `NULLS NOT DISTINCT`, or `NOT NULL`
   - `NOT NULL` by default for required fields
   - `CHECK` constraints where row-local correctness materially matters
   - partial `UNIQUE` indexes when uniqueness applies only to active or current rows
-  - exclusion constraints when interval or overlap rules are central
+  - exclusion or version-gated temporal constraints when interval or overlap rules are central
 - Keep referential integrity inside one service boundary.
 - Build index policy from actual or explicitly expected access patterns:
   - align composite index order with filter then sort usage
@@ -117,13 +134,13 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Reject cross-service global ACID assumptions.
 - Choose concurrency control by invariant class:
   - row uniqueness -> `UNIQUE` or partial `UNIQUE`
-  - interval, overlap, or scarce allocation -> exclusion constraint, lease table, or explicit lock ownership
+  - interval, overlap, or scarce allocation -> exclusion constraint, supported temporal constraint, lease table, or explicit lock ownership
   - lost updates on mutable rows -> version checks or compare-and-swap semantics
   - work claiming or queue consumption -> lease semantics or `FOR UPDATE SKIP LOCKED`
   - anomalies that constraints cannot encode locally -> selective stronger isolation or explicit coordination model
 - Prefer optimistic concurrency when conflicts are rare and rows are independently owned.
 - Use pessimistic or advisory locks only with explicit scope, acquisition order, timeout behavior, and deadlock story.
-- Treat stricter isolation levels as exception paths that come with retry semantics and serialization testing.
+- Treat stricter isolation levels as targeted paths that come with retry semantics and serialization testing.
 - Bound retries and classify them by failure class; deadlocks, serialization failures, and timeouts are not the same recovery case.
 - Make write paths idempotency-aware when retries, callbacks, or duplicate partner delivery are possible.
 
@@ -159,7 +176,9 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Require migration safety budgets such as lock and statement timeouts.
 - For PostgreSQL-class systems, call out online-DDL hazards explicitly:
   - non-concurrent index builds can take disruptive locks
-  - foreign-key or check-constraint validation can block or run long if introduced carelessly
+  - `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block and failure can leave invalid indexes
+  - PostgreSQL partitioned-table indexes need special handling because concurrent builds are not supported on the partitioned parent
+  - foreign-key, check, and not-null validation can run long; not-null tightening is version-sensitive, so use PostgreSQL 17-safe `CHECK` proof or scan budgeting unless the target engine explicitly supports newer `NOT VALID` not-null constraints
   - some defaults, type changes, or table rewrites can be more expensive than they look
   - long backfill transactions create bloat, replica lag, and rollback pain
 - Prefer additive columns, concurrent index builds, phased constraint validation, and compatibility-safe reads before contract when the table is already live.

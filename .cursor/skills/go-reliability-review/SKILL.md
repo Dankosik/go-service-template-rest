@@ -58,15 +58,15 @@ Do not:
 ## Expertise
 
 ### Timeout And Deadline Semantics
-- Require explicit deadlines on outbound calls in critical paths.
+- Require outbound calls in critical paths to be covered by a caller-derived deadline or timeout budget.
 - Preserve inbound deadline and cancellation propagation.
 - Flag request-path replacement of request context.
 - Require blocking work to have bounded wait behavior.
 
 ### Retry Budget, Eligibility, And Idempotency
 - Default retry posture is no retry unless the operation and failure class are explicitly retry-safe.
-- Flag retries on validation, auth, conflict, not-found, or caller-cancel classes.
-- Require bounded backoff and jitter on approved retries.
+- Flag retries on validation, auth, caller-cancel, or unqualified conflict/not-found classes.
+- Require capped backoff and jitter when repeated or correlated retries can align.
 - Require idempotency protection when retried operations can duplicate effects.
 - For async work, require deterministic retry classes and bounded retry loops.
 
@@ -80,7 +80,7 @@ Do not:
 - Verify readiness and startup behavior do not admit traffic before the component is actually ready.
 - Keep liveness independent from optional external dependencies when appropriate.
 - Flag shutdown sequences that can lose requests, data, or goroutine cleanup.
-- Require bounded drain and explicit transition to not-ready before teardown.
+- Require bounded drain and a traffic-removal signal before teardown, either app-owned not-ready state or a proven platform-owned drain path.
 
 ### Degradation And Fallback
 - Require fallback and degraded behavior to stay explicit and bounded.

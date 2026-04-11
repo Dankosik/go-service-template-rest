@@ -46,6 +46,71 @@ func (f fakePingHistoryDB) BeginTx(ctx context.Context, txOptions pgx.TxOptions)
 	return f.beginTx(ctx, txOptions)
 }
 
+type fakePingHistoryRow struct {
+	err error
+}
+
+func (r fakePingHistoryRow) Scan(...any) error {
+	return r.err
+}
+
+type recordingPingHistoryTx struct {
+	queryRow func(context.Context, string, ...any) pgx.Row
+	rollback func(context.Context) error
+}
+
+var _ pgx.Tx = (*recordingPingHistoryTx)(nil)
+
+func (tx *recordingPingHistoryTx) Begin(context.Context) (pgx.Tx, error) {
+	return nil, errors.New("nested transactions are not supported by fake tx")
+}
+
+func (tx *recordingPingHistoryTx) Commit(context.Context) error {
+	return nil
+}
+
+func (tx *recordingPingHistoryTx) Rollback(ctx context.Context) error {
+	if tx.rollback != nil {
+		return tx.rollback(ctx)
+	}
+	return nil
+}
+
+func (tx *recordingPingHistoryTx) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, errors.New("copy is not supported by fake tx")
+}
+
+func (tx *recordingPingHistoryTx) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults {
+	return nil
+}
+
+func (tx *recordingPingHistoryTx) LargeObjects() pgx.LargeObjects {
+	return pgx.LargeObjects{}
+}
+
+func (tx *recordingPingHistoryTx) Prepare(context.Context, string, string) (*pgconn.StatementDescription, error) {
+	return nil, errors.New("prepare is not supported by fake tx")
+}
+
+func (tx *recordingPingHistoryTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, errors.New("exec is not supported by fake tx")
+}
+
+func (tx *recordingPingHistoryTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	return nil, errors.New("query is not supported by fake tx")
+}
+
+func (tx *recordingPingHistoryTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if tx.queryRow != nil {
+		return tx.queryRow(ctx, sql, args...)
+	}
+	return fakePingHistoryRow{err: errors.New("query row is not supported by fake tx")}
+}
+
+func (tx *recordingPingHistoryTx) Conn() *pgx.Conn {
+	return nil
+}
+
 func TestPingHistoryRepositoryCreate(t *testing.T) {
 	t.Parallel()
 
@@ -211,5 +276,51 @@ func TestPingHistoryRepositoryCreateAndListRecentInTxBeginError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "begin ping history transaction") {
 		t.Fatalf("CreateAndListRecentInTx() error = %q, want begin context", err.Error())
+	}
+}
+
+func TestPingHistoryRepositoryRollbackUsesCleanupContext(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("write failed")
+	ctx, cancel := context.WithCancel(context.Background())
+	var rollbackCalled bool
+	var rollbackCtxErr error
+	var rollbackHasDeadline bool
+	tx := &recordingPingHistoryTx{
+		queryRow: func(context.Context, string, ...any) pgx.Row {
+			cancel()
+			return fakePingHistoryRow{err: sentinel}
+		},
+		rollback: func(ctx context.Context) error {
+			rollbackCalled = true
+			rollbackCtxErr = ctx.Err()
+			_, rollbackHasDeadline = ctx.Deadline()
+			return nil
+		},
+	}
+	repo := &PingHistoryRepository{
+		db: fakePingHistoryDB{
+			beginTx: func(context.Context, pgx.TxOptions) (pgx.Tx, error) {
+				return tx, nil
+			},
+		},
+	}
+
+	_, _, err := repo.CreateAndListRecentInTx(ctx, "payload", 1)
+	if err == nil {
+		t.Fatal("CreateAndListRecentInTx() error = nil, want non-nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("CreateAndListRecentInTx() error = %v, want wrapped %v", err, sentinel)
+	}
+	if !rollbackCalled {
+		t.Fatal("Rollback was not called")
+	}
+	if rollbackCtxErr != nil {
+		t.Fatalf("Rollback() ctx.Err() = %v, want nil", rollbackCtxErr)
+	}
+	if !rollbackHasDeadline {
+		t.Fatal("Rollback() context has no deadline")
 	}
 }

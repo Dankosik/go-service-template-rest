@@ -13,12 +13,7 @@ import (
 
 var ErrPingHistoryRepository = errors.New("ping history repository")
 
-// PingHistoryStore defines the infra-facing contract for ping history persistence.
-type PingHistoryStore interface {
-	Create(ctx context.Context, payload string) (PingHistoryRecord, error)
-	ListRecent(ctx context.Context, limit int32) ([]PingHistoryRecord, error)
-	CreateAndListRecentInTx(ctx context.Context, payload string, limit int32) (PingHistoryRecord, []PingHistoryRecord, error)
-}
+const txRollbackTimeout = 5 * time.Second
 
 // PingHistoryRecord is the adapter-safe representation of one ping_history row.
 type PingHistoryRecord struct {
@@ -43,8 +38,6 @@ type PingHistoryRepository struct {
 	queries pingHistoryQuerier
 	db      pingHistoryDB
 }
-
-var _ PingHistoryStore = (*PingHistoryRepository)(nil)
 
 // NewPingHistoryRepository builds a repository backed by sqlc generated queries.
 func NewPingHistoryRepository(db pingHistoryDB) *PingHistoryRepository {
@@ -108,7 +101,9 @@ func (r *PingHistoryRepository) CreateAndListRecentInTx(ctx context.Context, pay
 		return PingHistoryRecord{}, nil, fmt.Errorf("begin ping history transaction: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback(ctx)
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), txRollbackTimeout)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
 	}()
 
 	txQueries := sqlcgen.New(tx)

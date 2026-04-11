@@ -18,7 +18,7 @@ Define or review chi-based transport routing so router topology, middleware beha
 - define `chi` router topology and ownership of root vs subrouter composition
 - define middleware layering, scope, and order-sensitive behavior
 - define OpenAPI and `oapi-codegen` integration shape for chi-based routing
-- define `NotFound`, `MethodNotAllowed`, `OPTIONS`, and CORS policy
+- define `NotFound`, `MethodNotAllowed`, `HEAD` when routing policy depends on it, `OPTIONS`, and CORS policy
 - define controls against route conflict, shadowing, and accidental override
 - define route-template observability semantics for logs, metrics, and traces
 - define transport-boundary fallback and unmatched-route behavior
@@ -37,86 +37,49 @@ Do not:
 - Keep observability labels route-template-based and low-cardinality.
 - Keep OpenAPI as the source of truth; adapt routing integration rather than re-owning the contract.
 
-## Expertise
+## Reference Loading
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default. Load multiple only when the task clearly spans independent decision pressures, such as generated-route ownership plus route-label telemetry.
 
-### Chi Framing And Philosophy
-- Treat `chi` as a stdlib-first router, not a full-stack framework.
-- Keep business logic and domain rules out of router concerns.
-- Use `chi` for composability:
-  - route grouping and modular mounting
-  - local middleware scoping
-  - `net/http` ecosystem compatibility
-- Preserve `http.Handler` interoperability for testing and lifecycle integration.
-- Choose `chi` for routing and middleware clarity, not for trend alone.
+Pick the narrowest matching reference by symptom:
 
-### Chi Behavioral Semantics
-- Make framework-sensitive behavior explicit:
-  - global `Use(...)` middleware runs before final route-match context is fully resolved
-  - `RoutePattern()` is reliable only after downstream handling has established the route context
-  - default `405` and `OPTIONS` behavior must be pinned to an explicit policy
-  - duplicate route registrations can silently override by registration order unless guarded against
-- Treat route conflict, fallback behavior, CORS preflight, and route labeling as semantics, not implementation trivia.
-- For framework-sensitive claims, rely on repository tests or official chi documentation rather than memory.
+| Reference | Load For Symptom | Behavior Change |
+| --- | --- | --- |
+| [references/router-topology-patterns.md](references/router-topology-patterns.md) | root router shape, `Route`/`Mount`/`Group` choice, top-level prefix ownership, generated/manual coexistence, route conflict or wildcard concern | makes the model choose one path owner with route-inventory proof instead of likely mistake `let modules, registration order, or broad wildcards decide ownership` |
+| [references/middleware-layering-patterns.md](references/middleware-layering-patterns.md) | global vs scoped middleware, exact execution order, request context mutation, panic recovery, body limits, logging, generated middleware order | makes the model choose explicit scope and outer-to-inner stack semantics instead of likely mistake `make auth/CORS/logging global or assume route identity is available before routing finishes` |
+| [references/notfound-methodnotallowed-options-cors.md](references/notfound-methodnotallowed-options-cors.md) | `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, CORS preflight, custom fallback JSON, scoped CORS placement | makes the model choose explicit fallback and preflight policy with header proof instead of likely mistake `trust framework defaults or duplicate CORS and hand-written OPTIONS behavior` |
+| [references/openapi-oapi-codegen-integration.md](references/openapi-oapi-codegen-integration.md) | OpenAPI-generated chi handlers, `oapi-codegen` strict server wiring, `BaseURL`/mount prefix choice, generated/manual route boundaries, generated-code ownership | makes the model choose one generated API owner and config/wrapper changes instead of likely mistake `edit generated files, double-prefix routes, or add manual handlers inside the generated contract surface` |
+| [references/route-template-observability.md](references/route-template-observability.md) | metrics, traces, logs, span names, route labels, `RoutePattern()`, `Match`/`Find`, raw-path labels, fallback route identity | makes the model choose bounded route-template labels after route resolution instead of likely mistake `use raw URL paths or incomplete pre-handler route patterns` |
+| [references/router-validation-test-patterns.md](references/router-validation-test-patterns.md) | proof obligations for router topology, fallback, middleware order, CORS preflight, OpenAPI route coverage, observability labels | makes the model choose a small test/proof matrix tied to the routing risk instead of likely mistake `write generic happy-path route tests or prose-only validation` |
 
-### Router Topology
-- Require one deterministic ownership point for each affected path set.
-- Make root router, mounted subrouter, and direct handler coexistence rules explicit.
-- Prevent generated and manual routes from colliding silently.
-- Reject route plans that allow hidden override behavior without tests or explicit guardrails.
-
-### Middleware Order And Scope
-- Define exact middleware order and explain why order matters for:
-  - request or correlation ID
-  - security headers
-  - body and framing limits
-  - access logging and route-label extraction
-  - panic recovery
-- Make `global` vs route-local scope explicit.
-- Reject reorder proposals that do not analyze behavioral impact.
-
-### OpenAPI And Code Generation Integration
-- Keep OpenAPI as the contract source of truth.
-- Make the `oapi-codegen` mode and strict-wrapper behavior explicit.
-- Ensure generated and manual routes can coexist without collision ambiguity.
-- Generated files are not for manual editing.
-
-### 404, 405, OPTIONS, And CORS Policy
-- Define explicit behavior for:
-  - `NotFound`
-  - `MethodNotAllowed`
-  - `Allow` header behavior
-  - `OPTIONS` handling
-  - preflight CORS behavior
-- Treat CORS placement as an architecture decision:
-  - top-level middleware by default
-  - scoped placement only with a clear `OPTIONS` strategy
-- Do not leave API-facing fallback behavior to framework defaults when clients depend on it.
-
-### Observability Route Semantics
-- Prefer route-template extraction via chi route context.
-- Define safe fallback behavior when a route template is unavailable.
-- Make timing rules for route extraction explicit so logs, metrics, and spans stay aligned.
-- Never use raw request paths, user IDs, or request IDs as metric labels.
-
-### Resilience And Lifecycle Interface
-- Preserve graceful startup and shutdown behavior of `http.Server`.
-- Define transport behavior for unmatched and method-disallowed requests.
-- Make router-level degradation or policy-mismatch behavior explicit where it affects clients or operators.
+## Design Method
+- Start from the affected route surfaces and list the routing decisions that are still implicit.
+- Load the narrowest relevant reference only when it changes a routing decision; do not load references for general chi knowledge.
+- Make selected and rejected options explicit for nontrivial routing choices.
+- Treat framework-sensitive behavior as testable policy. Require repository proof or installed-version verification instead of relying on memory.
+- Keep the output focused on chi routing and transport composition. Hand off payload schema, persistence, security architecture, broad reliability policy, and SLI/SLO ownership unless routing behavior directly depends on them.
 
 ## Decision Quality Bar
 Major routing recommendations should make the following explicit:
 - the routing or middleware problem being solved
-- at least two viable options when the decision is nontrivial
-- selected and rejected options
-- behavior-sensitive framework implications
+- selected and rejected options when the decision is nontrivial
+- behavior-sensitive chi or `net/http` implications
+- generated vs manual route ownership when OpenAPI is involved
 - acceptance boundaries that can be tested
-- reopen conditions
+- adjacent handoffs and reopen conditions
+
+## Reject Conditions
+Reject designs that:
+- rely on implicit fallback or CORS defaults for client-visible API behavior
+- use raw request paths, user IDs, request IDs, or other high-cardinality values as metrics labels
+- allow generated and manual route ownership to collide without a validation hook
+- change middleware order without explaining the behavior impact
+- turn routing work into payload schema, storage, security architecture, or broad reliability design
 
 ## Deliverable Shape
-Return routing work in a compact, reviewable form:
+Return routing work in a compact, reviewable form. Include only sections that carry task-relevant decisions; omit headings whose domain is out of scope unless the omission is itself a handoff or risk:
 - `Router Topology`
 - `Middleware Order And Scope`
-- `404/405/OPTIONS/CORS Policy`
+- `404/405/HEAD/OPTIONS/CORS Policy`
 - `OpenAPI And Codegen Integration Notes`
 - `Route Observability Semantics`
 - `Open Risks And Assumptions`
