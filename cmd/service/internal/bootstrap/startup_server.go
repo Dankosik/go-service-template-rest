@@ -77,7 +77,7 @@ func serveHTTPRuntime(
 	admissionCtx, cancelAdmission := context.WithCancel(bootstrapCtx)
 	defer cancelAdmission()
 
-	admissionErrCh := startStartupAdmission(admissionCtx, readinessCheck, admission)
+	admissionErrCh := startStartupAdmission(admissionCtx, readinessCheck, admission, cfg.HTTP.ReadinessTimeout)
 	var serverErr error
 	var terminalErr error
 	startupFailureRecorded := false
@@ -176,11 +176,12 @@ func startStartupAdmission(
 	bootstrapCtx context.Context,
 	readinessCheck func(context.Context) error,
 	admission *startupAdmissionController,
+	readinessTimeout time.Duration,
 ) <-chan error {
 	resultCh := make(chan error, 1)
 
 	go func() {
-		readyCtx, cancel := withStageBudget(bootstrapCtx, startupAdmissionBudget)
+		readyCtx, cancel := withStageBudget(bootstrapCtx, readinessTimeout)
 		defer cancel()
 
 		if err := readyCtx.Err(); err != nil {

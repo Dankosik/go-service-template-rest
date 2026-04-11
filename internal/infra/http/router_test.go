@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -21,9 +24,35 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
+func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
+	t.Helper()
+
+	if h.Health == nil {
+		h.Health = health.New()
+	}
+	if h.Ping == nil {
+		h.Ping = ping.New()
+	}
+	if h.ReadinessGate == nil {
+		h.ReadinessGate = func(context.Context) error { return nil }
+	}
+	if metrics == nil {
+		metrics = telemetry.New()
+	}
+	if cfg.ReadinessTimeout <= 0 {
+		cfg.ReadinessTimeout = time.Second
+	}
+
+	handler, err := NewRouter(log, h, metrics, cfg)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v, want nil", err)
+	}
+	return handler
+}
+
 func TestRouterEndpoints(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -78,7 +107,7 @@ func TestRouterEndpoints(t *testing.T) {
 
 func TestRouterHTTPPolicy(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -190,6 +219,9 @@ func TestRouterHTTPPolicy(t *testing.T) {
 		if !strings.Contains(resp.Body.String(), "cors preflight is not enabled") {
 			t.Fatalf("body = %q, want to contain preflight policy detail", resp.Body.String())
 		}
+		if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Fatalf("Access-Control-Allow-Origin = %q, want empty for fail-closed CORS", got)
+		}
 		allowMethods := resp.Header().Values("Allow")
 		if !containsString(allowMethods, http.MethodGet) {
 			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodGet)
@@ -214,9 +246,52 @@ func TestRouterHTTPPolicy(t *testing.T) {
 	})
 }
 
+func TestStrictRequestErrorDetailsAreSanitized(t *testing.T) {
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	const attackerDetail = `invalid "token": secret-value`
+
+	// Current operations have no request parameters or bodies that trigger generated parse errors.
+	handler := RequestCorrelation(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logStrictRequestError(log, r, errors.New(attackerDetail))
+		writeMalformedRequestProblem(w, r)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	req.Header.Set(requestIDHeader, "req-123")
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
+	}
+	var problem map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("unmarshal problem: %v", err)
+	}
+	if got := problem["detail"]; got != malformedRequestProblemDetail {
+		t.Fatalf("detail = %v, want %q", got, malformedRequestProblemDetail)
+	}
+	if strings.Contains(resp.Body.String(), attackerDetail) {
+		t.Fatalf("problem body leaks raw parser detail: %q", resp.Body.String())
+	}
+
+	logLine := out.String()
+	if strings.Contains(logLine, attackerDetail) {
+		t.Fatalf("log line leaks raw parser detail: %q", logLine)
+	}
+	if !strings.Contains(logLine, `"error_class"`) {
+		t.Fatalf("log line = %q, want sanitized error_class", logLine)
+	}
+	if !strings.Contains(logLine, `"request_id":"req-123"`) {
+		t.Fatalf("log line = %q, want request_id", logLine)
+	}
+}
+
 func TestRouterAddsRequestIDHeader(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -249,7 +324,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 
 func TestRouterAddsSecurityHeaders(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -266,7 +341,7 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 
 func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -297,7 +372,7 @@ func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 
 func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
@@ -322,7 +397,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 func TestAccessLogIncludesCorrelationFields(t *testing.T) {
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, nil, RouterConfig{})
@@ -407,7 +482,7 @@ func TestAccessLogResponseControllerCanReachWrappedWriter(t *testing.T) {
 
 func TestMetricsExposeDurationHistogram(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -491,6 +566,60 @@ func TestRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
 	})
 }
 
+func TestManualRootRouteGeneratedOverlapsAreDocumented(t *testing.T) {
+	openAPIRoutes := openAPIOperationRoutes(t)
+	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	for _, route := range manualRoutes {
+		if route.reason == "" {
+			t.Fatalf("manual route %s %s has an empty root-route reason", route.key.method, route.key.path)
+		}
+		if strings.HasPrefix(route.key.path, "/api/") {
+			t.Fatalf("manual route %s %s uses API namespace; add it through OpenAPI instead", route.key.method, route.key.path)
+		}
+		if _, generated := openAPIRoutes[route.key]; !generated {
+			continue
+		}
+
+		reason, allowed := documentedManualGeneratedRouteOverlaps[route.key]
+		if !allowed {
+			t.Fatalf("manual route %s %s overlaps generated OpenAPI route without a documented root exception", route.key.method, route.key.path)
+		}
+		if reason != route.reason {
+			t.Fatalf("manual route %s %s reason = %q, want documented overlap reason %q", route.key.method, route.key.path, route.reason, reason)
+		}
+	}
+
+	for key, reason := range documentedManualGeneratedRouteOverlaps {
+		if reason == "" {
+			t.Fatalf("documented root exception %s %s has an empty reason", key.method, key.path)
+		}
+		if _, generated := openAPIRoutes[key]; !generated {
+			t.Fatalf("documented root exception %s %s no longer overlaps OpenAPI; remove the exception or update route ownership docs", key.method, key.path)
+		}
+	}
+}
+
+func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
+	t.Helper()
+
+	swagger, err := api.GetSwagger()
+	if err != nil {
+		t.Fatalf("GetSwagger() error = %v", err)
+	}
+
+	routes := make(map[manualRootRouteKey]struct{})
+	for path, item := range swagger.Paths.Map() {
+		if item == nil {
+			continue
+		}
+		for method := range item.Operations() {
+			routes[manualRootRouteKey{method: method, path: path}] = struct{}{}
+		}
+	}
+	return routes
+}
+
 func TestRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(
@@ -508,7 +637,7 @@ func TestRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	})
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})

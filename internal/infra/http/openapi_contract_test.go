@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
@@ -17,7 +18,7 @@ import (
 
 func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -80,7 +81,7 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 
 func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -103,7 +104,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 	healthSvc.StartDrain()
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: healthSvc,
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -121,9 +122,32 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 	}
 }
 
+func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := mustNewRouter(t, log, Handlers{
+		Health: health.New(),
+		Ping:   ping.New(),
+		ReadinessGate: func(context.Context) error {
+			return errors.New("startup admission is not ready")
+		},
+	}, telemetry.New(), RouterConfig{})
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
+	}
+	if body := resp.Body.String(); body != "not ready" {
+		t.Fatalf("body = %q, want %q", body, "not ready")
+	}
+}
+
 func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{
+	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
@@ -142,37 +166,95 @@ func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 	}
 }
 
-func TestOpenAPIRuntimeContractFallbackServices(t *testing.T) {
+func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRouter(log, Handlers{}, nil, RouterConfig{})
 
-	t.Run("ping fallback", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
+	testCases := []struct {
+		name     string
+		log      *slog.Logger
+		handlers Handlers
+		metrics  *telemetry.Metrics
+		cfg      RouterConfig
+		wantErr  string
+	}{
+		{
+			name:     "missing logger",
+			handlers: Handlers{Health: health.New(), Ping: ping.New(), ReadinessGate: func(context.Context) error { return nil }},
+			metrics:  telemetry.New(),
+			cfg:      RouterConfig{ReadinessTimeout: time.Second},
+			wantErr:  "logger is required",
+		},
+		{
+			name:    "missing health",
+			log:     log,
+			metrics: telemetry.New(),
+			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			handlers: Handlers{
+				Ping:          ping.New(),
+				ReadinessGate: func(context.Context) error { return nil },
+			},
+			wantErr: "health service is required",
+		},
+		{
+			name:    "missing ping",
+			log:     log,
+			metrics: telemetry.New(),
+			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			handlers: Handlers{
+				Health:        health.New(),
+				ReadinessGate: func(context.Context) error { return nil },
+			},
+			wantErr: "ping service is required",
+		},
+		{
+			name:    "missing readiness gate",
+			log:     log,
+			metrics: telemetry.New(),
+			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			handlers: Handlers{
+				Health: health.New(),
+				Ping:   ping.New(),
+			},
+			wantErr: "readiness gate is required",
+		},
+		{
+			name: "missing metrics",
+			log:  log,
+			cfg:  RouterConfig{ReadinessTimeout: time.Second},
+			handlers: Handlers{
+				Health:        health.New(),
+				Ping:          ping.New(),
+				ReadinessGate: func(context.Context) error { return nil },
+			},
+			wantErr: "metrics is required",
+		},
+		{
+			name:    "missing readiness timeout",
+			log:     log,
+			metrics: telemetry.New(),
+			handlers: Handlers{
+				Health:        health.New(),
+				Ping:          ping.New(),
+				ReadinessGate: func(context.Context) error { return nil },
+			},
+			wantErr: "readiness timeout must be > 0",
+		},
+	}
 
-		h.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-		if body := resp.Body.String(); body != "pong" {
-			t.Fatalf("body = %q, want %q", body, "pong")
-		}
-	})
-
-	t.Run("metrics fallback", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-		if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
-			t.Fatalf("content type = %q, want prefix %q", got, "text/plain")
-		}
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, err := NewRouter(tc.log, tc.handlers, tc.metrics, tc.cfg)
+			if err == nil {
+				t.Fatalf("NewRouter() error = nil, want %q", tc.wantErr)
+			}
+			if handler != nil {
+				t.Fatalf("NewRouter() handler = %T, want nil on error", handler)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("NewRouter() error = %v, want to contain %q", err, tc.wantErr)
+			}
+		})
+	}
 }
 
 type failingProbe struct {

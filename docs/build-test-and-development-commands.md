@@ -48,7 +48,7 @@ Bootstrap shortcuts:
 ### Bootstrap and environment checks
 
 - `make help`
-  - Purpose: print minimal onboarding command set and common workflows.
+  - Purpose: print minimal onboarding command set, common workflows, and feature validation shortcuts such as `openapi-check`, `sqlc-check`, `test-integration`, and Docker equivalents.
 
 - `make bootstrap`
   - Purpose: clone-and-go onboarding entrypoint with minimum side effects.
@@ -193,13 +193,13 @@ Bootstrap shortcuts:
 ### Formatting and static quality
 
 - `make fmt`
-  - Runs `go tool goimports -w` on all Go files except `vendor/`.
+  - Runs `go tool goimports -w` on all Go files except `vendor/` and local tool caches under `.cache/`.
 
 - `make docker-fmt`
   - Docker equivalent of `make fmt`.
 
 - `make fmt-check`
-  - Fails only when `go tool goimports -l` reports unformatted Go files.
+  - Fails only when `go tool goimports -l` reports unformatted Go files outside `vendor/` and local tool caches under `.cache/`.
 
 - `make docker-fmt-check`
   - Docker equivalent of `make fmt-check` (same `goimports -l` behavior).

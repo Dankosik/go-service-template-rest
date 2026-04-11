@@ -79,21 +79,23 @@ Stable direction rules:
 
 1. `cmd/service/internal/bootstrap.Run` builds the config snapshot, lifecycle logging, telemetry, dependency probes, app services, router, and HTTP server.
 2. `internal/infra/http.NewRouter` wraps the root router with request correlation, security headers, framing/body guards, panic recovery, access logging, route labeling, metrics, and tracing middleware.
-3. `/metrics` is served directly from the root router; API routes are handled through the generated strict OpenAPI server.
+3. `/metrics` is the documented operational root-router exception, served directly to avoid strict-handler buffering while still being guarded against accidental generated/manual route overlap. API routes are handled through the generated strict OpenAPI server.
 4. `internal/infra/http` maps the request into the generated OpenAPI handler interface and calls the app service (`internal/app/*`).
 5. The app service returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or problem responses.
 6. Transport observability is emitted at the edge: request logs, Prometheus request metrics, and OpenTelemetry spans use route labels from the HTTP layer.
 
-Current runtime note: the shipped endpoints are intentionally small (`ping`, liveness, readiness, metrics), but the same path is the baseline for future HTTP features.
+Current runtime note: the shipped endpoints are intentionally small (`ping`, liveness, readiness, metrics), and they are public system/sample endpoints. New business endpoints must make a security decision before implementation: public by design, protected by real OpenAPI security plus auth middleware and 401/403 Problem responses, or blocked pending a security spec. Browser CORS remains fail-closed by default.
+
+Operational exposure note: `/metrics` is not an ordinary public business API. Production deployments should expose it only on a private scrape path/network or add a real auth/internal-listener design before internet exposure.
 
 ### Startup/Shutdown Path
 
 1. `cmd/service/main.go` delegates to `bootstrap.Run`.
 2. Bootstrap parses config flags, creates the signal-aware root context, initializes baseline metrics, and loads the immutable config snapshot through `internal/config`.
 3. Bootstrap reconfigures structured logging from the validated config, initializes tracing in fail-open mode, applies startup network policy checks, and probes enabled dependencies.
-4. Only after bootstrap and readiness admission succeed does the HTTP runtime begin serving traffic.
-5. Readiness is guarded by both startup admission and `internal/app/health.Service`, which can aggregate dependency probes.
-6. On shutdown, bootstrap marks the service as draining, flips readiness off, waits the configured propagation delay, gracefully shuts down the HTTP server, and flushes telemetry.
+4. The HTTP runtime may begin serving while startup admission is still running, but external `/health/ready` stays not ready until startup admission marks the process ready.
+5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/app/health.Service`, which can aggregate dependency probes.
+6. On shutdown, bootstrap marks the service as draining, flips readiness off, waits the configured propagation delay, gracefully shuts down the HTTP server, and flushes telemetry inside the process-grace budget.
 
 The lifecycle baseline is: config and dependency validation happen before accepting traffic, and shutdown is coordinated from the bootstrap layer rather than from handlers or app services.
 
@@ -113,7 +115,9 @@ Preferred rule: if the workload has a distinct lifecycle or scaling model, add a
 Use these seams when extending the repository:
 
 - New HTTP capability: update `api/openapi/service.yaml`, regenerate `internal/api`, add use-case logic in `internal/app`, then wire handlers/routes in `internal/infra/http`.
-- New persistence or integration adapter: add it under `internal/infra/<integration>`; add a domain contract only if `internal/app` needs inversion over the concrete adapter.
+- New persistence flow: add a deterministic migration under `env/migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into app-facing types, add an app-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
+- New integration adapter: add it under `internal/infra/<integration>`; add an app-owned or domain contract only if `internal/app` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`.
+- New outbound target: fixed targets must declare source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before bootstrap wiring; dynamic or user-controlled URLs require a separate security design.
 - New durable schema behavior: evolve `env/migrations/` first, then keep adapter or generated access code derived from that schema.
 - New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse shared app/infra packages instead of duplicating logic.
 - New non-HTTP contract surface: `api/proto/` is the reserved source-of-truth location for protobuf contracts when that runtime is introduced.

@@ -31,6 +31,24 @@ type dependencyProbeOutcome struct {
 	postgresPool *postgres.Pool
 }
 
+type dependencyCleanupStack struct {
+	cleanups []func()
+}
+
+func (s *dependencyCleanupStack) add(cleanup func()) {
+	if cleanup == nil {
+		return
+	}
+	s.cleanups = append(s.cleanups, cleanup)
+}
+
+func (s *dependencyCleanupStack) run() {
+	for i := len(s.cleanups) - 1; i >= 0; i-- {
+		s.cleanups[i]()
+	}
+	s.cleanups = nil
+}
+
 type startupNamedProbe struct {
 	name  string
 	check func(context.Context) error
@@ -60,11 +78,17 @@ type probeExecutionResult struct {
 	err           error
 }
 
-func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime dependencyProbeRuntime) (dependencyProbeOutcome, error) {
+func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime dependencyProbeRuntime) (outcome dependencyProbeOutcome, err error) {
 	dependencyProbeCtx, dependencyProbeCancel := withStageBudget(startupCtx, startupProbeBudget)
 	defer dependencyProbeCancel()
 
-	outcome := dependencyProbeOutcome{probes: make([]health.Probe, 0, 1)}
+	outcome = dependencyProbeOutcome{probes: make([]health.Probe, 0, 1)}
+	cleanupStack := dependencyCleanupStack{}
+	defer func() {
+		if err != nil {
+			cleanupStack.run()
+		}
+	}()
 
 	pg, err := initPostgresDependency(bootstrapCtx, runtime, dependencyProbeCtx)
 	if err != nil {
@@ -72,6 +96,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 	}
 	if pg != nil {
 		outcome.postgresPool = pg
+		cleanupStack.add(pg.Close)
 		if runtime.cfg.FeatureFlags.PostgresReadinessProbe {
 			outcome.probes = append(outcome.probes, pg)
 		}
@@ -143,48 +168,28 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	})
 	if probeResult.failed {
 		if probeResult.budgetBlocked {
-			runtime.bootstrapSpan.RecordError(probeResult.err)
-			runtime.bootstrapSpan.SetAttributes(
-				attribute.String("result", "error"),
-				attribute.String("error.type", "dependency_init"),
-				attribute.String("failed.stage", "startup.probe.postgres"),
-			)
-			runtime.metrics.IncConfigValidationFailure("dependency_init")
-			runtime.metrics.IncConfigStartupOutcome("rejected")
-			runtime.log.Error(
-				"startup_blocked",
-				startupLogArgs(
-					bootstrapCtx,
-					"startup_probes",
-					"postgres_probe",
-					"error",
-					"error.type", "dependency_init",
-					"dependency", "postgres",
-				)...,
+			recordDependencyProbeRejection(
+				bootstrapCtx,
+				runtime,
+				"postgres",
+				"postgres_probe",
+				"startup.probe.postgres",
+				"",
+				probeResult.err,
 			)
 			return nil, fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, probeResult.err)
 		}
 
 		sanitizedErr := dependencyInitFailure("postgres", probeResult.err)
 		runtime.metrics.SetStartupDependencyStatus("postgres", "critical_fail_closed", false)
-		runtime.metrics.IncConfigValidationFailure("dependency_init")
-		runtime.metrics.IncConfigStartupOutcome("rejected")
-		runtime.bootstrapSpan.RecordError(sanitizedErr)
-		runtime.bootstrapSpan.SetAttributes(
-			attribute.String("result", "error"),
-			attribute.String("error.type", "dependency_init"),
-			attribute.String("failed.stage", "startup.probe.postgres"),
-		)
-		runtime.log.Error(
-			"startup_blocked",
-			startupLogArgs(
-				bootstrapCtx,
-				"startup_probes",
-				"postgres_probe",
-				"error",
-				"error.type", "dependency_init",
-				"dependency", "postgres",
-			)...,
+		recordDependencyProbeRejection(
+			bootstrapCtx,
+			runtime,
+			"postgres",
+			"postgres_probe",
+			"startup.probe.postgres",
+			"",
+			sanitizedErr,
 		)
 		return nil, sanitizedErr
 	}
@@ -250,49 +255,27 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	})
 	if probeResult.failed {
 		if shouldAbortDegradedDependencyStartup(probeResult) {
-			runtime.metrics.IncConfigValidationFailure("dependency_init")
-			runtime.metrics.IncConfigStartupOutcome("rejected")
-			runtime.bootstrapSpan.RecordError(probeResult.err)
-			runtime.bootstrapSpan.SetAttributes(
-				attribute.String("result", "error"),
-				attribute.String("error.type", "dependency_init"),
-				attribute.String("failed.stage", "startup.probe.redis"),
-			)
-			runtime.log.Error(
-				"startup_blocked",
-				startupLogArgs(
-					bootstrapCtx,
-					"startup_probes",
-					"redis_probe",
-					"error",
-					"error.type", "dependency_init",
-					"dependency", "redis",
-					"mode", redisMode,
-				)...,
+			recordDependencyProbeRejection(
+				bootstrapCtx,
+				runtime,
+				"redis",
+				"redis_probe",
+				"startup.probe.redis",
+				redisMode,
+				probeResult.err,
 			)
 			return nil, dependencyInitAbortFailure("redis", probeResult)
 		}
 		if redisMode == "store" {
 			rejectErr := dependencyInitFailure("redis", probeResult.err)
-			runtime.bootstrapSpan.RecordError(rejectErr)
-			runtime.bootstrapSpan.SetAttributes(
-				attribute.String("result", "error"),
-				attribute.String("error.type", "dependency_init"),
-				attribute.String("failed.stage", "startup.probe.redis"),
-			)
-			runtime.metrics.IncConfigValidationFailure("dependency_init")
-			runtime.metrics.IncConfigStartupOutcome("rejected")
-			runtime.log.Error(
-				"startup_blocked",
-				startupLogArgs(
-					bootstrapCtx,
-					"startup_probes",
-					"redis_probe",
-					"error",
-					"error.type", "dependency_init",
-					"dependency", "redis",
-					"mode", redisMode,
-				)...,
+			recordDependencyProbeRejection(
+				bootstrapCtx,
+				runtime,
+				"redis",
+				"redis_probe",
+				"startup.probe.redis",
+				redisMode,
+				rejectErr,
 			)
 			return nil, rejectErr
 		}
@@ -371,25 +354,14 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	})
 	if probeResult.failed {
 		if shouldAbortDegradedDependencyStartup(probeResult) {
-			runtime.metrics.IncConfigValidationFailure("dependency_init")
-			runtime.metrics.IncConfigStartupOutcome("rejected")
-			runtime.bootstrapSpan.RecordError(probeResult.err)
-			runtime.bootstrapSpan.SetAttributes(
-				attribute.String("result", "error"),
-				attribute.String("error.type", "dependency_init"),
-				attribute.String("failed.stage", "startup.probe.mongo"),
-			)
-			runtime.log.Error(
-				"startup_blocked",
-				startupLogArgs(
-					bootstrapCtx,
-					"startup_probes",
-					"mongo_probe",
-					"error",
-					"error.type", "dependency_init",
-					"dependency", "mongo",
-					"mode", "degraded_read_only_or_stale",
-				)...,
+			recordDependencyProbeRejection(
+				bootstrapCtx,
+				runtime,
+				"mongo",
+				"mongo_probe",
+				"startup.probe.mongo",
+				"degraded_read_only_or_stale",
+				probeResult.err,
 			)
 			return nil, dependencyInitAbortFailure("mongo", probeResult)
 		}

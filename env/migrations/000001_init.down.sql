@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS ping_history;
+DROP TABLE ping_history;

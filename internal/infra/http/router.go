@@ -1,9 +1,11 @@
 package httpx
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -12,14 +14,24 @@ import (
 )
 
 type RouterConfig struct {
-	MaxBodyBytes int64
+	MaxBodyBytes     int64
+	ReadinessTimeout time.Duration
 }
 
-func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
-	strict := newStrictHandlers(h, metrics)
+func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) (http.Handler, error) {
+	if log == nil {
+		return nil, fmt.Errorf("http router: logger is required")
+	}
+
+	strict, err := newStrictHandlers(h, metrics, cfg.ReadinessTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	server := api.NewStrictHandlerWithOptions(strict, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			writeProblem(w, r, http.StatusBadRequest, "bad request", err.Error())
+			logStrictRequestError(log, r, err)
+			writeMalformedRequestProblem(w, r)
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
 			writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
@@ -63,15 +75,68 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	handler = SecurityHeaders(handler)
 	handler = RequestCorrelation(handler)
 
-	return handler
+	return handler, nil
+}
+
+type manualRootRouteKey struct {
+	method string
+	path   string
+}
+
+type manualRootRoute struct {
+	key     manualRootRouteKey
+	handler http.Handler
+	reason  string
+}
+
+const metricsRootRouteReason = "operational metrics is streamed from the root router while remaining visible in the OpenAPI contract"
+
+var documentedManualGeneratedRouteOverlaps = map[manualRootRouteKey]string{
+	{method: http.MethodGet, path: "/metrics"}: metricsRootRouteReason,
 }
 
 func newRootRouter(apiSubrouter http.Handler, metricsHandler http.Handler) chi.Router {
 	root := chi.NewRouter()
-	root.Method(http.MethodGet, "/metrics", metricsHandler)
+	for _, route := range manualRootRoutes(metricsHandler) {
+		root.Method(route.key.method, route.key.path, route.handler)
+	}
 	root.Mount("/", apiSubrouter)
 	applyHTTPPolicy(root)
 	return root
+}
+
+func manualRootRoutes(metricsHandler http.Handler) []manualRootRoute {
+	return []manualRootRoute{
+		{
+			key: manualRootRouteKey{
+				method: http.MethodGet,
+				path:   "/metrics",
+			},
+			handler: metricsHandler,
+			reason:  metricsRootRouteReason,
+		},
+	}
+}
+
+func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
+	if log == nil {
+		return
+	}
+
+	attrs := []any{slog.String("error_class", strictRequestErrorClass(err))}
+	if r != nil {
+		if requestID := requestIDFromContext(r.Context()); requestID != "" {
+			attrs = append(attrs, slog.String("request_id", requestID))
+		}
+	}
+	log.Warn("rejected malformed HTTP request", attrs...)
+}
+
+func strictRequestErrorClass(err error) string {
+	if err == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%T", err)
 }
 
 func applyHTTPPolicy(root chi.Router) {

@@ -43,6 +43,12 @@ help:
 	@echo "Advanced validation commands:"
 	@echo "  make ci-local       # native CI-like checks"
 	@echo "  make docker-ci      # Docker CI-like checks"
+	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
+	@echo "  make sqlc-check     # SQLC generation and drift checks"
+	@echo "  make test-integration        # integration tests"
+	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
+	@echo "  make docker-sqlc-check       # Docker SQLC validation"
+	@echo "  make docker-test-integration # Docker integration tests"
 	@echo "  make gh-protect BRANCH=main"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
@@ -149,7 +155,7 @@ tidy:
 	go mod tidy
 
 fmt:
-	go tool goimports -w $(shell find . -type f -name '*.go' -not -path './vendor/*')
+	go tool goimports -w $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')
 
 mod-check:
 	GOFLAGS= go mod tidy -diff
@@ -160,7 +166,7 @@ docker-mod-check:
 	$(DOCKER_TOOLING_SCRIPT) mod-check
 
 fmt-check:
-	@unformatted="$$(go tool goimports -l $$(find . -type f -name '*.go' -not -path './vendor/*'))"; \
+	@unformatted="$$(go tool goimports -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*'))"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \

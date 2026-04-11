@@ -21,7 +21,6 @@ import (
 
 const (
 	telemetryShutdownTimeout    = 5 * time.Second
-	shutdownReadinessDelay      = 15 * time.Second
 	startupBudget               = 30 * time.Second
 	startupReserveBudget        = 3 * time.Second
 	startupFailFastThreshold    = 150 * time.Millisecond
@@ -29,7 +28,6 @@ const (
 	startupConfigValidateBudget = 2 * time.Second
 	startupProbeBudget          = 15 * time.Second
 	startupTelemetryBudget      = 2 * time.Second
-	startupAdmissionBudget      = 2 * time.Second
 
 	postgresProbeBudget = 5 * time.Second
 	redisProbeBudget    = 3 * time.Second
@@ -140,17 +138,29 @@ func Run(args []string) (runErr error) {
 		}
 		return healthSvc.Ready(ctx)
 	}
+	externalReadinessGate := func(ctx context.Context) error {
+		if err := startupAdmission.CheckReady(ctx); err != nil {
+			return err
+		}
+		return ingressGuard.Check(ctx)
+	}
 
-	handler := httpx.NewRouter(
+	handler, err := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
-			Health:      healthSvc,
-			Ping:        pingSvc,
-			BeforeReady: ingressGuard.Check,
+			Health:        healthSvc,
+			Ping:          pingSvc,
+			ReadinessGate: externalReadinessGate,
 		},
 		metrics,
-		httpx.RouterConfig{MaxBodyBytes: bootstrap.cfg.HTTP.MaxBodyBytes},
+		httpx.RouterConfig{
+			MaxBodyBytes:     bootstrap.cfg.HTTP.MaxBodyBytes,
+			ReadinessTimeout: bootstrap.cfg.HTTP.ReadinessTimeout,
+		},
 	)
+	if err != nil {
+		return fmt.Errorf("build http router: %w", err)
+	}
 
 	srv := httpx.New(httpx.Config{
 		Addr:              bootstrap.cfg.HTTP.Addr,
@@ -172,7 +182,7 @@ func Run(args []string) (runErr error) {
 		srv,
 		readinessCheck,
 		startupAdmission,
-		shutdownReadinessDelay,
+		bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 	)
 }
 

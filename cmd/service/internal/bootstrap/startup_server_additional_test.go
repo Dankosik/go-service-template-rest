@@ -64,6 +64,21 @@ func newTestStartupAdmissionController(metrics *telemetry.Metrics) *startupAdmis
 	)
 }
 
+func TestStartupAdmissionControllerCheckReady(t *testing.T) {
+	metrics := telemetry.New()
+	admission := newTestStartupAdmissionController(metrics)
+
+	err := admission.CheckReady(context.Background())
+	if !errors.Is(err, errStartupAdmissionPending) {
+		t.Fatalf("CheckReady() error = %v, want %v", err, errStartupAdmissionPending)
+	}
+
+	admission.MarkReady(context.Background())
+	if err := admission.CheckReady(context.Background()); err != nil {
+		t.Fatalf("CheckReady() after MarkReady error = %v, want nil", err)
+	}
+}
+
 func TestServeHTTPRuntimeListenError(t *testing.T) {
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))

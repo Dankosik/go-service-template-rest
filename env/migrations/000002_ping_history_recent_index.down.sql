@@ -1,1 +1,1 @@
-DROP INDEX IF EXISTS idx_ping_history_created_at_id;
+DROP INDEX idx_ping_history_created_at_id;

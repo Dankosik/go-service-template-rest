@@ -362,20 +362,32 @@ func isSecretLikeConfigKey(key string) bool {
 		return true
 	}
 
-	patterns := []string{
-		".password",
-		".token",
-		".secret",
-		".authorization",
-		".dsn",
-		"otlp_headers",
-	}
-	for _, pattern := range patterns {
-		if strings.Contains(lower, pattern) {
+	segments := configKeySegments(lower)
+	for i, segment := range segments {
+		switch segment {
+		case "password", "token", "secret", "authorization", "dsn":
 			return true
+		case "key":
+			if i > 0 && (segments[i-1] == "api" || segments[i-1] == "private") {
+				return true
+			}
+		case "headers":
+			if i > 0 && segments[i-1] == "otlp" {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func configKeySegments(key string) []string {
+	return strings.FieldsFunc(key, func(r rune) bool {
+		switch r {
+		case '.', '_', '-':
+			return true
+		}
+		return false
+	})
 }
 
 func hasNonEmptyConfigValue(value any) bool {

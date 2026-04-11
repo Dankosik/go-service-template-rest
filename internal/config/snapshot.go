@@ -19,6 +19,12 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err := readDurationInto(k, "http.shutdown_timeout", &cfg.HTTP.ShutdownTimeout); err != nil {
 		return Config{}, err
 	}
+	if err := readDurationInto(k, "http.readiness_timeout", &cfg.HTTP.ReadinessTimeout); err != nil {
+		return Config{}, err
+	}
+	if err := readDurationInto(k, "http.readiness_propagation_delay", &cfg.HTTP.ReadinessPropagationDelay); err != nil {
+		return Config{}, err
+	}
 	if err := readDurationInto(k, "http.read_header_timeout", &cfg.HTTP.ReadHeaderTimeout); err != nil {
 		return Config{}, err
 	}

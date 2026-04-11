@@ -239,6 +239,25 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	}
 }
 
+func TestDependencyCleanupStackRunsInReverseOrder(t *testing.T) {
+	t.Parallel()
+
+	var closed []string
+	stack := dependencyCleanupStack{}
+	stack.add(func() { closed = append(closed, "postgres") })
+	stack.add(func() { closed = append(closed, "redis") })
+
+	stack.run()
+
+	if got := strings.Join(closed, ","); got != "redis,postgres" {
+		t.Fatalf("cleanup order = %q, want %q", got, "redis,postgres")
+	}
+	stack.run()
+	if got := strings.Join(closed, ","); got != "redis,postgres" {
+		t.Fatalf("cleanup rerun changed order = %q", got)
+	}
+}
+
 func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 	t.Parallel()
 

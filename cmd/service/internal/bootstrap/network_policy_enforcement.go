@@ -10,22 +10,14 @@ import (
 )
 
 func (p networkPolicy) EnforceIngress() error {
-	if !p.ingressPublicEnabled {
-		return nil
-	}
-
-	if !p.ingressException.Active {
-		return fmt.Errorf("%w: public ingress denied without approved exception", config.ErrDependencyInit)
-	}
-
-	if p.isExceptionExpired(p.ingressException) {
-		return fmt.Errorf("%w: ingress exception is expired", config.ErrDependencyInit)
-	}
-
-	return nil
+	return p.validatePublicIngress()
 }
 
 func (p networkPolicy) ValidateIngressRuntime() error {
+	return p.validatePublicIngress()
+}
+
+func (p networkPolicy) validatePublicIngress() error {
 	if !p.ingressPublicEnabled {
 		return nil
 	}

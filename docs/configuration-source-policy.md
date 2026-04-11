@@ -28,6 +28,12 @@ Precedence (last wins):
 
 Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`.
 
+## Runtime Budget Policy
+
+- `http.readiness_timeout` bounds `/health/ready` and startup admission readiness checks. When a dependency readiness probe is enabled, this timeout must be at least that probe's configured budget (`postgres.healthcheck_timeout`, `redis.dial_timeout`, or `mongo.connect_timeout`).
+- `http.readiness_propagation_delay` is counted inside `http.shutdown_timeout`; the remaining drain budget must still cover `http.write_timeout`.
+- The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover both instead of only the HTTP server timeout.
+
 ## Template Extension Points
 
 Some keys exist as extension points and may be wired later by service authors.

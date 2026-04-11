@@ -47,6 +47,12 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 	if err := validateDurationExact("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, 30*time.Second); err != nil {
 		return ValidationResult{}, err
 	}
+	if err := validateDurationRange("http.readiness_timeout", cfg.HTTP.ReadinessTimeout, 100*time.Millisecond, 30*time.Second); err != nil {
+		return ValidationResult{}, err
+	}
+	if err := validateDurationRange("http.readiness_propagation_delay", cfg.HTTP.ReadinessPropagationDelay, 0, cfg.HTTP.ShutdownTimeout); err != nil {
+		return ValidationResult{}, err
+	}
 	if err := validateDurationRange("http.read_header_timeout", cfg.HTTP.ReadHeaderTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
 		return ValidationResult{}, err
 	}
@@ -57,6 +63,9 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		return ValidationResult{}, err
 	}
 	if err := validateDurationRange("http.idle_timeout", cfg.HTTP.IdleTimeout, 100*time.Millisecond, 24*time.Hour); err != nil {
+		return ValidationResult{}, err
+	}
+	if err := validateHTTPShutdownBudget(cfg.HTTP); err != nil {
 		return ValidationResult{}, err
 	}
 	if cfg.HTTP.MaxHeaderBytes <= 0 {
@@ -76,6 +85,9 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		return ValidationResult{}, err
 	}
 	if err := validateMongo(cfg.Mongo); err != nil {
+		return ValidationResult{}, err
+	}
+	if err := validateReadinessProbeBudgets(*cfg); err != nil {
 		return ValidationResult{}, err
 	}
 	if err := checkContext(ctx); err != nil {
@@ -235,6 +247,55 @@ func validateMongo(cfg MongoConfig) error {
 		return err
 	}
 
+	return nil
+}
+
+func validateHTTPShutdownBudget(cfg HTTPConfig) error {
+	effectiveDrainBudget := cfg.ShutdownTimeout - cfg.ReadinessPropagationDelay
+	if effectiveDrainBudget <= 0 {
+		return fmt.Errorf("%w: http.readiness_propagation_delay must be less than http.shutdown_timeout", ErrValidate)
+	}
+	if cfg.WriteTimeout > effectiveDrainBudget {
+		return fmt.Errorf(
+			"%w: http.write_timeout must be <= effective drain budget after readiness propagation (%s)",
+			ErrValidate,
+			effectiveDrainBudget,
+		)
+	}
+	return nil
+}
+
+func validateReadinessProbeBudgets(cfg Config) error {
+	if cfg.Postgres.Enabled && cfg.FeatureFlags.PostgresReadinessProbe {
+		if err := validateReadinessProbeBudget("postgres.healthcheck_timeout", cfg.HTTP.ReadinessTimeout, cfg.Postgres.HealthcheckTimeout); err != nil {
+			return err
+		}
+	}
+
+	redisMode := strings.ToLower(strings.TrimSpace(cfg.Redis.Mode))
+	if cfg.Redis.Enabled && (cfg.FeatureFlags.RedisReadinessProbe || redisMode == "store") {
+		if err := validateReadinessProbeBudget("redis.dial_timeout", cfg.HTTP.ReadinessTimeout, cfg.Redis.DialTimeout); err != nil {
+			return err
+		}
+	}
+
+	if cfg.Mongo.Enabled && cfg.FeatureFlags.MongoReadinessProbe {
+		if err := validateReadinessProbeBudget("mongo.connect_timeout", cfg.HTTP.ReadinessTimeout, cfg.Mongo.ConnectTimeout); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateReadinessProbeBudget(name string, readinessTimeout time.Duration, probeBudget time.Duration) error {
+	if readinessTimeout < probeBudget {
+		return fmt.Errorf(
+			"%w: http.readiness_timeout must be >= %s when that readiness probe is enabled",
+			ErrValidate,
+			name,
+		)
+	}
 	return nil
 }
 

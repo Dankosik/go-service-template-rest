@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,12 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
 		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s", cfg.HTTP.ShutdownTimeout)
+	}
+	if cfg.HTTP.ReadinessTimeout != 3*time.Second {
+		t.Fatalf("HTTP.ReadinessTimeout = %s, want 3s", cfg.HTTP.ReadinessTimeout)
+	}
+	if cfg.HTTP.ReadinessPropagationDelay != 15*time.Second {
+		t.Fatalf("HTTP.ReadinessPropagationDelay = %s, want 15s", cfg.HTTP.ReadinessPropagationDelay)
 	}
 	if cfg.Redis.Mode != "cache" {
 		t.Fatalf("Redis.Mode = %q, want cache", cfg.Redis.Mode)
@@ -98,6 +105,22 @@ func TestFlatEnvKeysAreIgnored(t *testing.T) {
 
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("HTTP.Addr = %q, want default :8080", cfg.HTTP.Addr)
+	}
+}
+
+func TestEnvExampleLoadsThroughConfigLoader(t *testing.T) {
+	resetConfigEnv(t)
+
+	for key, value := range readEnvExample(t, filepath.Join("..", "..", "env", ".env.example")) {
+		t.Setenv(key, value)
+	}
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() with env/.env.example values error = %v", err)
+	}
+	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s from env/.env.example", cfg.HTTP.ShutdownTimeout)
 	}
 }
 
@@ -637,6 +660,87 @@ postgres:
 	}
 }
 
+func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantKey string
+	}{
+		{
+			name: "client secret",
+			content: `
+oauth:
+  client_secret: "secret"
+`,
+			wantKey: "oauth.client_secret",
+		},
+		{
+			name: "jwt secret",
+			content: `
+security:
+  jwt_secret: "secret"
+`,
+			wantKey: "security.jwt_secret",
+		},
+		{
+			name: "api key",
+			content: `
+provider:
+  api_key: "secret"
+`,
+			wantKey: "provider.api_key",
+		},
+		{
+			name: "private key",
+			content: `
+tls:
+  private_key: "secret"
+`,
+			wantKey: "tls.private_key",
+		},
+		{
+			name: "top level token",
+			content: `
+token: "secret"
+`,
+			wantKey: "token",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetConfigEnv(t)
+
+			path := writeTempConfig(t, tt.content)
+			_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+			if err == nil {
+				t.Fatalf("LoadDetailed() expected secret policy rejection for %s", tt.wantKey)
+			}
+			if !errors.Is(err, ErrSecretPolicy) {
+				t.Fatalf("error = %v, want ErrSecretPolicy", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantKey) {
+				t.Fatalf("error = %v, want rejected key %q", err, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
+	keys := []string{
+		"http.addr",
+		"redis.key_prefix",
+		"feature_flags.redis_readiness_probe",
+		"metadata.public_key",
+	}
+
+	for _, key := range keys {
+		if isSecretLikeConfigKey(key) {
+			t.Fatalf("isSecretLikeConfigKey(%q) = true, want false", key)
+		}
+	}
+}
+
 func TestParseErrorDoesNotLeakRawValue(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -813,6 +917,38 @@ func writeTempConfig(t *testing.T, content string) string {
 	return path
 }
 
+func readEnvExample(t *testing.T, path string) map[string]string {
+	t.Helper()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
+	}
+
+	values := make(map[string]string)
+	for lineNumber, rawLine := range strings.Split(string(content), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			t.Fatalf("%s:%d is not KEY=VALUE", path, lineNumber+1)
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			t.Fatalf("%s:%d has an empty env key", path, lineNumber+1)
+		}
+		if !strings.HasPrefix(key, namespacePrefix) {
+			continue
+		}
+		values[key] = strings.TrimSpace(value)
+	}
+
+	return values
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -825,39 +961,30 @@ func containsString(values []string, target string) bool {
 func resetConfigEnv(t *testing.T) {
 	t.Helper()
 
-	keys := []string{
-		"APP__APP__ENV",
-		"APP__APP__VERSION",
-		"APP__HTTP__ADDR",
-		"APP__HTTP__SHUTDOWN_TIMEOUT",
-		"APP__HTTP__READ_HEADER_TIMEOUT",
-		"APP__HTTP__READ_TIMEOUT",
-		"APP__HTTP__WRITE_TIMEOUT",
-		"APP__HTTP__IDLE_TIMEOUT",
-		"APP__HTTP__MAX_HEADER_BYTES",
-		"APP__HTTP__MAX_BODY_BYTES",
-		"APP__LOG__LEVEL",
-		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT",
-		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_TRACES_ENDPOINT",
-		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS",
-		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_PROTOCOL",
-		"APP__POSTGRES__ENABLED",
-		"APP__POSTGRES__DSN",
-		"APP__REDIS__ENABLED",
-		"APP__REDIS__MODE",
-		"APP__REDIS__ALLOW_STORE_MODE",
-		"APP__REDIS__ADDR",
-		"APP__REDIS__STALE_WINDOW",
-		"APP__MONGO__ENABLED",
-		"APP__MONGO__URI",
-		"APP__MONGO__DATABASE",
-		"APP_CONFIG_ALLOWED_ROOTS",
-	}
-
-	for _, key := range keys {
+	for _, key := range configEnvResetKeys() {
 		t.Setenv(key, "")
 	}
 	t.Setenv("APP__APP__ENV", "local")
+}
+
+func configEnvResetKeys() []string {
+	knownKeys := knownConfigKeys()
+	keySet := make(map[string]struct{}, len(knownKeys)+1)
+	for key := range knownKeys {
+		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
+	}
+	keySet[allowedConfigRootsEnvVar] = struct{}{}
+
+	keys := make([]string, 0, len(keySet))
+	for key := range keySet {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func namespaceEnvForConfigKey(key string) string {
+	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(key, keyDelimiter, "__"))
 }
 
 func TestPostgresDurationBounds(t *testing.T) {
@@ -888,6 +1015,44 @@ func TestShutdownTimeoutMustMatchReliabilityBaseline(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "http.shutdown_timeout must equal 30s") {
 		t.Fatalf("error = %v, want explicit shutdown timeout policy lock", err)
+	}
+}
+
+func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "25s")
+	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "10s")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for write timeout beyond drain budget")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "http.write_timeout must be <= effective drain budget") {
+		t.Fatalf("error = %v, want explicit drain budget policy", err)
+	}
+}
+
+func TestReadinessTimeoutMustCoverEnabledProbeBudget(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "1s")
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
+	t.Setenv("APP__POSTGRES__HEALTHCHECK_TIMEOUT", "3s")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for short readiness timeout")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "http.readiness_timeout must be >= postgres.healthcheck_timeout") {
+		t.Fatalf("error = %v, want readiness dependency budget policy", err)
 	}
 }
 

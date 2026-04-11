@@ -11,11 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// ErrPingHistoryRepository classifies errors from the template ping_history sample repository.
 var ErrPingHistoryRepository = errors.New("ping history repository")
 
 const txRollbackTimeout = 5 * time.Second
 
-// PingHistoryRecord is the adapter-safe representation of one ping_history row.
+// PingHistoryRecord is the adapter-safe representation of one template ping_history sample row.
 type PingHistoryRecord struct {
 	ID        int64
 	Payload   string
@@ -34,12 +35,13 @@ type pingHistoryDB interface {
 	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
 }
 
+// PingHistoryRepository is a template SQLC sample repository, not production ping behavior.
 type PingHistoryRepository struct {
 	queries pingHistoryQuerier
 	db      pingHistoryDB
 }
 
-// NewPingHistoryRepository builds a repository backed by sqlc generated queries.
+// NewPingHistoryRepository builds the template sample repository backed by sqlc generated queries.
 func NewPingHistoryRepository(db pingHistoryDB) *PingHistoryRepository {
 	return &PingHistoryRepository{
 		queries: sqlcgen.New(db),

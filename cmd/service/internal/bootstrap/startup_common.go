@@ -124,6 +124,47 @@ func rejectStartupForDependencyInit(
 	return rejectErr
 }
 
+func recordDependencyProbeRejection(
+	ctx context.Context,
+	runtime dependencyProbeRuntime,
+	dependency string,
+	operation string,
+	failedStage string,
+	mode string,
+	err error,
+) {
+	dep := strings.ToLower(strings.TrimSpace(dependency))
+	if dep == "" {
+		dep = "dependency"
+	}
+	stage := strings.TrimSpace(failedStage)
+	if stage == "" {
+		stage = "startup.probe." + dep
+	}
+
+	runtime.bootstrapSpan.RecordError(err)
+	runtime.bootstrapSpan.SetAttributes(
+		attribute.String("result", "error"),
+		attribute.String("error.type", "dependency_init"),
+		attribute.String("failed.stage", stage),
+	)
+	runtime.metrics.IncConfigValidationFailure("dependency_init")
+	runtime.metrics.IncConfigStartupOutcome("rejected")
+
+	args := startupLogArgs(
+		ctx,
+		"startup_probes",
+		strings.TrimSpace(operation),
+		"error",
+		"error.type", "dependency_init",
+		"dependency", dep,
+	)
+	if strings.TrimSpace(mode) != "" {
+		args = append(args, "mode", strings.TrimSpace(mode))
+	}
+	runtime.log.Error("startup_blocked", args...)
+}
+
 func startupLogArgs(ctx context.Context, component, operation, outcome string, extra ...any) []any {
 	args := make([]any, 0, 6+len(extra))
 	args = append(args,

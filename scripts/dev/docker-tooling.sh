@@ -124,7 +124,7 @@ run_go() {
 		-e GOMODCACHE=/workspace/.cache/go-mod \
 		-e GOCACHE=/workspace/.cache/go-build \
 		"${GO_IMAGE}" \
-		bash -lc "$*"
+		bash -lc "export PATH=/usr/local/go/bin:\${PATH}; $*"
 }
 
 run_go_with_docker_socket() {
@@ -145,7 +145,7 @@ run_go_with_docker_socket() {
 		-e GOMODCACHE=/workspace/.cache/go-mod \
 		-e GOCACHE=/workspace/.cache/go-build \
 		"${GO_IMAGE}" \
-		bash -lc "$*"
+		bash -lc "export PATH=/usr/local/go/bin:\${PATH}; $*"
 }
 
 run_node() {
@@ -287,10 +287,13 @@ run_migration_validate() {
 	local migration_dsn="postgres://app:app@${postgres_container}:5432/app?sslmode=disable"
 
 	cleanup_migration() {
-		docker rm -f "${postgres_container}" >/dev/null 2>&1 || true
-		docker network rm "${network_name}" >/dev/null 2>&1 || true
+		local container_name="$1"
+		local container_network="$2"
+
+		docker rm -f "${container_name}" >/dev/null 2>&1 || true
+		docker network rm "${container_network}" >/dev/null 2>&1 || true
 	}
-	trap cleanup_migration EXIT
+	trap "cleanup_migration '${postgres_container}' '${network_name}'" EXIT
 
 	docker network create "${network_name}" >/dev/null
 	docker run \
@@ -387,7 +390,7 @@ init-module)
 			-e GOMODCACHE=/workspace/.cache/go-mod \
 			-e GOCACHE=/workspace/.cache/go-build \
 			"${GO_IMAGE}" \
-			bash -lc "bash ./scripts/init-module.sh \"${module_path}\""
+			bash -lc "export PATH=/usr/local/go/bin:\${PATH}; bash ./scripts/init-module.sh \"${module_path}\""
 	else
 		docker run \
 			--rm \
@@ -398,7 +401,7 @@ init-module)
 			-e GOMODCACHE=/workspace/.cache/go-mod \
 			-e GOCACHE=/workspace/.cache/go-build \
 			"${GO_IMAGE}" \
-			bash -lc "bash ./scripts/init-module.sh"
+			bash -lc "export PATH=/usr/local/go/bin:\${PATH}; bash ./scripts/init-module.sh"
 	fi
 	;;
 mod-check)
@@ -406,10 +409,10 @@ mod-check)
 	git -C "${ROOT_DIR}" diff --exit-code -- go.mod go.sum
 	;;
 fmt)
-	run_go "go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -w \$(find . -type f -name '*.go' -not -path './vendor/*')"
+	run_go "go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -w \$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')"
 	;;
 fmt-check)
-	run_go "unformatted=\$(go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -l \$(find . -type f -name '*.go' -not -path './vendor/*')); if [[ -n \"\${unformatted}\" ]]; then echo 'goimports required for:'; echo \"\${unformatted}\"; exit 1; fi"
+	run_go "unformatted=\$(go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -l \$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')); if [[ -n \"\${unformatted}\" ]]; then echo 'goimports required for:'; echo \"\${unformatted}\"; exit 1; fi"
 	;;
 test)
 	run_go "go test ./..."

@@ -23,14 +23,16 @@ type AppConfig struct {
 }
 
 type HTTPConfig struct {
-	Addr              string        `koanf:"addr"`
-	ShutdownTimeout   time.Duration `koanf:"shutdown_timeout"`
-	ReadHeaderTimeout time.Duration `koanf:"read_header_timeout"`
-	ReadTimeout       time.Duration `koanf:"read_timeout"`
-	WriteTimeout      time.Duration `koanf:"write_timeout"`
-	IdleTimeout       time.Duration `koanf:"idle_timeout"`
-	MaxHeaderBytes    int           `koanf:"max_header_bytes"`
-	MaxBodyBytes      int64         `koanf:"max_body_bytes"`
+	Addr                      string        `koanf:"addr"`
+	ShutdownTimeout           time.Duration `koanf:"shutdown_timeout"`
+	ReadinessTimeout          time.Duration `koanf:"readiness_timeout"`
+	ReadinessPropagationDelay time.Duration `koanf:"readiness_propagation_delay"`
+	ReadHeaderTimeout         time.Duration `koanf:"read_header_timeout"`
+	ReadTimeout               time.Duration `koanf:"read_timeout"`
+	WriteTimeout              time.Duration `koanf:"write_timeout"`
+	IdleTimeout               time.Duration `koanf:"idle_timeout"`
+	MaxHeaderBytes            int           `koanf:"max_header_bytes"`
+	MaxBodyBytes              int64         `koanf:"max_body_bytes"`
 }
 
 type LogConfig struct {
