@@ -119,7 +119,6 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 		span,
 		metrics,
 		logger,
-		time.Now(),
 		"redis",
 		errors.New("blocked"),
 	)
@@ -151,7 +150,6 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 		span,
 		metrics,
 		logger,
-		time.Now(),
 		"network_policy",
 		rootCause,
 	)
@@ -177,7 +175,7 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, time.Now())
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, config.Config{})
 	span.End()
 	if err == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
@@ -187,6 +185,30 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "RFC3339") {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want original parse detail", err)
+	}
+}
+
+func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLocalWildcardBind(t *testing.T) {
+	t.Setenv(envNetworkPublicIngressEnabled, "")
+
+	metrics := telemetry.New()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, config.Config{
+		App:  config.AppConfig{Env: "prod"},
+		HTTP: config.HTTPConfig{Addr: ":8080"},
+	})
+	span.End()
+	if err == nil {
+		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
+	}
+	if !errors.Is(err, config.ErrDependencyInit) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	}
+	if !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want missing ingress declaration detail", err)
 	}
 }
 

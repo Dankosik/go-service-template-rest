@@ -52,11 +52,9 @@ func rejectStartupForPolicyViolation(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	startupLifecycleStartedAt time.Time,
 	dependency string,
 	err error,
 ) error {
-	_ = startupLifecycleStartedAt
 	bootstrapSpan.RecordError(err)
 	bootstrapSpan.SetAttributes(
 		attribute.String("result", "error"),
@@ -69,7 +67,7 @@ func rejectStartupForPolicyViolation(
 		"startup_blocked",
 		startupLogArgs(
 			ctx,
-			"startup_probes",
+			startupLogComponentStartupProbes,
 			strings.ToLower(strings.TrimSpace(dependency))+"_policy",
 			"error",
 			"error.type", "policy_violation",
@@ -85,12 +83,10 @@ func rejectStartupForDependencyInit(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	startupLifecycleStartedAt time.Time,
 	dependency string,
 	stage string,
 	err error,
 ) error {
-	_ = startupLifecycleStartedAt
 	dep := strings.ToLower(strings.TrimSpace(dependency))
 	if dep == "" {
 		dep = "dependency"
@@ -113,7 +109,7 @@ func rejectStartupForDependencyInit(
 		"startup_blocked",
 		startupLogArgs(
 			ctx,
-			"startup_probes",
+			startupLogComponentStartupProbes,
 			dep+"_config",
 			"error",
 			"error.type", "dependency_init",
@@ -153,7 +149,7 @@ func recordDependencyProbeRejection(
 
 	args := startupLogArgs(
 		ctx,
-		"startup_probes",
+		startupLogComponentStartupProbes,
 		strings.TrimSpace(operation),
 		"error",
 		"error.type", "dependency_init",

@@ -81,12 +81,11 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		metrics:                   metrics,
-		log:                       logger,
-		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		cfg: config.Config{
 			Redis: config.RedisConfig{
 				Enabled: true,
@@ -118,12 +117,11 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		metrics:                   metrics,
-		log:                       logger,
-		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		cfg: config.Config{
 			Redis: config.RedisConfig{
 				Enabled: true,
@@ -171,12 +169,11 @@ func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		metrics:                   metrics,
-		log:                       logger,
-		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 		cfg: config.Config{
 			Redis: config.RedisConfig{
 				Enabled:     true,
@@ -207,13 +204,12 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 
 	metrics := telemetry.New()
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		cfg:                       config.Config{},
-		metrics:                   metrics,
-		log:                       slog.New(slog.NewJSONHandler(io.Discard, nil)),
-		networkPolicy:             networkPolicy{},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		cfg:           config.Config{},
+		metrics:       metrics,
+		log:           slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		networkPolicy: networkPolicy{},
 	}
 
 	outcome, err := initStartupDependencies(context.Background(), context.Background(), runtime)
@@ -264,12 +260,11 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		metrics:                   metrics,
-		log:                       logger,
-		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 	}
 
 	t.Run("redis cache", func(t *testing.T) {
@@ -318,12 +313,11 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		metrics:                   metrics,
-		log:                       logger,
-		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 	}
 
 	expiredCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
@@ -369,12 +363,11 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	runtime := dependencyProbeRuntime{
-		tracer:                    otel.Tracer("test"),
-		bootstrapSpan:             trace.SpanFromContext(context.Background()),
-		metrics:                   metrics,
-		log:                       logger,
-		networkPolicy:             networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
-		startupLifecycleStartedAt: time.Now(),
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
 	}
 
 	newLowBudgetCtx := func(t *testing.T) (context.Context, context.CancelFunc) {

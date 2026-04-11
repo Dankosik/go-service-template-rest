@@ -5,12 +5,14 @@ import (
 )
 
 type networkPolicy struct {
-	now                  func() time.Time
-	ingressPublicEnabled bool
-	egressAllowlist      []networkHostMatcher
-	egressAllowedSchemes map[string]struct{}
-	ingressException     networkException
-	egressException      networkException
+	now                        func() time.Time
+	ingressPublicEnabled       bool
+	ingressPublicDeclared      bool
+	ingressDeclarationRequired bool
+	egressAllowlist            []networkHostMatcher
+	egressAllowedSchemes       map[string]struct{}
+	ingressException           networkException
+	egressException            networkException
 }
 
 type networkException struct {

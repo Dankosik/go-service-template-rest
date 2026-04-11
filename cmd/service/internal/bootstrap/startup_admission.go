@@ -59,8 +59,7 @@ func (c *startupAdmissionController) CheckReady(context.Context) error {
 }
 
 type runtimeIngressAdmissionGuard struct {
-	policy        networkPolicy
-	violationOnce sync.Once
+	policy networkPolicy
 }
 
 func newRuntimeIngressAdmissionGuard(policy networkPolicy) *runtimeIngressAdmissionGuard {
@@ -69,15 +68,12 @@ func newRuntimeIngressAdmissionGuard(policy networkPolicy) *runtimeIngressAdmiss
 	}
 }
 
-func (g *runtimeIngressAdmissionGuard) Check(ctx context.Context) error {
+func (g *runtimeIngressAdmissionGuard) Check(context.Context) error {
 	if g == nil {
 		return nil
 	}
 
 	if err := g.policy.ValidateIngressRuntime(); err != nil {
-		g.violationOnce.Do(func() {
-			_ = ctx
-		})
 		return err
 	}
 

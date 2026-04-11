@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,6 +20,89 @@ func TestLoadNetworkPolicyFromEnvRequiresExceptionMetadata(t *testing.T) {
 	}
 	if reasonClass != "missing_metadata" {
 		t.Fatalf("reasonClass = %q, want %q", reasonClass, "missing_metadata")
+	}
+}
+
+func TestLoadNetworkPolicyFromEnvDistinguishesMissingPublicIngressDeclaration(t *testing.T) {
+	t.Setenv(envNetworkPublicIngressEnabled, "")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	if policy.ingressPublicDeclared {
+		t.Fatalf("ingressPublicDeclared = true, want false for missing %s", envNetworkPublicIngressEnabled)
+	}
+	if policy.ingressPublicEnabled {
+		t.Fatalf("ingressPublicEnabled = true, want false for missing %s", envNetworkPublicIngressEnabled)
+	}
+
+	t.Setenv(envNetworkPublicIngressEnabled, "false")
+	policy, err = loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() explicit false error = %v", err)
+	}
+	if !policy.ingressPublicDeclared {
+		t.Fatalf("ingressPublicDeclared = false, want true for explicit false")
+	}
+	if policy.ingressPublicEnabled {
+		t.Fatalf("ingressPublicEnabled = true, want false for explicit false")
+	}
+}
+
+func TestNetworkPolicyEnforceIngressRequiresDeclarationForNonLocalWildcardBind(t *testing.T) {
+	wildcardAddrs := []string{
+		":8080",
+		"0.0.0.0:8080",
+		"[::]:8080",
+	}
+
+	for _, addr := range wildcardAddrs {
+		t.Run(addr, func(t *testing.T) {
+			t.Setenv(envNetworkPublicIngressEnabled, "")
+
+			policy, err := loadNetworkPolicyFromEnv()
+			if err != nil {
+				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+			}
+			policy = policy.withIngressExposure("prod", addr)
+
+			err = policy.EnforceIngress()
+			if err == nil {
+				t.Fatal("EnforceIngress() error = nil, want non-nil")
+			}
+			if !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
+				t.Fatalf("EnforceIngress() error = %v, want %s detail", err, envNetworkPublicIngressEnabled)
+			}
+		})
+	}
+}
+
+func TestNetworkPolicyEnforceIngressAllowsExplicitPrivateIngressAssertion(t *testing.T) {
+	t.Setenv(envNetworkPublicIngressEnabled, "false")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy = policy.withIngressExposure("prod", ":8080")
+
+	if err := policy.EnforceIngress(); err != nil {
+		t.Fatalf("EnforceIngress() error = %v, want nil", err)
+	}
+}
+
+func TestNetworkPolicyEnforceIngressAllowsMissingDeclarationForLocalWildcardBind(t *testing.T) {
+	t.Setenv(envNetworkPublicIngressEnabled, "")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy = policy.withIngressExposure("local", ":8080")
+
+	if err := policy.EnforceIngress(); err != nil {
+		t.Fatalf("EnforceIngress() error = %v, want nil", err)
 	}
 }
 

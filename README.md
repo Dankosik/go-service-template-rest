@@ -1,7 +1,5 @@
 # Go Service Template REST
 
-Hello from claude code
-
 AI-native Go REST template for solo developers who want coding agents that can work inside real Go constraints.
 
 Generic AI-native repos are good at teaching agents how to spec, plan, and delegate. They are usually much weaker at teaching them how to operate inside idiomatic Go boundaries, preserve invariants, work with `context`, respect generated artifacts, reason about `chi` and `sqlc`, and ship code that survives review. `go-service-template-rest` is built around that exact gap.

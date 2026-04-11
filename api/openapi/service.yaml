@@ -20,6 +20,9 @@ paths:
       tags: [app]
       summary: Ping endpoint
       operationId: ping
+      x-security-decision:
+        exposure: public
+        rationale: sample endpoint for template smoke checks
       responses:
         "200":
           description: pong
@@ -39,6 +42,9 @@ paths:
       tags: [system]
       summary: Liveness probe
       operationId: healthLive
+      x-security-decision:
+        exposure: public
+        rationale: process-only platform liveness endpoint with no dependency details
       responses:
         "200":
           description: ok
@@ -58,6 +64,9 @@ paths:
       tags: [system]
       summary: Readiness probe
       operationId: healthReady
+      x-security-decision:
+        exposure: public
+        rationale: platform readiness endpoint exposing only generic ready state
       responses:
         "200":
           description: ready
@@ -84,6 +93,9 @@ paths:
       tags: [system]
       summary: Prometheus metrics
       operationId: metrics
+      x-security-decision:
+        exposure: operational-private-required
+        rationale: operational telemetry requires private scrape path, internal listener, or future real auth before internet exposure
       responses:
         "200":
           description: metrics output

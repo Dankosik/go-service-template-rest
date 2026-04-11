@@ -98,12 +98,11 @@ func Run(args []string) (runErr error) {
 
 	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupBudget)
 	defer startupCancel()
-	startupLifecycleStartedAt := time.Now()
 
 	loadOptions.LoadBudget = startupConfigLoadBudget
 	loadOptions.ValidateBudget = startupConfigValidateBudget
 
-	bootstrap, err := bootstrapRuntime(startupCtx, loadOptions, metrics, startupLifecycleStartedAt)
+	bootstrap, err := bootstrapRuntime(startupCtx, loadOptions, metrics)
 	if err != nil {
 		return err
 	}
@@ -113,13 +112,12 @@ func Run(args []string) (runErr error) {
 	bootstrapCtx := startupBootstrapContext(startupCtx, bootstrap.bootstrapSpan)
 
 	probeOutcome, err := initStartupDependencies(startupCtx, bootstrapCtx, dependencyProbeRuntime{
-		tracer:                    bootstrap.tracer,
-		bootstrapSpan:             bootstrap.bootstrapSpan,
-		cfg:                       bootstrap.cfg,
-		metrics:                   metrics,
-		log:                       bootstrap.log,
-		networkPolicy:             bootstrap.networkPolicy,
-		startupLifecycleStartedAt: startupLifecycleStartedAt,
+		tracer:        bootstrap.tracer,
+		bootstrapSpan: bootstrap.bootstrapSpan,
+		cfg:           bootstrap.cfg,
+		metrics:       metrics,
+		log:           bootstrap.log,
+		networkPolicy: bootstrap.networkPolicy,
 	})
 	if err != nil {
 		return err

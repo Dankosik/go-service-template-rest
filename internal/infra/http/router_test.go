@@ -289,6 +289,55 @@ func TestStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	}
 }
 
+func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	const attackerDetail = `invalid "token": secret-value`
+
+	options := generatedChiServerOptions(log)
+	if options.ErrorHandlerFunc == nil {
+		t.Fatalf("generatedChiServerOptions() ErrorHandlerFunc = nil")
+	}
+
+	handler := RequestCorrelation(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		options.ErrorHandlerFunc(w, r, errors.New(attackerDetail))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	req.Header.Set(requestIDHeader, "req-chi-123")
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
+		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
+	}
+	var problem map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("unmarshal problem: %v", err)
+	}
+	if got := problem["detail"]; got != malformedRequestProblemDetail {
+		t.Fatalf("detail = %v, want %q", got, malformedRequestProblemDetail)
+	}
+	if strings.Contains(resp.Body.String(), attackerDetail) {
+		t.Fatalf("problem body leaks raw parser detail: %q", resp.Body.String())
+	}
+
+	logLine := out.String()
+	if strings.Contains(logLine, attackerDetail) {
+		t.Fatalf("log line leaks raw parser detail: %q", logLine)
+	}
+	if !strings.Contains(logLine, `"error_class"`) {
+		t.Fatalf("log line = %q, want sanitized error_class", logLine)
+	}
+	if !strings.Contains(logLine, `"request_id":"req-chi-123"`) {
+		t.Fatalf("log line = %q, want request_id", logLine)
+	}
+}
+
 func TestRouterAddsRequestIDHeader(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := mustNewRouter(t, log, Handlers{
@@ -391,6 +440,37 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
 		t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
+	}
+}
+
+func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	const secretValue = "secret-value"
+
+	handler := RequestCorrelation(Recover(log, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(secretValue)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	req.Header.Set(requestIDHeader, "req-panic-123")
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)
+	}
+	if strings.Contains(out.String(), secretValue) {
+		t.Fatalf("panic log leaks raw recovered value: %q", out.String())
+	}
+	if !strings.Contains(out.String(), `"panic_class":"string"`) {
+		t.Fatalf("panic log = %q, want panic_class", out.String())
+	}
+	if !strings.Contains(out.String(), `"panic_type":"string"`) {
+		t.Fatalf("panic log = %q, want panic_type", out.String())
+	}
+	if !strings.Contains(out.String(), `"request_id":"req-panic-123"`) {
+		t.Fatalf("panic log = %q, want request_id", out.String())
 	}
 }
 

@@ -88,14 +88,17 @@ Current runtime note: the shipped endpoints are intentionally small (`ping`, liv
 
 Operational exposure note: `/metrics` is not an ordinary public business API. Production deployments should expose it only on a private scrape path/network or add a real auth/internal-listener design before internet exposure.
 
+Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLIC_INGRESS_ENABLED` declaration. `false` is a private-ingress assertion by the operator; `true` is a public-ingress exception and requires the reviewed ingress-exception metadata.
+
 ### Startup/Shutdown Path
 
 1. `cmd/service/main.go` delegates to `bootstrap.Run`.
 2. Bootstrap parses config flags, creates the signal-aware root context, initializes baseline metrics, and loads the immutable config snapshot through `internal/config`.
 3. Bootstrap reconfigures structured logging from the validated config, initializes tracing in fail-open mode, applies startup network policy checks, and probes enabled dependencies.
 4. The HTTP runtime may begin serving while startup admission is still running, but external `/health/ready` stays not ready until startup admission marks the process ready.
-5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/app/health.Service`, which can aggregate dependency probes.
-6. On shutdown, bootstrap marks the service as draining, flips readiness off, waits the configured propagation delay, gracefully shuts down the HTTP server, and flushes telemetry inside the process-grace budget.
+5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/app/health.Service`, which runs enabled dependency probes sequentially under one readiness timeout.
+6. `/health/live` remains process-only; external dependency checks, startup admission, drain, and ingress-policy checks belong in readiness.
+7. On shutdown, bootstrap marks the service as draining, flips readiness off, waits the configured propagation delay, gracefully shuts down the HTTP server, and flushes telemetry inside the process-grace budget.
 
 The lifecycle baseline is: config and dependency validation happen before accepting traffic, and shutdown is coordinated from the bootstrap layer rather than from handlers or app services.
 
@@ -116,7 +119,7 @@ Use these seams when extending the repository:
 
 - New HTTP capability: update `api/openapi/service.yaml`, regenerate `internal/api`, add use-case logic in `internal/app`, then wire handlers/routes in `internal/infra/http`.
 - New persistence flow: add a deterministic migration under `env/migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into app-facing types, add an app-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
-- New integration adapter: add it under `internal/infra/<integration>`; add an app-owned or domain contract only if `internal/app` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`.
+- New integration adapter: add it under `internal/infra/<integration>`; add an app-owned or domain contract only if `internal/app` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. Before enabling a runtime dependency, define config keys and secret-source policy, network egress admission, criticality/degraded-mode behavior, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
 - New outbound target: fixed targets must declare source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before bootstrap wiring; dynamic or user-controlled URLs require a separate security design.
 - New durable schema behavior: evolve `env/migrations/` first, then keep adapter or generated access code derived from that schema.
 - New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse shared app/infra packages instead of duplicating logic.

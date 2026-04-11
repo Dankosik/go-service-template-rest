@@ -208,19 +208,25 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 	headers := make(map[string]string)
 
 	pairs := strings.Split(raw, ",")
-	for _, pair := range pairs {
+	for i, pair := range pairs {
 		entry := strings.TrimSpace(pair)
 		if entry == "" {
 			continue
 		}
 		parts := strings.SplitN(entry, "=", 2)
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry %q", entry)
+			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d", i+1)
 		}
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-		if key == "" || value == "" {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry %q", entry)
+		if key == "" {
+			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header key", i+1)
+		}
+		if value == "" {
+			if !isSafeOTLPHeaderKey(key) {
+				return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header value", i+1)
+			}
+			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d for header %q: empty header value", i+1, key)
 		}
 		headers[key] = value
 	}
@@ -229,4 +235,18 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 		return nil, fmt.Errorf("parse otlp headers: no valid header pairs")
 	}
 	return headers, nil
+}
+
+func isSafeOTLPHeaderKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		b := key[i]
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-' || b == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }

@@ -225,6 +225,50 @@ func TestParseOTLPHeaders(t *testing.T) {
 	}
 }
 
+func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{
+			name: "authorization token without delimiter",
+			raw:  "authorization Bearer secret-value",
+		},
+		{
+			name: "api key without delimiter",
+			raw:  "x-api-key secret-value",
+		},
+		{
+			name: "empty authorization value after prior secret",
+			raw:  "x-api-key=secret-value,authorization=",
+		},
+		{
+			name: "unsafe empty-value key",
+			raw:  "secret-value.=",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseOTLPHeaders(tt.raw)
+			if err == nil {
+				t.Fatalf("parseOTLPHeaders() error = nil, want non-nil")
+			}
+			for _, leaked := range []string{"secret-value", "Bearer"} {
+				if strings.Contains(err.Error(), leaked) {
+					t.Fatalf("parseOTLPHeaders() error leaks %q: %v", leaked, err)
+				}
+			}
+			if strings.Contains(err.Error(), tt.raw) {
+				t.Fatalf("parseOTLPHeaders() error leaks raw entry: %v", err)
+			}
+			if !strings.Contains(err.Error(), "position") {
+				t.Fatalf("parseOTLPHeaders() error = %v, want position context", err)
+			}
+		})
+	}
+}
+
 func TestExporterOptionTypeCompatibility(t *testing.T) {
 	// Guard against accidental option-type drift when upgrading OTLP exporter package.
 	var _ []otlptracehttp.Option

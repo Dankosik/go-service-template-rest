@@ -15,7 +15,7 @@ const (
 )
 
 func loadNetworkPolicyFromEnv() (networkPolicy, error) {
-	ingressEnabled, err := parseOptionalBoolEnv(envNetworkPublicIngressEnabled, false, "ingress")
+	ingressEnabled, ingressDeclared, err := parseOptionalBoolEnvWithPresence(envNetworkPublicIngressEnabled, false, "ingress")
 	if err != nil {
 		return networkPolicy{}, err
 	}
@@ -39,12 +39,13 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 	}
 
 	return networkPolicy{
-		now:                  time.Now,
-		ingressPublicEnabled: ingressEnabled,
-		egressAllowlist:      egressAllowlist,
-		egressAllowedSchemes: egressSchemes,
-		ingressException:     ingressException,
-		egressException:      egressException,
+		now:                   time.Now,
+		ingressPublicEnabled:  ingressEnabled,
+		ingressPublicDeclared: ingressDeclared,
+		egressAllowlist:       egressAllowlist,
+		egressAllowedSchemes:  egressSchemes,
+		ingressException:      ingressException,
+		egressException:       egressException,
 	}, nil
 }
 
@@ -57,17 +58,23 @@ func networkPolicyErrorLabels(err error) (string, string) {
 }
 
 func parseOptionalBoolEnv(name string, defaultValue bool, policyClass string) (bool, error) {
-	raw := strings.TrimSpace(os.Getenv(name))
+	value, _, err := parseOptionalBoolEnvWithPresence(name, defaultValue, policyClass)
+	return value, err
+}
+
+func parseOptionalBoolEnvWithPresence(name string, defaultValue bool, policyClass string) (bool, bool, error) {
+	raw, declared := os.LookupEnv(name)
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return defaultValue, nil
+		return defaultValue, false, nil
 	}
 	switch strings.ToLower(raw) {
 	case "1", "true", "yes", "on":
-		return true, nil
+		return true, declared, nil
 	case "0", "false", "no", "off":
-		return false, nil
+		return false, declared, nil
 	default:
-		return false, &networkPolicyConfigError{
+		return false, declared, &networkPolicyConfigError{
 			policyClass: policyClass,
 			reasonClass: "invalid_configuration",
 			message:     fmt.Sprintf("%s must be a boolean value", name),

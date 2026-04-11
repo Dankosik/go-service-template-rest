@@ -232,7 +232,7 @@ func rejectHTTPStartup(
 		"startup_blocked",
 		startupLogArgs(
 			bootstrapCtx,
-			"startup_probes",
+			startupLogComponentStartupProbes,
 			strings.TrimPrefix(stage, "startup."),
 			"error",
 			"error.type", "startup_error",

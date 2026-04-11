@@ -237,7 +237,18 @@ Why: quality and security checks are codified, reviewable, and reproducible on e
 
 `internal/domain/*` should remain small and stable: only shared contracts/types. Prefer a consumer-owned interface beside the `internal/app/<feature>` package first; for readiness, implement `internal/app/health.Probe`.
 
-`/metrics` is operational telemetry, not a normal public business endpoint. If the service HTTP listener is internet-facing, expose `/metrics` only through a private scrape path/network or add a real auth/internal-listener design first. Browser CORS remains fail-closed until a dedicated security decision covers origins, credentials, headers, and protected endpoints.
+`/metrics` is operational telemetry, not a normal public business endpoint. If the service HTTP listener is internet-facing, expose `/metrics` only through a private scrape path/network or add a real auth/internal-listener design first. Browser CORS remains fail-closed until a dedicated security decision covers origins, credentials, headers, and protected endpoints. Fail-closed CORS is not CSRF protection.
+
+Public ingress declaration rule: in non-local environments, wildcard HTTP binds such as `:8080`, `0.0.0.0:8080`, and `[::]:8080` require `NETWORK_PUBLIC_INGRESS_ENABLED` to be explicitly set. `false` is a private-ingress assertion: the operator is saying a platform load balancer, private network, firewall, or equivalent control keeps the listener away from the public internet. `true` is a public-ingress exception and must include the reviewed `NETWORK_INGRESS_EXCEPTION_*` metadata with owner, reason, scope, expiry, and rollback plan.
+
+Health endpoint rule: `/health/live` stays process-only and must not call external dependencies. External dependency checks, startup admission, drain state, and runtime ingress policy belong in readiness, not liveness.
+
+Browser-callable endpoint checklist:
+- Record whether browsers may call the endpoint and whether credentials are allowed.
+- Define the CORS origin, method, and header allowlist before enabling CORS.
+- For cookie-backed flows, define `Secure`, `HttpOnly`, `SameSite`, Path, and Domain attributes.
+- Define CSRF controls such as origin checks, token policy, or `http.CrossOriginProtection`.
+- Add negative tests for disallowed origins, disallowed methods or headers, missing CSRF controls when credentials are used, and unauthenticated protected calls.
 
 ## 4) Where to Put New Code
 
@@ -257,13 +268,36 @@ New Postgres persistence:
 4. Add a hand-written repository under `internal/infra/postgres` that maps generated rows/types into app-facing records.
 5. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter; use `internal/domain` only for a genuinely shared stable contract.
 6. Wire the concrete repository in `cmd/service/internal/bootstrap`.
-7. Validate with `make sqlc-check`, repository unit tests, and `make test-integration` when migration-backed behavior changed.
+7. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
+
+App-facing persistence port sketch:
+
+```go
+// internal/app/orders/store.go
+package orders
+
+import "context"
+
+type Store interface {
+	Save(ctx context.Context, order Order) error
+}
+```
+
+The port belongs beside the app feature that consumes it. The Postgres implementation belongs under `internal/infra/postgres`, and bootstrap wires the concrete adapter into the app service. Do not add a generic runtime port package just to prepare for future repositories.
 
 New integration (Redis, Kafka, S3, external API):
 1. Add adapter in `internal/infra/<integration>`.
 2. Add an app-owned or domain interface only if `app` needs inversion over the concrete adapter.
 3. Wire the concrete adapter in `cmd/service/internal/bootstrap`; keep `cmd/service/main.go` thin.
 4. For outbound calls, declare the target source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before wiring. Fixed outbound targets are validated by bootstrap policy. Dynamic or user-controlled URLs require a separate security design and review before implementation.
+5. Add the runtime dependency admission checklist before enabling it in startup:
+   - config keys, defaults, secret-source policy, and validation;
+   - network policy egress target and public/private exposure assumptions;
+   - criticality mode (`critical_fail_closed`, `optional_fail_open`, degraded, or feature-off) and degraded-mode contract;
+   - retry class, timeout, startup budget, and readiness participation;
+   - cleanup registration for partially initialized resources;
+   - low-cardinality metrics/log labels such as `startup_dependency_status` `dep` and `mode`;
+   - bootstrap tests for disabled, ready, policy-denied, degraded, and cleanup paths.
 
 New binary:
 1. Create `cmd/<binary>/main.go`.

@@ -5,7 +5,7 @@
 - Phase: review-phase-1.
 - Phase status: complete.
 - Research mode: fan-out plus local repository inspection.
-- Completion marker: workflow adequacy challenge reconciled, required review lanes returned or are explicitly superseded, conditional security lane recorded as run or skipped with rationale, local evidence inspected, validation status recorded, and final Russian review report delivered.
+- Completion marker: workflow adequacy challenge reconciled, required review lanes returned or are explicitly superseded, required security lane returned or is explicitly superseded with a narrow rationale, local evidence inspected, validation status recorded, and final template-readiness review report delivered.
 - Stop rule: do not implement code changes, create implementation plans, or create task-local design artifacts in this phase.
 - Next action: none in this review phase; final report is delivered in chat.
 
@@ -40,7 +40,7 @@
 - `reliability`: `reliability-agent`; skill `go-reliability-review`; owns bootstrap, config, startup, shutdown, readiness, and dependency-admission guidance as template conventions.
 - `qa`: `qa-agent`; skill `go-qa-review`; owns test layout, validation commands, integration-test guidance, and future feature-test placement.
 - `docs-make-local`: orchestrator local lane; skill `no-skill`; owns README/project-structure docs, Make target discoverability, and whether documented generated-code/test commands match template extension paths.
-- `security-conditional`: `security-agent`; skill `go-security-review`; decision: run; rationale: local inspection and architecture lane flagged auth/CORS/trust-boundary extension concerns around OpenAPI `security: []`, unused bearer auth, fail-closed CORS preflight, and minimal security headers.
+- `security`: `security-agent`; skill `go-security-review`; decision: required for completion; rationale: local inspection and architecture lane flagged auth/CORS/trust-boundary extension concerns around OpenAPI `security: []`, unused bearer auth, fail-closed CORS preflight, and minimal security headers.
 
 ## Fan-In And Synthesis
 
@@ -52,13 +52,12 @@
 
 ## Validation
 
-- `make check`: passed.
-- `make openapi-check`: passed.
-- `make sqlc-check`: attempted but blocked by local `go tool sqlc` compilation failure in `pg_query_go` before drift checking.
-- `make test-integration` and `make migration-validate`: not run; Docker/Postgres proof was not needed for this read-only template-readiness review, and no migration correctness claim is made beyond static review and the attempted sqlc check.
+- Local inspection used `rg`, `find`, `sed`, `nl`, `go list`, and targeted file reads across the requested paths.
+- `go test ./cmd/service/internal/bootstrap ./internal/config ./internal/infra/http ./internal/infra/postgres ./internal/infra/telemetry ./internal/app/...`: passed.
+- `make check`, `make openapi-check`, `make sqlc-check`, `make test-integration`, and `make migration-validate`: not run; no full baseline, OpenAPI drift, sqlc drift, or live migration correctness claim is made.
 
 ## Workflow Plan Adequacy Challenge
 
 - Status: complete.
-- Blocking findings: docs/Make ownership was unclear; conditional security lane lacked an explicit run/skip decision point.
-- Resolution: assigned docs/Make to local orchestrator inspection and added the security run/skipped decision point before final synthesis.
+- Blocking findings: master handoff routing could skip fan-out; security lane was recorded as run but completion allowed skip.
+- Resolution: master routing now starts before fan-out/fan-in, the security lane is required for completion, and stale Russian-report wording was replaced with neutral final-report wording.

@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -115,7 +117,8 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				traceID, spanID := traceIDsFromContext(ctx)
 				log.Error(
 					"panic recovered",
-					"panic", rec,
+					"panic_class", panicClass(rec),
+					"panic_type", fmt.Sprintf("%T", rec),
 					"method", method,
 					"path", path,
 					"request_id", requestIDFromContext(ctx),
@@ -127,6 +130,19 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 		}(r.Context(), r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func panicClass(rec any) string {
+	switch rec.(type) {
+	case runtime.Error:
+		return "runtime_error"
+	case error:
+		return "error"
+	case string:
+		return "string"
+	default:
+		return "value"
+	}
 }
 
 func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) http.Handler {

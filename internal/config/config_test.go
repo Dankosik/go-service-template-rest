@@ -660,6 +660,27 @@ postgres:
 	}
 }
 
+func TestConfigFileAllowsEmptySecretLikePlaceholders(t *testing.T) {
+	resetConfigEnv(t)
+
+	path := writeTempConfig(t, `
+postgres:
+  dsn: ""
+mongo:
+  uri: ""
+redis:
+  password: ""
+observability:
+  otel:
+    exporter:
+      otlp_headers: ""
+`)
+
+	if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err != nil {
+		t.Fatalf("LoadDetailed() error = %v, want nil for empty secret-like placeholders", err)
+	}
+}
+
 func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -987,6 +1008,73 @@ func namespaceEnvForConfigKey(key string) string {
 	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(key, keyDelimiter, "__"))
 }
 
+func TestKnownConfigKeysMatchSnapshotTagsAndDefaults(t *testing.T) {
+	defaultKeys := sortedStringSetKeys(defaultValues())
+	knownKeys := sortedStringSetKeys(knownConfigKeys())
+	if !reflect.DeepEqual(knownKeys, defaultKeys) {
+		t.Fatalf("knownConfigKeys() = %v, want default keys %v", knownKeys, defaultKeys)
+	}
+
+	tagKeys := configLeafKeysFromType(t, reflect.TypeOf(Config{}), "")
+	sort.Strings(tagKeys)
+	if !reflect.DeepEqual(tagKeys, defaultKeys) {
+		t.Fatalf("Config koanf leaf keys = %v, want default keys %v", tagKeys, defaultKeys)
+	}
+}
+
+func configLeafKeysFromType(t *testing.T, typ reflect.Type, prefix string) []string {
+	t.Helper()
+
+	if typ.Kind() != reflect.Struct {
+		t.Fatalf("configLeafKeysFromType(%s) called with non-struct type", typ)
+	}
+
+	keys := make([]string, 0)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		tag := strings.TrimSpace(field.Tag.Get("koanf"))
+		if tag == "" || tag == "-" {
+			t.Fatalf("%s.%s must declare a concrete koanf tag", typ.Name(), field.Name)
+		}
+
+		key := tag
+		if prefix != "" {
+			key = prefix + keyDelimiter + tag
+		}
+
+		if hasKoanfTaggedFields(field.Type) {
+			keys = append(keys, configLeafKeysFromType(t, field.Type, key)...)
+			continue
+		}
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func hasKoanfTaggedFields(typ reflect.Type) bool {
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return false
+	}
+	for i := 0; i < typ.NumField(); i++ {
+		if strings.TrimSpace(typ.Field(i).Tag.Get("koanf")) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func sortedStringSetKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func TestPostgresDurationBounds(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1001,20 +1089,38 @@ func TestPostgresDurationBounds(t *testing.T) {
 	}
 }
 
-func TestShutdownTimeoutMustMatchReliabilityBaseline(t *testing.T) {
+func TestShutdownTimeoutCanBeTunedWhenDrainBudgetIsValid(t *testing.T) {
 	resetConfigEnv(t)
 
-	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "25s")
+	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "45s")
+	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "20s")
+	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "10s")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v, want nil for tuned shutdown timeout", err)
+	}
+	if cfg.HTTP.ShutdownTimeout != 45*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 45s", cfg.HTTP.ShutdownTimeout)
+	}
+}
+
+func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "500ms")
+	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "0s")
+	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "100ms")
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for shutdown timeout drift")
+		t.Fatalf("LoadDetailed() expected validation error for shutdown timeout range")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
 	}
-	if !strings.Contains(err.Error(), "http.shutdown_timeout must equal 30s") {
-		t.Fatalf("error = %v, want explicit shutdown timeout policy lock", err)
+	if !strings.Contains(err.Error(), "http.shutdown_timeout must be in range") {
+		t.Fatalf("error = %v, want shutdown timeout range policy", err)
 	}
 }
 
@@ -1036,23 +1142,34 @@ func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 	}
 }
 
-func TestReadinessTimeoutMustCoverEnabledProbeBudget(t *testing.T) {
+func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
 	resetConfigEnv(t)
 
-	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "1s")
+	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
 	t.Setenv("APP__POSTGRES__HEALTHCHECK_TIMEOUT", "3s")
+	t.Setenv("APP__REDIS__ENABLED", "true")
+	t.Setenv("APP__REDIS__MODE", "store")
+	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
+	t.Setenv("APP__REDIS__DIAL_TIMEOUT", "2s")
+	t.Setenv("APP__MONGO__ENABLED", "true")
+	t.Setenv("APP__MONGO__URI", "mongodb://localhost:27017/app")
+	t.Setenv("APP__MONGO__CONNECT_TIMEOUT", "2s")
+	t.Setenv("APP__FEATURE_FLAGS__MONGO_READINESS_PROBE", "true")
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for short readiness timeout")
+		t.Fatalf("LoadDetailed() expected validation error for aggregate readiness timeout")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
 	}
-	if !strings.Contains(err.Error(), "http.readiness_timeout must be >= postgres.healthcheck_timeout") {
-		t.Fatalf("error = %v, want readiness dependency budget policy", err)
+	if !strings.Contains(err.Error(), "aggregate sequential readiness probe budget") {
+		t.Fatalf("error = %v, want aggregate readiness dependency budget policy", err)
+	}
+	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout + redis.dial_timeout + mongo.connect_timeout") {
+		t.Fatalf("error = %v, want enabled readiness probe names", err)
 	}
 }
 

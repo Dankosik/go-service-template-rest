@@ -6,19 +6,19 @@ This template uses a strict split between non-secret and secret configuration.
 
 - YAML (`env/config/*.yaml`) is for baseline non-secret defaults.
 - ENV (`APP__...`) is for per-environment overrides and all secret values.
-- Flags are for explicit runtime overrides (`--config`, `--config-overlay`, `--config-strict`).
+- CLI flags are loader controls today: `--config` selects the base file, `--config-overlay` adds ordered overlays, and `--config-strict` controls unknown-key handling. They do not provide arbitrary runtime config key overrides.
 
-Precedence (last wins):
+Runtime config value precedence (last wins):
 1. code defaults
 2. `--config` base file
 3. `--config-overlay` files
 4. `APP__...` environment variables
-5. flags
 
 ## Secret Rules
 
 - Do not place secrets in YAML.
-- Secret-like keys in YAML are rejected at load time (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
+- Secret-like YAML keys may exist only as empty placeholders for schema/default visibility.
+- Non-empty secret-like YAML values are rejected at load time (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
 - In non-local environments, file-based config is hardened:
   - absolute path only
   - must be under allowed roots (`/etc/config`, `/etc/service/config`, `/run/secrets` by default)
@@ -30,9 +30,9 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`.
 
 ## Runtime Budget Policy
 
-- `http.readiness_timeout` bounds `/health/ready` and startup admission readiness checks. When a dependency readiness probe is enabled, this timeout must be at least that probe's configured budget (`postgres.healthcheck_timeout`, `redis.dial_timeout`, or `mongo.connect_timeout`).
-- `http.readiness_propagation_delay` is counted inside `http.shutdown_timeout`; the remaining drain budget must still cover `http.write_timeout`.
-- The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover both instead of only the HTTP server timeout.
+- `http.readiness_timeout` bounds `/health/ready` and startup admission readiness checks. Readiness probes run sequentially, so this timeout must cover the aggregate budget of every enabled readiness probe: `postgres.healthcheck_timeout`, `redis.dial_timeout` when Redis readiness is enabled or Redis runs in store mode, and `mongo.connect_timeout` when Mongo readiness is enabled.
+- `http.shutdown_timeout` is tunable within validation bounds. `http.readiness_propagation_delay` is counted inside it; the remaining drain budget must still cover `http.write_timeout`.
+- The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover readiness propagation, HTTP drain, and telemetry flush instead of only the HTTP server timeout.
 
 ## Template Extension Points
 

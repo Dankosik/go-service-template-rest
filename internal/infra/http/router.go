@@ -51,12 +51,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		}),
 	)
 
-	apiSubrouter := api.HandlerWithOptions(server, api.ChiServerOptions{
-		Middlewares: []api.MiddlewareFunc{
-			captureRouteLabelMiddleware,
-			otelMiddleware,
-		},
-	})
+	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware, otelMiddleware))
 
 	// Serve /metrics directly on the root router to avoid full payload buffering in strict handler path.
 	metricsHandler := otelMiddleware(captureRouteLabelMiddleware(strict.metrics.Handler()))
@@ -76,6 +71,16 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	handler = RequestCorrelation(handler)
 
 	return handler, nil
+}
+
+func generatedChiServerOptions(log *slog.Logger, middlewares ...api.MiddlewareFunc) api.ChiServerOptions {
+	return api.ChiServerOptions{
+		Middlewares: middlewares,
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			logStrictRequestError(log, r, err)
+			writeMalformedRequestProblem(w, r)
+		},
+	}
 }
 
 type manualRootRouteKey struct {

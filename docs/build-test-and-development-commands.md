@@ -48,7 +48,7 @@ Bootstrap shortcuts:
 ### Bootstrap and environment checks
 
 - `make help`
-  - Purpose: print minimal onboarding command set, common workflows, and feature validation shortcuts such as `openapi-check`, `sqlc-check`, `test-integration`, and Docker equivalents.
+  - Purpose: print minimal onboarding command set, common workflows, and feature validation shortcuts such as `openapi-check`, `sqlc-check`, `migration-validate`, generated-helper drift checks, `test-integration`, and Docker equivalents.
 
 - `make bootstrap`
   - Purpose: clone-and-go onboarding entrypoint with minimum side effects.
@@ -507,6 +507,9 @@ Bootstrap shortcuts:
 5. If API contract changed: `make openapi-check`
 6. If integration behavior changed: `make test-integration`
 7. If SQL queries/migrations changed: `make sqlc-check`
+8. If migrations changed: `make migration-validate`
+9. If mockgen directives or generated mocks changed: `make mocks-drift-check`
+10. If stringer directives or generated enum strings changed: `make stringer-drift-check`
 
 ### Feature implementation (zero-setup)
 
@@ -517,6 +520,9 @@ Bootstrap shortcuts:
 5. If API contract changed: `make docker-openapi-check`
 6. If integration behavior changed: `make docker-test-integration`
 7. If SQL queries/migrations changed: `make docker-sqlc-check`
+8. If migrations changed: `make docker-migration-validate`
+9. If mockgen directives or generated mocks changed: run `make mocks-drift-check` in native mode, or `make docker-ci` for the full zero-setup validation bundle.
+10. If stringer directives or generated enum strings changed: run `make stringer-drift-check` in native mode, or `make docker-ci` for the full zero-setup validation bundle.
 
 ## CI Mapping
 

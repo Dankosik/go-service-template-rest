@@ -17,7 +17,15 @@ func (p networkPolicy) ValidateIngressRuntime() error {
 	return p.validatePublicIngress()
 }
 
+func (p networkPolicy) withIngressExposure(env, addr string) networkPolicy {
+	p.ingressDeclarationRequired = requiresPublicIngressDeclaration(env, addr)
+	return p
+}
+
 func (p networkPolicy) validatePublicIngress() error {
+	if p.ingressDeclarationRequired && !p.ingressPublicDeclared {
+		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", config.ErrDependencyInit, envNetworkPublicIngressEnabled)
+	}
 	if !p.ingressPublicEnabled {
 		return nil
 	}
@@ -28,6 +36,31 @@ func (p networkPolicy) validatePublicIngress() error {
 		return fmt.Errorf("%w: ingress exception is expired", config.ErrDependencyInit)
 	}
 	return nil
+}
+
+func requiresPublicIngressDeclaration(env, addr string) bool {
+	if strings.EqualFold(strings.TrimSpace(env), "local") {
+		return false
+	}
+	return isWildcardHTTPBind(addr)
+}
+
+func isWildcardHTTPBind(addr string) bool {
+	trimmed := strings.TrimSpace(addr)
+	if trimmed == "" {
+		return false
+	}
+
+	host, _, err := net.SplitHostPort(trimmed)
+	if err != nil {
+		host = trimmed
+	}
+	host = normalizeHost(host)
+	if host == "" || host == "*" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
 }
 
 func (p networkPolicy) EmitEgressExceptionState() error {

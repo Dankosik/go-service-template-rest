@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
 func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
@@ -255,6 +258,151 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOpenAPIOperationsDeclareSecurityDecisions(t *testing.T) {
+	swagger := mustOpenAPISwagger(t)
+
+	for path, item := range swagger.Paths.Map() {
+		if item == nil {
+			continue
+		}
+		for method, operation := range item.Operations() {
+			t.Run(method+" "+path, func(t *testing.T) {
+				decision, err := operationSecurityDecision(operation)
+				if err != nil {
+					t.Fatalf("security decision: %v", err)
+				}
+
+				switch decision.exposure {
+				case securityExposurePublic, securityExposureOperationalPrivateRequired:
+					if operationHasRealSecurity(swagger, operation) {
+						t.Fatalf("%s operation declares real security while marked %q", operation.OperationID, decision.exposure)
+					}
+				case securityExposureProtected:
+					if !operationHasRealSecurity(swagger, operation) {
+						t.Fatalf("%s operation is protected but has no real OpenAPI security requirement", operation.OperationID)
+					}
+					for _, status := range []string{"401", "403"} {
+						if !operationHasProblemResponse(swagger, operation, status) {
+							t.Fatalf("%s operation is protected but lacks %s application/problem+json response", operation.OperationID, status)
+						}
+					}
+				case securityExposureBlocked:
+				default:
+					t.Fatalf("exposure = %q, want one of %q, %q, %q, %q", decision.exposure, securityExposurePublic, securityExposureOperationalPrivateRequired, securityExposureProtected, securityExposureBlocked)
+				}
+
+				if path == "/metrics" && decision.exposure != securityExposureOperationalPrivateRequired {
+					t.Fatalf("/metrics exposure = %q, want %q", decision.exposure, securityExposureOperationalPrivateRequired)
+				}
+			})
+		}
+	}
+}
+
+const securityDecisionExtension = "x-security-decision"
+
+const (
+	securityExposurePublic                     = "public"
+	securityExposureOperationalPrivateRequired = "operational-private-required"
+	securityExposureProtected                  = "protected"
+	securityExposureBlocked                    = "blocked"
+)
+
+type openAPISecurityDecision struct {
+	exposure  string
+	rationale string
+}
+
+func operationSecurityDecision(operation *openapi3.Operation) (openAPISecurityDecision, error) {
+	if operation == nil {
+		return openAPISecurityDecision{}, fmt.Errorf("operation is nil")
+	}
+
+	raw, ok := operation.Extensions[securityDecisionExtension]
+	if !ok {
+		return openAPISecurityDecision{}, fmt.Errorf("missing %s", securityDecisionExtension)
+	}
+	fields, ok := raw.(map[string]any)
+	if !ok {
+		return openAPISecurityDecision{}, fmt.Errorf("%s must be an object", securityDecisionExtension)
+	}
+
+	decision := openAPISecurityDecision{}
+	if exposure, ok := fields["exposure"].(string); ok {
+		decision.exposure = strings.TrimSpace(exposure)
+	}
+	if rationale, ok := fields["rationale"].(string); ok {
+		decision.rationale = strings.TrimSpace(rationale)
+	}
+	if decision.exposure == "" {
+		return openAPISecurityDecision{}, fmt.Errorf("%s.exposure is required", securityDecisionExtension)
+	}
+	if decision.rationale == "" {
+		return openAPISecurityDecision{}, fmt.Errorf("%s.rationale is required", securityDecisionExtension)
+	}
+	return decision, nil
+}
+
+func operationHasRealSecurity(swagger *openapi3.T, operation *openapi3.Operation) bool {
+	if swagger == nil || swagger.Components == nil || operation == nil || operation.Security == nil {
+		return false
+	}
+	for _, requirement := range *operation.Security {
+		for name := range requirement {
+			if _, ok := swagger.Components.SecuritySchemes[name]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func operationHasProblemResponse(swagger *openapi3.T, operation *openapi3.Operation, status string) bool {
+	if operation == nil || operation.Responses == nil {
+		return false
+	}
+	response := resolveResponseRef(swagger, operation.Responses.Value(status))
+	if response == nil {
+		return false
+	}
+	mediaType := response.Content.Get("application/problem+json")
+	if mediaType == nil || mediaType.Schema == nil {
+		return false
+	}
+	if mediaType.Schema.Ref == "" {
+		return mediaType.Schema.Value != nil
+	}
+	return mediaType.Schema.Ref == "#/components/schemas/Problem"
+}
+
+func resolveResponseRef(swagger *openapi3.T, responseRef *openapi3.ResponseRef) *openapi3.Response {
+	if responseRef == nil {
+		return nil
+	}
+	if responseRef.Value != nil {
+		return responseRef.Value
+	}
+	name, ok := strings.CutPrefix(responseRef.Ref, "#/components/responses/")
+	if !ok || swagger == nil || swagger.Components == nil {
+		return nil
+	}
+	componentRef := swagger.Components.Responses[name]
+	if componentRef == nil {
+		return nil
+	}
+	return componentRef.Value
+}
+
+func mustOpenAPISwagger(t *testing.T) *openapi3.T {
+	t.Helper()
+
+	swagger, err := api.GetSwagger()
+	if err != nil {
+		t.Fatalf("GetSwagger() error = %v", err)
+	}
+	return swagger
 }
 
 type failingProbe struct {

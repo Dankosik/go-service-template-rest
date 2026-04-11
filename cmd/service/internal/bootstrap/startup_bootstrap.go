@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -26,7 +25,6 @@ func bootstrapRuntime(
 	startupCtx context.Context,
 	loadOptions config.LoadOptions,
 	metrics *telemetry.Metrics,
-	startupLifecycleStartedAt time.Time,
 ) (result startupBootstrap, err error) {
 	telemetryCleanup := func(context.Context) {}
 	defer func() {
@@ -39,7 +37,6 @@ func bootstrapRuntime(
 		startupCtx,
 		loadOptions,
 		metrics,
-		startupLifecycleStartedAt,
 	)
 	if err != nil {
 		return startupBootstrap{}, err
@@ -61,7 +58,7 @@ func bootstrapRuntime(
 		bootstrapSpan,
 		metrics,
 		log,
-		startupLifecycleStartedAt,
+		cfg,
 	)
 	if err != nil {
 		return startupBootstrap{}, err
@@ -87,7 +84,6 @@ func bootstrapConfigStage(
 	startupCtx context.Context,
 	loadOptions config.LoadOptions,
 	metrics *telemetry.Metrics,
-	startupLifecycleStartedAt time.Time,
 ) (config.Config, config.LoadReport, error) {
 	slog.Info(
 		"config_load_started",
@@ -148,7 +144,7 @@ func bootstrapTelemetryStage(
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
 ) (func(context.Context), error) {
-	metrics.SetStartupDependencyStatus("telemetry", "optional_fail_open", false)
+	metrics.SetStartupDependencyStatus(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen, false)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
 		ServiceName:      cfg.Observability.OTel.ServiceName,
@@ -166,11 +162,11 @@ func bootstrapTelemetryStage(
 	telemetryCancel()
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.SetStartupDependencyStatus("telemetry", "feature_off", false)
+		metrics.SetStartupDependencyStatus(startupDependencyTelemetry, startupDependencyModeFeatureOff, false)
 		return func(context.Context) {}, telemetryInitErr
 	}
 
-	metrics.SetStartupDependencyStatus("telemetry", "optional_fail_open", true)
+	metrics.SetStartupDependencyStatus(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen, true)
 	return func(shutdownBaseCtx context.Context) {
 		log.Info(
 			"telemetry_flush_started",
@@ -188,8 +184,8 @@ func bootstrapTelemetryStage(
 				"tracing shutdown failed",
 				startupLogArgs(
 					shutdownBaseCtx,
-					"startup_probes",
-					"telemetry_shutdown",
+					startupLogComponentStartupProbes,
+					startupOperationTelemetryFlush,
 					"error",
 					"error.type", "dependency_init",
 					"err", shutdownErr,
@@ -260,11 +256,11 @@ func bootstrapReportStage(
 			"startup_dependency_degraded",
 			startupLogArgs(
 				bootstrapCtx,
-				"startup_probes",
-				"telemetry_init",
+				startupLogComponentStartupProbes,
+				startupOperationTelemetryInit,
 				"degraded",
-				"dependency", "telemetry",
-				"mode", "feature_off",
+				"dependency", startupDependencyTelemetry,
+				"mode", startupDependencyModeFeatureOff,
 				"reason", telemetryInitFailureReason(telemetryInitErr),
 			)...,
 		)
@@ -295,7 +291,7 @@ func bootstrapNetworkPolicyStage(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	startupLifecycleStartedAt time.Time,
+	cfg config.Config,
 ) (networkPolicy, error) {
 	netPolicy, netPolicyErr := loadNetworkPolicyFromEnv()
 	if netPolicyErr != nil {
@@ -304,11 +300,11 @@ func bootstrapNetworkPolicyStage(
 			bootstrapSpan,
 			metrics,
 			log,
-			startupLifecycleStartedAt,
-			"network_policy",
+			startupDependencyNetworkPolicy,
 			fmt.Errorf("%w: invalid network policy configuration: %w", config.ErrDependencyInit, netPolicyErr),
 		)
 	}
+	netPolicy = netPolicy.withIngressExposure(cfg.App.Env, cfg.HTTP.Addr)
 
 	if ingressErr := netPolicy.EnforceIngress(); ingressErr != nil {
 		return networkPolicy{}, rejectStartupForPolicyViolation(
@@ -316,8 +312,7 @@ func bootstrapNetworkPolicyStage(
 			bootstrapSpan,
 			metrics,
 			log,
-			startupLifecycleStartedAt,
-			"ingress_policy",
+			startupDependencyIngressPolicy,
 			ingressErr,
 		)
 	}
@@ -328,8 +323,7 @@ func bootstrapNetworkPolicyStage(
 			bootstrapSpan,
 			metrics,
 			log,
-			startupLifecycleStartedAt,
-			"egress_exception",
+			startupDependencyEgressPolicy,
 			egressErr,
 		)
 	}

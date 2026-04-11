@@ -44,7 +44,7 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		return ValidationResult{}, fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
 	}
 
-	if err := validateDurationExact("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, 30*time.Second); err != nil {
+	if err := validateDurationRange("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, time.Second, 10*time.Minute); err != nil {
 		return ValidationResult{}, err
 	}
 	if err := validateDurationRange("http.readiness_timeout", cfg.HTTP.ReadinessTimeout, 100*time.Millisecond, 30*time.Second); err != nil {
@@ -266,37 +266,49 @@ func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 }
 
 func validateReadinessProbeBudgets(cfg Config) error {
+	budgets := make([]readinessProbeBudget, 0, 3)
 	if cfg.Postgres.Enabled && cfg.FeatureFlags.PostgresReadinessProbe {
-		if err := validateReadinessProbeBudget("postgres.healthcheck_timeout", cfg.HTTP.ReadinessTimeout, cfg.Postgres.HealthcheckTimeout); err != nil {
-			return err
-		}
+		budgets = append(budgets, readinessProbeBudget{
+			name:   "postgres.healthcheck_timeout",
+			budget: cfg.Postgres.HealthcheckTimeout,
+		})
 	}
 
 	redisMode := strings.ToLower(strings.TrimSpace(cfg.Redis.Mode))
 	if cfg.Redis.Enabled && (cfg.FeatureFlags.RedisReadinessProbe || redisMode == "store") {
-		if err := validateReadinessProbeBudget("redis.dial_timeout", cfg.HTTP.ReadinessTimeout, cfg.Redis.DialTimeout); err != nil {
-			return err
-		}
+		budgets = append(budgets, readinessProbeBudget{
+			name:   "redis.dial_timeout",
+			budget: cfg.Redis.DialTimeout,
+		})
 	}
 
 	if cfg.Mongo.Enabled && cfg.FeatureFlags.MongoReadinessProbe {
-		if err := validateReadinessProbeBudget("mongo.connect_timeout", cfg.HTTP.ReadinessTimeout, cfg.Mongo.ConnectTimeout); err != nil {
-			return err
-		}
+		budgets = append(budgets, readinessProbeBudget{
+			name:   "mongo.connect_timeout",
+			budget: cfg.Mongo.ConnectTimeout,
+		})
 	}
 
-	return nil
-}
-
-func validateReadinessProbeBudget(name string, readinessTimeout time.Duration, probeBudget time.Duration) error {
-	if readinessTimeout < probeBudget {
+	var aggregate time.Duration
+	names := make([]string, 0, len(budgets))
+	for _, probe := range budgets {
+		aggregate += probe.budget
+		names = append(names, probe.name)
+	}
+	if cfg.HTTP.ReadinessTimeout < aggregate {
 		return fmt.Errorf(
-			"%w: http.readiness_timeout must be >= %s when that readiness probe is enabled",
+			"%w: http.readiness_timeout must be >= aggregate sequential readiness probe budget (%s = %s)",
 			ErrValidate,
-			name,
+			strings.Join(names, " + "),
+			aggregate,
 		)
 	}
 	return nil
+}
+
+type readinessProbeBudget struct {
+	name   string
+	budget time.Duration
 }
 
 func validateSampler(sampler string, samplerArg float64) error {
@@ -327,13 +339,6 @@ func validateOTLPExporter(cfg OTelExporterConfig) error {
 func validateDurationRange(name string, value time.Duration, min time.Duration, max time.Duration) error {
 	if value < min || value > max {
 		return fmt.Errorf("%w: %s must be in range [%s,%s]", ErrValidate, name, min, max)
-	}
-	return nil
-}
-
-func validateDurationExact(name string, value time.Duration, expected time.Duration) error {
-	if value != expected {
-		return fmt.Errorf("%w: %s must equal %s", ErrValidate, name, expected)
 	}
 	return nil
 }

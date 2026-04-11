@@ -8,18 +8,18 @@
 - Phase status: complete.
 - Session boundary reached: yes.
 - Ready for next session: yes.
-- Next session starts with: user decision on which recommended template improvements to implement, if requested later.
+- Next session starts with: user decision on which recommended template-readiness improvements to implement, if requested later.
 
 ## Scope
 
-- In scope: read-only repository inspection, domain-specific subagent review lanes, lightweight validation commands when useful, and final Russian synthesis with concrete recommendations.
+- In scope: read-only repository inspection, domain-specific subagent review lanes, lightweight validation commands when useful, and final template-readiness synthesis with concrete recommendations.
 - Out of scope: implementation, refactors, generated-code updates, migrations, or repository behavior changes.
 - Allowed writes: this workflow-control file and `workflow-plans/review-phase-1.md` only.
 
 ## Artifact Status
 
-- `workflow-plan.md`: draft, active.
-- `workflow-plans/review-phase-1.md`: draft, active.
+- `workflow-plan.md`: draft, current review pass complete.
+- `workflow-plans/review-phase-1.md`: draft, current review pass complete.
 - `spec.md`: not expected for this review-only pass; no implementation decision record is being approved.
 - `design/`: not expected; the review consumes stable repository docs instead of creating task-local design.
 - `plan.md`: not expected; no implementation plan is requested.
@@ -38,15 +38,14 @@
 - Reliability: `reliability-agent` with `go-reliability-review`; bootstrap/config/shutdown/readiness template guidance.
 - QA: `qa-agent` with `go-qa-review`; test layout, validation commands, integration-test guidance, future feature-test placement.
 - Docs/Make local inspection: orchestrator-owned `no-skill` lane for README, project-structure docs, command discoverability, and whether documented generated-code/test commands match template extension paths.
-- Security: `security-agent` with `go-security-review`; run because architecture and local inspection raised auth/CORS/trust-boundary extension concerns.
+- Security: `security-agent` with `go-security-review`; required for completion because architecture and local inspection raised auth/CORS/trust-boundary extension concerns.
 
 ## Validation Expectations
 
 - Fresh repository evidence gathered with `rg`, `sed`, `nl`, and targeted file reads across the requested paths.
-- `make check`: passed.
-- `make openapi-check`: passed.
-- `make sqlc-check`: attempted; failed before drift checking because the local `go tool sqlc` dependency `pg_query_go` failed to compile against the macOS SDK (`strchrnul` duplicate declaration). No generated sqlc diff was present after the attempt.
-- Integration tests and migration rehearsal: not run; review did not require a live Docker/Postgres proof, and `make check` plus OpenAPI drift/runtime checks were sufficient for the review claims.
+- Local inspection used `rg`, `find`, `sed`, `nl`, `go list`, and targeted file reads across the requested paths.
+- `go test ./cmd/service/internal/bootstrap ./internal/config ./internal/infra/http ./internal/infra/postgres ./internal/infra/telemetry ./internal/app/...`: passed.
+- `make check`, `make openapi-check`, `make sqlc-check`, integration tests, and migration rehearsal: not run in this pass; the review did not make full baseline, OpenAPI drift, sqlc drift, or live migration correctness claims.
 
 ## Blockers
 
@@ -54,12 +53,12 @@
 
 ## Workflow Plan Adequacy Challenge
 
-- Status: complete; blocking lane-ownership findings reconciled.
-- Resolution: docs/Make ownership was assigned to local orchestrator inspection, and the conditional security lane now has an explicit run/skipped decision point before final synthesis.
+- Status: complete; blocking handoff/lane findings reconciled.
+- Resolution: master next-session routing now starts before fan-out/fan-in, the security lane is required rather than conditional, and stale Russian-report wording was removed from the active phase plan.
 
 ## Resume Order
 
 1. Read this file.
 2. Read `workflow-plans/review-phase-1.md`.
 3. Read `AGENTS.md`, `docs/spec-first-workflow.md`, and `docs/repo-architecture.md`.
-4. Resume local inspection, subagent fan-in, validation, and final Russian synthesis.
+4. If implementation is requested later, start from the final review report and decide which recommendations to turn into a separate spec/planning pass.
