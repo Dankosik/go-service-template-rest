@@ -323,7 +323,7 @@ The orchestrator decides:
 - whether research mode is `local` or `fan-out`,
 - which questions can be handled directly in the main flow,
 - which questions need subagent research,
-- which single skill each planned subagent lane should use, if any,
+- which single skill name each planned subagent lane should use, if any,
 - which tracks are independent and should run in parallel,
 - which high-impact or ambiguous topics need multi-angle coverage,
 - whether candidate synthesis needs a pre-spec challenge pass before technical design and planning,
@@ -333,7 +333,7 @@ The orchestrator decides:
 
 #### Workflow control
 
-For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation. The master owns cross-phase control; the phase file owns phase-local orchestration. If implementation phase count is unknown, record that and the phased-delivery policy. Track whether `tasks.md` is expected, missing, draft, approved, or explicitly waived. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when used. Plan by lane, not unique role name: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes.
+For non-trivial or agent-backed work, record workflow control before any subagent call in master `workflow-plan.md` plus `workflow-plans/<phase>.md`, and keep both updated through validation. The master owns cross-phase control; the phase file owns phase-local orchestration. If implementation phase count is unknown, record that and the phased-delivery policy. Track whether `tasks.md` is expected, missing, draft, approved, or explicitly waived. Add `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` only when used. Plan by lane, not unique role name: multiple `data-agent` or `quality-agent` lanes are allowed when they answer different questions with different single-skill passes. A lane's chosen skill is routing metadata: record or pass the skill name without loading the full `SKILL.md` in the orchestrator unless a direct-use exception applies.
 
 #### Workflow plan adequacy challenge
 
@@ -381,7 +381,7 @@ When using subagents:
 
 - pass only the **minimum relevant slice of context**,
 - use only read-only agent or tool surfaces for delegated work; write-capable delegate agents are out of policy for this workflow,
-- keep each subagent pass scoped to one question and one skill,
+- keep each subagent pass scoped to one question and one skill, letting the subagent load its assigned skill inside that pass,
 - use enough lanes to cover every materially affected domain seam; keep independent tracks parallel, including duplicate-role lanes when scope, evidence target, or chosen skill differs,
 - use multi-angle patterns for high-impact or ambiguous areas when needed,
 - if a subagent result is needed for synthesis, review fan-in, or an agent-backed answer, wait up to 20 minutes per cycle and treat short timeouts as “still running”; do not interrupt, close, or declare failure unless there is clear evidence of a hang, the work is no longer needed, or the user explicitly redirects or cancels it.
@@ -646,11 +646,13 @@ Examples, if present in the toolchain: `idea-refine` / `spec-first-brainstorming
 ### Rules
 
 - Default to no skill when local reasoning is sufficient.
+- For subagent-internal skills, orchestrator selection is name-only routing: choose, record, or pass the skill name; do not open the full `SKILL.md` just to prepare a subagent lane.
 - A subagent pass may use **zero or one** skill; do not chain skills inside one pass.
 - Framing skills may be used only before `spec.md` is stable, or when a reopen shows that the problem frame itself is incomplete.
 - If a question naturally splits across skills, split it into separate subagent lanes instead, including multiple lanes of the same role when useful.
 - Record duplicate-role lanes in the current phase workflow plan by lane purpose and chosen skill rather than trying to make every role name unique.
 - Planning skills consume an approved frame, research-routing decision, and when required the approved design bundle; they do not create them.
+- Do not read multiple domain or review skill bodies in the main flow solely because their descriptions match a review prompt; route separate read-only lanes and let each lane load its own skill, unless an explicit direct-use exception is recorded.
 - Skill instructions do not override the ownership model or read-only boundaries in this file.
 - Do not copy full skill logs into the main flow unless needed as evidence.
 - If a relevant skill is missing or stale, proceed best-effort and record the limitation.

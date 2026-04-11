@@ -25,7 +25,7 @@ More artifacts do not change ownership:
 
 - **Orchestrator:** owns framing, routing, final decisions, implementation, validation, and artifact authority.
 - **Subagents:** stay read-only and advisory.
-- **Skills:** remain optional tools.
+- **Skills:** remain optional tools. For subagent-internal research or review skills, the orchestrator routes by skill name and the subagent loads the skill body inside its own pass.
 - **`spec.md`:** remains the canonical decisions artifact.
 
 The added artifacts provide control and technical context around `spec.md`, not another authority chain.
@@ -249,6 +249,8 @@ The phase file owns only local orchestration:
 - next action,
 - blockers,
 - parallelizable work.
+
+A lane's selected skill is a skill name or `no-skill` routing decision. It is not a requirement for the orchestrator to load the full `SKILL.md`; pass the selected name to the subagent and let that lane load the skill if it uses one.
 
 Section 7 defines the minimum shape in more detail.
 
@@ -557,6 +559,7 @@ Avoid:
 - **Task ledger drift:** Letting `tasks.md` become a second spec, second design bundle, competing plan, or a place to invent missing technical decisions.
 - **Readiness bypass:** Treating implementation as ready when implementation readiness is missing or `FAIL`, using `CONCERNS` without named accepted risks and proof obligations, or treating `WAIVED` as the default for work that is not tiny, direct-path, or prototype-scoped.
 - **New process artifacts after code starts:** Creating new workflow/process markdown during implementation or validation instead of reopening the correct earlier phase.
+- **Pre-reading review skills:** Loading multiple subagent-internal review or domain skill bodies in the main flow because their descriptions match, instead of routing one skill name per read-only lane.
 - **Just-in-case artifacts:** Creating `test-plan.md`, `rollout.md`, or conditional design files "just in case".
 - **Missing skip rationale:** Forgetting to record the skip rationale when bypassing `design/`.
 - **Architecture re-derivation:** Re-deriving repository architecture every session instead of loading [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md).
