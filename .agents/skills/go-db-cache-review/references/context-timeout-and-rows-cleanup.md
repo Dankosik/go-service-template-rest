@@ -1,7 +1,7 @@
 # Context Timeout And Rows Cleanup
 
 ## Behavior Change Thesis
-When loaded for dropped cancellation, unbounded DB/cache calls, or resource lifecycle leaks, this file makes the model choose caller-derived deadlines and explicit cleanup instead of likely mistakes such as `context.Background`, arbitrary timeout budgets, or assuming `QueryContext` alone returns connections safely.
+When loaded for dropped cancellation, unbounded DB/cache calls, or resource lifecycle leaks, this file makes the model choose caller-derived cancellation/deadlines and explicit cleanup instead of likely mistakes such as `context.Background`, arbitrary timeout budgets, or assuming `QueryContext` alone returns connections safely.
 
 ## When To Load
 Load this reference when lifecycle and cancellation are the primary symptoms: DB/cache calls in request paths drop caller context, use `context.Background()` or `context.TODO()`, add local query deadlines, change `Rows` iteration, prepare statements, reserve connections, or alter transaction cleanup.
@@ -46,7 +46,7 @@ Review finding shape:
 [medium] [go-db-cache-review] store/users.go:55
 Issue: The changed query replaces the caller's request context with context.Background and does not close/check Rows.
 Impact: A canceled request can keep the DB query and cursor alive, tying up a pooled connection and hiding iteration errors.
-Suggested fix: Derive any timeout from the caller context, defer cancel, close Rows after a successful query, and check rows.Err after iteration.
+Suggested fix: Propagate the caller context, derive any locally owned timeout from it and defer cancel, close Rows after a successful query, and check rows.Err after iteration.
 Reference: Go context cancellation and database/sql Rows cleanup guidance.
 ```
 
@@ -79,7 +79,7 @@ func (s *Store) ActiveUsers(ctx context.Context) ([]User, error) {
 }
 ```
 
-Do not mandate `2*time.Second`; use the repository's existing timeout source when one exists. The review finding is that blocking I/O needs a bounded, propagated context and cursor cleanup.
+Do not mandate `2*time.Second`; use the repository's existing timeout source when one exists. The review finding is that blocking I/O needs propagated cancellation, an owned budget when this package controls one, and cursor cleanup.
 
 ## Bad Example: Prepared Statement Leaked
 
@@ -123,7 +123,7 @@ If the statement is intentionally reused, require the owning lifecycle to close 
 
 ## Smallest Safe Fix
 - Pass the caller `ctx` to DB/cache methods instead of `context.Background()`.
-- Derive operation-specific timeouts from the caller context and `defer cancel()`.
+- When the package owns an operation budget, derive operation-specific timeouts from the caller context and `defer cancel()`; otherwise preserve the caller's existing deadline/cancellation.
 - Add `defer rows.Close()` after successful `QueryContext`.
 - Check `rows.Err()` after iteration.
 - Close `Stmt` and `Conn` when created in the changed path.

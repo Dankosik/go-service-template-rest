@@ -8,7 +8,8 @@ Load this when a spec touches retries, duplicate requests, replay, out-of-order 
 
 ## Decision Rubric
 - Start with the logical operation and one-domain-effect boundary, not the header, table, queue, or workflow engine.
-- Define the sameness rule: caller key, business key, payload hash, event ID, aggregate version/checkpoint, tenant/actor scope, or a deliberate combination.
+- Define the sameness rule: caller key, business key, request fingerprint or payload hash, event ID, aggregate version/checkpoint, tenant/actor scope, or a deliberate combination.
+- Do not collapse HTTP request equality into domain sameness; define which fields carry business intent and which are incidental metadata.
 - Specify same identity plus same intent, same identity plus different intent, in-progress duplicate, expired-window duplicate, concurrent duplicate, and unknown-commit duplicate behavior when relevant.
 - Define out-of-order behavior in domain terms: no-op, reject, compensate, forward-recover, or reconcile.
 - Classify replay side effects as recomputable, sandbox-only, forbidden, or policy-controlled before allowing replay.

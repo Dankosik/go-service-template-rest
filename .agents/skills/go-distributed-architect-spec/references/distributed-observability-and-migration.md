@@ -15,7 +15,7 @@ Load when a distributed-flow spec changes event contracts, compatibility windows
 - Keep telemetry labels bounded; IDs belong in logs/traces, not metric dimensions.
 
 ## Imitate
-- Every command or event includes `correlation_id`, `causation_id`, `message_id`, `producer`, `schema_version`, and the business key used for dedup or ordering. Copy the recovery identifiers.
+- Recovery-relevant commands or events include `correlation_id`, `causation_id`, `message_id`, `producer`, `schema_version`, and the business key used for dedup or ordering. Copy the recovery identifiers.
 - Metrics distinguish produced, relayed, consumed, deduped, retried, DLQ, compensated, reconciled, and manually repaired outcomes. Copy the outcome taxonomy, not unbounded labels.
 - Migration adds `PaymentAuthorized.v2` while consumers continue accepting v1; replay tooling handles both. Copy the mixed-version window.
 - A `202 Accepted` API returns an operation ID; the saga updates operation state from durable flow transitions. Copy the client-visible recovery surface.

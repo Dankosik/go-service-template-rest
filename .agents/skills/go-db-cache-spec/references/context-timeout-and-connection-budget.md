@@ -12,6 +12,7 @@ Keep the focus on runtime contracts and proof obligations. Do not turn this into
 - Use the inbound request context as the parent for ordinary request work so caller cancellation can stop DB/cache operations.
 - Use a bounded detached context only for an approved side effect that must outlive the caller; define deadline, retry/observation path, and reconciliation.
 - Make cache budget shorter than origin budget for read acceleration, leaving time for fallback and response mapping.
+- Do not assume a context deadline cancels in-flight DB work unless the driver and server support cancellation; state the dependency-side timeout or accepted limitation when cancellation semantics matter.
 - Count pool wait against the caller deadline; pool sizing must account for service replicas, transaction duration, DB limits, and other app instances.
 - Reserve a dedicated `sql.Conn` only when one connection is required and a transaction is not the better model; state release obligations.
 - Treat a larger pool as capacity policy, not a latency fix, unless the acceptance proof includes pool wait and DB headroom.
@@ -37,6 +38,7 @@ Keep the focus on runtime contracts and proof obligations. Do not turn this into
 - Transaction context cancellation rolls back the transaction; commit errors require the spec to define unknown-outcome handling.
 - Pool waits count against the caller's deadline. If pool wait is material, the acceptance checks should include pool wait or saturation telemetry.
 - The spec states parent context, DB deadline, cache deadline, and total request deadline relationship.
+- Cancellation proof includes driver/server behavior, or the spec names a DB-side timeout or accepted limitation.
 - Cache deadline is shorter than origin deadline unless an explicit exception is justified.
 - Fallback concurrency is bounded so cache outage does not overload the origin.
 - Connection pool assumptions include max open connections, expected in-flight work, replicas, and database limit headroom.

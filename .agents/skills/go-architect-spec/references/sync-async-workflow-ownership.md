@@ -13,16 +13,16 @@ Load when a task asks whether work belongs on the request path, in a queue, in a
 - Use commands or queues for owned work distribution where one owner accepts responsibility.
 - Use orchestration when one owner must track timers, retries, approvals, cancellation, ambiguous outcomes, or operator repair.
 - Use choreography only when independent reactions do not need a central status, cancellation, or repair owner.
-- Consider a workflow engine only after internal state machine/process manager limits are named: long timers, human tasks, replay/debug needs, fleet-wide operations, or cross-owner orchestration.
+- Consider a workflow engine or durable-execution platform when internal state machine/process manager limits are material: long timers, human tasks, replay/debug needs, fleet-wide operations, cross-owner orchestration, or ad hoc retry/state persistence becoming the architecture.
 
 ## Imitate
 
 ### Refund With Partner Reversal
 Context: refunds require partner reversal calls, 24-hour retry timers, finance approval over a threshold, manual repair for ambiguous partner outcomes, and an auditable requester-visible status.
 
-Choose: make `payments` the process owner and model refunds as a durable state machine or process manager first. Return a durable operation/status resource after starting the flow.
+Choose: make `payments` the process owner and model refunds as a durable state machine, process manager, or workflow-engine-backed orchestration depending on platform fit. Return a durable operation/status resource after starting the flow.
 
-Copy: this chooses durable ownership and client-visible progress before deciding whether the implementation needs a workflow engine.
+Copy: this chooses durable ownership and client-visible progress before selecting implementation machinery.
 
 ### Independent Order Reactions
 Context: order placement should notify analytics, send marketing email, and update a recommendation index. None of those consumers can decide whether the order exists.
@@ -49,4 +49,4 @@ Copy: this avoids remote calls after a non-compensable pivot without recovery.
 - Do not call every multi-step flow a saga. Name the pivot and whether each step is compensable or forward-recoverable.
 - Do not publish events without atomic linkage when the DB state and emitted fact must agree.
 - Do not leave DLQ ownership implicit. A dead letter is a business and operations queue, not a trash can.
-- Do not introduce a workflow engine without in-flight migration, replay, operator repair, and rollback consequences.
+- Do not introduce or reject a workflow engine by habit; check in-flight migration, replay/debug, operator repair, rollback, and operational ownership consequences.

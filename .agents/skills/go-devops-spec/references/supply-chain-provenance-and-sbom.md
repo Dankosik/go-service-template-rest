@@ -7,15 +7,16 @@ When loaded for symptom "the delivery spec needs release-trust evidence," this f
 Load for release-trust evidence, image signing, SBOM, provenance attestation, OIDC permissions, digest pinning, GHCR publish policy, SLSA expectations, or verification before deploy.
 
 ## Local Source Of Truth
-- `.github/workflows/cd.yml` grants `contents: read`, `packages: write`, `id-token: write`, and `attestations: write`; builds images; scans with Trivy; generates CycloneDX SBOM through Trivy; pushes tags; resolves digest; installs cosign; signs by digest; attests build provenance with `actions/attest-build-provenance`; and uploads the SBOM artifact.
+- `.github/workflows/cd.yml` currently grants `contents: read`, `packages: write`, `id-token: write`, and `attestations: write` at workflow scope; builds images; scans with Trivy; generates CycloneDX SBOM through Trivy; pushes tags; resolves digest; installs cosign; signs by digest; attests build provenance with `actions/attest-build-provenance`; and uploads the SBOM artifact.
 - `.github/workflows/ci.yml` and `.github/workflows/nightly.yml` use SHA-pinned actions and image scanning gates.
 - `build/docker/Dockerfile` pins base images by digest.
 
 ## Decision Rubric
 - Publish jobs must sign and attest the immutable image digest, not only mutable tags.
 - Release tags must run `release-preflight` before `publish-release`; publish without successful preflight is blocked.
-- SBOM artifacts must fail closed when missing, for example `if-no-files-found: error`.
-- Jobs that do not publish or attest should keep read-only permissions; write scopes belong only where required for package publish, OIDC signing, or attestations.
+- SBOM artifacts must fail closed when missing, for example `if-no-files-found: error`; if the SBOM is release-trust evidence rather than a diagnostic artifact, bind or attest it to the same subject digest.
+- Jobs that do not publish or attest should keep read-only permissions; write scopes belong only where required for package publish, OIDC signing, or attestations. If touching CD permissions, prefer moving current workflow-level writes down to the publish/attestation jobs.
+- `workflow_run` publish paths must prove the triggering workflow, repository, branch, conclusion, and SHA are trusted before checkout or publish; do not consume untrusted upstream code/artifacts in the privileged workflow.
 - Consumers/deployers that verify release trust must check attestation identity, source repository/ref, subject digest, and signer/workflow identity before accepting an artifact.
 - Base images and third-party actions should be pinned to immutable digests or SHAs with an update policy, not floating names alone.
 
@@ -33,10 +34,11 @@ Load for release-trust evidence, image signing, SBOM, provenance attestation, OI
 ## Agent Traps
 - Do not rebuild after scanning or attesting and then publish the rebuilt artifact.
 - Do not make SBOM/provenance optional artifacts.
+- Do not treat `workflow_run` as harmless glue; it can run with secrets and write tokens even when the upstream workflow was intentionally unprivileged.
 - Do not define the cryptographic trust model or vulnerability acceptance here; route those to security/platform ownership while recording delivery proof needs.
 
 ## Validation Shape
-Use CD workflow run URL and commit SHA, release preflight and publish job conclusions, published image tags and immutable digest, cosign signing log for the digest, build-provenance attestation log/id, SBOM artifact name/file, and verification output from `gh attestation verify`, `slsa-verifier`, cosign, or the deployment platform's verifier.
+Use CD workflow run URL and commit SHA, release preflight and publish job conclusions, published image tags and immutable digest, cosign signing log for the digest, build-provenance attestation log/id, SBOM artifact name/file, and verification output from `gh attestation verify` for GitHub artifact attestations, cosign for image signatures, `slsa-verifier` only when the provenance format/toolchain supports it, or the deployment platform's verifier.
 
 ## Hand-Off Boundary
 Do not define vulnerability acceptance, cryptographic trust model, or deployment admission architecture here beyond delivery proof requirements. Route unresolved security policy to the security spec and unresolved platform admission design to platform architecture.

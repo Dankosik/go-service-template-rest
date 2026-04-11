@@ -11,7 +11,7 @@ Load this when a draft proposes or may imply metric labels from user IDs, tenant
 - Prefer route templates, status classes, bounded `outcome`, bounded `error.type`, retry reason taxonomies, service class, region, and dependency catalog names.
 - Reject labels whose values can be created by users, traffic, data shape, timestamps, exception text, or generated IDs.
 - Keep SLO and paging metrics separate from forensic identifiers. Use exemplars, traces, or structured logs for representative request or entity pivots.
-- Align histogram buckets with SLO or operational decision cut points; do not add high-resolution buckets because the backend permits them.
+- For histograms, record the backend/SDK choice: use native histograms when the Prometheus path supports them; otherwise align explicit buckets with SLO or operational decision cut points. Do not add high-resolution buckets because the backend permits them.
 - Treat new labels on high-traffic paths as a cost and retention decision, not a harmless schema change.
 
 ## Imitate

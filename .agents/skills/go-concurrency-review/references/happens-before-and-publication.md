@@ -7,7 +7,7 @@ Symptom: the diff reads or publishes shared fields, maps, slices, pointers, inte
 
 ## Decision Rubric
 - Name the exact visibility edge before accepting the code: mutex unlock/lock, channel send/receive, channel close/receive observation, `sync.Once`, documented `sync.Map` behavior, or atomic operations that protect the whole published value.
-- Treat an atomic flag that gates non-atomic fields as suspicious. The flag can synchronize observations of itself; it does not make mutable maps, slices, or multi-field invariants safe.
+- Treat an atomic flag that gates non-atomic fields as suspicious. Observing the atomic store can publish prior writes, but it does not protect later mutation or make mutable maps, slices, or multi-field invariants atomic.
 - Accept atomic snapshot publication only when the stored value is fully built before publication and is immutable afterward or separately synchronized.
 - Reject `single writer` arguments when aliases escape to readers without a visibility rule.
 - If the invariant spans more than one field, prefer one mutex, one owner goroutine, or one immutable snapshot over per-field atomics.
@@ -16,7 +16,7 @@ Symptom: the diff reads or publishes shared fields, maps, slices, pointers, inte
 ```text
 [high] [go-concurrency-review] cache/config.go:47
 Issue:
-Axis: Happens-Before And State Publication; `ready.Store(true)` publishes `cfg`, but readers load `ready` and then read `cfg.Routes` without synchronizing access to the map. The atomic flag only orders observations of the flag; it does not make later mutation of `cfg.Routes` safe or make this multi-field invariant atomic.
+Axis: Happens-Before And State Publication; `ready.Store(true)` publishes `cfg`, but readers load `ready` and then read `cfg.Routes` while reload can still mutate the map. The observed atomic store can publish prior writes, but it does not make later mutation of `cfg.Routes` safe or make this multi-field invariant atomic.
 Impact:
 Requests can observe a partially initialized or concurrently mutated config map, which is a merge-blocking data race and can panic under concurrent map access.
 Suggested fix:
@@ -42,7 +42,7 @@ No issue: writes happen in the reload goroutine before readers check `ready`.
 Reject this shape: goroutine execution order is not synchronization. The review needs the edge that makes the reader observe the write.
 
 ## Agent Traps
-- Do not say "atomic makes it safe" unless the atomic operation protects the whole value being read.
+- Do not say "atomic makes it safe" unless the observed atomic operation protects the whole publication being read and later mutation is impossible or separately synchronized.
 - Do not treat goroutine exit, elapsed time, or "initialized during startup" as a visibility edge.
 - Do not bury a real race behind "consider a mutex"; state the broken invariant and failure mode.
 - Do not require a mutex when immutable snapshot ownership transfer is the smaller correction.

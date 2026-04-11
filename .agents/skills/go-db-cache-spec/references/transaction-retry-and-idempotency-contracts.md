@@ -1,7 +1,7 @@
 # Transaction Retry And Idempotency Contracts
 
 ## Behavior Change Thesis
-When loaded for write retries, ambiguous commit outcomes, or cache invalidation tied to writes, this file makes the model choose use-case-level transaction retry with idempotency and durable invalidation linkage instead of likely mistake `retry the failed statement or dual-write DB plus Redis best effort`.
+When loaded for write retries, ambiguous commit outcomes, or cache invalidation tied to writes, this file makes the model choose use-case-level transaction retry with idempotency and durable invalidation linkage or an explicit harmless-loss fallback instead of likely mistake `retry the failed statement or dual-write DB plus Redis best effort`.
 
 ## When To Load
 Load this when the spec must define write transaction ownership, isolation, retry rules, idempotency, `ON CONFLICT`, commit-outcome handling, or the way cache invalidation/update publication is linked to a write.

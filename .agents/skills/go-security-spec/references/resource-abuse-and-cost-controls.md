@@ -11,7 +11,7 @@ Load this when a flow includes repeated attempts, bulk/list/export work, expensi
 - Bind limits to the right security principal: caller, subject, tenant, API client, IP or network, object, provider account, idempotency key, or a combination. IP-only is rarely enough for authenticated APIs.
 - Put cheap checks before expensive parsing, queries, provider calls, job creation, or side effects. Authentication and tenant binding should happen before principal-scoped budget decisions when the endpoint is protected.
 - Define hard limits for body size, page size, batch size, concurrency, retry count, queue depth, fan-out, response size, and job duration when those dimensions are attacker-controlled.
-- Define denial semantics: `429` for quota/rate abuse, `413` for body size, `400` or `422` for invalid client-controlled dimensions when that is the repo/API policy, and safe degradation only when it does not leak or perform side effects.
+- Define denial semantics: `429` for quota/rate abuse, `413` for body size, `400` or `422` for invalid client-controlled dimensions when that is the repo/API policy, and safe degradation only when it does not leak or perform side effects. For active floods, explicitly decide whether the safer control is to drop or refuse before allocating response work.
 - For provider-cost triggers, define attempt budgets, dedup/idempotency, backoff, enumeration resistance, and audit events.
 
 ## Imitate

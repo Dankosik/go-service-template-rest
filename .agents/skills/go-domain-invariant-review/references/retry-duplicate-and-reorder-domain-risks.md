@@ -39,4 +39,6 @@ Failure: this does not tie duplicate handling to a domain transition or repeated
 - Do not require global ordering when the local rule only needs per-aggregate ordering or a stale-version guard.
 - Do not flag every retry loop; flag retries that can change business outcome or repeat an effect.
 - Do not require a new inbox table when a local idempotency key or transition guard already provides the approved guarantee.
+- Do not infer duplicate intent from identical payloads, timestamps, or field hashes alone; prefer a local idempotency token, message ID, version, or current-state guard that preserves caller or event intent.
+- Do not silently replay success for the same idempotency key or message ID with conflicting business payload unless the local contract explicitly defines that outcome.
 - Do not assume "last write wins" is acceptable for business state unless a local contract says stale overwrites are allowed.

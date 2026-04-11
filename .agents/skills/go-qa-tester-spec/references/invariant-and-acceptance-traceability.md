@@ -16,7 +16,7 @@ Load this when domain invariants, acceptance criteria, state transitions, or reo
 ## Imitate
 | Claim | Selected Proof | Required Rows | Reopen Trigger |
 | --- | --- | --- | --- |
-| `OneActiveExportPerTenant` | Contract plus integration if durable lock/idempotency is storage-backed | first export accepted; duplicate same request equivalent; different duplicate conflicts; concurrent duplicate suppressed | conflict semantics or idempotency retention not approved |
+| `OneActiveExportPerTenant` | Contract plus integration if durable lock/idempotency is storage-backed | first export accepted; duplicate same request equivalent; same key with different payload rejected per approved mismatch policy; concurrent duplicate suppressed | mismatch/concurrency semantics or idempotency retention not approved |
 | `NoCrossTenantRead` | Contract or integration | own object; other tenant object; unauthenticated; admin/internal actor if specified | tenant source or concealment policy unresolved |
 | `RollbackOnPartialFailure` | Integration | all steps succeed; middle step fails; context cancels before commit; retry after rollback | transaction owner or retry class not approved |
 | `AsyncEventuallyTerminal` | Integration or process proof | accepted; retryable failure; non-retryable failure; poison message; replay after restart | terminal states or poison policy missing |

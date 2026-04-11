@@ -11,8 +11,9 @@ If the main issue is object authorization after identity is verified, load the a
 ## Decision Rubric
 - For JWT or bearer tokens, verify signature, algorithm allowlist, issuer, audience, expiry, not-before, key source, token type, and parse-error handling when the change owns those checks.
 - Do not trust unverified token claims or client-controlled identity headers such as `X-User-ID`, `X-Tenant-ID`, or `X-Admin` unless an authenticated gateway contract strips inbound copies and sets them.
-- Generate reset, invite, API, and session tokens with `crypto/rand` or a vetted token library; reject `math/rand`, timestamps, counters, UUID-only secrets, or deterministic user-derived values.
+- Generate reset, invite, API, and session tokens with `crypto/rand` or a vetted token library; reject `math/rand`, timestamps, counters, deterministic user-derived values, or UUID-backed secrets without CSPRNG and entropy evidence.
 - Persist reset and API tokens hashed or otherwise non-recoverable when they grant account access, with expiry and single-use or replay controls.
+- Treat JWT `kid`, `jku`, and `x5u` as untrusted key-selection inputs; use an allowlisted key source instead of fetching attacker-selected keys.
 - Keep account-recovery responses generic enough to avoid account enumeration while still giving safe user guidance.
 - Store passwords with an approved adaptive password-hashing scheme; reject plaintext, reversible encryption, fast hashes such as SHA/MD5, and custom password hashing.
 - Compare token digests using constant-time comparison when the code does a manual equality check on secret-derived material.
@@ -69,8 +70,8 @@ Reject because parse success is not signature, algorithm, issuer, audience, expi
 
 ## Agent Traps
 - Do not let a successful parser call stand in for full token verification.
-- Do not trust JWT header `alg` or `kid` as policy without an allowlisted verifier and key source.
-- Do not treat UUIDs, timestamps, or random-looking strings as account-recovery secrets without entropy evidence.
+- Do not trust JWT header `alg`, `kid`, `jku`, or `x5u` as policy without an allowlisted verifier and key source.
+- Do not treat UUIDs, timestamps, or random-looking strings as account-recovery secrets without CSPRNG, entropy, and lifecycle evidence.
 - Do not combine password hashing and reset-token findings when they need different fixes and tests.
 - Do not require a new auth architecture when the local fix is deriving identity from verified claims instead of request headers.
 - Do not log or return raw reset tokens while writing a token lifecycle finding; add a secrets handoff if disclosure is a separate issue.

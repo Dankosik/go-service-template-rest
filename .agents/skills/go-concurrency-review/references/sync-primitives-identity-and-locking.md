@@ -10,7 +10,7 @@ Symptom: the diff touches `sync.WaitGroup`, `WaitGroup.Go`, copied `Mutex`/`RWMu
 - `WaitGroup.Add` must occur before the goroutine can call `Done` and before any possible `Wait` on a zero counter. Review the ordering, not just the presence of `defer Done`.
 - Lock scope must match the protected invariant. Blocking callbacks, channel sends, I/O, or user hooks under lock are findings when they can deadlock or stall unrelated callers.
 - `sync.Cond` requires a predicate protected by the associated locker and `Wait` in a loop.
-- `RWMutex` is not a default upgrade over `Mutex`; recursive reads, upgrades, or writer starvation risk can make it worse.
+- `RWMutex` is not a default upgrade over `Mutex`; recursive reads, upgrades or downgrades, and reader blocking while a writer waits can make it worse.
 - If a lock-free invariant cannot be stated in one sentence and validated with a concrete progress story, prefer a mutex or owner goroutine.
 
 ## Imitate
@@ -47,7 +47,7 @@ Reject this as safe unless the callback contract is intentionally serialized und
 ## Agent Traps
 - Do not miss sync-value copies through value receiver methods; this is common in review diffs because the method body still "looks" locked.
 - Do not recommend `RWMutex` without checking read dominance, upgrade/downgrade behavior, and writer progress.
-- Do not claim `WaitGroup.Go` fixes cancellation, panic handling, or downstream blocking by itself; it only changes launch/accounting shape.
+- Do not claim `WaitGroup.Go` fixes cancellation, panic handling, or downstream blocking by itself; its function must not panic, and it only changes launch/accounting shape.
 - Do not conflate atomic publication defects with sync-object identity defects. Load the publication reference when the core problem is visibility of data behind atomics.
 
 ## Validation Shape

@@ -13,9 +13,10 @@ Load this when writing or refactoring ordinary Go tests, subtests, fixtures, hel
 - Use `t.Run` to name subcases that can fail independently.
 - Use `t.Helper()` in helpers that can fail the test, and keep helpers thin enough that the behavior remains visible at the call site.
 - Use `t.Setenv`, `t.TempDir`, and `t.Cleanup` for local resource control. Do not hand-roll global cleanup when testing already gives a scoped primitive.
-- Use `t.Parallel()` only when environment, temp files, ports, mocks, package globals, and shared fakes are isolated.
+- Do not use process-wide helpers like `t.Setenv` or `t.Chdir` in tests that call `t.Parallel()` or have parallel ancestors.
+- Use `t.Parallel()` only when temp files, ports, mocks, package globals, and shared fakes are isolated.
 - For fuzz tests, add small regression seeds with `f.Add` and one `f.Fuzz` target.
-- For benchmarks, keep setup outside the measured loop and use the repo's current Go-version idiom.
+- For Go 1.24+ benchmarks, prefer `for b.Loop()` in new code unless nearby style or compatibility requires `b.N`; do not mix the two loop styles.
 
 ## Imitate
 ```go

@@ -11,6 +11,7 @@ Load this when the spec needs W3C Trace Context, baggage, request IDs, log corre
 - Use request IDs as client/support handles and log correlation fields, not metric labels.
 - Use baggage only from an allowlist. Strip or rewrite it before crossing trust boundaries when the receiving side should not see the value.
 - Use parent-child spans for direct causality; use span links for batch, fan-in, retry/redrive, or processing under another ambient context.
+- When linked contexts are already known at span start, specify creation-time links; adding them later can miss sampler decisions.
 - Preserve original correlation/message identity through retry and DLQ transitions in logs/traces while metrics use bounded reason and destination labels.
 - Do not require one ID to solve every problem. Trace ID, request ID, message ID, correlation ID, and idempotency key can have different privacy and lifetime rules.
 

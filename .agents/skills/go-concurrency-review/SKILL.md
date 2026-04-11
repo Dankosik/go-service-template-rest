@@ -61,7 +61,7 @@ When you load a reference, translate the example into the current diff's concret
 ## Expertise
 
 ### Happens-Before And State Publication
-- Require a concrete happens-before edge for shared state: channel send or receive, close observation, mutex unlock or lock, `WaitGroup` or `errgroup` completion, or atomic operations on the same variable.
+- Require a concrete happens-before edge for shared state: channel send or receive, close observation, mutex unlock or lock, `WaitGroup` or `errgroup` completion, or an atomic operation whose observed value protects the publication being claimed.
 - Flag mixed atomic and non-atomic access to the same variable.
 - Do not accept an atomic flag as proof that separately stored fields, slices, maps, or pointers are safely published unless later mutation is impossible or separately synchronized.
 - Treat `single writer` claims as incomplete if aliases escape or readers have no visibility guarantee.
@@ -90,7 +90,7 @@ When you load a reference, translate the example into the current diff's concret
 - `select { default: ... }` inside a loop often means busy-spin, starvation, or hidden loss of backpressure.
 
 ### WaitGroups, Locks, `sync.Cond`, And Copy Safety
-- `WaitGroup.Add` must happen before launch and before any possible `Wait`; `Add` or `Done` imbalance is merge-risk.
+- `WaitGroup.Add` with a positive delta on a zero counter must happen before launch and before any possible `Wait`; `Add` or `Done` imbalance is merge-risk.
 - Flag copying of structs containing `sync.WaitGroup`, `sync.Mutex`, `sync.RWMutex`, or `sync.Cond` after first use, including value receivers and by-value helper calls.
 - Keep lock scope clear; flag callbacks, channel sends, or blocking I/O under lock unless the lock is intentionally protecting that blocking contract.
 - Prefer `sync.Mutex` over `sync.RWMutex` unless read dominance and contention behavior are justified.
@@ -105,8 +105,8 @@ When you load a reference, translate the example into the current diff's concret
 
 ### Timers, Tickers, And Time-Based Coordination
 - `time.After` in hot or long-lived loops creates timer churn and often hides cancellation or reset semantics; account for Go version differences before calling it a timer leak.
-- `Ticker` must be `Stop`ped on all exit paths.
-- `Timer.Stop` or `Reset` flows need correct stop or drain coordination when another goroutine may already observe the tick.
+- Owned tickers that can keep driving work after the owner exits need `Stop` on exit paths; do not frame Go 1.23+ unreferenced tickers as GC leaks.
+- `Timer.Stop` or `Reset` flows need ownership and completion coordination; on Go 1.23+ channel timers do not need the old stale-tick drain dance, while `AfterFunc` callbacks and concurrent receivers still need an explicit story.
 - Sleep-based polling is not an acceptable substitute for a real signal or bounded retry strategy.
 
 ### Bounded Concurrency And Backpressure

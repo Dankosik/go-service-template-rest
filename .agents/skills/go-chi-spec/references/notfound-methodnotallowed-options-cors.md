@@ -8,10 +8,11 @@ Load when client-visible `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, CORS prefligh
 
 ## Decision Rubric
 - Put `NotFound` and `MethodNotAllowed` on the router that owns the client-visible surface, not inside unrelated business handlers.
-- A custom `405` may change body shape, but it must preserve accurate `Allow` behavior when clients depend on it.
-- If the API advertises `HEAD`, make support explicit with `Head(...)`, a documented middleware decision, or a handoff to the API contract owner. Do not infer `HEAD` support from `GET`.
+- chi's default `405` sets `Allow`, but a custom `MethodNotAllowed` handler replaces that default. A custom JSON `405` design must name its `Allow` source or explicitly accept that dynamic `Allow` is not preserved.
+- If the API advertises `HEAD`, make support explicit with `Head(...)`, a documented `middleware.GetHead` decision, or a handoff to the API contract owner. When `Allow` semantics matter, prove that `HEAD` appears where intended instead of inferring it from `GET`.
 - Treat CORS as transport policy. Prefer top-level or API-prefix middleware when preflight must apply across a mounted API surface.
 - Use scoped CORS only when expected preflight paths have matching `OPTIONS` behavior or the pass-through behavior is deliberately accepted.
+- If hand-written `OPTIONS` must run after `cors.Handler`, make `OptionsPassthrough` an explicit decision and test the resulting status and headers.
 - Do not duplicate CORS middleware and hand-written `OPTIONS` handlers for the same path unless the precedence, status, and headers are explicitly tested.
 - For generated and manual siblings under one prefix, require the same fallback and CORS policy unless the contract says they differ.
 
@@ -20,7 +21,7 @@ Load when client-visible `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, CORS prefligh
 api := chi.NewRouter()
 api.Use(cors.Handler(cors.Options{AllowedMethods: []string{"GET", "POST", "OPTIONS"}}))
 api.NotFound(jsonNotFound)
-api.MethodNotAllowed(jsonMethodNotAllowedWithAllow)
+api.MethodNotAllowed(jsonMethodNotAllowed) // only after the design names the exact Allow behavior
 ```
 
 Copy the surface shape: fallback and CORS policy are owned by the API router.
@@ -41,7 +42,7 @@ api.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 })
 ```
 
-Reject unless the design explains how `Allow` is preserved or why the API contract does not require it.
+Reject unless the design explains how `Allow` is preserved or why the API contract does not require it; chi will not add the default dynamic `Allow` header after a custom handler replaces the default.
 
 ```go
 api.With(cors.Handler(opts)).Post("/widgets", createWidget)
@@ -59,6 +60,8 @@ Reject unless the design names which layer wins and tests status, `Vary`, allow-
 
 ## Agent Traps
 - Do not say "custom JSON fallback" and forget `Allow`.
+- Do not assume `middleware.GetHead` makes `HEAD` appear in `Allow`; prove it or register `Head(...)` where the API contract requires it.
+- Do not treat `Allow` header presence as exact when overlapping wildcard or parameterized routes are involved; assert the method set when `405` behavior is client-visible.
 - Do not assume bare `OPTIONS` tests prove CORS. Preflight includes `Origin` and `Access-Control-Request-Method`.
 - Do not let API fallback policy accidentally cover `/debug`, `/metrics`, or internal health routes unless those routes are API-owned.
 - Do not settle `HEAD` support in the chi reference when it is actually an API-contract decision; record the handoff when needed.

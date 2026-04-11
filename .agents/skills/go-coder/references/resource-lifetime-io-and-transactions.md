@@ -10,7 +10,7 @@ Load this when work touches readers, writers, response bodies, files, `Rows`, sc
 - Keep acquire, use, and release in one obvious scope unless ownership is explicitly transferred.
 - Put `defer` next to acquisition, but avoid `defer` inside long-running loops when cleanup would be delayed.
 - Check terminal error surfaces: `rows.Err`, scanner errors, writer close errors when terminal, and `Commit` errors.
-- Use context-aware calls such as `QueryContext`, `ExecContext`, and `BeginTx`.
+- Use the datastore's context-aware API, such as `database/sql` `QueryContext`, `ExecContext`, and `BeginTx`, or pgx/sqlc `Query(ctx, ...)`, `Exec(ctx, ...)`, and `BeginTx(ctx, ...)`.
 - Keep slow network calls, queue publishes, and unrelated side effects outside transactions unless the approved design says otherwise.
 - Bound reads at trust boundaries before expensive work or side effects.
 
@@ -40,7 +40,7 @@ func (r *Repo) List(ctx context.Context) ([]Order, error) {
 }
 ```
 
-Use `database/sql` transaction ownership instead of raw SQL transaction strings.
+Use driver transaction ownership instead of raw SQL transaction strings.
 
 ```go
 func (r *Repo) Create(ctx context.Context, order Order) error {
@@ -121,5 +121,5 @@ body, err := io.ReadAll(r.Body)
 - Use fake `io.Closer`, `httptest`, or repository fakes to prove close behavior when ownership changes.
 - Add repository tests for scan and iteration failures when cursor handling changed.
 - Test transaction failure points when order changes: begin, write, later write, commit.
-- Use canceled contexts to prove caller cancellation reaches `QueryContext`, `ExecContext`, or `BeginTx`.
+- Use canceled contexts to prove caller cancellation reaches the datastore call or transaction begin for the active driver.
 - Run `go test -race` when cleanup, locks, timers, or shared state changed.

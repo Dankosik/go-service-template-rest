@@ -10,9 +10,9 @@ Load this for tenant-scoped identity, external references, time semantics, money
 - Use stable internal surrogate keys for joins and ownership; model public references, partner references, correlation IDs, and idempotency keys as separate concepts.
 - Scope uniqueness to the authority that owns it: usually `(tenant_id, key)` or `(tenant_id, provider, external_id)`, not global by habit.
 - Put `tenant_id` in invariant-bearing uniqueness, child ownership, and access-path indexes for shared-table tenancy.
-- Use row-level security only when tenant context is reliably set, tests prove fail-closed behavior, and migration/admin roles are accounted for.
+- Use row-level security only when tenant context is reliably set, tests prove fail-closed behavior, and table owner, `BYPASSRLS`, migration, backup, and support roles are deliberately in or out of policy.
 - Model real instants, effective time, provider event time, processing time, and user-local business dates separately when policy or reporting depends on the distinction.
-- Use exact money representation with currency and rounding policy. Do not use floating-point types for money, credits, quotas, or billable usage.
+- Use exact money representation with currency and rounding policy. Prefer integer minor units or `numeric(precision, scale)`; do not use floating-point or PostgreSQL `money` by default.
 
 ## Imitate
 
@@ -33,7 +33,7 @@ Copy this because each identifier answers a different authority question.
 ### Money and time semantics
 Context: Billing stores usage charges, plan prices, invoice dates, provider callbacks, and customer-local billing periods.
 
-Use integer minor units plus currency, or `numeric(precision, scale)` plus currency and rounding policy. Use `timestamptz` for real instants, separate `business_date` or effective-time fields for policy dates, and separate provider event time from processing time for late callbacks.
+Use integer minor units plus currency, or `numeric(precision, scale)` plus currency and rounding policy. Avoid PostgreSQL `money` unless its locale and arithmetic behavior are an explicit fit. Use `timestamptz` for real instants, store the original named zone separately when it matters, use separate `business_date` or effective-time fields for policy dates, and separate provider event time from processing time for late callbacks.
 
 Copy this because customer-visible balances and invoices need explainable precision and date semantics.
 
@@ -44,10 +44,11 @@ Copy this because customer-visible balances and invoices need explainable precis
 - "Store provider IDs in `jsonb`; reconciliation can search payloads." If the ID defines uniqueness or repair, make it relational.
 - "Use `created_at` for provider event time, invoice business date, and processing time." That destroys late-arrival and reporting semantics.
 - "Use float for money because values are small." Small values still need exact representation and rounding.
+- "Use `timestamptz` to remember the customer's time zone." It stores the instant, not the original named zone needed for policy or display.
 
 ## Agent Traps
 - Do not mark every unique key as global just because it is easier to describe.
-- Do not propose RLS without naming how service, migration, and support roles set or bypass tenant context.
+- Do not propose RLS without naming how table owner, `BYPASSRLS`, migration, backup, and support roles set or bypass tenant context.
 - Do not assume UTC instants solve user-local business-date policy.
 - Do not collapse balances, credits, and quotas into one generic numeric type if their rounding, currency, or lifecycle differs.
 

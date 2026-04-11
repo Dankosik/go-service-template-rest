@@ -11,7 +11,7 @@ Load this when the spec touches JSON decoding, query parameters, file/path/URL f
 - For fixed-shape JSON mutation, require body size limit, media-type check, unknown-field policy, duplicate-key policy when security relevant, trailing-token rejection, numeric precision choice, and forbidden-field handling.
 - Use allowlists for schemes, hosts, ports, HTTP methods, media types, enum values, sort fields, table/column identifiers, and pagination limits.
 - For SQL, pass values through `database/sql` or generated-query parameters. Dynamic identifiers must come from code-owned allowlists, not user strings.
-- For SSRF-prone behavior, define allowed origins, scheme and port policy, DNS/IP resolution policy, loopback/private/link-local/metadata blocking, redirect behavior, timeout, response size, media-type validation, and no raw internal response relay.
+- For SSRF-prone behavior, define allowed origins when the target set is known. When user-controlled external destinations are a product requirement, do not invent a static allowlist; require public-destination checks, DNS/IP re-resolution policy, loopback/private/link-local/metadata blocking, redirect behavior, timeout, response size, media-type validation, and no raw internal response relay.
 - Sanitize output and problem responses. Client-visible errors should not include stack traces, SQL errors, credentials, filesystem paths, internal hosts, or raw user-supplied error strings.
 
 ## Imitate
@@ -27,6 +27,7 @@ Load this when the spec touches JSON decoding, query parameters, file/path/URL f
 
 ## Agent Traps
 - Do not conflate strict JSON syntax with semantic authorization. Parser strictness does not prove the caller may set the field.
+- Do not assume Go's default `encoding/json` behavior is strict enough for security-sensitive fields; duplicate keys, case-insensitive struct matching, ignored unknown fields, invalid UTF-8 replacement, and large-number precision need explicit policy when relevant.
 - Do not treat generated handlers or request structs as an input-security control unless their rejection behavior is explicit.
 - Do not claim SSRF is solved by timeout alone. Timeout limits blast radius; it does not authorize a target.
 

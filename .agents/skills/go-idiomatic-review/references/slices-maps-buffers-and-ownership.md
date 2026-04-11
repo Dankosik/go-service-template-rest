@@ -13,7 +13,7 @@ Load when a Go review touches slice/map returns, `[]byte`, `bytes.Buffer`, `stri
 - Check whether a clone is shallow. `maps.Clone` and `slices.Clone` do not deep-copy nested maps, slices, pointers, or `http.Header` values.
 - Sort map keys only when order is externally observable or correctness-relevant: signatures, hashes, stable serialized output, or golden tests.
 - Use `http.Header` and `url.Values` methods when canonicalization, first/all value semantics, or encoding matters; raw map access is fine only when those semantics are intentionally bypassed.
-- Watch for retained sub-slices of large buffers in long-lived objects. Use a clone, full-slice expression, or `slices.Clip` when capacity retention matters.
+- Watch for retained sub-slices of large buffers in long-lived objects. Clone or copy when the goal is to let the large backing array be collected; use a full-slice expression or `slices.Clip` only when the goal is to prevent later appends from reusing spare capacity.
 - Separate ownership leaks from concurrency risk. If the main harm is mutation after lock release, this file can frame it; deep race analysis belongs to concurrency review.
 
 ## Imitate
@@ -80,6 +80,7 @@ Reject because maps can be valid API types. The finding must identify whether ca
 - Do not assume `maps.Clone(http.Header)` is a deep copy; header values are `[]string` and still alias.
 - Do not forget setter ownership: storing caller-provided slices/maps can be as risky as returning internal ones.
 - Do not conflate nil-vs-empty with ownership. Load the nil reference when encoding or absence semantics are the real issue.
+- Do not claim `slices.Clip` or `s[:len(s):len(s)]` releases a large backing array; use clone/copy when GC retention is the defect.
 - Do not make a performance claim about retained buffers unless the object is long-lived enough for retention to matter.
 - Do not use this reference to replace local helpers with stdlib only because they exist; load the stdlib-first reference for reinvention questions.
 

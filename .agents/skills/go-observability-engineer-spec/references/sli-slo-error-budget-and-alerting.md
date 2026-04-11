@@ -10,7 +10,7 @@ Load this when the spec needs user-impacting SLIs, SLO windows, budget policy, b
 - Start from the user or workflow promise, then define `good_events`, `total_events`, exclusions, measurement source, and window.
 - Separate admission, durable async handoff, final completion, stream continuity, and freshness when they are different promises.
 - Do not let fast failures improve latency health. Define failed-request handling for latency SLIs.
-- Page only when budget burn is meaningful, event floors are met, ownership is clear, and the runbook names a first action.
+- Page only when budget burn is meaningful, ownership is clear, the runbook names a first action, and sparse traffic has an explicit low-traffic policy: event floor, synthetic traffic, aggregation, longer window, renegotiated SLO, or ticket-only response.
 - Use ticket-only, dashboard-only, or release/degrade policy when the response is not immediate human wake-up.
 - Keep dependency labels out of user-facing SLO math unless the operator response truly differs by bounded dependency.
 
@@ -21,7 +21,7 @@ Load this when the spec needs user-impacting SLIs, SLO windows, budget policy, b
   Copy the final-completion/freshness split.
 - Latency SLI: `good_events = successful GET /v1/payouts/{id} responses under 200 ms`; failed requests tracked separately so fast 500s do not look healthy.
   Copy the failed-request guard.
-- Alert: page on multi-window burn only after event floor is met; create ticket for slow budget consumption; link SLO panel, dependency panel, and trace/log queries from the runbook.
+- Alert: page on multi-window burn only after the chosen low-traffic policy is satisfied; create ticket for slow budget consumption; link SLO panel, dependency panel, and trace/log queries from the runbook.
   Copy the proportional response.
 
 ## Reject

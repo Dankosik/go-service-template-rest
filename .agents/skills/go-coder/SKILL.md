@@ -146,9 +146,9 @@ References are compact rubrics and example banks, not exhaustive checklists or G
 - Avoid `defer` inside long-running loops when per-iteration cleanup timing matters.
 - Close readers, bodies, rows, files, and network handles exactly once and check terminal error surfaces such as `rows.Err()` or scanner errors.
 - Stop tickers, timers, streams, subscriptions, and derived contexts when their lifecycle ends.
-- Use context-aware datastore calls such as `QueryContext`, `ExecContext`, and `BeginTx` so cancellation and deadlines reach the datastore.
+- Use the datastore's context-aware API, such as `database/sql` `QueryContext`, `ExecContext`, and `BeginTx`, or pgx/sqlc `Query(ctx, ...)`, `Exec(ctx, ...)`, and `BeginTx(ctx, ...)`, so cancellation and deadlines reach the datastore.
 - Keep network calls, blocking RPCs, and unrelated side effects outside transactions unless the approved design explicitly requires otherwise.
-- Use the standard transaction pattern: begin, `defer tx.Rollback()`, do work, then `Commit()` once success is certain.
+- Use the standard transaction pattern for the active driver: begin, defer rollback with the driver's context/signature, do work, then commit once success is certain.
 
 ## Bug-Class Playbooks
 

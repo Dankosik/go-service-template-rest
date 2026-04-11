@@ -12,10 +12,11 @@ Stay out of primary schema ownership. If the invalidation answer requires a dura
 - Name the freshness class per operation: strong, bounded stale, stale-while-revalidate, or best-effort.
 - Use TTL-only only when bounded staleness is product-acceptable and exact invalidation is not required.
 - Use write-triggered invalidation only when the writer owns all affected keys or can target them deterministically.
-- Use event-driven invalidation only with durable publication, idempotent consumer, replay, lag observability, and reader behavior while lagged.
+- Use durable event-driven invalidation with idempotent consumers, replay, lag observability, and lagged-reader behavior when missed events would violate the contract.
+- Allow ephemeral invalidation signals only with bounded-stale semantics, loss detection or resync behavior, max TTL, and reader behavior while signals are delayed or lost.
 - Use versioned namespaces for rollout or broad invalidation when wildcard key scans would otherwise be tempting; include cleanup so old versions do not leak memory.
 - Use stale-while-revalidate only with fresh TTL, stale window, refresh owner, coalescing, eligible consumers, and refresh-failure behavior.
-- Use negative caching only for expensive repeated business misses, with short TTL and separate treatment for transient dependency failures.
+- Use negative caching for expensive repeated business misses, or a separate short-lived degraded error cache when protecting an unavailable origin; never mix transient dependency failures with business negatives.
 
 ## Imitate
 - Public profile read: cache-aside with `fresh_ttl=30s`, tenant/user/version key dimensions, and origin fallback; admin permission reads bypass cache or require a fresh permission version. Copy the split between public bounded-stale and admin strong paths.
@@ -29,13 +30,14 @@ Stay out of primary schema ownership. If the invalidation answer requires a dura
 
 ## Agent Traps
 - Do not use TTL as a substitute for invalidation when the contract requires immediate or strong behavior.
+- Do not treat Pub/Sub or keyspace notifications as durable invalidation without TTL, resync, or bounded-stale acceptance.
 - Do not invalidate with `KEYS` or broad runtime wildcard scans from production request paths.
 - Do not forget tenant, authorization, locale, version, price rule, and other response-shaping dimensions in the key.
 
 ## Validation Shape
 - State the freshness class per operation: strong, bounded stale, stale-while-revalidate, or best-effort.
 - TTL is a maximum cache age, not proof that invalidation happened at a specific wall-clock moment.
-- Event-driven invalidation must define lag behavior, replay, duplicate handling, and what readers do while invalidation is delayed.
+- Event-driven invalidation must define lag/loss behavior, duplicate handling, and either replay/durability or ephemeral-signal containment.
 - Versioned keys should include rollout and cleanup behavior so old versions do not become unbounded memory leaks.
 - Decode failure normally behaves like a miss plus an error counter; do not serve undecodable data.
 - Every cacheable operation has a named staleness window or explicit strong-consistency bypass.

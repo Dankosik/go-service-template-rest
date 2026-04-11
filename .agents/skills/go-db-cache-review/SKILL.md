@@ -49,7 +49,7 @@ Do not:
 ## Core Defaults
 - Correctness comes before optimization.
 - Treat cache as an accelerator, not the source of truth, unless an explicit contract says otherwise.
-- Require explicit deadlines and explicit cleanup for blocking DB or cache calls.
+- Require propagated cancellation, explicit cleanup, and operation deadlines when the caller or package owns a budget.
 - Require cache keys to encode every dimension needed for correctness and isolation.
 - Prefer the smallest safe fix that restores consistency and predictable fallback behavior.
 

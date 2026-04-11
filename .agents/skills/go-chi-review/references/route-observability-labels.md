@@ -9,9 +9,9 @@ Load when a diff touches metrics, traces, logs, span names, `http.route`, route-
 ## Decision Rubric
 - Route labels should come from chi route templates when available, not `r.URL.Path`, query strings, captures, IDs, slugs, or wildcard values.
 - Read final chi route templates after downstream routing. If the main defect is context timing rather than telemetry cardinality, load `route-context-and-match-probing.md`.
-- Unmatched requests need one bounded fallback label, such as `unmatched`, `not_found`, or another project-approved constant. Do not fall back to user-controlled paths.
-- Metrics, traces, span names, and structured logs should use the same route identity source unless the diff records a deliberate policy difference.
-- For server span naming, prefer method plus route template when the template exists; absence of a template is not permission to substitute the raw URL path.
+- Custom metrics and logs for unmatched requests need one bounded fallback label, such as `unmatched`, `not_found`, or another project-approved constant. Do not fall back to user-controlled paths.
+- Metrics, traces, span names, and structured logs should use the same route-template source unless the diff records a deliberate policy difference.
+- For OpenTelemetry, set `http.route` only when a real route template is available. For server span naming, prefer method plus route template when the template exists; otherwise use method-only naming instead of substituting a raw path or synthetic fallback as `http.route`.
 - If standards wording matters, verify against the current OpenTelemetry HTTP semantic conventions, but do not turn the review reference into a link dump.
 
 ## Imitate
@@ -31,10 +31,12 @@ Copy the label shape: post-route template extraction plus bounded fallback.
 if route := chi.RouteContext(r.Context()).RoutePattern(); route != "" {
 	span.SetName(r.Method + " " + route)
 	span.SetAttributes(attribute.String("http.route", route))
+} else {
+	span.SetName(r.Method)
 }
 ```
 
-Copy the trace shape: use method plus route template and set `http.route` from the same template.
+Copy the trace shape: use method plus route template and set `http.route` from the same template; if no template exists, keep the span name bounded and leave `http.route` unset.
 
 ```go
 assertSameRouteLabel(t, "/users/1", "/users/2", "/users/{id}")
@@ -69,11 +71,12 @@ Reject because the fallback converts unmatched routes into unbounded labels.
 ## Agent Traps
 - Do not stop at "use `RoutePattern`" if the code still reads it before routing finishes.
 - Do not accept a bounded metric label while traces or logs still use raw paths for the same route identity.
+- Do not write `http.route="unmatched"`; use a separate custom label if project policy needs an unmatched fallback.
 - Do not substitute wildcard captures, IDs, or query strings when a template is unavailable.
 - Do not make this a performance-only finding; the merge risk is telemetry cardinality and debuggability drift.
 
 ## Validation Shape
 - Send two concrete parameter values, such as `/users/1` and `/users/2`, and assert one route-template label.
 - Send two unknown paths and assert both collapse to the same bounded fallback label.
-- Assert metrics, span name, `http.route`, and structured logs use the same route-template source when the diff touches more than one signal.
+- Assert metrics, span name, `http.route`, and structured logs use the same route-template source when the diff touches more than one signal; for unmatched paths, assert any custom fallback is bounded and `http.route` is omitted.
 - Suggested command: `go test ./... -run 'Test.*RouteLabel|Test.*Observability|Test.*Telemetry|Test.*Trace|Test.*Metrics|Test.*Log'`.

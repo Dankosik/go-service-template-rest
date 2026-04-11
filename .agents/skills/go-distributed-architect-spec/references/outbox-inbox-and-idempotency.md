@@ -9,7 +9,7 @@ Load when a spec must avoid dual writes, define outbox relay behavior, choose co
 ## Decision Rubric
 - Reject dual writes as the correctness mechanism; database commit and broker publish can diverge.
 - Use a transactional outbox when producer state and message intent must be atomically linked, then publish asynchronously.
-- Use Dapr outbox only when Dapr state transactions and pub/sub are already part of the service; still model transaction markers, verification, and at-least-once publish.
+- Use Dapr outbox only when the service already uses Dapr state transactions with a supported transactional state store and Dapr pub/sub; still model transaction markers, verification, and at-least-once publish.
 - Use inline idempotent consumers when message handling and the processed-message marker can commit in the same local transaction.
 - Use an inbox when receiving, batching, retrying, or independently scaling message processing needs durable separation from broker ACK.
 - Accept natural idempotency only when repeat execution is domain-equivalent and protected by durable uniqueness or version checks.

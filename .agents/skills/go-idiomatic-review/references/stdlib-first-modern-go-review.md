@@ -12,7 +12,7 @@ Load when a Go review touches helper packages that duplicate builtins or the sta
 - Keep local helpers when they intentionally carry policy: deep copy, nil/empty normalization, canonicalization, redaction, validation, compatibility with older supported versions, or domain naming.
 - Check shallow/deep semantics before replacing clone helpers with `slices.Clone` or `maps.Clone`.
 - Check error-tree semantics before preserving custom error traversal; `errors.Is` and `errors.As` cover standard wrapping and joined errors.
-- Check loop-variable capture claims against effective Go version; Go 1.22 changed common range-loop capture behavior for modules/files using the new semantics.
+- Check loop-variable capture claims against effective Go version and declaration shape; in Go 1.22+ files or packages, variables declared by the loop get per-iteration instances, but preexisting variables assigned inside the loop can still have the old capture hazard.
 - Treat wrapper removal as a public API/design question when the helper is exported or has broad callers.
 - When the stdlib is almost enough, name the remaining semantic gap and decide whether it is real or accidental.
 

@@ -12,6 +12,7 @@ Load this when the spec needs `/livez`, `/readyz`, `/startupz`, graceful shutdow
 - `/startupz` answers "has initialization completed?" It protects slow startup from premature liveness restarts.
 - Shutdown must expose readiness-fail time, drain begin/end, in-flight work, worker stop, exporter flush success/failure, and bounded exit reason.
 - Put pprof, expvar, and expensive diagnostics on an isolated internal/admin listener or loopback-only surface with auth/network controls, audit, owner, and time-bound activation.
+- In Go, side-effect imports of `net/http/pprof` or `expvar` register `/debug/*` handlers on `http.DefaultServeMux`; require an isolated mux/listener when the customer router may use the default mux.
 - Treat profiles, heap dumps, goroutine dumps, command lines, environment, and debug vars as potentially sensitive data.
 
 ## Imitate

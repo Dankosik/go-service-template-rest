@@ -12,7 +12,7 @@ Load this when a flow needs authentication requirements, JWT or bearer-token rul
 - Require object-level checks for identifiers from path, query, header, body, async payload, or derived lookup.
 - Require property-level checks for both mutable request fields and response fields. Reject or explicitly ignore forbidden mutable fields according to the API contract.
 - Require function-level checks for privileged actions regardless of URL shape. Admin behavior is a capability, not a path prefix.
-- For JWT or OAuth-style tokens, require issuer, audience, expiry/not-before, signature algorithm allowlist, key-source, token type, and key-rotation failure behavior. Never let the token header choose verification policy.
+- For JWT or OAuth-style tokens, require issuer, audience, expiry/not-before, signature algorithm allowlist, key-source, token type, and key-rotation failure behavior. Treat header parameters such as `alg`, `kid`, `jku`, and `x5u` as untrusted lookup inputs; never let the token header choose verification policy or an unapproved remote key source.
 
 ## Imitate
 - "For `GET /accounts/{account_id}`, require the caller's tenant and relationship to `account_id` before the repository read; same-role callers in other tenants receive `403` or an approved concealment response with no data disclosure." Copy the object plus tenant rule before data access.
@@ -32,7 +32,7 @@ Load this when a flow needs authentication requirements, JWT or bearer-token rul
 
 ## Validation Shape
 - Authorization matrix: caller role/scope -> tenant -> object relation -> mutable fields -> response fields -> allowed action -> denial response.
-- JWT negative cases: `alg: none`, wrong issuer, wrong audience, expired `exp`, future `nbf`, unknown `kid`, altered claims, missing signature, wrong token type, and stale key-set behavior.
+- JWT negative cases: `alg: none`, wrong issuer, wrong audience, expired `exp`, future `nbf`, unknown or injection-shaped `kid`, unapproved `jku`/`x5u`, altered claims, missing signature, wrong token type, and stale key-set behavior.
 - Tenant-crossing checks with two accounts or tenants, including read, update, delete, bulk/list, and inference paths.
 
 ## Repo-Local Anchors

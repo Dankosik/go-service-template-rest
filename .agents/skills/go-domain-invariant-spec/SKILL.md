@@ -85,8 +85,9 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 - Cover happy path, forbidden path, fail path, and corner or edge conditions for every critical invariant.
 - Include duplicate, replay, and out-of-order behavior when async processing is involved.
 - Define idempotency conflict behavior where retries are possible:
-  - same key + same payload => equivalent outcome
-  - same key + different payload => explicit conflict
+  - same key + same domain intent or documented request fingerprint => equivalent outcome
+  - same key + different domain intent => explicit conflict
+  - in-progress duplicate => pending, retry-later, or conflict; never a second side effect
 - For eventual reads, define freshness and staleness boundaries.
 - For long-running side effects, require honest async acknowledgement semantics rather than fake immediate completion.
 
@@ -105,10 +106,10 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 
 ### API, Distributed, And Persistence Alignment
 - When invariants affect external behavior, make method semantics, status codes, idempotency, optimistic concurrency, and consistency disclosure explicit.
-- For state changes that emit messages, require outbox-equivalent atomic linkage.
+- For state changes that emit messages, require outbox-equivalent atomic linkage and make duplicate delivery a domain proof obligation.
 - Require consumer idempotency, durable dedup, bounded retries, and reconciliation for cross-service invariants.
 - Use DB constraints for DB-enforceable invariants rather than app-only checks.
-- Keep transaction boundaries local to one service-owned datastore.
+- Prefer transaction boundaries local to one service-owned datastore; escalate distributed transactions or external-resource locks as explicit architecture decisions.
 - Require migration compatibility strategy and objective invariant verification before destructive steps.
 
 ### Cache, Identity, And Reliability Impact

@@ -15,9 +15,9 @@ Load for Railway deployment policy, release promotion/rollback criteria, healthc
 
 ## Decision Rubric
 - Treat `railway.toml` as the reviewable policy surface; secrets and environment-specific secret values stay in Railway variables, not repository files.
-- Deployment specs must tie promotion/rollback to `/health/ready`, overlap/draining windows, restart policy, and objective post-deploy signals.
+- Deployment specs must tie promotion/rollback to `/health/ready`, overlap/draining windows, restart policy, and objective post-deploy signals. Do not treat the Railway deploy healthcheck as continuous monitoring; it proves startup/promotion health, so ongoing health needs separate evidence.
 - If release risk depends on capacity, name the replica and per-replica baselines and the evidence that the target environment satisfies them.
-- If the spec proposes a different builder, Dockerfile path, healthcheck, overlap, draining, or restart policy, require a guardrail update or an explicit exception.
+- If the spec proposes a different builder, Dockerfile path, healthcheck, overlap, draining, or restart policy, require a guardrail update or an explicit exception; do not "fix" these only in the Railway dashboard when config-as-code overrides them.
 - Do not import Kubernetes concepts unless the deployment target actually changes or a Kubernetes manifest/admission surface is part of the plan.
 
 ## Imitate

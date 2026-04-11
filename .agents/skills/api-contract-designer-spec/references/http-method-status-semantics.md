@@ -5,7 +5,7 @@ Load this when choosing methods, mutation semantics, status codes, `201` vs `202
 
 ## Decision Rubric
 - Model the client-visible resource first; choose the method after the representation semantics are clear.
-- `POST` creates a subordinate resource when the server assigns identity, or starts an operation resource when work outlives the request.
+- `POST` asks the target resource to process the representation. Default to subordinate-resource create when the server assigns identity, or operation resource start when work outlives the request; for other resource-specific processing, state why safe or idempotent alternatives do not fit and define retry behavior.
 - `PUT` is full replacement of a known resource. HTTP allows create-or-replace at the target URI, but this skill treats that as exception-only client-chosen identity or upsert; if it exists, say so explicitly.
 - `PATCH` is partial update and is incomplete until it defines patch media type, omitted fields, explicit `null`, empty objects, arrays, and immutable-field writes.
 - Treat `application/merge-patch+json` as a default only when null-as-removal and whole-array replacement fit; use `application/json-patch+json` or a resource-specific update document for per-element array edits or ordered operations.
@@ -63,5 +63,6 @@ Bad unless documented as a full replacement shape or explicit upsert/partial pol
 - A `Location` header on `201` usually points to the created resource; on `202`, it often points to an operation resource. Say which.
 - For `PUT`, do not emit `ETag` or `Last-Modified` in the success response if the server transformed the submitted representation; have clients read back the resource when they need the new validator.
 - `DELETE` idempotency does not require identical later responses. First delete can return `204`; later reads or deletes can be `404` or `410` if documented.
+- A `POST` endpoint can still be resource-oriented; what fails this skill is an action-RPC surface without resource semantics, lifecycle, and retry behavior.
 - Do not invent custom status codes. Use Problem Details extensions for API-specific detail.
 - If multiple mutation surfaces coexist, define whether they share `ETag` space, stale-write behavior, and success statuses.

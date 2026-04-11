@@ -9,6 +9,7 @@ Symptom: the diff launches goroutines per item, adds worker pools, `errgroup.Set
 - Count both active work and waiting work. A fixed worker count with a request-sized input slice, retry list, or detached sender goroutine can still retain unbounded work relative to production inputs.
 - Acquire semaphores before launching goroutines. Acquiring inside the goroutine limits only the critical section, not goroutine creation.
 - `errgroup.SetLimit` can bound running functions, but only if all work is launched through that group and blocked submitters have a cancellation story, usually because active workers observe `ctx` and return promptly.
+- Do not modify an `errgroup` limit while goroutines are active; treat dynamic limit changes as a correctness or panic risk, not a tuning tweak.
 - Buffered channels need an explicit full-queue policy: block with cancellation, drop with accounting, fail fast, or shed upstream.
 - Do not hide backpressure by spawning a goroutine just to avoid a blocking send; that creates an unbounded goroutine queue under slow consumers.
 - If the correct policy is overload behavior rather than local concurrency mechanics, record a handoff to reliability review while still flagging the local unbounded-work defect.

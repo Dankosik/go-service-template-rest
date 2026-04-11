@@ -11,7 +11,7 @@ Load when the task involves read/write separation, read services, projections, C
 - Use projections, materialized views, search indexes, read replicas, exports, aggregators, or BFFs for query shape and scale, not for command acceptance.
 - Give every projection a support owner, freshness contract, rebuild path, drift detection, and failure mode.
 - Reject direct cross-service joins against private operational stores as steady state.
-- Consider event sourcing only when audit/replay is a real domain requirement, not because the read model is complex.
+- Consider event sourcing only when immutable history/replay, conflict handling, natural domain events, or CQRS/eventual-consistency benefits justify the operational complexity; not because the read model is complex.
 - For exports and scans, define a stable read fence or documented consistency boundary instead of promising exact snapshots casually.
 
 ## Imitate
@@ -40,7 +40,7 @@ Copy: this names completeness boundaries and avoids moving write ownership to th
 ## Reject
 - "The projection is usually current, so checkout can use it." Bad because acceptance semantics cannot depend on best-effort freshness.
 - "The read service can query private operational tables directly." Bad because schemas and connection pools become shared runtime contracts.
-- "Event source the system because the dashboard is hard." Bad unless audit/replay and immutable facts are true domain requirements.
+- "Event source the system because the dashboard is hard." Bad unless immutable facts, replay, conflict handling, or CQRS/eventual-consistency trade-offs are true domain requirements.
 - "Export as exact snapshot" without a read fence. Bad because it invents stronger consistency than the architecture proves.
 
 ## Agent Traps

@@ -25,7 +25,7 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 - If approved task artifacts exist, treat them as governing intent.
 - Findings come first and must be ordered by merge risk, not by section order or taste.
 - Green tests do not prove a cleanup preserved local reasoning safety.
-- Always run a source-of-truth helper pass: flag both stable same-package policy still scattered across files and bogus extraction into vague helper buckets.
+- Always check touched helper or policy changes for source-of-truth drift: flag stable same-package policy still scattered across files and bogus extraction into vague helper buckets only when there is concrete future-change risk.
 - Prefer official Go docs, Go Code Review Comments, Effective Go, Go module/package organization docs, and repository-local review patterns over external clean-code advice. Treat generic clean-code material as calibration only.
 
 ## Scope
@@ -78,7 +78,7 @@ Do not:
 - Control flow: prefer guard clauses and straight-line happy paths only when side-effect ordering, cleanup, and which error wins stay explicit.
 - Predicate clarity: flag compound negatives, boolean clusters, and hidden mode decoding when the decision no longer reads at the call site.
 - API and call-site burden: flag same-typed positional parameters, raw strings with hidden meaning, `map[string]any` option blobs, and exported-surface changes that need design escalation.
-- Error paths: preserve distinct failure classes, `errors.Is/As` inspectability, status mapping, context cancellation, and cleanup/audit precedence.
+- Error paths: preserve distinct failure classes, `errors.Is` plus `errors.As`/`errors.AsType` inspectability, status mapping, context cancellation, and cleanup/audit precedence.
 - Naming and tests: suggest naming or test simplification only when it lowers future reasoning and diagnosis load.
 
 ### Go-Semantic Stop-Signs

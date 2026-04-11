@@ -13,7 +13,7 @@ Keep the skill on runtime cache contracts. If the right answer is a new read mod
 - Choose local in-process cache only when per-instance divergence is harmless and bounded by TTL, rollout behavior, and memory cap.
 - Choose distributed cache when shared hit ratio, fleet-wide warmup, or cross-instance reuse justifies network and dependency costs.
 - Choose hybrid L1/L2 only with separate TTLs, coherence/invalidation rules, memory caps, and lost-invalidation behavior.
-- Choose client-side caching only with tracking mode, local max TTL, memory cap, connection-health behavior, and flush-on-disconnect rules.
+- Choose client-side caching only with tracking mode, local max TTL, memory cap, invalidation-channel health detection, and flush-on-disconnect rules.
 - Default to cache-aside when origin remains authoritative; require explicit reasons for other patterns.
 
 ## Imitate
@@ -34,7 +34,7 @@ Keep the skill on runtime cache contracts. If the right answer is a new read mod
 ## Validation Shape
 - Local cache implies instance divergence; the spec must define the maximum allowed divergence or reject local cache for that path.
 - Distributed cache implies dependency and network failure behavior; read-acceleration paths usually fall back to origin with bounded concurrency.
-- Client-side caching must flush local state when invalidation connectivity is lost; otherwise stale data can outlive the server-side contract.
+- Client-side caching must flush local state when invalidation connectivity is lost or cannot be proven healthy; otherwise stale data can outlive the server-side contract.
 - If strict consistency is required and no safe bypass exists, reject cache for that operation class.
 - The spec states measured or required benefit: latency, DB load, cost, or availability target.
 - The no-cache option is compared and rejected only with evidence.

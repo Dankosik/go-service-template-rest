@@ -16,6 +16,8 @@ Load for CI gate matrices, required status checks, local/CI command parity, time
 - Name the exact gate tier and job/target that enforces it; avoid prose-only gate names.
 - Required branch-protection contexts must match stable CI job names; when a job is renamed, update branch protection configuration and `scripts/ci/required-guardrails-check.sh` in the same change.
 - Treat timed-out, cancelled, missing, or path-filter-skipped required checks as blocking delivery evidence until rerun or covered by exception governance.
+- Distinguish workflow-level skip from job-level skip: GitHub keeps required checks pending when a workflow is skipped by path/branch filters or skip markers, but a job skipped by a conditional can report success. Required aggregate jobs that depend on other jobs need `if: always()` or equivalent failure propagation.
+- If merge queue is enabled, required-check workflows must also run on `merge_group`; otherwise required checks may never report for the merge group.
 - Use `make check` for fast local confidence; require `make check-full` or `make docker-ci` when Docker-backed integration, migration rehearsal, or image scanning evidence matters.
 - Treat nightly failures as release blockers only when they affect a changed path, reveal an active regression, or the release policy explicitly promotes nightly reliability evidence into a hard gate.
 
@@ -33,6 +35,7 @@ Load for CI gate matrices, required status checks, local/CI command parity, time
 - Do not invent a CI tier if no repository command or workflow can produce its artifact.
 - Do not replace Makefile targets with inline CI commands unless the spec explicitly accepts local/CI drift.
 - Do not treat `workflow_dispatch` success as equivalent to PR, push, or tag-triggered evidence without checking trigger, ref, permissions, and base comparison.
+- Do not require a conditional job as a status check unless the spec states how skipped dependencies, cancelled dependencies, and hidden upstream failures are surfaced.
 
 ## Validation Shape
 Use GitHub Actions run URL, workflow name, job name, commit SHA, conclusion, coverage artifacts (`coverage.out`, `.artifacts/test/junit.xml`, `.artifacts/test/test2json.json`), Trivy output, migration rehearsal logs, and release preflight logs.

@@ -76,8 +76,8 @@ Do not load a reference just because it mentions a keyword; load it when its exa
 
 ### Browser Session, CORS, And CSRF
 - Treat credentialed browser requests as their own trust boundary, especially cookie-authenticated state changes.
-- Reject reflective or wildcard credentialed CORS for sensitive APIs.
-- Require CSRF defenses or an explicit same-site browser policy before side effects on cookie-authenticated routes.
+- Reject arbitrary reflected credentialed CORS for sensitive APIs; treat literal wildcard-plus-credentials as fail-closed misconfiguration unless the framework reflects the caller's origin.
+- Require CSRF defenses, Go's `http.CrossOriginProtection`, or an explicit same-site browser policy before side effects on cookie-authenticated routes.
 - Require session cookies to keep `Secure`, `HttpOnly`, and appropriate `SameSite`, `Path`, and `Domain` constraints when touched.
 - Do not treat CORS as authorization; server-side identity and authorization still own access.
 

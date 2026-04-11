@@ -65,7 +65,7 @@ If a narrower positive reference matches, prefer it over broad smell triage. If 
 
 ### Registration And Startup Hazards
 - Flag `Use(...)` added after the first route registration on the same mux. In chi this panics at startup.
-- Flag `Mount(...)` on an already owned pattern. In chi this panics when mounting on an existing path.
+- Flag `Mount(...)` conflicts with existing mounted or wildcard subtree ownership. Chi panics for nil handlers and duplicate mount-style paths, while exact-route overlaps can still silently change ownership and need review as route conflicts.
 - Flag diffs that rely on registration order to make one handler “win” ownership, especially when manual handlers and mounts overlap.
 - Treat startup panics from router construction as `high` or `critical` merge risk, even if the steady-state routing logic looks correct.
 
@@ -94,6 +94,7 @@ If a narrower positive reference matches, prefer it over broad smell triage. If 
 - Verify `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, and CORS behavior remain deliberate and contract-consistent.
 - Remember chi does not automatically route `HEAD` to `GET`; that requires an explicit `Head(...)` route or `middleware.GetHead`.
 - Flag custom `Allow` or fallback logic that claims `HEAD` support when the router cannot actually serve it.
+- When `middleware.GetHead` is the only HEAD support, verify `Allow` separately; serving `HEAD` through `GET` does not automatically prove the 405 `Allow` header advertises `HEAD`.
 - When a custom `405` helper both mutates probe state and overclaims supported methods, report both defects as first-class findings.
 - Check that preflight handling is complete for affected routes and scopes.
 - Treat inconsistent `404` vs `405` vs `204` behavior across related surfaces as a correctness risk.

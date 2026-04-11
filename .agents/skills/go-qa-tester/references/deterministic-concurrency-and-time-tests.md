@@ -11,9 +11,11 @@ Load this when tests touch goroutines, channels, worker pools, shutdown, backpre
 - For cancellation or shutdown, prove the blocked operation returns and inspect the final error or state.
 - For max concurrency or duplicate side effects, use an atomic or mutex-protected fake and fail at the first overflow or duplicate.
 - For timer and backoff behavior, prefer injected clocks or `testing/synctest` when the code can stay inside the fake-time bubble.
+- Inside `synctest.Test`, do not call `T.Run`, `T.Parallel`, or `T.Deadline`; keep subcase grouping outside the bubble.
+- Call `synctest.Wait` only inside the bubble and not concurrently from multiple goroutines in the same bubble.
 - Use a real timeout only as a diagnostic guard around a deterministic condition.
 - Use `go test -race` or the repository race target for concurrency-sensitive changes when the platform/toolchain supports it.
-- Verify `testing/synctest` in the active Go toolchain before relying on it. In this repo, `go.mod` currently targets Go 1.26.1, so `synctest` is expected to be available.
+- Verify `testing/synctest` in the active Go toolchain before relying on it. Go docs mark it as Go 1.25+, and this repo currently targets Go 1.26.1.
 
 ## Imitate
 ```go

@@ -39,7 +39,7 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 ## Core Defaults
 - REST over HTTP with JSON payloads; OpenAPI must mirror the approved wire contract rather than outrank it.
 - Keep API major version in the URI prefix as this skill's default; preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it.
-- Use `application/problem+json` as the default HTTP error model.
+- Use `application/problem+json` as the default HTTP error model unless the API already has a stable error profile; if changing profiles, treat it as compatibility work.
 - Prefer resource or operation resources over action-RPC endpoints.
 - Prefer cursor pagination for mutable or large collections; use offset only when drift, bounded size, and jump-to-page UX are acceptable.
 - Prefer honest async acknowledgement over fake synchronous success.
@@ -89,7 +89,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 
 ### HTTP Method, Status, And Mutation Semantics
 - `GET` is safe and idempotent.
-- `POST` creates a collection resource or starts an operation resource.
+- `POST` asks the target resource to process the representation; default to subordinate-resource create or operation start, and allow other resource-specific processing only when the contract names the resource semantics and retry behavior.
 - `PUT` is full replacement and idempotent by contract.
 - `PATCH` is partial update and must define omitted versus `null` versus empty semantics, array replacement behavior, and whether writes to read-only fields fail or are ignored.
 - `DELETE` is idempotent by contract.
@@ -167,7 +167,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Webhook contracts should define signature verification, replay window, retry schedule, dedup key, and sender timeout expectations.
 
 ### Consistency And Freshness Disclosure
-- Each endpoint should declare whether behavior is `strong` or `eventual`.
+- Each endpoint should declare observable freshness and read-after-write behavior; use `strong` or `eventual` labels only when they describe the actual guarantee.
 - Eventual endpoints should disclose expected propagation or freshness behavior.
 - Read models that converge asynchronously should expose freshness fields such as `as_of` or `last_updated_at` when feasible.
 - Cache-backed reads are contract-visible when freshness can lag or fail over.

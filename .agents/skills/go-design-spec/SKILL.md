@@ -90,20 +90,20 @@ This is a technical-design integrator, not a workflow owner:
 
 ### Sync And API Seams
 - Verify sync vs async choice before discussing transports or endpoints.
-- For sync seams, require explicit deadline budgets, retry classes, idempotency policy, error model, and pagination behavior.
+- For sync seams, require explicit deadline budgets, retry classes, idempotency policy, and error model; add pagination behavior only for collection or list semantics.
 - Guard against action-RPC drift hiding inside nominally resource-oriented APIs.
 - Make eventual-consistency disclosure explicit when sync read behavior depends on async convergence.
 
 ### Async And Distributed Seams
 - Require explicit event vs command intent and a justified choice of pub/sub vs queue.
-- Require outbox/inbox or equivalent atomic and dedup guarantees for side-effecting async flows.
+- For side-effecting async flows, require a named atomicity and dedup model, such as transactional outbox plus idempotent consumer or an equivalent guarantee.
 - When cross-service invariants exist, require an explicit process or saga state model.
 - Make compensation or forward-recovery semantics explicit for each critical distributed step.
 - Reject dual writes and implicit exactly-once assumptions.
 
 ### Data, Cache, And Evolution Integrity
 - Keep local transaction boundaries explicit and aligned with ownership boundaries.
-- Require behavior-changing data evolution to use `expand -> backfill/verify -> contract` with a mixed-version compatibility window.
+- Require rollout-sensitive persisted-state evolution to use `expand -> backfill/verify -> contract` with a mixed-version compatibility window.
 - Require cache decisions to preserve correctness: clear staleness contract, tenant-safe keying, invalidation/fallback behavior, and no hidden dependency on exact TTL timing.
 - Do not allow data/cache assumptions to silently break domain behavior during rollout.
 

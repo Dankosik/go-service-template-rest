@@ -10,7 +10,7 @@ Use this when the simplification risk is the error contract itself. If the risk 
 ## Decision Rubric
 - Keep distinct failure classes distinct when callers, operators, retries, transports, or tests must reason about them differently.
 - Flag helpers that collapse validation, conflict, retryable, not-found, timeout, cancellation, and internal errors into one generic bucket.
-- Preserve `errors.Is` and `errors.As` behavior when inspectability is part of the contract.
+- Preserve `errors.Is` plus `errors.As`/`errors.AsType` behavior when inspectability is part of the contract.
 - Do not demand `%w` for every wrapped error; wrapping can expose internals when callers should not inspect them.
 - Keep which error wins explicit when cleanup, audit, rollback, notification, or logging can also fail.
 
@@ -88,4 +88,4 @@ func writeUserError(w http.ResponseWriter, err error) {
 - Do not make simplification review the final authority on subtle Go error trees; hand off deep wrapping or nil behavior questions to `go-idiomatic-review`.
 
 ## Validation Shape
-Ask for proof that inspectable errors still satisfy `errors.Is` or `errors.As`, cancellation/deadline paths still map distinctly, and transport status mapping remains stable. For cleanup precedence, also verify the primary error remains visible according to the existing contract.
+Ask for proof that inspectable errors still satisfy `errors.Is`, `errors.As`, or `errors.AsType`, cancellation/deadline paths still map distinctly, and transport status mapping remains stable. For cleanup precedence, also verify the primary error remains visible according to the existing contract.

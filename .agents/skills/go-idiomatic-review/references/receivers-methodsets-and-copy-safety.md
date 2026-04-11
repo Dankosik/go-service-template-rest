@@ -1,7 +1,7 @@
 # Receivers, Method Sets, And Copy Safety
 
 ## Behavior Change Thesis
-When loaded for receiver or copy-safety symptoms, this file makes the model tie findings to mutation, identity, method-set reachability, and must-not-copy state instead of likely mistake "use pointer receivers everywhere" or "make receivers consistent."
+When loaded for receiver or copy-safety symptoms, this file makes the model tie findings to mutation, identity, method-set reachability, and copy-sensitive state instead of likely mistake "use pointer receivers everywhere" or "make receivers consistent."
 
 ## When To Load
 Load when a Go review touches method receivers, interface satisfaction, value vs pointer semantics, copying structs, `sync.Mutex`, `sync.RWMutex`, `sync.Once`, `sync.WaitGroup`, `sync.Map`, atomics, `strings.Builder`, `bytes.Buffer`, pointer-to-interface parameters, or method values/closures that capture receivers.
@@ -10,7 +10,7 @@ Load when a Go review touches method receivers, interface satisfaction, value vs
 - Use pointer receivers when a method mutates state, depends on identity, protects shared state, or must avoid copying copy-sensitive fields.
 - Value receivers are fine for small immutable value types and methods that intentionally work on a copy.
 - Mixed receiver types are a finding only when they confuse mutation visibility, method-set satisfaction, or copy expectations.
-- Do not copy a type after first use if it contains locks, atomics, builders, buffers, wait groups, or other must-not-copy fields.
+- Do not copy a type after first use when it contains documented must-not-copy state such as locks, `sync.Once`, `sync.WaitGroup`, `sync.Map`, atomics, or `strings.Builder`. For `bytes.Buffer` or slice-backed fields, prove the aliasing or mutation risk instead of treating them as a documented copylock contract.
 - Keep `sync` fields as values inside the struct unless a documented shared-lock indirection is required; pointer-to-lock often adds nil and ownership confusion.
 - Check whether `T` or `*T` satisfies the interface actually used at the boundary; non-addressable values cannot call pointer receiver methods.
 - Treat pointer-to-interface, pointer-to-map, and pointer-to-slice parameters as smells unless nilability or mutation of the header itself is the explicit contract.

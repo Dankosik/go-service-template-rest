@@ -12,6 +12,7 @@ Use this as a stop-sign reference. It helps decide whether simplification review
 - Finding-worthy: a "cleanup" removes the protective step and thereby exposes mutable state, changes observable nil/empty behavior, drops required cancellation/close/unlock/rollback, or erases a wrapper's contract.
 - Handoff-worthy: the risk depends on subtle Go method sets, interface satisfaction, comparability, `errors.Join` trees, `defer` and named returns, or standard-library contract details beyond the simplification lane.
 - Smallest safe fix: restore the protective line or helper and name why it exists; do not broaden the refactor.
+- Clone helpers such as `slices.Clone` and `maps.Clone` are shallow; treat them as protecting the copied container only unless nested reference fields are separately proven.
 
 ## Imitate
 Finding shape to copy when clone-before-store is removed:
@@ -96,8 +97,10 @@ return scan(rows)
 
 ## Agent Traps
 - Do not call clone/copy helpers "dead wrappers" until alias ownership is clear.
+- Do not overstate `slices.Clone` or `maps.Clone` as deep-copy protection.
 - Do not normalize nil and empty values unless the API contract says they are interchangeable.
 - Do not remove `defer cancel`, `Close`, `Unlock`, or rollback code as cleanup without proving another owner closes the same lifetime.
+- Do not turn `Rows.Close` into a blanket close-error finding; normal exhaustion can close rows implicitly, while early returns and write/autocommit paths still need explicit ownership and error policy.
 - Do not simplify receiver shape or exported method names without considering interface satisfaction and zero-value behavior.
 - Do not hide stdlib wrapper types behind generic maps if their methods or canonicalization rules are part of the contract.
 

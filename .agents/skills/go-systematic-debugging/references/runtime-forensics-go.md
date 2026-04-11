@@ -11,6 +11,7 @@ Load when a Go process or test is alive but not making progress, deadlocked, lea
 - Pick the first artifact that matches the wait or growth class; do not collect every profile by habit.
 - Use two time-separated samples when claiming goroutine, heap, or RSS growth.
 - Prefer goroutine dumps for "who is blocked now"; use block/mutex profiles for accumulated wait and contention.
+- Prefer local or protected pprof when the process must stay alive; use `SIGQUIT` only when its default exit-with-stack-dump behavior is acceptable or custom signal handling is confirmed.
 - Use execution trace when ordering and timing relationships matter more than aggregate samples.
 - Remove or close temporary runtime endpoints after capture.
 
@@ -33,7 +34,7 @@ kill -QUIT <pid>
 docker kill --signal=QUIT <container>
 ```
 
-Use this before restarting a stuck process when doing so is operationally safe.
+Use this only when terminating the process is acceptable, or when you have confirmed custom signal handling. By default, Go exits with a stack dump on `SIGQUIT`.
 
 ```bash
 curl -o goroutine-1.txt 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2'
@@ -75,4 +76,4 @@ This destroys the blocked goroutine state that would have shown the owner cycle.
 - Checking in `*.pprof`, `trace.out`, or dumps by accident.
 
 ## Validation Shape
-Record timestamp, process identity, version or commit, load condition, exact capture command, artifact path, repeated blocked stack or profile top summary, elapsed time between samples for growth claims, and whether runtime endpoints were already protected or temporary.
+Record timestamp, process identity, version or commit, load condition, exact capture command, artifact path, repeated blocked stack or profile top summary, elapsed time between samples for growth claims, whether signal capture was expected to terminate the process, and whether runtime endpoints were already protected or temporary.

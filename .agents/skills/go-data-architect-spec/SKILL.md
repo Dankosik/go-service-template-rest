@@ -97,13 +97,14 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Prefer stable surrogate primary keys. Keep natural or business keys explicit through `UNIQUE` constraints instead of using mutable business identifiers as the primary key.
 - Distinguish internal identity, public reference, partner reference, idempotency key, and correlation ID. They are not interchangeable.
 - Every unique, foreign-key, and index decision should say whether it is tenant-scoped.
-- For shared-table multi-tenancy, require `tenant_id` to participate in the relevant uniqueness and indexing strategy. Use centralized isolation controls such as RLS where appropriate.
+- For shared-table multi-tenancy, require `tenant_id` to participate in the relevant uniqueness and indexing strategy. Use centralized isolation controls such as RLS only when tenant context and bypassing roles are explicit.
 - Use a version column or equivalent optimistic-concurrency token for mutable rows that are updated by competing writers.
 - Model time deliberately:
   - use timestamp-with-time-zone semantics for real instants
+  - persist the original named zone separately when policy or rendering must reconstruct it
   - use a separate business date or effective timestamp when policy depends on local dates or retroactive effect
   - if event time and processing time differ, define late or out-of-order handling explicitly
-- Use exact numeric types for money, rates, quotas, or billable usage. Do not use floating-point types for money.
+- Use exact numeric types for money, rates, quotas, or billable usage. Do not use floating-point types for money. Avoid PostgreSQL `money` unless locale, precision, and division semantics are an explicit fit.
 - Choose enum, lookup-table, or constrained-text modeling based on change cadence and compatibility needs. Do not let unstable partner statuses leak into the canonical domain state.
 - `JSONB` is acceptable for sparse or adjunct attributes with weak relational invariants and bounded query needs. It is a poor default for invariant-bearing fields, multi-column uniqueness, or heavily filtered operational data.
 
@@ -174,6 +175,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Require migration safety budgets such as lock and statement timeouts.
 - For PostgreSQL-class systems, call out online-DDL hazards explicitly:
   - non-concurrent index builds can take disruptive locks
+  - `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block and failure can leave invalid indexes
   - foreign-key or check-constraint validation can block or run long if introduced carelessly
   - some defaults, type changes, or table rewrites can be more expensive than they look
   - long backfill transactions create bloat, replica lag, and rollback pain

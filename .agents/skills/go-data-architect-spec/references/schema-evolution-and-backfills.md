@@ -12,6 +12,7 @@ Load this for live schema changes, tightened constraints, column splits or renam
 - Name rollback class: `safe`, `conditional`, or `restore-based`. Do not imply destructive or externally observed changes are trivially reversible.
 - Make backfills restart-safe, checkpointed, throttled, and bounded by load, lock time, replica lag, and abort thresholds.
 - Create live-table indexes and validate constraints with engine-safe phases when table size and traffic make blocking unacceptable.
+- For PostgreSQL concurrent indexes, ensure the migration runner can execute outside a transaction block and plan invalid-index cleanup.
 - Treat validation failure as a contraction blocker, not as permission for improvised production edits.
 
 ## Imitate
@@ -47,7 +48,7 @@ Copy this because enforcement follows evidence that existing and future rows com
 ## Agent Traps
 - Do not bundle unrelated DDL subcommands when the strictest lock can apply to the whole statement.
 - Do not skip duplicate or null detection before adding a uniqueness or required-value constraint.
-- Do not leave invalid or failed concurrent index artifacts unnamed; they affect retries and cleanup.
+- Do not leave invalid or failed concurrent index artifacts unnamed; they affect retries, write overhead, and cleanup.
 - Do not contract old fields until old code, workers, generated clients, and replay paths are drained.
 
 ## Validation Shape

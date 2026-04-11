@@ -86,7 +86,7 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Keep cancellation and deadline errors recognizable.
 - Verify request context is propagated rather than replaced.
 - Avoid brittle string-based assertions unless exact text is part of the public contract.
-- When API behavior changes, cover status codes, problem details, idempotency keys, conflict semantics, async `202 + operation resource` behavior, validation, limits, and request/correlation IDs.
+- When API behavior changes, cover status codes, problem details, idempotency keys, conflict or mismatch semantics, async `202` status-monitor or operation-identity behavior, validation, limits, and request/correlation IDs.
 
 ### Data, Cache, Security, And Distributed Concerns
 - Cover transaction behavior, optimistic/pessimistic conflicts, deterministic pagination, and N+1/chatty query risk when the change is data-heavy.

@@ -10,6 +10,7 @@ Load when a diff changes fallback handlers, custom method discovery, `Allow` hea
 - Unknown path should exercise the intended `404`; known path with wrong method should exercise the intended `405`.
 - Custom `MethodNotAllowed` can change body format, but it must preserve route-accurate method disclosure when the contract depends on `Allow`.
 - `HEAD` is not automatic for every `GET` route. Require `Head(...)` or `middleware.GetHead` installed before route registration when `HEAD` support is advertised.
+- If `middleware.GetHead` is the only HEAD mechanism, validate `Allow` independently. It can serve an undefined `HEAD` request through the `GET` handler without making the router's 405 method disclosure include `HEAD`.
 - If `middleware.GetHead` is added after routes on the same mux, primary finding is the late-`Use` startup hazard; load `chi-router-registration-hazards.md`.
 - CORS preflight needs matching `OPTIONS` handling at the path/scope receiving the preflight. Do not assume a grouped or inline middleware covers unmatched `OPTIONS` routes.
 - Generated and manual routes under the same prefix should expose consistent fallback, `Allow`, `HEAD`, `OPTIONS`, and CORS behavior. If ownership drift is primary, load `generated-and-manual-route-drift.md`.
@@ -22,7 +23,7 @@ r.Use(middleware.GetHead)
 r.Get("/reports/{id}", getReport)
 ```
 
-Copy the capability shape: `HEAD` support is deliberate because the middleware is installed before routes.
+Copy the capability shape: `HEAD` support is deliberate because the middleware is installed before routes; `Allow` still needs a separate assertion if the contract requires it.
 
 ```go
 r.Use(cors.Handler(cors.Options{

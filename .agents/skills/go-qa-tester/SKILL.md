@@ -67,7 +67,7 @@ If a reference would not change the test decision, do not load it. If newer Go o
 - Prefer explicit Go assertions and actionable failure messages over opaque assertion frameworks.
 - Use `t.Helper()` in helpers and keep helper layers thin enough that scenario intent stays visible.
 - Use `t.Run` and table-driven tests when shared structure improves clarity.
-- Use `t.Parallel()` only when isolation and shared-resource safety are clear.
+- Use `t.Parallel()` only when isolation and shared-resource safety are clear; do not combine it with process-wide mutations such as `t.Setenv` or `t.Chdir`.
 - Use `t.Setenv`, `t.TempDir`, and `t.Cleanup` for local resource control where appropriate.
 - Prefer deterministic coordination primitives over timing sleeps and polling luck.
 - Treat critical omitted scenarios as defects, not documentation debt.

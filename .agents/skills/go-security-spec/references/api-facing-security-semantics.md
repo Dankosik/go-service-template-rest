@@ -8,9 +8,9 @@ Load this when security requirements touch REST/OpenAPI behavior, status codes, 
 
 ## Decision Rubric
 - Put client-visible security behavior in the API contract or task-local API design: security scheme, per-operation security, protected/public distinction, supported methods, media types, request limits, and problem responses.
-- Use `401` for missing or invalid authentication and `403` for authenticated callers without permission, unless a resource-existence concealment policy explicitly chooses otherwise.
+- Use `401` for missing or invalid authentication and `403` for authenticated callers without permission, unless a resource-existence concealment policy explicitly chooses otherwise. For `401`, define the `WWW-Authenticate` challenge policy while keeping error detail non-leaky.
 - Use `405` with `Allow` when method semantics require it; do not let disallowed methods fall through to another handler.
-- Use `413` for request size limits, `415` for unsupported request media types, `406` only when response negotiation is intentionally constrained, `429` for rate or abuse limits, and `503` only when temporary unavailability is safe to disclose and retryable.
+- Use `413` for request size limits, `415` for unsupported request media types, `406` only when response negotiation is intentionally constrained, `429` for rate or abuse limits, and `503` only when temporary unavailability is safe to disclose and retryable. Under active floods where responding burns the scarce resource, record whether an earlier layer should drop or refuse connections instead of producing a problem response.
 - For retry-unsafe create or mutate operations, define idempotency-key scope, caller/tenant binding, TTL, conflict response, replay behavior, and storage boundary.
 - For browser-callable APIs, define CORS allowlist policy and security headers. If CORS is unsupported, reject preflight explicitly.
 

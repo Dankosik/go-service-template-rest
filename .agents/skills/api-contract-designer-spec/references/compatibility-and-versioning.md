@@ -12,7 +12,7 @@ Load this when a contract change affects existing clients, status codes, error s
 - Adding enum values is a compatibility decision. Document unknown-value tolerance or avoid expanding a closed enum in place.
 - Tightening validation, making optional fields required, changing defaults, changing null-vs-omitted behavior, or changing timestamp precision can be breaking.
 - Adding pagination to an unpaginated collection can be breaking because old clients may silently miss data.
-- Deprecation means "do not use"; Sunset means "may become unavailable." Use both only when both meanings are true.
+- Deprecation means "discourage new dependence and plan migration"; Sunset means "may become unavailable." Use both only when both meanings are true.
 - When old and new endpoints coexist, define which is authoritative for validation, state transitions, idempotency key scope, `ETag` space, error mapping, and consistency.
 
 ## Imitate

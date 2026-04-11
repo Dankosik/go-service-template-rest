@@ -36,7 +36,7 @@ Keep this focused on runtime DB/cache contracts. If the work is a line-level imp
 - Stale serve is allowed only for the named operation classes and only inside the stated window.
 - Cache telemetry failures must not hide origin failures; record both cache outcome and origin outcome when both are attempted.
 - Raw keys and sensitive values do not belong in metric labels or logs. Use grouped key classes or stable operation names.
-- Redis client-side caching must flush local entries on lost invalidation connectivity to avoid stale data escaping the contract.
+- Redis client-side caching must flush local entries on lost invalidation connectivity, or when invalidation health cannot be proven, to avoid stale data escaping the contract.
 - The spec defines cache hit, miss, timeout, error, decode failure, bypass, stale, and origin failure behavior for every affected path.
 - Origin protection exists for hot or expensive keys: coalescing, fallback cap, retry/backoff, or degraded response.
 - Telemetry includes DB latency/error/pool pressure and cache hit/miss/error/timeout/bypass/stale/fallback signals.

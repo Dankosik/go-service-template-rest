@@ -11,6 +11,7 @@ Load this when implementation work starts goroutines, uses channels, adds fan-ou
 - Give every goroutine a lifecycle owner, cancellation path, and result/error path.
 - Bound fan-out and queue growth; unbounded concurrency is a correctness risk, not just a performance risk.
 - Prefer `errgroup.WithContext` when the dependency already exists and first-error cancellation is the desired contract.
+- For Go 1.25+ self-contained tests of goroutines, timers, or timeouts, consider `testing/synctest` before sleeps or hand-rolled fake clocks; skip it when real network, external process, or non-durably-blocking I/O/lock behavior is part of the contract.
 - Close channels from the sender side, and only after all sends are done.
 - Stop timers and tickers and cancel derived contexts when their lifetime ends.
 - Preserve ordering if callers or tests depend on it.
@@ -113,6 +114,6 @@ time.Sleep(100 * time.Millisecond)
 - Run `go test -race` for changed concurrent code.
 - Run targeted repeated tests for lifecycle-sensitive code, for example `go test ./pkg/foo -run TestWorkerShutdown -count=100`.
 - Use canceled contexts and blocked fake dependencies to prove goroutines exit.
-- Prefer channels, hooks, or fake clocks over sleeps in tests.
+- Prefer channels, hooks, fake clocks, or Go 1.25+ `testing/synctest` over sleeps in tests.
 - If the repository already uses a leak checker such as `goleak`, add or update the relevant leak proof.
 - For worker pools, test the concurrency limit and early-error cancellation path.

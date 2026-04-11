@@ -7,11 +7,11 @@ When loaded for symptom `metrics, traces, logs, span names, route labels, RouteP
 Load when the routing design touches logs, metrics, traces, span names, `http.route`, route labels, path cardinality, `RoutePattern()`, chi route context, `Find`/`Match`, or fallback labels for unmatched routes.
 
 ## Decision Rubric
-- Metrics and traces use route templates, operation IDs, or fixed fallback labels. Never use raw paths, IDs, slugs, query strings, wildcard captures, or request IDs as labels.
+- Metrics and traces use route templates or operation IDs. For OpenTelemetry `http.route`, set it only when a matched route template is available; fixed fallback labels belong in repo-owned metrics/log fields, not `http.route`. Never use raw paths, IDs, slugs, query strings, wildcard captures, or request IDs as labels.
 - For post-handler telemetry, call `next.ServeHTTP` first, then read `chi.RouteContext(r.Context()).RoutePattern()` when chi resolved the route.
 - For pre-handler route identity, use `Find` or `Match` only when the installed chi version and subrouter behavior are verified. Use fresh route contexts for probes.
 - Define fallback labels deliberately, such as `<unmatched>`, `not_found`, or `method_not_allowed`. Do not fall back to the raw path when the template is empty.
-- Logs may include raw path as a field if the repo accepts it, but metrics, span names, and `http.route` must stay bounded.
+- Logs may include raw path as a field if the repo accepts it, but metrics and span names must stay bounded. When no route template is available, omit `http.route` rather than substituting a raw path.
 - If the design uses `r.Pattern`, require repository or installed-version proof that the active router sets it for the relevant requests.
 
 ## Imitate

@@ -12,7 +12,7 @@ Keep findings local: identify the missing key dimension or unsafe decode path in
 - Cache key omits tenant, organization, auth scope, locale, feature flag, role, or response version when those inputs change the value.
 - Cache key uses raw user-provided strings without a stable delimiter, escaping, or hashing strategy.
 - Different resources share a prefix and can collide, such as `user:` for both profile and permissions.
-- Key includes a JSON-serialized map or option object without a stable canonicalization policy.
+- Key material serializes an option bag whose semantic normalization is unclear, such as defaults, omitted fields, set-valued filters, floats, or cross-encoder JSON; Go `encoding/json` map key order alone is not a finding.
 - Cached payload has no schema/version marker while decode code assumes a current struct.
 - Decode errors are treated as cache misses without invalidation or logging, causing repeated corrupt reads.
 - Negative cache stores dependency failures as "not found."
@@ -125,7 +125,7 @@ Use the repository's existing canonicalization helper if one exists. The review 
 
 ## Agent Traps
 - Do not suggest hashing while still omitting a correctness dimension such as tenant, locale, role, feature, page, or payload version.
-- Do not accept JSON over maps or option bags as deterministic key material unless the repository has an explicit canonicalization policy.
+- Do not flag Go `encoding/json` map serialization solely for nondeterministic key order; current Go sorts map keys. Do flag option bags whose semantic normalization is unclear, such as defaults, omitted fields, set-valued filters, floats, or cross-encoder JSON.
 - Do not treat decode failures as harmless misses forever; repeated corrupt entries can pin an expensive miss path or hide a schema mismatch.
 - Do not "fix" an isolation breach only in cache code if the same missing tenant/auth scope exists in the underlying DB query; hand off or add the paired finding.
 

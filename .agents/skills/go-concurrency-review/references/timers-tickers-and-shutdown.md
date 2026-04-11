@@ -7,10 +7,10 @@ Symptom: the diff touches `time.After`, `time.Tick`, `time.NewTimer`, `time.NewT
 
 ## Decision Rubric
 - Time is not a synchronization substitute. Ask which signal unblocks the goroutine when shutdown or cancellation happens.
-- Long-lived tickers need a clear owner and `Stop` on every exit path.
+- Owned tickers need a clear stop story when ticks must stop after the owner exits; on Go 1.23+ do not frame `Stop` as required only for garbage collection.
 - `time.After` in a loop is not automatically a leak on modern Go; focus the finding on timer churn, delayed shutdown, lost reset semantics, or version-sensitive retention when that is the actual merge risk.
 - `AfterFunc.Stop` does not wait for an already-running function; require explicit completion coordination when the callback touches shared state or shutdown depends on it.
-- `Timer.Reset` needs coordination when another goroutine may receive the old tick or the previous callback may still run.
+- For channel timers on Go 1.23+, do not require the old stop-and-drain pattern for stale values after `Stop` or `Reset` returns; still require owner coordination when another goroutine may already be acting on a tick. For `AfterFunc`, `Stop` and `Reset` do not wait for callback completion or prevent callback overlap when the docs say they return false.
 - Sleep-based tests should usually be replaced with gates, fake clocks, or `testing/synctest` when the project can rely on it.
 
 ## Imitate
@@ -45,7 +45,7 @@ Reject this as primary proof: scheduler timing does not prove the stop signal wa
 
 ## Agent Traps
 - Do not flag `time.After` solely from memory of older Go behavior; tie the finding to the repo's Go version or to a version-independent issue.
-- Do not forget `Ticker.Stop` when the ticker is created outside the loop owner.
+- Do not forget `Ticker.Stop` when ticks can continue to drive work after the owner exits, but do not claim an unreferenced Go 1.23+ ticker leaks solely because it was not stopped.
 - Do not treat a false return from `AfterFunc.Stop` as callback completion.
 - Do not replace every timer with a ticker; one-shot timers, reused timers, and fake clocks may be the smaller correction.
 

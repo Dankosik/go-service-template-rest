@@ -38,5 +38,6 @@ Failure: this jumps to architecture without naming the violated precondition or 
 ## Agent Traps
 - Do not flag every external call as a domain issue; tie it to a rejected operation, duplicate effect, forbidden mixed outcome, or violated side-effect contract.
 - Do not require compensation for a side effect that is provably after acceptance and locally idempotent.
-- Do not treat logging, metrics, or tracing as domain side effects unless they change business obligations or user-visible behavior.
+- Do not treat logging, metrics, tracing, or queued-but-undispatched in-memory domain events as domain side effects unless they change business obligations, persist, dispatch, or trigger user-visible behavior before acceptance.
+- Do not treat an outbox or event relay as full protection when duplicate delivery can repeat the business effect; pair it with an existing idempotency or transition guard, or escalate.
 - Do not hide a needed data/reliability escalation inside a review-local suggested fix.

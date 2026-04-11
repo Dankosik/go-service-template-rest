@@ -76,7 +76,7 @@ Use the smallest evidence that actually fits the symptom:
 - Expect `-benchmem` when allocations or GC are part of the claim.
 - Prefer repeated runs with stable variance; do not treat one lucky run or a noisy delta as proof of improvement.
 - Check that setup is outside the timed loop when practical, inputs are realistic, and tiny toy data is not being used to justify production-path complexity.
-- Watch for weak methodology: benchmarking mocks only, measuring constructor or setup inside the loop, no result sink on pure code, or no explanation of workload shape.
+- Watch for weak methodology: benchmarking mocks only, measuring constructor or setup inside a `b.N` loop, missing timer control for per-iteration setup, no result sink on pure `b.N` code when optimizer elimination is plausible, or no explanation of workload shape.
 - Treat benchmark evidence as local proof; require broader evidence before approving end-to-end claims.
 
 ### Hot-Path Cost Model
@@ -88,7 +88,7 @@ Use the smallest evidence that actually fits the symptom:
 ### Allocation And GC Pressure
 - Look for hot-loop heap growth, temporary object churn, buffer churn, and retained large backing arrays.
 - Prefer structural fixes such as batching, reducing copies, or changing data flow before suggesting syntax-level rewrites.
-- Treat `sync.Pool`, manual buffer reuse, and object recycling as suspicious until profiling shows that allocations are the real bottleneck and the pool actually helps.
+- Treat `sync.Pool`, manual buffer reuse, and object recycling as suspicious until profiling shows that allocations are the real bottleneck, reuse amortizes across concurrent callers, and the pool actually helps.
 - Flag reuse patterns that keep oversized buffers alive, skip reset discipline, or trade away clarity for an unproven win.
 
 ### Contention And Scheduler Cost

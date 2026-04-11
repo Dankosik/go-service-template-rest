@@ -36,7 +36,7 @@ Load when replay, redrive, broker ordering, partitioning, stale projections, dup
 
 ## Validation Shape
 - RabbitMQ redelivery can alter observed order when multiple consumers or requeueing are involved; use streams or single active consumer if order is required.
-- SQS standard queues can deliver duplicates and best-effort order only; FIFO queues preserve order within a message group but still require application-level side-effect idempotency.
+- SQS standard queues can deliver duplicates and best-effort order only; FIFO queues preserve order within a message group and deduplicate sends within the 5-minute deduplication interval, but still require application-level side-effect idempotency.
 - Kafka gives ordered offsets within a partition, not across partitions; key selection becomes part of the correctness contract.
 - Replay after dedup retention expiry can reapply old events; keep retention aligned with replay windows or use aggregate version checks.
 - Reconciliation finds owner state and projection state disagree: emit a repair command or rebuild the projection from authoritative history.

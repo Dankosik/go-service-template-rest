@@ -7,7 +7,7 @@ When loaded for symptom "a PR uses CPU, heap, allocs, goroutine, block, mutex, o
 Load this when profile selection, collection quality, or profile interpretation is the deciding issue. Prefer `trace-block-mutex-and-contention.md` when the primary issue is a code-level lock, channel, fan-out, or queueing defect rather than a profile artifact.
 
 ## Decision Rubric
-- Ask whether the profile type can observe the claimed symptom: CPU for on-CPU work, allocs or `-alloc_space` for churn, in-use heap for retention, block/mutex for wait, trace for scheduler and blocking shape.
+- Ask whether the profile type can observe the claimed symptom: CPU for on-CPU work, allocs or `-alloc_space` for churn, in-use heap for retention, block for waiter locations, mutex for contended critical-section holders, and trace for scheduler and blocking shape.
 - Require the workload, command, duration, binary/commit, and profile type for profile evidence used to clear risk.
 - Check that the changed function or its caller/callee path appears in the profile before treating it as evidence about the diff.
 - Do not clear p99, lock wait, network wait, DB wait, or queue wait with CPU samples alone.
@@ -50,6 +50,7 @@ Reject it when the claim is allocation churn. Use allocs, `-alloc_space`, or `-b
 - Treating a `top` line as a defect without checking cumulative cost, call path, and whether the cost is in setup outside the hot path.
 - Accepting pprof screenshots that omit command, workload, commit, duration, and profile type.
 - Treating an empty block or mutex profile as proof when sampling was not enabled.
+- Reading mutex profile stacks as waiter locations; they point to the end of critical sections that caused contention.
 - Using synthetic data profiles to clear production tail-latency risk without explaining why the workload matches.
 - Ignoring profiler interference when many diagnostic modes were enabled together.
 

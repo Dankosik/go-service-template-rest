@@ -101,7 +101,7 @@ Before recommending topology, make these facts explicit:
 - Build an explicit invariant register before selecting sync/async boundaries or service topology.
 - Separate `local_hard_invariant` from `cross_process_invariant` and keep hard invariants inside one local transaction boundary whenever possible.
 - Identify the irreversible or non-compensable pivot in every multi-step flow and design recovery around it.
-- Model long-running or failure-prone flows as durable state machines with monotonic transitions, durable identity, timers, and reconciliation ownership.
+- Model long-running or failure-prone flows with explicit durable execution state: monotonic transitions, durable identity, timers, and reconciliation ownership.
 - Derived projections, caches, search indexes, and exports may accelerate reads, but they must not quietly become write authorities.
 - Require one active owner for retries, stuck detection, manual repair, and convergence in any multi-step workflow.
 
@@ -112,7 +112,7 @@ Before recommending topology, make these facts explicit:
 - If the outcome does not need immediate finality, prefer a job, long-running operation, or resource-status pattern over stretching the request path.
 - Make retry policy explicit per operation; bound retries and classify non-retry cases.
 - Require idempotency design for retry-unsafe operations.
-- External or public surfaces should normally be REST/OpenAPI; internal service-to-service calls should normally be gRPC/Protobuf unless there is a stronger workload-driven reason not to.
+- Choose API transport from consumer reach, contract tooling, streaming, latency, and operability. REST/OpenAPI often fits public or browser-facing surfaces; gRPC/Protobuf often fits controlled internal RPC when strong schemas, streaming, or low-latency transport matter.
 - Do not place remote calls after a non-compensable pivot unless the recovery and reconciliation model is explicit.
 
 ### Async, Queueing, And Workflow Engines
@@ -122,8 +122,8 @@ Before recommending topology, make these facts explicit:
 - Use pub/sub for independent domain reactions and queues for owned work distribution.
 - Require transactional outbox or an equivalent atomic linkage when a DB state change must emit a message.
 - Require consumer idempotency, durable dedup or inbox handling, bounded retries, poison-message handling, and clear DLQ ownership.
-- Prefer an internal durable state machine or process manager before introducing a dedicated workflow engine.
-- Approve a workflow engine only when durable timers, human tasks, cross-owner orchestration, replay visibility, or fleet-wide workflow operations justify its platform and migration cost.
+- Prefer an internal durable state machine or process manager only when the workflow is locally owned and simple enough that state, timers, retries, and repair paths stay reviewable.
+- Consider a workflow engine or durable-execution platform when long timers, human tasks, cross-owner orchestration, replay/debug needs, fleet-wide operations, or hand-rolled retry/state persistence would become the architecture.
 
 ### Data And Read Topology
 - Separate command authority, query projections, and analytical or export views. Only one surface should own correctness for writes.

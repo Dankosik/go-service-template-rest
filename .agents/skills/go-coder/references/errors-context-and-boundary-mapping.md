@@ -8,7 +8,7 @@ Load this when implementation work touches error wrapping, sentinel or typed err
 
 ## Decision Rubric
 - Return domain-shaped errors from domain or repository layers; map them to transport status at the transport boundary.
-- Preserve inspectable identity with `%w`, `errors.Is`, `errors.As`, or `errors.AsType` when callers branch on the error.
+- Preserve inspectable identity with `%w`, `errors.Is`, `errors.As`, or Go 1.26+ `errors.AsType` when callers branch on the error.
 - Do not wrap an internal error with `%w` if exposing it would become an API contract.
 - Pass `context.Context` as the first argument through request-scoped work; detach only when the approved design says so.
 - Treat `context.Canceled` and `context.DeadlineExceeded` as control-flow signals, not generic internal failures.

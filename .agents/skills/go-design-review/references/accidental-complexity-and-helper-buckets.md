@@ -10,7 +10,7 @@ Prefer `source-of-truth-seam-drift.md` when the main problem is duplicated canon
 
 ## Decision Rubric
 - Flag owner-neutral helper buckets when they collect unrelated transport, config, data, or domain policy.
-- Flag producer-owned interfaces when they freeze implementor shape before a consumer needs inversion.
+- Flag producer-owned interfaces when they freeze implementor shape before a consumer needs inversion; do not flag product/protocol or generated contract interfaces solely because the producer owns them.
 - Flag wrapper layers that add naming, flags, or future extension points without reducing current duplication, boundary risk, or change blast radius.
 - Accept small same-package helpers when they name a real seam and keep ownership local.
 - Accept approved abstractions and real second implementations; review whether the code honors the approved seam rather than relitigating it.

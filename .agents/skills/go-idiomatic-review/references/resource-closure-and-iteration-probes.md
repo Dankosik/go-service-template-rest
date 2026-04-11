@@ -10,9 +10,9 @@ Load when a Go review touches `Body.Close`, `rows.Close`, `rows.Err`, `scanner.E
 - Check both release and completion. Some APIs require a close/release call and a separate post-iteration error probe.
 - For `database/sql.Rows`, closing is not enough; after iteration, check `rows.Err()` before treating the result as complete.
 - For `bufio.Scanner`, check `scanner.Err()` after the scan loop unless the code intentionally accepts truncated/partial input and documents why.
-- For `http.Response.Body`, ensure the body is closed on all paths after a successful response; do not hide a prior read/status error behind a later close error unless the close error matters for writes or protocols.
+- For `http.Response.Body`, ensure the body is closed on all paths after a successful response; when HTTP/1.x connection reuse matters, check whether the body is read to completion before close or intentionally closed early to avoid draining a large or untrusted body. Do not hide a prior read/status error behind a later close error unless the close error matters for writes or protocols.
 - Avoid `defer` inside long or unbounded loops when it accumulates open bodies/files/rows until function return. Close within the iteration or move the work to a helper with a bounded scope.
-- Stop timers and tickers when the current function owns them and they can otherwise retain resources or continue delivering events.
+- For timers and tickers, check the effective Go version and reason: Go 1.23+ no longer needs `Stop` only for GC recovery, but `Stop` can still be required to prevent future events, preserve older-version behavior, or make `Reset` or shutdown semantics correct.
 - For `io.Reader.Read`, handle `n > 0` before or along with `err`; do not discard bytes just because `err == io.EOF` or another terminal error arrived.
 - Keep DB query semantics, retry budgets, and goroutine shutdown in their specialist lanes; this reference owns Go/stdlib contract shape.
 
@@ -86,7 +86,7 @@ Reject as a blanket rule. Close errors on read-only response bodies are often no
 ## Validation Shape
 - Add a fake iterator/scanner/reader path that fails after yielding partial data and assert the function returns an error instead of success.
 - Add a loop test with a close-counting fake body when lifetime is the defect.
-- For timer/ticker ownership, use deterministic cancellation or a fake clock where the repo already has one.
+- For timer/ticker ownership, include the module Go version when Stop/GC behavior matters; use deterministic cancellation or a fake clock where the repo already has one.
 - Run focused package tests for the changed resource path; add `go vet` only if the suspected issue maps to a vet analyzer.
 
 ## Handoffs

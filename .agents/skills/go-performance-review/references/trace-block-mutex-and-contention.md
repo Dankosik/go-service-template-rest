@@ -10,7 +10,7 @@ Load this when code shape, not just a profile artifact, introduces contention or
 - Name the wait source: mutex wait, channel send/receive wait, fan-in wait, queue wait, runnable backlog, syscall wait, or goroutine explosion.
 - State the bound: request concurrency, shard count, item count, queue capacity, tenant count, or downstream call count.
 - Treat locks held across network, disk, DB, cache, RPC, logging, compression, or expensive merging as tail-latency risk until bounded or measured.
-- Prefer a mutex profile for lock-holder stacks, a block profile for synchronization waits, and trace for scheduler, runnable, fan-out, and wakeup shape.
+- Prefer a mutex profile for contended critical-section holder stacks, a block profile for synchronization waiter stacks, and trace for scheduler, runnable, fan-out, and wakeup shape.
 - Do not prescribe worker pools by default. The smallest fix may be moving work outside a lock, single-owner merge, bounded fan-out, cancellation-aware fan-in, or avoiding shared state.
 - Escalate to `go-concurrency-review` when correctness, deadlock, race, goroutine lifecycle, or shutdown safety is the primary issue.
 

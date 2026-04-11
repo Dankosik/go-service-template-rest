@@ -11,7 +11,7 @@ Keep findings local: prove why the changed operation must be atomic or why the t
 ## Decision Rubric
 - Dependent writes that must commit together are executed on `db` outside one `Tx`.
 - A transaction is started with `Begin` instead of `BeginTx(ctx, opts)` in a request path.
-- `Rollback` is missing on error paths or ignored before early return.
+- The transaction can return before `Commit` without a `Rollback`.
 - `Commit` errors are dropped, masked, or followed by a success response.
 - The transaction includes Redis, HTTP, queue publish, or other network calls before `Commit`.
 - Cache invalidation happens before the DB commit and can publish data that later rolls back.
