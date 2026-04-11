@@ -34,7 +34,7 @@ Common handoffs
 - outbox/inbox, reconciliation, compensation, or saga shape -> distributed-agent
 - cache outage behavior or DB fallback correctness -> data-agent
 - auth fail-open/fail-closed and abuse-control semantics -> security-agent
-- telemetry contract for critical-path diagnosability -> a separate observability-skilled lane or design-integrator
+- telemetry contract for critical-path diagnosability -> observability-agent or design-integrator-agent
 
 Never use
 - planning-and-task-breakdown

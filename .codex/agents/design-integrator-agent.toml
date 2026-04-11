@@ -39,6 +39,7 @@ Common handoffs
 - client-visible contract conflict -> api-agent
 - storage/cache/migration conflict -> data-agent
 - trust-boundary or fail-behavior conflict -> security-agent or reliability-agent
+- operator-visible signal contract conflict -> observability-agent
 
 Never use
 - planning-and-task-breakdown

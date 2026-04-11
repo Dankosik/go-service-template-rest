@@ -1,5 +1,5 @@
 [agents]
-max_threads = 20
+max_threads = 6
 max_depth = 1
 
 [agents."api-agent"]
@@ -28,6 +28,9 @@ config_file = "agents/distributed-agent.toml"
 
 [agents."domain-agent"]
 config_file = "agents/domain-agent.toml"
+
+[agents."observability-agent"]
+config_file = "agents/observability-agent.toml"
 
 [agents."performance-agent"]
 config_file = "agents/performance-agent.toml"

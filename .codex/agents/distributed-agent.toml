@@ -38,6 +38,7 @@ Common handoffs
 - DB ownership, outbox storage, dedup storage -> data-agent
 - async authn/authz or authenticity/replay controls -> security-agent
 - API-visible async acknowledgement contract -> api-agent
+- DLQ, redrive, lag, reconciliation, or async correlation telemetry -> observability-agent
 
 Never use
 - planning-and-task-breakdown

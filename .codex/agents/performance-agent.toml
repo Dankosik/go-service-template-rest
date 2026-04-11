@@ -36,6 +36,7 @@ Common handoffs
 - overload/retry/backpressure policy -> reliability-agent
 - goroutine lifecycle and synchronization correctness -> concurrency-agent
 - payload/async contract shaping latency -> api-agent
+- runtime signal contract, telemetry cost, or SLO alerting -> observability-agent
 - broad system-shape trade-offs -> design-integrator-agent or architecture-agent
 
 Never use

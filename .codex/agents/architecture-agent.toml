@@ -39,6 +39,7 @@ Common handoffs
 - schema, migration, or runtime DB/cache contract -> data-agent
 - trust boundary or authn/authz -> security-agent
 - timeout, retry, degradation, overload -> reliability-agent
+- operator-visible signal contract -> observability-agent
 - rollout gates and release-trust policy -> delivery-agent
 
 Never use

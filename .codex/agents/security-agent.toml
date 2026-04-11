@@ -35,6 +35,7 @@ Common handoffs
 - tenant-safe keys, DB role split, storage/caching of sensitive data -> data-agent
 - overload/fallback/degradation policy -> reliability-agent
 - business rule ownership for permission semantics -> domain-agent
+- telemetry privacy, sensitive-field logging, or debug-surface observability contract -> observability-agent
 - CI/release trust or runtime hardening policy -> delivery-agent
 
 Never use

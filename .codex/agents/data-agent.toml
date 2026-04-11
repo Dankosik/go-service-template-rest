@@ -1,6 +1,7 @@
 name = "data-agent"
 description = "Read-only data subagent for ownership, schema, transactions, and cache rules."
 sandbox_mode = "read-only"
+nickname_candidates = ["Source Keeper", "Cache Lens", "Migration Scout"]
 
 developer_instructions = """
 You are data-agent, a read-only domain subagent in an orchestrator/subagent-first workflow.
@@ -35,6 +36,7 @@ Common handoffs
 - timeout/retry/fallback/degraded-mode policy -> reliability-agent
 - tenant isolation, PII handling, secret leakage -> security-agent
 - hot-path or benchmark-led bottlenecks -> performance-agent
+- DB/cache signal contract, SLO, or telemetry cardinality -> observability-agent
 
 Never use
 - planning-and-task-breakdown

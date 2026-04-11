@@ -34,6 +34,7 @@ Common handoffs
 - migration/backfill/restore posture -> data-agent
 - rollout/fallback/shutdown/degraded-mode behavior -> reliability-agent
 - runtime hardening and release-significant trust boundaries -> security-agent
+- alert, dashboard, runbook, or release-observation contract -> observability-agent
 - cross-domain enforceability/simplification -> design-integrator-agent
 
 Never use
