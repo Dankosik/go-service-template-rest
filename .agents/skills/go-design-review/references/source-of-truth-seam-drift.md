@@ -17,7 +17,7 @@ Prefer `accidental-complexity-and-helper-buckets.md` when the primary symptom is
 
 ## Imitate
 ```text
-[critical] [go-design-review] internal/api/server.gen.go:219
+[critical] [go-design-review] internal/api/openapi.gen.go:219
 Issue: The diff changes generated API code instead of the OpenAPI contract source.
 Impact: Regeneration can discard the behavior, and reviewers cannot tell whether the REST contract intentionally changed.
 Suggested fix: Update `api/openapi/service.yaml`, regenerate the bindings, then keep manual runtime mapping in `internal/infra/http`.
@@ -56,7 +56,7 @@ Suggested fix: Move it to `internal/common`.
 Reject because it flags duplication without proving stable policy and proposes an owner-neutral bucket.
 
 ```text
-[high] [go-design-review] internal/api/server.gen.go:219
+[high] [go-design-review] internal/api/openapi.gen.go:219
 Issue: Generated code changed.
 Suggested fix: Do not commit generated code.
 ```

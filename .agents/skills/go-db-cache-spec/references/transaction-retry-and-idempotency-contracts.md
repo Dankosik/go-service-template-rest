@@ -10,7 +10,7 @@ Stay in the runtime contract. If the work requires designing the primary schema,
 
 ## Decision Rubric
 - Prefer no retry when the write is not idempotent, the error is persistent, or the application cannot safely replay all decision logic.
-- For serialization failures and selected transient classes, retry the whole use-case transaction, not one SQL statement. State max attempts, backoff/jitter, and exhausted-retry result.
+- For PostgreSQL `40001`, and optionally `40P01` or proven transient `23505`/`23P01`, retry the whole use-case transaction, not one SQL statement. State max attempts, backoff/jitter, and exhausted-retry result.
 - Allow outward write retries only with an idempotency mechanism such as request keys, `INSERT ... ON CONFLICT`, compare-and-set versions, or equivalent uniqueness guarantees.
 - Treat unique violations as retryable only when the spec explains why the conflict is a transient race; most `23505` errors are permanent input conflicts.
 - Link cache invalidation or update publication to the write via the same DB transaction when stale data would violate the contract.

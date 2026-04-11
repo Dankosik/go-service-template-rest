@@ -13,6 +13,7 @@ Load this when choosing methods, mutation semantics, status codes, `201` vs `202
 - RFC 9110 makes `202 Accepted` intentionally noncommittal about final outcome. Use it in this skill only when the service also accepts durable recovery or reporting responsibility and the client has a completion or recovery path.
 - Use `204 No Content` only when no body helps the client. A `204` response cannot carry a representation or problem body.
 - Keep `409`, `412`, and `428` distinct. If the client supplied a stale `If-Match`, prefer `412`; if it omitted a required condition, prefer `428`.
+- If specifying `405 Method Not Allowed`, include the `Allow` header with the target resource's currently supported methods.
 - Use `415` for unsupported request content type and `406` when the server cannot produce an acceptable response representation.
 
 ## Imitate

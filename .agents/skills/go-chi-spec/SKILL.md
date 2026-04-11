@@ -76,7 +76,7 @@ Reject designs that:
 - turn routing work into payload schema, storage, security architecture, or broad reliability design
 
 ## Deliverable Shape
-Return routing work in a compact, reviewable form:
+Return routing work in a compact, reviewable form. Include only sections that carry task-relevant decisions; omit headings whose domain is out of scope unless the omission is itself a handoff or risk:
 - `Router Topology`
 - `Middleware Order And Scope`
 - `404/405/HEAD/OPTIONS/CORS Policy`

@@ -8,18 +8,19 @@ Load when client-visible `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, CORS prefligh
 
 ## Decision Rubric
 - Put `NotFound` and `MethodNotAllowed` on the router that owns the client-visible surface, not inside unrelated business handlers.
-- chi's default `405` sets `Allow`, but a custom `MethodNotAllowed` handler replaces that default. A custom JSON `405` design must name its `Allow` source or explicitly accept that dynamic `Allow` is not preserved.
+- chi's default `405` sets `Allow`, but a custom `MethodNotAllowed` handler replaces that default and cannot read chi's unexported allowed-method set through a public handler API. A custom JSON `405` design must name a tested `Allow` source, such as route inventory or method probing with fresh route contexts, or explicitly accept that dynamic `Allow` is not preserved.
 - If the API advertises `HEAD`, make support explicit with `Head(...)`, a documented `middleware.GetHead` decision, or a handoff to the API contract owner. When `Allow` semantics matter, prove that `HEAD` appears where intended instead of inferring it from `GET`.
 - Treat CORS as transport policy. Prefer top-level or API-prefix middleware when preflight must apply across a mounted API surface.
 - Use scoped CORS only when expected preflight paths have matching `OPTIONS` behavior or the pass-through behavior is deliberately accepted.
-- If hand-written `OPTIONS` must run after `cors.Handler`, make `OptionsPassthrough` an explicit decision and test the resulting status and headers.
+- If hand-written `OPTIONS` must run after `cors.Handler`, make `OptionsPassthrough` an explicit decision and test the resulting status and headers. This only affects CORS preflight shape, not every bare `OPTIONS` request.
+- Do not assume preflight success status from memory; `github.com/go-chi/cors` and `github.com/rs/cors` versions differ, so design or test the status explicitly when clients observe it.
 - Do not duplicate CORS middleware and hand-written `OPTIONS` handlers for the same path unless the precedence, status, and headers are explicitly tested.
 - For generated and manual siblings under one prefix, require the same fallback and CORS policy unless the contract says they differ.
 
 ## Imitate
 ```go
 api := chi.NewRouter()
-api.Use(cors.Handler(cors.Options{AllowedMethods: []string{"GET", "POST", "OPTIONS"}}))
+api.Use(cors.Handler(cors.Options{AllowedMethods: []string{"GET", "POST"}}))
 api.NotFound(jsonNotFound)
 api.MethodNotAllowed(jsonMethodNotAllowed) // only after the design names the exact Allow behavior
 ```
@@ -62,7 +63,7 @@ Reject unless the design names which layer wins and tests status, `Vary`, allow-
 - Do not say "custom JSON fallback" and forget `Allow`.
 - Do not assume `middleware.GetHead` makes `HEAD` appear in `Allow`; prove it or register `Head(...)` where the API contract requires it.
 - Do not treat `Allow` header presence as exact when overlapping wildcard or parameterized routes are involved; assert the method set when `405` behavior is client-visible.
-- Do not assume bare `OPTIONS` tests prove CORS. Preflight includes `Origin` and `Access-Control-Request-Method`.
+- Do not assume bare `OPTIONS` tests prove CORS. Preflight includes `Origin` and `Access-Control-Request-Method`, and some middleware only takes its preflight branch when that shape is present.
 - Do not let API fallback policy accidentally cover `/debug`, `/metrics`, or internal health routes unless those routes are API-owned.
 - Do not settle `HEAD` support in the chi reference when it is actually an API-contract decision; record the handoff when needed.
 

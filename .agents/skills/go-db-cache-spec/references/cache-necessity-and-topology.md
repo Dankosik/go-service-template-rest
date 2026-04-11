@@ -13,13 +13,13 @@ Keep the skill on runtime cache contracts. If the right answer is a new read mod
 - Choose local in-process cache only when per-instance divergence is harmless and bounded by TTL, rollout behavior, and memory cap.
 - Choose distributed cache when shared hit ratio, fleet-wide warmup, or cross-instance reuse justifies network and dependency costs.
 - Choose hybrid L1/L2 only with separate TTLs, coherence/invalidation rules, memory caps, and lost-invalidation behavior.
-- Choose client-side caching only with tracking mode, local max TTL, memory cap, invalidation-channel health detection, and flush-on-disconnect rules.
+- Choose Redis client-side caching only with tracking mode, invalidation delivery mode, local max TTL, memory cap, invalidation-channel health detection, flush-on-disconnect rules, and two-connection race handling when invalidations are redirected.
 - Default to cache-aside when origin remains authoritative; require explicit reasons for other patterns.
 
 ## Imitate
 - Public catalog content: measured repeated reads, content changes a few times per day, Redis viable for marketing copy keyed by tenant, locale, catalog version, and price-rule dimensions. Copy the habit of keeping stock and admin-sensitive fields origin-backed or stronger.
 - Small immutable lookup table: local cache with memory cap and short TTL because per-instance divergence is harmless. Copy only when rollout invalidation is not correctness-critical.
-- Very hot keys with Redis client-side caching: tracking mode, local TTL cap, memory cap, and flush on lost invalidation connection. Copy the habit of naming the extra coherence contract.
+- Very hot keys with Redis client-side caching: tracking mode, invalidation delivery mode, local TTL cap, memory cap, placeholder-or-equivalent race handling for redirected invalidations, and flush on lost invalidation connection. Copy the habit of naming the extra coherence contract.
 
 ## Reject
 - Invoice-list cache after one p95 screenshot with no query plan, hit-rate hypothesis, or row-count distribution. Reject because no-cache still has not lost.
@@ -34,11 +34,11 @@ Keep the skill on runtime cache contracts. If the right answer is a new read mod
 ## Validation Shape
 - Local cache implies instance divergence; the spec must define the maximum allowed divergence or reject local cache for that path.
 - Distributed cache implies dependency and network failure behavior; read-acceleration paths usually fall back to origin with bounded concurrency.
-- Client-side caching must flush local state when invalidation connectivity is lost or cannot be proven healthy; otherwise stale data can outlive the server-side contract.
+- Client-side caching must flush local state when invalidation connectivity is lost or cannot be proven healthy; redirected invalidation delivery must also handle the data-reply/invalidation race so stale values are not inserted after an invalidation.
 - If strict consistency is required and no safe bypass exists, reject cache for that operation class.
 - The spec states measured or required benefit: latency, DB load, cost, or availability target.
 - The no-cache option is compared and rejected only with evidence.
 - Chosen topology includes memory bounds, key shape, TTL/freshness class, invalidation source, and outage behavior.
 - Every response-shaping dimension appears in the key or is explicitly excluded by a correctness argument.
 - Local and hybrid caches include per-instance divergence and invalidation/coherence checks.
-- Redis client-side caching includes tracking mode, local TTL cap, memory cap, and lost-invalidation behavior.
+- Redis client-side caching includes tracking mode, invalidation delivery mode, local TTL cap, memory cap, redirected-invalidation race handling if applicable, and lost-invalidation behavior.

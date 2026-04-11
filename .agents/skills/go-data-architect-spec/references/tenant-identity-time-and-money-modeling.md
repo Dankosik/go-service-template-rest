@@ -10,7 +10,7 @@ Load this for tenant-scoped identity, external references, time semantics, money
 - Use stable internal surrogate keys for joins and ownership; model public references, partner references, correlation IDs, and idempotency keys as separate concepts.
 - Scope uniqueness to the authority that owns it: usually `(tenant_id, key)` or `(tenant_id, provider, external_id)`, not global by habit.
 - Put `tenant_id` in invariant-bearing uniqueness, child ownership, and access-path indexes for shared-table tenancy.
-- Use row-level security only when tenant context is reliably set, tests prove fail-closed behavior, and table owner, `BYPASSRLS`, migration, backup, and support roles are deliberately in or out of policy.
+- Use row-level security only when tenant context is reliably set, tests prove fail-closed behavior, table owner, `BYPASSRLS`, migration, backup, and support roles are deliberately in or out of policy, and referential-integrity bypass or policy-subquery race risks are understood.
 - Model real instants, effective time, provider event time, processing time, and user-local business dates separately when policy or reporting depends on the distinction.
 - Use exact money representation with currency and rounding policy. Prefer integer minor units or `numeric(precision, scale)`; do not use floating-point or PostgreSQL `money` by default.
 
@@ -49,10 +49,11 @@ Copy this because customer-visible balances and invoices need explainable precis
 ## Agent Traps
 - Do not mark every unique key as global just because it is easier to describe.
 - Do not propose RLS without naming how table owner, `BYPASSRLS`, migration, backup, and support roles set or bypass tenant context.
+- Do not put mutable authorization lookups in RLS policy subqueries unless the locking or snapshot race story is explicit.
 - Do not assume UTC instants solve user-local business-date policy.
 - Do not collapse balances, credits, and quotas into one generic numeric type if their rounding, currency, or lifecycle differs.
 
 ## Validation Shape
 - Identity proof lists each identifier, its authority, uniqueness scope, exposure level, and reconciliation use.
-- Tenant proof includes constraints or indexes with `tenant_id`, fail-closed access tests, and migration-role behavior when RLS is used.
+- Tenant proof includes constraints or indexes with `tenant_id`, fail-closed access tests, migration-role behavior, and bypass or policy-race risks when RLS is used.
 - Money/time proof includes precision, currency, rounding, event/effective/processed time mapping, and parity checks for representation changes.

@@ -11,7 +11,7 @@ If the only symptom is dropped cancellation, timeout selection, or resource life
 ## Decision Rubric
 - Values must be bind arguments; dynamic identifiers, sort fields, and directions must be selected from an allowlist because placeholders do not bind SQL syntax.
 - Context-aware query methods are expected when the caller has a request or operation context, but context-only defects belong in the context lifecycle reference.
-- `QueryContext` creates a `*Rows` cursor that must be closed and checked with `rows.Err()`; use `QueryRowContext` for a contract that can return at most one row.
+- `QueryContext` creates a `*Rows` cursor; require close/error checks when early returns or non-exhaustion can leak it, and use `QueryRowContext` only for a contract that can return at most one row and does not need duplicate-row detection.
 - `QueryRowContext` reports `sql.ErrNoRows` and scan errors from `Scan`, not from the call site; zero-value results must not be cached or returned as successful data.
 - Flag per-item query loops only when the changed path clearly introduces or worsens avoidable round trips and one batched query would preserve behavior.
 - Prepared statements created in a request path need an owner and close path; otherwise the smaller finding is often to avoid per-request prepare.
@@ -140,13 +140,14 @@ If the repository does not use `pq.Array`, adapt to its existing driver or query
 - Do not turn every query loop into a finding. Require evidence that the changed path can amplify round trips in the reviewed flow.
 - Do not prescribe `pq.Array`, `sqlx`, or a new query builder if the repository already has a driver pattern.
 - Do not call `QueryRowContext` safe until the `Scan` error path is handled and cannot poison callers or caches with a zero value.
+- Do not replace `QueryContext` with `QueryRowContext` when the code intentionally detects duplicate rows; `QueryRowContext` scans the first row and discards the rest.
 
 ## Smallest Safe Fix
 - Replace contextless `Query`, `Exec`, `Prepare`, or `Begin` with the context-aware form when the caller already has `ctx`.
 - Bind data values as query arguments.
 - Add an allowlist for dynamic identifiers, sort fields, or directions.
-- Add `defer rows.Close()` immediately after a successful query and check `rows.Err()` after iteration.
-- Replace `QueryContext` plus a one-row loop with `QueryRowContext` when the result contract is at most one row.
+- Add `defer rows.Close()` immediately after a successful query, especially when later scan/decode paths can return before exhausting rows, and check `rows.Err()` after iteration.
+- Replace `QueryContext` plus a one-row loop with `QueryRowContext` when the result contract is at most one row and extra rows do not need to be detected as data corruption.
 - Preserve `sql.ErrNoRows` and scan errors instead of converting them to successful zero values.
 - Batch only when the changed path clearly introduced or worsened avoidable round trips; otherwise record the risk.
 

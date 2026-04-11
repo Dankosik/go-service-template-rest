@@ -12,7 +12,9 @@ Load this for live schema changes, tightened constraints, column splits or renam
 - Name rollback class: `safe`, `conditional`, or `restore-based`. Do not imply destructive or externally observed changes are trivially reversible.
 - Make backfills restart-safe, checkpointed, throttled, and bounded by load, lock time, replica lag, and abort thresholds.
 - Create live-table indexes and validate constraints with engine-safe phases when table size and traffic make blocking unacceptable.
+- For PostgreSQL 17, do not promise `NOT NULL NOT VALID`; use a valid `CHECK` proof before `SET NOT NULL` when you need to avoid the not-null scan, or budget the scan.
 - For PostgreSQL concurrent indexes, ensure the migration runner can execute outside a transaction block and plan invalid-index cleanup.
+- For PostgreSQL partitioned tables, do not promise `CREATE INDEX CONCURRENTLY` on the parent; plan concurrent builds on individual partitions plus the short parent metadata step when that shape fits.
 - Treat validation failure as a contraction blocker, not as permission for improvised production edits.
 
 ## Imitate
@@ -34,7 +36,7 @@ Copy this because duplicate cleanup and enforcement order are part of the design
 ### Tighten `NOT NULL` or `CHECK`
 Context: A previously optional column is now required and must satisfy a row-local rule.
 
-Make writers compatible first, backfill missing values, add a staged validation path where available, validate after cleanup, then remove fallback handling.
+Make writers compatible first, backfill missing values, add a staged validation path where the deployed engine supports it, validate after cleanup, then remove fallback handling.
 
 Copy this because enforcement follows evidence that existing and future rows comply.
 
@@ -48,7 +50,9 @@ Copy this because enforcement follows evidence that existing and future rows com
 ## Agent Traps
 - Do not bundle unrelated DDL subcommands when the strictest lock can apply to the whole statement.
 - Do not skip duplicate or null detection before adding a uniqueness or required-value constraint.
+- Do not write PostgreSQL 18-only not-null `NOT VALID` syntax into a PostgreSQL 17 migration.
 - Do not leave invalid or failed concurrent index artifacts unnamed; they affect retries, write overhead, and cleanup.
+- Do not hide partitioned-table index or uniqueness limitations behind a generic "concurrent index" step.
 - Do not contract old fields until old code, workers, generated clients, and replay paths are drained.
 
 ## Validation Shape

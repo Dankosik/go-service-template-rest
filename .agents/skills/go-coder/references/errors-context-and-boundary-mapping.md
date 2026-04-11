@@ -8,7 +8,7 @@ Load this when implementation work touches error wrapping, sentinel or typed err
 
 ## Decision Rubric
 - Return domain-shaped errors from domain or repository layers; map them to transport status at the transport boundary.
-- Preserve inspectable identity with `%w`, `errors.Is`, `errors.As`, or Go 1.26+ `errors.AsType` when callers branch on the error.
+- Preserve inspectable identity with `%w`, `errors.Is`, and Go-version-appropriate `errors.AsType` or `errors.As` when callers branch on the error.
 - Do not wrap an internal error with `%w` if exposing it would become an API contract.
 - Pass `context.Context` as the first argument through request-scoped work; detach only when the approved design says so.
 - Treat `context.Canceled` and `context.DeadlineExceeded` as control-flow signals, not generic internal failures.
@@ -89,7 +89,7 @@ func (s *Service) Sync(_ context.Context, id OrderID) error {
 - Mapping cancellations, deadlines, validation failures, conflicts, and missing resources to one generic internal error.
 
 ## Validation Shape
-- Add boundary tests that assert status mapping through `errors.Is`/`errors.As`, not string equality.
+- Add boundary tests that assert status mapping through `errors.Is`, `errors.AsType`, or `errors.As`, not string equality.
 - Add a wrapped typed-error case when typed inspection matters.
 - Add cancellation or timeout tests when context propagation changed, and prove the repository/client receives the caller context.
 - If a wrapper intentionally hides an internal cause, test that callers cannot match it.

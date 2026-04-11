@@ -8,7 +8,7 @@ Load when a task asks whether work belongs on the request path, in a queue, in a
 
 ## Decision Rubric
 - Keep hard acceptance invariants inside one local transaction boundary when possible.
-- Use synchronous calls only when the caller needs immediate finality and the deadline, retry, idempotency, and fail-closed behavior are explicit.
+- Use synchronous calls only when the caller needs an immediate answer or command finality and the deadline, retry, idempotency, and fail-closed behavior are explicit.
 - Use events for independent reactions that cannot decide whether the source fact exists.
 - Use commands or queues for owned work distribution where one owner accepts responsibility.
 - Use orchestration when one owner must track timers, retries, approvals, cancellation, ambiguous outcomes, or operator repair.
@@ -49,4 +49,5 @@ Copy: this avoids remote calls after a non-compensable pivot without recovery.
 - Do not call every multi-step flow a saga. Name the pivot and whether each step is compensable or forward-recoverable.
 - Do not publish events without atomic linkage when the DB state and emitted fact must agree.
 - Do not leave DLQ ownership implicit. A dead letter is a business and operations queue, not a trash can.
+- Do not treat a workflow engine as a queue with timers; call out determinism, versioning, worker ownership, and replay constraints when durable execution is the recommendation.
 - Do not introduce or reject a workflow engine by habit; check in-flight migration, replay/debug, operator repair, rollback, and operational ownership consequences.

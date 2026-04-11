@@ -78,7 +78,7 @@ Do not:
 - Control flow: prefer guard clauses and straight-line happy paths only when side-effect ordering, cleanup, and which error wins stay explicit.
 - Predicate clarity: flag compound negatives, boolean clusters, and hidden mode decoding when the decision no longer reads at the call site.
 - API and call-site burden: flag same-typed positional parameters, raw strings with hidden meaning, `map[string]any` option blobs, and exported-surface changes that need design escalation.
-- Error paths: preserve distinct failure classes, `errors.Is` plus `errors.As`/`errors.AsType` inspectability, status mapping, context cancellation, and cleanup/audit precedence.
+- Error paths: preserve distinct failure classes, `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` inspectability when the module supports it, status mapping, context cancellation, and cleanup/audit precedence.
 - Naming and tests: suggest naming or test simplification only when it lowers future reasoning and diagnosis load.
 
 ### Go-Semantic Stop-Signs

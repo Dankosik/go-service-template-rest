@@ -8,7 +8,7 @@ Load when the design must decide middleware placement, stack order, global vs ro
 
 ## Decision Rubric
 - Separate global transport concerns from path-local policy. Request correlation, panic recovery, framing guards, and common access logging may be global only when they truly apply to every path.
-- Put authorization, tenant checks, admin-only policy, API-only CORS, and generated request validation on the smallest router branch that owns the path set.
+- Put authorization, tenant checks, admin-only policy, API-only CORS, generated request binding/error handling, and external OpenAPI validation middleware on the smallest router branch that owns the path set.
 - Write the stack in execution order from outermost to innermost whenever order changes status capture, panic handling, body reads, context values, tracing, or route labels.
 - For telemetry that needs the final route template, design the middleware so route-label capture happens after downstream routing.
 - For generated `oapi-codegen` middleware, define whether the generated wrapper or chi router middleware owns the concern. Do not implement auth, CORS, validation, or telemetry twice.
@@ -37,7 +37,7 @@ Copy the scope shape: API and admin policy sit on their owning subtrees, while r
 
 ```go
 // Design statement:
-// request correlation -> recovery -> body limit -> access log wrapper -> API CORS -> API auth -> generated validation -> handler -> post-handler route label capture.
+// request correlation -> recovery -> body limit -> access log wrapper -> API CORS -> API auth -> generated binding/error handling -> handler -> post-handler route label capture.
 ```
 
 Copy the order shape: it names behavior, not just middleware function names.

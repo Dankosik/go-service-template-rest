@@ -12,6 +12,7 @@ Load when a design depends on an external provider, partner webhook, vendor stat
 - Keep internal state monotonic and explicit about ambiguity: `submitted`, `pending_confirmation`, `confirmed`, `failed`, `requires_repair`, or similar local states when the business needs them.
 - Use provider identifiers as correlation evidence, not as the primary idempotency or lifecycle key unless the provider contract truly guarantees it.
 - Define webhook ordering, duplicate handling, timeout, retry, and replay assumptions before trusting callbacks.
+- Treat callbacks as evidence only after authenticity, account or tenant context, replay, and recency handling are assigned to the local boundary.
 - Fail closed when provider ambiguity could authorize money movement, entitlement, identity verification, tenant access, or irreversible notification.
 - Reconcile independently of provider push events when missing, duplicate, delayed, or contradictory callbacks are plausible.
 

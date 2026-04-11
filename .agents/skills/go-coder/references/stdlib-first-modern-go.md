@@ -8,7 +8,7 @@ Load this when an implementation choice could use a builtin, standard-library pa
 
 ## Decision Rubric
 - Check the module's `go` directive before using a version-specific API.
-- Version-gate newer APIs that agents commonly over-apply: `bytes.Clone` is Go 1.20+, `slices` and `maps` are Go 1.21+, `cmp.Or` is Go 1.22+, `sync.WaitGroup.Go` and `testing/synctest` are Go 1.25+, and `errors.AsType` and `testing.T.ArtifactDir` are Go 1.26+.
+- Version-gate newer APIs and builtins that agents commonly over-apply: `bytes.Clone` is Go 1.20+, `min`, `max`, `clear`, `slices`, and `maps` are Go 1.21+, `cmp.Or` is Go 1.22+, `sync.WaitGroup.Go` and `testing/synctest` are Go 1.25+, and `errors.AsType` and `testing.T.ArtifactDir` are Go 1.26+.
 - Prefer the builtin or stdlib call when it expresses the same caller-visible contract.
 - Keep custom code when it owns a semantic the stdlib call does not: domain naming, normalization, nil/empty shape, error identity, bounds, ordering, or authorization meaning.
 - Avoid third-party dependencies for sorting, cloning, set membership, comparisons, simple path/URL/string work, test temp files, or error inspection until the stdlib gap is concrete.
@@ -29,7 +29,7 @@ Use `cmp.Or` only when the zero value really means fallback.
 displayName := cmp.Or(strings.TrimSpace(input.Name), "anonymous")
 ```
 
-Use `errors.AsType` only when the module version supports Go 1.26+ and the target type matters; otherwise keep `errors.As`.
+On Go 1.26+, prefer `errors.AsType` when matching a typed error that implements `error`; keep `errors.As` for older modules or non-error interface targets.
 
 ```go
 if pathErr, ok := errors.AsType[*fs.PathError](err); ok {

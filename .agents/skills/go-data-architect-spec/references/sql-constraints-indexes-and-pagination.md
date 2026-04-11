@@ -8,6 +8,7 @@ Load this for invariant-bearing SQL constraints, physical index shape, JSONB pla
 
 ## Decision Rubric
 - Prefer SQL constraints for row-local and relation-local invariants the database can enforce: `UNIQUE`, composite `UNIQUE`, `NOT NULL`, `CHECK`, foreign keys inside one owner boundary, partial unique indexes, and exclusion constraints.
+- For nullable unique keys, decide whether duplicate nulls are allowed. Use `NOT NULL` or `NULLS NOT DISTINCT` when "missing" should still be unique.
 - Use application checks only as user-friendly preflight; they do not replace the write-time constraint.
 - Keep invariant-bearing, join-critical, or heavily filtered fields relational. Use `jsonb` for bounded adjunct attributes with weak invariants and explicit query limits.
 - Tie every index to a filter, join, sort, uniqueness, retention, or partition-pruning need. Every index adds write cost, storage cost, and rollout cost.
@@ -47,10 +48,10 @@ Copy this because it prevents duplicate or missing rows during churn and keeps t
 ## Agent Traps
 - Do not use a plain unique constraint when historical rows require partial uniqueness.
 - Do not suggest cross-service foreign keys; keep referential integrity inside one service-owned data boundary.
-- Do not imply partitioned uniqueness works globally unless the partition key participates in the unique definition or the engine supports the exact shape.
+- Do not imply partitioned uniqueness or exclusion works globally unless the partition key participates in the constraint definition or the engine supports the exact shape.
 - Do not treat index removal as always correctness-neutral if it backed uniqueness or exclusion.
 
 ## Validation Shape
-- Constraint proof includes duplicate or conflict detection before creation, expected constraint definition, and what happens to legacy violating rows.
+- Constraint proof includes duplicate or conflict detection before creation, expected constraint definition including nullable uniqueness behavior, and what happens to legacy violating rows.
 - Pagination proof includes stable sort columns, unique tie-breaker, cursor contents, and index shape.
 - JSONB proof names which fields are adjunct, which fields stay relational, and which queries are intentionally unsupported or bounded.

@@ -31,7 +31,8 @@ Stay out of primary schema ownership. If the invalidation answer requires a dura
 ## Agent Traps
 - Do not use TTL as a substitute for invalidation when the contract requires immediate or strong behavior.
 - Do not treat Pub/Sub or keyspace notifications as durable invalidation without TTL, resync, or bounded-stale acceptance.
-- Do not invalidate with `KEYS` or broad runtime wildcard scans from production request paths.
+- Do not use Redis Cluster keyspace notifications without naming per-node subscription coverage or a resync path.
+- Do not invalidate with `KEYS` or broad runtime wildcard scans from production request paths; if `SCAN` is used off-request for maintenance, require idempotent effects and tolerate duplicates or keys changing during iteration.
 - Do not forget tenant, authorization, locale, version, price rule, and other response-shaping dimensions in the key.
 
 ## Validation Shape
@@ -45,5 +46,6 @@ Stay out of primary schema ownership. If the invalidation answer requires a dura
 - Invalidation source is named: TTL-only, write-triggered, event-driven, versioned namespace, or manual purge.
 - Key shape includes tenant, scope, version, locale, authorization, price rule, and other response-shaping dimensions as applicable.
 - No production request path depends on `KEYS` or broad runtime wildcard scans.
+- Any accepted `SCAN` maintenance path is bounded, idempotent, and not treated as exact live key inventory.
 - Stale-while-revalidate has fresh TTL, stale window, refresh owner, concurrency bound, and failure behavior.
 - Negative caching has a short TTL and does not cache dependency errors as business negatives.

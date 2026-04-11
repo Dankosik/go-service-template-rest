@@ -11,7 +11,8 @@ Load this when the review touches `testing.B`, `B.Loop`, `b.N`, `-benchmem`, cus
 - Check timer boundaries. For `b.N`, expensive setup usually needs `b.ResetTimer`; for `B.Loop`, setup before the loop and cleanup after it are excluded automatically, but per-iteration setup inside the loop still needs explicit timer control when it is not the measured work.
 - Require `-benchmem` when the claim mentions allocations, GC, buffer reuse, or `sync.Pool`.
 - Prefer old and new results collected with the same benchmark, flags, package, Go version, input size, `GOMAXPROCS`, cache state, and environment.
-- Use repeated runs plus `benchstat` when the delta is small, noisy, or used to justify complexity.
+- Use repeated runs plus `benchstat` when the delta is small, noisy, or used to justify complexity; prefer a fixed run count and do not rerun until the result becomes significant.
+- When small deltas are decision-critical, prefer interleaved old/new runs or explicitly state residual environment-order noise.
 - Separate statistical significance from practical significance. A tiny significant win may not justify a harder implementation.
 - For this repo's Go 1.26+ toolchain, prefer `B.Loop` for new simple benchmarks; verify support only when reviewing older-module or cross-repo code.
 

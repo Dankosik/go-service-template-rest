@@ -9,7 +9,7 @@ Load when a prompt asks whether to keep a Go service as a modular monolith, crea
 ## Decision Rubric
 - Default to modular monolith when ownership, datastore, transaction boundary, and release cadence are still shared.
 - Choose a separate worker/runtime when workload isolation, scheduling, CPU, queue depth, or request-path protection is the main problem and write truth stays put.
-- Choose a true service only when domain capability, exclusive data authority, team/support ownership, independent deployability, runtime isolation, and accepted consistency trade-offs all hold.
+- Choose a true service only when domain capability, exclusive data authority, team/support ownership, independent deployability, runtime isolation, operational readiness, and accepted consistency trade-offs all hold.
 - State rollback truthfully: module refactors usually roll back by code path; service extraction may leave routing, data authority, in-flight work, and compatibility windows behind.
 - Name extraction posture and reopen criteria, so "not now" is not mistaken for "never".
 
@@ -45,5 +45,5 @@ Copy: this permits runtime separation without dragging mutable core workflow sta
 ## Agent Traps
 - Do not conflate "module", "binary", "runtime", and "service"; choose the smallest boundary that solves the actual pressure.
 - Do not require every module to be extraction-ready on day one. Some modules exist to restore local ownership clarity.
-- Do not ignore operational cost. A service needs on-call, observability, deploy, migration, and compatibility ownership.
+- Do not ignore operational readiness. A service needs credible on-call, observability, deploy, rollback, migration, and compatibility ownership.
 - Do not leave "future extraction" vague; name the evidence that would reopen it.

@@ -9,7 +9,7 @@ Load this when changed Go code touches JWT or bearer token parsing, header-deriv
 If the main issue is object authorization after identity is verified, load the authz reference. If the main issue is provider cost or repeated reset attempts, load the abuse reference. If the main issue is token value disclosure in logs or errors, load the secrets reference.
 
 ## Decision Rubric
-- For JWT or bearer tokens, verify signature, algorithm allowlist, issuer, audience, expiry, not-before, key source, token type, and parse-error handling when the change owns those checks.
+- For JWT or bearer tokens, verify signature, algorithm allowlist, issuer, audience or an explicit single-recipient profile, expiry, not-before, key source, token type, and parse-error handling when the change owns those checks.
 - Do not trust unverified token claims or client-controlled identity headers such as `X-User-ID`, `X-Tenant-ID`, or `X-Admin` unless an authenticated gateway contract strips inbound copies and sets them.
 - Generate reset, invite, API, and session tokens with `crypto/rand` or a vetted token library; reject `math/rand`, timestamps, counters, deterministic user-derived values, or UUID-backed secrets without CSPRNG and entropy evidence.
 - Persist reset and API tokens hashed or otherwise non-recoverable when they grant account access, with expiry and single-use or replay controls.

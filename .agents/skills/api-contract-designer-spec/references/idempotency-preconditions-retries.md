@@ -7,11 +7,11 @@ Load this when a write can be retried, a timeout may hide whether mutation happe
 - Separate HTTP method idempotency from API-contract idempotency. `PUT` and `DELETE` have method idempotency; `POST` and `PATCH` need extra rules for safe retries.
 - For retryable non-idempotent writes, require `Idempotency-Key` or expose a recovery read that cannot create duplicate work.
 - Verify the current `Idempotency-Key` status before claiming RFC compliance; when it is still an Internet-Draft, use it as strong design input, not as a final RFC guarantee.
-- Define key syntax, entropy expectations, tenant/account scope, operation scope, route or method scope, and TTL. This skill's default TTL is `24h`.
+- Define key syntax, entropy expectations, tenant/account scope, operation scope, route or method scope, and TTL. This skill's `24h` TTL is a provider-inspired starting heuristic, not a standards default.
 - For new `Idempotency-Key` contracts, prefer draft-compatible Structured Field string syntax, for example `Idempotency-Key: "8e03978e-40d5-43e8-bc93-6894a57f9324"`. Preserve an established unquoted or provider-specific convention only as an explicit compatibility choice.
 - Compare retried payloads at the normalized contract level when irrelevant JSON formatting, object order, or defaults can differ.
 - Same key plus same normalized payload should return an equivalent prior outcome after the durable boundary.
-- Same key plus different normalized payload should fail with a stable conflict or validation problem.
+- Same key plus different normalized payload should fail as a stable caller-fixable validation problem, not an in-progress conflict. The current Idempotency-Key draft uses `422`; concurrent same-key attempts use `409`.
 - Same key while the first attempt is still in progress needs its own response, often `409 Conflict` with polling or retry guidance.
 - Define which failures reserve the key. Strict decode errors usually should not; accepted async work usually should.
 - If lost updates matter, expose `ETag` on reads and successful writes, require `If-Match` on risky mutations, return `412` for false supplied preconditions, and return `428` when required preconditions are missing.
@@ -32,7 +32,7 @@ HTTP/1.1 201 Created
 Location: /v1/payments/pay_456
 ```
 
-Good contract rule: within the TTL, the same tenant, key, and normalized payload returns an equivalent outcome and the same payment identity. A different payload returns a conflict.
+Good contract rule: within the TTL, the same tenant, key, and normalized payload returns an equivalent outcome and the same payment identity. A different payload returns a stable caller-fixable validation problem.
 
 ```http
 PATCH /v1/orders/ord_123 HTTP/1.1

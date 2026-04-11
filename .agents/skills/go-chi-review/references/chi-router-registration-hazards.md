@@ -9,6 +9,7 @@ Load when a review diff changes `Use`, `Route`, `Mount`, catch-all/wildcard path
 ## Decision Rubric
 - On one mux, `Use(...)` belongs before the first route-like registration that builds the handler stack. A later `Use` is startup panic risk, not a style preference.
 - `Route(pattern, fn)` is a mount shorthand. A nil `fn` is a constructor panic, and the child router still owns the mounted subtree.
+- Treat `Handle("METHOD /x", h)` and `HandleFunc("METHOD /x", h)` as method-specific route registrations when checking ownership; chi parses the method prefix instead of treating the whole string as a literal path.
 - `Mount("/x", h)` owns `/x`, `/x/`, and `/x/*`. Two owners for that subtree should become one owner that delegates below `/x`.
 - Do not rely on the duplicate-mount panic as the only conflict signal. An exact route such as `Get("/x", ...)` plus a later `Mount("/x", ...)` is still an ownership defect even when it presents as overwrite or shadowing rather than the documented duplicate-mount panic.
 - Wildcard handlers such as `/files/*` and a later mount at `/files` are ownership conflicts until the diff proves one is intentionally removed or nested.

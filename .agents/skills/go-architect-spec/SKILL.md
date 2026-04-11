@@ -26,7 +26,7 @@ Use this skill to define or review service-level architecture decisions:
 Do not:
 - reduce the task to local code changes or low-level implementation detail
 - redesign endpoint payload minutiae, physical schema details, cache tuning, or CI/container setup as the primary output
-- approve a new service boundary without ownership, transaction-boundary, runtime-isolation, and operational-cost proof
+- approve a new service boundary without ownership, transaction-boundary, runtime-isolation, and operational-readiness proof
 - invent stricter SLOs, freshness budgets, or operational thresholds than the prompt supplies unless they are clearly marked as assumptions
 - leave critical architecture choices implicit for implementation to discover later
 
@@ -87,7 +87,7 @@ Before recommending topology, make these facts explicit:
 - If dependency direction matters to keep seams real, state it directly rather than leaving it implied.
 - Use anti-corruption adapters when an external or legacy model would otherwise leak across a boundary and distort local domain rules.
 - Reject service-per-table, service-per-CRUD, shared-schema decomposition, and cross-service direct DB access by default.
-- Approve service extraction only when independent deployability, ownership, scaling, runtime isolation, and accepted consistency trade-offs are all explicitly justified.
+- Approve service extraction only when independent deployability, ownership, scaling, runtime isolation, operational readiness, and accepted consistency trade-offs are all explicitly justified.
 - Detect distributed-monolith signals early: coordinated releases, chatty call chains, shared schema coupling, cross-service table reads, or hidden shared business logic.
 - Distinguish service boundaries from runtime boundaries. Separate processes or binaries are sometimes enough; a new service should not be the default answer to every isolation problem.
 
@@ -121,7 +121,7 @@ Before recommending topology, make these facts explicit:
 - Choose orchestration when one owner must track timers, retries, cancellation, reconciliation, or operator actions. Choose choreography only when independent reactions do not need one authoritative process state.
 - Use pub/sub for independent domain reactions and queues for owned work distribution.
 - Require transactional outbox or an equivalent atomic linkage when a DB state change must emit a message.
-- Require consumer idempotency, durable dedup or inbox handling, bounded retries, poison-message handling, and clear DLQ ownership.
+- When duplicate processing can change business state or trigger irreversible side effects, require consumer idempotency, durable dedup or inbox handling, bounded retries, poison-message handling, and clear DLQ ownership.
 - Prefer an internal durable state machine or process manager only when the workflow is locally owned and simple enough that state, timers, retries, and repair paths stay reviewable.
 - Consider a workflow engine or durable-execution platform when long timers, human tasks, cross-owner orchestration, replay/debug needs, fleet-wide operations, or hand-rolled retry/state persistence would become the architecture.
 
@@ -195,7 +195,7 @@ When writing the architecture spec or review, cover:
 - a new service boundary without ownership, transaction-boundary, and runtime-isolation proof
 - a read model, cache, or search index quietly becoming write authority
 - a sync call chain without critical-path budgets, retry semantics, and idempotency classification
-- an async design without outbox/inbox, bounded retries, or DLQ ownership
+- a correctness-bearing async design without atomic message linkage, idempotent consumption or dedup, bounded retries, or DLQ/replay ownership
 - a distributed flow without invariant ownership, pivot definition, and explicit state model
 - a migration that relies on indefinite dual writes, permanent compatibility shims, or manual heroics
 - a workflow-engine or broker recommendation based on tool familiarity instead of workload evidence

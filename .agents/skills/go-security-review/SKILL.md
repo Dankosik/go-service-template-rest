@@ -77,12 +77,12 @@ Do not load a reference just because it mentions a keyword; load it when its exa
 ### Browser Session, CORS, And CSRF
 - Treat credentialed browser requests as their own trust boundary, especially cookie-authenticated state changes.
 - Reject arbitrary reflected credentialed CORS for sensitive APIs; treat literal wildcard-plus-credentials as fail-closed misconfiguration unless the framework reflects the caller's origin.
-- Require CSRF defenses, Go's `http.CrossOriginProtection`, or an explicit same-site browser policy before side effects on cookie-authenticated routes.
+- Require CSRF defenses, Go's `http.CrossOriginProtection`, or an explicit browser-origin policy before side effects on cookie-authenticated routes; treat `SameSite` as one policy input, not proof by itself.
 - Require session cookies to keep `Secure`, `HttpOnly`, and appropriate `SameSite`, `Path`, and `Domain` constraints when touched.
 - Do not treat CORS as authorization; server-side identity and authorization still own access.
 
 ### Tokens, Credentials, And Password Reset
-- Require JWT or bearer token validation to cover signature, algorithm allowlist, issuer, audience, expiry/not-before, key source, and parse errors when those controls are local to the change.
+- Require JWT or bearer token validation to cover signature, algorithm allowlist, issuer, audience or an explicit single-recipient profile, expiry/not-before, key source, and parse errors when those controls are local to the change.
 - Reject client-controlled identity headers unless an authenticated gateway contract strips and sets them before the service boundary.
 - Require reset, invitation, and API tokens to use cryptographic randomness, enough entropy, expiry, replay or single-use controls, and hashed-at-rest storage when persisted.
 - Reject password storage with plaintext, reversible encryption, fast hashes, or custom hashing.

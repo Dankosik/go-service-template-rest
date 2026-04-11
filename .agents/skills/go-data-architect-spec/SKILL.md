@@ -97,7 +97,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Prefer stable surrogate primary keys. Keep natural or business keys explicit through `UNIQUE` constraints instead of using mutable business identifiers as the primary key.
 - Distinguish internal identity, public reference, partner reference, idempotency key, and correlation ID. They are not interchangeable.
 - Every unique, foreign-key, and index decision should say whether it is tenant-scoped.
-- For shared-table multi-tenancy, require `tenant_id` to participate in the relevant uniqueness and indexing strategy. Use centralized isolation controls such as RLS only when tenant context and bypassing roles are explicit.
+- For shared-table multi-tenancy, require `tenant_id` to participate in the relevant uniqueness and indexing strategy. Use centralized isolation controls such as RLS only when tenant context, bypassing roles, and bypass or side-channel surfaces are explicit.
 - Use a version column or equivalent optimistic-concurrency token for mutable rows that are updated by competing writers.
 - Model time deliberately:
   - use timestamp-with-time-zone semantics for real instants
@@ -113,6 +113,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Treat constraints as contracts:
   - primary key on every table
   - `UNIQUE` or composite `UNIQUE` for business uniqueness
+  - explicit null behavior for nullable unique keys, either `NULLS DISTINCT`, `NULLS NOT DISTINCT`, or `NOT NULL`
   - `NOT NULL` by default for required fields
   - `CHECK` constraints where row-local correctness materially matters
   - partial `UNIQUE` indexes when uniqueness applies only to active or current rows
@@ -139,7 +140,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
   - anomalies that constraints cannot encode locally -> selective stronger isolation or explicit coordination model
 - Prefer optimistic concurrency when conflicts are rare and rows are independently owned.
 - Use pessimistic or advisory locks only with explicit scope, acquisition order, timeout behavior, and deadlock story.
-- Treat stricter isolation levels as exception paths that come with retry semantics and serialization testing.
+- Treat stricter isolation levels as targeted paths that come with retry semantics and serialization testing.
 - Bound retries and classify them by failure class; deadlocks, serialization failures, and timeouts are not the same recovery case.
 - Make write paths idempotency-aware when retries, callbacks, or duplicate partner delivery are possible.
 
@@ -176,7 +177,8 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - For PostgreSQL-class systems, call out online-DDL hazards explicitly:
   - non-concurrent index builds can take disruptive locks
   - `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block and failure can leave invalid indexes
-  - foreign-key or check-constraint validation can block or run long if introduced carelessly
+  - PostgreSQL partitioned-table indexes need special handling because concurrent builds are not supported on the partitioned parent
+  - foreign-key and check validation can run long; PostgreSQL 17 `SET NOT NULL` scans unless a valid `CHECK` proves non-null
   - some defaults, type changes, or table rewrites can be more expensive than they look
   - long backfill transactions create bloat, replica lag, and rollback pain
 - Prefer additive columns, concurrent index builds, phased constraint validation, and compatibility-safe reads before contract when the table is already live.

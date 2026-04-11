@@ -9,7 +9,7 @@ Load when a Go review touches `context.Context` parameters, request-scoped work,
 ## Decision Rubric
 - Treat `ctx` as caller-owned on request-scoped work; replacing it with `Background` or `TODO` is a finding when it lets downstream work outlive the caller.
 - Accept `Background` at process roots, startup wiring, tests, and work that intentionally is not tied to a caller request.
-- For intentionally detached work on Go 1.21+, check whether `context.WithoutCancel(ctx)` better preserves needed request values than `Background`; route auth, tenant, and value-leak policy to security or API lanes when those values matter.
+- For intentionally detached work on Go 1.21+, check whether `context.WithoutCancel(ctx)` better preserves needed request values than `Background`; because it also removes `Done`, `Err`, and `Deadline`, require an explicit new bound when detached work must stay time-limited. Route auth, tenant, and value-leak policy to security or API lanes when those values matter.
 - Do not flag missing context on pure CPU/local helpers unless cancellation, deadlines, request values, or blocking I/O actually matter.
 - Prefer `ctx context.Context` as the first parameter for operations that observe request cancellation or deadline policy.
 - Avoid storing `context.Context` in long-lived structs; accept a stored context only for a clearly scoped object whose lifetime is the operation itself.

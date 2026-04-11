@@ -12,7 +12,8 @@ Load this when implementation work adds or changes tests, fuzz tests, benchmarks
 - Use direct tests for one or two clear cases; use tables when cases are genuinely parallel.
 - Make failure messages include the operation, input, got value, and expected value when practical.
 - Control clocks, randomness, goroutine completion, temp files, external I/O, and generated IDs.
-- For Go 1.25+ self-contained concurrent/time tests, consider `testing/synctest`; avoid it when correctness depends on real network, external process, or non-durably-blocking I/O/lock behavior.
+- For Go 1.25+ self-contained concurrent/time tests, consider `testing/synctest`; avoid it when correctness depends on goroutines outside the synctest bubble, real network, external process, or non-durably-blocking I/O/lock behavior.
+- Use `t.TempDir` for ordinary scratch files; reserve Go 1.26+ `t.ArtifactDir` for outputs a human or CI needs to inspect, and remember they persist only when `-artifacts` is set.
 - Match verification commands to the claim; do not claim repository-wide readiness from a stale or too-narrow command.
 
 ## Imitate
@@ -107,12 +108,12 @@ if !worker.Ready() {
 
 ## Agent Traps
 - Adding an assertion library for simple comparisons when plain Go gives clearer failures.
-- Comparing exact error strings when the contract is `errors.Is`, `errors.As`, status code, or exported type.
+- Comparing exact error strings when the contract is `errors.Is`, `errors.AsType`/`errors.As`, status code, or exported type.
 - Hiding important setup in one-off helpers that do not call `t.Helper`.
 - Depending on map iteration order, log formatting, wall-clock sleeps, or exact generated IDs unless that is the contract.
 - Using fuzzing for slow, stateful, networked, or nondeterministic behavior.
 - Reporting "tested" from a command that did not cover the changed package.
-- Using Go 1.26+ `t.ArtifactDir` for ordinary assertions instead of only for artifacts a human or CI needs to inspect.
+- Using Go 1.26+ `t.ArtifactDir` for ordinary scratch files or assertions instead of persisted test artifacts.
 
 ## Validation Shape
 - Start with the smallest proving command, such as `go test ./internal/orders -run TestCreateOrder`.

@@ -10,7 +10,9 @@ Prefer `boundary-and-ownership-drift.md` when the main problem is misplaced beha
 
 ## Decision Rubric
 - Flag inward packages importing concrete outward adapters unless bootstrap or another approved composition root is doing the wiring.
-- Flag package-init registration and global registries when they make runtime dependency admission, config, or shutdown ownership implicit; do not flag side-effect registration solely because it exists when it is isolated to `main`, tests, or an approved composition root and does not hide lifecycle/config/shutdown ownership.
+- Flag package-init registration and global registries when they make runtime dependency admission, config, or shutdown ownership implicit.
+- Do not flag explicit registration in an approved composition root solely because it wires concrete adapters there; bootstrap is where that dependency admission belongs.
+- Treat package `init` or blank-import registration as suspect outside `main`, tests, or stateless/idempotent format-style registration; even in bootstrap, ask whether it hides lifecycle, config, shutdown, or test-isolation ownership.
 - Flag test helper imports when a lower-level or app test now depends on adapter setup that can break for unrelated reasons.
 - Do not flag generated imports solely because they look unusual; first check whether they follow the canonical generator path.
 - Do not require an interface by default. Use a small consumer-owned interface only when the consuming package needs inversion.

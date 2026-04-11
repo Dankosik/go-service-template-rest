@@ -4,7 +4,7 @@
 When loaded for helper-reinvention symptoms, this file makes the model check effective Go version and semantic deltas before choosing standard-library replacement or preserving a wrapper instead of likely mistake "stdlib is always better" or outdated loop-variable folklore.
 
 ## When To Load
-Load when a Go review touches helper packages that duplicate builtins or the standard library, compatibility shims, generic slice/map helpers, sorting/comparison helpers, URL/header wrappers, string/byte manipulation, custom error traversal, or loop-variable capture claims.
+Load when a Go review touches helper packages that duplicate builtins or the standard library, compatibility shims, generic slice/map helpers, sorting/comparison helpers, URL/header wrappers, string/byte manipulation, custom error traversal, simple `sync.WaitGroup` goroutine-launch helpers, or loop-variable capture claims.
 
 ## Decision Rubric
 - Identify the effective Go version from `go.mod`, build tags, or file constraints before recommending newer builtins or packages.
@@ -12,6 +12,7 @@ Load when a Go review touches helper packages that duplicate builtins or the sta
 - Keep local helpers when they intentionally carry policy: deep copy, nil/empty normalization, canonicalization, redaction, validation, compatibility with older supported versions, or domain naming.
 - Check shallow/deep semantics before replacing clone helpers with `slices.Clone` or `maps.Clone`.
 - Check error-tree semantics before preserving custom error traversal; `errors.Is` and `errors.As` cover standard wrapping and joined errors.
+- On Go 1.25+, consider `sync.WaitGroup.Go` only for simple fire-and-wait tasks where `f` must not panic; keep local helpers or hand off when they carry error return, panic recovery, cancellation, concurrency limits, or lifecycle policy.
 - Check loop-variable capture claims against effective Go version and declaration shape; in Go 1.22+ files or packages, variables declared by the loop get per-iteration instances, but preexisting variables assigned inside the loop can still have the old capture hazard.
 - Treat wrapper removal as a public API/design question when the helper is exported or has broad callers.
 - When the stdlib is almost enough, name the remaining semantic gap and decide whether it is real or accidental.
@@ -73,6 +74,12 @@ Delete this wrapper around url.Values.
 
 Reject when the wrapper enforces encoding, normalization, redaction, validation, or domain policy.
 
+```text
+Replace every Add/go/Done wrapper with WaitGroup.Go.
+```
+
+Reject unless the wrapper is only simple fire-and-wait launch and `f` must not panic; `WaitGroup.Go` does not carry error, panic-recovery, cancellation, or concurrency-limit policy.
+
 ## Agent Traps
 - Do not recommend a package or builtin that the module cannot use under its declared Go version.
 - Do not remove exported helpers as "cleanup" without routing public API compatibility.
@@ -83,7 +90,7 @@ Reject when the wrapper enforces encoding, normalization, redaction, validation,
 ## Validation Shape
 - Add tests that prove nil preservation, shallow/deep copy, ordering, redaction, or validation before replacing a helper.
 - Run focused package tests after replacing helper call sites.
-- Use `go vet` with a modern toolchain when standard-library symbol version mismatches are plausible.
+- Use Go 1.23+ `go vet`/`stdversion` when standard-library symbol version mismatches are plausible.
 - For exported helper removal, require API/design review or compatibility tooling rather than only `go test`.
 
 ## Handoffs

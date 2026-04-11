@@ -9,7 +9,7 @@ Load when a design moves ownership, extracts a service, changes source of truth,
 ## Decision Rubric
 - Name one write authority for each phase before choosing traffic routing.
 - Prefer additive compatibility first, then shadow/dark read, dual-read comparison, canary, cutover, contract, and removal when each step has useful evidence.
-- Use dual writes only as a bounded migration mechanism with one authoritative side, drift metrics, reconciliation owner, and deletion criteria.
+- Use dual-write-like comparison or bridge writes only as bounded migration mechanisms with one authoritative side, drift metrics, reconciliation owner, and deletion criteria.
 - Keep irreversible operations behind the old owner until the cutover checkpoint when rollback must be a router flip.
 - Separate deploy rollback from authority rollback. After data authority moves, rollback may mean forward repair or route-back with reconciliation.
 - Bound bridges, compatibility topics, facades, and shims with owner, consumers, exit metric, and removal task.

@@ -100,7 +100,7 @@ return scan(rows)
 - Do not overstate `slices.Clone` or `maps.Clone` as deep-copy protection.
 - Do not normalize nil and empty values unless the API contract says they are interchangeable.
 - Do not remove `defer cancel`, `Close`, `Unlock`, or rollback code as cleanup without proving another owner closes the same lifetime.
-- Do not turn `Rows.Close` into a blanket close-error finding; normal exhaustion can close rows implicitly, while early returns and write/autocommit paths still need explicit ownership and error policy.
+- Do not turn `Rows.Close` into a blanket close-error finding: normal exhaustion can close rows implicitly only after `Next` returns false with no further result sets, while early exits, multi-result flows, and write/autocommit paths still need explicit lifetime ownership and close-error policy.
 - Do not simplify receiver shape or exported method names without considering interface satisfaction and zero-value behavior.
 - Do not hide stdlib wrapper types behind generic maps if their methods or canonicalization rules are part of the contract.
 

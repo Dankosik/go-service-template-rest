@@ -99,7 +99,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Keep `409 Conflict`, `412 Precondition Failed`, and `428 Precondition Required` distinct.
 - HTTP allows `PUT` to create a target resource, but this skill's default for a missing target is `404` unless client-chosen identity or upsert is explicit.
 - Default patch media type is `application/merge-patch+json` only when null-as-removal and whole-array replacement semantics fit; otherwise choose a more precise patch contract.
-- Unknown or immutable mutable-field writes should fail consistently.
+- Unknown fields and writes to immutable or read-only fields should fail consistently unless an existing compatibility profile explicitly requires ignore-and-report behavior.
 - When multiple mutation surfaces can change the same resource during migration, define whether they share the same version source, `ETag` space, and stale-write behavior or are intentionally inconsistent during coexistence.
 - Endpoint matrices, examples, and detailed rules must agree. If idempotent replay, conditional success, or legacy coexistence changes the returned success status, surface it where clients scan first.
 - Do not hide partial failure behind a generic success flag.
@@ -132,11 +132,11 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Classify every endpoint as retry-safe by protocol, retry-safe by contract, or retry-unsafe.
 - For every non-idempotent write, define the durable acceptance boundary: which outcomes mean no durable work exists, and which outcomes mean the client must poll, read, or replay a stored result.
 - Retry-unsafe operations that may be retried by clients should require `Idempotency-Key`.
-- Use `24h` as the starting heuristic for idempotency dedup TTL; change it when duplicate-work risk, operation duration, or product policy requires.
+- Use `24h` as a provider-inspired starting heuristic for idempotency dedup TTL, not a standards default; change it when duplicate-work risk, operation duration, or product policy requires.
 - Key scope should include tenant or account, operation, and route or method.
 - Define payload comparison at the normalized contract level, not only at raw-byte level, when retries may differ in insignificant formatting.
 - Same key with same payload returns equivalent outcome.
-- Same key with different payload returns a stable conflict or validation problem.
+- Same key with different normalized payload should return a stable caller-fixable validation problem by default; reserve conflict semantics for in-progress same-key attempts or existing API policy.
 - When same-key replay hits a stored terminal result, define whether the contract returns `200 OK`, `201 Created`, or `202 Accepted`; do not leave terminal replay semantics implicit.
 - When replay returns a stored outcome, say whether `Location`, `ETag`, operation IDs, and advisory headers such as `Retry-After` are identical or merely equivalent.
 - Distinguish failures that do not reserve the idempotency key from accepted attempts that do reserve it and later fail during async processing.

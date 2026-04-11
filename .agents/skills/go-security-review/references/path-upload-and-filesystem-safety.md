@@ -66,6 +66,7 @@ Reject because lexical cleanup alone does not prove root confinement or symlink 
 ## Agent Traps
 - Do not trust `header.Filename`, `Content-Type`, or extension alone.
 - Do not treat `http.Dir` as a hard serving boundary for user-writable trees; it follows symlinks out of its root and serves dotfiles unless wrapped.
+- Do not overclaim `os.Root`: it prevents ordinary path and symlink escape, but not bind mounts, `/proc` special files, device files, or OS-specific metadata-operation races called out by the Go docs.
 - Do not forget Windows path forms and reserved names when the code claims cross-platform support.
 - Do not assume temp directories are safe if attacker-controlled names or permissions are introduced.
 - Do not expose internal absolute paths in client-visible errors.

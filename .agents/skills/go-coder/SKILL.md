@@ -134,7 +134,7 @@ References are compact rubrics and example banks, not exhaustive checklists or G
 - Make side-effect ordering intentional. If a write, publish, cache invalidation, or callback happens in the wrong order, treat that as a correctness issue.
 - Do not let retries, duplicates, re-entry, or partial failure silently widen business effects.
 - Return errors with enough operation context to explain where failure happened, while keeping sentinel or typed errors inspectable with `%w`.
-- Use `errors.Is` and `errors.As` where callers need semantic branching.
+- Use `errors.Is` and Go-version-appropriate `errors.AsType` or `errors.As` where callers need semantic branching.
 - Do not log and return the same error at the same layer unless the additional log materially improves diagnosis and is not already guaranteed upstream.
 - Keep request context flowing through request-scoped work. Avoid `context.Background()` inside request paths unless the work is explicitly detached and approved.
 - Preserve `context.Canceled` and `context.DeadlineExceeded` semantics instead of collapsing them into generic internal errors.
@@ -182,6 +182,7 @@ References are compact rubrics and example banks, not exhaustive checklists or G
 - Make ownership of each goroutine, channel, worker pool, and cancel function obvious.
 - Do not start background work without a clear stop condition, error path, and lifecycle owner.
 - Use `errgroup.WithContext` when related goroutines share cancellation and outcome.
+- For Go 1.25+ wait-only goroutines, use `sync.WaitGroup.Go` when panic handling, error propagation, and cancellation are not part of the contract.
 - Bound concurrency and queue growth; unbounded fan-out is a defect, not an optimization.
 - Preserve ordering when callers or tests depend on it.
 - Close channels from the sender side, not the receiver side.

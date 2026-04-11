@@ -11,6 +11,8 @@ Load this when the API contract needs Problem Details, validation errors, auth o
 - Pick one `400` vs `422` split. A sharp default: malformed transport or JSON shape is `400`; syntactically valid JSON with semantic field errors is `422`.
 - Keep `409`, `412`, and `428` separate: state conflict, failed supplied precondition, and missing required precondition.
 - Choose one concealment policy for inaccessible resources. Cross-tenant lookups should not drift between `403` and `404` by endpoint.
+- If the contract uses `401`, include the required authentication challenge header; if a challenge would mislead clients, choose `403` or the API's concealment policy instead.
+- For rate-limit or overload problems, define whether the contract uses only `Retry-After`, existing vendor quota headers, or draft `RateLimit` fields; do not label `RateLimit` fields as stable RFC semantics unless the current spec status is rechecked.
 - Never hide failure in a `2xx` body, and never leak stack traces, SQL, secrets, hostnames, shard IDs, or cross-tenant identifiers.
 
 ## Imitate
@@ -75,6 +77,6 @@ Bad: it leaks implementation detail and gives clients no stable action.
 ## Agent Traps
 - `about:blank` is valid but weak. Do not use it for domain problems clients must distinguish.
 - Localization can change human text; machine decisions need stable `type`, `code`, or typed extensions.
-- `401` and `403` are not interchangeable; authentication challenges can require headers.
+- `401` and `403` are not interchangeable; `401` needs a challenge, while `403` says the server understood the request and refuses it.
 - `405`, `406`, `413`, and `415` are API contract choices, not generic validation failures.
 - Multiple field errors can share one validation problem; unrelated problem types need a client-facing reason to be bundled.

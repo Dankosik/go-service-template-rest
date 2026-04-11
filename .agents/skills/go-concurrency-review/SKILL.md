@@ -53,7 +53,7 @@ Choose by symptom and behavior change:
 | channel close ownership, send-on-closed risk, blocked sends or receives, `select` default spin, nil-channel gating, or fragile buffer assumptions | `references/channels-select-and-close-ownership.md` | makes the review assign one channel owner and explicit progress/full-queue policy instead of trusting receiver close, buffers, or `default` branches |
 | `WaitGroup` ordering, copied sync values, lock scope, `sync.Cond` predicates, `RWMutex` misuse, or local lock-free claims | `references/sync-primitives-identity-and-locking.md` | makes the review treat sync primitives as identity-bearing state and review the protected invariant instead of filing style nits or defaulting to `RWMutex`/atomics |
 | per-item goroutine fan-out, worker pools, semaphores, `errgroup.SetLimit`, buffered job/result queues, async send wrappers, or producer/consumer backpressure | `references/bounded-work-and-backpressure.md` | makes the review prove active work and queued work are both bounded instead of accepting worker-pool or semaphore-shaped code as safe |
-| timer/ticker reset or stop behavior, `time.After` loops, sleep polling, `AfterFunc` completion, fake-clock tests, or shutdown timing | `references/timers-tickers-and-shutdown.md` | makes the review focus on timer ownership and prompt unblock semantics instead of stale timer-leak folklore or sleep-as-synchronization |
+| timer/ticker reset or stop behavior, `time.After` loops, sleep polling, `time.AfterFunc` or `context.AfterFunc` completion, fake-clock tests, or shutdown timing | `references/timers-tickers-and-shutdown.md` | makes the review focus on timer ownership and prompt unblock semantics instead of stale timer-leak folklore or sleep-as-synchronization |
 | evidence quality, `go test -race`, leak or liveness tests, deterministic coordination, `testing/synctest`, or residual risk wording | `references/concurrency-review-validation.md` | makes the review match proof to the failure mode instead of treating "tests passed" or race-clean output as blanket validation |
 
 When you load a reference, translate the example into the current diff's concrete `file:line`, failure mode, smallest safe correction, and validation command. Do not paste generic examples as final review output.
@@ -61,7 +61,7 @@ When you load a reference, translate the example into the current diff's concret
 ## Expertise
 
 ### Happens-Before And State Publication
-- Require a concrete happens-before edge for shared state: channel send or receive, close observation, mutex unlock or lock, `WaitGroup` or `errgroup` completion, or an atomic operation whose observed value protects the publication being claimed.
+- Require a concrete happens-before edge for shared state: matched channel send/receive, channel close observed by receive, mutex unlock/lock, `WaitGroup` or `errgroup` completion, or an atomic operation whose observed value protects the publication being claimed.
 - Flag mixed atomic and non-atomic access to the same variable.
 - Do not accept an atomic flag as proof that separately stored fields, slices, maps, or pointers are safely published unless later mutation is impossible or separately synchronized.
 - Treat `single writer` claims as incomplete if aliases escape or readers have no visibility guarantee.
@@ -90,8 +90,8 @@ When you load a reference, translate the example into the current diff's concret
 - `select { default: ... }` inside a loop often means busy-spin, starvation, or hidden loss of backpressure.
 
 ### WaitGroups, Locks, `sync.Cond`, And Copy Safety
-- `WaitGroup.Add` with a positive delta on a zero counter must happen before launch and before any possible `Wait`; `Add` or `Done` imbalance is merge-risk.
-- Flag copying of structs containing `sync.WaitGroup`, `sync.Mutex`, `sync.RWMutex`, or `sync.Cond` after first use, including value receivers and by-value helper calls.
+- When `Add`/`Done` tracks a goroutine, positive `WaitGroup.Add` on a zero counter must happen before any possible `Wait` and normally before launch so `Done` cannot race ahead; if the counter is already non-zero, recursive adds still need a clear lifecycle story.
+- Flag copying of structs containing identity-bearing sync values after first use, including `sync.WaitGroup`, `sync.Mutex`, `sync.RWMutex`, `sync.Cond`, `sync.Once`, `sync.Map`, `sync.Pool`, value receivers, and by-value helper calls.
 - Keep lock scope clear; flag callbacks, channel sends, or blocking I/O under lock unless the lock is intentionally protecting that blocking contract.
 - Prefer `sync.Mutex` over `sync.RWMutex` unless read dominance and contention behavior are justified.
 - `sync.Cond` requires predicate-in-a-loop reasoning; signal or broadcast must correspond to a state change that waiters can actually observe.
@@ -106,7 +106,8 @@ When you load a reference, translate the example into the current diff's concret
 ### Timers, Tickers, And Time-Based Coordination
 - `time.After` in hot or long-lived loops creates timer churn and often hides cancellation or reset semantics; account for Go version differences before calling it a timer leak.
 - Owned tickers that can keep driving work after the owner exits need `Stop` on exit paths; do not frame Go 1.23+ unreferenced tickers as GC leaks.
-- `Timer.Stop` or `Reset` flows need ownership and completion coordination; on Go 1.23+ channel timers do not need the old stale-tick drain dance, while `AfterFunc` callbacks and concurrent receivers still need an explicit story.
+- `Ticker.Stop` does not close `Ticker.C`; loops waiting only on the ticker channel still need a separate stop, context, or owner-exit signal.
+- `Timer.Stop` or `Reset` flows need ownership and completion coordination; on Go 1.23+ channel timers do not need the old stale-tick drain dance unless `GODEBUG=asynctimerchan=1` is in effect, while `time.AfterFunc`, `context.AfterFunc`, and concurrent receivers still need an explicit story.
 - Sleep-based polling is not an acceptable substitute for a real signal or bounded retry strategy.
 
 ### Bounded Concurrency And Backpressure

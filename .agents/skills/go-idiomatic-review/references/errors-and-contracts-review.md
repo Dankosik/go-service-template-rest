@@ -4,13 +4,14 @@
 When loaded for error-contract symptoms, this file makes the model choose the caller-observable failure contract and hidden-success risk instead of likely mistake "always use `%w`", "always make a custom error type", or "the log is enough."
 
 ## When To Load
-Load when a Go review touches returned errors, sentinel or typed errors, wrapping with `%w` or `%v`, `errors.Is`, `errors.As`, `errors.Join`, `(nil, nil)` ambiguity, panic-as-control-flow, logs replacing returns, or package API docs that promise error behavior.
+Load when a Go review touches returned errors, sentinel or typed errors, wrapping with `%w` or `%v`, `errors.Is`, `errors.As`, `errors.AsType`, `errors.Join`, `(nil, nil)` ambiguity, panic-as-control-flow, logs replacing returns, or package API docs that promise error behavior.
 
 ## Decision Rubric
 - Start from caller policy: what must callers distinguish, retry, ignore, log, translate, or redact?
 - Treat swallowed errors and log-only failures as merge-risk when callers observe success or partial state.
 - Use `%w` only when exposing the cause is part of the package contract; use `%v` or a package-owned error when the cause is diagnostic-only.
 - Prefer `errors.Is` or `errors.As` when wrapping can occur and callers inspect a contract; direct `==` is fine at a seam where the exact sentinel is the contract and wrapping is impossible.
+- On Go 1.26+, prefer `errors.AsType` when the target type itself implements `error` and its return form is clearer; keep `errors.As` for older Go versions or non-error interface targets.
 - `errors.Join` changes the error tree. Check whether custom traversal misses joined causes or whether joining now exposes causes callers should not inspect.
 - Reject string matching on `err.Error()` for policy unless the string is the only external protocol available and that fragility is documented.
 - Treat `(nil, nil)` as a finding when absence and success are indistinguishable; prefer `(value, ok)` or `(value, error)` according to caller needs.
@@ -74,7 +75,7 @@ Reject because direct sentinel equality can be correct at a local seam where wra
 - Do not take transport status mapping, retry policy, or domain meaning as this lane's final authority; hand off when needed.
 
 ## Validation Shape
-- Add table tests that assert `errors.Is` or `errors.As` for the exported contract, not the entire error string.
+- Add table tests that assert version-appropriate `errors.Is`, `errors.As`, or `errors.AsType` behavior for the exported contract, not the entire error string.
 - Add a negative test proving an implementation detail is not exposed when opacity is intentional.
 - Inject an error on the hidden-success path and assert no success-side effect occurs.
 - Use focused package tests for local contracts; broader `go test ./...` is appropriate when exported behavior crosses packages.

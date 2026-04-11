@@ -37,7 +37,7 @@ Failure points:
 
 Side effects:
 - No async emission in this phase.
-- No retries inside HTTP; retry policy is owned by clients or a later idempotency design.
+- No retries inside the HTTP adapter in this phase; retry policy is owned by clients or a later idempotency design.
 ```
 
 Async sequence with lifecycle owner and reconciliation:

@@ -86,7 +86,8 @@ Reject as a design finding if ownership is intact and the question is purely aut
 - `go-concurrency-review`: goroutines, channels, WaitGroups, mutexes, atomics, timers, worker pools.
 - `go-performance-review`: hot paths, batching, serialization, fan-out, caching, contention, benchmark evidence.
 - `go-qa-review`: test obligations, scenario coverage, assertion strength, determinism, validation readiness.
-- `go-devops-spec` or delivery review lane: generated-code policy, CI, rollout, release, compatibility, migration choreography.
+- delivery review lane: CI/CD gates, rollout, release, compatibility, and migration choreography.
+- `go-devops-spec`: use only as a design escalation when delivery policy must be redefined, not as a code-review handoff.
 
 ## Agent Traps
 - Do not duplicate a specialist review as a design finding when the design seam is intact.

@@ -12,7 +12,7 @@ Load when a Go review touches `Body.Close`, `rows.Close`, `rows.Err`, `scanner.E
 - For `bufio.Scanner`, check `scanner.Err()` after the scan loop unless the code intentionally accepts truncated/partial input and documents why.
 - For `http.Response.Body`, ensure the body is closed on all paths after a successful response; when HTTP/1.x connection reuse matters, check whether the body is read to completion before close or intentionally closed early to avoid draining a large or untrusted body. Do not hide a prior read/status error behind a later close error unless the close error matters for writes or protocols.
 - Avoid `defer` inside long or unbounded loops when it accumulates open bodies/files/rows until function return. Close within the iteration or move the work to a helper with a bounded scope.
-- For timers and tickers, check the effective Go version and reason: Go 1.23+ no longer needs `Stop` only for GC recovery, but `Stop` can still be required to prevent future events, preserve older-version behavior, or make `Reset` or shutdown semantics correct.
+- For timers and tickers, check the effective module and `GODEBUG=asynctimerchan` behavior, not just the installed toolchain. Go 1.23+ no longer needs `Stop` only for GC recovery when the new timer behavior is active, but `Stop` can still be required to prevent future events, preserve older-version behavior, or make `Reset` or shutdown semantics correct.
 - For `io.Reader.Read`, handle `n > 0` before or along with `err`; do not discard bytes just because `err == io.EOF` or another terminal error arrived.
 - Keep DB query semantics, retry budgets, and goroutine shutdown in their specialist lanes; this reference owns Go/stdlib contract shape.
 

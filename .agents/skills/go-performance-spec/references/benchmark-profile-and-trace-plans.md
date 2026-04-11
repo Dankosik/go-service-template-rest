@@ -13,6 +13,7 @@ Load after the measurement category is chosen and the spec needs exact Go proof 
 - Require `-benchmem` when allocations, bytes/op, or GC pressure matter.
 - Require `benchstat` for A/B comparison of repeated Go benchmark output.
 - Choose CPU, heap, allocs, mutex, block, goroutine profile, or runtime trace according to the symptom.
+- When mutex or block profiles are selected, name the `go test` profile flag or runtime sampling setting; runtime trace sync/sched profiles are related but not a substitute by default.
 - Treat PGO command examples as lifecycle obligations only after representative CPU profiles are available.
 
 ## Imitate

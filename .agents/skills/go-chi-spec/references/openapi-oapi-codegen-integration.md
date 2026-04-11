@@ -9,6 +9,7 @@ Load when chi routing is generated from OpenAPI, `oapi-codegen` chi or strict se
 ## Decision Rubric
 - Keep OpenAPI as the source of truth for public API paths, methods, parameters, and response shape. Chi wiring serves that contract.
 - Choose one generated router target for the surface. Combine `chi-server` with `strict-server` only when typed request/response wrappers are desired.
+- Do not treat `strict-server` or generated chi wrappers as full request or security validation. If contract validation is required, choose the validation middleware explicitly and place it once in the chi stack.
 - Choose exactly one prefix source: the OpenAPI path itself, `ChiServerOptions.BaseURL`, or the parent chi mount/route prefix. Do not accidentally apply the same prefix twice.
 - Keep manual routes outside the generated contract surface unless they are intentionally represented in the OpenAPI spec or share one parent router with the same policy.
 - Treat generated files as generated artifacts. Change generator config, templates, wrappers, or hand-written implementations instead of editing generated code manually.

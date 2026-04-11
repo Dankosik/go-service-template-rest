@@ -67,7 +67,7 @@ func (s *Cache) TouchProject(ctx context.Context, key string, value []byte) erro
 }
 ```
 
-Redis `SET` overwrites the old value and discards previous TTL unless the command/client uses a TTL-preserving option. This can turn a bounded cache entry into a persistent one.
+Redis `SET` overwrites the old value and discards previous TTL unless the command/client uses a TTL-preserving option. In go-redis, `Set(..., 0)` means no expiration. This can turn a bounded cache entry into a persistent one.
 
 ## Good Example: Explicit TTL On Write
 
@@ -115,7 +115,7 @@ The local finding is that transient source errors must not be converted into cac
 - Do not require cache invalidation failure to fail the write if the repository's existing contract is best-effort; preserve the contract and ask for observability when local patterns do.
 - Do not use wildcard deletes in request paths as a "simple" invalidation fix; prefer exact keys or escalate to a tag/index design.
 - Do not cache every repository error as "missing"; negative cache is only for authoritative misses such as `sql.ErrNoRows` when the contract allows it.
-- Do not overwrite a Redis key with a zero TTL unless persistent cache entries are the explicit contract.
+- Do not treat zero TTL as portable shorthand; in go-redis it creates a persistent key, while other clients need API-specific confirmation.
 
 ## Smallest Safe Fix
 - Delete or refresh exact keys after successful writes when the current package already owns those keys.

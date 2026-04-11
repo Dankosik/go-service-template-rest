@@ -48,3 +48,4 @@ Copy: this names completeness boundaries and avoids moving write ownership to th
 - Do not forget rebuild and drift. A projection without a rebuild path becomes an accidental datastore.
 - Do not make a derived read path the only path for operator repair or correctness-critical decisions.
 - Do not let read-model ownership erase command ownership; separate support owner from write authority.
+- Do not turn event sourcing into a whole-system choice when only one bounded ledger or workflow needs historical reconstruction.

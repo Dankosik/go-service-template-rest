@@ -62,7 +62,7 @@ Do not:
 
 ### Symptom-To-Evidence Selection
 Use the smallest evidence that actually fits the symptom:
-- localized CPU or allocation claim: `go test -run '^$' -bench ... -benchmem` plus before or after `benchstat`
+- localized CPU or allocation claim: old-vs-new `go test -run '^$' -bench ... -benchmem` results summarized with `benchstat`
 - unclear CPU bottleneck: CPU profile
 - allocation or GC pressure claim: `-benchmem` plus heap or allocs profile
 - lock wait, blocking, queue buildup, or fan-out stall: mutex profile, block profile, and often `go tool trace`

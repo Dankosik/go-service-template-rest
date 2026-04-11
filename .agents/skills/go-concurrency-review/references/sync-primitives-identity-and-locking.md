@@ -3,11 +3,11 @@
 Behavior Change Thesis: When loaded for `WaitGroup`, mutex, `Cond`, copied sync value, or lock-scope symptoms, this file makes the model treat synchronization objects as identity-bearing state and review the protected invariant instead of filing style nits or defaulting to `RWMutex` and atomics.
 
 ## When To Load
-Symptom: the diff touches `sync.WaitGroup`, `WaitGroup.Go`, copied `Mutex`/`RWMutex`/`Cond`/`sync.Map` values, value receivers on structs with sync fields, lock scope, callbacks under lock, `sync.Cond`, recursive or upgrade-style `RWMutex` use, or local lock-free claims. If the main risk is atomic publication of shared data, load `happens-before-and-publication.md` instead.
+Symptom: the diff touches `sync.WaitGroup`, `WaitGroup.Go`, copied `Mutex`/`RWMutex`/`Cond`/`Once`/`Map`/`Pool` values, value receivers on structs with sync fields, lock scope, callbacks under lock, `sync.Cond`, recursive or upgrade-style `RWMutex` use, or local lock-free claims. If the main risk is atomic publication of shared data, load `happens-before-and-publication.md` instead.
 
 ## Decision Rubric
 - A sync value has identity after first use. Copying it through value receivers, by-value helpers, map/slice movement, or struct returns can split the state that callers believe is shared.
-- `WaitGroup.Add` must occur before the goroutine can call `Done` and before any possible `Wait` on a zero counter. Review the ordering, not just the presence of `defer Done`.
+- When `Add`/`Done` tracks a goroutine, `Add` must occur before that goroutine can call `Done` and before any possible `Wait` on a zero counter. If the counter is already non-zero, additional `Add` calls may be valid but still need an intentional lifecycle story.
 - Lock scope must match the protected invariant. Blocking callbacks, channel sends, I/O, or user hooks under lock are findings when they can deadlock or stall unrelated callers.
 - `sync.Cond` requires a predicate protected by the associated locker and `Wait` in a loop.
 - `RWMutex` is not a default upgrade over `Mutex`; recursive reads, upgrades or downgrades, and reader blocking while a writer waits can make it worse.
@@ -21,7 +21,7 @@ Axis: WaitGroups, Locks, And Atomics; `func (p Poller) Start()` copies `Poller`,
 Impact:
 `Stop` can return before the worker exits or wait forever depending on which copy was incremented, so shutdown correctness is not deterministic.
 Suggested fix:
-Make `Start` a pointer receiver and ensure every `Add`, goroutine launch, `Done`, and `Wait` operates on the same `*Poller` instance. Consider `WaitGroup.Go` where available, or call `Add` before launching the goroutine.
+Make `Start` a pointer receiver and ensure every `Add`, goroutine launch, `Done`, and `Wait` operates on the same `*Poller` instance. Consider `WaitGroup.Go` when the module's Go version supports it, or call `Add` before launching the goroutine.
 Reference:
 Validate with `go test -race ./internal/poller -run TestStopWaitsForWorker -count=100`.
 ```
@@ -47,7 +47,7 @@ Reject this as safe unless the callback contract is intentionally serialized und
 ## Agent Traps
 - Do not miss sync-value copies through value receiver methods; this is common in review diffs because the method body still "looks" locked.
 - Do not recommend `RWMutex` without checking read dominance, upgrade/downgrade behavior, and writer progress.
-- Do not claim `WaitGroup.Go` fixes cancellation, panic handling, or downstream blocking by itself; its function must not panic, and it only changes launch/accounting shape.
+- Do not suggest `WaitGroup.Go` unless the module's Go version supports it, and do not claim it fixes cancellation, panic handling, or downstream blocking by itself; its function must not panic, and it only changes launch/accounting shape.
 - Do not conflate atomic publication defects with sync-object identity defects. Load the publication reference when the core problem is visibility of data behind atomics.
 
 ## Validation Shape

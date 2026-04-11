@@ -10,6 +10,7 @@ Load this when the review touches allocation churn, GC pressure, heap profiles, 
 - Separate allocation churn from retained memory: use `-benchmem` and allocs or allocation-space evidence for churn; use in-use heap evidence for retention.
 - Require old-vs-new `-benchmem` when allocation, GC, buffer reuse, or `sync.Pool` claims are used to justify complexity.
 - Treat `sync.Pool` as suspicious until evidence shows the pool is long-lived, shared across concurrent callers, reuses temporary objects often, resets safely, and reduces allocation or GC pressure under the real workload.
+- Do not treat `sync.Pool` hit rate or object identity as guaranteed; `Get` may ignore stored values, so the optimization and benchmark must tolerate misses.
 - Check for oversized backing arrays, request-specific data leakage, missing reset discipline, and single-threaded toy benchmarks for pooled objects.
 - Prefer reducing duplicate materialization, avoiding hot-loop conversions, and changing data flow before adding pooling.
 - Use `hot-path-cost-model.md` when the allocation issue is mainly repeated encode/decode or copy amplification in a loop.

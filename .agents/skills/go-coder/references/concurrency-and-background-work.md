@@ -11,13 +11,14 @@ Load this when implementation work starts goroutines, uses channels, adds fan-ou
 - Give every goroutine a lifecycle owner, cancellation path, and result/error path.
 - Bound fan-out and queue growth; unbounded concurrency is a correctness risk, not just a performance risk.
 - Prefer `errgroup.WithContext` when the dependency already exists and first-error cancellation is the desired contract.
-- For Go 1.25+ self-contained tests of goroutines, timers, or timeouts, consider `testing/synctest` before sleeps or hand-rolled fake clocks; skip it when real network, external process, or non-durably-blocking I/O/lock behavior is part of the contract.
+- For Go 1.25+ wait-only goroutines, prefer `sync.WaitGroup.Go` over manual `Add`/`Done` when `f` must not panic and no error propagation or shared cancellation is needed.
+- For Go 1.25+ self-contained tests of goroutines, timers, or timeouts, consider `testing/synctest` before sleeps or hand-rolled fake clocks; skip it when goroutines outside the synctest bubble, real network, external process, or non-durably-blocking I/O/lock behavior is part of the contract.
 - Close channels from the sender side, and only after all sends are done.
 - Stop timers and tickers and cancel derived contexts when their lifetime ends.
 - Preserve ordering if callers or tests depend on it.
 
 ## Imitate
-Use `errgroup` when it already fits the task and dependency policy.
+Use `errgroup` when it already fits the task and dependency policy. For modules below Go 1.22, copy loop variables before closure-based goroutines.
 
 ```go
 func ProcessAll(ctx context.Context, jobs []Job, limit int) error {
@@ -28,6 +29,7 @@ func ProcessAll(ctx context.Context, jobs []Job, limit int) error {
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(limit)
 	for _, job := range jobs {
+		job := job
 		g.Go(func() error {
 			return process(ctx, job)
 		})
@@ -108,7 +110,7 @@ time.Sleep(100 * time.Millisecond)
 - Treating a buffered channel as a complete lifecycle plan.
 - Replacing test sleeps with a longer timeout rather than a readiness/completion signal.
 - Assuming the race detector proves paths the tests never exercise.
-- Using `sync.WaitGroup.Go` without checking the module Go version or handling the "function must not panic" contract.
+- Using `sync.WaitGroup.Go` without checking the module Go version, the "function must not panic" contract, or the absence of error and cancellation needs.
 
 ## Validation Shape
 - Run `go test -race` for changed concurrent code.

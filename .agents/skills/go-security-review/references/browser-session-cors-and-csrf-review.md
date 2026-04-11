@@ -9,7 +9,7 @@ Load this when changed Go code touches browser session cookies, login/logout han
 If the primary issue is chi router method or preflight mechanics, hand off or pair with `go-chi-review`. If the issue is object permission after a valid request reaches the service, load the authz reference instead.
 
 ## Decision Rubric
-- Treat cookie-authenticated unsafe methods as CSRF-exposed unless the route has a token, Go's `http.CrossOriginProtection`, same-site policy, origin check, or another explicit anti-CSRF control before side effects.
+- Treat cookie-authenticated unsafe methods as CSRF-exposed unless the route has a token, Go's `http.CrossOriginProtection`, origin check, or another explicit anti-CSRF control before side effects; treat `SameSite` as a supporting control whose sibling-subdomain assumptions must be clear.
 - Do not rely on CORS as server-side authorization; non-browser clients and same-site requests are outside CORS protection.
 - Reject arbitrary reflected credentialed CORS. Treat literal wildcard-plus-credentials as fail-closed misconfiguration in standards-compliant browsers, not automatically as cross-origin data theft, unless the framework reflects the caller's origin.
 - Require exact origin allowlists for credentialed browser flows; pattern matching needs a strong reason and tight tests.
@@ -66,6 +66,8 @@ Reject when the route already authorizes the victim user but lacks protection ag
 - Do not flag permissive CORS on a non-browser, non-credentialed, public resource without naming a sensitive browser impact.
 - Do not describe literal `Access-Control-Allow-Origin: *` with credentials as browser-readable sensitive data unless the implementation actually echoes the attacker-controlled origin.
 - Do not assume `SameSite=Lax` protects state-changing `GET`.
+- Do not treat `SameSite` or Fetch Metadata `same-site` as same-origin; if sibling subdomains are not trusted, require a stricter origin/token policy for state-changing requests.
+- Do not treat `http.CrossOriginProtection` as a magic CSRF waiver: safe methods are always allowed, requests without `Sec-Fetch-Site` or `Origin` are allowed, and broad `AddInsecureBypassPattern` bypasses need exact review.
 - Do not ignore missing `Vary: Origin` when responses differ by origin.
 - Do not absorb chi fallback or OPTIONS routing mechanics; name the security impact and hand off router-specific proof when needed.
 

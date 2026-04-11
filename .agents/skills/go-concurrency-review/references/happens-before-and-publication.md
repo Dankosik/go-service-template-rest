@@ -6,7 +6,7 @@ Behavior Change Thesis: When loaded for shared-state visibility or publication s
 Symptom: the diff reads or publishes shared fields, maps, slices, pointers, interface values, readiness flags, `atomic.Value`, or `atomic.Pointer[T]`, and the review question is whether another goroutine can safely observe the write.
 
 ## Decision Rubric
-- Name the exact visibility edge before accepting the code: mutex unlock/lock, channel send/receive, channel close/receive observation, `sync.Once`, documented `sync.Map` behavior, or atomic operations that protect the whole published value.
+- Name the exact visibility edge before accepting the code: mutex unlock/lock, matched channel send/receive, channel close observed by receive, `sync.Once`, documented `sync.Map` behavior, or atomic operations that protect the whole published value.
 - Treat an atomic flag that gates non-atomic fields as suspicious. Observing the atomic store can publish prior writes, but it does not protect later mutation or make mutable maps, slices, or multi-field invariants atomic.
 - Accept atomic snapshot publication only when the stored value is fully built before publication and is immutable afterward or separately synchronized.
 - Reject `single writer` arguments when aliases escape to readers without a visibility rule.

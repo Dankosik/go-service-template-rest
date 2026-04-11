@@ -155,6 +155,7 @@ If product requirements say Redis failure should fall back to DB, require a boun
 ## Agent Traps
 - Do not treat `singleflight` as cross-process protection. It only coalesces work inside the current process unless the repository wraps it with distributed behavior.
 - Do not use a coalescing key that is missing tenant, version, locale, auth, or feature dimensions from the cache key.
+- Do not let the first caller's cancelable request context accidentally become the shared fill context for every waiter; `singleflight.Group.Do` has one function result per key, not waiter-specific cancellation.
 - Do not release Redis locks with a plain `DEL` when the lock can expire and be reacquired by another owner; require token-checked release or an existing safe helper.
 - Do not treat every Redis error as `redis.Nil`; cache failure and cache miss have different origin-protection consequences.
 - Do not invent distributed locking, stale-while-revalidate, or retry budgets in a review finding when the local code only needs same-process coalescing or a bounded fallback handoff.
@@ -163,7 +164,7 @@ If product requirements say Redis failure should fall back to DB, require a boun
 - Add or reuse `singleflight` for same-process hot miss coalescing when the repository already accepts it.
 - Use the cache key, including tenant/version dimensions, as the coalescing key.
 - Recheck cache inside the coalesced function to avoid duplicate origin fetch after another goroutine fills it.
-- For Redis locks, require `SET NX` with an expiry and token-checked release.
+- For Redis locks, require `SET NX` with an expiry and token-checked release through the repository helper, Lua compare/delete, or Redis 8.4+ `DELEX ... IFEQ` after confirming server/client support.
 - Separate cache miss from cache failure; do not treat every cache error as unlimited origin fallback.
 - Escalate when the right fix requires stale serving, distributed locks, fencing tokens, retry budgets, or overload policy.
 

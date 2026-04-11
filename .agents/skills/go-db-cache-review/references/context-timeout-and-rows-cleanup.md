@@ -14,9 +14,9 @@ If query construction, dynamic SQL, or round-trip shape is the primary symptom, 
 - Code uses context-aware DB/cache methods but with an unbounded parent context on critical paths.
 - `rows.Close()` is missing or placed after code that can return early.
 - `rows.Err()` is not checked after iteration.
-- `QueryContext` returns `Rows`, but the code only wants one row.
+- `QueryContext` returns `Rows`, but the code only wants one row and does not need duplicate-row detection.
 - `Stmt` or `Conn` is created/reserved and never closed.
-- A transaction is left open if `Commit` is skipped or context cancellation occurs.
+- A transaction started without `BeginTx(ctx, ...)` or without a rollback path can remain open when `Commit` is skipped; with `BeginTx`, context cancellation rolls the transaction back and makes `Commit` return an error.
 
 ## Bad Example: Dropped Request Cancellation
 
@@ -119,6 +119,7 @@ If the statement is intentionally reused, require the owning lifecycle to close 
 - Do not invent a magic timeout duration. Use an existing repository budget, caller deadline, or ask for the local operation to derive a deadline where the package already owns one.
 - Do not replace caller cancellation with `context.Background()` for "cleanup" in a request path unless the code is deliberately detaching an owned async operation.
 - Do not say `PrepareContext` bounds statement execution; the prepare context covers prepare work, while each query still needs its own execution context.
+- Do not replace a one-row `QueryContext` loop with `QueryRowContext` when that loop intentionally detects duplicate rows.
 - Do not load both this file and the SQL query reference just to mention `Rows.Close`; pick the one that changes the finding.
 
 ## Smallest Safe Fix
