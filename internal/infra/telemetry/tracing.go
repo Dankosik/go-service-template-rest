@@ -133,20 +133,15 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 	options := make([]otlptracehttp.Option, 0, 4)
 	configured := false
 
-	if endpoint := strings.TrimSpace(cfg.OTLPEndpoint); endpoint != "" {
-		parsedOptions, err := parseOTLPEndpointOptions(endpoint)
-		if err != nil {
-			return nil, false, err
-		}
-		options = append(options, parsedOptions...)
-		configured = true
+	endpoint := strings.TrimSpace(cfg.OTLPTracesEndpoint)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(cfg.OTLPEndpoint)
 	}
-	if endpoint := strings.TrimSpace(cfg.OTLPTracesEndpoint); endpoint != "" {
+	if endpoint != "" {
 		parsedOptions, err := parseOTLPEndpointOptions(endpoint)
 		if err != nil {
 			return nil, false, err
 		}
-		// Traces endpoint should override generic OTLP endpoint when both are set.
 		options = append(options, parsedOptions...)
 		configured = true
 	}
@@ -168,21 +163,7 @@ func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
 		}
-		if parsedURL.Host == "" {
-			return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
-		}
-
-		options := []otlptracehttp.Option{
-			otlptracehttp.WithEndpoint(parsedURL.Host),
-		}
-		path := strings.TrimSpace(parsedURL.EscapedPath())
-		if path != "" && path != "/" {
-			options = append(options, otlptracehttp.WithURLPath(path))
-		}
-		if parsedURL.RawQuery != "" {
-			return nil, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
-		}
-		return options, nil
+		return otlpEndpointOptions(raw, parsedURL, true)
 	}
 
 	parsedURL, err := url.Parse(raw)
@@ -190,26 +171,34 @@ func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
 		return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
 	}
 
-	options := make([]otlptracehttp.Option, 0, 3)
-	if parsedURL.Host == "" {
-		return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
-	}
-
+	insecure := false
 	switch strings.ToLower(parsedURL.Scheme) {
 	case "http":
-		options = append(options, otlptracehttp.WithInsecure())
+		insecure = true
 	case "https":
 	default:
 		return nil, fmt.Errorf("parse otlp endpoint %q: unsupported scheme %q", raw, parsedURL.Scheme)
 	}
 
+	return otlpEndpointOptions(raw, parsedURL, insecure)
+}
+
+func otlpEndpointOptions(raw string, parsedURL *url.URL, insecure bool) ([]otlptracehttp.Option, error) {
+	if parsedURL.Host == "" {
+		return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
+	}
+	if parsedURL.RawQuery != "" {
+		return nil, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
+	}
+
+	options := make([]otlptracehttp.Option, 0, 3)
+	if insecure {
+		options = append(options, otlptracehttp.WithInsecure())
+	}
 	options = append(options, otlptracehttp.WithEndpoint(parsedURL.Host))
 	path := strings.TrimSpace(parsedURL.EscapedPath())
 	if path != "" && path != "/" {
 		options = append(options, otlptracehttp.WithURLPath(path))
-	}
-	if parsedURL.RawQuery != "" {
-		return nil, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
 	}
 
 	return options, nil

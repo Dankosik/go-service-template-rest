@@ -267,15 +267,15 @@ func TestPingHistoryRepositoryCreateAndListRecentInTxBeginError(t *testing.T) {
 		},
 	}
 
-	_, _, err := repo.CreateAndListRecentInTx(context.Background(), "payload", 1)
+	_, _, err := repo.createAndListRecentInTx(context.Background(), "payload", 1)
 	if err == nil {
-		t.Fatal("CreateAndListRecentInTx() error = nil, want non-nil")
+		t.Fatal("createAndListRecentInTx() error = nil, want non-nil")
 	}
 	if !errors.Is(err, sentinel) {
-		t.Fatalf("CreateAndListRecentInTx() error = %v, want wrapped %v", err, sentinel)
+		t.Fatalf("createAndListRecentInTx() error = %v, want wrapped %v", err, sentinel)
 	}
 	if !strings.Contains(err.Error(), "begin ping history transaction") {
-		t.Fatalf("CreateAndListRecentInTx() error = %q, want begin context", err.Error())
+		t.Fatalf("createAndListRecentInTx() error = %q, want begin context", err.Error())
 	}
 }
 
@@ -307,12 +307,12 @@ func TestPingHistoryRepositoryRollbackUsesCleanupContext(t *testing.T) {
 		},
 	}
 
-	_, _, err := repo.CreateAndListRecentInTx(ctx, "payload", 1)
+	_, _, err := repo.createAndListRecentInTx(ctx, "payload", 1)
 	if err == nil {
-		t.Fatal("CreateAndListRecentInTx() error = nil, want non-nil")
+		t.Fatal("createAndListRecentInTx() error = nil, want non-nil")
 	}
 	if !errors.Is(err, sentinel) {
-		t.Fatalf("CreateAndListRecentInTx() error = %v, want wrapped %v", err, sentinel)
+		t.Fatalf("createAndListRecentInTx() error = %v, want wrapped %v", err, sentinel)
 	}
 	if !rollbackCalled {
 		t.Fatal("Rollback was not called")

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -49,6 +50,23 @@ func TestNewServerAppliesConfig(t *testing.T) {
 	}
 	if srv.srv.MaxHeaderBytes != cfg.MaxHeaderBytes {
 		t.Fatalf("MaxHeaderBytes = %d, want %d", srv.srv.MaxHeaderBytes, cfg.MaxHeaderBytes)
+	}
+}
+
+func TestNewServerUsesNotFoundHandlerWhenHandlerNil(t *testing.T) {
+	t.Parallel()
+
+	srv := New(Config{}, nil)
+	if srv == nil || srv.srv == nil || srv.srv.Handler == nil {
+		t.Fatal("New(Config{}, nil) did not install a handler")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 	}
 }
 

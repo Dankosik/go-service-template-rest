@@ -87,8 +87,7 @@ func (r *PingHistoryRepository) ListRecent(ctx context.Context, limit int32) ([]
 	return records, nil
 }
 
-// CreateAndListRecentInTx runs a write+read flow under one explicit infra transaction boundary.
-func (r *PingHistoryRepository) CreateAndListRecentInTx(ctx context.Context, payload string, limit int32) (PingHistoryRecord, []PingHistoryRecord, error) {
+func (r *PingHistoryRepository) createAndListRecentInTx(ctx context.Context, payload string, limit int32) (PingHistoryRecord, []PingHistoryRecord, error) {
 	if limit <= 0 {
 		return PingHistoryRecord{}, nil, fmt.Errorf("%w: limit must be > 0", ErrPingHistoryRepository)
 	}

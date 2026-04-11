@@ -111,6 +111,8 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 
 	if err := nilPool.Check(context.Background()); err == nil {
 		t.Fatal("(*Pool)(nil).Check() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrHealthcheck) {
+		t.Fatalf("(*Pool)(nil).Check() error = %v, want ErrHealthcheck", err)
 	}
 
 	pool := &Pool{}
@@ -124,6 +126,8 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 	pool.Close()
 	if err := pool.Check(context.Background()); err == nil {
 		t.Fatal("Check() error = nil, want non-nil for nil internal pool")
+	} else if !errors.Is(err, ErrHealthcheck) {
+		t.Fatalf("Check() error = %v, want ErrHealthcheck", err)
 	}
 }
 

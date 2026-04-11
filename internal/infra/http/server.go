@@ -25,6 +25,10 @@ type Config struct {
 }
 
 func New(cfg Config, handler http.Handler) *Server {
+	if handler == nil {
+		handler = http.NotFoundHandler()
+	}
+
 	return &Server{
 		srv: &http.Server{
 			Addr:              cfg.Addr,

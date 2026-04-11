@@ -1,9 +1,15 @@
 package telemetry
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func TestBuildTraceSampler(t *testing.T) {
@@ -122,6 +128,39 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("traces endpoint overrides generic endpoint path", func(t *testing.T) {
+		genericPaths := make(chan string, 1)
+		genericServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			genericPaths <- r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(genericServer.Close)
+
+		tracesPaths := make(chan string, 1)
+		tracesServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tracesPaths <- r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(tracesServer.Close)
+
+		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+			OTLPEndpoint:       genericServer.URL + "/generic",
+			OTLPTracesEndpoint: tracesServer.URL,
+			OTLPProtocol:       "http/protobuf",
+		})
+		if err != nil {
+			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+		}
+		if !configured {
+			t.Fatalf("configured = false, want true")
+		}
+
+		exportOneTestSpan(t, options)
+
+		assertNoCollectorRequest(t, genericPaths, "generic endpoint")
+		assertCollectorPath(t, tracesPaths, "/v1/traces")
+	})
+
 	t.Run("invalid protocol", func(t *testing.T) {
 		_, _, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
@@ -149,6 +188,18 @@ func TestParseOTLPEndpointOptions(t *testing.T) {
 	if len(options) == 0 {
 		t.Fatalf("scheme-less options len = 0, want > 0")
 	}
+	serverPaths := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverPaths <- r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+	schemeLessOptions, err := parseOTLPEndpointOptions(strings.TrimPrefix(server.URL, "http://"))
+	if err != nil {
+		t.Fatalf("parseOTLPEndpointOptions() scheme-less test server error = %v", err)
+	}
+	exportOneTestSpan(t, schemeLessOptions)
+	assertCollectorPath(t, serverPaths, "/v1/traces")
 
 	_, err = parseOTLPEndpointOptions("://bad-endpoint")
 	if err == nil {
@@ -177,4 +228,54 @@ func TestParseOTLPHeaders(t *testing.T) {
 func TestExporterOptionTypeCompatibility(t *testing.T) {
 	// Guard against accidental option-type drift when upgrading OTLP exporter package.
 	var _ []otlptracehttp.Option
+}
+
+func exportOneTestSpan(t *testing.T, options []otlptracehttp.Option) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	exporter, err := otlptracehttp.New(ctx, options...)
+	if err != nil {
+		t.Fatalf("create OTLP trace exporter: %v", err)
+	}
+
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSyncer(exporter),
+	)
+	_, span := provider.Tracer("telemetry-test").Start(ctx, "test-span")
+	span.End()
+
+	if err := provider.ForceFlush(ctx); err != nil {
+		_ = provider.Shutdown(ctx)
+		t.Fatalf("force flush trace provider: %v", err)
+	}
+	if err := provider.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown trace provider: %v", err)
+	}
+}
+
+func assertCollectorPath(t *testing.T, paths <-chan string, want string) {
+	t.Helper()
+
+	select {
+	case got := <-paths:
+		if got != want {
+			t.Fatalf("collector path = %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("collector path was not requested")
+	}
+}
+
+func assertNoCollectorRequest(t *testing.T, paths <-chan string, name string) {
+	t.Helper()
+
+	select {
+	case got := <-paths:
+		t.Fatalf("%s received unexpected request path %q", name, got)
+	default:
+	}
 }

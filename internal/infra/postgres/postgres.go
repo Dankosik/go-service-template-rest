@@ -116,7 +116,10 @@ func (p *Pool) Name() string {
 
 func (p *Pool) Check(ctx context.Context) error {
 	if p == nil || p.pool == nil {
-		return fmt.Errorf("postgres pool is nil")
+		return fmt.Errorf("%w: postgres pool is nil", ErrHealthcheck)
 	}
-	return p.pool.Ping(ctx)
+	if err := p.pool.Ping(ctx); err != nil {
+		return fmt.Errorf("%w: ping postgres: %w", ErrHealthcheck, err)
+	}
+	return nil
 }

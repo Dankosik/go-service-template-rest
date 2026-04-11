@@ -51,28 +51,6 @@ func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	}
 }
 
-func TestPingHistoryRepositorySQLCTxPath(t *testing.T) {
-	pool := setupPostgresPoolWithMigrations(t)
-
-	repo := postgres.NewPingHistoryRepository(pool.DB())
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	created, recent, err := repo.CreateAndListRecentInTx(ctx, "tx", 1)
-	if err != nil {
-		t.Fatalf("CreateAndListRecentInTx error: %v", err)
-	}
-	if len(recent) != 1 {
-		t.Fatalf("CreateAndListRecentInTx recent len = %d, want 1", len(recent))
-	}
-	if recent[0].ID != created.ID {
-		t.Fatalf("CreateAndListRecentInTx mismatch: created=%d recent[0]=%d", created.ID, recent[0].ID)
-	}
-	if recent[0].Payload != "tx" {
-		t.Fatalf("CreateAndListRecentInTx payload = %q, want %q", recent[0].Payload, "tx")
-	}
-}
-
 func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
 	t.Helper()
 
