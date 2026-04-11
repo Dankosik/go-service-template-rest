@@ -81,6 +81,18 @@ Do not:
 - preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
 - a finished research session hands off evidence and routing; it does not convert that evidence into approved `Decisions`
 
+## Lazy-Loaded Reference Examples
+Keep this `SKILL.md` as the protocol. Load only the specific reference file needed for examples, and treat those examples as non-authoritative illustrations under `AGENTS.md` and `docs/spec-first-workflow.md`.
+
+- `references/research-question-framing.md` - load when research questions are too broad, solution-led, biased, or mixed with decisions
+- `references/local-vs-fanout-mode-selection.md` - load when choosing `local` versus read-only `fan-out` is the hard part
+- `references/research-lane-planning.md` - load when `workflow-plans/research.md` needs clearer lane ownership, role choice, source targets, or parallelism
+- `references/evidence-note-structure.md` - load when deciding what belongs in `research/*.md` and how to keep source notes reusable
+- `references/fan-in-handoff-examples.md` - load when research is done but the handoff to future `specification-session` is unclear
+- `references/research-session-anti-patterns.md` - load when a session is drifting toward `spec.md`, `design/`, `plan.md`, `tasks.md`, implementation, or generic note sprawl
+
+Reference files may include external method links gathered through Exa, but those links support example quality only. Repository-local workflow rules always win for allowed writes, phase boundaries, subagent read-only constraints, and stop rules.
+
 ## Boundary With Future `specification-session`
 - `research-session` may write `workflow-plan.md`, `workflow-plans/research.md`, and optional `research/*.md`
 - the future `specification-session` owns approved `spec.md`, `workflow-plans/specification.md`, and the handoff into `technical design`

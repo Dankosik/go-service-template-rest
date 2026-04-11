@@ -41,6 +41,18 @@ Do not:
 - If an approved spec, plan, or contract exists, use it as governing evidence for lifecycle and shutdown expectations without suppressing local findings.
 - Prefer the smallest safe correction that restores deterministic concurrent behavior.
 
+## Reference Selection
+Keep this file focused on the review workflow. Load only the reference file that matches the changed concurrency surface:
+
+- `references/happens-before-and-publication.md` for shared state publication, unsafe readiness flags, mixed atomic and non-atomic access, `atomic.Value`, immutable snapshots, or missing visibility edges.
+- `references/goroutine-lifecycle-and-cancellation.md` for fire-and-forget goroutines, context propagation, early return leaks, pipeline abandonment, `errgroup` cancellation, or shutdown joins.
+- `references/channels-select-and-close-ownership.md` for channel close ownership, send-on-closed risk, blocked sends or receives, `select` default spin, nil-channel gating, or fragile buffer assumptions.
+- `references/waitgroups-locks-and-atomics.md` for `WaitGroup` ordering, copied sync values, lock scope, `sync.Cond` predicates, `RWMutex` misuse, atomic pointers, and lock-free claims.
+- `references/timers-tickers-and-shutdown.md` for timer/ticker reset or stop behavior, `time.After` loops, sleep polling, `AfterFunc` completion, fake-clock tests, and shutdown timing.
+- `references/concurrency-review-validation.md` for deciding whether evidence is enough: `go test -race`, leak or liveness tests, deterministic coordination, `testing/synctest`, and residual risk wording.
+
+When you load a reference, translate the example into the current diff's concrete `file:line`, failure mode, smallest safe correction, and validation command. Do not paste generic examples as final review output.
+
 ## Expertise
 
 ### Happens-Before And State Publication
@@ -87,7 +99,7 @@ Do not:
 - If the reviewer cannot explain the invariant in one sentence, the code is probably not safely lock-free.
 
 ### Timers, Tickers, And Time-Based Coordination
-- `time.After` in hot or long-lived loops can leak timer allocations and makes shutdown harder to reason about.
+- `time.After` in hot or long-lived loops creates timer churn and often hides cancellation or reset semantics; account for Go version differences before calling it a timer leak.
 - `Ticker` must be `Stop`ped on all exit paths.
 - `Timer.Stop` or `Reset` flows need correct stop or drain coordination when another goroutine may already observe the tick.
 - Sleep-based polling is not an acceptable substitute for a real signal or bounded retry strategy.

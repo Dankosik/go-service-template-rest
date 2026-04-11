@@ -29,6 +29,18 @@ Escalate if:
 - critical behavior is not testable, operable, or rollout-safe
 - repository baseline context from `docs/repo-architecture.md` materially matters and has not been loaded yet
 
+## Reference Files
+Use references lazily. Load repo-native task artifacts and repository docs first, then open only the reference file that matches the active design pressure. These references contain examples and calibration links; they do not replace specialist architecture, API, data, reliability, security, observability, QA, or planning decisions.
+
+- [design-bundle-assembly.md](references/design-bundle-assembly.md) - use when deciding the shape of `design/overview.md`, the required design bundle, conditional artifacts, and the overview-to-artifact index.
+- [component-and-ownership-maps.md](references/component-and-ownership-maps.md) - use when producing `design/component-map.md` or `design/ownership-map.md`, especially around package boundaries, source-of-truth ownership, and dependency direction.
+- [runtime-sequence-and-failure-points.md](references/runtime-sequence-and-failure-points.md) - use when producing `design/sequence.md`, runtime scenarios, failure points, side effects, retries, or sync/async boundaries.
+- [cross-domain-reconciliation.md](references/cross-domain-reconciliation.md) - use when specialist outputs or design artifacts disagree across architecture, API, data, security, reliability, observability, delivery, or QA.
+- [design-readiness-and-planning-handoff.md](references/design-readiness-and-planning-handoff.md) - use before marking design planning-ready or handing off to `planning-and-task-breakdown`.
+- [complexity-and-abstraction-tradeoffs.md](references/complexity-and-abstraction-tradeoffs.md) - use when a proposed layer, interface, helper, adapter, or simplification may increase accidental complexity or blur ownership.
+
+Do not bulk-load all references. If a reference exposes a missing final decision, escalate to the orchestrator or the appropriate specialist instead of deciding inside this integrator skill. If a reference exposes missing execution sequencing, hand off to `planning-and-task-breakdown` instead of writing `plan.md` or `tasks.md`.
+
 ## Specialist Stance
 - `spec.md` owns decisions, `design/` owns task-local technical context, and `plan.md` consumes approved `spec.md + design/`.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.

@@ -15,6 +15,18 @@ Turn a mostly chosen request into a concrete, falsifiable, challenge-ready probl
 - seed prioritized open questions with owner and unblock condition
 - decide whether the request is ready for deeper design and whether a pre-spec challenge pass is required, recommended, or skippable
 
+## Lazy Reference Loading
+Keep this skill as the framing workflow. Load only the reference file that matches the uncertainty in front of you:
+
+- `references/problem-and-behavior-delta.md` when the request needs a sharper problem statement, current-vs-desired behavior delta, affected actor, or system-boundary phrasing.
+- `references/scope-constraints-and-non-goals.md` when scope is expanding, non-goals are vague, constraints may change downstream design, or the request mixes problem framing with delivery commitments.
+- `references/assumptions-and-open-questions.md` when the frame depends on implied facts, missing owner decisions, unvalidated risky assumptions, or an unprioritized question pile.
+- `references/challenge-recommendation-examples.md` when deciding whether the pre-spec challenge pass is `required`, `recommended`, or `skippable`, or when choosing the seams the challenger should pressure-test.
+- `references/readiness-decision-examples.md` when the pass/fail readiness decision is close, blocked, or at risk of becoming a generic "looks good" statement.
+- `references/framing-anti-patterns.md` when the output starts smuggling architecture/API/data/security/reliability decisions, task breakdowns, implementation design, or vague stakeholder theater into brainstorming.
+
+Treat reference examples as calibration only. Repository-local spec-first workflow rules stay authoritative.
+
 ## Boundaries
 Do not:
 - run open-ended ideation when the real problem is that no concrete direction has been chosen yet; use `idea-refine` first

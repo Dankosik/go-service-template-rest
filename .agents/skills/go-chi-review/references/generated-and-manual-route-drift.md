@@ -28,7 +28,7 @@ Review finding shape: this avoids split ownership of the generated `/api/users/{
 -  r.Get("/debug/routes", debugRoutes)
 -})
 +v1 := chi.NewRouter()
-+v1.Mount("/", generated.Handler(api))
++generated.RegisterHandlers(v1, api) // use the local generator's chi hook
 +v1.Get("/debug/routes", debugRoutes)
 +r.Mount("/v1", v1)
 ```
@@ -52,4 +52,3 @@ Review finding shape: generated artifacts are not a stable ownership surface for
 - [chi package docs on pkg.go.dev for Routes and route traversal](https://pkg.go.dev/github.com/go-chi/chi/v5)
 - [go-chi README on generated route docs and composable subrouters](https://github.com/go-chi/chi/blob/master/README.md)
 - [go-chi mux.go source for Mount, NotFound, and MethodNotAllowed propagation](https://raw.githubusercontent.com/go-chi/chi/master/mux.go)
-

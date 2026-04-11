@@ -15,6 +15,16 @@ Turn a raw concept into one concrete direction that is specific enough to hand o
 - surface critical assumptions, MVP boundaries, and a clear `Not Doing` list
 - produce a compact handoff artifact that can feed `spec-first-brainstorming`
 
+## Lazy Reference Loading
+Keep this skill compact. Load only the reference file that matches the uncertainty in front of you:
+
+- `references/problem-vs-solution-framing.md` when the idea starts as a feature, implementation, or "we need X" request and the underlying problem is still blurry.
+- `references/target-user-and-success-signal.md` when the actor, operator, job, or success signal is vague or output-shaped.
+- `references/direction-options-and-convergence.md` when several product directions are plausible and the pass needs a defensible recommendation.
+- `references/assumptions-and-kill-criteria.md` when the idea depends on weak assumptions, risky beliefs, or untested value claims.
+- `references/mvp-scope-and-not-doing.md` when scope is expanding, the MVP is unclear, or the `Not Doing` list needs sharper boundaries.
+- `references/spec-first-handoff-examples.md` when the refined idea is ready to hand off into `spec-first-brainstorming`.
+
 ## Boundaries
 Do not:
 - write final architecture, API, data, security, reliability, or rollout decisions

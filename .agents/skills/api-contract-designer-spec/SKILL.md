@@ -47,7 +47,7 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 - Missing contract facts become explicit assumptions or blockers, not implementation guesses.
 
 ## Reference Files
-Use reference files lazily. Read only the file that matches the contract symptom in front of you, then synthesize the guidance into the task's `spec.md` or API decision output. Do not paste reference examples wholesale into deliverables.
+Use reference files lazily as compact rubrics and example banks. Read only the file that matches the contract symptom in front of you, then synthesize the relevant decision rule or counterexample into the task's `spec.md` or API decision output. Do not treat references as exhaustive checklists, and do not paste examples wholesale into deliverables.
 
 | Task symptom | Read |
 | --- | --- |

@@ -71,6 +71,20 @@ Conflict resolution:
 Unknowns:
 - if critical facts are missing, mark them as `[assumption]` or escalate
 
+## Reference Files Selector
+
+After the core context is loaded, choose only the reference files needed for the current spec pass. Do not load the whole `references/` directory by default.
+
+| Need | Load |
+|---|---|
+| baseline repository-native pattern bank | `references/spec-patterns.md` |
+| choose lean vs expanded section depth | `references/spec-section-depth-examples.md` |
+| decide whether a fact belongs in `spec.md`, `research/`, `design/`, `plan.md`, or `tasks.md` | `references/decision-placement-and-artifact-ownership.md` |
+| record assumptions, blockers, deferrals, or user-only decisions without inventing certainty | `references/open-questions-and-assumptions.md` |
+| reconcile `spec-clarification-challenge` findings into final spec sections | `references/clarification-gate-reconciliation.md` |
+| write proof expectations or close out `Validation` and `Outcome` sections | `references/validation-and-outcome-sections.md` |
+| prepare the approved `spec.md -> design/` handoff without smuggling design detail into the spec | `references/spec-handoff-to-technical-design.md` |
+
 ## Hard Skills
 
 ### Mission

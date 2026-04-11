@@ -35,6 +35,22 @@ Escalate if core business terms are undefined, invariants conflict across actors
 - Treat invariant violations as explicit outcomes such as reject, deny, compensate, forward-recover, or manual intervention.
 - Prefer compatibility-first invariant evolution across mixed-version rollout.
 
+## Source And Reference Policy
+- Prefer the current task's product notes, `spec.md`, workflow artifacts, repository docs, and existing domain code as the source of truth for behavior.
+- Use DDD, aggregate, state-machine, and idempotency sources only to calibrate the pattern language; do not import external sample domains as decisions.
+- Keep this pass domain-decision-first. Do not choose transport status codes, SQL constraints, infra topology, or implementation mechanics until the business rule and violation semantics are explicit.
+- Load reference files lazily. Use the selector below rather than opening every file by default.
+
+## Reference Files Selector
+| Need | Load |
+| --- | --- |
+| Shape or review an invariant register, ownership rule, or enforcement point | `references/invariant-register-patterns.md` |
+| Define lifecycle states, transition guards, terminal states, or invalid transitions | `references/state-machine-and-transition-rules.md` |
+| Turn rules into observable acceptance criteria and edge-case prompts | `references/acceptance-criteria-and-corner-cases.md` |
+| Decide reject, deny, compensate, forward-recover, manual-intervention, or async-deferred semantics | `references/invariant-violation-semantics.md` |
+| Specify duplicate, retry, replay, out-of-order, idempotency, or async command/event behavior | `references/idempotency-replay-and-async-domain-rules.md` |
+| Hand off stable domain decisions into API, data, reliability, security, and test obligations | `references/api-data-reliability-test-traceability.md` |
+
 ## Expertise
 
 ### Invariant Modeling And Ownership

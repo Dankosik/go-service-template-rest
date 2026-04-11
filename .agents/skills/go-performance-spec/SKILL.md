@@ -17,6 +17,31 @@ Turn performance intent into measurable, reproducible pre-coding contracts for l
 ## Scope
 Use this skill to define or review latency, throughput, allocation, contention, and capacity behavior, including hot-path budgets, measurement protocol, acceptance thresholds, and production validation signals.
 
+## Operating Loop
+1. Frame the affected operation class, workload, hot path, and user-visible or system-visible performance objective.
+2. Load only the relevant reference files from the selector below. Use them for examples, option comparisons, and official-source reminders instead of expanding SKILL.md.
+3. Compare viable options before selecting a performance contract. Keep unproven numeric targets marked as assumptions.
+4. Write section-ready spec content with budgets, workload shape, selected and rejected options, measurement protocol, thresholds, runtime telemetry, and rollout checkpoints.
+5. Stop at the pre-coding boundary. Do not drift into low-level optimization, implementation review, or benchmark result interpretation without a specification decision to support.
+
+## Reference Files
+Load reference files lazily. Pick the smallest set that matches the active performance-spec seam.
+
+| Need | Load |
+| --- | --- |
+| Budget decomposition, hot-path map, bottleneck hypothesis, SLI/SLO tie-in | `references/budget-modeling-and-hot-path-maps.md` |
+| Workload profile, traffic mix, input size, cardinality, skew, cache warm/cold shape | `references/workload-profile-and-input-shape.md` |
+| Measurement protocol selection, reproducibility, variance, pass/fail evidence | `references/measurement-protocols.md` |
+| Benchmark, profile, trace, PGO profile, and benchstat plan examples | `references/benchmark-profile-and-trace-plans.md` |
+| Concurrency, contention, goroutine fan-out, queue/backpressure, and capacity contracts | `references/concurrency-contention-and-capacity.md` |
+| DB, cache, and API-visible performance contract interactions | `references/db-cache-api-performance-contracts.md` |
+| Runtime telemetry, SLI/SLO rollout checkpoints, canary, rollback, and production validation | `references/runtime-telemetry-and-rollout-checkpoints.md` |
+| Allocation rate, live heap, GC CPU/memory trade-off, GOGC, GOMEMLIMIT, and memory telemetry | `references/memory-allocation-and-gc-budgets.md` |
+| PGO profile source, build lifecycle, source skew, workload-specific profiles, and rollback checks | `references/pgo-profile-lifecycle.md` |
+| Overload, load shedding, degraded responses, retry amplification, and capacity protection | `references/overload-backpressure-and-load-shedding.md` |
+| SLI/SLO latency targets, histogram boundaries, aggregation windows, and error-budget risk | `references/latency-sli-slo-and-histogram-thresholds.md` |
+| JSON encoding/decoding, payload size, streaming, flushing, and response-body budget contracts | `references/payload-serialization-and-streaming-budgets.md` |
+
 ## Boundaries
 Do not:
 - optimize by instinct, anecdote, or microbenchmark alone

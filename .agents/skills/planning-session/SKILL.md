@@ -62,6 +62,20 @@ Rules:
 - do not treat `spec.md` alone as sufficient for non-trivial planning
 - do not broad-read unrelated repository surfaces when the design bundle already defines the sequencing and ownership constraints
 
+## Lazily Loaded References
+Keep this `SKILL.md` as the planning-session wrapper protocol. Load reference files only when their examples are directly useful for the current planning pass:
+- `references/planning-session-readiness.md` - load when checking required planning inputs, good or bad planning-entry outcomes, and blocker routing before artifact writes.
+- `references/allowed-writes-and-prohibited-actions.md` - load when the session needs concrete allowed-write boundaries or examples of planning-only prohibited actions.
+- `references/implementation-readiness-gate.md` - load when assigning `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` and recording the readiness result across planning artifacts.
+- `references/workflow-plan-update-examples.md` - load when repairing master `workflow-plan.md` planning status, artifact status, adequacy challenge status, or next-session handoff notes.
+- `references/phase-control-file-examples.md` - load when planning must create or repair `workflow-plans/planning.md` or pre-code implementation/review/validation phase-control files.
+- `references/session-boundary-and-stop-rules.md` - load when closing the planning session and proving that the next phase will start in a later session.
+
+Reference rules:
+- `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative; examples are calibration only.
+- Load the smallest relevant reference, not the full `references/` directory by default.
+- Do not copy an example if it would combine planning with implementation, review, validation, or silent `spec.md`/`design/` edits.
+
 ## Allowed Writes
 This session may write or update only:
 - task-local `plan.md`

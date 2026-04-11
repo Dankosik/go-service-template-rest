@@ -52,6 +52,16 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - the phase-local plan stays routing-only and does not duplicate final decisions, technical design, execution strategy, or the executable `tasks.md` ledger
 - tiny/direct-path or lightweight-local skips include a real rationale instead of silently bypassing control artifacts
 
+## Lazy Reference Packs
+Keep this file compact. Load only the reference file that matches the suspected adequacy gap, and treat repository-local `AGENTS.md` plus `docs/spec-first-workflow.md` as authoritative. External links in the reference packs are calibration only.
+
+- `references/master-phase-consistency-examples.md`: master and active phase disagree about current phase, status, blockers, readiness, session boundary, or next-session start.
+- `references/artifact-status-gap-examples.md`: artifact expectations or statuses are missing, stale, overbroad, or not proportional to the execution shape.
+- `references/lane-ownership-and-research-mode.md`: research mode, lane role, owned question, single skill, order/parallelism, or fan-in path is missing or muddy.
+- `references/stop-rule-and-completion-marker.md`: completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak.
+- `references/planning-readiness-gap-examples.md`: planning-phase implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing.
+- `references/non-blocking-vs-blocking-findings.md`: finding severity is unclear, especially `blocks_phase_handoff` versus `blocks_specific_lane` versus `non_blocking_but_record`.
+
 ## Classification
 Use exactly one per finding:
 - `blocks_phase_handoff` when the current phase cannot honestly be marked complete or ready for next session until repaired, explicitly waived, or accepted as risk

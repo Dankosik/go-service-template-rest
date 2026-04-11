@@ -35,6 +35,18 @@ Do not:
 - Determinism matters more than clever test helpers.
 - Prefer the smallest safe test correction that restores confidence.
 
+## Reference Selection
+Keep this file focused on review workflow. Load only the reference file that matches the proof-quality gap:
+
+- `references/scenario-traceability-review.md` for mapping changed behavior, approved obligations, invariants, or API/data/reliability expectations to named test scenarios.
+- `references/assertion-strength-and-diagnostics.md` for weak assertions, opaque helpers, missing error-shape checks, or diagnostics that do not localize the failed behavior.
+- `references/determinism-isolation-and-flake-risk.md` for sleeps, time, randomness, environment/global state, `t.Parallel()`, goroutine coordination, race evidence, `goleak`, or `testing/synctest` suitability.
+- `references/fail-edge-and-abuse-path-coverage.md` for missing fail paths, edge cases, malformed input, boundary values, fuzz/regression seeds, or abuse-path coverage when those paths are in scope.
+- `references/validation-command-fit.md` for validation commands that do not exercise the changed risk surface, wrong package level, missing integration/contract/race/fuzz checks, or overbroad commands that hide an unproven target.
+- `references/cross-domain-test-gap-handoffs.md` for proof gaps whose correct review depends on domain, API, DB/cache, concurrency, security, reliability, or performance semantics.
+
+When you load a reference, translate the example into the current diff's concrete `file:line`, missing obligation, regression-leakage impact, smallest safe correction, and validation command. Do not paste generic examples as final review output.
+
 ## Expertise
 
 ### Coverage And Traceability
@@ -102,6 +114,8 @@ Return review output in this order:
 - `Design Escalations`
 - `Residual Risks`
 - `Validation Commands`
+
+If there are no findings, say `No QA findings.` and still note any residual risks or evidence gaps.
 
 Use this format for each finding:
 

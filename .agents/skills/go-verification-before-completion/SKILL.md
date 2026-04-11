@@ -29,6 +29,19 @@ Do not:
 - If verification fails or was not run, say so explicitly.
 - Consume existing task artifacts and fresh command output when they exist; do not author new process artifacts from this skill.
 - If proof depends on missing expected context, report the proof gap and the smallest unblock action instead of inventing replacement context.
+- If command output shows cached or skipped work, keep the conclusion narrower than an executed green run unless the cache or skip semantics are sufficient for the claim.
+
+## Lazy References
+Load only the reference needed for the claim shape:
+
+| Reference | Load when |
+|---|---|
+| `references/claim-to-proof-mapping.md` | choosing the proof set for ambiguous completion, readiness, test, lint, build, or handoff claims |
+| `references/focused-vs-repository-wide-verification.md` | deciding whether focused package proof is enough or a repository-wide claim needs broader checks |
+| `references/go-test-build-race-and-lint-evidence.md` | matching Go test, build, race detector, vet, and lint claims to command evidence |
+| `references/generated-api-and-migration-verification.md` | generated API, OpenAPI, sqlc, migration, or contract drift changed |
+| `references/delegated-work-verification.md` | another agent, tool, CI snippet, or prior session claims work is done |
+| `references/failure-and-gap-reporting.md` | any required proof failed, was skipped, was not run, or is weaker than the requested claim |
 
 ## Expertise
 
@@ -42,19 +55,13 @@ Before any success or readiness claim:
 6. report evidence or report the gap
 
 ### Claim-To-Proof Mapping
-Use these defaults unless the scope requires something stricter:
-
-| Claim | Minimum proof |
-|---|---|
-| Targeted fix works | the reproducible failing command now passes |
-| Scoped package behavior is green | `go test ./path/to/pkg/...` |
-| Repository tests pass | `make test` |
-| Concurrency-safe for the changed path | `make test-race` or `go test -race ./...` |
-| Lint clean | `make lint` |
-| Build succeeds | `make build` |
-| API contract/runtime checks green | `make openapi-check` |
-| Migration safety checked | `make migration-validate` |
-| Ready for handoff or review | scope-required tests plus the required quality checks for the changed surface |
+Use these defaults unless the claim scope requires something stricter:
+- targeted fix: rerun the exact failing command or the narrowest reproducer that covers the fixed path
+- scoped package behavior: run the relevant `go test` package pattern, with `-run` and `-count=1` when a specific test or uncached execution matters
+- repository test claim: run the repository test target or an explicit repository-wide `go test` pattern
+- race-safety claim: run race-detector coverage for the changed concurrent path
+- lint, build, generated API, and migration claims: run the repository target that owns that proof
+- readiness claim: combine the checks required by the changed surface; never use one green check as proof for unrelated surfaces
 
 ### Freshness And Scope
 - “Fresh” means executed in the current iteration against the current workspace state.

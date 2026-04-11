@@ -73,6 +73,18 @@ The orchestrator owns reconciliation after the subagent returns:
 - update `workflow-plan.md` with `spec.md` status and clarification gate status
 - rerun this challenge once if material decisions changed or a major seam was reopened
 
+## Lazily Loaded Examples
+Keep this file compact. Load only the reference that matches the uncertainty in the current challenge:
+
+- `references/approval-blocker-question-examples.md` for approval-changing hidden assumptions and blocker wording.
+- `references/input-bundle-sufficiency.md` when the orchestrator's bundle may be too thin to challenge honestly.
+- `references/domain-reopen-classification.md` when deciding between `blocks_spec_approval` and `blocks_specific_domain`.
+- `references/defer-to-design-vs-block-spec.md` when a question may be downstream design instead of spec-approval work.
+- `references/requires-user-decision-examples.md` when the question may need external product, business, policy, or legal judgment.
+- `references/clarification-anti-patterns.md` when pruning generic checklist questions, answer-writing, design drift, or approval theater.
+
+Use references as examples, not templates to fill. Do not copy an example unless the same candidate-decision seam is present.
+
 ## Deliverable Shape
 Return:
 - `Clarification Summary`

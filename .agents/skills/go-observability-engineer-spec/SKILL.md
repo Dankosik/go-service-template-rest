@@ -6,122 +6,82 @@ description: "Design observability-first specifications for Go services. Use whe
 # Go Observability Engineer Spec
 
 ## Purpose
-Make diagnosability, alertability, and telemetry cost explicit before coding so that changed runtime behavior is observable, operable, and safe to roll out.
+Make diagnosability, alertability, and telemetry cost explicit before coding so changed runtime behavior is observable, operable, privacy-safe, and safe to roll out.
 
 ## Specialist Stance
-- Treat observability as an operability contract: logs, metrics, traces, correlation, and SLOs must answer concrete questions.
-- Prefer low-cardinality, privacy-safe, action-oriented signals over “log more” or dashboard sprawl.
-- Tie async, degraded, and failure-path visibility to the operator decisions they support.
+- Treat observability as an operator decision contract. Every log, metric, span, correlation field, dashboard, or alert must answer a concrete operational question and support a named response.
+- Prefer bounded, stable, privacy-safe telemetry over "log more", raw identifiers, trace IDs as metric labels, or dashboard sprawl.
+- Separate logical outcomes from attempts, retries, fallbacks, and transport details so SLOs and alerts reflect user or workflow impact.
 - Hand off API, data, security, reliability, and delivery design when observability is only a dependent concern.
 
 ## Scope
-Use this skill to define or review telemetry behavior: logs, metrics, traces, correlation, debuggability, async observability, SLI/SLO expectations, and telemetry-cost guardrails.
+Use this skill to specify or review:
+- logs, metrics, traces, and correlation contracts
+- service/resource identity and cross-signal consistency
+- SLI/SLO, error-budget, alert, dashboard, and runbook expectations
+- async retry, DLQ, lag, backlog, and reconciliation observability
+- runtime diagnostics, probes, pprof/expvar/debug access, shutdown telemetry, sampling, retention, cardinality, cost, and privacy controls
 
 ## Boundaries
 Do not:
-- recommend telemetry that cannot answer a concrete operational question
-- turn observability into exhaustive data collection without cardinality, cost, and actionability controls
-- drift into generic implementation tuning or unrelated API/data redesign as the primary output
-- leave ownership for alerting, dashboards, or failure diagnosis unclear
+- recommend telemetry that cannot answer a concrete operator question
+- turn observability into exhaustive data collection
+- use unbounded identifiers such as request IDs, trace IDs, user IDs, raw tenant IDs, message IDs, raw paths, raw queries, or error strings as metric labels
+- make logs the alerting source of truth when a bounded metric can represent the same operator decision
+- leave ownership for alerts, dashboards, runbooks, debug endpoints, or cost controls unclear
+- drift into implementation tuning, API redesign, or database schema design as the primary output
 
-## Escalate When
-Escalate if critical paths lack observable success/failure signals, correlation cannot be preserved across boundaries, SLO/alert expectations are undefined, or telemetry cost and signal quality cannot be balanced responsibly.
+## Workflow
+1. Frame the changed runtime paths: API handlers, clients, database/cache calls, producers, consumers, jobs, reconcilers, shutdown, and debug surfaces.
+2. Identify the operator decisions for each path: detect user impact, route an alert, isolate a dependency, decide rollback/degrade/retry/redrive, prove recovery, or investigate a specific entity.
+3. Choose the cheapest sufficient signal for each decision:
+   - metrics for SLOs, trends, alerting, capacity, backlog, and bounded aggregation
+   - traces for causality, cross-boundary timing, fan-out, retries, and async linkage
+   - logs for high-cardinality forensic detail that should not become a metric label
+   - correlation fields only when they preserve a debugging path without leaking sensitive data
+4. Specify the signal contract: names, units, attributes, cardinality limits, event boundaries, sampling, retention, owner, runbook/dashboard links, and validation evidence.
+5. Record selected and rejected options. Reject "log more", raw IDs in metrics, generic dashboards, public debug endpoints, and paging alerts with no operator action.
+6. Call out assumptions, blockers, and reopen conditions when signal quality, convention stability, privacy, or cost tradeoffs are not yet proven.
 
-## Core Defaults
-- Treat observability coverage for changed critical paths as blocking by default.
-- Use evidence-first design: every signal should answer an operational question for a real consumer.
-- Prefer bounded, low-cardinality telemetry with stable semantics over ad hoc detail collection.
-- Prefer the cheapest signal that answers the question: metrics for trends and alerts, traces for causality, logs for high-cardinality diagnosis.
-- Treat missing critical observability facts as explicit assumptions or blockers.
+## Reference Selection
+Load references lazily. Read only the files relevant to the current spec question:
 
-## Expertise
+- `references/signal-contract-matrix.md` for component-by-component signal matrices across logs, metrics, traces, correlation, owners, and validation.
+- `references/trace-context-and-correlation.md` for W3C Trace Context, baggage, request IDs, async correlation IDs, span links, and cross-boundary propagation.
+- `references/metrics-cardinality-and-cost.md` for metric names, label budgets, histograms, cardinality traps, cost controls, retention, and "logs/traces instead of metrics" decisions.
+- `references/structured-logs-and-privacy.md` for structured log event design, redaction, PII/secrets handling, sanitized DB/query data, and log-to-trace correlation.
+- `references/sli-slo-error-budget-and-alerting.md` for SLI ratios, SLO windows, error budget policy, multi-window burn-rate alerting, low-traffic event floors, and alert ownership.
+- `references/async-dlq-lag-and-reconciliation-observability.md` for producer/consumer/retry/DLQ/redrive, lag/backlog/oldest-age, idempotency, and reconciliation telemetry.
+- `references/runtime-diagnostics-and-debug-endpoints.md` for `/livez`, `/readyz`, `/startupz`, pprof, expvar, admin listeners, shutdown drain/flush, and incident-only diagnostics.
 
-### Telemetry Signal Contract
-- Require OTel bootstrap in the composition root with resource identity, tracer provider, meter provider, and propagators.
-- Make service identity fields mandatory across signals, including `service.name`, `service.version`, and deployment environment.
-- Require baseline signal coverage for:
-  - API handlers
-  - outbound clients
-  - DB access
-  - workers, producers, and consumers
-  - scheduled jobs and reconcilers
-- Require RED metrics plus saturation or backlog signals where applicable.
-- Use structured logs with stable common keys and a bounded `error.type` taxonomy.
-- Keep span names low-cardinality and record errors consistently.
-
-### Correlation And Propagation
-- Default to W3C Trace Context plus Baggage.
-- Require request ID generation and propagation for sync flows.
-- Require stable `correlation_id`, `message_id`, and `attempt` for async flows.
-- Preserve correlation continuity across retries and DLQ transitions.
-- Use span links for batch or fan-in processing instead of forcing misleading single-parent lineage.
-
-### SLI, SLO, Error Budget, And Alerting
-- Define each SLI as an explicit ratio with `good_events`, `total_events`, and exclusions.
-- Default to a 28-day SLO window unless there is a strong reason not to.
-- Use service-class and criticality-aware targets for APIs, workers, and async consumers.
-- Define budget states such as `green`, `yellow`, `orange`, and `red`, along with release/degradation implications.
-- Use multi-window burn-rate rules with event-floor guards for low-traffic services.
-- Every paging alert should have an owner, a runbook, and a dashboard.
-
-### Debuggability And Runtime Diagnostics
-- Keep probe semantics separate:
-  - `/livez` for restart decisions
-  - `/readyz` for traffic admission
-  - `/startupz` for startup completion
-- Make graceful shutdown observable: readiness fail, drain period, telemetry flush, bounded exit.
-- Isolate admin and debug endpoints on a separate listener; do not expose them publicly by default.
-- Keep pprof, expvar, or similar debug controls behind kill switches and time-bound incident activation.
-- Make crash diagnostics explicit, including tracebacks, crash metadata, retention, and privacy constraints.
-
-### Telemetry Cost And Cardinality
-- Treat unbounded metric labels as a blocker.
-- Prohibit request IDs, trace IDs, user IDs, raw paths, message IDs, and similar unbounded identifiers in metric labels.
-- Use fixed histogram strategies with meaningful SLO cut points.
-- Define trace and log sampling defaults by environment, plus incident burst mode with auto-expire behavior.
-- Make retention and cost impact explicit when telemetry volume changes.
-- Set attribute limits and observe dropped or truncated attributes.
-
-### Async Observability
-- Require trace coverage for producer send, consumer processing, retries, DLQ transitions, lag growth, and reconciliation runs.
-- Require metrics for outcomes, retries, DLQ, lag, backlog, oldest age, and idempotency decisions.
-- Keep retry reason taxonomy bounded and operationally meaningful.
-- Require DLQ depth/age visibility and redrive observability.
-- Require drift and repair telemetry for reconciliation.
-
-### Privacy, Security, And Cross-Domain Alignment
-- Require redaction and sanitization policy for logs, traces, URLs, query data, and DB statements.
-- Prohibit secrets, tokens, credentials, and PII leakage in telemetry by default.
-- Treat baggage as allowlisted data only.
-- Keep telemetry dimensions tenant-safe and do not use tenant or user IDs as default metric labels.
-- When API, distributed, data/cache, or release behavior depends on observability, make those interfaces explicit.
+When extending examples or source guidance, research primary sources first. Prefer OpenTelemetry docs and semantic conventions, W3C Trace Context, Google SRE book/workbook chapters, Go and Kubernetes docs, Prometheus docs, and official cloud observability docs. Keep source links in the relevant reference file.
 
 ## Decision Quality Bar
-For every major observability recommendation, include:
-- the operational question being answered
-- at least two viable options
-- the selected option and at least one explicit rejection reason
-- signal contract deltas across logs, metrics, traces, and correlation
-- cardinality and cost impact with controls
-- SLI/SLO/burn-rate/alerting impact
-- runtime verification obligations
+For every material recommendation, include:
+- operator question and decision
+- selected signal and why it is the cheapest sufficient option
+- at least one rejected option and why it is unsafe, noisy, costly, or misleading
+- log, metric, trace, and correlation deltas where applicable
+- cardinality, privacy, sampling, retention, and cost controls
+- SLI/SLO, alerting, dashboard, runbook, or verification impact
 - assumptions, blockers, and reopen conditions
 
 ## Deliverable Shape
-When writing the observability spec or review, cover:
-- signal contract matrix by component
-- SLI/SLO, error budget, and burn-rate policy
-- alert routing, dashboards, and runbooks
-- diagnostics and debuggability contract
-- telemetry cost, cardinality, sampling, and retention controls
-- async correlation, retry, DLQ, lag, and reconciliation observability
+When writing an observability spec, cover:
+- signal contract matrix by component or workflow stage
+- SLI/SLO, error budget, burn-rate, and alert routing policy
+- dashboard and runbook contract tied to alert decisions
+- debug endpoint, health probe, shutdown, and runtime diagnostics contract
+- telemetry cost, cardinality, sampling, retention, and privacy controls
+- async correlation, retry, DLQ, lag, redrive, and reconciliation observability when relevant
 
 ## Escalate Or Reject
-- missing telemetry contract for a changed critical runtime path
-- high-cardinality metric dimensions without a justified exception
-- SLI/SLO targets without clear `good/total` semantics or exclusions
-- burn-rate paging without event floors or without actionable runbook/dashboard linkage
-- async retries or DLQ configured but not observable
-- public exposure of debug endpoints or missing shutdown telemetry-flush contract
-- telemetry changes that risk leaking secrets or PII
-- critical observability decisions deferred to implementation
+Escalate or reject the plan if it includes:
+- a changed critical runtime path with no success/failure signal contract
+- high-cardinality metric dimensions without an explicit bounded exception
+- SLI/SLO targets without `good_events`, `total_events`, exclusions, and measurement source
+- paging alerts without event floors, runbook/dashboard links, owner, or operator action
+- async retries or DLQ behavior without lag, age, retry, redrive, and reconciliation visibility
+- public debug endpoints, shared liveness/readiness semantics, or missing shutdown telemetry flush
+- telemetry that risks leaking secrets, tokens, credentials, PII, or raw tenant/user identifiers
+- critical observability decisions deferred to implementation without a recorded proof obligation

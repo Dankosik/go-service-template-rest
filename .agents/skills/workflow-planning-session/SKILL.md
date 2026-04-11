@@ -72,6 +72,18 @@ Do not:
 - Before handoff on non-trivial or agent-backed work, run or record the read-only `workflow-plan-adequacy-challenge`; tiny/direct-path work may skip it only with an explicit rationale.
 - For non-trivial work, stop after the workflow artifacts are updated. Research or another recorded next phase begins in a new session unless an approved waiver already exists.
 
+## Lazily Loaded References
+Keep `SKILL.md` as the wrapper protocol. After reading `AGENTS.md` and `docs/spec-first-workflow.md`, load only the reference file that matches the routing question in front of you:
+
+- [execution-shape-selection.md](references/execution-shape-selection.md) - load when choosing or checking `direct path`, `lightweight local`, or `full orchestrated`, including escalation triggers.
+- [research-mode-and-fanout-lanes.md](references/research-mode-and-fanout-lanes.md) - load when deciding `local` versus `fan-out`, planning lanes, assigning one skill per lane, or checking good/bad lane rows.
+- [artifact-expectation-matrix.md](references/artifact-expectation-matrix.md) - load when marking later artifacts as expected, missing, draft, approved, not expected, or explicitly waived.
+- [workflow-plan-authoring-examples.md](references/workflow-plan-authoring-examples.md) - load when writing or repairing the master `workflow-plan.md` handoff fields.
+- [workflow-planning-phase-file-examples.md](references/workflow-planning-phase-file-examples.md) - load when writing or repairing `workflow-plans/workflow-planning.md` and keeping it phase-local.
+- [adequacy-challenge-and-stop-boundary.md](references/adequacy-challenge-and-stop-boundary.md) - load when routing the workflow-plan adequacy challenge, reconciling findings, or marking the session boundary.
+
+Reference snippets are examples, not authority. If any example conflicts with `AGENTS.md` or `docs/spec-first-workflow.md`, follow the repo-local contract. Do not bulk-load all references, and do not use an example as permission to start research, write `spec.md`, create `design/`, write `plan.md` or `tasks.md`, or create implementation artifacts.
+
 ## Workflow
 
 ### 1. Confirm This Session Owns Workflow Planning Only

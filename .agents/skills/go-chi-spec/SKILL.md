@@ -63,7 +63,7 @@ Major routing recommendations should make the following explicit:
 - acceptance boundaries that can be tested
 - adjacent handoffs and reopen conditions
 
-## Decision Quality Bar
+## Reject Conditions
 Reject designs that:
 - rely on implicit fallback or CORS defaults for client-visible API behavior
 - use raw request paths, user IDs, request IDs, or other high-cardinality values as metrics labels

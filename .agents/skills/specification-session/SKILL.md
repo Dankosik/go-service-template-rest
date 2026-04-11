@@ -68,6 +68,16 @@ Rules:
 - load only the smallest evidence set needed to decide whether the task is truly spec-ready
 - if phase context shows the task already advanced past specification, stop instead of casually reopening an earlier phase
 
+## Lazy Reference Examples
+Load these only when the active session needs the example shape. The examples calibrate the wrapper; they do not override `AGENTS.md`, `docs/spec-first-workflow.md`, `spec-document-designer`, or `spec-clarification-challenge`.
+
+- `references/specification-session-readiness.md`: deciding whether specification may start or approve `spec.md`
+- `references/allowed-writes-and-stop-rules.md`: checking allowed writes, refusal wording, and stop rules before any file edit
+- `references/spec-clarification-gate-flow.md`: running or reconciling the non-trivial clarification gate
+- `references/workflow-plan-specification-updates.md`: updating `workflow-plan.md` and `workflow-plans/specification.md`
+- `references/blocked-specification-examples.md`: leaving `spec.md` draft or blocked without inventing missing decisions
+- `references/handoff-to-technical-design.md`: finishing the specification checkpoint and routing the next session to `technical-design`
+
 ## Allowed Writes
 This session may write or update only:
 - task-local `spec.md`

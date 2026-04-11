@@ -38,6 +38,21 @@ Default to the smallest mode that can prove the bug:
 
 Do not let deep-dive tooling delay a narrow deterministic fix that is already proven.
 
+## Lazy Reference Selector
+Use `SKILL.md` as the lane selector. Load reference files only when the symptom fits:
+
+- `references/flaky-repro-controls-go.md`: flaky tests, CI-only failures, order dependence, scheduler sensitivity, race repro controls, and repetition strategy.
+- `references/condition-based-waiting-go.md`: replacing sleep-based test synchronization with explicit, bounded, condition-driven waits.
+- `references/root-cause-tracing-go.md`: panics, deterministic regressions, bad state passed across service boundaries, and "fix the source, not the crash site" investigations.
+- `references/runtime-forensics-go.md`: hangs, deadlocks, goroutine leaks, process stalls, SIGQUIT dumps, goroutine/profile capture, and low-level runtime evidence.
+- `references/pprof-trace-and-profile-selection.md`: choosing CPU, heap, goroutine, block, mutex, threadcreate, or execution trace evidence without over-collecting.
+- `references/context-timeout-and-saturation-debugging.md`: `context.Canceled`, `context.DeadlineExceeded`, DB pool wait, HTTP client timing, retry amplification, queue wait, and saturation incidents.
+- `references/build-and-generated-artifact-debugging.md`: `go build`, `go test` build failures, build tags, generated files, `go generate`, toolchain/env drift, and build JSON or `go list` evidence.
+- `references/defense-in-depth-go.md`: deciding which post-root-cause guardrails are justified without turning a local fix into a broad redesign.
+- `references/fix-verification-and-scaffolding-cleanup.md`: RED/GREEN proof, regression command selection, cleanup of temporary diagnostics, and residual-risk reporting.
+
+If several lanes fit, load the smallest set needed for the next falsifiable experiment. Do not bulk-load all references just because the bug is complex.
+
 ## Expertise
 
 ### Choose The Debugging Lane
@@ -46,11 +61,13 @@ Pick the dominant lane first, then broaden only if the evidence forces it.
 - `compile or build failure`
   - confirm the exact failing package, build tags, generated files, and toolchain or env drift
   - start with `go build ./...` or the narrow failing package before touching runtime reasoning
+  - read `references/build-and-generated-artifact-debugging.md` when generated files, build constraints, or toolchain drift are plausible
 
 - `deterministic test or panic`
   - reduce to the narrowest failing test with `go test ./path/to/pkg -run '^TestName$' -count=1 -v`
   - preserve the first stack trace and first broken assertion; later noise is secondary
   - check nil or typed-nil, zero-value misuse, context replacement, aliasing, and state ownership before rewriting logic
+  - read `references/root-cause-tracing-go.md` when the crash site might not be the first broken boundary
 
 - `flake or order-sensitive test`
   - characterize frequency and trigger conditions with repetition, `-shuffle`, `-race`, and controlled CPU parallelism
@@ -61,10 +78,12 @@ Pick the dominant lane first, then broaden only if the evidence forces it.
   - capture goroutine state before editing code
   - inspect who is blocked on send, receive, lock, wait, or shutdown drain
   - use `references/runtime-forensics-go.md` for dump and profile capture patterns
+  - use `references/pprof-trace-and-profile-selection.md` when the first artifact choice is not obvious
 
 - `timeout, cancellation, or saturation incident`
   - identify who owned the budget, where time was spent, and whether the failure is real work, queue wait, lock wait, connection-pool wait, or retry amplification
   - preserve `context.Canceled` and `context.DeadlineExceeded` semantics; do not normalize them into vague timeout strings
+  - read `references/context-timeout-and-saturation-debugging.md` before widening timeouts or adding retries
 
 - `data or integration failure`
   - trace payload shape, query shape, lock scope, retry behavior, DNS or TLS or connectivity, cache staleness, and transaction scope
@@ -219,6 +238,7 @@ Validation guidance:
 - do not claim repository-wide safety from a narrow passing command
 
 Fresh command evidence is required before any positive completion language.
+Read `references/fix-verification-and-scaffolding-cleanup.md` when choosing the final proof set or removing temporary diagnostics.
 
 ## Boundaries And Handoffs
 Keep workflow touchpoints minimal:

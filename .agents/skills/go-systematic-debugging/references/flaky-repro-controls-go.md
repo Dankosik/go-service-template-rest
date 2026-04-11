@@ -1,64 +1,78 @@
 # Flaky Reproduction Controls For Go
 
-## Purpose
-Shrink intermittent Go failures into a repeatable signal without masking the real bug.
+## When To Load
+Load this reference when a Go test fails only under repetition, CI, `-race`, `-shuffle`, a specific CPU count, slower machines, different environment variables, or wider package scope.
 
-## Repetition And Order Controls
+Use it to turn "sometimes fails" into a measured failure class before changing code.
 
-Use the narrowest package and test first:
+## Commands
+Start with one variable at a time:
 
 ```bash
-go test ./path/to/pkg -run '^TestName$' -count=100
-go test ./path/to/pkg -run '^TestName$' -shuffle=on -count=100
-go test ./path/to/pkg -run '^TestName$' -race -count=50
-go test ./path/to/pkg -run '^TestName$' -cpu=1,4
+go test ./path/to/pkg -run '^TestName$' -count=100 -v
+go test ./path/to/pkg -run '^TestName$' -race -count=50 -v
+go test ./path/to/pkg -run '^TestName$' -cpu=1,4 -count=50 -v
+go test ./path/to/pkg -run '^(TestA|TestB|TestC)$' -shuffle=on -count=50 -v
+go test ./path/to/pkg -shuffle=on -count=20 -v
+go test ./path/to/pkg -run '^TestName$' -count=1 -json
 ```
 
-Notes:
-- `-count` helps estimate frequency and confirms whether the signal is real.
-- `-shuffle=on` surfaces order dependence only when multiple tests or subtests are actually in scope. Capture the printed seed and reuse it with `-shuffle=<seed>` once a failing order is found.
-- If you narrow to one top-level test with `-run '^TestName$'`, `-shuffle` often stops being meaningful for package-level order. In that case use a wider pattern or the full package for the order experiment, and keep the narrow command for local race or lifecycle proof.
-- `-race` is essential when shared-state or goroutine ownership is even mildly suspicious.
-- `-cpu=1,4` is useful when scheduler sensitivity or accidental parallelism is part of the failure mode.
+When `-shuffle=on` exposes a failing seed, replay it:
 
-## Common Flake Classes
+```bash
+go test ./path/to/pkg -shuffle=123456789 -count=1 -v
+```
 
-### Sleep-Based Coordination
-- `time.Sleep` guesses readiness instead of proving it
-- background work sometimes finishes before the sleep and sometimes after it
-- fix by waiting on a condition, event, or channel, not by inflating the delay
+Use a wider `-run` or full package scope when checking package-order leakage. Use a narrow single-test command for lifecycle, local race, or scheduler-sensitive proof.
 
-### Shared State Leakage
-- env vars, temp dirs, ports, global singletons, caches, or registries persist between tests
-- order changes the visible state
-- fix by isolating state and cleaning up with `t.Cleanup`
+## Evidence To Capture
+- exact command, package, test name, and working directory
+- `-count`, `-shuffle` value or seed, `-race`, `-cpu`, timeout, and relevant env
+- first distinct failure symptom and stack, not every repeated duplicate
+- failure frequency, for example `7/100`
+- whether a wider scope is required for the failure to appear
+- cleanup, temp path, port, env var, clock, random seed, and global state conditions
 
-### Time And Randomness
-- test uses wall clock, implicit `time.Now`, default random seed, or real timers
-- slower CI or fast local machines move behavior across thresholds
-- fix with fake clocks, explicit seeds, and deterministic timer control when possible
+## Common Failure Classes
+- order dependence from shared package state, global registries, caches, env vars, temp paths, or leaked ports
+- race exposed by `-race`, repeated execution, or altered `GOMAXPROCS`
+- goroutine lifecycle leak from workers that outlive the test or miss shutdown
+- sleep-based readiness where CI speed changes the result
+- real network, DB, cache, or wall-clock dependency that a unit test treated as stable
+- `t.Parallel` overlap with mutable fixtures or cleanup
 
-### Goroutine Lifecycle
-- worker goroutines outlive the test
-- channel senders or receivers remain blocked across test boundaries
-- `t.Parallel` overlaps cleanup and background work
-- fix by owning shutdown and waiting for completion explicitly
+## Bad Debugging Moves
+- inflating `time.Sleep` without proving readiness semantics
+- pairing `-shuffle` with an over-narrow `-run` and claiming package-order coverage
+- mixing `-shuffle`, `-race`, `-cpu`, and env changes in one first experiment
+- skipping the failing seed, command, or failure frequency in the report
+- "fixing" by disabling the test without proving whether production behavior is also racy
 
-### External Dependency Leakage
-- test depends on real network, DB, cache, or clock skew
-- local pass is luck; CI fails under latency or ordering variation
-- fix by isolating the dependency or at least making its timing and cleanup explicit
+## Good Debugging Moves
+- separate order, race, CPU, and environment experiments so each result falsifies one hypothesis
+- replay the `-shuffle` seed before editing
+- isolate state with `t.Setenv`, `t.TempDir`, explicit fixture ownership, and `t.Cleanup`
+- replace readiness sleeps with condition-based waits, explicit channels, fake clocks, or deterministic hooks
+- keep the narrow reproducer for local proof and the wider reproducer for package-order proof
 
-## Good Artifact Hygiene
-For each flake run, record:
-- exact command
-- package and test name
-- `-count`, `-shuffle`, `-race`, `-cpu`, and timeout settings
-- failing seed or order if known
-- the first distinct failure symptom, not every duplicate line
+## Example Debugging Flow
+For a CI-only flake:
 
-## Escalation Clues
-Escalate beyond test-only repair when:
-- the flake is really a production concurrency bug that the test happened to expose
-- the only plausible fix changes timeout, retry, or API contract behavior
-- the test cannot be made deterministic without first changing the production ownership model
+```bash
+go test ./internal/orders -run '^TestCheckout$' -count=100 -v
+go test ./internal/orders -run '^TestCheckout$' -race -count=50 -v
+go test ./internal/orders -run '^(TestCheckout|TestCacheRefresh)$' -shuffle=on -count=50 -v
+go test ./internal/orders -run '^(TestCheckout|TestCacheRefresh)$' -shuffle=1700000000000000000 -count=1 -v
+```
+
+Interpretation:
+- narrow `-count` fails: local lifecycle, timing, or shared state inside the test
+- only `-race` fails: unsynchronized shared access on an executed path
+- only wider `-shuffle` fails: order or cleanup leakage
+- only `-cpu` varies: scheduler sensitivity or accidental parallelism
+
+## Source Links
+- [testing package](https://pkg.go.dev/testing)
+- [go command test packages](https://pkg.go.dev/cmd/go#hdr-Test_packages)
+- [go command testing flags](https://pkg.go.dev/cmd/go#hdr-Testing_flags)
+- [Go data race detector](https://go.dev/doc/articles/race_detector)

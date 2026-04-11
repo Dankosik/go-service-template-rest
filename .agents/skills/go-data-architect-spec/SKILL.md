@@ -37,6 +37,16 @@ Do not:
 ## Escalate When
 Escalate if ownership is unclear, hard invariants are not yet approved, workload or retention evidence is materially missing, datastore choice is underconstrained, or destructive migration risk lacks a safe rollout and verification plan.
 
+## Reference Files
+Load these lazily when the data-architecture pressure matches the topic; do not read them all by default. They contain decision examples, rejected alternatives, migration and rollback consequences, and source links gathered through Exa. Keep the main output data-architecture-first and route endpoint contracts, cache tuning, and local implementation mechanics to specialist skills.
+
+- [source-of-truth-and-derived-surfaces.md](references/source-of-truth-and-derived-surfaces.md) - source-of-truth ownership, audit/event/outbox distinctions, CDC feeds, projections, and derived-only read surfaces.
+- [tenant-identity-time-and-money-modeling.md](references/tenant-identity-time-and-money-modeling.md) - tenant-scoped identity, row-level isolation, public and partner references, time semantics, and exact money modeling.
+- [sql-constraints-indexes-and-pagination.md](references/sql-constraints-indexes-and-pagination.md) - invariant-bearing SQL constraints, partial and composite indexes, exclusion constraints, JSONB boundaries, and stable pagination.
+- [transactions-concurrency-and-idempotency.md](references/transactions-concurrency-and-idempotency.md) - transaction scope, isolation, locks, work claiming, optimistic concurrency, idempotency keys, and duplicate delivery.
+- [schema-evolution-and-backfills.md](references/schema-evolution-and-backfills.md) - expand/migrate/contract rollout, online DDL, constraint validation, concurrent indexes, chunked backfills, and rollback class.
+- [retention-deletion-history-and-projections.md](references/retention-deletion-history-and-projections.md) - retention, deletion, legal hold, history, archive, PITR, partition pruning, and projection rebuild semantics.
+
 ## Core Defaults
 - Default to SQL OLTP (`PostgreSQL`-compatible) as the primary system of record for service business data.
 - Default to one service-owned schema or database boundary and local ACID within that boundary.

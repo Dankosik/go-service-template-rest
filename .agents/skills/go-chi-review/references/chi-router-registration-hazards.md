@@ -40,7 +40,12 @@ Review finding shape: the conflict is subtree ownership. The smallest safe fix i
 
 ```go
 func TestNewRouterDoesNotPanic(t *testing.T) {
-  require.NotPanics(t, func() { _ = NewRouter() })
+  defer func() {
+    if got := recover(); got != nil {
+      t.Fatalf("NewRouter panicked: %v", got)
+    }
+  }()
+  _ = NewRouter()
 }
 ```
 
@@ -58,7 +63,9 @@ for _, tc := range []struct {
   req := httptest.NewRequest(tc.method, tc.path, nil)
   rr := httptest.NewRecorder()
   NewRouter().ServeHTTP(rr, req)
-  require.Equal(t, tc.want, rr.Code)
+  if rr.Code != tc.want {
+    t.Fatalf("%s %s: got %d, want %d", tc.method, tc.path, rr.Code, tc.want)
+  }
 }
 ```
 
@@ -68,4 +75,3 @@ for _, tc := range []struct {
 - [chi package docs on pkg.go.dev](https://pkg.go.dev/github.com/go-chi/chi/v5)
 - [go-chi README router interface and examples](https://github.com/go-chi/chi/blob/master/README.md)
 - [go-chi mux.go source for Use, Mount, Route, and constructor behavior](https://raw.githubusercontent.com/go-chi/chi/master/mux.go)
-

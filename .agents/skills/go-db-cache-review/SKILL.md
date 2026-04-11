@@ -23,6 +23,18 @@ Protect changed data-access and cache paths from consistency, isolation, timeout
 - review stampede suppression, fallback behavior, and origin protection
 - review test and validation signals for DB/cache-sensitive behavior
 
+## Lazy Reference Loading
+Keep this `SKILL.md` as the decision guide. Load examples from `references/` only when the diff touches that review surface or you need a sharper local finding pattern:
+
+- `references/sql-query-and-resource-safety-review.md` - SQL parameterization, dynamic identifiers, round-trip amplification, single-row vs multi-row query usage, and cursor cleanup.
+- `references/transaction-boundary-review.md` - transaction atomicity, `BeginTx`, rollback and commit discipline, isolation expectations, and cache work around commit boundaries.
+- `references/context-timeout-and-rows-cleanup.md` - request context propagation, operation deadlines, `Rows.Close`, `Rows.Err`, prepared statement cleanup, and transaction cleanup on cancellation.
+- `references/cache-key-isolation-and-serialization.md` - cache key dimensions, tenant or scope separation, deterministic key construction, value schema versioning, and corrupt-entry handling.
+- `references/invalidation-ttl-and-staleness-review.md` - write-driven invalidation, TTL selection, negative caching, stale windows, and Redis TTL behavior during overwrites.
+- `references/stampede-fallback-and-origin-protection.md` - miss coalescing, Redis lock safety, `singleflight` use, bounded cache-failure fallback, and origin protection.
+
+Use reference examples to shape local review findings. Escalate instead of solving here when the smallest safe correction changes schema ownership, API-visible consistency, tenant security policy, or broad reliability policy.
+
 ## Boundaries
 Do not:
 - turn DB/cache review into a broad architecture rewrite

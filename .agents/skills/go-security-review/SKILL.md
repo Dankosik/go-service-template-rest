@@ -38,6 +38,17 @@ Do not:
 - Missing limits, missing timeout budgets, and missing tenant checks are defects until proven safe.
 - Prefer the smallest safe correction that closes the exploit or removes the unsafe assumption.
 
+## Lazy Reference Examples
+When a touched diff matches one security axis and you need concrete review examples, load only the relevant reference file:
+
+- `references/trust-boundary-and-input-validation-review.md` for inbound HTTP, config, async message, or external feed validation.
+- `references/authz-tenant-and-object-access-review.md` for authn/authz separation, object-level access, tenant binding, and IDOR/BOLA risk.
+- `references/injection-query-and-command-safety.md` for SQL, query-builder, template, shell, and `os/exec` review.
+- `references/ssrf-outbound-and-redirect-safety.md` for user-influenced outbound HTTP, webhooks, URL previews, remote imports, and redirect behavior.
+- `references/path-upload-and-filesystem-safety.md` for file paths, archive extraction, uploads, static serving, and user-controlled filenames.
+- `references/secrets-pii-and-telemetry-disclosure.md` for secrets, PII, config sources, errors, logs, traces, and metrics.
+- `references/abuse-resistance-and-resource-bounds.md` for size, time, concurrency, pagination, retry, batch, and third-party cost controls.
+
 ## Expertise
 
 ### Trust Boundary And Input Validation

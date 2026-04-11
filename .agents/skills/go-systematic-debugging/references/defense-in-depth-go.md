@@ -1,34 +1,54 @@
 # Defense-In-Depth After Root-Cause Fix
 
-## Overview
-After a source-level fix, add focused safeguards so the same defect class cannot silently return through a different path.
+## When To Load
+Load this reference after the root cause is proven and the local fix is clear, but recurrence prevention is still a question.
+
+Use it to add only the guardrails justified by the discovered failure mode.
+
+## Commands
+Verify the source-level fix before adding guardrails:
+
+```bash
+go test ./path/to/pkg -run '^TestName$' -count=1 -v
+go test ./path/to/pkg -run '^TestName$' -race -count=1 -v
+go test ./path/to/pkg/...
+go build ./...
+```
+
+When guardrails add diagnostics, run the command that exercises the bad input or failure path:
+
+```bash
+go test ./path/to/pkg -run '^TestRejectsBadInput$' -count=1 -v
+go test ./path/to/pkg -run '^TestPreservesContextCancellation$' -count=1 -v
+```
+
+## Evidence To Capture
+- proven root cause and first broken invariant
+- guardrail layer: transport, application, domain, infrastructure, or diagnostics
+- why each guardrail blocks recurrence of this defect class
+- RED/GREEN proof for the old failure and any new guardrail test
+- explicit note when a plausible guardrail was rejected as over-hardening
 
 ## Layer Model
-1. Transport boundary: decode, size limits, required fields, semantic validation
-2. Application or use-case layer: business preconditions and transition checks
-3. Infrastructure adapters: persistence, network, or cache safety constraints
-4. Diagnostics layer: bounded logs, metrics, and traces for future forensics
+1. Transport boundary: decode, size limits, required fields, semantic validation.
+2. Application or use-case layer: business preconditions and transition checks.
+3. Infrastructure adapters: persistence, network, cache, context propagation, and resource ownership.
+4. Diagnostics layer: bounded logs, metrics, traces, or error wrapping for future forensics.
 
-## Guardrail Checklist
-- Is boundary input validated before expensive side effects?
-- Is the invariant checked where ownership belongs?
-- Are infrastructure operations context-bounded and fail-fast?
-- Is diagnostics sufficient to localize a recurrence quickly?
-
-## Go Example: Boundary + Domain + Infra
+## Go Example
 
 ```go
-// Layer 1: transport validation
+// Layer 1: transport validation.
 if req.AccountID == "" {
 	return problem.BadRequest("account_id is required")
 }
 
-// Layer 2: domain/application invariant
+// Layer 2: domain/application invariant.
 if amount <= 0 {
 	return ErrInvalidAmount
 }
 
-// Layer 3: infra safety
+// Layer 3: infrastructure safety.
 ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 defer cancel()
 if err := repo.Save(ctx, entity); err != nil {
@@ -36,12 +56,22 @@ if err := repo.Save(ctx, entity); err != nil {
 }
 ```
 
-## Anti-Overhardening Rule
-Add only safeguards justified by the discovered failure mode.
-Do not add unrelated guardrails that increase complexity without reducing recurrence risk.
+## Bad Debugging Moves
+- adding unrelated validation, retries, metrics, and refactors because the file is already open
+- hiding the root cause behind a defensive nil check with no regression test
+- adding diagnostics with secret leakage or high-cardinality fields
+- changing API, timeout, retry, or data semantics without escalating the decision
+- keeping broad guardrails that no longer connect to the proven failure
 
-## Verification
-After adding guardrails:
-- reproduce the old failing scenario and confirm it now fails safely or is rejected early
-- run the regression path and confirm it still passes
-- run the baseline quality checks needed for the changed scope
+## Good Debugging Moves
+- fix the earliest valid boundary first
+- add one guardrail at the layer that owns the invariant
+- keep diagnostics bounded and useful for recurrence triage
+- reject over-hardening explicitly when it adds complexity without blocking the defect class
+- verify the original failure and the new guardrail path separately
+
+## Source Links
+- [Go diagnostics](https://go.dev/doc/diagnostics)
+- [context package](https://pkg.go.dev/context)
+- [errors package](https://pkg.go.dev/errors)
+- [testing package](https://pkg.go.dev/testing)

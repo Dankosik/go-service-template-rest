@@ -36,6 +36,25 @@ Do not:
 - Preconditions should protect side effects, not explain them afterward.
 - Prefer the smallest safe fix that restores invariant enforcement and deterministic behavior.
 
+## Source Authority
+Use repo-local evidence before general domain modeling advice:
+- approved `spec.md`, domain docs, plans, task artifacts, and task-local design files
+- existing tests, fixtures, and accepted behavior examples
+- changed code and adjacent code when no approved artifact is attached
+
+If no approved artifact is present, say the rule is inferred from code-visible behavior, tests, names, or caller expectations. Do not treat external DDD or workflow sources as business-rule authority; use them only to calibrate review questions and finding quality.
+
+## Lazy-Loaded Review Examples
+Load only the reference file that matches the changed risk:
+- `references/invariant-preservation-review.md` for invariant bypasses, direct mutation, missing guard ownership, and invalid persisted state.
+- `references/state-transition-review.md` for lifecycle states, status enums, transition tables, event-driven transitions, and terminal-state drift.
+- `references/acceptance-and-rejection-semantics.md` for command acceptance, deterministic rejection, no-op semantics, and event-vs-command confusion.
+- `references/preconditions-side-effects-and-partial-failure.md` for irreversible side effects, precondition ordering, dual-write windows, and partial success.
+- `references/retry-duplicate-and-reorder-domain-risks.md` for duplicate, replay, retry, stale, and out-of-order domain effects.
+- `references/domain-test-traceability.md` for changed invariants or transitions whose proof is missing, weak, or no longer traceable.
+
+The reference examples are not reusable business rules. Adapt only the review lens and output shape, then cite the local contract or state the local inference.
+
 ## Expertise
 
 ### Invariant Preservation
@@ -85,6 +104,8 @@ Each finding should include:
 - the smallest safe correction
 - a relevant contract or decision when one exists
 - whether the issue is local code drift or needs design escalation
+
+Keep findings local and review-shaped. Do not redesign the domain model unless the smallest safe correction cannot preserve the approved rule. If the only honest fix changes the invariant set, transition model, acceptance contract, or ownership boundary, escalate instead of smuggling a redesign into a review comment.
 
 Severity is merge-risk based:
 - `critical`: confirmed invariant violation or forbidden transition

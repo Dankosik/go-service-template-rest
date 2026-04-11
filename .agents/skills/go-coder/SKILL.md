@@ -56,6 +56,16 @@ Strong implementation work usually gets these details right before review:
 - resource lifetime, transactions, cancellation, retries, and partial-failure behavior stay explicit
 - tests prove the changed behavior with deterministic evidence at the smallest sufficient layer
 
+## Reference Files
+Load these lazily when the implementation task touches the topic; do not read them all by default. They contain compact examples and official Go source links gathered via Exa.
+- `references/stdlib-first-modern-go.md` - builtins, stdlib packages, modern Go APIs, and version-aware replacement of custom helpers or dependencies.
+- `references/helper-extraction-and-package-ownership.md` - helper extraction, same-package policy ownership, export decisions, interfaces, and package boundaries.
+- `references/errors-context-and-boundary-mapping.md` - error wrapping, `errors.Is`/`As`/`AsType`, context propagation, cancellation, and transport-boundary mapping.
+- `references/resource-lifetime-io-and-transactions.md` - readers, rows, files, response bodies, bounded reads, cleanup, and `database/sql` transaction scope.
+- `references/mutable-state-aliasing.md` - slices, maps, `[]byte`, nil/empty semantics, receiver choice, copy boundaries, and synchronization-bearing structs.
+- `references/concurrency-and-background-work.md` - goroutines, channels, bounded fan-out, worker lifecycle, cancellation, shutdown, and race/leak proof.
+- `references/testing-verification-patterns.md` - deterministic tests, useful failure messages, table tests, fuzzing, race checks, repeated runs, and verification scope.
+
 ## Engineering Defaults
 
 ### Language And Standard Library First

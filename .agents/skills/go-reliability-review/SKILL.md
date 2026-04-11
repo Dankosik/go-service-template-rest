@@ -24,6 +24,19 @@ Protect changed failure paths from outage, cascading-failure, retry-amplificatio
 - review async and distributed reliability touchpoints when they appear in changed code
 - review validation signals for fail-path behavior
 
+## Lazy Reference Loading
+Keep this `SKILL.md` as the review decision guide. Load examples from `references/` only when the diff touches that review surface or you need a sharper local finding pattern:
+
+- `references/timeout-deadline-and-cancellation-review.md` - request context propagation, derived deadlines, DB/HTTP cancellation, and dropped-caller cancellation.
+- `references/retry-budget-and-idempotency-review.md` - retry eligibility, per-request budget, backoff or jitter, retry amplification, and idempotency protection.
+- `references/backpressure-overload-and-bulkheads.md` - overload rejection, bounded fan-out, queue growth, bulkhead isolation, and circuit-breaker interaction.
+- `references/startup-readiness-liveness-shutdown.md` - startup probes, readiness versus liveness, graceful HTTP shutdown, drain order, and health-check death spirals.
+- `references/degradation-fallback-and-fail-open-closed.md` - degraded responses, fallback correctness, fail-open versus fail-closed choices, and hidden mode transitions.
+- `references/async-durable-side-effect-review.md` - local state plus message durability, outbox or relay behavior, ack or commit ordering, dedup, DLQ, and replay safety.
+- `references/rollout-rollback-safety-review.md` - canaries, progressive rollout, rollback traps, mixed-version compatibility, and capacity-sensitive releases.
+
+Do not bulk-load the reference directory. Keep findings failure-path-first and local to the changed code. Hand off broader distributed, DB/cache, security, concurrency, performance, API, or delivery ownership when the smallest safe fix no longer fits this review lane.
+
 ## Boundaries
 Do not:
 - turn reliability review into architecture redesign or broad code cleanup

@@ -21,6 +21,19 @@ Protect changed Go hot paths from measurable latency, throughput, allocation, co
 - review missing mandatory evidence when the change is high-risk or complexity-increasing
 - review performance-visible API shape when synchronous behavior, pagination, payload size, or fallback strategy creates deterministic latency cliffs
 
+## Lazy Reference Loading
+Keep this `SKILL.md` as the review routing guide. Load examples from `references/` only when the diff touches that surface or you need a sharper evidence pattern:
+
+- `references/performance-evidence-quality.md` - claim-to-evidence fit, missing proof findings, residual-risk wording, and proof gaps for local vs service-level performance claims.
+- `references/benchmark-and-benchstat-review.md` - benchmark methodology, `testing.B`, `B.Loop`, `-benchmem`, repeated runs, benchstat interpretation, and noisy or non-representative benchmark findings.
+- `references/pprof-and-profile-selection.md` - CPU, heap, allocs, goroutine, block, and mutex profile selection; live `net/http/pprof` collection; and pprof evidence review.
+- `references/trace-block-mutex-and-contention.md` - execution trace, block and mutex profiles, scheduler stalls, lock contention, queueing, and fan-out/fan-in tail-latency evidence.
+- `references/hot-path-cost-model.md` - loops, asymptotic regressions, repeated encode/decode work, copy amplification, serialization, batching, and fan-out cost models.
+- `references/db-cache-and-io-amplification.md` - `N+1`, query count, DB round trips, cache miss/fallback amplification, dependency timing, and request-path I/O proof.
+- `references/allocation-gc-and-syncpool-review.md` - allocation churn, GC pressure, heap vs allocs profiles, runtime metrics, `sync.Pool` review, and buffer reuse evidence.
+
+Use the reference examples to shape local findings, not to invent blockers. Prefer the smallest evidence-backed correction and escalate when the performance fix changes architecture, data ownership, retry policy, or API semantics.
+
 ## Boundaries
 Do not:
 - invent performance blockers from style preference or micro-optimization taste

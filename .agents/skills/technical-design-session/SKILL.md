@@ -65,6 +65,18 @@ Rules:
 - do not broad-read unrelated repository areas when the design questions are narrower
 - do not reopen framing casually; if the design cannot be completed honestly, route back to `specification`
 
+## Reference Files
+Use `references/` lazily. Read only the file that matches the current design-session pressure, after repo-local authority has been checked. These files contain examples and calibration links; they do not replace `AGENTS.md`, `docs/spec-first-workflow.md`, `docs/repo-architecture.md`, approved `spec.md`, or `.agents/skills/go-design-spec/SKILL.md`.
+
+- [technical-design-entry-readiness.md](references/technical-design-entry-readiness.md) - use before starting or resuming technical design, especially when checking approved `spec.md`, current phase, allowed writes, and blocked entry cases.
+- [required-design-artifact-examples.md](references/required-design-artifact-examples.md) - use when shaping or reviewing the required `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` bundle.
+- [conditional-design-artifact-triggers.md](references/conditional-design-artifact-triggers.md) - use when deciding whether `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md` is genuinely triggered.
+- [repo-architecture-loading-rules.md](references/repo-architecture-loading-rules.md) - use when deciding whether `docs/repo-architecture.md` must be loaded before design work.
+- [workflow-plan-technical-design-updates.md](references/workflow-plan-technical-design-updates.md) - use when updating `workflow-plan.md` and `workflow-plans/technical-design.md` after a complete, blocked, or repair pass.
+- [planning-handoff-and-stop-rules.md](references/planning-handoff-and-stop-rules.md) - use before marking the design bundle planning-ready or stopping at a blocked handoff.
+
+Do not bulk-load all examples. If a reference exposes a missing decision, route back to `specification`. If it exposes missing execution sequencing, stop at the planning handoff instead of writing `plan.md` or `tasks.md`.
+
 ## Allowed Writes
 This session may write or update only:
 - task-local `design/overview.md`

@@ -34,6 +34,23 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Treat untestable requirements as design defects that must be escalated.
 - Keep validation realistic: use repository commands and CI-compatible environments.
 
+## Source And Reference Policy
+- Prefer approved task artifacts, repository docs, nearby tests, `docs/build-test-and-development-commands.md`, `Makefile`, and CI workflows as the local source of truth for executable checks.
+- Use Go primary docs and the bundled reference files to calibrate level selection, matrix shape, and validation evidence; do not import external sample behavior as a product decision.
+- Load reference files lazily. Use the selector below rather than opening every file by default.
+- Keep this skill strategy-only: define test obligations, proof levels, pass/fail observables, and validation commands. Do not write test code, review implementation details, or decide API/data/security/reliability semantics that belong to another specialist.
+
+## Reference Files Selector
+| Need | Load |
+| --- | --- |
+| Choose the smallest honest proving level or compare unit/integration/contract/e2e/fuzz/race options | `references/test-level-selection.md` |
+| Shape a compact scenario matrix with happy, fail, edge, abuse, retry, and concurrency rows | `references/scenario-matrix-patterns.md` |
+| Map invariants and acceptance criteria to explicit proof obligations before implementation | `references/invariant-and-acceptance-traceability.md` |
+| Specify timeout, cancellation, retry, poison, backpressure, shutdown, and degradation fail-path obligations | `references/reliability-fail-path-test-obligations.md` |
+| Define API contract, OpenAPI, transport-boundary, validation, idempotency, and auth-boundary proof | `references/api-contract-and-boundary-tests.md` |
+| Cover data, cache, tenant/security, distributed, outbox/inbox, migration, and reconciliation proof obligations | `references/data-cache-security-distributed-test-obligations.md` |
+| Name repository-executable commands, CI mapping, coverage/race/fuzz/integration gates, and residual proof limits | `references/quality-gates-and-execution.md` |
+
 ## Expertise
 
 ### Test-Level Selection

@@ -69,6 +69,24 @@ Rules:
 - do not broad-read the repository once the closeout claim and proof scope are clear
 - if phase context shows the task is not yet at validation or closeout, stop and point to the correct reopen point instead of validating by momentum
 
+## Lazy References
+Load only the example file needed for the closeout decision in front of you. These references contain examples only; the `Read First` authorities still own the rules.
+
+| Reference | Load when |
+|---|---|
+| `references/closeout-readiness-examples.md` | deciding whether a dedicated validation closeout session may proceed or must reopen an earlier phase |
+| `references/claim-to-proof-closeout.md` | mapping a closeout claim such as `task done`, `phase complete`, or `ready for handoff` to fresh command evidence |
+| `references/spec-validation-outcome-updates.md` | updating `spec.md` `Validation` and `Outcome` without overstating the proof |
+| `references/tasks-progress-update-examples.md` | updating existing `tasks.md` checkbox/progress state from fresh proof only |
+| `references/workflow-plan-completion-vs-reopen.md` | choosing and recording master workflow completion versus explicit reopen routing |
+| `references/failed-proof-and-reopen-handling.md` | handling failed, missing, stale, skipped, or too-narrow proof without drifting into fixes |
+
+Reference rules:
+- do not bulk-load all examples for routine closeout
+- do not let an example override `AGENTS.md`, `docs/spec-first-workflow.md`, or `go-verification-before-completion`
+- do not copy example snippets blindly; bind them to the current task's artifacts, commands, and observed results
+- if an example would require implementing a fix, creating a missing phase file, creating missing `tasks.md`, or softening failed proof into completion language, reject the example and reopen instead
+
 ## Allowed Writes
 This session may write or update only:
 - task-local `spec.md`, limited to `Validation`, `Outcome`, and any minimal cross-reference needed to make reopen state honest

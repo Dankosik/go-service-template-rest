@@ -33,6 +33,16 @@ Do not:
 ## Escalate When
 Escalate if the recommendation depends on unresolved ownership, missing invariant or write-authority assumptions, undefined failure behavior, unclear rollout compatibility, or cross-domain trade-offs that materially affect API, data, security, or operability.
 
+## Reference Files
+Load only the narrow reference file that matches the decision pressure; keep the main output architecture-first and route API payloads, SQL migration mechanics, low-level resilience tuning, and CI/container details to specialist skills.
+
+- [boundary-decomposition-examples.md](references/boundary-decomposition-examples.md) - service or module boundary decisions, source-of-truth ownership, shared-data pressure, and Go package/module boundary evidence.
+- [modular-monolith-vs-service-extraction.md](references/modular-monolith-vs-service-extraction.md) - modular monolith, separate runtime, or true service extraction trade-offs.
+- [sync-async-workflow-ownership.md](references/sync-async-workflow-ownership.md) - request-path vs async work, saga ownership, choreography/orchestration, durable process manager, or workflow-engine choices.
+- [read-write-topology-and-projections.md](references/read-write-topology-and-projections.md) - CQRS, read projections, materialized views, aggregators/BFFs, and derived-read correctness boundaries.
+- [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) - strangler, shadow/dark read, canary, expand/contract, mixed-version rollout, and rollback-limit decisions.
+- [architecture-anti-patterns.md](references/architecture-anti-patterns.md) - distributed monolith, shared database, dual-write, retry storm, untested fallback, and permanent-shim smell checks.
+
 ## Core Defaults
 - Prefer modular monolith boundaries until service extraction is justified by domain capability, data ownership, team ownership, transaction boundaries, and runtime isolation needs.
 - Prefer one explicit source of truth per invariant-bearing entity or process.

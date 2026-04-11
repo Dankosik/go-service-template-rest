@@ -6,128 +6,83 @@ description: "Design distributed-consistency-first specifications for Go service
 # Go Distributed Architect Spec
 
 ## Purpose
-Turn ambiguous cross-service behavior into explicit flow, consistency, and failure-handling contracts that remain correct under partial failure, at-least-once delivery, replay, and mixed-version rollout.
+Turn ambiguous cross-service behavior into explicit flow, consistency, and failure-handling contracts that remain correct under partial failure, at-least-once delivery, replay, mixed-version rollout, and delayed reconciliation.
 
 ## Specialist Stance
-- Treat distributed flows as ownership and recovery problems before transport or broker selection.
-- Require explicit command/event intent, invariant owner, durable boundary, idempotency contract, and reconciliation path.
-- Prefer forward recovery and observable convergence over implicit exactly-once assumptions.
-- Hand off local architecture, physical schema, API payloads, and CI mechanics when they are not the distributed seam.
-
-## Scope
-Use this skill to define or review cross-service consistency behavior: saga shape, orchestration vs choreography, outbox/inbox requirements, idempotency, ordering assumptions, compensation or forward recovery, and reconciliation strategy.
-
-## Boundaries
-Do not:
-- treat distributed coordination as acceptable without explicit invariant ownership
-- approve dual writes, hidden coupling, or distributed locks as the primary correctness mechanism
-- reduce the problem to endpoint detail, schema scripting, or low-level retry tuning
-- leave convergence, replay safety, or poison-message handling unspecified
-
-## Escalate When
-Escalate if hard invariants span service boundaries without a defensible model, state transitions are not explicit, recovery ownership is unclear, or delivery/order assumptions materially affect correctness.
-
-## Core Defaults
+- Treat distributed flows as ownership and recovery problems before transport, broker, or framework selection.
 - Keep hard commit-time invariants inside one local transaction boundary whenever possible.
-- Treat cross-service consistency as explicit eventual-consistency process design, never as hidden global ACID.
-- Default to orchestration for business-critical or multi-step outcomes that need centralized operational policy.
-- Treat at-least-once delivery as the default assumption; never assume exactly-once end to end.
-- Require outbox/inbox idempotency plus reconciliation for side-effecting distributed flows.
-- Use compatibility-first evolution for distributed data and event contract changes.
+- Treat cross-service consistency as explicit process design, never as hidden global ACID or "exactly once" across the whole path.
+- Require an invariant owner, durable flow boundary, command or event intent, idempotency contract, and reconciliation owner.
+- Hand off endpoint payload detail, physical schema scripting, low-level retry tuning, and CI mechanics unless they change the distributed consistency contract.
 
-## Expertise
+## Workflow
+1. Frame the business outcome and invariants.
+   - Name the business key, source-of-truth owner, invariant owner, allowed staleness, and failure outcome.
+   - Classify each invariant as `local_hard_invariant` or `cross_service_process_invariant`.
+   - Reject ownerless invariants and stale read-model writes that pretend to be authoritative.
+2. Decide whether the flow should stay local or become a saga.
+   - Keep it local when compensation is unacceptable, intermediate states are intolerable, or a commit-time check is required.
+   - Use a saga only when local ownership cannot satisfy the business outcome and explicit convergence is acceptable.
+3. Choose orchestration, choreography, or a bounded hybrid.
+   - Prefer orchestration for multi-step, business-critical, operationally visible flows with centralized retry, compensation, DLQ, or reconciliation policy.
+   - Allow choreography for independent reactions where no central process outcome is required and event cycles are prevented.
+   - Do not mix both in one flow without a named handoff boundary.
+4. Define the durable state model and step contracts.
+   - Require one active flow instance per business key or an explicit concurrency rule.
+   - Define monotonic states, version checks, stuck-flow behavior, timeout classes, and operator-visible terminal states.
+   - For each step, specify trigger, local transaction scope, idempotency key source, dedup boundary, retry class, success transition, and compensation or forward-recovery rule.
+5. Define delivery, idempotency, replay, and ordering contracts.
+   - Require outbox-equivalent atomic linkage for state change plus message intent.
+   - Require durable consumer-side dedup or inbox handling for side-effecting consumers.
+   - Persist business side effects and dedup markers before ack or offset commit.
+   - Assume at-least-once delivery and no global ordering unless a broker-specific partition, FIFO group, stream, or single-active-consumer contract is explicitly chosen.
+6. Define pivot, compensation, forward recovery, and reconciliation.
+   - Identify the pivot transaction for every nontrivial saga.
+   - Make pre-pivot steps compensable; make post-pivot steps idempotent, retryable, and forward-recoverable.
+   - Prefer repair commands or events over direct cross-service table writes.
+   - Make reconciliation idempotent, resumable, watermark-based, and tied to an owner.
+7. Surface cross-domain consequences.
+   - If API-visible, specify async status, idempotency, retry, and operation-resource semantics.
+   - If event-visible, specify compatibility windows, versioning, dedup retention, replay expectations, and mixed-version behavior.
+   - Require correlation across producer, consumer, retries, DLQ, and reconciliation with bounded-cardinality telemetry.
 
-### Invariant Ownership And Consistency Contracts
-- Require explicit source-of-truth ownership per critical entity and per invariant.
-- Classify invariants as either `local_hard_invariant` or `cross_service_process_invariant`.
-- Define the consistency contract per flow: type, maximum staleness, failure outcome policy, reconciliation owner, and cadence.
-- Keep behavior local when compensation is unacceptable, intermediate states are intolerable, or commit-time checks are required.
-- Reject ownerless invariants and “some consumer will fix it later” assumptions.
+## Lazy Reference Selection
+Read only the reference files needed for the flow under design. Use multiple references when a decision crosses seams.
 
-### State Model And Step Contracts
-- Model every nontrivial flow as a durable state machine with monotonic, version-checked transitions.
-- Require one active flow instance per business key through durable uniqueness or an equivalent mechanism.
-- Make timeout and stuck-flow behavior explicit; every step should have deterministic expiry behavior.
-- Each step contract should define:
-  - trigger
-  - local transaction scope
-  - idempotency key source and dedup boundary
-  - timeout and retry class
-  - success transition
-  - compensation or explicit forward-recovery rule
+- `references/invariant-ownership-and-consistency-contracts.md`: load when source-of-truth ownership, hard vs eventual consistency, freshness, or invariant locality is unclear.
+- `references/orchestration-vs-choreography.md`: load when choosing saga coordination style, avoiding event cycles, or deciding whether a workflow engine is justified.
+- `references/saga-state-model-and-step-contracts.md`: load when modeling saga state, flow identity, step contracts, stuck-flow handling, or durable workflow execution.
+- `references/outbox-inbox-and-idempotency.md`: load when designing state-plus-message atomicity, outbox relay behavior, consumer dedup, inbox, ACK timing, or idempotency keys.
+- `references/pivot-compensation-and-forward-recovery.md`: load when choosing the pivot transaction, compensation policy, non-compensable steps, or operator recovery expectations.
+- `references/replay-ordering-and-reconciliation.md`: load when replay, redrive, broker ordering, per-aggregate serialization, stale projections, or repair jobs affect correctness.
+- `references/distributed-observability-and-migration.md`: load when event versioning, mixed-version rollout, DLQ/reconciliation observability, or migration sequencing changes the spec.
 
-### Orchestration vs Choreography
-- Default to orchestration when more than two services participate in one business outcome, when centralized process state is needed, or when one owner must manage retries, DLQ, and reconciliation.
-- Allow choreography only when reactions are independent, no central process-state outcome is required, event cycles are prevented, and ownership is clear per consumer.
-- Do not mix orchestration and choreography inside one flow without an explicit boundary and handoff.
-- Reject event-bus-as-hidden-sync-RPC designs.
-
-### Compensation, Pivot, And Forward Recovery
-- Identify the pivot transaction for every nontrivial saga.
-- Pre-pivot steps must be compensable; post-pivot steps must be idempotent, retryable, and forward-recoverable.
-- Compensation should be semantic inverse behavior, idempotent, and guarded by preconditions.
-- If compensation is impossible, mark the step as non-compensable, place it after the pivot, and define the forward-recovery path and operator expectations.
-- Reject flows with missing compensation or forward-recovery semantics.
-
-### Delivery Semantics, Idempotency, And Commit Ordering
-- Require outbox-equivalent atomic linkage for state change plus message emission.
-- Require consumer dedup/inbox handling with durable uniqueness for side-effecting handlers.
-- Default dedup key policy:
-  - CloudEvents: `source + id`
-  - otherwise: `producer_service + message_id`
-- Keep dedup retention at least as long as replay/redrive risk justifies.
-- For externally retryable commands, define idempotency scope, TTL, equivalent-outcome behavior, and conflict semantics.
-- Persist durable state and dedup markers before ack or offset commit.
-
-### Ordering, Replay, And Race Control
-- Do not assume global ordering across partitions, topics, or queues.
-- Require replay-safe consumers: duplicate side effects prevented, historical reprocessing meaningful, and processing deterministic for the same input and version.
-- Require controlled replay/redrive with checkpointing and throughput guardrails.
-- Require serialization strategy and CAS/version checks for competing flows on the same aggregate.
-- Reject distributed locks as the primary correctness mechanism; if a technical lock is unavoidable, require fencing-token semantics and explicit failure analysis.
-- Do not make hard write decisions from stale projections or read models.
-
-### Freshness And Reconciliation
-- Treat read models as query-optimization surfaces, not write-authority.
-- Require freshness signals such as `updated_at`, lag, or equivalent.
-- If freshness exceeds the budget, write paths should query the owner or fail by contract.
-- Reconciliation should be idempotent, resumable, watermark-based, and repair-oriented.
-- Prefer repair commands or events over direct cross-service table writes.
-
-### Reliability, API, Migration, And Observability Interfaces
-- Align distributed step contracts with timeout, retry, fallback, and overload expectations of downstream dependencies.
-- When distributed behavior is API-visible, make consistency, idempotency, retry, and `202 + operation resource` semantics explicit.
-- Require compatibility windows across code, schema, and event versions; do not contract while downstream consumers still depend on the old shape.
-- Require end-to-end correlation across producer, consumer, retries, DLQ, and reconciliation, plus bounded-cardinality async telemetry.
+## Guardrails
+- Do not approve dual writes between database and broker as the correctness mechanism.
+- Do not depend on distributed locks for business correctness; if a technical lock is unavoidable, require fencing-token analysis.
+- Do not assume global broker order, exactly-once end to end, or single delivery to consumers.
+- Do not let a read model or projection become write authority without querying or delegating to the owner.
+- Do not leave DLQ, poison-message, replay, or reconciliation ownership implicit.
+- Do not reduce the spec to endpoint payloads, physical SQL scripts, or retry knobs.
 
 ## Decision Quality Bar
 For every major distributed recommendation, include:
 - the flow, invariant, or consistency problem
-- at least two viable options
-- the selected option and at least one explicit rejection reason
-- failure-path behavior: retry, compensate, forward-recover, or manual intervention
-- idempotency, dedup, and commit-ordering implications
+- at least two viable options and a reasoned rejection for the non-selected option
+- the selected flow shape and owner
+- failure-path behavior: retry, compensate, forward-recover, reconcile, or manual intervention
+- idempotency, dedup, commit-ordering, replay, and ordering implications
 - freshness and reconciliation implications
-- cross-domain impact on API, data, reliability, observability, and security
-- assumptions, blockers, and reopen conditions
+- cross-domain impact on API, data, reliability, observability, security, and rollout
+- assumptions, blockers, accepted risks, and reopen conditions
 
 ## Deliverable Shape
-When writing the distributed spec or review, cover:
+When writing the distributed spec, cover:
 - flow inventory and ownership
 - invariant register and enforcement points
-- state models and step contracts
-- outbox, inbox, dedup, and idempotency policy
+- coordination style and durable flow state
+- step contracts and timeout/stuck-flow policy
+- outbox, inbox, dedup, idempotency, ACK, and offset-commit policy
 - pivot, compensation, and forward-recovery rules
-- staleness, freshness, and reconciliation expectations
-- replay, ordering, and race-control assumptions
-
-## Escalate Or Reject
-- missing invariant owner or enforcement point
-- flow without an explicit durable state model and step contracts
-- missing pivot for a nontrivial saga
-- dual writes used instead of atomic linkage
-- missing idempotency or dedup policy for side-effecting handlers
-- ack or offset commit before durable side effects
-- hidden ordering or replay assumptions
-- eventual-consistency flow without freshness or reconciliation contract
-- API-visible async/idempotency semantics changed without explicit contract update
+- replay, ordering, freshness, and reconciliation expectations
+- observability, migration, compatibility, and operator handoff

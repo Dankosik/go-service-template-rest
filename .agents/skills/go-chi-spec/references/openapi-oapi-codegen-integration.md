@@ -30,7 +30,10 @@ compatibility:
 ```go
 r := chi.NewRouter()
 r.Route("/api", func(r chi.Router) {
-	api.HandlerFromMuxWithBaseURL(impl, r, "/api")
+	api.HandlerWithOptions(impl, api.ChiServerOptions{
+		BaseRouter: r,
+		BaseURL:    "/api",
+	})
 })
 ```
 
