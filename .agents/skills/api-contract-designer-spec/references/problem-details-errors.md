@@ -5,6 +5,7 @@ Load this when the API contract needs Problem Details, validation errors, auth o
 
 ## Decision Rubric
 - Use `application/problem+json` when clients need a machine-readable error contract, not just a status code.
+- If the API profile requires common members such as `type`, `title`, `status`, or `detail`, say so as a profile choice; RFC 9457 does not require every common member.
 - Treat the wire status as authoritative; if the body has `status`, it must match.
 - Make `type` and extension fields the stable machine contract. `title` and `detail` are for humans and diagnostics.
 - Pick one `400` vs `422` split. A sharp default: malformed transport or JSON shape is `400`; syntactically valid JSON with semantic field errors is `422`.

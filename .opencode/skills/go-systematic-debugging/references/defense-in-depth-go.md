@@ -1,34 +1,32 @@
 # Defense-In-Depth After Root-Cause Fix
 
-## Overview
-After a source-level fix, add focused safeguards so the same defect class cannot silently return through a different path.
+## Behavior Change Thesis
+When loaded after a root-cause fix, this file makes the model add only the owning-layer guardrail justified by the failure mode instead of broad hardening, retries, metrics, or redesign.
 
-## Layer Model
-1. Transport boundary: decode, size limits, required fields, semantic validation
-2. Application or use-case layer: business preconditions and transition checks
-3. Infrastructure adapters: persistence, network, or cache safety constraints
-4. Diagnostics layer: bounded logs, metrics, and traces for future forensics
+## When To Load
+Load after the root cause is proven and the local fix is clear, but recurrence prevention, diagnostics, or an additional guardrail is still being considered.
 
-## Guardrail Checklist
-- Is boundary input validated before expensive side effects?
-- Is the invariant checked where ownership belongs?
-- Are infrastructure operations context-bounded and fail-fast?
-- Is diagnostics sufficient to localize a recurrence quickly?
+## Decision Rubric
+- Fix the earliest valid boundary first; guardrails come after root cause, not instead of it.
+- Add a guardrail only when it blocks the same defect class or materially improves future triage.
+- Put the guardrail at the layer that owns the invariant: transport, application/domain, infrastructure adapter, or diagnostics.
+- Reject plausible guardrails explicitly when they add complexity without blocking recurrence.
+- Escalate if the guardrail changes API, timeout, retry, durability, security, data, or rollout semantics.
 
-## Go Example: Boundary + Domain + Infra
+## Imitate
 
 ```go
-// Layer 1: transport validation
+// Transport boundary: reject impossible request shape.
 if req.AccountID == "" {
 	return problem.BadRequest("account_id is required")
 }
 
-// Layer 2: domain/application invariant
+// Domain/application invariant: reject invalid state transition.
 if amount <= 0 {
 	return ErrInvalidAmount
 }
 
-// Layer 3: infra safety
+// Infrastructure safety: preserve caller context and bound adapter work.
 ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 defer cancel()
 if err := repo.Save(ctx, entity); err != nil {
@@ -36,12 +34,37 @@ if err := repo.Save(ctx, entity); err != nil {
 }
 ```
 
-## Anti-Overhardening Rule
-Add only safeguards justified by the discovered failure mode.
-Do not add unrelated guardrails that increase complexity without reducing recurrence risk.
+Copy the ownership: each guardrail lives at the boundary that can enforce the specific invariant.
 
-## Verification
-After adding guardrails:
-- reproduce the old failing scenario and confirm it now fails safely or is rejected early
-- run the regression path and confirm it still passes
-- run the baseline quality checks needed for the changed scope
+```text
+Rejected guardrail: package-wide nil checks in handlers.
+Reason: the proven defect was repository missing-row mapping; handler checks would hide the contract violation and add no new detection.
+```
+
+Copy the explicit rejection when hardening sounds plausible but does not block the recurrence.
+
+## Reject
+
+```text
+Also added retries, extra validation, metrics, and a cache fallback while fixing the nil panic.
+```
+
+This expands a local root-cause fix into unrelated policy and observability changes.
+
+```go
+if result == nil {
+	return nil
+}
+```
+
+This may hide the bad state instead of adding a guardrail at the owner of the invariant.
+
+## Agent Traps
+- Treating "defense in depth" as permission for unrelated refactors.
+- Adding diagnostics with secrets, PII, or unbounded-cardinality fields.
+- Keeping a guardrail only because it was useful during debugging.
+- Forgetting to prove the original failure separately from the new guardrail path.
+- Changing retries or timeouts as a guardrail without reliability/design approval.
+
+## Validation Shape
+Record the proven root cause, first broken invariant, guardrail layer, why the guardrail blocks recurrence, RED/GREEN proof for the original failure, and a separate command for any new guardrail behavior.

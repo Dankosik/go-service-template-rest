@@ -1,22 +1,18 @@
-# Retry, Duplicate, And Reorder Domain Risk Examples
+# Retry, Duplicate, And Reorder Domain Risks
+
+## Behavior Change Thesis
+When loaded for symptom "retry, replay, duplicate, stale, or out-of-order input can repeat or reorder business effects", this file makes the model tie idempotency and ordering to a concrete domain consequence instead of likely mistake "say add dedupe or global ordering generically."
 
 ## When To Load
 Load this when a review touches message consumers, retry loops, idempotency keys, deduplication, replay, out-of-order events, version checks, stale updates, backfills, command reprocessing, refund/capture/reservation duplication, or optimistic concurrency around business state.
 
-Use local event contracts, specs, tests, and task artifacts as authority for what must be idempotent, monotonic, ordered, or rejected. External sources calibrate common failure modes: at-least-once delivery, outbox replay, duplicate messages, and per-aggregate ordering.
+## Decision Rubric
+- Review the business entity key, current-state guard, processed-message key, event version, and side-effect idempotency together.
+- Report a finding when replay or stale input can repeat an irreversible effect, skip a legal transition check, overwrite newer business state, or make stale facts look current.
+- Prefer an existing local processed-event key, idempotency key, current-state guard, or version check before proposing new storage.
+- Escalate when safe dedupe/order handling requires new storage, event partitioning, transaction design, retry policy, public idempotency semantics, or reconciliation behavior.
 
-## Review Lens
-Retries and duplicates are domain risks when they repeat irreversible effects, skip legal transition checks, overwrite newer business state, or make stale facts look current. Review the business entity key, current-state guard, processed-message key, event version, and side-effect idempotency together.
-
-## Bad Finding Example
-```text
-[medium] internal/orders/consumer.go:23
-This consumer is not idempotent. Add dedupe.
-```
-
-Why it fails: it does not tie duplicate handling to a domain transition or specific repeated business effect.
-
-## Good Finding Example
+## Imitate
 ```text
 [high] [go-domain-invariant-review] internal/orders/consumer.go:23
 Issue:
@@ -26,33 +22,21 @@ A replayed or redelivered cancellation can issue another refund for the same pay
 Suggested fix:
 Guard the transition so only the first valid `paid -> cancelled` path can create the refund, using the local processed-event key, refund idempotency key, or current-state check already established in this service.
 Reference:
-Local cancellation event contract or tests; idempotent-consumer guidance is calibration only.
+Local cancellation event contract or duplicate-cancellation test.
 ```
 
-## Non-Findings To Avoid
+Copy the shape: duplicate/stale path, concrete repeated or overwritten business effect, existing local guard if present.
+
+## Reject
+```text
+[medium] internal/orders/consumer.go:23
+This consumer is not idempotent. Add dedupe.
+```
+
+Failure: this does not tie duplicate handling to a domain transition or repeated business effect.
+
+## Agent Traps
 - Do not require global ordering when the local rule only needs per-aggregate ordering or a stale-version guard.
 - Do not flag every retry loop; flag retries that can change business outcome or repeat an effect.
 - Do not require a new inbox table when a local idempotency key or transition guard already provides the approved guarantee.
 - Do not assume "last write wins" is acceptable for business state unless a local contract says stale overwrites are allowed.
-
-## Smallest Safe Correction
-Prefer a targeted guard:
-- check current state before applying a transition or side effect;
-- record and check the processed message or command key inside the existing transaction when available;
-- pass a stable idempotency key to external side-effect APIs;
-- reject or ignore stale event versions according to local contract;
-- keep duplicate handling close to the consumer path that performs the irreversible action.
-
-## Escalation Cases
-Escalate when:
-- the local contract does not define duplicate, replay, or stale-event behavior;
-- safe dedupe requires new storage, transaction, or outbox/inbox design;
-- event partitioning or ordering keys conflict with the aggregate boundary;
-- the fix changes retry policy, public idempotency semantics, or reconciliation behavior;
-- several producers can authoritatively update the same business entity without a single sequencing rule.
-
-## Source Links From Exa
-- [Microservices.io: Idempotent Consumer](https://microservices.io/patterns/communication-style/idempotent-consumer.html)
-- [Microservices.io: Transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html)
-- [NILUS: Event Ordering Tradeoffs in Event Streaming](https://www.nilus.be/blog/event_ordering_tradeoffs_in_event_streaming/)
-- [Milan Jovanovic: Solving Message Ordering from First Principles](https://www.milanjovanovic.tech/blog/solving-message-ordering-from-first-principles)

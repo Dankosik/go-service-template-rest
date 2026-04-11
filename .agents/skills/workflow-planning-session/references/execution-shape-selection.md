@@ -1,109 +1,75 @@
 # Execution Shape Selection
 
+## Behavior Change Thesis
+When loaded for symptom "I am unsure whether this needs direct path, lightweight local, or full orchestrated routing," this file makes the model choose the smallest defensible execution shape with an explicit escalation trigger instead of forcing ceremony for tiny work or under-routing cross-domain work.
+
 ## When To Load
-Load this when a workflow-planning session needs examples for choosing or checking `direct path`, `lightweight local`, or `full orchestrated`.
+Load this only when execution shape is the active uncertainty. If the shape is already chosen and the hard part is lane design, artifact status, file authoring, or the adequacy boundary, load that narrower reference instead.
 
-Use it only after reading `AGENTS.md` and `docs/spec-first-workflow.md`. This file calibrates routing examples; it does not authorize research, `spec.md`, `design/`, `plan.md`, `tasks.md`, tests, or implementation work.
+## Decision Rubric
+- Choose `direct path` only for tiny, reversible, single-surface work with high confidence after a first read and no need for preserved research, subagents, or multi-session handoff.
+- Choose `lightweight local` for bounded, non-trivial, mostly single-domain work where local research is enough unless it reveals a cross-domain seam.
+- Choose `full orchestrated` when the work crosses material API, data, security, reliability, observability, delivery, or domain-invariant boundaries; when the decision is hard to reverse; or when user-requested agent-backed work needs durable fan-out evidence.
+- Escalate from `lightweight local` to `full orchestrated` if local reading exposes persisted-state, public contract, tenant isolation, auth/trust-boundary, concurrency/lifecycle, rollout, or proof-obligation uncertainty.
+- Do not let "the user named this skill" override the tiny/direct-path exception; a workflow-planning session can return "do not create workflow-control files" when the repository contract says ceremony would add noise.
 
-## Direct / Lightweight / Full Examples
+## Imitate
 
-### Direct path example
+Direct-path calibration:
 
 ```markdown
 Execution shape: direct path
-Why: one small reversible documentation typo in one skill reference; no domain behavior, runtime, data, contract, or multi-session risk.
-Research mode: local; no subagent lanes.
-Artifact expectations: no dedicated workflow artifacts; inline skip rationale is enough.
-Adequacy challenge: skipped because the work is tiny/direct-path.
-Stop rule: record the inline workflow-planning rationale, then proceed only if the user requested the tiny edit in the same direct-path pass.
+Why: one reversible edit in one skill reference; no runtime behavior, repository architecture, public contract, persisted data, or multi-session resume risk.
+Workflow artifacts: not expected; inline skip rationale is enough.
+Adequacy challenge: skipped with tiny/direct-path rationale.
+Stop rule: proceed only with the requested tiny local edit; no research or planning artifacts.
 ```
 
-Why it works: it uses the tiny exception instead of creating process files for ceremony.
+What to copy: the explanation names why the full workflow contract is not buying safety.
 
-### Lightweight local example
+Lightweight-local calibration:
 
 ```markdown
 Execution shape: lightweight local
-Why: bounded single-domain update to one existing HTTP middleware behavior; no persisted-state change, public contract change, or cross-domain ownership seam visible after first read.
-Research mode: local in the next session; no fan-out unless local reading exposes a domain seam.
-Artifact expectations: `workflow-plan.md` and `workflow-plans/workflow-planning.md` expected for this dedicated session; later `spec.md` expected; `design/` may be skipped only if the specification records the local design-skip rationale; `plan.md` and `tasks.md` may be waived only if it remains tiny after specification.
-Adequacy challenge: record skip only if the upfront lightweight-local waiver is explicit; otherwise run the read-only challenge before handoff.
-Stop rule: stop after routing is written; do not begin the local research read.
+Why: bounded single-package behavior change; no visible persisted-state, tenant, API contract, or rollout seam after the initial read.
+Research mode: local in the next session.
+Escalation trigger: reopen workflow planning if local research finds API, data, security, reliability, or rollout ambiguity.
+Stop rule: after workflow-control handoff; do not start the local research read.
 ```
 
-Why it works: it preserves the explicit research-mode decision without pretending the next stage has already happened.
+What to copy: the escalation trigger is part of the route, not an afterthought.
 
-### Full orchestrated example
+Full-orchestrated calibration:
 
 ```markdown
 Execution shape: full orchestrated
-Why: tenant-scoped async exports touch API, data ownership, background work, signed URL security, admin authorization, reliability, observability, and rollout risk.
+Why: tenant-scoped async exports touch REST contract, job state, tenant isolation, signed URL security, admin authorization, reliability, observability, QA, and rollout.
 Research mode: fan-out in the next session.
-Artifact expectations: `workflow-plan.md` and `workflow-plans/workflow-planning.md` required now; later `research/*.md`, `spec.md`, core `design/`, `plan.md`, and `tasks.md` expected; `test-plan.md` and `rollout.md` likely but still marked conditional until research confirms triggers.
-Adequacy challenge: required before workflow-planning handoff.
+Adequacy challenge: required before handoff.
 Stop rule: stop after workflow-control artifacts and challenge reconciliation; next session starts with research fan-out.
 ```
 
-Why it works: it plans orchestration and later artifacts without starting research or designing the feature.
+What to copy: the route names the affected seams without doing their research.
 
-## Good / Bad Lane Rows
-
-Good lane rows for execution-shape calibration:
-
-| Lane | Role | Owned Question | Skill | Why It Fits |
-| --- | --- | --- | --- | --- |
-| L1 | `data-agent` | Which persisted-state and tenant-isolation questions must research answer before specification? | `go-data-architect-spec` | One domain, one question family, read-only, useful only after full orchestration is chosen. |
-| L2 | `security-agent` | What authorization, signed URL, and abuse-resistance seams need separate research? | `go-security-spec` | Separates security evidence from API/data assumptions. |
-
-Bad lane rows to reject:
-
-| Lane | Role | Owned Question | Skill | Why It Fails |
-| --- | --- | --- | --- | --- |
-| Lx | `worker` | Own a later code-change phase from this routing session. | `go-coder` | Pulls implementation ownership into workflow planning. |
-| Ly | `architecture-agent` | Own final architecture decisions from the routing artifact. | `go-architect-spec` | Mixes research, final decisions, and later-phase authorship into the routing phase. |
-
-## Handoff Examples
-
-Good handoff for direct path:
+## Reject
 
 ```markdown
-Workflow-planning result: inline direct-path skip rationale recorded. No dedicated workflow-control files expected.
-Next action: continue only with the tiny local edit if the active task explicitly allows same-pass direct-path execution.
-Stop boundary: no subagents, no research artifact, no spec/design/planning artifact.
+Execution shape: full orchestrated
+Why: the repository prefers orchestrators and workflow artifacts.
 ```
 
-Good handoff for lightweight local:
+Failure: generic process preference is not a task-specific risk argument.
 
 ```markdown
-Session boundary reached: yes
-Ready for next session: yes
-Next session starts with: research, local mode
-Handoff note: if local research exposes data ownership, API contract, or security uncertainty, reopen workflow planning or escalate to fan-out before specification.
+Execution shape: lightweight local
+Why: probably only code.
+Escalation trigger: none.
 ```
 
-Good handoff for full orchestrated:
+Failure: "only code" hides the exact seams that would force fan-out.
 
-```markdown
-Session boundary reached: yes
-Ready for next session: yes
-Next session starts with: research, fan-out mode
-Handoff note: spawn only the planned read-only lanes in the research session; preserve evidence in `research/*.md` when it remains useful after fan-in.
-```
-
-Bad handoff:
-
-```markdown
-Next session starts with: unspecified later work
-Reason: the workflow plan already lists the expected lanes.
-```
-
-Why it is bad: workflow planning does not replace research, synthesis, specification, design, or implementation planning.
-
-## Exa Source Links
-Exa MCP was attempted before these examples were authored on 2026-04-11, but the service returned a 402 credit-limit error. The links below were gathered through fallback web search and are only calibration sources; the repo-local `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative.
-
-- Claude Skills overview: https://claude.com/docs/skills/overview
-- Claude Code skills supporting-files guidance: https://code.claude.com/docs/en/skills
-- Anthropic, "Equipping agents for the real world with Agent Skills": https://claude.com/blog/equipping-agents-for-the-real-world-with-agent-skills
-- Anthropic, "Building effective agents": https://www.anthropic.com/engineering/building-effective-agents
-- arc42 architecture decisions: https://docs.arc42.org/section-9/
+## Agent Traps
+- Treating `workflow-planning-session` as a command to create workflow files even when the task is clearly tiny.
+- Choosing `full orchestrated` because many skills exist, not because the task crosses material decision seams.
+- Choosing `lightweight local` without recording what would make that choice wrong.
+- Starting the next research step while "just checking" whether the chosen shape is right.

@@ -1,64 +1,87 @@
 # Middleware Order And Scope
 
-## When To Read
-Read this when a diff touches `Use`, `With`, `Group`, `Route`, `Mount`, middleware ordering, route-local middleware, logging, tracing, auth, panic recovery, body limits, or request context setup. The review question is whether runtime scope changed, not whether the code looks tidier.
+## Behavior Change Thesis
+When loaded for symptom `middleware order or scope changed around Use, With, Group, Route, or Mount`, this file makes the model choose exact runtime coverage and order proof instead of likely mistake `treat nested middleware refactors as harmless cleanup`.
 
-## Review Smell Patterns
-- Request ID, real IP, logger, recoverer, auth, tracing, body limit, or timeout middleware is reordered without a reason tied to runtime behavior.
-- Middleware that depends on the final chi route pattern reads `RoutePattern()` before `next.ServeHTTP`.
-- `Use(...)` is moved into or out of a `Group`/`Route`, silently widening or narrowing coverage.
-- `With(...)` is called without immediately registering an endpoint on the returned inline router.
-- A mounted child router is expected to inherit child-only middleware from a sibling `Group` or `Route`.
-- CORS middleware is applied with `With` or inside a group without matching `OPTIONS` routes. Use the HTTP fallback reference for the CORS-specific finding.
+## When To Load
+Load when a diff moves middleware between global, group, route, inline, or mounted scopes; reorders request ID, recovery, auth, tracing, logging, body-limit, or response-shaping middleware; or uses `With`/`Group` in a way that may not affect the intended endpoint.
 
-## Minimal Examples
+## Decision Rubric
+- `Use(...)` on a mux changes that mux's middleware stack for later routing. If it appears after route registration on the same mux, switch to `chi-router-registration-hazards.md`.
+- `With(...)` returns an inline router with extra middleware. The middleware only applies to routes registered on the returned router.
+- `Group(...)` copies the current stack and allows local additions. Middleware added inside the group does not cover siblings outside the group.
+- `Route(...)` creates a child router and mounts it at the pattern. Middleware inside the route covers that subtree, not the parent or sibling routes.
+- `Mount(...)` runs under parent middleware but does not inherit middleware from sibling groups. Do not assume a group around one subtree covers another mount.
+- If the primary issue is route-template timing or `RoutePattern()` extraction, prefer `route-context-and-match-probing.md` or `route-observability-labels.md`.
 
-```diff
- func routeLabel(next http.Handler) http.Handler {
-   return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
--    label := chi.RouteContext(r.Context()).RoutePattern()
--    record(label)
-     next.ServeHTTP(w, r)
-+    label := chi.RouteContext(r.Context()).RoutePattern()
-+    record(label)
-   })
- }
+## Imitate
+
+```go
+r.Route("/admin", func(r chi.Router) {
+	r.Use(adminOnly)
+	r.Get("/users", listUsers)
+})
+r.Get("/status", status)
 ```
 
-Review finding shape: route identity is incomplete before route resolution. The smallest safe fix is to record after `next` while the route context still belongs to the request.
+Copy the reasoning: this intentionally narrows `adminOnly` to `/admin`; review asks whether that scope change is approved and tested.
 
-```diff
--r.Use(adminOnly)
--r.Route("/admin", func(r chi.Router) {
--  r.Get("/users", listUsers)
--})
-+r.Route("/admin", func(r chi.Router) {
-+  r.Use(adminOnly)
-+  r.Get("/users", listUsers)
-+})
- r.Get("/status", status)
+```go
+r.With(authRequired, audit).Get("/me", me)
 ```
 
-Review finding shape: this narrows auth coverage to `/admin` instead of every later route on the mux. If the old scope was intentional, keep it global and preserve registration order; if the new scope is intentional, require a test proving `/status` remains unauthenticated.
+Copy the shape: `With` is immediately used to register the endpoint on the inline router it returns.
 
-```diff
--r.With(auth)
--r.Get("/me", me)
-+r.With(auth).Get("/me", me)
+```go
+var hits []string
+mw := func(name string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits = append(hits, name+":before")
+			next.ServeHTTP(w, r)
+			hits = append(hits, name+":after")
+		})
+	}
+}
 ```
 
-Review finding shape: `With` returns an inline router. The smallest safe fix is to register the endpoint on that returned router.
+Copy the proof shape: order-sensitive middleware reviews should suggest tests that observe execution order, not only final status codes.
 
-## Validation
-- Use an `httptest` table that proves coverage, not just status codes. Record middleware execution in a slice or inject a test header from the middleware and assert where it appears.
-- For order-sensitive stacks, build tiny middleware that appends names before and after `next`, then assert the sequence for a representative route.
-- For scope changes, include at least one in-scope path and one sibling/out-of-scope path.
-- Suggested validation command: `go test ./... -run 'Test.*Middleware|Test.*Scope|Test.*Auth'`.
+## Reject
 
-## Sources Gathered With Exa
-- [chi package docs on pkg.go.dev](https://pkg.go.dev/github.com/go-chi/chi/v5)
-- [go-chi README middleware, Route, Group, With, and Mount examples](https://github.com/go-chi/chi/blob/master/README.md)
-- [go-chi mux.go source for Use, With, Group, Route, and Mount behavior](https://raw.githubusercontent.com/go-chi/chi/master/mux.go)
-- [go-chi context.go source for RoutePattern timing](https://raw.githubusercontent.com/go-chi/chi/master/context.go)
-- [go-chi/cors docs for top-level CORS middleware scope](https://pkg.go.dev/github.com/go-chi/cors)
+```go
+r.With(authRequired)
+r.Get("/me", me)
+```
 
+Reject because the route is registered on the parent, not the inline router returned by `With`.
+
+```go
+r.Group(func(r chi.Router) {
+	r.Use(adminOnly)
+})
+r.Get("/admin/users", listUsers)
+```
+
+Reject because the group-local middleware is not attached to the sibling route registered after the group.
+
+```go
+r.Route("/api", func(r chi.Router) {
+	r.Use(apiOnly)
+})
+r.Mount("/api", generated.Handler(api))
+```
+
+Reject because the mounted handler is a sibling of the route block, not a child covered by its middleware.
+
+## Agent Traps
+- Do not assume a prettier nesting shape preserves middleware coverage.
+- Do not approve a `With(...)` call unless the endpoint is registered on the returned router.
+- Do not treat auth or body-limit movement as style. Ask which paths gained or lost coverage.
+- Do not duplicate the route-label timing finding here when the review is really about route context or telemetry labels; load the narrower reference.
+
+## Validation Shape
+- Scope change: test one in-scope path and one sibling/out-of-scope path.
+- Order change: use test middleware that records before/after sequencing.
+- Coverage change: assert an observable side effect, such as a header, auth rejection, request ID, or body-limit response.
+- Suggested command: `go test ./... -run 'Test.*Middleware|Test.*Scope|Test.*Auth|Test.*BodyLimit|Test.*Trace'`.

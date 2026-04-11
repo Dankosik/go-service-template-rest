@@ -1,30 +1,21 @@
 # Resource Lifetime, I/O, And Transactions
 
+## Behavior Change Thesis
+When loaded for resource or transaction-lifetime pressure, this file makes the model keep acquisition, cleanup, terminal errors, and transaction scope explicit instead of hiding ownership in helpers, leaking resources, or leaving half-checked database/I/O paths.
+
 ## When To Load
-Load this when work touches readers, writers, response bodies, files, rows, scanners, prepared statements, dedicated SQL connections, transactions, locks, timers, tickers, derived contexts, or cleanup helper extraction.
+Load this when work touches readers, writers, response bodies, files, `Rows`, scanners, statements, dedicated SQL connections, transactions, locks, timers, tickers, derived contexts, or cleanup helper extraction.
 
-## Good/Bad Examples
+## Decision Rubric
+- Keep acquire, use, and release in one obvious scope unless ownership is explicitly transferred.
+- Put `defer` next to acquisition, but avoid `defer` inside long-running loops when cleanup would be delayed.
+- Check terminal error surfaces: `rows.Err`, scanner errors, writer close errors when terminal, and `Commit` errors.
+- Use context-aware calls such as `QueryContext`, `ExecContext`, and `BeginTx`.
+- Keep slow network calls, queue publishes, and unrelated side effects outside transactions unless the approved design says otherwise.
+- Bound reads at trust boundaries before expensive work or side effects.
 
-Bad: rows are not closed and terminal cursor errors disappear.
-
-```go
-func (r *Repo) List(ctx context.Context) ([]Order, error) {
-	rows, err := r.db.QueryContext(ctx, "select id, total from orders")
-	if err != nil {
-		return nil, err
-	}
-
-	var orders []Order
-	for rows.Next() {
-		var order Order
-		_ = rows.Scan(&order.ID, &order.Total)
-		orders = append(orders, order)
-	}
-	return orders, nil
-}
-```
-
-Good: acquire, defer cleanup next to acquisition, and check terminal errors.
+## Imitate
+Close rows and surface scan and cursor errors.
 
 ```go
 func (r *Repo) List(ctx context.Context) ([]Order, error) {
@@ -49,20 +40,7 @@ func (r *Repo) List(ctx context.Context) ([]Order, error) {
 }
 ```
 
-Bad: transaction lifetime is spread across raw SQL and unrelated side effects.
-
-```go
-if _, err := db.ExecContext(ctx, "BEGIN"); err != nil {
-	return err
-}
-if err := publishToQueue(ctx, event); err != nil {
-	return err
-}
-_, err := db.ExecContext(ctx, "COMMIT")
-return err
-```
-
-Good: use `database/sql` transaction APIs and keep transaction work narrow.
+Use `database/sql` transaction ownership instead of raw SQL transaction strings.
 
 ```go
 func (r *Repo) Create(ctx context.Context, order Order) error {
@@ -75,9 +53,6 @@ func (r *Repo) Create(ctx context.Context, order Order) error {
 	if _, err := tx.ExecContext(ctx, insertOrderSQL, order.ID, order.Total); err != nil {
 		return fmt.Errorf("insert order %s: %w", order.ID, err)
 	}
-	if _, err := tx.ExecContext(ctx, insertAuditSQL, order.ID, "created"); err != nil {
-		return fmt.Errorf("insert order audit %s: %w", order.ID, err)
-	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit create order %s: %w", order.ID, err)
 	}
@@ -85,20 +60,7 @@ func (r *Repo) Create(ctx context.Context, order Order) error {
 }
 ```
 
-Bad: defers inside a long loop delay cleanup.
-
-```go
-for _, name := range names {
-	f, err := os.Open(name)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	process(f)
-}
-```
-
-Good: make per-iteration ownership explicit.
+Use a helper only when it clarifies per-iteration ownership.
 
 ```go
 for _, name := range names {
@@ -117,39 +79,47 @@ func processFile(name string) error {
 }
 ```
 
-Bad: unbounded reads on request bodies.
+## Reject
+Reject cursor code that loses cleanup and terminal errors.
+
+```go
+rows, err := r.db.QueryContext(ctx, "select id, total from orders")
+if err != nil {
+	return nil, err
+}
+for rows.Next() {
+	var order Order
+	_ = rows.Scan(&order.ID, &order.Total)
+	orders = append(orders, order)
+}
+return orders, nil
+```
+
+Reject raw transaction management and unrelated side effects inside the transaction window.
+
+```go
+_, _ = db.ExecContext(ctx, "BEGIN")
+_ = publishToQueue(ctx, event)
+_, err := db.ExecContext(ctx, "COMMIT")
+```
+
+Reject unbounded reads on untrusted bodies.
 
 ```go
 body, err := io.ReadAll(r.Body)
 ```
 
-Good: bound reads at trust boundaries.
+## Agent Traps
+- Moving `Close`, `Rollback`, `Unlock`, or `cancel` into a helper that obscures who owns the resource.
+- Using `defer` inside loops that can hold many resources until the outer function returns.
+- Converting transaction logic into a callback helper before transaction scope, retry, and side-effect rules are stable.
+- Ignoring `rows.Err`, scanner errors, writer close errors, or `Commit` errors.
+- Treating rollback errors after a successful commit as a new failure.
+- Adding `io.ReadAll` to simplify parsing without a size bound at a trust boundary.
 
-```go
-const maxBody = 1 << 20
-body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-```
-
-## Common False Simplifications
-- Moving `Close`, `Rollback`, `Unlock`, or `cancel` into a helper that hides who owns the resource.
-- Using `defer` inside loops where many resources can remain open until the outer function returns.
-- Converting transaction logic into a callback helper before transaction scope, retries, and side-effect rules are clear.
-- Ignoring `rows.Err`, scanner errors, `Close` errors that are terminal for writers, or `Commit` errors.
-- Performing network calls, queue publishes, or slow unrelated work inside a transaction without an approved design reason.
-- Using `io.ReadAll` on untrusted input without a size bound.
-
-## Validation Or Test Patterns
-- Use tests with fake `io.Closer` or `httptest` responses to prove close behavior for new I/O ownership.
-- Add a repository test that forces scan or iteration failure when cursor handling changed.
-- Test transaction failure at each step when changing transaction order: begin, first write, later write, commit.
-- Use canceled contexts to prove `QueryContext`, `ExecContext`, and `BeginTx` paths receive caller cancellation.
-- Run `go test -race` when cleanup or locking changes can affect concurrency.
-
-## Source Links Gathered Through Exa
-- [database/sql package](https://pkg.go.dev/database/sql)
-- [Executing transactions](https://go.dev/doc/database/execute-transactions)
-- [Canceling in-progress database operations](https://go.dev/doc/database/cancel-operations)
-- [Managing database connections](https://go.dev/doc/database/manage-connections)
-- [io package](https://pkg.go.dev/io)
-- [context package](https://pkg.go.dev/context)
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
+## Validation Shape
+- Use fake `io.Closer`, `httptest`, or repository fakes to prove close behavior when ownership changes.
+- Add repository tests for scan and iteration failures when cursor handling changed.
+- Test transaction failure points when order changes: begin, write, later write, commit.
+- Use canceled contexts to prove caller cancellation reaches `QueryContext`, `ExecContext`, or `BeginTx`.
+- Run `go test -race` when cleanup, locks, timers, or shared state changed.

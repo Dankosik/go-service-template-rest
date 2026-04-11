@@ -1,46 +1,39 @@
 # Scenario Matrix Patterns
 
+## Behavior Change Thesis
+When loaded for symptom "the test plan is becoming happy-path-only or checklist-shaped", this file makes the model write discriminating scenario rows with observables instead of likely mistake "list generic cases without proof value."
+
 ## When To Load
-Load this when turning approved behavior into a scenario matrix, especially when the plan risks becoming happy-path-only or when fail, edge, abuse, retry, or concurrency rows need sharper observables.
+Load this when approved behavior needs a compact scenario matrix, especially for fail, edge, abuse, retry, or concurrency rows.
 
-## Source Grounding
-- Use approved `spec.md`, design artifacts, and domain/API/data/reliability/security decisions as the source of scenario meaning.
-- Use Go's `testing` docs for subtest and focused-run terminology, but keep this file at strategy level.
-- Use repository command docs to keep matrix rows executable in local and CI paths.
+## Decision Rubric
+- Start from the changed behavior, not from a universal category list.
+- Every row needs preconditions, data/input shape, selected proof level, expected observable, and pass/fail rule.
+- Add a fail row for each meaningful rejection, rollback, denial, retry stop, or degraded-mode behavior.
+- Add an edge row only when a named boundary value, terminal state, empty set, ordering tie, limit, or malformed shape changes the proof.
+- Add an abuse row when caller identity, tenant, object ID, cursor, limit, key, or payload size is caller-controlled.
+- Add retry/concurrency rows when duplicate suppression, conflict, ordering, cancellation, worker lifecycle, or shared state matters.
+- Rows that cannot name an observable are not "future test ideas"; they are underspecified behavior to escalate.
 
-## Selected/Rejected Level Examples
-| Scenario class | Selected level | Rejected level | Why |
-| --- | --- | --- | --- |
-| Local rule with many parallel examples | Unit table/subtest strategy | Contract | Contract proof adds boundary noise when no public boundary changed. |
-| Public validation error shape | Contract | Pure unit | The observable is status, problem body, headers, and documented field mapping. |
-| DB uniqueness conflict or transaction rollback | Integration | Unit with fake repository only | The scenario depends on database-enforced behavior and real transaction semantics. |
-| Cross-tenant object access denial | Contract or integration | Same-tenant happy path | The negative actor/scope mismatch is the behavior under test. |
-| Parser robustness over unexpected input | Fuzz smoke with seed corpus | Enumeration-only unit list | Fuzzing explores inputs the author did not enumerate while preserving failing inputs as regressions. |
-| Worker coordination and shared state | Targeted race-aware test plan | E2E smoke only | E2E smoke may miss the interleaving; the race detector needs the risky path executed. |
+## Imitate
+| Requirement | Compact Rows | Observable To Copy |
+| --- | --- | --- |
+| Request creates one resource | valid payload; invalid field; unknown field if strict; duplicate idempotency key; oversized body if limit changed | status, response body, `Location` or resource state, no partial side effect |
+| State transition | allowed transition; forbidden transition; stale version; concurrent transition attempt; terminal-state repeat | persisted state, conflict class, emitted event count |
+| Cache-backed read | hit; miss; stale entry; corrupt entry; cache timeout; tenant key mismatch; parallel miss | returned value, origin call count, cache write/delete/bypass |
+| Async processing | accepted; retryable failure; non-retryable failure; poison message; duplicate replay; restart replay | terminal state, retry count, DLQ/escalation signal, idempotent replay |
 
-## Scenario Matrix Examples
-Use the smallest matrix that still proves the changed behavior.
+## Reject
+- "Happy path, invalid input, edge case" with no named data shape. The model has not said what makes the edge interesting.
+- "Expect an error" for a negative row. The observable must name the error class, status, persisted state, message state, or side-effect absence that proves the contract.
+- "Concurrency test" without duplicate, conflict, ordering, or race-sensitive observable.
+- "Security test" that uses only an authorized actor. Boundary proof needs the wrong actor, missing credential, wrong tenant, or caller-controlled identifier path when relevant.
 
-| Requirement | Happy path | Fail path | Edge path | Abuse or misuse | Retry/concurrency | Observable |
-| --- | --- | --- | --- | --- | --- | --- |
-| Request creates one resource | valid actor, valid payload | invalid field rejected | boundary value accepted/rejected as specified | oversized body or unknown field if relevant | same idempotency key replay | status, response body, `Location` or resource state |
-| State transition | allowed state moves to next state | forbidden transition rejected | terminal state no-op or conflict as specified | stale version attempt | concurrent transition attempts | persisted state, conflict class, emitted event count |
-| Cache-backed read | cache hit returns fresh value | origin failure follows fallback policy | stale or corrupt value handled | tenant key mismatch denied | miss coalescing under parallel reads | returned value, origin call count, cache write or bypass |
-| Async processing | accepted work reaches terminal success | retryable dependency failure retried | poison message routed or escalated | duplicate message suppressed | replay after restart | durable state, retry count, DLQ/escalation signal |
-| Security boundary | authorized actor succeeds | missing/expired credential denied | tenantless/internal actor follows explicit rule | object ID substitution by another actor | repeated misuse still fail-closed | 401/403 or concealment status, no side effect, audit signal if specified |
+## Agent Traps
+- Do not add every row type to every requirement. A small matrix is better when it proves the risk honestly.
+- Do not let examples invent behavior. If a status, terminal state, retry policy, or concealment policy is not approved, mark it as a blocker.
+- Do not use "edge" as a bucket for cases the strategy cannot explain.
+- Do not bury pass/fail rules in prose; make them visible enough for implementation to encode later.
 
-## Pass/Fail Observables
-- Every row has preconditions, input/data shape, expected outcome, and pass/fail rule.
-- Negative rows prove a meaningful rejection or denial, not merely "got an error".
-- Edge rows name the boundary value or state that makes the case interesting.
-- Retry/concurrency rows state duplicate-suppression, conflict, ordering, or race-sensitive observable.
-- Abuse rows appear when trust boundaries, limits, ownership, or caller-controlled identifiers are involved.
-- Rows that cannot name an observable should be escalated as untestable or underspecified behavior.
-
-## Exa Source Links
-- [testing package](https://pkg.go.dev/testing)
-- [go command testing flags](https://pkg.go.dev/cmd/go#hdr-Testing_flags)
-- [Go Fuzzing](https://go.dev/doc/fuzz/)
-- [Data Race Detector](https://go.dev/doc/articles/race_detector.html)
-- [Go security best practices](https://go.dev/doc/security/best-practices)
-
+## Validation Shape
+The matrix is ready when each row can be converted into a deterministic test name without asking what input, expected state, or proof level was intended.

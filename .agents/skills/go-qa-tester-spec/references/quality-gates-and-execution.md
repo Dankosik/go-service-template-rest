@@ -1,47 +1,43 @@
 # Quality Gates And Execution
 
+## Behavior Change Thesis
+When loaded for symptom "the strategy must name executable validation", this file makes the model map proof obligations to repository-supported commands and proof limits instead of likely mistake "claim generic `go test` or stale CI as sufficient evidence."
+
 ## When To Load
-Load this when the test strategy must name repository-executable validation commands, CI mapping, focused local checks, coverage/race/fuzz/integration gates, OpenAPI checks, migration checks, or residual proof limits.
+Load this when test strategy must name local or CI validation commands, focused checks, coverage/race/fuzz/integration gates, OpenAPI checks, migration checks, generated-code drift checks, or residual proof limits.
 
-## Source Grounding
-- Local source of truth: `docs/build-test-and-development-commands.md`, `Makefile`, `.github/workflows/ci.yml`, `.github/workflows/nightly.yml`, `test/README.md`, and `internal/api/README.md`.
-- Use Go `cmd/go` docs for test flags, coverage mode, caching, focused runs, race, and fuzz semantics.
-- Do not claim readiness from commands that were not run or from commands that do not cover the changed surface.
+## Decision Rubric
+- Use `docs/build-test-and-development-commands.md`, `Makefile`, `.github/workflows/ci.yml`, `.github/workflows/nightly.yml`, `test/README.md`, and `internal/api/README.md` as command sources.
+- Start with the proof obligation, then choose the narrowest focused command and the broader repo/CI gate that cover the same surface.
+- Use focused `go test ./internal/<pkg> -run <RelevantPattern> -count=1` when fresh package-local evidence matters.
+- Use `make test-race` or focused `go test -race ...` only when the scenario executes the shared-state or goroutine path.
+- Use `make openapi-check` when OpenAPI, generated API, or runtime contract behavior changed.
+- Use `make test-integration` or `REQUIRE_DOCKER=1 make test-integration` when Docker-backed/runtime dependency behavior is the proof target; local skips are not CI-equivalent evidence.
+- Use `make sqlc-check` for SQL query/source drift and `make migration-validate` or `docker-migration-validate` when migrations changed.
+- Use `make test-report COVERAGE_MIN=<value>` only for coverage threshold/artifact claims, not as a synonym for "tests passed."
+- Use `make test-fuzz-smoke FUZZ_TIME=<bounded>` only when fuzz targets exist or the skip is recorded honestly.
 
-## Selected/Rejected Level Examples
-| Change risk | Selected execution gate | Rejected gate | Why |
+## Imitate
+| Risk Surface | Focused Command Pattern | Broader Gate | Proof Limit To State |
 | --- | --- | --- | --- |
-| Pure local Go behavior | Focused `go test` for the package plus `make test`/`make vet` as broader evidence | Only a stale previous CI run | Fresh evidence must cover the changed package and repo baseline. |
-| API contract or generated binding change | `make openapi-check` plus relevant focused contract test | `go test ./...` only | Repo contract target also covers generation, drift, runtime contract, lint, and validation. |
-| Concurrency, shared state, worker, or cancellation change | `make test-race` or focused `go test -race` plus targeted scenario | Non-race unit pass only | Race detector evidence is required, but it must execute the risky path. |
-| Fuzzable parser/decoder/validator | Seeded unit cases plus `make test-fuzz-smoke` when fuzz targets exist | Unbounded fuzz in normal CI plan | Smoke is CI-compatible; longer fuzz belongs in nightly or explicit hardening. |
-| Integration behavior or Docker-backed runtime dependency | `make test-integration` locally, `REQUIRE_DOCKER=1 make test-integration` in CI | Unit-only | The proof depends on composed runtime or external dependency behavior. |
-| Coverage reporting or release evidence | `make test-report COVERAGE_MIN=<value>` | Interpreting `go test` pass as coverage proof | Coverage requires coverage artifacts and threshold evaluation. |
-| SQL/migration changes | `make sqlc-check` and migration validation target when migrations changed | App unit tests only | Drift and migration compatibility are separate proof obligations. |
+| Package-local behavior | `go test ./internal/<pkg> -run <RelevantPattern> -count=1` | `make test` | Focused pass proves changed package only; repo pass gives baseline. |
+| Concurrency path | `go test -race ./internal/<pkg> -run <RelevantPattern> -count=1` | `make test-race` | Race run proves only executed interleavings, not unexercised paths. |
+| API contract | focused handler/runtime contract command if known | `make openapi-check` | Contract gate covers generation, drift, runtime contract, lint, and validation. |
+| Integration behavior | focused integration package if known | `make test-integration` or `REQUIRE_DOCKER=1 make test-integration` | Docker-dependent local skip is not success evidence. |
+| SQL/migration | focused affected package if useful | `make sqlc-check`; `make migration-validate` when migrations changed | SQL drift and migration rehearsal are separate proof obligations. |
+| Fuzz smoke | `go test ./<pkg> -run '^$' -fuzz=<Target> -fuzztime=<bounded>` | `make test-fuzz-smoke FUZZ_TIME=<bounded>` | No fuzz targets means a recorded skip, not robustness proof. |
 
-## Scenario Matrix Examples
-| Risk surface | Focused command pattern | Broader repo gate | CI mapping or artifact | Pass/fail observable |
-| --- | --- | --- | --- | --- |
-| Package-local behavior | `go test ./internal/<pkg> -run <RelevantPattern> -count=1` | `make test` | CI `test` job | targeted suite passes fresh; repo tests pass |
-| Concurrency path | `go test -race ./internal/<pkg> -run <RelevantPattern> -count=1` | `make test-race` | CI `test-race` job | race run passes and scenario exercises risky path |
-| API contract | focused handler/runtime contract command if known | `make openapi-check` | CI `openapi-contract` job | generated drift clean, runtime contract check pass, OpenAPI validate/lint pass |
-| Integration | focused integration package if known | `make test-integration` | CI `test-integration` with `REQUIRE_DOCKER=1` | Docker-backed suite passes or local skip is explicitly not CI evidence |
-| Coverage | none unless a focused coverage question exists | `make test-report COVERAGE_MIN=<value>` | CI `test-coverage` plus `coverage.out`, JUnit, JSON artifacts | threshold pass and artifacts produced |
-| Fuzz smoke | `go test ./<pkg> -fuzz=<Target> -fuzztime=<bounded>` | `make test-fuzz-smoke FUZZ_TIME=<bounded>` | nightly fuzz smoke when configured | target runs bounded; no fuzz target skip is recorded honestly |
+## Reject
+- "Run `go test ./...`" as the only gate for API drift, migrations, SQL generation, race-sensitive behavior, integration dependencies, or coverage claims.
+- "CI passed before" as proof. Readiness needs fresh evidence for the changed surface or an explicit reason it cannot be rerun.
+- "Run integration tests" when Docker is unavailable and the local command skipped, without stating that CI still must provide the proof.
+- "Coverage is fine" without a coverage command, threshold, and artifact expectation.
 
-## Pass/Fail Observables
-- Each command maps to the changed risk surface and is repository-supported.
-- Local skips, especially Docker-dependent integration skips, are called out and not presented as CI-equivalent proof.
-- Focused `go test` commands use `-count=1` when fresh non-cached evidence matters.
-- Coverage claims require coverage command/artifact evidence, not a plain test pass.
-- Race claims require `-race` execution on a scenario that touches the shared-state path.
-- Fuzz claims distinguish seed corpus execution under regular `go test` from active fuzzing under `-fuzz`.
-- API claims use `make openapi-check` when OpenAPI/runtime contract behavior changed.
+## Agent Traps
+- Do not invent Makefile targets; inspect repo command docs or Makefile before naming them.
+- Do not use docker and native command names interchangeably when the environment expectation changes.
+- Do not claim fuzz, race, coverage, OpenAPI, or migration proof from a command that does not produce that evidence.
+- Do not defer the command mapping to implementation for high-risk surfaces; the test strategy must be executable enough to plan.
 
-## Exa Source Links
-- [go command test packages](https://pkg.go.dev/cmd/go#hdr-Test_packages)
-- [go command testing flags](https://pkg.go.dev/cmd/go#hdr-Testing_flags)
-- [testing package](https://pkg.go.dev/testing)
-- [Go Fuzzing](https://go.dev/doc/fuzz/)
-- [Data Race Detector](https://go.dev/doc/articles/race_detector.html)
-- [Go security best practices](https://go.dev/doc/security/best-practices)
+## Validation Shape
+Every validation recommendation should state: proof obligation -> focused command if useful -> broader repo/CI gate -> artifact or pass/fail observable -> residual proof limit.

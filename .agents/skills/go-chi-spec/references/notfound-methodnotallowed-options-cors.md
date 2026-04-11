@@ -1,28 +1,29 @@
 # NotFound, MethodNotAllowed, OPTIONS, And CORS
 
+## Behavior Change Thesis
+When loaded for symptom `NotFound, MethodNotAllowed, Allow, HEAD, OPTIONS, CORS preflight, custom fallback JSON, or scoped CORS placement`, this file makes the model choose explicit fallback and preflight policy with header proof instead of likely mistake `trust framework defaults or duplicate CORS and hand-written OPTIONS behavior`.
+
 ## When To Load
-Load this when client-visible `404`, `405`, `OPTIONS`, `Allow`, or CORS preflight behavior is in scope, when CORS placement is disputed, or when custom fallback JSON/error responses must be designed before coding.
+Load when client-visible `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, CORS preflight, fallback JSON/error shape, or CORS placement must be designed before coding.
 
-## Recommended Design Options
-- Pin API fallback behavior explicitly with `NotFound` and `MethodNotAllowed` on the router that owns the API surface.
-- Preserve `Allow` header behavior for `405`. If writing a custom `MethodNotAllowed`, make header behavior an acceptance boundary.
-- Treat CORS as transport policy, not handler business logic. Prefer top-level or API-prefix middleware when preflight must apply across the mounted API surface.
-- Use scoped CORS only when every expected preflight path has matching `OPTIONS` behavior or the CORS middleware is configured to pass through intentionally.
-- Keep preflight responses small and deterministic; avoid duplicating custom `OPTIONS` handlers and CORS middleware for the same path unless the interaction is tested.
+## Decision Rubric
+- Put `NotFound` and `MethodNotAllowed` on the router that owns the client-visible surface, not inside unrelated business handlers.
+- A custom `405` may change body shape, but it must preserve accurate `Allow` behavior when clients depend on it.
+- If the API advertises `HEAD`, make support explicit with `Head(...)`, a documented middleware decision, or a handoff to the API contract owner. Do not infer `HEAD` support from `GET`.
+- Treat CORS as transport policy. Prefer top-level or API-prefix middleware when preflight must apply across a mounted API surface.
+- Use scoped CORS only when expected preflight paths have matching `OPTIONS` behavior or the pass-through behavior is deliberately accepted.
+- Do not duplicate CORS middleware and hand-written `OPTIONS` handlers for the same path unless the precedence, status, and headers are explicitly tested.
+- For generated and manual siblings under one prefix, require the same fallback and CORS policy unless the contract says they differ.
 
-## Rejected Alternatives
-- Leaving public API `404`/`405` response shape to framework defaults when clients require JSON, stable headers, or documented status behavior.
-- Custom `405` handlers that omit `Allow` coverage.
-- Route-local CORS with no `OPTIONS` route plan. The go-chi/cors README warns that `Group`/`With` placement needs matching `OPTIONS` routes.
-- Duplicating preflight policy in both CORS middleware and hand-written `OPTIONS` handlers without tests for precedence and headers.
-
-## Example Sketches
+## Imitate
 ```go
 api := chi.NewRouter()
 api.Use(cors.Handler(cors.Options{AllowedMethods: []string{"GET", "POST", "OPTIONS"}}))
 api.NotFound(jsonNotFound)
 api.MethodNotAllowed(jsonMethodNotAllowedWithAllow)
 ```
+
+Copy the surface shape: fallback and CORS policy are owned by the API router.
 
 ```go
 // Acceptance sketch:
@@ -31,17 +32,40 @@ api.MethodNotAllowed(jsonMethodNotAllowedWithAllow)
 // GET /api/missing returns the API JSON 404 shape.
 ```
 
-## Testable Acceptance Boundaries
-- `GET` for a missing API path returns the chosen JSON `404` contract.
-- Unsupported method on an existing path returns `405` and expected `Allow` values.
-- Preflight requests include `Origin` and `Access-Control-Request-Method` in tests and prove the expected CORS headers.
-- Non-preflight `OPTIONS` behavior is intentionally accepted, passed through, or rejected with documented status.
-- Scoped CORS tests cover one matching route and one unmatched route so fallback behavior is not accidental.
+Copy the proof shape: include real preflight headers and separate missing-path from wrong-method behavior.
 
-## Source Links Gathered Through Exa
-- chi mux source for default `NotFound`, `MethodNotAllowed`, and `Allow` header behavior: https://github.com/go-chi/chi/blob/master/mux.go
-- chi package docs for `NotFound`, `MethodNotAllowed`, and `Options`: https://pkg.go.dev/github.com/go-chi/chi/v5
-- go-chi/cors README for top-level middleware recommendation and scoped `OPTIONS` caveat: https://github.com/go-chi/cors/blob/master/README.md
-- go-chi/cors tests for preflight, `Vary`, allowed methods, allowed headers, and `OptionsPassthrough`: https://github.com/go-chi/cors/blob/master/cors_test.go
-- WHATWG Fetch Standard for CORS preflight semantics: https://fetch.spec.whatwg.org/
-- Go `net/http` docs for handler and server behavior: https://pkg.go.dev/net/http
+## Reject
+```go
+api.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusMethodNotAllowed, problem)
+})
+```
+
+Reject unless the design explains how `Allow` is preserved or why the API contract does not require it.
+
+```go
+api.With(cors.Handler(opts)).Post("/widgets", createWidget)
+// no matching OPTIONS route or broader CORS scope
+```
+
+Reject because route-local CORS does not by itself prove preflight behavior for the path.
+
+```go
+api.Use(cors.Handler(opts))
+api.Options("/widgets", customPreflight)
+```
+
+Reject unless the design names which layer wins and tests status, `Vary`, allow-method, and allow-header behavior.
+
+## Agent Traps
+- Do not say "custom JSON fallback" and forget `Allow`.
+- Do not assume bare `OPTIONS` tests prove CORS. Preflight includes `Origin` and `Access-Control-Request-Method`.
+- Do not let API fallback policy accidentally cover `/debug`, `/metrics`, or internal health routes unless those routes are API-owned.
+- Do not settle `HEAD` support in the chi reference when it is actually an API-contract decision; record the handoff when needed.
+
+## Validation Shape
+- Unknown API path returns the chosen JSON `404` shape.
+- Existing route with unsupported method returns `405` and expected `Allow`.
+- Preflight request includes `Origin` and `Access-Control-Request-Method` and proves the intended CORS headers.
+- Scoped CORS proof covers one matching route and one unmatched route.
+- Generated/manual sibling proof covers the same fallback scenario on both sides if they share a prefix.

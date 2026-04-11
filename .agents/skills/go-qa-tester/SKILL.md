@@ -44,19 +44,22 @@ Load only the local guidance that matches the changed surface:
 - auth, tenant isolation, or trust-boundary behavior: touched auth or boundary code and the approved security expectation
 
 ## Lazy Reference Selector
-Read only the files needed for the current test task:
+References are compact rubrics and example banks, not exhaustive checklists or Go documentation dumps. Load at most one reference by default. Load more only when the task clearly spans independent decision pressures, such as API idempotency plus cache tenant isolation plus race validation.
 
-| Load when... | Reference |
-| --- | --- |
-| you need to turn requirements, invariants, or bug reports into named test cases | `references/obligation-to-test-translation.md` |
-| you must decide unit vs integration vs contract vs fuzz vs benchmark/example coverage | `references/minimal-proving-layer-selection.md` |
-| you are writing ordinary Go tests, helpers, subtests, fixtures, fuzz seeds, or examples | `references/go-test-construction-patterns.md` |
-| goroutines, channels, shutdown, backpressure, timers, deadlines, races, or `testing/synctest` are involved | `references/deterministic-concurrency-and-time-tests.md` |
-| API, SQL, migrations, cache, idempotency, tenant isolation, or repository integration behavior is involved | `references/api-data-cache-test-patterns.md` |
-| errors, wrapping, context propagation, cancellation, deadline behavior, or fail-fast lifecycle is involved | `references/error-context-and-cancellation-tests.md` |
-| you need command selection, race/fuzz/integration evidence, or final reporting wording | `references/verification-command-evidence.md` |
+Pick the narrowest matching reference by symptom and behavior change:
 
-The references contain examples and Exa source links gathered from Go primary docs plus repository-local test patterns. If a new example depends on a newer Go feature or external library behavior not covered there, refresh that source with Exa before relying on it.
+| Symptom | Behavior change | Reference |
+| --- | --- | --- |
+| Approved requirements, invariants, review findings, bug notes, or test plans need to become named scenarios. | Makes the model write tests around observable obligations and escalations instead of branch coverage, implementation mirroring, or guessed semantics. | `references/obligation-to-test-translation.md` |
+| The proof layer is ambiguous: unit vs handler/contract vs integration vs fuzz vs benchmark vs example. | Makes the model choose the smallest layer that can observe the regression instead of defaulting to slow integration coverage or faking away boundary behavior. | `references/minimal-proving-layer-selection.md` |
+| Ordinary Go test structure, subtests, helpers, fixtures, fuzz seeds, benchmarks, or examples are the main risk. | Makes the model keep scenario intent, helpers, fixtures, and assertions visible instead of helper-heavy tests, table-driven theater, opaque assertions, or unsafe `t.Parallel()`. | `references/go-test-construction-patterns.md` |
+| Goroutines, channels, worker pools, shutdown, backpressure, timers, deadlines, race detection, or `testing/synctest` are involved. | Makes the model use handshakes, bounded exit checks, fake time where suitable, and race evidence instead of sleeps, pass-by-no-panic tests, or unobserved leaks. | `references/deterministic-concurrency-and-time-tests.md` |
+| Wrapped errors, sentinel or typed error categories, context propagation, cancellation categories, deadlines, shutdown error shape, or fail-fast behavior are involved. | Makes the model prove inspectable error and context contracts instead of raw string comparisons, nil-only checks, swallowed cancellation, or accidental `context.Background()`. | `references/error-context-and-cancellation-tests.md` |
+| HTTP routes, generated OpenAPI handlers, strict request parsing, status/header/body mapping, idempotency, request IDs, CORS/fallback behavior, async operation resources, or retry classification are involved. | Makes the model assert approved transport contracts at the handler/generated boundary instead of service-only proof, "any 4xx" assertions, broad end-to-end tests, or guessed mappings. | `references/api-contract-test-patterns.md` |
+| SQL repositories, generated queries, migrations, transactions, row scanning, tenant isolation, cache hit/miss/stale/fallback behavior, TTLs, stampede suppression, testcontainers, or Docker-gated integration behavior are involved. | Makes the model prove durable state, transaction/cache semantics, and failure categories at the right seam instead of overusing Postgres for mapper tests, freezing cache keys, or inventing migration/backfill mechanisms. | `references/data-cache-integration-test-patterns.md` |
+| Final handoff needs command selection, race/fuzz/integration evidence, or validation wording. | Makes the model report fresh, risk-matched command evidence instead of vague "tests should pass" claims, cached success, blanket `go test ./...`, or unreported failures. | `references/verification-command-evidence.md` |
+
+If a reference would not change the test decision, do not load it. If newer Go or dependency behavior is decisive for an example, verify it against the active toolchain or official primary docs before relying on it.
 
 ## Core Test Discipline
 - Obligations first: test what must be true, not what is easiest to assert.

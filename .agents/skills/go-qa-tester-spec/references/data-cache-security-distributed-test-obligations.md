@@ -1,46 +1,40 @@
 # Data, Cache, Security, And Distributed Test Obligations
 
+## Behavior Change Thesis
+When loaded for symptom "the proof depends on durable state, cache behavior, tenant-scoped storage, migration, or async/distributed recovery", this file makes the model choose stateful observables and replay/fallback rows instead of likely mistake "use mocks or a successful API response as proof."
+
 ## When To Load
-Load this when test strategy must cover SQL transactions, migrations, query shape, cache key/fallback/staleness behavior, tenant or authorization boundaries, outbox/inbox, dedup, replay, ordering, compensation, reconciliation, or mixed-version distributed behavior.
+Load this when test strategy must cover SQL transactions, migrations, deterministic queries, cache key/fallback/staleness, tenant-safe durable/cache scoping, outbox/inbox, dedup, replay, ordering, compensation, reconciliation, or mixed-version compatibility.
 
-## Source Grounding
-- Use approved data, cache, security, and distributed specs as the source of behavior.
-- Use Go database docs to calibrate transaction and context-proof obligations.
-- Use OWASP only for security test objective patterns such as object-level authorization; do not import vulnerability examples as product requirements.
+## Decision Rubric
+- Transaction proof must observe all-or-nothing durable state, rollback on representative failure, and recognizable error/cancellation behavior when relevant.
+- Query proof must control data shape enough to prove ordering, pagination boundaries, filters, cursor validity, and equal sort-key ties.
+- Cache proof must distinguish correctness, staleness, isolation, fallback, serialization/TTL, origin protection, and degraded cache behavior.
+- Tenant/security proof here is stateful: tenant dimensions in keys, queries, persisted rows, cache entries, and durable side effects. Use API-boundary guidance when the main proof is caller-visible status or payload.
+- Distributed proof must include duplicate, replay, ordering, ack-after-durable-state, retry class, poison, compensation/forward recovery, or reconciliation rows when those are part of the approved flow.
+- Migration/backfill proof must cover expand/contract compatibility, generated SQL drift, idempotent/resumable backfill, verification gate, and destructive-step block where applicable.
+- If the owning data/cache/security/distributed spec has not approved behavior, record a blocker rather than inventing it in QA strategy.
 
-## Selected/Rejected Level Examples
-| Obligation | Selected level | Rejected level | Why |
+## Imitate
+| Surface | Required Rows | Selected Proof | Observable To Copy |
 | --- | --- | --- | --- |
-| Transaction commits all changes or rolls back all changes | Integration | Mock-only unit | The claim is atomic durable state, not just control flow. |
-| Query pagination is deterministic under equal sort keys | Integration | API e2e only | The data ordering invariant belongs near the DB/query boundary and needs controlled data shape. |
-| Cache key includes tenant/scope/version dimensions | Unit for pure key builder plus integration when Redis/TTL/serialization matters | Contract happy path | Happy response cannot prove isolation, stale prevention, or fallback semantics. |
-| Cache outage degradation | Integration or component test with controlled cache failure | Live outage e2e | Controlled failure proves the exact fallback and origin-protection behavior. |
-| Tenant mismatch or object ownership denial | Contract or integration with multiple actors | Unit-only auth helper | The proof must exercise caller identity and boundary-visible denial. |
-| Outbox/inbox dedup or ack-after-durable-state | Integration or process-level component | Unit-only message handler | The durable ordering of state change, message write, ack, and replay behavior is the obligation. |
-| Migration/backfill compatibility | Migration validation/integration rehearsal | Unit | The proof concerns schema/data compatibility, idempotence, resumability, and drift. |
+| SQL transaction | all statements succeed; mid-transaction failure; context cancellation; retry after rollback | Integration | persisted rows all present or all absent, returned error class, no inconsistent read |
+| Pagination/query | empty; first page; last page; invalid cursor; equal sort-key tie; concurrent insert if specified | Integration plus contract if client-visible | stable order, valid cursor, no duplicate/missing row across boundary |
+| Cache | hit; miss; stale entry; corrupt entry; Redis timeout; tenant key mismatch; parallel miss | Unit and/or integration | returned value, origin call count, cache write/delete/bypass, fallback signal |
+| Distributed flow | first delivery; duplicate delivery; out-of-order event; retryable error; poison message; replay after restart | Integration or process proof | durable state, inbox/outbox row, ack timing, retry counter, DLQ/escalation, reconciliation output |
+| Migration/backfill | expand; old app/new schema compatibility; resumable backfill; verification gate; contract step | Migration validation/integration | migration applies cleanly, generated SQL drift resolved, backfill idempotent, destructive step blocked until verified |
 
-## Scenario Matrix Examples
-| Surface | Required rows | Selected proof | Pass/fail observable |
-| --- | --- | --- | --- |
-| SQL transaction | all statements succeed, mid-transaction failure, commit failure if representable, context cancellation | Integration | persisted rows all present or all absent, returned error class, no inconsistent read |
-| Pagination/query | empty, first page, last page, invalid cursor, equal sort-key tie, concurrent insert if specified | Integration plus contract if client-visible | stable order, cursor validity, no duplicate/missing row across page boundary |
-| Cache | hit, miss, stale entry, corrupt entry, Redis timeout, tenant key mismatch, stampede under parallel miss | Unit and/or integration | returned value, origin call count, cache write/delete, fallback/degraded signal |
-| Security boundary | unauthenticated, invalid credential, wrong tenant, wrong object owner, allowed actor | Contract/integration | fail-closed status/error, no data leak, no side effect, audit/metric only if specified |
-| Distributed flow | first delivery, duplicate delivery, out-of-order event, retryable error, poison message, replay after restart | Integration/process proof | durable state, inbox/outbox row, ack timing, retry counter, DLQ/escalation, reconciliation output |
-| Migration/backfill | expand step, old app/new schema compatibility, resumable backfill, verification gate, contract step | Migration validation/integration | migration applies cleanly, generated SQL drift resolved, backfill idempotent, destructive step blocked until verified |
+## Reject
+- "Mock repository proves rollback." The durable state boundary is exactly what needs proof.
+- "API returns 200, so cache works." A successful response can hide stale reads, tenant key misses, serialization bugs, or origin stampede.
+- "Distributed handler unit test" as the only proof for ack timing, inbox/outbox dedup, replay safety, or reconciliation.
+- "Migration applies" without backfill resumability, old/new compatibility, or destructive-step verification when those risks exist.
 
-## Pass/Fail Observables
-- Durable-state obligations name the persisted state that proves success and the absence of partial state that proves rollback.
-- Cache obligations distinguish correctness, staleness, isolation, fallback, and origin protection.
-- Security obligations include negative actor/scope rows and expected denial semantics.
-- Distributed obligations include duplicate, replay, ordering, and ack/durable-state observables where applicable.
-- Migration obligations include compatibility and verification gates before destructive or irreversible steps.
-- Any behavior not already approved by the owning specialist remains a blocker, not a QA invention.
+## Agent Traps
+- Do not duplicate API-boundary advice here. If the main proof is HTTP status/body/auth response, load the API reference instead.
+- Do not treat a fake cache as proof of Redis TTL, serialization, eviction, or connection-failure behavior.
+- Do not skip negative tenant rows when tenant identity affects keys, queries, or persisted side effects.
+- Do not assume ordering or exactly-once behavior for distributed flows unless approved.
 
-## Exa Source Links
-- [Executing transactions](https://go.dev/doc/database/execute-transactions)
-- [Canceling in-progress operations](https://go.dev/doc/database/cancel-operations)
-- [OWASP WSTG API Broken Object Level Authorization](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/12-API_Testing/02-API_Broken_Object_Level_Authorization)
-- [Go security best practices](https://go.dev/doc/security/best-practices)
-- [OpenAPI Specification v3.0.4](https://spec.openapis.org/oas/v3.0.4.html)
-
+## Validation Shape
+Stateful strategy is ready when it names the durable/cache/message observable, the controlled data shape, the failure or replay trigger, and the repository validation family such as integration, SQL generation/drift, or migration rehearsal.

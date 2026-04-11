@@ -1,40 +1,40 @@
 # Branch Protection And PR Governance
 
+## Behavior Change Thesis
+When loaded for symptom "the delivery spec needs merge governance or protected-branch policy," this file makes the model choose enforceable GitHub branch-protection settings and drift guards instead of likely mistake "use branch protection" with vague review/check language or silent admin bypass.
+
 ## When To Load
-Load this when specifying merge governance, branch protection, rulesets, required reviews, CODEOWNERS, status checks, admin bypass, conversation resolution, or merge queue readiness.
+Load for protected branch setup, rulesets, required reviews, CODEOWNERS, required status checks, admin/bypass rules, conversation resolution, or merge queue readiness.
 
 ## Local Source Of Truth
-- `scripts/dev/configure-branch-protection.sh` configures required status checks, strict up-to-date branches, admin enforcement, code-owner review, stale-review dismissal, conversation resolution, and force-push/deletion denial.
-- `scripts/ci/required-guardrails-check.sh` verifies required guardrail files and keeps branch-protection contexts aligned with `.github/workflows/ci.yml`.
+- `scripts/dev/configure-branch-protection.sh` configures strict required checks, PR review, code-owner review, stale-review dismissal, conversation resolution, force-push/deletion denial, and admin enforcement.
+- `scripts/ci/required-guardrails-check.sh` keeps required branch-protection contexts aligned with `.github/workflows/ci.yml`.
 - `.github/CODEOWNERS`, `.github/pull_request_template.md`, `SECURITY.md`, `CONTRIBUTING.md`, and `.github/dependabot.yml` are repository governance guardrails.
 
-## Enforceable Policy Examples
-- Protected default branch requires pull requests, up-to-date status checks, at least one approving review, code-owner review, stale-review dismissal, resolved conversations, force-push denial, deletion denial, and admin enforcement.
-- Required checks must include every merge-blocking CI job exposed by `.github/workflows/ci.yml`; the guardrails check must fail if the configured context list and CI job list drift.
-- CODEOWNERS placeholders block branch-protection setup until replaced with real owners.
-- If GitHub rulesets are introduced, record whether they layer with or replace classic branch protection, and require the most restrictive effective rule to be documented as the merge policy.
-- Any bypass actor must be named in an exception record with scope, owner, expiry, and audit trail; default policy is no silent bypass.
+## Decision Rubric
+- Protected default branch policy should require PRs, up-to-date required checks, at least one approving review, code-owner review, stale-review dismissal, resolved conversations, force-push denial, deletion denial, and admin enforcement.
+- Required check contexts must be stable and match `.github/workflows/ci.yml`; `make guardrails-check` is the drift alarm for configured contexts and guardrail files.
+- CODEOWNERS placeholders block code-owner review claims; replacement with real owners is a prerequisite for claiming owner review enforcement.
+- If GitHub rulesets are introduced, state whether they layer with or replace classic branch protection and document the most restrictive effective rule.
+- Any bypass actor needs an exception record with owner, scope, expiry, compensating controls, and audit evidence. Default is no silent bypass.
 
-## Non-Enforceable Anti-Patterns
-- "Use branch protection" without naming which protections are required.
-- Requiring status checks whose job names are duplicated across workflows or unstable across renames.
-- Depending on admin discipline instead of enabling admin enforcement or no-bypass controls.
-- Keeping CODEOWNERS as a placeholder while treating code-owner review as active.
-- Allowing direct pushes to protected branches because release fixes are "urgent" without an exception record and follow-up reconciliation.
+## Imitate
+- "Run `make guardrails-check`; then apply `make gh-protect BRANCH=main`; record exported GitHub settings proving strict checks, admin enforcement, stale-review dismissal, code-owner review, and resolved conversations." Copy the command-plus-export proof shape.
+- "If `openapi-breaking` becomes a required compatibility gate, add it to GitHub required checks and the guardrails checker in the same change." Copy the two-surface drift-control rule.
+- "Rulesets may be adopted only with an effective-policy note that says which classic branch-protection controls remain active." Copy the anti-ambiguity rule.
 
-## Evidence Artifacts
-- Output from `make guardrails-check`.
-- Output from `make gh-protect BRANCH=main` or the equivalent GitHub API/ruleset configuration change.
-- Screenshot or exported API response showing required status checks, strict mode, review settings, conversation resolution, and bypass settings.
-- PR evidence: required checks pass on the merge SHA, code-owner approval exists when touched paths require it, and conversations are resolved.
+## Reject
+- "Require status checks." This is not enough unless the exact contexts are named and stable.
+- "Admins can merge emergency fixes directly." This is silent bypass unless there is an exception record and reconciliation path.
+- "CODEOWNERS review is required" while `.github/CODEOWNERS` still contains `@your-org/your-team`. This claims enforcement that the repo setup script rejects.
+
+## Agent Traps
+- Do not decide who owns code here; only turn settled ownership into enforcement.
+- Do not require duplicated or unstable job names as status checks.
+- Do not treat GitHub UI screenshots alone as durable policy if a script or guardrail can keep it repo-reviewable.
+
+## Validation Shape
+Use `make guardrails-check`, `make gh-protect BRANCH=main` or equivalent API/ruleset export, and PR evidence that required checks pass on the merge SHA with code-owner approval and resolved conversations when required.
 
 ## Hand-Off Boundary
 Do not decide code ownership, API ownership, or security review ownership here. This file only turns settled ownership policy into merge enforcement.
-
-## Exa Source Links
-- GitHub Docs: [About protected branches](https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-- GitHub Docs: [Managing a branch protection rule](https://docs.github.com/en/github/administering-a-repository/enabling-required-status-checks)
-- GitHub Docs: [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
-- GitHub REST Docs: [REST API endpoints for rules](https://docs.github.com/en/rest/orgs/rules)
-- OpenSSF: [scorecard-action](https://github.com/ossf/scorecard-action)
-

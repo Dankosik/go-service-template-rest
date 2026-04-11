@@ -36,17 +36,18 @@ Escalate if release safety depends on missing migration constraints, runtime ass
 - Keep local and CI behavior aligned through repository-defined commands.
 
 ## Reference Files Selector
-Load only the files needed for the delivery decision in front of you. Prefer the repository's CI files, build files, and scripts as the local source of truth, then use the linked primary sources for policy examples and terminology.
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default unless the task clearly spans multiple independent decision pressures. Prefer live repository files as the source of truth, then use a reference to sharpen the decision.
 
-| Need | Load |
-| --- | --- |
-| CI tiering, required jobs, fail-closed blocking semantics, local/CI parity | `references/ci-gate-matrix-and-blocking-policy.md` |
-| Protected branch, required status checks, CODEOWNERS, PR review, bypass rules | `references/branch-protection-and-pr-governance.md` |
-| Generated artifacts, OpenAPI/sqlc/mock/stringer drift, docs drift | `references/codegen-contract-and-docs-drift.md` |
-| Migration validation, phased release safety, rollback class, one migrator policy | `references/migration-release-safety.md` |
-| Dockerfile/runtime baseline, non-root, minimal image, Kubernetes securityContext | `references/container-runtime-hardening.md` |
-| SBOM, provenance attestation, signing, digest and publish trust | `references/supply-chain-provenance-and-sbom.md` |
-| Temporary bypasses, suppression records, accepted release risk | `references/exception-governance.md` |
+| Symptom | Load | Behavior Change |
+| --- | --- | --- |
+| CI tiers, required jobs, skipped/cancelled checks, local/CI parity, nightly or release preflight evidence | `references/ci-gate-matrix-and-blocking-policy.md` | Choose exact repo-owned jobs, Make targets, and fail-closed status semantics instead of vague "usual checks" or advisory evidence. |
+| Protected branch setup, rulesets, required reviews, CODEOWNERS, bypass actors, conversation resolution, merge queue readiness | `references/branch-protection-and-pr-governance.md` | Choose enforceable branch-protection settings plus drift guards instead of generic "use branch protection" language. |
+| Generated OpenAPI/sqlc/mock/stringer artifacts, docs drift, compatibility-check blocking, base-ref behavior | `references/codegen-contract-and-docs-drift.md` | Choose generator-backed drift gates and docs-trigger policy instead of reviewer-memory regeneration advice. |
+| Schema migrations, data-moving release, rollback class, mixed-version window, backfill gates, one-migrator policy | `references/migration-release-safety.md` | Choose rehearsal, rollback classification, compatibility, and migrator ownership instead of "run migrations before deploy." |
+| Dockerfile, runtime image contents, non-root/minimal image baseline, Trivy gate, Kubernetes securityContext when actually in scope | `references/container-runtime-hardening.md` | Choose the repo's digest-pinned non-root runtime baseline and scan gates instead of generic image-hardening advice. |
+| Railway deployment policy, healthcheck, overlap/draining, restart policy, capacity baseline, platform drift in `railway.toml` | `references/railway-release-runtime-policy.md` | Choose repo-reviewable Railway platform evidence instead of generic Kubernetes rollout or manual monitoring language. |
+| SBOM, provenance, image signing, OIDC permissions, GHCR publish, SLSA-style verifier-facing release trust | `references/supply-chain-provenance-and-sbom.md` | Choose digest-bound signing, provenance, SBOM, and verification proof instead of signing mutable tags or optional metadata. |
+| Temporary bypass, suppression, accepted release risk, manual release override, branch-protection bypass, rollback exception | `references/exception-governance.md` | Challenge the exception path with owner, expiry, compensating proof, and reopen conditions instead of silently downgrading gates. |
 
 If a reference exposes an unresolved API, schema, distributed consistency, security-domain, or application architecture decision, stop at the delivery consequence and hand that decision to the owning specialist/spec.
 
@@ -65,7 +66,7 @@ If a reference exposes an unresolved API, schema, distributed consistency, secur
 ### Runtime And Release Trust
 - Default to multi-stage builds, minimal runtime images, non-root execution, deterministic Go build flags, and explicit runtime-hardening policy.
 - Treat SBOM, provenance attestation, artifact signing, digest resolution, and publish permissions as release-gate evidence, not optional metadata.
-- Require progressive rollout strategy, rollback ownership, and objective promotion or rollback criteria for risky changes.
+- Tie deployment-platform policy to repo-reviewable surfaces such as `railway.toml`; require objective promotion or rollback criteria for risky changes.
 
 ## Deliverable Shape
 When writing the delivery/platform spec or review, cover:
@@ -73,6 +74,7 @@ When writing the delivery/platform spec or review, cover:
 - merge and release hard-stop criteria
 - docs, codegen, contract, and migration drift policy
 - containerization and runtime hardening baseline
+- deployment-platform health, restart, rollout, and capacity evidence when platform policy is in scope
 - release trust evidence requirements
 - exception and risk-acceptance policy
 

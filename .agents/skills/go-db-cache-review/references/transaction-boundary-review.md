@@ -1,11 +1,14 @@
 # Transaction Boundary Review
 
+## Behavior Change Thesis
+When loaded for changed transaction scope or cache work around commit, this file makes the model choose the smallest atomic DB boundary and post-commit cache decision instead of likely mistakes such as per-statement fixes, Redis inside a transaction, or inventing an outbox design from review.
+
 ## When To Load
 Load this reference when a Go diff starts, moves, retries, or removes a SQL transaction; splits dependent DB writes; mixes DB writes with cache updates; changes isolation options; or adds rollback/commit handling.
 
 Keep findings local: prove why the changed operation must be atomic or why the transaction boundary is now too wide. Escalate schema ownership, saga/outbox design, API idempotency semantics, or a new retry policy instead of solving those here.
 
-## Review Smell Patterns
+## Decision Rubric
 - Dependent writes that must commit together are executed on `db` outside one `Tx`.
 - A transaction is started with `Begin` instead of `BeginTx(ctx, opts)` in a request path.
 - `Rollback` is missing on error paths or ignored before early return.
@@ -122,6 +125,12 @@ func (s *Store) RenameUser(ctx context.Context, id, name string) error {
 
 The review finding should be precise: avoid holding DB locks while doing Redis I/O and avoid invalidating data that may roll back.
 
+## Agent Traps
+- Do not move Redis, HTTP, queue publish, or cache fill work inside a transaction just to make code "ordered"; that stretches locks across external I/O.
+- Do not treat `defer tx.Rollback()` after `BeginTx` as a bug when the code checks `Commit`; rollback is normally a no-op after a successful commit.
+- Do not invent outbox, saga, distributed transaction, or retry policy as the suggested fix unless the existing design already provides it.
+- Do not report success after a `Commit` error. The safe review point is an unknown-state risk that needs returned or recorded failure handling.
+
 ## Smallest Safe Fix
 - Use `db.BeginTx(ctx, opts)` when a request context exists.
 - Add `defer tx.Rollback()` immediately after a successful `BeginTx`; let it no-op after `Commit`.
@@ -130,14 +139,8 @@ The review finding should be precise: avoid holding DB locks while doing Redis I
 - Return or record `Commit` errors as unknown-state risks; never report success after a failed commit.
 - If the fix needs outbox, saga, new idempotency keys, or API error semantics, escalate rather than inventing it in a review finding.
 
-## Validation Ideas
+## Validation Shape
 - Add a test that makes the second DB statement fail and verifies the first write is rolled back.
 - Add a test that makes `Commit` fail and verifies no success response is returned.
 - Add a fake cache that blocks or fails to prove Redis calls are not inside the DB transaction.
 - Add a concurrency/integration case for the changed isolation assumption only when the invariant depends on it.
-
-## Source Links From Exa
-- Go `database/sql` package: https://go.dev/pkg/database/sql
-- Go SQLInterface transaction examples: https://go.dev/wiki/SQLInterface
-- PostgreSQL transaction isolation: https://www.postgresql.org/docs/current/transaction-iso.html
-- PostgreSQL client statement and lock timeout settings: https://www.postgresql.org/docs/current/runtime-config-client.html

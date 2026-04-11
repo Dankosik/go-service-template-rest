@@ -1,43 +1,20 @@
 # Hot Path Cost Model Review
 
+## Behavior Change Thesis
+When loaded for symptom "the changed hot path adds loops, copies, serialization, batching changes, fan-out growth, or repeated parse/encode/decode work," this file makes the model choose a scaling-dimension finding instead of likely mistake "block on isolated micro-optimization folklore such as `fmt.Sprintf` is slow."
+
 ## When To Load
-Load this when a review touches request hot paths, loops, serialization, batching, fan-out, repeated parsing, repeated encoding/decoding, map/slice copying, compression, hashing, regex, template rendering, or algorithmic shape.
+Load this when the review turns on how work scales with request count, page size, item count, payload bytes, fan-out width, or repeated materialization in a changed hot path.
 
-Use this to explain why the work scales with input size, request count, fan-out width, or payload bytes. Keep the finding grounded in the changed hot path and avoid speculative micro-tuning.
+## Decision Rubric
+- Name the scaling dimension first: item count, page size, payload bytes, fan-out width, cache misses, or request concurrency.
+- Distinguish CPU/materialization loops from I/O loops. Use `db-cache-and-io-amplification.md` when the loop is primarily round trips.
+- Prefer structural fixes such as reuse existing normalized data, batch once, move parse/encode to a boundary, avoid over-fetching, or preserve batching.
+- Do not make a finding from a single operation inside a loop unless the path is hot and the loop bound can be material.
+- Compare typical and high-end input sizes. Tiny benchmark inputs can hide asymptotic or per-item growth.
+- Do not require a benchmark for obvious unbounded work, but ask for the smallest proof when impact depends on real workload size.
 
-## Review Smell Patterns
-- A changed loop adds nested scans over the same data.
-- A per-item path repeats `json.Marshal`, `json.Unmarshal`, `fmt.Sprintf`, regex compilation, time parsing, compression, hashing, or template rendering.
-- A request handler materializes the same payload multiple times as `[]byte`, `string`, maps, or structs.
-- A diff copies full slices or maps on every request when only a small projection changed.
-- Batching is removed or fan-out width grows with input size.
-- New sorting or filtering happens after over-fetching a large dataset.
-- The PR optimizes a cold helper while the hot path cost is in I/O, serialization, or fan-out.
-- The benchmark input is much smaller than the actual production limit, hiding asymptotic growth.
-
-## Evidence Required
-- State the scaling dimension: page size, item count, payload bytes, fan-out width, cache misses, or request concurrency.
-- Use a benchmark or request-path measurement with at least typical and high-end input sizes.
-- Use CPU and allocation profiles when the cost is repeated CPU work or repeated materialization.
-- Use query-count or dependency timing evidence when the "loop" is I/O rather than CPU.
-- Do not require a benchmark for obvious unbounded work, but ask for the smallest proof when the impact depends on workload size.
-
-## Bad Finding
-```text
-[medium] [go-performance-review] internal/api/list.go:74
-Issue:
-`fmt.Sprintf` in a loop is slow.
-Impact:
-The endpoint may be slower.
-Suggested fix:
-Use strings.Builder.
-Reference:
-N/A
-```
-
-Why it fails: it treats a generic micro-optimization as a blocker without proving the loop is hot, the input size matters, or formatting dominates cost.
-
-## Good Finding
+## Imitate
 ```text
 [high] [go-performance-review] internal/api/list.go:74
 Issue:
@@ -47,10 +24,36 @@ At max page size the handler performs 500 duplicate parse/format operations per 
 Suggested fix:
 Reuse the normalized timestamp from the loaded model or precompute it once per item at the data boundary. Validate with benchmarks for typical and max page sizes using `-benchmem` and benchstat.
 Reference:
-Go benchmark methodology and diagnostics guidance for CPU/allocation profiling.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: changed repeated work, scaling bound, why the proof misses that bound, and a structural fix.
+
+## Reject
+```text
+Issue:
+`fmt.Sprintf` in a loop is slow.
+Suggested fix:
+Use strings.Builder.
+```
+
+Reject it because it treats a generic micro-optimization as a blocker without proving the loop is hot, the input size matters, or formatting dominates cost.
+
+```text
+Issue:
+This helper is optimized, so the endpoint should be faster.
+```
+
+Reject it when the request hot path cost is in I/O, serialization, batching, or fan-out outside that helper.
+
+## Agent Traps
+- Naming a CPU micro-cost while missing the larger repeated encode/decode, copy, or fan-out multiplier.
+- Forgetting that max allowed page size or fan-out width can matter more than the benchmark's default input.
+- Suggesting clever syntax rewrites before reducing duplicate work.
+- Treating payload amplification and over-fetching as style rather than latency and throughput risk.
+- Failing to state when the correct proof is query-count or dependency timing rather than a CPU benchmark.
+
+## Validation Shape
 ```bash
 go test -run '^$' -bench '^BenchmarkListResponse/(size=50|size=500)$' -benchmem -count=10 ./internal/api > new.txt
 benchstat old.txt new.txt
@@ -60,10 +63,3 @@ go tool pprof -top -alloc_space mem.out
 ```
 
 For fan-out paths, add dimensions to sub-benchmark names, such as `shards=8`, `shards=64`, or `misses=100`, so benchstat compares the same workload slice.
-
-## Source Links From Exa
-- [Go Diagnostics](https://go.dev/doc/diagnostics)
-- [testing package benchmarks](https://pkg.go.dev/testing)
-- [Go Benchmark Data Format](https://go.dev/design/14313-benchmark-format)
-- [runtime/pprof package](https://pkg.go.dev/runtime/pprof)
-

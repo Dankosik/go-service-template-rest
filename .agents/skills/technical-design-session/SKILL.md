@@ -66,16 +66,26 @@ Rules:
 - do not reopen framing casually; if the design cannot be completed honestly, route back to `specification`
 
 ## Reference Files
-Use `references/` lazily. Read only the file that matches the current design-session pressure, after repo-local authority has been checked. These files contain examples and calibration links; they do not replace `AGENTS.md`, `docs/spec-first-workflow.md`, `docs/repo-architecture.md`, approved `spec.md`, or `.agents/skills/go-design-spec/SKILL.md`.
+Keep this `SKILL.md` as the technical-design-session wrapper protocol. References are compact rubrics and example banks, not exhaustive checklists, source-link collections, or substitutes for repo-local authority.
 
-- [technical-design-entry-readiness.md](references/technical-design-entry-readiness.md) - use before starting or resuming technical design, especially when checking approved `spec.md`, current phase, allowed writes, and blocked entry cases.
-- [required-design-artifact-examples.md](references/required-design-artifact-examples.md) - use when shaping or reviewing the required `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` bundle.
-- [conditional-design-artifact-triggers.md](references/conditional-design-artifact-triggers.md) - use when deciding whether `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md` is genuinely triggered.
-- [repo-architecture-loading-rules.md](references/repo-architecture-loading-rules.md) - use when deciding whether `docs/repo-architecture.md` must be loaded before design work.
-- [workflow-plan-technical-design-updates.md](references/workflow-plan-technical-design-updates.md) - use when updating `workflow-plan.md` and `workflow-plans/technical-design.md` after a complete, blocked, or repair pass.
-- [planning-handoff-and-stop-rules.md](references/planning-handoff-and-stop-rules.md) - use before marking the design bundle planning-ready or stopping at a blocked handoff.
+Default loading rule:
+- Load at most one reference by default.
+- Load a second reference only when the task clearly spans multiple independent decision pressures, such as uncertain entry readiness plus closing handoff, or required artifact shaping plus conditional artifact triggers.
+- Do not load the full `references/` directory by default.
+- Check repo-local authority first: `AGENTS.md`, `docs/spec-first-workflow.md`, task-local workflow files, approved `spec.md`, and `docs/repo-architecture.md` when triggered.
+- Do not copy examples blindly; bind them to the current task's phase, artifacts, blockers, and approved decisions.
+- If a reference exposes a missing decision, route back to `specification`. If it exposes missing execution sequencing, stop at the planning handoff instead of writing `plan.md` or `tasks.md`.
 
-Do not bulk-load all examples. If a reference exposes a missing decision, route back to `specification`. If it exposes missing execution sequencing, stop at the planning handoff instead of writing `plan.md` or `tasks.md`.
+Routing table:
+
+| Reference | Load When The Symptom Is | Behavior Change |
+| --- | --- | --- |
+| [references/technical-design-entry-readiness.md](references/technical-design-entry-readiness.md) | `spec.md`, current phase, allowed writes, or user-requested phase mixing is unclear before technical-design writes. | Blocks, reopens, or narrows the write surface instead of starting design from a draft spec, chat momentum, or an obvious implementation path. |
+| [references/repo-architecture-loading-rules.md](references/repo-architecture-loading-rules.md) | Repository boundaries, runtime flow, ownership seams, new packages, dependency direction, generated contracts, async work, data flow, or bootstrap/app/infra edges are in scope. | Loads or cites `docs/repo-architecture.md` before boundary decisions instead of relying on memory or treating generated/runtime surfaces as authority. |
+| [references/required-design-artifact-examples.md](references/required-design-artifact-examples.md) | The core design bundle needs creation, repair, or boundary cleanup across overview, component map, sequence, or ownership map. | Splits task-local technical context into the four required artifacts instead of writing one design dump or hiding design content in workflow files. |
+| [references/conditional-design-artifact-triggers.md](references/conditional-design-artifact-triggers.md) | Optional design artifacts, `test-plan.md`, or `rollout.md` might be needed, or an existing conditional artifact looks like filler. | Creates only artifacts with real pressure and records `not expected` otherwise instead of creating all optional files or skipping planning-critical context. |
+| [references/workflow-plan-technical-design-updates.md](references/workflow-plan-technical-design-updates.md) | Workflow-control files need design artifact status, blocker, repair, reopen, session-boundary, or next-session updates. | Records master and phase-local routing state instead of leaving state in chat, duplicating design content, or letting workflow files disagree. |
+| [references/planning-handoff-and-stop-rules.md](references/planning-handoff-and-stop-rules.md) | Technical design is being closed, marked planning-ready, blocked, or pressured to continue into planning or implementation. | Hands off to a later planning session or reopen target instead of drafting `plan.md`, `tasks.md`, code, tests, migrations, generated files, or review output. |
 
 ## Allowed Writes
 This session may write or update only:

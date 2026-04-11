@@ -69,6 +69,25 @@ Rules:
 - do not broad-read the repository once the closeout claim and proof scope are clear
 - if phase context shows the task is not yet at validation or closeout, stop and point to the correct reopen point instead of validating by momentum
 
+## Reference Loading
+References are compact rubrics and example banks, not exhaustive checklists or replacement documentation. Load at most one reference by default. Load more than one only when the closeout task clearly spans multiple independent decision pressures, such as choosing proof scope and then updating a separate task ledger.
+
+| Reference | Symptom | Behavior change |
+|---|---|---|
+| `references/closeout-readiness-examples.md` | unsure whether this session may proceed as validation closeout | choose proceed, skip, or reopen before running commands instead of validating by momentum |
+| `references/claim-to-proof-closeout.md` | closeout claim is explicit but proof scope is uncertain | narrow the command set and success wording to the claim instead of treating one green check as task-wide proof |
+| `references/spec-validation-outcome-updates.md` | updating `spec.md` `Validation` or `Outcome` | write a proof-shaped closeout record instead of vague "tests pass" or optimistic outcome prose |
+| `references/tasks-progress-update-examples.md` | existing `tasks.md` needs checkbox or progress alignment | update only ledger items proved by fresh evidence instead of bulk-checking or creating tasks during validation |
+| `references/workflow-plan-completion-vs-reopen.md` | existing workflow routing must record complete, blocked, or reopened state | make master and phase routing agree instead of leaving "mostly done" or `TBD` state |
+| `references/failed-proof-and-reopen-handling.md` | required proof fails, is missing, stale, skipped, or too narrow | record the narrowest reopen target and stop instead of fixing code or softening failure during closeout |
+
+Reference rules:
+- do not bulk-load references for routine closeout
+- do not let a reference override `AGENTS.md`, `docs/spec-first-workflow.md`, or `go-verification-before-completion`
+- do not copy snippets blindly; bind them to the current task's artifacts, commands, and observed results
+- prefer the narrowest matching reference; broad failure handling is a challenge rubric, not the default when a narrower positive update reference matches
+- if an example would require implementing a fix, creating a missing phase file, creating missing `tasks.md`, or softening failed proof into completion language, reject the example and reopen instead
+
 ## Allowed Writes
 This session may write or update only:
 - task-local `spec.md`, limited to `Validation`, `Outcome`, and any minimal cross-reference needed to make reopen state honest

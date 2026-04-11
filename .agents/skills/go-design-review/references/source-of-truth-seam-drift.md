@@ -1,13 +1,21 @@
 # Source-Of-Truth Seam Drift
 
+## Behavior Change Thesis
+When loaded for symptom "generated, config, migration, contract, or stable policy ownership split," this file makes the model route the fix through the canonical owner or a narrow owning-package seam instead of accepting local copies, hand edits to derived files, or a global helper package.
+
 ## When To Load
-Load this when the diff spreads one stable policy across files, edits derived/generated code, duplicates config or migration rules, or creates competing owners for contracts, validation, classification, mapping, or normalization.
+Load this when a diff edits derived/generated code, duplicates config or migration rules, spreads one stable policy across files, or creates competing owners for contracts, validation, classification, mapping, or normalization.
 
-Repository-approved specs/design docs and canonical repo sources win. External sources only help explain why a single owner is easier to review and evolve.
+Prefer `accidental-complexity-and-helper-buckets.md` when the primary symptom is speculative abstraction rather than source ownership.
 
-## Concrete Review Examples
-Finding example: generated OpenAPI bindings are edited by hand to add a field.
+## Decision Rubric
+- Generated output is acceptable only when it follows a canonical input change; hand edits to generated output are source-of-truth drift.
+- Config precedence, validation, migration shape, and API contracts should have one canonical source before runtime code consumes them.
+- Repeated stable policy deserves one seam-named helper or type in the owning package; one-off logic and intentionally local test setup do not.
+- Do not solve source spread by adding `common`, `util`, or an owner-neutral package.
+- If no package clearly owns the stable policy, request design escalation rather than picking an owner in the review comment.
 
+## Imitate
 ```text
 [critical] [go-design-review] internal/api/server.gen.go:219
 Issue: The diff changes generated API code instead of the OpenAPI contract source.
@@ -16,7 +24,17 @@ Suggested fix: Update `api/openapi/service.yaml`, regenerate the bindings, then 
 Reference: `docs/repo-architecture.md` source-of-truth table.
 ```
 
-Finding example: request size parsing is added in both middleware and one handler.
+Copy this shape when derived output changed without its canonical input.
+
+```text
+[high] [go-design-review] cmd/service/internal/bootstrap/cache.go:44
+Issue: Bootstrap now reinterprets env and flag precedence for cache settings instead of consuming the validated config snapshot.
+Impact: The cache path can diverge from `internal/config` validation and secret policy, making startup behavior depend on two config owners.
+Suggested fix: Add the field and validation to `internal/config`, then consume the typed value from bootstrap.
+Reference: `docs/repo-architecture.md` config ownership.
+```
+
+Copy this shape when runtime code duplicates an already-owned policy.
 
 ```text
 [medium] [go-design-review] internal/infra/http/widgets.go:73
@@ -26,46 +44,29 @@ Suggested fix: Put the stable policy behind one seam-named helper in `internal/i
 Reference: task `design/ownership-map.md` if present; otherwise HTTP edge ownership in `docs/repo-architecture.md`.
 ```
 
-Finding example: config precedence is reimplemented in bootstrap for one dependency.
+Copy this shape when repeated policy is stable enough to deserve one local owner.
 
+## Reject
 ```text
-[high] [go-design-review] cmd/service/internal/bootstrap/cache.go:44
-Issue: Bootstrap now reinterprets env and flag precedence for cache settings instead of consuming the validated config snapshot.
-Impact: The cache path can diverge from `internal/config` validation and secret policy, making startup behavior depend on two config owners.
-Suggested fix: Add the field and validation to `internal/config`, then consume the typed value from bootstrap.
-Reference: repository config source policy and `docs/repo-architecture.md` config ownership.
+[medium] [go-design-review] internal/infra/http/widgets.go:73
+Issue: This repeats code.
+Suggested fix: Move it to `internal/common`.
 ```
 
-Finding example: a durable schema assumption is encoded in repository code without a migration or design note.
+Reject because it flags duplication without proving stable policy and proposes an owner-neutral bucket.
 
 ```text
-[high] [go-design-review] internal/infra/postgres/orders.go:102
-Issue: The repository now assumes a new `archived_at` column, but the migration source of truth did not change.
-Impact: Code and database shape can drift across environments; tests using fakes may stay green while deployed queries fail.
-Suggested fix: Add the migration and align repository code with the schema change, or remove the new assumption until the data design is approved.
-Reference: `docs/repo-architecture.md` migration source-of-truth row.
+[high] [go-design-review] internal/api/server.gen.go:219
+Issue: Generated code changed.
+Suggested fix: Do not commit generated code.
 ```
 
-## Non-Findings To Avoid
-- Do not require extraction for one-off local logic that is not stable policy and has no second consumer.
-- Do not flag duplicated test setup when it is intentionally local and avoids coupling tests to a shared fixture with hidden state.
-- Do not flag generated code changes when the generator is the actual source and the diff is the regenerated output from a canonical input change.
-- Do not ask for a global helper package to solve source-of-truth spread. Prefer the narrowest owning package.
+Reject because regenerated output is fine when the canonical input changed; the finding must distinguish hand edit from expected generation.
 
-## Smallest Safe Correction
-- Update the canonical source, then regenerate or adapt derived consumers.
-- Collapse repeated stable policy into a seam-named helper or type in the owning package.
-- Delete local copies that reinterpret config, contract, migration, or classification rules.
-- Cite the repository source of truth directly in the review finding so the fix is clear.
+## Agent Traps
+- Do not require extraction for one-off local logic.
+- Do not flag duplicated tests when local setup is clearer and avoids hidden fixture state.
+- Do not treat a fake or mock as the source of truth for durable schema, contract, or config behavior.
 
-## Escalation Rules
-- Escalate to `api-contract-designer-spec` when the canonical API contract itself needs a new resource, status, idempotency, async, or error decision.
-- Escalate to `go-data-architect-spec` or `go-db-cache-spec` when schema ownership, transactions, projections, cache behavior, or data consistency must change.
-- Escalate to `go-design-spec` when no existing package clearly owns the stable policy.
-- Hand off to `go-qa-review` when missing tests are the only proof gap after the source-of-truth owner is correct.
-
-## Exa Source Links
-- [Organizing a Go module - The Go Programming Language](https://go.dev/doc/modules/layout)
-- [Go Code Review Comments - Package Names](https://go.dev/wiki/CodeReviewComments)
-- [arc42 Section 9 - Architecture Decisions](https://docs.arc42.org/section-9/)
-- [Architecture Decision Record - Martin Fowler](https://martinfowler.com/bliki/ArchitectureDecisionRecord.html)
+## Validation Shape
+Check the canonical source and derived surfaces together: OpenAPI input plus generated code, migrations plus repository queries, config parser plus bootstrap consumers, and owning helper plus all repeated call sites. Proof means the canonical owner and consumers move in sync.

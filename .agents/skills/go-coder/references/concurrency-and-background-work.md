@@ -1,11 +1,70 @@
 # Concurrency And Background Work
 
+## Behavior Change Thesis
+When loaded for goroutine, channel, worker, or shutdown pressure, this file makes the model make lifecycle, cancellation, bounds, and proof visible instead of hiding unbounded background work, blocking on early returns, or synchronizing tests with sleeps.
+
 ## When To Load
-Load this when implementation work starts goroutines, uses channels, adds worker pools, changes shutdown, adds timers/tickers, touches shared state, or makes request-scoped work asynchronous.
+Load this when implementation work starts goroutines, uses channels, adds fan-out or worker pools, changes shutdown, adds timers/tickers, touches shared state, or makes request-scoped work asynchronous.
 
-## Good/Bad Examples
+## Decision Rubric
+- Do not add hidden concurrency just to make synchronous work look faster.
+- Give every goroutine a lifecycle owner, cancellation path, and result/error path.
+- Bound fan-out and queue growth; unbounded concurrency is a correctness risk, not just a performance risk.
+- Prefer `errgroup.WithContext` when the dependency already exists and first-error cancellation is the desired contract.
+- Close channels from the sender side, and only after all sends are done.
+- Stop timers and tickers and cancel derived contexts when their lifetime ends.
+- Preserve ordering if callers or tests depend on it.
 
-Bad: unbounded goroutines can block forever on early return.
+## Imitate
+Use `errgroup` when it already fits the task and dependency policy.
+
+```go
+func ProcessAll(ctx context.Context, jobs []Job, limit int) error {
+	if limit < 1 {
+		limit = 1
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(limit)
+	for _, job := range jobs {
+		g.Go(func() error {
+			return process(ctx, job)
+		})
+	}
+	return g.Wait()
+}
+```
+
+Make channel ownership explicit at the sender.
+
+```go
+func produce(ctx context.Context, ch chan<- Event, events []Event) {
+	defer close(ch)
+	for _, event := range events {
+		select {
+		case ch <- event:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+```
+
+Expose readiness or completion rather than sleeping.
+
+```go
+ready := make(chan struct{})
+go worker.Run(ready)
+
+select {
+case <-ready:
+case <-ctx.Done():
+	return ctx.Err()
+}
+```
+
+## Reject
+Reject unbounded goroutines that can block after early return.
 
 ```go
 func ProcessAll(ctx context.Context, jobs []Job) error {
@@ -24,70 +83,7 @@ func ProcessAll(ctx context.Context, jobs []Job) error {
 }
 ```
 
-Good: keep lifecycle, cancellation, buffering, and bounded concurrency visible. Use `WaitGroup.Go` only when the module's Go version supports it.
-
-```go
-func ProcessAll(ctx context.Context, jobs []Job, limit int) error {
-	if limit < 1 {
-		limit = 1
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	sem := make(chan struct{}, limit)
-	errs := make(chan error, len(jobs))
-
-	var wg sync.WaitGroup
-	for _, job := range jobs {
-		job := job
-		wg.Go(func() {
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-ctx.Done():
-				return
-			}
-
-			if err := process(ctx, job); err != nil {
-				cancel()
-				errs <- err
-			}
-		})
-	}
-	wg.Wait()
-	close(errs)
-
-	for err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-	return ctx.Err()
-}
-```
-
-Good when an approved dependency already exists: `errgroup` owns cancellation and first-error collection more directly.
-
-```go
-func ProcessAll(ctx context.Context, jobs []Job, limit int) error {
-	if limit < 1 {
-		limit = 1
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(limit)
-	for _, job := range jobs {
-		job := job
-		g.Go(func() error {
-			return process(ctx, job)
-		})
-	}
-	return g.Wait()
-}
-```
-
-Bad: receiver closes a channel it does not own.
+Reject receiver-side channel close.
 
 ```go
 func consume(ch <-chan Event) {
@@ -98,64 +94,25 @@ func consume(ch <-chan Event) {
 }
 ```
 
-Good: the sender that owns the channel closes it.
-
-```go
-func produce(ctx context.Context, ch chan<- Event, events []Event) {
-	defer close(ch)
-	for _, event := range events {
-		select {
-		case ch <- event:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-```
-
-Bad: sleeping to "wait" for background work.
+Reject sleep-as-synchronization.
 
 ```go
 go worker.Run()
 time.Sleep(100 * time.Millisecond)
 ```
 
-Good: expose a readiness or completion signal.
+## Agent Traps
+- Returning on first error without proving other goroutines cannot block on sends, receives, locks, or semaphores.
+- Assuming closure captures are safe when the code uses a reused mutable variable outside the range loop or a pre-Go 1.22 module.
+- Treating a buffered channel as a complete lifecycle plan.
+- Replacing test sleeps with a longer timeout rather than a readiness/completion signal.
+- Assuming the race detector proves paths the tests never exercise.
+- Using `sync.WaitGroup.Go` without checking the module Go version or handling the "function must not panic" contract.
 
-```go
-ready := make(chan struct{})
-go worker.Run(ready)
-
-select {
-case <-ready:
-case <-ctx.Done():
-	return ctx.Err()
-}
-```
-
-## Common False Simplifications
-- Starting a goroutine inside a function just to make synchronous work look faster. Callers can add concurrency more easily than remove hidden concurrency.
-- Using unbounded fan-out for I/O or CPU-heavy work.
-- Returning on first error without proving other goroutines cannot block on send, receive, locks, or semaphores.
-- Closing a channel from the receiver side.
-- Ignoring `Ticker.Stop`, `Timer.Stop`, derived context cancellation, or worker shutdown paths.
-- Replacing synchronization with sleeps in tests.
-- Assuming the race detector proves absence of races on code paths tests do not execute.
-
-## Validation Or Test Patterns
+## Validation Shape
 - Run `go test -race` for changed concurrent code.
-- Run targeted repeated tests, for example `go test ./pkg/foo -run TestWorkerShutdown -count=100`.
+- Run targeted repeated tests for lifecycle-sensitive code, for example `go test ./pkg/foo -run TestWorkerShutdown -count=100`.
 - Use canceled contexts and blocked fake dependencies to prove goroutines exit.
 - Prefer channels, hooks, or fake clocks over sleeps in tests.
 - If the repository already uses a leak checker such as `goleak`, add or update the relevant leak proof.
 - For worker pools, test the concurrency limit and early-error cancellation path.
-
-## Source Links Gathered Through Exa
-- [sync package](https://pkg.go.dev/sync)
-- [context package](https://pkg.go.dev/context)
-- [Go memory model](https://go.dev/ref/mem)
-- [Data Race Detector](https://go.dev/doc/articles/race_detector)
-- [Go Concurrency Patterns: Context](https://go.dev/blog/context)
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
-- [Go 1.26 release notes](https://go.dev/doc/go1.26)
-- [golang.org/x/sync/errgroup](https://pkg.go.dev/golang.org/x/sync/errgroup)

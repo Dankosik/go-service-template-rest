@@ -52,15 +52,18 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - the phase-local plan stays routing-only and does not duplicate final decisions, technical design, execution strategy, or the executable `tasks.md` ledger
 - tiny/direct-path or lightweight-local skips include a real rationale instead of silently bypassing control artifacts
 
-## Lazy Reference Packs
-Keep this file compact. Load only the reference file that matches the suspected adequacy gap, and treat repository-local `AGENTS.md` plus `docs/spec-first-workflow.md` as authoritative. External links in the reference packs are calibration only.
+## Reference Routing
+References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the file that matches the suspected adequacy gap. Load multiple references only when the same bundle clearly spans independent decision pressures, such as both a lane-ownership gap and an implementation-readiness gap. Treat repository-local `AGENTS.md` plus `docs/spec-first-workflow.md` as authoritative.
 
-- `references/master-phase-consistency-examples.md`: master and active phase disagree about current phase, status, blockers, readiness, session boundary, or next-session start.
-- `references/artifact-status-gap-examples.md`: artifact expectations or statuses are missing, stale, overbroad, or not proportional to the execution shape.
-- `references/lane-ownership-and-research-mode.md`: research mode, lane role, owned question, single skill, order/parallelism, or fan-in path is missing or muddy.
-- `references/stop-rule-and-completion-marker.md`: completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak.
-- `references/planning-readiness-gap-examples.md`: planning-phase implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing.
-- `references/non-blocking-vs-blocking-findings.md`: finding severity is unclear, especially `blocks_phase_handoff` versus `blocks_specific_lane` versus `non_blocking_but_record`.
+| Symptom | Load | Behavior Change |
+| --- | --- | --- |
+| Master and active phase disagree about current phase, status, blockers, readiness, session boundary, or next-session start. | `references/master-phase-consistency-examples.md` | Makes the challenger require aligned routing fields in both workflow-control files instead of trusting the clearer artifact or chat intent. |
+| Artifact expectations or statuses are missing, stale, overbroad, or not proportional to the execution shape. | `references/artifact-status-gap-examples.md` | Makes the challenger ask for status/rationale repair only, instead of demanding just-in-case artifacts or copying artifact content into workflow control. |
+| Research mode, lane role, owned question, single skill, order/parallelism, or fan-in path is missing or muddy. | `references/lane-ownership-and-research-mode.md` | Makes the challenger split vague agent work into lane-level routing instead of telling the orchestrator to "use more agents." |
+| Completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak. | `references/stop-rule-and-completion-marker.md` | Makes the challenger protect the phase boundary with a concrete stop/handoff rule instead of letting the session drift into the next phase. |
+| Planning-phase implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing. | `references/planning-readiness-gap-examples.md` | Makes the challenger route readiness gaps to `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` repair instead of treating "ready to code" prose as enough. |
+| Finding severity is unclear, especially `blocks_phase_handoff` versus `blocks_specific_lane` versus `non_blocking_but_record`. | `references/non-blocking-vs-blocking-findings.md` | Makes the challenger classify by execution impact instead of making every imperfection block the phase or every gap a nit. |
+| Workflow-control files duplicate `spec.md`, `design/`, `plan.md`, or `tasks.md`, or a finding would ask them to do so. | `references/authority-boundary-and-duplication.md` | Makes the challenger recommend `trim_duplicate_authority` or a status-only repair instead of creating a second source of truth. |
 
 ## Classification
 Use exactly one per finding:

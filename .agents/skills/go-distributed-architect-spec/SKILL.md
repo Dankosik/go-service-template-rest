@@ -47,15 +47,17 @@ Turn ambiguous cross-service behavior into explicit flow, consistency, and failu
    - Require correlation across producer, consumer, retries, DLQ, and reconciliation with bounded-cardinality telemetry.
 
 ## Lazy Reference Selection
-Read only the reference files needed for the flow under design. Use multiple references when a decision crosses seams.
+References are compact rubrics and example banks, not exhaustive checklists or domain primers. Load at most one reference by default; load multiple only when the task clearly spans independent decision pressures, such as both pivot recovery and event-version rollout.
 
-- `references/invariant-ownership-and-consistency-contracts.md`: load when source-of-truth ownership, hard vs eventual consistency, freshness, or invariant locality is unclear.
-- `references/orchestration-vs-choreography.md`: load when choosing saga coordination style, avoiding event cycles, or deciding whether a workflow engine is justified.
-- `references/saga-state-model-and-step-contracts.md`: load when modeling saga state, flow identity, step contracts, stuck-flow handling, or durable workflow execution.
-- `references/outbox-inbox-and-idempotency.md`: load when designing state-plus-message atomicity, outbox relay behavior, consumer dedup, inbox, ACK timing, or idempotency keys.
-- `references/pivot-compensation-and-forward-recovery.md`: load when choosing the pivot transaction, compensation policy, non-compensable steps, or operator recovery expectations.
-- `references/replay-ordering-and-reconciliation.md`: load when replay, redrive, broker ordering, per-aggregate serialization, stale projections, or repair jobs affect correctness.
-- `references/distributed-observability-and-migration.md`: load when event versioning, mixed-version rollout, DLQ/reconciliation observability, or migration sequencing changes the spec.
+| Symptom | Load | Behavior Change |
+| --- | --- | --- |
+| Source-of-truth ownership, hard vs eventual consistency, projection freshness, or owner-unavailable behavior is unclear | `references/invariant-ownership-and-consistency-contracts.md` | Makes the spec route hard decisions to the invariant owner or a durable pending process instead of approving writes from stale projections or ownerless "eventual consistency." |
+| The prompt says "just publish events," asks orchestration vs choreography, risks event cycles, or considers a workflow engine | `references/orchestration-vs-choreography.md` | Makes the spec choose an owned durable process or bounded terminal-event handoff instead of an unowned event chain with no timeout or compensation authority. |
+| The flow needs saga identity, one-active-flow rules, step contracts, stuck-flow handling, or durable workflow execution | `references/saga-state-model-and-step-contracts.md` | Makes the spec define a resumable monotonic state machine instead of keeping "current step" in memory or retrying forever without terminal states. |
+| State-plus-message atomicity, outbox relay behavior, consumer dedup, inbox, ACK timing, or idempotency keys affect correctness | `references/outbox-inbox-and-idempotency.md` | Makes the spec require durable outbox/inbox and business idempotency boundaries instead of relying on dual writes, broker "exactly once," or in-memory dedup. |
+| The flow needs a pivot transaction, compensation policy, cancellation behavior, non-compensable step handling, or operator recovery | `references/pivot-compensation-and-forward-recovery.md` | Makes the spec distinguish semantic compensation from post-pivot forward recovery instead of promising generic rollback or assuming timeouts mean no side effect. |
+| Replay, redrive, broker ordering, per-aggregate serialization, stale projections, distributed locks, or repair jobs affect correctness | `references/replay-ordering-and-reconciliation.md` | Makes the spec choose per-key ordering/version checks and owner-driven repair instead of assuming global order, direct projection writes, or lock-only correctness. |
+| Event contract rollout, mixed versions, stored-message compatibility, DLQ/reconciliation observability, or migration sequencing changes the design | `references/distributed-observability-and-migration.md` | Makes the spec include compatibility windows and recovery telemetry instead of big-bang event changes or logs that cannot drive repair. |
 
 ## Guardrails
 - Do not approve dual writes between database and broker as the correctness mechanism.

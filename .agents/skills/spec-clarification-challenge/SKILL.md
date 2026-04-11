@@ -73,17 +73,21 @@ The orchestrator owns reconciliation after the subagent returns:
 - update `workflow-plan.md` with `spec.md` status and clarification gate status
 - rerun this challenge once if material decisions changed or a major seam was reopened
 
-## Lazily Loaded Examples
-Keep this file compact. Load only the reference that matches the uncertainty in the current challenge:
+## Reference Loading
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default. Load a second only when the challenge clearly spans multiple independent decision pressures, such as a thin input bundle plus a separate external-policy question.
 
-- `references/approval-blocker-question-examples.md` for approval-changing hidden assumptions and blocker wording.
-- `references/input-bundle-sufficiency.md` when the orchestrator's bundle may be too thin to challenge honestly.
-- `references/domain-reopen-classification.md` when deciding between `blocks_spec_approval` and `blocks_specific_domain`.
-- `references/defer-to-design-vs-block-spec.md` when a question may be downstream design instead of spec-approval work.
-- `references/requires-user-decision-examples.md` when the question may need external product, business, policy, or legal judgment.
-- `references/clarification-anti-patterns.md` when pruning generic checklist questions, answer-writing, design drift, or approval theater.
+Use references for behavior change, not reassurance. Before loading a reference, name the symptom it should correct.
 
-Use references as examples, not templates to fill. Do not copy an example unless the same candidate-decision seam is present.
+| Symptom in the challenge | Load | Behavior change |
+| --- | --- | --- |
+| A hidden assumption may make approval dishonest, but the question wording is too broad or weak. | `references/approval-blocker-question-examples.md` | Choose a candidate-decision-specific blocker question instead of a generic checklist prompt. |
+| The orchestrator bundle may be too thin to challenge without guessing. | `references/input-bundle-sufficiency.md` | Return a missing-input blocker instead of inventing candidate decisions or validation expectations. |
+| A question seems important, but classification between whole-spec blocker, one-domain reopen, and record-only note is unclear. | `references/domain-reopen-classification.md` | Route the seam to the smallest approval-safe owner instead of doing expert analysis inside this challenge or blocking everything. |
+| A valid concern may belong in `design/` rather than blocking `spec.md` approval. | `references/defer-to-design-vs-block-spec.md` | Preserve spec-level invariants and proof obligations while deferring only stable mechanism choices. |
+| A question may need external product, business, support, contractual, policy, or legal judgment. | `references/requires-user-decision-examples.md` | Use `requires_user_decision` only for non-repo-answerable policy choices instead of asking the human for technical facts or inventing policy. |
+| A draft output is bloated, generic, answer-heavy, or too eager to approve. | `references/clarification-anti-patterns.md` | Prune checklist noise, design authorship, human-escalation shortcuts, and approval theater before returning. |
+
+Do not load `approval-blocker-question-examples.md` and `clarification-anti-patterns.md` together by default: use the first to shape a blocker question, and the second to prune a draft. Do not copy an example unless the same candidate-decision seam is present.
 
 ## Deliverable Shape
 Return:

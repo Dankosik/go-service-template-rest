@@ -1,22 +1,20 @@
 # OpenAPI And oapi-codegen Integration
 
+## Behavior Change Thesis
+When loaded for symptom `OpenAPI-generated chi handlers, oapi-codegen strict server wiring, BaseURL/mount prefix choice, generated/manual route boundaries, or generated-code ownership`, this file makes the model choose one generated API owner and config/wrapper changes instead of likely mistake `edit generated files, double-prefix routes, or add manual handlers inside the generated contract surface`.
+
 ## When To Load
-Load this when chi routing is generated from OpenAPI, when `oapi-codegen` strict server or chi server wiring is in scope, when generated and manual routes coexist, or when OpenAPI path matching affects router topology.
+Load when chi routing is generated from OpenAPI, `oapi-codegen` chi or strict server wiring is in scope, `BaseURL` and mount prefix placement are disputed, generated and manual routes coexist, or OpenAPI path matching affects router topology.
 
-## Recommended Design Options
-- Keep OpenAPI as the source of truth for public API paths, methods, parameters, and response shape. Let chi integration serve that contract.
-- Choose one `oapi-codegen` server mode for the generated surface, commonly `chi-server` plus `strict-server` when typed request/response objects are desired.
-- Mount or register generated handlers under one explicit prefix and keep manual routes out of that ownership zone unless they are intentionally represented in the spec.
-- Treat generated files as generated artifacts. Change config, templates, wrappers, or hand-written implementations instead of editing generated code manually.
-- Record codegen compatibility settings that affect routing or middleware semantics, especially chi middleware execution order.
+## Decision Rubric
+- Keep OpenAPI as the source of truth for public API paths, methods, parameters, and response shape. Chi wiring serves that contract.
+- Choose one generated server mode for the surface, commonly `chi-server` plus `strict-server` when typed request/response objects are desired.
+- Choose exactly one prefix source: the OpenAPI path itself, `ChiServerOptions.BaseURL`, or the parent chi mount/route prefix. Do not accidentally apply the same prefix twice.
+- Keep manual routes outside the generated contract surface unless they are intentionally represented in the OpenAPI spec or share one parent router with the same policy.
+- Treat generated files as generated artifacts. Change generator config, templates, wrappers, or hand-written implementations instead of editing generated code manually.
+- Record compatibility settings that affect routing or middleware semantics, especially generated chi middleware execution order.
 
-## Rejected Alternatives
-- Splitting public API path ownership between OpenAPI and hand-written chi routes without a collision rule.
-- Editing generated code to fix routing policy. That creates regeneration drift.
-- Using OpenAPI for payload contracts while letting chi route templates diverge in path names, prefixes, or method ownership.
-- Hiding generated middleware inside a wrapper without documenting whether it runs before or after chi route-level middleware.
-
-## Example Sketches
+## Imitate
 ```yaml
 package: api
 generate:
@@ -27,9 +25,31 @@ compatibility:
   apply-chi-middleware-first-to-last: true
 ```
 
+Copy the config shape when middleware order affects behavior: the setting is visible and reviewable.
+
 ```go
-r := chi.NewRouter()
-r.Route("/api", func(r chi.Router) {
+apiRouter := chi.NewRouter()
+api.HandlerWithOptions(impl, api.ChiServerOptions{
+	BaseRouter: apiRouter,
+	BaseURL:    "",
+})
+root.Mount("/api", apiRouter)
+```
+
+Copy only when generated paths are relative to `/api`; the parent mount is the prefix source.
+
+```go
+api.HandlerWithOptions(impl, api.ChiServerOptions{
+	BaseRouter: root,
+	BaseURL:    "/api",
+})
+```
+
+Copy only when `BaseURL` is the prefix source and the handler is not also registered under an `/api` subrouter.
+
+## Reject
+```go
+root.Route("/api", func(r chi.Router) {
 	api.HandlerWithOptions(impl, api.ChiServerOptions{
 		BaseRouter: r,
 		BaseURL:    "/api",
@@ -37,16 +57,30 @@ r.Route("/api", func(r chi.Router) {
 })
 ```
 
-## Testable Acceptance Boundaries
-- Generated config names the server mode and whether strict server is enabled.
-- Route inventory proves every OpenAPI operation is registered at the expected prefix and no manual route collides with it.
-- Middleware-order tests or generated-output inspection prove wrapper middleware order when behavior depends on it.
-- Generated files include a generated-code marker and are not hand-edited.
-- If OpenAPI templated paths differ from chi path templates, the design explains and tests the mapping.
+Reject unless the intended route really is double-prefixed; both the parent route and `BaseURL` are claiming the same prefix.
 
-## Source Links Gathered Through Exa
-- oapi-codegen README for chi server and strict server generation: https://github.com/oapi-codegen/oapi-codegen/blob/09919e79/README.md
-- oapi-codegen configuration source for `chi-server`, `strict-server`, and compatibility options: https://github.com/oapi-codegen/oapi-codegen/blob/09919e79/pkg/codegen/configuration.go
-- oapi-codegen generated chi strict-server example: https://github.com/oapi-codegen/oapi-codegen/blob/09919e79/internal/test/strict-server/chi/server.gen.go
-- OpenAPI Specification 3.1.2 for path templating and path matching rules: https://spec.openapis.org/oas/v3.1.2.html
-- chi README for route patterns and `net/http` compatible routing: https://github.com/go-chi/chi/blob/master/README.md
+```go
+// edit openapi.gen.go to add one missing route
+```
+
+Reject because generated files are not the stable design surface.
+
+```go
+root.Mount("/v1", generated.Handler(impl))
+root.Get("/v1/admin/metrics", manualMetrics)
+```
+
+Reject when the manual route is not in the OpenAPI contract or does not share the generated surface's policy.
+
+## Agent Traps
+- Do not say "OpenAPI owns the contract" while hand-writing a sibling route under the generated prefix.
+- Do not hide a `BaseURL` or mount-prefix decision in example code; state which layer owns the prefix.
+- Do not patch generated files as the design answer. Prefer config, wrapper, or handwritten implementation changes.
+- Do not assume generated middleware order; require config or generated-output proof when order matters.
+
+## Validation Shape
+- Generated config names the server mode and strict-server choice.
+- Route inventory or representative `httptest` proves each expected OpenAPI operation appears at the intended full path.
+- Prefix proof includes at least one path that would expose accidental double-prefixing.
+- Generated/manual coexistence proof detects duplicate method-path ownership.
+- Generated files retain their generated-code marker and are not hand-edited.

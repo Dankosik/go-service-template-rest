@@ -1,19 +1,21 @@
 # Testing And Verification Patterns
 
+## Behavior Change Thesis
+When loaded for test or verification pressure, this file makes the model prove the changed behavior at the smallest reliable layer instead of adding broad, brittle, stale, or ceremonial tests and commands.
+
 ## When To Load
-Load this when implementation work adds or changes tests, fuzz tests, benchmarks, verification commands, deterministic seams, golden files, failure messages, or concurrency/lifecycle proof.
+Load this when implementation work adds or changes tests, fuzz tests, benchmarks, deterministic seams, golden files, failure messages, concurrency proof, or final verification commands.
 
-## Good/Bad Examples
+## Decision Rubric
+- Prefer a regression test that would fail before the change over broad coverage churn.
+- Test at the smallest layer where the changed behavior is observable.
+- Use direct tests for one or two clear cases; use tables when cases are genuinely parallel.
+- Make failure messages include the operation, input, got value, and expected value when practical.
+- Control clocks, randomness, goroutine completion, temp files, external I/O, and generated IDs.
+- Match verification commands to the claim; do not claim repository-wide readiness from a stale or too-narrow command.
 
-Bad: failure output loses the input, got value, and expected value.
-
-```go
-if got != want {
-	t.Fatal("wrong result")
-}
-```
-
-Good: make the failure useful to a future reader.
+## Imitate
+Make failures useful.
 
 ```go
 if got != want {
@@ -21,27 +23,7 @@ if got != want {
 }
 ```
 
-Bad: table ceremony for one obvious case.
-
-```go
-tests := []struct {
-	name string
-	in   string
-	want string
-}{
-	{name: "trims", in: " ada@example.com ", want: "ada@example.com"},
-}
-for _, tt := range tests {
-	t.Run(tt.name, func(t *testing.T) {
-		got := NormalizeEmail(tt.in)
-		if got != tt.want {
-			t.Fatalf("got %q, want %q", got, tt.want)
-		}
-	})
-}
-```
-
-Good: use the direct test when it is clearer.
+Use a direct test when the setup is one obvious case.
 
 ```go
 func TestNormalizeEmailTrimsSpace(t *testing.T) {
@@ -52,7 +34,7 @@ func TestNormalizeEmailTrimsSpace(t *testing.T) {
 }
 ```
 
-Good: use a table when cases are genuinely parallel.
+Use a table when the cases share the same shape and each case adds signal.
 
 ```go
 func TestNormalizeEmailRejectsInvalidInput(t *testing.T) {
@@ -74,30 +56,7 @@ func TestNormalizeEmailRejectsInvalidInput(t *testing.T) {
 }
 ```
 
-Bad: sleeping to test asynchronous behavior.
-
-```go
-go worker.Run()
-time.Sleep(50 * time.Millisecond)
-if !worker.Ready() {
-	t.Fatal("worker not ready")
-}
-```
-
-Good: test a signal or controlled seam.
-
-```go
-ready := make(chan struct{})
-go worker.Run(ready)
-
-select {
-case <-ready:
-case <-time.After(time.Second):
-	t.Fatal("worker did not become ready")
-}
-```
-
-Good: use fuzzing for parsers or validators with cheap, deterministic invariants.
+Use fuzzing for cheap deterministic parser or validator invariants.
 
 ```go
 func FuzzParseEmail(f *testing.F) {
@@ -114,28 +73,50 @@ func FuzzParseEmail(f *testing.F) {
 }
 ```
 
-## Common False Simplifications
-- Adding an assertion library for simple comparisons when Go failure messages would be clearer.
-- Comparing exact error strings when the contract is `errors.Is`, `errors.As`, status code, or exported type.
-- Turning every test into a table; a single direct test can be better.
-- Hiding important setup in one-off helpers that do not call `t.Helper`.
-- Depending on wall-clock sleeps, map iteration order, log formatting, or exact generated IDs unless those are the contract.
-- Using fuzzing for slow, stateful, networked, or nondeterministic behavior.
-- Claiming verification from a stale command or from a command that did not cover the changed package.
+## Reject
+Reject vague failures.
 
-## Validation Or Test Patterns
+```go
+if got != want {
+	t.Fatal("wrong result")
+}
+```
+
+Reject table ceremony for one case.
+
+```go
+tests := []struct {
+	name string
+	in   string
+	want string
+}{
+	{name: "trims", in: " ada@example.com ", want: "ada@example.com"},
+}
+```
+
+Reject sleep-based async tests.
+
+```go
+go worker.Run()
+time.Sleep(50 * time.Millisecond)
+if !worker.Ready() {
+	t.Fatal("worker not ready")
+}
+```
+
+## Agent Traps
+- Adding an assertion library for simple comparisons when plain Go gives clearer failures.
+- Comparing exact error strings when the contract is `errors.Is`, `errors.As`, status code, or exported type.
+- Hiding important setup in one-off helpers that do not call `t.Helper`.
+- Depending on map iteration order, log formatting, wall-clock sleeps, or exact generated IDs unless that is the contract.
+- Using fuzzing for slow, stateful, networked, or nondeterministic behavior.
+- Reporting "tested" from a command that did not cover the changed package.
+- Using `t.ArtifactDir` for ordinary assertions instead of only for artifacts a human or CI needs to inspect.
+
+## Validation Shape
 - Start with the smallest proving command, such as `go test ./internal/orders -run TestCreateOrder`.
 - Use `go test ./...` when the change touches shared packages, generated contracts, or cross-cutting behavior.
-- Use `go test -race` for concurrency, shared state, background work, and resource lifetime changes.
+- Use `go test -race` for concurrency, shared state, background work, and resource-lifetime changes.
 - Use repeated targeted runs for flakes: `go test ./pkg/foo -run TestName -count=100`.
-- Use fuzzing for input parsers and validators: `go test ./pkg/foo -fuzz=FuzzParseEmail -fuzztime=30s`.
-- Use `t.TempDir`, `t.Cleanup`, `httptest`, and explicit fake clocks or channels to keep tests deterministic.
-- In Go 1.26+, use `t.ArtifactDir` only for artifacts a human or CI needs to inspect; do not turn tests into file-output workflows without a reason.
-
-## Source Links Gathered Through Exa
-- [testing package](https://pkg.go.dev/testing)
-- [Go Fuzzing](https://go.dev/doc/fuzz)
-- [Go Test Comments](https://go.dev/wiki/TestComments)
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
-- [Data Race Detector](https://go.dev/doc/articles/race_detector)
-- [Go 1.26 release notes](https://go.dev/doc/go1.26)
+- Use fuzzing for parser and validator invariants: `go test ./pkg/foo -fuzz=FuzzParseEmail -fuzztime=30s`.
+- Use `t.TempDir`, `t.Cleanup`, `httptest`, fake clocks, and channels to keep tests deterministic.

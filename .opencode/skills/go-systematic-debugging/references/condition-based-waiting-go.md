@@ -1,10 +1,19 @@
 # Condition-Based Waiting For Go Tests
 
-## Overview
-Sleep-based synchronization (`time.Sleep`) is a common source of flakes.
-Wait for a condition, not for guessed timing.
+## Behavior Change Thesis
+When loaded for sleep-based async tests, this file makes the model wait on an observable condition or event instead of inflating sleeps or hiding goroutine lifecycle bugs.
 
-## Recommended Pattern
+## When To Load
+Load when a Go test uses `time.Sleep`, polls guessed timing, fails only on slower CI, or needs deterministic waiting for asynchronous work.
+
+## Decision Rubric
+- Name the behavior the test actually needs: worker drained, message committed, callback observed, server ready, goroutine exited, or clock advanced.
+- Prefer an explicit event, channel, fake clock, or test hook when the production design already has a reliable signal.
+- Use polling only when no event source exists, and make the condition read fresh state every loop.
+- Keep timeout and interval small enough to localize failure, with a failure message that names the missing condition.
+- Keep fixed delays only when timing itself is the behavior under test, such as debounce, throttle, lease expiry, or backoff.
+
+## Imitate
 
 ```go
 func waitFor(t *testing.T, timeout time.Duration, interval time.Duration, cond func() bool, what string) {
@@ -20,21 +29,36 @@ func waitFor(t *testing.T, timeout time.Duration, interval time.Duration, cond f
 }
 ```
 
-Usage:
-
 ```go
 waitFor(t, 2*time.Second, 20*time.Millisecond, func() bool {
 	return repo.PendingJobs() == 0
 }, "job queue drain")
 ```
 
-## Guidelines
-- timeout must be explicit and tied to expected behavior
-- polling interval should be bounded, often in the `10-50ms` range
-- failure message must describe the missing condition
-- the condition function must read fresh state on each loop
-- prefer the narrowest condition that proves the behavior under test
+Copy the shape: the test names readiness in business or lifecycle terms, and the timeout failure points at the missing condition.
 
-## Fixed-Delay Exception
-Use a fixed delay only when timing itself is the behavior under test, such as debounce, throttle, or lease expiry.
-Document why a fixed delay is required and how its value was derived.
+## Reject
+
+```go
+time.Sleep(2 * time.Second)
+```
+
+This makes the test slower without proving the worker is ready, drained, or stopped.
+
+```go
+waitFor(t, time.Minute, time.Second, func() bool {
+	return len(debugGlobal) > 0
+}, "thing")
+```
+
+This waits too long, relies on an implementation detail, and gives a vague failure message.
+
+## Agent Traps
+- Replacing a sleep with a larger sleep and calling it stabilization.
+- Waiting on a private implementation detail that can change while the observable behavior is still wrong.
+- Hiding a goroutine leak by extending the test timeout.
+- Adding a helper without `t.Helper()`, making failures point inside the helper instead of the caller.
+- Forgetting that package-order flakes still need the wider reproducer from `flaky-repro-controls-go.md`.
+
+## Validation Shape
+Show the old timing assumption with a repetition command when feasible, then rerun the same command after replacing the sleep. Use `-race` or `-cpu=1,4` only when the failure class points at shared state or scheduler sensitivity.

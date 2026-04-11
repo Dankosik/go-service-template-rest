@@ -1,44 +1,39 @@
 # API Contract And Boundary Tests
 
+## Behavior Change Thesis
+When loaded for symptom "the change is REST/OpenAPI or client-boundary visible", this file makes the model choose boundary-observable contract proof instead of likely mistake "prove handlers with internal unit tests or invent missing HTTP semantics."
+
 ## When To Load
-Load this when a planned change affects REST/OpenAPI contract behavior, generated API bindings, HTTP status semantics, validation, limits, idempotency, auth/tenant boundaries, async acceptance, problem details, or runtime route/handler conformance.
+Load this when planned behavior affects OpenAPI, generated bindings, HTTP method/status semantics, validation, limits, idempotency keys, auth/tenant/object boundaries, problem details, async acceptance, or runtime route/handler conformance.
 
-## Source Grounding
-- Treat `api/openapi/service.yaml` and generated API docs as local contract sources when the change is API-visible.
-- Use `internal/api/README.md`, `docs/build-test-and-development-commands.md`, `Makefile`, and CI workflows for repository commands and contract checks.
-- Use OpenAPI and OWASP sources to calibrate boundary proof, not to invent product-specific status or error policy.
+## Decision Rubric
+- Use `api/openapi/service.yaml`, generated API docs, `internal/api/README.md`, and runtime route tests as local contract sources before naming external standards.
+- Contract proof must name status, headers, body schema/problem details, request decoding, and generated/runtime artifact expectations when those are affected.
+- Boundary proof must vary the caller-controlled dimension: credential, tenant, object ID, idempotency key, cursor/filter, request size, unknown field, or async operation ID.
+- Idempotent write proof should include first request, same key/same payload replay, same key/different payload conflict, and concurrent same-key attempts when concurrency is in scope.
+- Async `202 Accepted` proof should include accepted response, operation identity, invalid-before-acceptance rejection, polling/terminal states if approved, and failure exposure if the contract owns it.
+- OpenAPI drift proof should use repository targets, not ad hoc command substitutes.
+- Missing method/status/error/idempotency/concealment policy is an API-spec blocker, not a QA decision.
 
-## Selected/Rejected Level Examples
-| API obligation | Selected level | Rejected level | Why |
+## Imitate
+| Contract Surface | Required Rows | Selected Proof | Observable To Copy |
 | --- | --- | --- | --- |
-| OpenAPI shape, generated binding drift, or runtime contract route match | Contract | E2E-only | Contract checks catch spec/code/runtime drift directly and are cheaper than full runtime smoke. |
-| Handler validation result visible to clients | Contract or handler-boundary integration | Pure use-case unit | The proof must include decoding, status, response body, and relevant headers. |
-| Object ownership or tenant mismatch | Contract or integration with two actors/scopes | Authorized happy-path contract only | The security obligation is the denied cross-scope request. |
-| Idempotency key behavior on public write endpoint | Contract plus integration when durable storage owns dedup | Unit-only idempotency helper | Public semantics and durable duplicate suppression must both be proven when they are part of the contract. |
-| Async `202 Accepted` operation resource behavior | Contract plus process/integration proof | Immediate-success unit | The proof must cover accepted response, operation identity, polling/terminal states if specified, and failure exposure. |
-| Parser or decoder robustness for request input | Contract rows, plus fuzz if parser has cheap deterministic invariant | Manual malformed examples only | Contract rows prove public response; fuzz broadens parser input space when the parser itself is risky. |
+| Request validation | valid body; missing field; invalid type; unknown field if strict; oversized body if limit changed | Contract | status, problem payload shape, field path if specified, no partial side effect |
+| Auth and ownership | no credential; expired/invalid credential; wrong tenant/object owner; authorized actor | Contract or integration | 401/403/concealment status per approved policy, no leaked data, no write |
+| Idempotent write | first request; same key/same payload; same key/different payload; concurrent same key | Contract plus integration if durable | stable response or operation, conflict where specified, exactly one durable side effect |
+| OpenAPI drift | generated bindings compile; runtime route contract check; lint/validate | Repository contract commands | clean generated diff, `internal/api` tests pass, runtime contract check passes |
 
-## Scenario Matrix Examples
-| Contract surface | Required rows | Selected proof | Pass/fail observable |
-| --- | --- | --- | --- |
-| Request validation | valid body, missing field, invalid type, unknown field if strict, oversized body if limits changed | Contract | status, problem/error payload shape, field path if specified, no partial side effect |
-| Auth and ownership | no credential, expired/invalid credential, wrong tenant/object owner, authorized actor | Contract or integration | 401/403/concealment status per approved policy, no leaked resource data, no write |
-| Idempotent write | first request, replay same key/same payload, same key/different payload, concurrent same key | Contract plus integration if persistent | stable response/operation, conflict where specified, exactly one durable side effect |
-| Pagination/filtering | empty result, boundary page size, invalid cursor/filter, deterministic order | Contract plus data integration if DB ordering matters | response schema, next cursor/link, stable ordering, validation error |
-| Async operation | accepted, invalid request rejected before acceptance, retryable worker failure, terminal failure, poll unknown ID | Contract plus process proof | `202`/operation resource where specified, terminal state, error shape, retention behavior |
-| OpenAPI drift | generated bindings compile, runtime route contract check, lint/validate | Repository contract commands | clean generated diff, `internal/api` tests pass, runtime contract test pass |
+## Reject
+- "Unit test the handler" as the only API contract proof when middleware, decoding, generated bindings, headers, or OpenAPI drift can change client-visible behavior.
+- "Check 400 on bad input" without problem body, field path, strictness, size, and no-side-effect expectations when those are in scope.
+- "Test authorization happy path" without wrong tenant/object or missing/invalid credential when the boundary changed.
+- "OpenAPI looks updated" without repository drift/runtime/lint/validate commands.
 
-## Pass/Fail Observables
-- Contract rows name status, headers, body schema, and generated/runtime artifact expectations when relevant.
-- Boundary tests include negative and misuse paths when caller identity, tenant, object ID, size, or idempotency key is caller-controlled.
-- API strategy does not decide missing product semantics; unresolved method/status/error/idempotency policy is an upstream API spec blocker.
-- OpenAPI drift and generated artifact checks use repository targets rather than ad hoc command substitutes.
-- Security-sensitive contract proof fails closed and checks absence of leaked sensitive or cross-tenant data.
+## Agent Traps
+- Do not import generic REST status choices from external examples. Use approved API decisions.
+- Do not route storage-backed idempotency only to API contract tests; durable duplicate suppression may also need integration proof.
+- Do not confuse generated-code compile success with runtime route conformance.
+- Do not let security boundary proof leak into a broad security checklist. Keep it to caller-visible boundary behavior unless a separate security specialist owns more.
 
-## Exa Source Links
-- [OpenAPI Specification v3.0.4](https://spec.openapis.org/oas/v3.0.4.html)
-- [OWASP WSTG API Broken Object Level Authorization](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/12-API_Testing/02-API_Broken_Object_Level_Authorization)
-- [testing package](https://pkg.go.dev/testing)
-- [Go Fuzzing](https://go.dev/doc/fuzz/)
-- [Go security best practices](https://go.dev/doc/security/best-practices)
-
+## Validation Shape
+API strategy is ready when each boundary row names the public observable and the repository-supported contract or runtime check that would catch drift.

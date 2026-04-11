@@ -38,19 +38,24 @@ Do not:
 - Missing trust-boundary facts, identity-model facts, data-classification facts, or enforcement ownership are blockers, not details to improvise later.
 
 ## Reference Files
-Load only the files needed for the security requirement question. Use these references before writing security examples or coding-facing requirements.
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the task clearly spans independent security decision pressures, such as tenant authorization plus SSRF, async replay plus secret handling, or REST status semantics plus abuse budgeting.
 
-- `references/trust-boundary-threat-modeling.md`: boundary maps, attacker paths, STRIDE-style prompts, threat responses, and repo-local boundary anchors.
-- `references/authentication-authorization-tenant-isolation.md`: identity model, bearer/JWT expectations, caller/subject separation, object/function/property authorization, and tenant isolation.
-- `references/input-output-injection-and-ssrf-controls.md`: request validation, JSON strictness, injection controls, SSRF and outbound allowlists, response sanitization, and Go parser/API caveats.
-- `references/api-facing-security-semantics.md`: REST security semantics, `401` vs `403`, `405`, `413`, `415`, `429`, `503`, idempotency, CORS, security headers, and sanitized problem responses.
-- `references/async-distributed-security.md`: async envelope authenticity, replay windows, token propagation rules, third-party API consumption, webhook callbacks, and distributed recovery security.
-- `references/data-cache-and-secret-handling.md`: sensitive data minimization, privacy, cache isolation, DB access controls, secret-source policy, key management, and logging/redaction.
-- `references/security-negative-path-verification.md`: negative-path and abuse-path test obligations, auth matrix testing, JWT tampering, BOLA, tenant-crossing, injection/SSRF, resource exhaustion, and CI security gates.
+Before loading a reference, name the symptom and the behavior change you need. If the skill body already steers the decision, skip the reference.
+
+| Symptom | Load | Behavior Change |
+| --- | --- | --- |
+| Trust boundaries, attacker paths, or boundary ownership are implicit. | `references/trust-boundary-threat-modeling.md` | Choose named boundary, attacker-path, enforcement, and proof requirements instead of generic "use auth" or "validate input" advice. |
+| Identity, authorization, tenant, object, property, or admin rules are in scope. | `references/authentication-authorization-tenant-isolation.md` | Choose caller/subject/tenant-bound access rules instead of role-only checks, untrusted headers, or `subject_id == path_id` shortcuts. |
+| JSON/input parsing, SQL or interpreter use, outbound URLs, webhooks, or sanitized errors are in scope. | `references/input-output-injection-and-ssrf-controls.md` | Choose strict parser, allowlist, SSRF dial, and sanitized output requirements instead of denylist validation, late validation, or raw error relay. |
+| REST/OpenAPI status codes, CORS, problem responses, method policy, request limits, retry/idempotency, or browser-visible headers are in scope. | `references/api-facing-security-semantics.md` | Choose contract-visible fail-closed semantics instead of ad hoc status codes, `200` error bodies, permissive CORS, or retry ambiguity. |
+| Queues, workers, outbox/inbox, webhooks, callbacks, cross-service calls, third-party APIs, or retries are in scope. | `references/async-distributed-security.md` | Choose authenticity, replay, scoped credential, and step-authorization rules instead of trusting internal queues or propagating raw bearer tokens. |
+| Sensitive data, privacy, cache keys, DB access, secrets, config source policy, logging, redaction, or telemetry fields are in scope. | `references/data-cache-and-secret-handling.md` | Choose classification, minimization, cache scoping, secret-source, and redaction requirements instead of shared caches, secret config, or log leakage. |
+| Rate limits, expensive operations, bulk work, provider-cost triggers, repeated attempts, or resource exhaustion are in scope. | `references/resource-abuse-and-cost-controls.md` | Choose principal/tenant-scoped budgets and cheap pre-side-effect gates instead of one global rate limit or reliability-only overload wording. |
+| Security decisions need proof obligations, test matrices, abuse-path checks, or scanner-vs-test separation. | `references/security-negative-path-verification.md` | Choose concrete negative-path and no-side-effect proof obligations instead of "covered by integration tests" or scanner-only confidence. |
 
 ## Design Method
 - Start from the affected flow and name the security decision that is still implicit.
-- Load the relevant reference files and reuse their selected/rejected controls, fail-closed examples, and testable requirement patterns.
+- Load at most one relevant reference by default and reuse its rubric, examples, traps, and proof shape. Load another only for an independent pressure the first file does not cover.
 - Produce requirements, not implementation guesses: state the threat scenario, selected control, rejected alternative, enforcement point, failure behavior, and verification obligation.
 - Tie security requirements to repo-local sources of truth when present, such as `api/openapi/service.yaml`, `internal/infra/http`, `internal/config`, `SECURITY.md`, and CI security targets.
 - If a control depends on an identity provider, gateway, service mesh, secret manager, cache, queue, or third-party API not present in the repo, record the assumption or blocker.

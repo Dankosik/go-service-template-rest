@@ -1,36 +1,26 @@
 # Verification Command Evidence
 
-## When To Load
-Load this before final handoff, when selecting validation commands, narrowing failing tests, adding race/fuzz/integration evidence, or reporting what was actually run.
+## Behavior Change Thesis
+When loaded before final handoff or validation selection, this file makes the model report fresh, risk-matched command evidence instead of likely mistake: vague "tests should pass" claims, cached success, blanket `go test ./...` as proof of every risk, or unreported failures.
 
-## Command Selection
-- Start with the narrowest command that proves the changed package or test name.
-- Add broader repository commands when the change touches shared behavior or build/test infrastructure.
+## When To Load
+Load this before final handoff, when selecting validation commands, narrowing failing tests, adding race/fuzz/integration evidence, or wording the validation report.
+
+## Decision Rubric
+- Start with the narrowest fresh command that proves the changed test name or package.
+- Add package-level validation when helpers, fixtures, generated test assets, or nearby tests could be affected.
+- Add broader repository commands when the change touches shared behavior, build/test infrastructure, generated artifacts, or cross-package contracts.
 - Prefer repository `make` targets as the normal interface when they exist.
-- Use raw `go test` commands to focus diagnosis or accelerate a package loop; do not silently let them replace the repo's required quality gate.
-- Use `-count=1` when you need fresh execution rather than cached package results.
-- Use `-run` to pin the relevant suite or subtest.
-- Use `-race` for concurrency-sensitive changes when the platform/toolchain supports it.
-- Use `-fuzz` plus bounded `-fuzztime` only for fuzzing work, not as a substitute for seed-corpus regression execution.
+- Use raw `go test` commands for focused diagnosis or fast loops; do not silently let them replace a required repository gate.
+- Use `-count=1` when you need fresh execution rather than cached results.
+- Use `-run` for named suites or subtests.
+- Use `-race` or `make test-race` for concurrency-sensitive changes when supported.
+- Use fuzz execution only for fuzz targets; plain `go test` proves seed corpus regressions but not exploration.
 - Use integration targets or build tags only when the test depends on external services and the repo already supports that mode.
 
-## Common Commands
-```bash
-go test ./internal/infra/http -run 'TestRouterHTTPPolicy' -count=1
-go test ./internal/infra/postgres -run 'TestPingHistoryRepository' -count=1
-go test -race ./cmd/service/internal/bootstrap -run 'Test.*Shutdown' -count=1
-go test ./... -count=1
-go test ./internal/parser -run '^$' -fuzz=FuzzParse -fuzztime=30s
-make test
-make test-race
-make test-integration
-make check
-make check-full
-```
+## Imitate
+Test:
 
-Adapt package paths and test names to the actual changed surface.
-
-## Good Test Example
 ```go
 func TestWorkerStopsOnCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,23 +33,14 @@ func TestWorkerStopsOnCancellation(t *testing.T) {
 }
 ```
 
-Verification should include a focused fresh run such as:
+Validation command shape:
 
 ```bash
 go test ./internal/worker -run '^TestWorkerStopsOnCancellation$' -count=1
 ```
 
-## Bad Test Example
-```go
-func TestWorkerStops(t *testing.T) {
-	go runWorker(context.Background(), fakeSource{})
-	time.Sleep(10 * time.Millisecond)
-}
-```
+Report shape:
 
-Why it is bad: it has no observable assertion, can leak the goroutine, and gives validation commands nothing meaningful to prove.
-
-## Good Report Example
 ```text
 Implemented repository tests for query error wrapping, null timestamp rejection, and list ordering.
 
@@ -68,33 +49,53 @@ Validation:
 - make test: passed
 ```
 
-## Bad Report Example
+Copy the shape: scenario coverage is named by behavior and every command includes its observed result.
+
+## Reject
+```go
+func TestWorkerStops(t *testing.T) {
+	go runWorker(context.Background(), fakeSource{})
+	time.Sleep(10 * time.Millisecond)
+}
+```
+
+Reject because it has no observable assertion, can leak the goroutine, and gives validation commands nothing meaningful to prove.
+
 ```text
 Tests should pass. I added coverage.
 ```
 
-Why it is bad: it gives no command evidence and claims coverage without naming the proof.
+Reject because it gives no command evidence and claims coverage without naming the proof.
 
-## Assertion Patterns For Validation
-- A focused command proves the exact changed test names.
-- A package command proves compile and interaction with nearby tests.
-- A broader make target proves repository quality expectations.
-- A race command proves executed concurrency paths; remember the race detector only reports races in code paths that ran.
-- A fuzz command proves fuzz exploration for a bounded time; plain `go test` proves seed corpus regressions.
+## Command Examples
+```bash
+go test ./internal/infra/http -run 'TestRouterHTTPPolicy' -count=1
+go test ./internal/infra/postgres -run 'TestPingHistoryRepository' -count=1
+go test -race ./cmd/service/internal/bootstrap -run 'Test.*Shutdown' -count=1
+go test ./... -count=1
+go test ./internal/parser -run '^$' -fuzz=FuzzParse -fuzztime=30s
+make test
+make test-race
+make test-fuzz-smoke
+make test-integration
+make check
+make check-full
+```
 
-## Deterministic Coordination Patterns
-- Re-run with `-count=1` after changing tests so cached success does not masquerade as validation.
-- When a concurrency test is meant to flush scheduling bugs, use repeated `-count=N` only after the test has deterministic coordination and a bounded timeout.
-- If a command cannot run because Docker, cgo, a race-supported platform, or another dependency is missing, report the blocker and the narrower evidence you did obtain.
-- If validation fails, report the failing command and the key failure line; do not claim completion.
+Adapt package paths and test names to the actual changed surface.
 
-## Repository-Local Cues
-- `docs/build-test-and-development-commands.md` lists `make check`, `make test`, `make vet`, `make test-race`, `make test-integration`, and `make check-full`.
-- Integration tests in `test/` use `//go:build integration` and Docker/testcontainers.
-- The repo uses local Go from `go.mod` and make targets as the default validation interface.
+## Agent Traps
+- Reporting "passed" from a cached run after editing tests.
+- Treating a race-clean run as proof that cancellation or liveness semantics are correct.
+- Requiring full CI for every local test change when a focused and package-level proof is enough.
+- Skipping integration proof silently because Docker is unavailable.
+- Hiding a failed command behind a broad summary.
+- Claiming fuzz coverage when only seed corpus execution ran.
 
-## Exa Source Links
-- [Go command documentation](https://pkg.go.dev/cmd/go)
-- [Go testing package](https://pkg.go.dev/testing)
-- [Go fuzzing documentation](https://go.dev/doc/fuzz/)
-- [Go race detector article](https://go.dev/doc/articles/race_detector.html)
+## Validation Shape
+- Focused command proves the exact changed test names.
+- Package command proves compilation and interaction with nearby tests.
+- Broader make target proves repository quality expectations.
+- Race command proves the executed concurrency paths are race-clean, not that unexecuted paths are safe.
+- Fuzz command proves bounded exploration; plain `go test` proves seeded regressions.
+- If validation cannot run because Docker, cgo, race support, toolchain, or another dependency is missing, report the blocker and the narrower evidence obtained.

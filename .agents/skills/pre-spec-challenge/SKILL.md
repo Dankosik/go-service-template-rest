@@ -41,16 +41,17 @@ Escalate if:
 - Stay advisory. The orchestrator decides.
 
 ## Reference Files
-Load references lazily. Use the repository workflow docs, especially `docs/spec-first-workflow.md`, as the authority for phase placement; these files only sharpen the challenge examples.
+Load references lazily. Use repository workflow docs, especially `docs/spec-first-workflow.md`, as the authority for phase placement; these references are compact rubrics and example banks, not exhaustive checklists or design guidance.
 
-| Need | Load |
-| --- | --- |
-| Decide whether the input bundle is ready for a challenge pass | `references/input-sufficiency-and-challenge-readiness.md` |
-| Turn candidate assumptions into falsifying questions | `references/falsifying-candidate-assumptions.md` |
-| Challenge source-of-truth, actor, side-effect, or failure seams | `references/ownership-boundary-and-failure-seams.md` |
-| Pressure-test rollout, compatibility, canary, feature-flag, or rollback claims | `references/rollout-compatibility-and-risk-questions.md` |
-| Calibrate blocker levels and avoid over-blocking | `references/blocker-classification-examples.md` |
-| Choose `answer`, `re-research`, `ask_user`, `defer`, or `accept_risk` next actions | `references/research-reopen-and-next-action-examples.md` |
+Load at most one reference by default. Load more than one only when the candidate synthesis spans independent decision pressures, such as both async ownership and mixed-version rollout.
+
+| Symptom | Behavior Change | Load |
+| --- | --- | --- |
+| The input bundle may be too thin or blank-page design is tempting | Makes the model route to framing or targeted research instead of inventing challenge questions from missing decisions | `references/input-sufficiency-and-challenge-readiness.md` |
+| Candidate decisions lean on convenience assumptions like frontend dedupe, TTL cleanup, UUID secrecy, or manual fixes | Makes the model ask falsifying failure questions instead of generic "what about retries/security/scale?" prompts | `references/falsifying-candidate-assumptions.md` |
+| Source-of-truth, actor authority, side effects, async handoff, cache, or destructive admin seams are underdefined | Makes the model challenge durable ownership and recovery instead of vague ownership/auth questions or implementation advice | `references/ownership-boundary-and-failure-seams.md` |
+| Rollout, migration, compatibility, feature flags, canaries, backfills, global enablement, or rollback are material | Makes the model test mixed-version and rollback state instead of forcing ceremony or ignoring hard-to-reverse release risk | `references/rollout-compatibility-and-risk-questions.md` |
+| Strong questions exist but severity or resolution route is unclear | Makes the model classify by what changes planning and choose a concrete next action instead of overblocking or reflexively asking for more research | `references/triage-and-next-action-routing.md` |
 
 ## Challenge Loop
 1. Confirm the input is challenge-ready rather than underframed.

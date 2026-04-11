@@ -29,19 +29,22 @@ Protect changed Go code from language-level, standard-library, and exported-surf
 6. Escalate or hand off when the fix needs another lane's ownership.
 
 ## Lazy Reference Selection
-Load reference files only when the diff touches that axis or you need concrete examples/source anchors. Do not bulk-load the directory by default.
+References are compact rubrics and example banks, not exhaustive checklists or Go documentation dumps. Load at most one reference by default. Load multiple only when the diff clearly spans independent decision pressures, such as both error-contract drift and mutable ownership leakage.
 
-| Reference | Load when |
-| --- | --- |
-| `references/errors-and-contracts-review.md` | Errors are swallowed, logged instead of returned, string-matched, wrapped with `%w` or `%v`, joined, typed, sentinel-based, or exported as package contracts. |
-| `references/context-and-lifetime-review.md` | `context.Context` is stored, replaced with `context.Background`, passed nil, omitted from request-scoped work, or derived without clear cancellation ownership. |
-| `references/receivers-methodsets-and-copy-safety.md` | Receivers, method sets, interface satisfaction, value copies, `sync` fields, `strings.Builder`, `bytes.Buffer`, or pointer-to-map/slice/interface shapes changed. |
-| `references/nil-zero-value-and-typed-nil.md` | Nil interfaces, typed-nil errors, nil maps/channels/slices, constructors, zero-value usability, absent vs empty semantics, or JSON-visible nil behavior changed. |
-| `references/slices-maps-buffers-and-ownership.md` | Slices, maps, `[]byte`, buffers, `http.Header`, `url.Values`, cloning, aliasing, map iteration order, or mutable data crossing package boundaries changed. |
-| `references/stdlib-first-modern-go-review.md` | Custom helpers duplicate current Go builtins or stdlib packages such as `errors`, `slices`, `maps`, `cmp`, `strings`, `bytes`, `net/url`, or `net/http`. |
-| `references/exported-api-and-interface-shape.md` | Exported names, doc comments, package names, interfaces, constructors, compatibility, option structs, or public method/function signatures changed. |
+Choose the reference by the symptom you are reviewing and the behavior change you need:
 
-If multiple axes apply, load the smallest set that explains the concrete finding. If a reference points to deeper concurrency, data, security, domain, or architecture policy, use it to frame the handoff rather than doing that review here.
+| Reference | Symptom | Behavior change when loaded |
+| --- | --- | --- |
+| `references/errors-and-contracts-review.md` | Returned errors are swallowed, logged instead of returned, string-matched, wrapped with `%w` or `%v`, joined, typed, sentinel-based, or exported as package contracts. | Choose the caller-observable error contract and hidden-success risk instead of reflexively saying "use `%w`" or "custom error type". |
+| `references/context-and-lifetime-review.md` | `context.Context` is stored, replaced with `context.Background`, passed nil, omitted from request-scoped work, or derived without clear cancellation ownership. | Review cancellation ownership and lifetime instead of blanket "add context everywhere" or "never use Background". |
+| `references/receivers-methodsets-and-copy-safety.md` | Receivers, method sets, interface satisfaction, value copies, `sync` fields, `strings.Builder`, `bytes.Buffer`, or pointer-to-map/slice/interface shapes changed. | Tie receiver/copy findings to mutation, identity, method-set reachability, and must-not-copy state instead of preferring pointer receivers everywhere. |
+| `references/nil-zero-value-and-typed-nil.md` | Nil interfaces, typed-nil errors, nil maps/channels/slices, constructors, zero-value usability, absent vs empty semantics, or JSON-visible nil behavior changed. | Treat nil and zero values as observable runtime/API contracts instead of style preferences. |
+| `references/slices-maps-buffers-and-ownership.md` | Slices, maps, `[]byte`, buffers, `http.Header`, `url.Values`, cloning, aliasing, map iteration order, or mutable data crossing package boundaries changed. | Review aliasing, mutation authority, and observable ordering instead of blindly cloning or banning exposed maps. |
+| `references/resource-closure-and-iteration-probes.md` | `Body.Close`, `rows.Close`, `rows.Err`, `scanner.Err`, files, timers, tickers, cancel funcs, partial reads, or `defer` lifetime changed. | Require the completion probe and correct release lifetime instead of stopping at "Close exists" or adding `defer` in the wrong scope. |
+| `references/stdlib-first-modern-go-review.md` | Custom helpers duplicate current Go builtins or stdlib packages such as `errors`, `slices`, `maps`, `cmp`, `strings`, `bytes`, `net/url`, or `net/http`. | Check effective Go version and semantic deltas before choosing stdlib replacement or preserving a wrapper. |
+| `references/exported-api-and-interface-shape.md` | Exported names, doc comments, package names, interfaces, constructors, compatibility, option structs, or public method/function signatures changed. | Review consumer-owned abstraction and compatibility risk instead of generic "small interface" or doc-comment advice. |
+
+If symptoms overlap, load the file whose thesis matches the concrete risk. Examples: use `context-and-lifetime-review.md` for lost cancellation flow, `errors-and-contracts-review.md` for whether cancellation remains inspectable; use `slices-maps-buffers-and-ownership.md` for aliasing, `stdlib-first-modern-go-review.md` for whether a local helper still beats `slices` or `maps`. If a reference points to deeper concurrency, data, security, domain, or architecture policy, use it to frame the handoff rather than doing that review here.
 
 ## Core Axes
 - Error semantics: preserve inspectable contracts with deliberate sentinel, typed, joined, wrapped, or opaque errors. Use `errors.Is` and `errors.As` when callers need cause inspection; do not string-match error text.

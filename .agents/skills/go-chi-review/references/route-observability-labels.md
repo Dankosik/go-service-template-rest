@@ -1,52 +1,79 @@
 # Route Observability Labels
 
-## When To Read
-Read this when a diff touches metrics, traces, logs, span names, route labels, `http.route`, route-template extraction, unmatched-route fallback labels, or middleware that records route identity.
+## Behavior Change Thesis
+When loaded for symptom `metrics, traces, logs, span names, http.route, route label extraction, or unmatched-route labels changed`, this file makes the model choose bounded route-template telemetry shared across signals instead of likely mistake `use raw URL paths or inconsistent route identities`.
 
-## Review Smell Patterns
-- Metrics, spans, or logs label routes with `r.URL.Path`, wildcard captures, IDs, slugs, query strings, or raw unmatched paths.
-- `http.route` is populated from the URI path when chi route templates are not available.
-- Route labels are read before `next.ServeHTTP`, so nested routes or mounted subrouters produce incomplete templates.
-- Traces use one route identity while metrics or logs use another.
-- Unmatched routes fall back to raw user-controlled paths instead of one bounded label such as `unmatched`.
+## When To Load
+Load when a diff touches metrics, traces, logs, span names, `http.route`, route-template extraction, unmatched-route fallback labels, or middleware that records route identity.
 
-## Minimal Examples
+## Decision Rubric
+- Route labels should come from chi route templates when available, not `r.URL.Path`, query strings, captures, IDs, slugs, or wildcard values.
+- Read final chi route templates after downstream routing. If the main defect is context timing rather than telemetry cardinality, load `route-context-and-match-probing.md`.
+- Unmatched requests need one bounded fallback label, such as `unmatched`, `not_found`, or another project-approved constant. Do not fall back to user-controlled paths.
+- Metrics, traces, span names, and structured logs should use the same route identity source unless the diff records a deliberate policy difference.
+- For server span naming, prefer method plus route template when the template exists; absence of a template is not permission to substitute the raw URL path.
+- If standards wording matters, verify against the current OpenTelemetry HTTP semantic conventions, but do not turn the review reference into a link dump.
 
-```diff
- func routeMetrics(next http.Handler) http.Handler {
-   return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
--    labels.Route = r.URL.Path
-     next.ServeHTTP(w, r)
-+    labels.Route = chi.RouteContext(r.Context()).RoutePattern()
-+    if labels.Route == "" {
-+      labels.Route = "unmatched"
-+    }
-     metrics.Record(labels)
-   })
- }
+## Imitate
+
+```go
+next.ServeHTTP(w, r)
+route := chi.RouteContext(r.Context()).RoutePattern()
+if route == "" {
+	route = "unmatched"
+}
+metrics.Record("route", route)
 ```
 
-Review finding shape: raw paths create high-cardinality telemetry. The smallest safe fix is route-template labels after routing plus a bounded unmatched fallback.
+Copy the label shape: post-route template extraction plus bounded fallback.
 
-```diff
--span.SetName(r.Method + " " + r.URL.Path)
-+if route := chi.RouteContext(r.Context()).RoutePattern(); route != "" {
-+  span.SetName(r.Method + " " + route)
-+  span.SetAttributes(attribute.String("http.route", route))
-+}
+```go
+if route := chi.RouteContext(r.Context()).RoutePattern(); route != "" {
+	span.SetName(r.Method + " " + route)
+	span.SetAttributes(attribute.String("http.route", route))
+}
 ```
 
-Review finding shape: server span names should use method plus a low-cardinality route target when it is available; do not substitute a raw URL path for an unavailable route template.
+Copy the trace shape: use method plus route template and set `http.route` from the same template.
 
-## Validation
-- Send `/users/1` and `/users/2` through the middleware and assert one recorded route label, such as `/users/{id}`.
+```go
+assertSameRouteLabel(t, "/users/1", "/users/2", "/users/{id}")
+assertSameRouteLabel(t, "/missing/a", "/missing/b", "unmatched")
+```
+
+Copy the proof shape: parameterized routes collapse together, and unknown routes collapse together.
+
+## Reject
+
+```go
+metrics.Record("route", r.URL.Path)
+```
+
+Reject because raw paths create high-cardinality labels.
+
+```go
+span.SetName(r.Method + " " + r.URL.Path)
+span.SetAttributes(attribute.String("http.route", r.URL.Path))
+```
+
+Reject because trace names and `http.route` now include user-controlled path data.
+
+```go
+if route == "" {
+	route = r.URL.Path
+}
+```
+
+Reject because the fallback converts unmatched routes into unbounded labels.
+
+## Agent Traps
+- Do not stop at "use `RoutePattern`" if the code still reads it before routing finishes.
+- Do not accept a bounded metric label while traces or logs still use raw paths for the same route identity.
+- Do not substitute wildcard captures, IDs, or query strings when a template is unavailable.
+- Do not make this a performance-only finding; the merge risk is telemetry cardinality and debuggability drift.
+
+## Validation Shape
+- Send two concrete parameter values, such as `/users/1` and `/users/2`, and assert one route-template label.
 - Send two unknown paths and assert both collapse to the same bounded fallback label.
-- Assert metrics, trace span name, `http.route`, and structured logs use the same route-template source.
-- Suggested validation command: `go test ./... -run 'Test.*RouteLabel|Test.*Observability|Test.*Telemetry|Test.*Trace|Test.*Metrics'`.
-
-## Sources Gathered With Exa
-- [OpenTelemetry HTTP semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/)
-- [OpenTelemetry HTTP span semantic conventions](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/http/)
-- [go-chi context.go source for RoutePattern timing](https://raw.githubusercontent.com/go-chi/chi/master/context.go)
-- [go-chi mux.go source for request route pattern assignment](https://raw.githubusercontent.com/go-chi/chi/master/mux.go)
-
+- Assert metrics, span name, `http.route`, and structured logs use the same route-template source when the diff touches more than one signal.
+- Suggested command: `go test ./... -run 'Test.*RouteLabel|Test.*Observability|Test.*Telemetry|Test.*Trace|Test.*Metrics|Test.*Log'`.

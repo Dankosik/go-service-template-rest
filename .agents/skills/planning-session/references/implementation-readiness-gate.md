@@ -1,72 +1,62 @@
-# Implementation Readiness Gate Examples
+# Implementation Readiness Gate
+
+## Behavior Change Thesis
+When loaded for a handoff that feels almost ready, this file makes the model choose `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` from concrete blockers and proof obligations instead of using optimistic `PASS`, vague `CONCERNS`, or convenience `WAIVED`.
 
 ## When To Load
-Load this reference when assigning or checking implementation-readiness status, when recording `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`, or when deciding whether a planning handoff can point to an implementation phase.
+Load when assigning or auditing implementation-readiness status.
 
-This file gives examples only. `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative.
+## Decision Rubric
+- `PASS`: all required spec, design, planning, task-ledger, triggered test or rollout artifacts, required phase-control files, blocker resolution, and proof path are in place.
+- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the next implementation phase can satisfy without re-planning.
+- `FAIL`: implementation must not start; name the earlier phase to reopen when a missing artifact, unresolved decision, or blocker could change correctness, ownership, rollout, sequencing, or validation.
+- `WAIVED`: use only for tiny, direct-path, or prototype-scoped work with explicit rationale and scope; never use it to bypass normal non-trivial planning.
+- Record the readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, compact summary in `plan.md`, and short reference in `tasks.md` when useful.
 
-## Good Session Outcomes
-- `PASS` is used only after required spec, design, planning, task-ledger, optional validation or rollout artifacts, pre-created phase-control files, proof path, and blockers are resolved.
-- `CONCERNS` names each accepted risk and adds proof obligations that the first implementation phase can verify without re-planning.
-- `FAIL` names the earlier phase to reopen and keeps planning blocked rather than passing ambiguity forward.
-- `WAIVED` is used only for an eligible tiny, direct-path, or prototype-scoped exception with rationale and scope.
-- The readiness status is recorded in `workflow-plan.md`, the gate result and stop/handoff rule are recorded in `workflow-plans/planning.md`, a compact summary is added to `plan.md`, and `tasks.md` carries a short reference when useful.
-
-## Bad Session Outcomes
-- `PASS` while `tasks.md` is missing for non-trivial work.
-- `CONCERNS` with vague wording such as "some risk remains" and no proof obligation.
-- `FAIL` followed by creating the missing design artifact inside the same planning session.
-- `WAIVED` used as a convenience for normal non-trivial work.
-- The gate result appears only in chat and not in workflow-control artifacts.
-
-## Example Handoff Notes
-PASS:
-
+## Imitate
 ```markdown
 Implementation readiness: PASS.
-Gate result: approved for `implementation-phase-1` in a later session.
-Proof path: task-level verification is listed in `tasks.md`; phase checkpoint verification is listed in `plan.md`.
-Stop rule: planning session ends here.
+Gate result: implementation may start with `implementation-phase-1` in a later session.
+Proof path: task-level proof is listed in `tasks.md`; phase checkpoint proof is listed in `plan.md`.
 ```
 
-CONCERNS:
+Copy this shape: PASS is tied to named artifacts and a later-session entry point.
 
 ```markdown
 Implementation readiness: CONCERNS.
-Accepted risk: cache invalidation proof depends on first-phase integration test evidence.
-Proof obligation: `implementation-phase-1` must add the named integration test before marking phase complete.
-Gate result: implementation may start in the next session with this proof obligation visible.
+Accepted risk: cache invalidation proof depends on first-phase integration evidence.
+Proof obligation: `implementation-phase-1` must add and pass the named integration test before phase completion.
+Gate result: implementation may start in the next session with this obligation visible.
 ```
 
-FAIL:
+Copy this shape: concerns are specific, accepted, and testable in the next phase.
 
 ```markdown
 Implementation readiness: FAIL.
-Reopen target: technical design.
-Reason: `tasks.md` cannot order the migration safely because ownership of the backfill source of truth is not settled in `design/`.
+Reopen target: technical-design.
+Reason: task order depends on an unsettled backfill source-of-truth decision.
 Gate result: implementation must not start.
 ```
 
-WAIVED:
+Copy this shape: FAIL routes upstream instead of pretending uncertainty is an implementation task.
+
+## Reject
+```markdown
+Implementation readiness: CONCERNS.
+Risk: some validation risk remains.
+```
+
+Failure: it has no named accepted risk and no proof obligation.
 
 ```markdown
 Implementation readiness: WAIVED.
-Rationale: direct-path prototype note update; no code, data, API, or runtime-sequence change; separate `tasks.md` would add no useful execution control.
-Scope: one documented planning note only.
-Gate result: no implementation phase is opened by this planning session.
+Rationale: planning files are probably enough and the change is routine.
 ```
 
-## Blocker Handling
-- For unresolved high-impact decisions that could change correctness, ownership, rollout, or validation, use `FAIL`, name the reopen target, and stop.
-- For accepted but bounded risks, use `CONCERNS` only when the risk can be carried by named proof obligations during implementation.
-- For missing required artifacts, keep readiness at `FAIL` or blocked; do not downgrade to `CONCERNS` to force handoff.
-- For tiny/direct-path exceptions, record the waiver rationale and scope clearly enough that a later session does not guess whether artifacts were forgotten.
+Failure: waiver is not for routine non-trivial work.
 
-## Exa Calibration Source Links
-Found through Exa MCP search before these examples were written. Use these links only for calibration; local repo guidance wins.
-
-- arc42 documentation: https://arc42.org/documentation/
-- arc42 method: https://arc42.org/method
-- Martin Fowler on Architecture Decision Records: https://martinfowler.com/bliki/ArchitectureDecisionRecord.html
-- Asana implementation plan guide: https://www.asana.com/resources/implementation-plan
-
+## Agent Traps
+- Passing readiness while `tasks.md` is missing for non-trivial work.
+- Downgrading a missing required design artifact from `FAIL` to `CONCERNS`.
+- Recording the gate only in chat.
+- Letting `CONCERNS` carry unnamed risk that the implementation agent must rediscover.

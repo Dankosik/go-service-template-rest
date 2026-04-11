@@ -1,18 +1,21 @@
 # Deterministic Concurrency And Time Tests
 
+## Behavior Change Thesis
+When loaded for goroutines, channels, shutdown, timers, deadlines, or race-sensitive behavior, this file makes the model use deterministic handshakes, bounded exit checks, fake time where suitable, and race evidence instead of likely mistake: `time.Sleep`, pass-by-no-panic tests, or unobserved goroutine leaks.
+
 ## When To Load
-Load this when tests touch goroutines, channels, worker pools, cancellation, shutdown, backpressure, timers, tickers, deadlines, race detection, or `testing/synctest`.
+Load this when tests touch goroutines, channels, worker pools, shutdown, backpressure, timers, tickers, deadlines, race detection, or `testing/synctest`. If the primary issue is error category or context propagation without goroutine scheduling, load `error-context-and-cancellation-tests.md` instead.
 
-## Determinism Rules
-- Do not use `time.Sleep` as a hope that another goroutine reached a state; use an explicit handshake.
-- Use a bounded timeout only as a diagnostic guard around a deterministic condition.
-- Prove blocking operations unblock on cancel or shutdown.
-- Keep channel send/close ownership explicit.
-- Use `testing/synctest` when code can run inside a self-contained bubble and fake time makes the test simpler.
-- Avoid `testing/synctest` when the test depends on real network I/O, external processes, goroutines outside the bubble, or mutex blocking as the main synchronization point.
-- Validate concurrency-sensitive changes with `go test -race` or the repo race target when supported.
+## Decision Rubric
+- For "wait until goroutine reaches state", add an explicit `ready` handshake at the boundary being tested.
+- For cancellation or shutdown, prove the blocked operation returns and inspect the final error or state.
+- For max concurrency or duplicate side effects, use an atomic or mutex-protected fake and fail at the first overflow or duplicate.
+- For timer and backoff behavior, prefer injected clocks or `testing/synctest` when the code can stay inside the fake-time bubble.
+- Use a real timeout only as a diagnostic guard around a deterministic condition.
+- Use `go test -race` or the repository race target for concurrency-sensitive changes when the platform/toolchain supports it.
+- Verify `testing/synctest` in the active Go toolchain before relying on it. In this repo, `go.mod` currently targets Go 1.26.1, so `synctest` is expected to be available.
 
-## Good Example
+## Imitate
 ```go
 func TestPublisherBlockedSendUnblocksOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -40,22 +43,8 @@ func TestPublisherBlockedSendUnblocksOnCancel(t *testing.T) {
 }
 ```
 
-Why it is good: cancellation happens only after the goroutine confirms it is at the publication boundary.
+Copy the shape: cancellation happens only after the goroutine confirms it reached the blocked send boundary, and the test observes exit.
 
-## Bad Example
-```go
-func TestPublisherBlockedSendUnblocksOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	go Publish(ctx, make(chan Event), Event{ID: "evt-1"}, nil)
-	time.Sleep(10 * time.Millisecond)
-	cancel()
-	time.Sleep(10 * time.Millisecond)
-}
-```
-
-Why it is bad: it proves no observable outcome and can pass even if the goroutine leaks.
-
-## Synctest Example
 ```go
 func TestRetryTimerFiresAfterBackoff(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -78,31 +67,30 @@ func TestRetryTimerFiresAfterBackoff(t *testing.T) {
 }
 ```
 
-Use this only when `testing/synctest` is available in the repo's Go version and the code under test stays inside the bubble.
+Copy the shape only when the code under test stays inside the `synctest` bubble and does not depend on real network I/O, external processes, or goroutines outside the bubble.
 
-## Assertion Patterns
-- Assert bounded exit: receive from `errCh` or `doneCh` and inspect the error or final state.
-- Assert max concurrency with an atomic in-flight counter and an immediate fail-on-overflow signal.
-- Assert sibling shutdown by blocking one worker behind a channel, failing another, then requiring the blocked worker to observe cancellation.
-- Assert no duplicate side effects under concurrency with a thread-safe fake that records call count and payload.
-- Assert wrapped fatal causes with `errors.Is` or `errors.As`.
+## Reject
+```go
+func TestPublisherBlockedSendUnblocksOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go Publish(ctx, make(chan Event), Event{ID: "evt-1"}, nil)
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	time.Sleep(10 * time.Millisecond)
+}
+```
 
-## Deterministic Coordination Patterns
-- `ready := make(chan struct{})` closed just before a goroutine blocks or sends.
-- `release := make(chan struct{})` to hold work until all goroutines are queued.
-- `done := make(chan error, 1)` so goroutine completion cannot block.
-- `sync.WaitGroup` only when every `Add` happens before the goroutine can call `Done`.
-- `atomic.Int64` or a mutex-protected fake for call counts shared across goroutines.
-- `testing/synctest.Wait()` to wait until goroutines in a bubble are durably blocked.
+Reject because it proves no observable outcome and can pass even if the goroutine leaks.
 
-## Repository-Local Cues
-- `internal/infra/http/goleak_test.go` installs goleak for the HTTP package.
-- `cmd/service/internal/bootstrap/main_shutdown_test.go` verifies shutdown ordering and cancellation categories.
-- Some existing server lifecycle tests use short sleeps while polling real network startup. Prefer explicit hooks for new pure concurrency tests.
+## Agent Traps
+- Using a timeout as synchronization rather than as a guard around deterministic coordination.
+- Forgetting to buffer `errCh` or `doneCh`, causing the goroutine under test to block on reporting.
+- Calling `WaitGroup.Add` after a goroutine can call `Done`.
+- Closing a channel from the receiver side without owning the close.
+- Treating a clean race run as proof of liveness, ordering, or cancellation semantics.
+- Using `synctest` for real network startup, process lifecycle, or code that spawns work outside the bubble.
 
-## Exa Source Links
-- [Go race detector article](https://go.dev/doc/articles/race_detector.html)
-- [testing/synctest package](https://pkg.go.dev/testing/synctest)
-- [Go testing package](https://pkg.go.dev/testing)
-- [Go context package](https://pkg.go.dev/context)
-
+## Validation Shape
+- Run the focused test with `-count=1`.
+- Add `-race` or `make test-race` when the changed path includes shared state, goroutines, worker pools, channel handoff, or cancellation races.
+- Use repeated `-count=N` only after deterministic coordination exists; repetition is not a substitute for a proper handshake.

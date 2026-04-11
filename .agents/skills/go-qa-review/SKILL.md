@@ -36,14 +36,16 @@ Do not:
 - Prefer the smallest safe test correction that restores confidence.
 
 ## Reference Selection
-Keep this file focused on review workflow. Load only the reference file that matches the proof-quality gap:
+Keep this file focused on review workflow. References are compact rubrics and example banks, not exhaustive QA checklists or Go testing documentation. Load at most one reference by default; load more only when the diff clearly spans independent proof-quality pressures.
 
-- `references/scenario-traceability-review.md` for mapping changed behavior, approved obligations, invariants, or API/data/reliability expectations to named test scenarios.
-- `references/assertion-strength-and-diagnostics.md` for weak assertions, opaque helpers, missing error-shape checks, or diagnostics that do not localize the failed behavior.
-- `references/determinism-isolation-and-flake-risk.md` for sleeps, time, randomness, environment/global state, `t.Parallel()`, goroutine coordination, race evidence, `goleak`, or `testing/synctest` suitability.
-- `references/fail-edge-and-abuse-path-coverage.md` for missing fail paths, edge cases, malformed input, boundary values, fuzz/regression seeds, or abuse-path coverage when those paths are in scope.
-- `references/validation-command-fit.md` for validation commands that do not exercise the changed risk surface, wrong package level, missing integration/contract/race/fuzz checks, or overbroad commands that hide an unproven target.
-- `references/cross-domain-test-gap-handoffs.md` for proof gaps whose correct review depends on domain, API, DB/cache, concurrency, security, reliability, or performance semantics.
+| Symptom | Load | Behavior change |
+| --- | --- | --- |
+| The review risks saying "add more tests" without naming the missing scenario. | `references/scenario-traceability-review.md` | Makes the model tie changed behavior to one named scenario and regression leakage instead of using test count or coverage as proof. |
+| The test exists but can pass while the observable contract is wrong, or failures would not localize cause. | `references/assertion-strength-and-diagnostics.md` | Makes the model ask for stable got/want, side-effect, state, or error-shape assertions instead of library-preference or "assert more" findings. |
+| Proof relies on timing luck, scheduler luck, shared state, parallel isolation, race runs, leak checks, or `testing/synctest` judgment. | `references/determinism-isolation-and-flake-risk.md` | Makes the model identify the uncontrolled source and deterministic proof shape instead of blanket sleep removal, `-race`, or `-count=100` advice. |
+| The changed behavior includes failure classes, boundaries, malformed input, fuzz seeds, or abuse-path obligations. | `references/fail-edge-and-abuse-path-coverage.md` | Makes the model request the smallest representative negative case instead of exhaustive matrices, fuzz-everything advice, or threat-model ownership. |
+| Reported validation does not exercise the changed risk surface at the right package, tag, contract, race, fuzz, or CI-parity level. | `references/validation-command-fit.md` | Makes the model map validation to the regression under discussion instead of accepting broad `go test ./...` or demanding full CI by default. |
+| The QA gap depends on specialist semantics from domain, API, DB/cache, concurrency, security, reliability, performance, or design. | `references/cross-domain-test-gap-handoffs.md` | Makes the model separate the local executable proof gap from the specialist question instead of punting vaguely or over-owning another review lane. |
 
 When you load a reference, translate the example into the current diff's concrete `file:line`, missing obligation, regression-leakage impact, smallest safe correction, and validation command. Do not paste generic examples as final review output.
 

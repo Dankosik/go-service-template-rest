@@ -1,13 +1,21 @@
 # Cross-Domain Handoff Examples
 
+## Behavior Change Thesis
+When loaded for symptom "design review found a seam but domain correctness belongs elsewhere," this file makes the model write one design-shaped finding plus a targeted specialist handoff instead of pretending to own every review domain or handing off everything generically.
+
 ## When To Load
-Load this when design review detects that a diff has crossed a domain seam, but the deep correctness question belongs to a specialist review lane.
+Load this when the design reviewer can name a boundary, ownership, or proof-shape risk, but deep correctness requires API, chi, data/cache, security, reliability, concurrency, performance, QA, or delivery expertise.
 
-Use this to keep the review output focused. The design reviewer names the shape risk, then hands off the domain-specific proof instead of pretending to own every domain.
+Use this as a routing reference, not primary design guidance. If a narrower design reference explains the finding, load that one first and use this only for the handoff wording.
 
-## Concrete Review Examples
-HTTP contract handoff:
+## Decision Rubric
+- If the design seam is broken, write the design finding first; do not hide it as a handoff.
+- If the design seam is intact and only specialist implementation detail is risky, hand off without inventing a design finding.
+- Hand off only domain depth that changes merge risk or proof obligations.
+- Name the exact specialist question: not "please review data," but "inspect transaction scope and cache invalidation atomicity."
+- Add a design escalation only when the specialist answer could change ownership, architecture, or approved behavior.
 
+## Imitate
 ```text
 Findings:
 - [medium] [go-design-review] internal/infra/http/router.go:52
@@ -20,7 +28,7 @@ Handoffs:
 - `go-chi-review`: verify chi mount order, fallback behavior, route labels, CORS/OPTIONS policy, and generated-route integration.
 ```
 
-Data handoff:
+Copy this shape when the design finding is route/contract seam drift and chi semantics need specialist proof.
 
 ```text
 Findings:
@@ -34,21 +42,7 @@ Handoffs:
 - `go-db-cache-review`: inspect transaction scope, context/resource safety, cache key correctness, invalidation, and fallback behavior.
 ```
 
-Security handoff:
-
-```text
-Findings:
-- [high] [go-design-review] internal/infra/http/admin.go:77
-  Issue: Authorization moved from middleware into endpoint-local branching without a design note.
-  Impact: The trust boundary becomes per-handler convention rather than a structural guard.
-  Suggested fix: Restore the approved auth owner or reopen design for endpoint-local authorization semantics.
-  Reference: task security/design decisions if present.
-
-Handoffs:
-- `go-security-review`: verify fail-closed behavior, tenant isolation, authz checks, and abuse resistance.
-```
-
-Reliability and concurrency handoff:
+Copy this shape when the design finding is invariant ownership and the specialist proof is data/cache mechanics.
 
 ```text
 Findings:
@@ -63,43 +57,41 @@ Handoffs:
 - `go-reliability-review`: inspect retry, backpressure, overload, degradation, and lifecycle readiness.
 ```
 
-QA handoff:
+Copy this shape when one design drift creates two independent proof obligations.
+
+## Reject
+```text
+Handoffs:
+- `go-security-review`
+- `go-db-cache-review`
+- `go-qa-review`
+- `go-performance-review`
+```
+
+Reject because it names review lanes without the seam or specialist question.
 
 ```text
 Findings:
-- [medium] [go-design-review] internal/infra/http/problems.go:121
-  Issue: Error classification is now centralized, which is the right owner, but the diff changes multiple endpoint-visible outcomes.
-  Impact: The design seam is cleaner, yet the changed response matrix needs proof.
-  Suggested fix: Keep the owning seam and add validation for affected endpoints.
-  Reference: task `plan.md` validation section if present.
-
-Handoffs:
-- `go-qa-review`: verify scenario traceability, assertion strength, and contract coverage for changed outcomes.
+- [high] [go-design-review] internal/infra/http/admin.go:77
+  Issue: The authorization condition may be wrong.
 ```
 
-## Non-Findings To Avoid
-- Do not duplicate a specialist review as a design finding if the design seam is intact and the issue is purely implementation detail.
-- Do not hand off everything. Hand off only domain depth that changes merge risk or proof obligations.
-- Do not hide a design finding inside a handoff. If ownership drift exists, make it a finding and then add the handoff.
+Reject as a design finding if ownership is intact and the question is purely auth correctness; hand off to `go-security-review` instead.
+
+## Handoff Map
+- `go-chi-review`: chi router, middleware order/scope, fallback, CORS/OPTIONS, route labels, generated handler integration.
+- `go-db-cache-review`: SQL access discipline, transactions, context/resource safety, cache keys, invalidation, stampede/fallback risk.
+- `go-security-review`: trust boundaries, auth, tenant isolation, injection, SSRF, secrets, abuse resistance.
+- `go-reliability-review`: deadlines, retries, backpressure, degradation, startup/shutdown, rollout safety.
+- `go-concurrency-review`: goroutines, channels, WaitGroups, mutexes, atomics, timers, worker pools.
+- `go-performance-review`: hot paths, batching, serialization, fan-out, caching, contention, benchmark evidence.
+- `go-qa-review`: test obligations, scenario coverage, assertion strength, determinism, validation readiness.
+- `go-devops-spec` or delivery review lane: generated-code policy, CI, rollout, release, compatibility, migration choreography.
+
+## Agent Traps
+- Do not duplicate a specialist review as a design finding when the design seam is intact.
 - Do not let external examples override approved repo ownership.
+- Do not use this file as a broad checklist; it is for routing a known seam.
 
-## Smallest Safe Correction
-- State the design-shape issue in one finding.
-- Add one targeted handoff with the exact specialist question.
-- If the specialist question could change ownership or architecture, mark a design escalation too.
-- Keep suggested fixes local unless the approved design must be reopened.
-
-## Escalation Rules
-- Use `go-chi-review` for chi router, middleware order/scope, fallback, CORS/OPTIONS, route labels, and generated handler integration.
-- Use `go-db-cache-review` for SQL access discipline, transactions, context/resource safety, cache keys, invalidation, and stampede/fallback risk.
-- Use `go-security-review` for trust boundaries, auth, tenant isolation, injection, SSRF, secrets, and abuse resistance.
-- Use `go-reliability-review` for deadlines, retries, backpressure, degradation, startup/shutdown, and rollout safety.
-- Use `go-concurrency-review` for goroutines, channels, WaitGroups, mutexes, atomics, timers, and worker pools.
-- Use `go-performance-review` for hot paths, batching, serialization, fan-out, caching, contention, and benchmark evidence.
-- Use `go-qa-review` for test obligations, scenario coverage, assertion strength, determinism, and validation readiness.
-
-## Exa Source Links
-- [Organizing a Go module - The Go Programming Language](https://go.dev/doc/modules/layout)
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
-- [arc42 Section 9 - Architecture Decisions](https://docs.arc42.org/section-9/)
-- [Architecture Decision Record - Martin Fowler](https://martinfowler.com/bliki/ArchitectureDecisionRecord.html)
+## Validation Shape
+Validate that the handoff question is narrow enough for the specialist to answer and that the design review output still includes any design drift needed to understand merge risk.

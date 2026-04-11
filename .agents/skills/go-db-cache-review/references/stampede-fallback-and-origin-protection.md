@@ -1,11 +1,14 @@
 # Stampede Fallback And Origin Protection
 
+## Behavior Change Thesis
+When loaded for hot miss, cache outage, `singleflight`, or Redis lock changes, this file makes the model choose bounded origin protection and correctly scoped coalescing/locking instead of likely mistakes such as treating every cache error as a miss, collapsing the wrong key dimensions, or pretending process-local coalescing is distributed protection.
+
 ## When To Load
 Load this reference when a Go diff changes cache miss handling, fallback on cache outage, Redis lock use, `singleflight`, stale serving, local/in-process cache refill, or origin DB protection.
 
 Keep findings local: identify the changed miss/fallback path that can multiply origin load or serve the wrong contract. Escalate new stale-while-revalidate policy, retry budgets, overload behavior, or distributed-lock correctness requirements.
 
-## Review Smell Patterns
+## Decision Rubric
 - Many concurrent misses for the same key can all call the DB/origin.
 - `singleflight` key is broader or narrower than the cache key and can collapse unrelated requests or fail to collapse identical ones.
 - Redis lock is acquired without `NX` plus expiry, or released with an unsafe plain `DEL` after the lock can expire.
@@ -149,6 +152,13 @@ func (s *Store) FeatureConfig(ctx context.Context, tenantID string) (Config, err
 
 If product requirements say Redis failure should fall back to DB, require a bound such as coalescing, rate limiting, stale data with a named window, or an accepted reliability-risk handoff.
 
+## Agent Traps
+- Do not treat `singleflight` as cross-process protection. It only coalesces work inside the current process unless the repository wraps it with distributed behavior.
+- Do not use a coalescing key that is missing tenant, version, locale, auth, or feature dimensions from the cache key.
+- Do not release Redis locks with a plain `DEL` when the lock can expire and be reacquired by another owner; require token-checked release or an existing safe helper.
+- Do not treat every Redis error as `redis.Nil`; cache failure and cache miss have different origin-protection consequences.
+- Do not invent distributed locking, stale-while-revalidate, or retry budgets in a review finding when the local code only needs same-process coalescing or a bounded fallback handoff.
+
 ## Smallest Safe Fix
 - Add or reuse `singleflight` for same-process hot miss coalescing when the repository already accepts it.
 - Use the cache key, including tenant/version dimensions, as the coalescing key.
@@ -157,16 +167,9 @@ If product requirements say Redis failure should fall back to DB, require a boun
 - Separate cache miss from cache failure; do not treat every cache error as unlimited origin fallback.
 - Escalate when the right fix requires stale serving, distributed locks, fencing tokens, retry budgets, or overload policy.
 
-## Validation Ideas
+## Validation Shape
 - Add a concurrency test that launches many identical misses and asserts one origin call.
 - Add a test that different tenant/version keys do not share a `singleflight` result.
 - Add a fake Redis failure test and assert fallback is bounded or returns the intended error.
 - Add a lock-release test showing an expired/reacquired lock is not deleted by the old holder.
 - Run race tests for shared cache wrapper state.
-
-## Source Links From Exa
-- Go `singleflight` package: https://pkg.go.dev/golang.org/x/sync/singleflight
-- Redis `SET` command lock pattern and expiration options: https://redis.io/docs/latest/commands/set/
-- Redis distributed locks guidance: https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/
-- Redis cache stampede discussion with locks/promises: https://redis.io/blog/caches-promises-locks
-- Redis cache-aside query caching tutorial: https://redis.io/learn/howtos/solutions/microservices/caching

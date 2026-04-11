@@ -1,27 +1,25 @@
 # Route Template Observability
 
+## Behavior Change Thesis
+When loaded for symptom `metrics, traces, logs, span names, route labels, RoutePattern, Match/Find, raw-path labels, or fallback route identity`, this file makes the model choose bounded route-template labels after route resolution instead of likely mistake `use raw URL paths or incomplete pre-handler route patterns`.
+
 ## When To Load
-Load this when logs, metrics, traces, route labels, path cardinality, `RoutePattern()`, chi route context, or pre-handler route matching are in scope.
+Load when the routing design touches logs, metrics, traces, span names, `http.route`, route labels, path cardinality, `RoutePattern()`, chi route context, `Find`/`Match`, or fallback labels for unmatched routes.
 
-## Recommended Design Options
-- Use route templates, operation IDs, or a fixed fallback label for metrics and traces. Never use raw paths with IDs or user-controlled path fragments as labels.
-- For post-handler telemetry, call `next.ServeHTTP` first, then read `chi.RouteContext(r.Context()).RoutePattern()` if the route matched.
-- For pre-handler route identification, prefer a version-supported chi lookup such as `Find` or `Match` only when the installed chi version provides the needed behavior and tests cover misses and subrouters.
-- Define fallback labels deliberately, for example `unmatched`, `method_not_allowed`, or `unknown`, so misses do not explode label cardinality.
-- Keep logs richer than metrics if needed, but avoid promoting raw path fields into metric labels.
+## Decision Rubric
+- Metrics and traces use route templates, operation IDs, or fixed fallback labels. Never use raw paths, IDs, slugs, query strings, wildcard captures, or request IDs as labels.
+- For post-handler telemetry, call `next.ServeHTTP` first, then read `chi.RouteContext(r.Context()).RoutePattern()` when chi resolved the route.
+- For pre-handler route identity, use `Find` or `Match` only when the installed chi version and subrouter behavior are verified. Use fresh route contexts for probes.
+- Define fallback labels deliberately, such as `<unmatched>`, `not_found`, or `method_not_allowed`. Do not fall back to the raw path when the template is empty.
+- Logs may include raw path as a field if the repo accepts it, but metrics, span names, and `http.route` must stay bounded.
+- If the design uses `r.Pattern`, require repository or installed-version proof that the active router sets it for the relevant requests.
 
-## Rejected Alternatives
-- Metrics labeled with `r.URL.Path`, request IDs, user IDs, slugs, or database identifiers.
-- Reading `RoutePattern()` before `next.ServeHTTP` in middleware and assuming the final route has already been resolved.
-- Treating `404` and `405` as normal route templates when no final handler was reached. Use an explicit fallback label.
-- Building custom route matching logic by string parsing when chi already has route context or version-supported route lookup APIs.
-
-## Example Sketches
+## Imitate
 ```go
 func observe(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-		pattern := "unmatched"
+		pattern := "<unmatched>"
 		if rctx := chi.RouteContext(r.Context()); rctx != nil && rctx.RoutePattern() != "" {
 			pattern = rctx.RoutePattern()
 		}
@@ -30,22 +28,54 @@ func observe(next http.Handler) http.Handler {
 }
 ```
 
+Copy the timing shape: final route extraction happens after downstream routing and uses a bounded fallback.
+
 ```go
 // Pre-handler design sketch:
-// if router.Find(chi.NewRouteContext(), r.Method, r.URL.Path) == "" { label = "unmatched" }
+// if router.Find(chi.NewRouteContext(), r.Method, r.URL.Path) == "" { label = "<unmatched>" }
 // Gate this on the installed chi version and prove subrouter behavior with tests.
 ```
 
-## Testable Acceptance Boundaries
-- A path like `/users/123/orders/456` records `/users/{userID}/orders/{orderID}` or an operation ID, never the raw path.
-- A missing route records the chosen fallback label and bounded status label.
-- A method-disallowed request records the chosen `405` fallback label without dropping `Allow` behavior.
-- Subrouter and wildcard routes produce stable templates in tests.
-- Middleware-order tests prove route-label extraction happens at the intended point in the handler chain.
+Copy the proof gate: pre-handler lookup is not a default; it must be version-checked and subrouter-tested.
 
-## Source Links Gathered Through Exa
-- chi context source for `RoutePattern()` timing and nil fallback: https://github.com/go-chi/chi/blob/master/context.go
-- chi mux source for `Find`, `Match`, `r.Pattern`, and fallback routing flow: https://github.com/go-chi/chi/blob/master/mux.go
-- chi package docs for route context, route patterns, and router traversal: https://pkg.go.dev/github.com/go-chi/chi/v5
-- chi route-pattern discussion with maintainer guidance on post-handler extraction: https://github.com/go-chi/chi/issues/692
-- chi README for named params and wildcards: https://github.com/go-chi/chi/blob/master/README.md
+```go
+assertSameRouteLabel(t, "/users/123/orders/456", "/users/789/orders/000", "/users/{userID}/orders/{orderID}")
+assertSameRouteLabel(t, "/missing/a", "/missing/b", "<unmatched>")
+```
+
+Copy the assertion shape: concrete path values collapse to one template or one fallback label.
+
+## Reject
+```go
+metrics.Record("route", r.URL.Path)
+```
+
+Reject because raw paths create high-cardinality labels.
+
+```go
+route := chi.RouteContext(r.Context()).RoutePattern()
+next.ServeHTTP(w, r)
+metrics.Record("route", route)
+```
+
+Reject because the route template was read before final route resolution.
+
+```go
+if route == "" {
+	route = r.URL.Path
+}
+```
+
+Reject because unmatched routes become unbounded labels.
+
+## Agent Traps
+- Do not stop at "use `RoutePattern`"; the timing matters.
+- Do not allow metrics to be bounded while span names or `http.route` still use raw paths for the same surface.
+- Do not invent string parsing of chi path templates when route context or version-supported lookup can answer the question.
+- Do not treat `404` and `405` as normal matched route labels unless the repo has an explicit policy for them.
+
+## Validation Shape
+- Two concrete parameter values produce the same route-template or operation-ID label.
+- Two unmatched paths produce the same bounded fallback label.
+- A method-disallowed request records the chosen `405` fallback label while preserving `Allow` behavior.
+- Subrouter and wildcard routes have representative tests because they are where route-template assumptions often fail.

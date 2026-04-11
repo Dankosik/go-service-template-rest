@@ -1,27 +1,21 @@
 # Errors, Context, And Boundary Mapping
 
+## Behavior Change Thesis
+When loaded for error, context, or transport-boundary pressure, this file makes the model preserve inspectable error identity and caller cancellation at the correct boundary instead of string-matching errors, returning status codes from repositories, or accidentally detaching request work.
+
 ## When To Load
-Load this when implementation work touches error wrapping, sentinel or typed errors, context propagation, cancellation, HTTP or RPC status mapping, repository error translation, or log-and-return decisions.
+Load this when implementation work touches error wrapping, sentinel or typed errors, context propagation, cancellation, HTTP/RPC status mapping, repository error translation, or log-and-return behavior.
 
-## Good/Bad Examples
+## Decision Rubric
+- Return domain-shaped errors from domain or repository layers; map them to transport status at the transport boundary.
+- Preserve inspectable identity with `%w`, `errors.Is`, `errors.As`, or `errors.AsType` when callers branch on the error.
+- Do not wrap an internal error with `%w` if exposing it would become an API contract.
+- Pass `context.Context` as the first argument through request-scoped work; detach only when the approved design says so.
+- Treat `context.Canceled` and `context.DeadlineExceeded` as control-flow signals, not generic internal failures.
+- Add operation context to returned errors; avoid logging and returning the same error at every layer.
 
-Bad: string matching and boundary behavior mixed into the repository.
-
-```go
-func (r *Repo) Find(ctx context.Context, id OrderID) (Order, int, error) {
-	row := r.db.QueryRowContext(ctx, "select id, total from orders where id = $1", id)
-	var order Order
-	if err := row.Scan(&order.ID, &order.Total); err != nil {
-		if strings.Contains(err.Error(), "no rows") {
-			return Order{}, http.StatusNotFound, nil
-		}
-		return Order{}, http.StatusInternalServerError, err
-	}
-	return order, http.StatusOK, nil
-}
-```
-
-Good: repository returns domain-shaped errors; the transport boundary maps them.
+## Imitate
+Keep repository errors domain-shaped and map at the boundary.
 
 ```go
 var ErrOrderNotFound = errors.New("order not found")
@@ -51,15 +45,7 @@ func writeOrderError(w http.ResponseWriter, err error) {
 }
 ```
 
-Bad: request-scoped code detaches work by accident.
-
-```go
-func (s *Service) Sync(_ context.Context, id OrderID) error {
-	return s.client.Push(context.Background(), id)
-}
-```
-
-Good: keep the caller's context flowing unless detachment is explicitly approved.
+Pass caller context through request work.
 
 ```go
 func (s *Service) Sync(ctx context.Context, id OrderID) error {
@@ -70,44 +56,40 @@ func (s *Service) Sync(ctx context.Context, id OrderID) error {
 }
 ```
 
-Bad: typed error checks only see the outer error.
+## Reject
+Reject boundary leakage and string matching in repositories.
 
 ```go
-if pathErr, ok := err.(*fs.PathError); ok {
-	return pathErr.Path
+func (r *Repo) Find(ctx context.Context, id OrderID) (Order, int, error) {
+	row := r.db.QueryRowContext(ctx, "select id, total from orders where id = $1", id)
+	var order Order
+	if err := row.Scan(&order.ID, &order.Total); err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return Order{}, http.StatusNotFound, nil
+		}
+		return Order{}, http.StatusInternalServerError, err
+	}
+	return order, http.StatusOK, nil
 }
 ```
 
-Good: inspect wrapped errors. In Go 1.26+, `errors.AsType` is concise for error types.
+Reject accidental detachment.
 
 ```go
-if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
-	return pathErr.Path
+func (s *Service) Sync(_ context.Context, id OrderID) error {
+	return s.client.Push(context.Background(), id)
 }
 ```
 
-## Common False Simplifications
+## Agent Traps
 - Replacing `errors.Is` with direct equality after adding `%w`.
-- Matching error text in tests when the contract is error identity or type.
-- Wrapping every error with `%w` even when exposing the wrapped error would accidentally become part of an API contract.
-- Logging and returning the same error at every layer. Add context to the returned error; log once where the operation is handled or abandoned.
-- Treating `context.Canceled` and `context.DeadlineExceeded` as generic internal errors at the transport boundary.
-- Storing `context.Context` in long-lived structs instead of passing it as the first argument to request-scoped operations.
-- Using context values for optional parameters instead of request-scoped data that crosses APIs.
+- Matching exact error text in tests when the contract is identity, type, or status mapping.
+- Wrapping every error with `%w` even when callers must not inspect the internal cause.
+- Storing `context.Context` in long-lived structs instead of passing it through request operations.
+- Mapping cancellations, deadlines, validation failures, conflicts, and missing resources to one generic internal error.
 
-## Validation Or Test Patterns
-- Write boundary tests that assert status mapping through `errors.Is`, not through exact error strings.
-- Add cancellation tests with a canceled or timed-out context and prove the repository/client receives that context.
-- For typed errors, add a test where the typed error is wrapped once and still found by `errors.As` or `errors.AsType`.
-- If a wrapper intentionally hides an internal error, test that callers cannot match it with `errors.Is`.
-- Verify log changes by behavior when possible; avoid brittle tests on log text unless log format is part of the contract.
-
-## Source Links Gathered Through Exa
-- [errors package](https://pkg.go.dev/errors)
-- [context package](https://pkg.go.dev/context)
-- [database/sql package](https://pkg.go.dev/database/sql)
-- [Go Concurrency Patterns: Context](https://go.dev/blog/context)
-- [Contexts and structs](https://go.dev/blog/context-and-structs)
-- [Canceling in-progress database operations](https://go.dev/doc/database/cancel-operations)
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
-- [Go 1.26 release notes](https://go.dev/doc/go1.26)
+## Validation Shape
+- Add boundary tests that assert status mapping through `errors.Is`/`errors.As`, not string equality.
+- Add a wrapped typed-error case when typed inspection matters.
+- Add cancellation or timeout tests when context propagation changed, and prove the repository/client receives the caller context.
+- If a wrapper intentionally hides an internal cause, test that callers cannot match it.

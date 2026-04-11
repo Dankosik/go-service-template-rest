@@ -1,48 +1,45 @@
 # Structured Logs And Privacy
 
-## When To Load This
-Load this reference when designing structured log events, privacy controls, redaction, log-to-trace correlation, audit/error events, DB/query telemetry, request/response body handling, or support-investigation fields.
+## Behavior Change Thesis
+When loaded for structured log or privacy symptoms, this file makes the model design allowlisted forensic logs with redaction and metric pivots instead of likely mistake raw body/header logging, sensitive query capture, or log-scrape alerting.
 
-## Operational Questions
-- Which specific incident or support question requires a log field?
-- Can the same decision be represented as a bounded metric instead of log scraping?
-- Does the log event include enough trace/resource context to pivot from a metric alert?
-- Which fields are sensitive, regulated, user-controlled, or externally propagated?
-- Where is redaction enforced: source, middleware, collector, backend, or all of them?
-- How long should the log be retained, and who is allowed to query it?
+## When To Load
+Load this when the spec touches structured log events, support-investigation fields, redaction, PII/secrets, request or response bodies, raw headers, DB/query data, audit/error events, or log-to-trace correlation.
 
-## Good Telemetry Examples
-- `payout.create.completed` log with `trace_id`, `span_id`, `request_id`, `route_template="/v1/payouts"`, `outcome="accepted_async_retry"`, `error.type="fraud_timeout"`, and no request body.
-- `invoice.consumer.deduped` log with `invoice_id` only if the privacy policy allows logs to carry it, while the metric uses `decision="duplicate"` without the ID.
-- `db.query.text` records parameterized query text or sanitized literal placeholders, and `db.query.summary` remains low-cardinality and free of dynamic values.
-- Security-relevant denials use structured event names and bounded reason codes, with secrets and tokens redacted before export.
-- Collector-side redaction or filtering is a backup control, not the only place sensitive application data is handled.
+## Decision Rubric
+- Every log field needs a concrete incident, audit, or support question. If the field cannot name its consumer, reject it.
+- Use bounded structured event names, bounded reason codes, and stable resource/trace context.
+- Keep alerting classification in metrics when the service can emit it at decision time; logs can carry the same classification for investigation.
+- Allowlist sensitive or externally propagated fields. Redact at source first, then use collector/backend controls as defense in depth.
+- Store entity identifiers in logs only when policy, retention, and access controls allow them; never promote those identifiers into metric labels.
+- Log parameterized or sanitized query text only when it changes operator behavior; prefer query summary fields over raw SQL with literals.
 
-## Bad Telemetry Examples
-- Logging request/response bodies "for debugging" without data classification, sampling, retention, and access controls.
-- Logging `Authorization`, cookies, tokens, API keys, session IDs, passwords, raw query strings, or full URLs with credentials.
-- Building alerts from ad hoc log text such as "if this string appears, page".
-- Logging SQL statements with literal email, card, token, or account values.
-- Adding `tenant_id` and `user_id` to every log when the operator only needs them for a narrow support workflow.
+## Imitate
+- `payout.create.completed` with `trace_id`, `span_id`, `request_id`, route template, bounded `outcome`, bounded `error.type`, and no request body.
+  Copy the completion-boundary event and bounded classification.
+- `invoice.consumer.deduped` with `invoice_id` only when privacy policy permits logs to carry it, while the metric uses `decision="duplicate"` without the ID.
+  Copy the split between forensic log detail and aggregate metric label.
+- `db.query.text` as parameterized query text or sanitized literal placeholders, paired with low-cardinality `db.query.summary`.
+  Copy sanitization and summary separation.
 
-## Cardinality Traps
-- Entity IDs in logs are often acceptable for forensics, but never copy them into metric labels or dashboard variables by default.
-- Dynamic log event names such as `payment_failed_for_user_123` make query and retention controls harder.
-- Raw exception messages and stack traces can include paths, hostnames, SQL literals, request bodies, or tokens.
-- Baggage and trace context can be logged accidentally by generic header logging.
-- Query string keys can be stable while values are sensitive; preserve keys only when useful and redact values.
+## Reject
+- Logging request or response bodies "temporarily" without data classification, sampling, retention, access control, and expiry.
+- Logging `Authorization`, cookies, tokens, API keys, session IDs, passwords, raw query strings, or URLs containing credentials.
+- Paging on ad hoc log text such as "if this string appears, page" when bounded metrics can represent the state.
+- Dynamic log event names such as `payment_failed_for_user_123`.
+- Generic header logging that accidentally records baggage, trace context, cookies, or customer-controlled values.
 
-## Selected And Rejected Options
-- Select structured logs for high-cardinality forensic detail after an alert fires.
-- Select bounded metrics for alerting and SLI classification, with the same decision recorded in logs for later investigation.
-- Select allowlists for log fields and baggage fields when the service crosses trust boundaries.
-- Select source redaction first, collector redaction second, and backend access control as defense in depth.
-- Reject raw body logging, full header logging, raw URL logging, and "temporary" PII logs without expiry.
-- Reject using logs as the only place where SLO-impacting classification is computed when the service can emit a metric at decision time.
+## Agent Traps
+- Treating logs as inherently safer than metrics. Logs often carry more sensitive data and broader access patterns.
+- Adding `tenant_id` and `user_id` to every log because support might someday ask. Narrow the workflow and retention first.
+- Assuming collector redaction is enough after the application already emitted secrets.
+- Forgetting that exception strings and stack traces can include hostnames, SQL literals, file paths, request bodies, or tokens.
+- Designing log fields that cannot be joined to traces or representative alerts.
 
-## Exa Source Links
-- OpenTelemetry Logs Overview and correlation model: https://opentelemetry.io/docs/reference/specification/logs/overview/
-- OpenTelemetry Handling Sensitive Data: https://opentelemetry.io/docs/security/handling-sensitive-data/
-- OpenTelemetry Collector processors list, including redaction/filter/transform processors: https://opentelemetry.io/docs/collector/components/processor/
-- OpenTelemetry Database spans and `db.query.text` sanitization: https://opentelemetry.io/docs/specs/semconv/database/database-spans/
-- OpenTelemetry HTTP spans and URL scrubbing guidance: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/http/
+## Validation Shape
+- For each new log field, record consumer, sensitivity class, redaction point, retention/access rule, and whether it must stay out of metrics.
+- Verify alerting and SLO-impacting classification exists as a bounded metric or record why logs are the only source.
+- Verify one representative alert can pivot to trace and log query without exposing raw identifiers in the alert payload.
+
+## Canonical Verification Pointer
+Use current OpenTelemetry sensitive-data and log-correlation guidance when a field's safety or correlation semantics depends on collector/exporter behavior.

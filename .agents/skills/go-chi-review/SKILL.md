@@ -39,16 +39,21 @@ Do not:
 - When multiple chi defects coexist, prioritize the one that corrupts live route state, startup safety, or advertised HTTP capability most directly.
 - Prefer the smallest safe routing fix that restores deterministic behavior.
 
-## Reference Files
-Load these files lazily when a finding needs chi-specific examples or validation shape:
-- [references/chi-router-registration-hazards.md](references/chi-router-registration-hazards.md): route registration, startup panic, `Use`, duplicate `Mount`, and subtree ownership hazards.
-- [references/middleware-order-and-scope.md](references/middleware-order-and-scope.md): middleware order, route identity timing, and `Use`/`With`/`Group`/`Route`/`Mount` scope mistakes.
-- [references/route-context-and-match-probing.md](references/route-context-and-match-probing.md): `RouteContext`, `RoutePattern`, `Match`, and `Find` probing hazards.
-- [references/http-fallback-head-options-cors.md](references/http-fallback-head-options-cors.md): `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, and CORS review checks.
-- [references/generated-and-manual-route-drift.md](references/generated-and-manual-route-drift.md): OpenAPI/generated handler wiring, manual route overlap, and generated-route drift.
-- [references/route-observability-labels.md](references/route-observability-labels.md): low-cardinality route labels, span names, metrics, and log route identity.
+## Reference Loading
+Load references lazily as compact rubrics and example banks, not as exhaustive checklists or documentation dumps. Load at most one reference by default. Load multiple references only when the diff clearly spans independent decision pressures, such as route probing plus generated/manual ownership.
 
-Keep findings review-oriented after reading references: exact file/line, runtime impact, smallest safe fix, and a validation command. Do not turn these references into design-spec output.
+Pick the narrowest matching reference by symptom:
+
+| Reference | Load For Symptom | Behavior Change |
+| --- | --- | --- |
+| [references/chi-router-registration-hazards.md](references/chi-router-registration-hazards.md) | router construction order, late `Use`, `Route`/`Mount`, wildcard ownership, duplicate subtree owners, nil mounted handlers | makes the model report startup safety and subtree ownership defects instead of treating the change as style, generic duplicate routing, or harmless registration order |
+| [references/middleware-order-and-scope.md](references/middleware-order-and-scope.md) | middleware stack order or scope changes across `Use`, `With`, `Group`, `Route`, or `Mount` | makes the model prove exact coverage and order instead of assuming nested middleware refactors preserve behavior |
+| [references/route-context-and-match-probing.md](references/route-context-and-match-probing.md) | `chi.RouteContext`, `RoutePattern`, `Match`, `Find`, custom `Allow`/`OPTIONS`, or alternate-method probing | makes the model choose post-routing route-pattern reads and fresh probe contexts instead of live request-context mutation or incomplete route identity |
+| [references/http-fallback-head-options-cors.md](references/http-fallback-head-options-cors.md) | `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, CORS, or fallback wrappers | makes the model verify actual router capability and fallback contracts instead of inferring method support from `GET` routes or hardcoded method lists |
+| [references/generated-and-manual-route-drift.md](references/generated-and-manual-route-drift.md) | OpenAPI/generated chi handlers, generated/manual route overlap, generated subtree wrappers, or no-touch generated files | makes the model preserve a single generated/manual route owner and policy parity instead of patching generated files or adding shadowing manual routes |
+| [references/route-observability-labels.md](references/route-observability-labels.md) | metrics, traces, logs, span names, `http.route`, route label extraction, or unmatched-route labels | makes the model demand bounded route-template labels shared across telemetry instead of raw URL paths or inconsistent route identities |
+
+If a narrower positive reference matches, prefer it over broad smell triage. If a finding crosses references, name the primary behavior in the finding and use the second reference only to sharpen validation. Keep review output anchored to exact file/line, runtime impact, smallest safe fix, and validation command. Do not turn references into design-spec output.
 
 ## Expertise
 

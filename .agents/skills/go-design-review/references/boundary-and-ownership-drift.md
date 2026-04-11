@@ -1,67 +1,61 @@
 # Boundary And Ownership Drift
 
+## Behavior Change Thesis
+When loaded for symptom "behavior moved across a component or package boundary," this file makes the model identify the owning boundary and request the smallest move back to that owner instead of giving a generic layering lecture or redesigning the system.
+
 ## When To Load
-Load this when a Go diff changes where behavior lives, bypasses a component owner, or moves policy across app, domain, infra, HTTP, config, bootstrap, telemetry, or migration boundaries.
+Load this when behavior, policy, or construction moves across app, domain, infra, HTTP, config, bootstrap, telemetry, or migration boundaries.
 
-Use repository-approved `spec.md`, `design/`, and `docs/repo-architecture.md` first. External links below calibrate Go package and decision-documentation patterns only.
+Prefer narrower references when the primary symptom is import direction, generated/config source drift, or helper abstraction shape.
 
-## Concrete Review Examples
-Finding example: `internal/app/orders` imports `internal/infra/http` to build HTTP problem responses.
+## Decision Rubric
+- Make a finding when the diff changes who owns a responsibility, not merely where code looks tidy.
+- Anchor the owner in task `design/ownership-map.md`, `spec.md`, or `docs/repo-architecture.md`; if no owner exists, make a design escalation instead of inventing one.
+- Keep fixes local: move behavior back to the owner, pass already validated values through bootstrap, or keep transport mapping at the transport edge.
+- Do not require a new abstraction just because a boundary exists; concrete adapters wired by bootstrap are often the simpler approved shape.
+- Treat a small same-package helper as fine unless it hides owner drift, source-of-truth spread, or dependency reversal.
 
-Review shape:
-
+## Imitate
 ```text
 [high] [go-design-review] internal/app/orders/service.go:42
-Issue: The app layer now depends on the HTTP adapter to shape domain errors, reversing the approved transport-agnostic app boundary.
-Impact: Future non-HTTP callers inherit transport semantics and must import the HTTP package, so a local handler convenience becomes a system ownership change.
-Suggested fix: Return a domain/app error shape from `internal/app/orders` and keep HTTP response mapping in `internal/infra/http`.
-Reference: task `design/ownership-map.md` if present; otherwise `docs/repo-architecture.md` app and HTTP boundary rows.
+Issue: The app layer now builds HTTP problem responses, moving transport response policy into the transport-agnostic app boundary.
+Impact: Future non-HTTP callers inherit HTTP semantics and must account for adapter concerns that should stay at the edge.
+Suggested fix: Return an app/domain error shape from `internal/app/orders` and keep HTTP response mapping in `internal/infra/http`.
+Reference: task `design/ownership-map.md` if present; otherwise `docs/repo-architecture.md` app and HTTP ownership rows.
 ```
 
-Finding example: a handler starts reading env/config flags directly because it needs a request-specific option.
-
-Review shape:
+Copy this shape when a local convenience crosses a clear component owner: name the owner, the crossed behavior, and the smallest move back.
 
 ```text
 [high] [go-design-review] internal/infra/http/widgets.go:88
-Issue: The HTTP adapter now owns runtime config lookup that the repository assigns to `internal/config` and bootstrap wiring.
-Impact: Config precedence and validation can diverge between startup and request handling, even if this endpoint works in tests.
-Suggested fix: Pass the already validated config value through the composition root or add an approved app/adapter option owned by bootstrap.
+Issue: The HTTP handler now reads env/config directly, taking over config precedence that belongs to `internal/config` and bootstrap wiring.
+Impact: Request handling can diverge from startup validation even while endpoint tests stay green.
+Suggested fix: Pass the already validated config value through the composition root or add an approved option owned by bootstrap.
 Reference: `docs/repo-architecture.md` config and bootstrap ownership rows.
 ```
 
-Finding example: a new concrete adapter is constructed from inside `internal/app`.
+Copy this shape when the wrong package owns a policy lookup rather than just a helper call.
 
-Review shape:
-
+## Reject
 ```text
-[critical] [go-design-review] internal/app/reporting/service.go:61
-Issue: The use case now constructs the Postgres adapter directly, bypassing the bootstrap composition root.
-Impact: App behavior becomes coupled to a concrete integration and can no longer be reused by another binary or test seam without pulling in persistence lifecycle.
-Suggested fix: Move construction back to bootstrap and pass the dependency through an app-facing contract only if the app layer needs inversion.
-Reference: `docs/repo-architecture.md` stable dependency direction.
+[medium] [go-design-review] internal/app/orders/service.go:42
+Issue: This violates clean architecture.
+Suggested fix: Add an interface.
 ```
 
-## Non-Findings To Avoid
-- Do not flag a new same-package helper solely because it extracts code; flag only when ownership, source of truth, or dependency direction changes.
-- Do not object to `internal/` packages in a server repository by default; Go's official module guidance recommends keeping server logic internal when it is not exported for other modules.
-- Do not require a new domain abstraction just because an adapter exists. A concrete type wired by bootstrap can be simpler when no consumer-owned interface is needed.
-- Do not turn a small placement concern into a full architecture redesign. Keep the finding to the line that crosses ownership.
+Reject because it skips the repository owner, the concrete merge risk, and the smallest safe correction.
 
-## Smallest Safe Correction
-- Move the crossed behavior back to the owning package.
-- Pass already validated data or a narrow dependency from the composition root rather than importing outward from app/domain code.
-- Keep transport mapping at the transport edge and business policy in app/domain code.
-- If the diff reveals a real missing owner, ask for a design escalation instead of inventing the new owner in the review comment.
+```text
+[low] [go-design-review] internal/app/orders/errors.go:12
+Issue: This helper should be in a shared package.
+```
 
-## Escalation Rules
-- Escalate to `go-design-spec` or `go-architect-spec` when the smallest correction changes approved component ownership.
-- Hand off to `go-chi-review` when the boundary issue is specifically HTTP router, middleware, OpenAPI handler, fallback, or route-label behavior.
-- Hand off to `go-db-cache-review` when ownership drift centers on transactions, repository contracts, cache keys, or datastore lifecycle.
-- Mark as a design escalation, not a code-only finding, when multiple packages already depend on the new boundary and a local move is no longer safe.
+Reject because extraction is not a design finding unless ownership or source-of-truth behavior changed.
 
-## Exa Source Links
-- [Organizing a Go module - The Go Programming Language](https://go.dev/doc/modules/layout)
-- [Go Code Review Comments - Interfaces and Package Names](https://go.dev/wiki/CodeReviewComments)
-- [arc42 Section 9 - Architecture Decisions](https://docs.arc42.org/section-9/)
-- [Architecture Decision Record - Martin Fowler](https://martinfowler.com/bliki/ArchitectureDecisionRecord.html)
+## Agent Traps
+- Do not object to `internal/` packages by default; server-internal code is normal when not exported as a module API.
+- Do not turn boundary review into a package-layout essay. Tie the comment to one crossed responsibility.
+- Do not keep reviewing inside this file when the real issue is router semantics, data lifecycle, security, or reliability depth; make the boundary finding and hand off the specialist part.
+
+## Validation Shape
+Use fresh evidence from the diff plus the nearest approved owner artifact. Green tests do not prove boundary integrity; proof is that construction, policy lookup, and mapping still happen at the approved owner.

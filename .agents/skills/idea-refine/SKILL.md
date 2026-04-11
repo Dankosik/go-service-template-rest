@@ -16,14 +16,17 @@ Turn a raw concept into one concrete direction that is specific enough to hand o
 - produce a compact handoff artifact that can feed `spec-first-brainstorming`
 
 ## Lazy Reference Loading
-Keep this skill compact. Load only the reference file that matches the uncertainty in front of you:
+References are compact rubrics and example banks, not exhaustive checklists or product-management documentation. Load at most one reference by default: choose the one decision pressure that is most likely to change the output. Load a second reference only when the task clearly spans independent pressures, such as a solution-led prompt that is also blocked by destructive-action policy uncertainty.
 
-- `references/problem-vs-solution-framing.md` when the idea starts as a feature, implementation, or "we need X" request and the underlying problem is still blurry.
-- `references/target-user-and-success-signal.md` when the actor, operator, job, or success signal is vague or output-shaped.
-- `references/direction-options-and-convergence.md` when several product directions are plausible and the pass needs a defensible recommendation.
-- `references/assumptions-and-kill-criteria.md` when the idea depends on weak assumptions, risky beliefs, or untested value claims.
-- `references/mvp-scope-and-not-doing.md` when scope is expanding, the MVP is unclear, or the `Not Doing` list needs sharper boundaries.
-- `references/spec-first-handoff-examples.md` when the refined idea is ready to hand off into `spec-first-brainstorming`.
+| Reference | Symptom | Behavior Change |
+| --- | --- | --- |
+| `references/problem-vs-solution-framing.md` | The idea starts as a feature, implementation, vendor/tool choice, AI mechanism, or "we need X" request while the underlying pain is blurry. | Reframes the proposal into a user/operator problem instead of repeating the requested solution as the recommendation. |
+| `references/target-user-and-success-signal.md` | The actor, operator, job, or success signal is generic, mixed-audience, business-only, or output-shaped. | Chooses one primary actor and behavior/outcome signal instead of accepting "all users" and "ship the feature." |
+| `references/clarifying-questions-and-safe-assumptions.md` | The idea is thin enough to tempt a long questionnaire, but not so ambiguous that progress is impossible. | Uses one or two gating questions plus labeled safe assumptions instead of stalling or inventing certainty. |
+| `references/direction-options-and-convergence.md` | Several product directions remain plausible, or the raw idea is a grab bag of unrelated features. | Compares a small option set and recommends one first direction instead of merging every option into a bundle. |
+| `references/assumptions-and-kill-criteria.md` | The idea depends on enthusiasm, AI magic, uncertain demand, risky behavior, policy, trust, or weak evidence. | Names falsifiable bets and kill/pivot criteria instead of listing vague assumptions that cannot affect the recommendation. |
+| `references/mvp-scope-and-not-doing.md` | Scope is expanding, the MVP boundary is vague, or `Not Doing` would be missing or toothless. | Sets a learning-shaped MVP boundary with concrete exclusions instead of calling a platform-sized bundle an MVP. |
+| `references/spec-first-handoff-examples.md` | The pass has converged and needs to hand off into `spec-first-brainstorming`. | Produces a product-direction handoff with assumptions and open questions instead of smuggling architecture, endpoints, or tasks into the next step. |
 
 ## Boundaries
 Do not:

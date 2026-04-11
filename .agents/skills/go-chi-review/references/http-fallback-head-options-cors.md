@@ -1,59 +1,80 @@
 # HTTP Fallback, HEAD, OPTIONS, And CORS
 
-## When To Read
-Read this when a diff touches `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, CORS middleware, generated handler fallback wrappers, or custom method discovery.
+## Behavior Change Thesis
+When loaded for symptom `NotFound, MethodNotAllowed, Allow, HEAD, OPTIONS, CORS, or fallback wrappers changed`, this file makes the model choose actual router capability and fallback-contract proof instead of likely mistake `infer method support from GET routes or hardcode method lists`.
 
-## Review Smell Patterns
-- A custom `MethodNotAllowed` response omits or hardcodes `Allow` and can drift from actual registered methods.
-- A route adds `Get(...)` and assumes `HEAD` will work without `Head(...)` or `middleware.GetHead`.
-- `middleware.GetHead` is added after routes on the same mux, which is both a HEAD behavior change and a registration-order startup hazard.
-- CORS middleware is installed with `With` or inside `Group` while preflight requests have no explicit matching `OPTIONS` route.
-- `OPTIONS` and preflight behavior differs between a mounted generated router and adjacent manual routes.
-- Related resources return inconsistent `404`, `405`, or preflight statuses after a routing refactor.
+## When To Load
+Load when a diff changes fallback handlers, custom method discovery, `Allow` headers, `Head` routes, `middleware.GetHead`, `Options` routes, preflight handling, CORS middleware, or generated handler fallback wrappers.
 
-## Minimal Examples
+## Decision Rubric
+- Unknown path should exercise the intended `404`; known path with wrong method should exercise the intended `405`.
+- Custom `MethodNotAllowed` can change body format, but it must preserve route-accurate method disclosure when the contract depends on `Allow`.
+- `HEAD` is not automatic for every `GET` route. Require `Head(...)` or `middleware.GetHead` installed before route registration when `HEAD` support is advertised.
+- If `middleware.GetHead` is added after routes on the same mux, primary finding is the late-`Use` startup hazard; load `chi-router-registration-hazards.md`.
+- CORS preflight needs matching `OPTIONS` handling at the path/scope receiving the preflight. Do not assume a grouped or inline middleware covers unmatched `OPTIONS` routes.
+- Generated and manual routes under the same prefix should expose consistent fallback, `Allow`, `HEAD`, `OPTIONS`, and CORS behavior. If ownership drift is primary, load `generated-and-manual-route-drift.md`.
+- If custom discovery uses `Match` or `Find`, load `route-context-and-match-probing.md` for the probing mechanics.
 
-```diff
- r := chi.NewRouter()
-+r.Use(middleware.GetHead)
- r.Get("/reports/{id}", getReport)
+## Imitate
+
+```go
+r.Use(middleware.GetHead)
+r.Get("/reports/{id}", getReport)
 ```
 
-Review finding shape: if `HEAD` is part of the contract, make it explicit. The smallest safe fix is either `middleware.GetHead` before route registration or a dedicated `Head` handler when the response headers differ from `GET`.
+Copy the capability shape: `HEAD` support is deliberate because the middleware is installed before routes.
 
-```diff
--r.Route("/api", func(r chi.Router) {
--  r.Use(cors.Handler(cors.Options{AllowedMethods: []string{"GET", "POST", "OPTIONS"}}))
--  r.Get("/users", listUsers)
--})
-+r.Use(cors.Handler(cors.Options{AllowedMethods: []string{"GET", "POST", "OPTIONS"}}))
-+r.Route("/api", func(r chi.Router) {
-+  r.Get("/users", listUsers)
-+})
+```go
+r.Use(cors.Handler(cors.Options{
+	AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+}))
+r.Route("/api", func(r chi.Router) {
+	r.Get("/users", listUsers)
+})
 ```
 
-Review finding shape: go-chi/cors expects top-level middleware unless explicit `OPTIONS` routes exist. The smallest safe fix is top-level CORS scope or concrete `Options` routes for the group.
+Copy the scope shape when using chi CORS middleware: top-level CORS can see preflight routing instead of being hidden inside a route-local stack.
 
-```diff
--r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
--  http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
--})
-+// Prefer chi's default MethodNotAllowed unless the custom responder preserves
-+// accurate Allow behavior for the matched route.
+```go
+req := httptest.NewRequest(http.MethodOptions, "/api/users", nil)
+req.Header.Set("Origin", "https://example.test")
+req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 ```
 
-Review finding shape: a custom body format is fine, but it must preserve route-accurate method disclosure. If that requires probing, use fresh route contexts.
+Copy the proof shape: preflight tests must include `Origin` and `Access-Control-Request-Method`, not just a bare `OPTIONS` request.
 
-## Validation
-- Use `httptest` tables for unknown path (`404`), known path with wrong method (`405`), `Allow` header, `HEAD`, and `OPTIONS` preflight.
-- For CORS, include `Origin`, `Access-Control-Request-Method`, and the relevant request method in the preflight request.
-- For `HEAD`, assert both status and body behavior expected by the project. Do not infer contract support from a successful `GET` test.
-- Suggested validation command: `go test ./... -run 'Test.*NotFound|Test.*MethodNotAllowed|Test.*Head|Test.*Options|Test.*Cors|Test.*CORS'`.
+## Reject
 
-## Sources Gathered With Exa
-- [chi package docs on pkg.go.dev for NotFound, MethodNotAllowed, Head, and Options](https://pkg.go.dev/github.com/go-chi/chi/v5)
-- [go-chi README middleware list including GetHead](https://github.com/go-chi/chi/blob/master/README.md)
-- [go-chi mux.go source for default 404 and 405 behavior](https://raw.githubusercontent.com/go-chi/chi/master/mux.go)
-- [go-chi/cors docs for top-level middleware guidance](https://pkg.go.dev/github.com/go-chi/cors)
-- [Go net/http docs for HTTP method and status constants](https://pkg.go.dev/net/http)
+```go
+r.Get("/reports/{id}", getReport)
+// custom Allow: GET, HEAD
+```
 
+Reject unless the router can actually serve `HEAD` through `Head(...)` or `middleware.GetHead`.
+
+```go
+r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Allow", "GET, POST, HEAD, OPTIONS")
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+})
+```
+
+Reject because hardcoded `Allow` can drift from the route tree and may overclaim `HEAD` or `OPTIONS`.
+
+```go
+r.With(cors.Handler(opts)).Get("/users", listUsers)
+```
+
+Reject when the code expects preflight to work for `/users` without a matching `OPTIONS` route or broader CORS scope.
+
+## Agent Traps
+- Do not assume chi maps `HEAD` to `GET` by default.
+- Do not report only the missing `Allow` header when the same helper also mutates live route context; split both first-class defects or load the probing reference.
+- Do not accept a fallback wrapper just because status codes look right. Check headers and method-specific behavior too.
+- Do not let generated/manual siblings expose different CORS or fallback behavior without naming the contract risk.
+
+## Validation Shape
+- Table-test unknown path (`404`), known path with wrong method (`405`), `Allow`, `HEAD`, and `OPTIONS`.
+- For CORS, include `Origin`, `Access-Control-Request-Method`, and the requested method.
+- For generated/manual prefixes, test one generated route and one manual sibling route with the same fallback scenario.
+- Suggested command: `go test ./... -run 'Test.*NotFound|Test.*MethodNotAllowed|Test.*Head|Test.*Options|Test.*Cors|Test.*CORS|Test.*Allow'`.

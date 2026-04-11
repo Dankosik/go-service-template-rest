@@ -1,22 +1,20 @@
 # Router Validation Test Patterns
 
+## Behavior Change Thesis
+When loaded for symptom `proof obligations for router topology, fallback, middleware order, CORS preflight, OpenAPI route coverage, or observability labels`, this file makes the model choose a small test/proof matrix tied to the routing risk instead of likely mistake `write generic happy-path route tests or prose-only validation`.
+
 ## When To Load
-Load this when designing proof obligations for chi routing work, including route collision checks, middleware scope/order tests, fallback tests, OpenAPI route coverage, CORS preflight tests, or observability-label assertions.
+Load when the design already has the routing choice and needs validation obligations for route collision checks, middleware scope/order, fallback policy, CORS preflight, generated route coverage, route-label assertions, or route inventory.
 
-## Recommended Design Options
-- Use `httptest` for client-visible behavior: status, headers, body shape, middleware side effects, and fallback behavior.
-- Use route-table inspection for topology expectations: `chi.Walk`, `Routes`, `Middlewares`, `Match`, or `Find` depending on the installed chi version and the exact question.
-- Add focused probes for middleware order by appending markers to request context or headers in test-only middleware.
-- Validate CORS through real preflight request shapes: `OPTIONS` plus `Origin` and `Access-Control-Request-Method`.
-- For OpenAPI-generated routes, compare generated operation paths against registered route inventory or representative generated handler requests.
+## Decision Rubric
+- Use `httptest` for client-visible behavior: status, headers, body shape, middleware side effects, fallback behavior, and CORS.
+- Use route inventory for topology: `chi.Walk`, `Routes`, `Middlewares`, `Match`, or `Find`, depending on installed-version support and the exact question.
+- Use targeted middleware probes for order or scope, such as headers, context markers, or a test-only recorder. Status-only tests are usually too weak.
+- Validate CORS with real preflight shape: `OPTIONS` plus `Origin` and `Access-Control-Request-Method`.
+- For OpenAPI-generated routes, compare expected operation paths against registered route inventory or representative generated handler requests.
+- Keep the proof matrix small. One proof per independent routing risk is better than a broad "test all routes" demand.
 
-## Rejected Alternatives
-- Only snapshotting route docs without behavioral `httptest` coverage. It can miss fallback, middleware, and header behavior.
-- Testing just happy-path `GET` routes when the design changes `405`, `OPTIONS`, or CORS.
-- Using broad string contains checks on generated code as the only route proof.
-- Accepting raw-path telemetry by eyeballing logs instead of asserting label values in a test hook.
-
-## Example Sketches
+## Imitate
 ```go
 req := httptest.NewRequest(http.MethodOptions, "/api/widgets", nil)
 req.Header.Set("Origin", "https://app.example")
@@ -24,6 +22,8 @@ req.Header.Set("Access-Control-Request-Method", "POST")
 rr := httptest.NewRecorder()
 handler.ServeHTTP(rr, req)
 ```
+
+Copy the CORS proof shape: it is not a bare `OPTIONS` request.
 
 ```go
 seen := map[string]bool{}
@@ -33,22 +33,47 @@ _ = chi.Walk(r, func(method, route string, h http.Handler, mws ...func(http.Hand
 })
 ```
 
+Copy the route inventory shape: topology proof should see actual registered method-path pairs.
+
 ```go
 rr := httptest.NewRecorder()
 handler.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/widgets/123", nil))
 // Assert status, Allow header if applicable, and emitted route label.
 ```
 
-## Testable Acceptance Boundaries
-- Route inventory contains all expected method/path pairs and no disallowed prefix collisions.
-- `404`, `405`, `Allow`, and preflight headers are asserted at the HTTP boundary.
-- Middleware scope tests show admin-only middleware does not affect public health or debug routes unless designed to.
-- Observability tests assert low-cardinality route labels and explicit fallback labels.
-- Generated and manual route coexistence is covered by a collision test or route inventory comparison.
+Copy the bundled proof shape: one request can prove fallback status, headers, and route label when all three changed together.
 
-## Source Links Gathered Through Exa
-- chi README for router traversal, doc generation, examples, params, and stdlib testing compatibility: https://github.com/go-chi/chi/blob/master/README.md
-- chi mux source for `Match`, `Find`, `Routes`, fallback flow, and `r.Pattern`: https://github.com/go-chi/chi/blob/master/mux.go
-- chi tree source for `Walk` and route traversal: https://github.com/go-chi/chi/blob/master/tree.go
-- go-chi/cors tests for preflight and header assertion examples: https://github.com/go-chi/cors/blob/master/cors_test.go
-- Go `net/http` docs for handlers and `httptest`-compatible handler behavior: https://pkg.go.dev/net/http
+## Reject
+```go
+// Test only GET /api/widgets returns 200.
+```
+
+Reject when the design changed `405`, `OPTIONS`, CORS, fallback, route ownership, or middleware scope.
+
+```go
+if !strings.Contains(string(generatedFile), "/api/widgets") {
+	t.Fatal("missing route")
+}
+```
+
+Reject as the only proof because generated text does not prove mounted prefix, middleware, or fallback behavior.
+
+```go
+// Manually checked logs for /users/123 looked fine.
+```
+
+Reject because raw-path telemetry bugs need asserted labels for multiple concrete values.
+
+## Agent Traps
+- Do not turn validation into a generic checklist. Tie each proof to the decision that could regress.
+- Do not use route inventory alone for client-visible behavior. It misses status, headers, body, and middleware side effects.
+- Do not use `httptest` happy paths alone for topology. It can miss duplicate or shadowed routes.
+- Do not forget negative cases: unmatched path, wrong method, sibling route outside middleware scope, and concrete parameter values for route labels.
+
+## Validation Shape
+- Topology: route inventory contains expected method-path pairs and no disallowed prefix collisions.
+- Fallback: HTTP-boundary tests assert `404`, `405`, `Allow`, and any JSON body contract in separate missing-path and wrong-method cases.
+- CORS: preflight includes `Origin` and `Access-Control-Request-Method` and asserts headers.
+- Middleware: in-scope and out-of-scope paths prove coverage; order-sensitive stacks use a recorder.
+- Observability: two concrete parameter values collapse to one route label; unmatched routes collapse to one fallback label.
+- Generated/manual coexistence: route inventory or representative requests prove there is no collision and policy is consistent.

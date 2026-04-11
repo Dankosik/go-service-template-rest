@@ -1,13 +1,21 @@
 # Approved Decision Conformance
 
+## Behavior Change Thesis
+When loaded for symptom "the diff introduces behavior or structure not in the approved artifacts," this file makes the model treat code as design drift or a reopen trigger instead of letting implementation become the new decision record.
+
 ## When To Load
-Load this when the diff appears to introduce behavior, ownership, lifecycle, fallback, contract, or delivery decisions that are not present in the approved `spec.md`, `design/`, `plan.md`, or repository baseline.
+Load this when a diff appears to introduce behavior, ownership, lifecycle, fallback, contract, async, rollout, or delivery decisions not present in approved `spec.md`, `design/`, `plan.md`, `tasks.md`, or repository baseline.
 
-This reference is about review conformance, not creating new architecture. If the code reveals a better design, report a design escalation rather than rewriting the plan in the review.
+Use this only when approved intent exists or the repo baseline clearly owns the decision. Do not demand artifacts for eligible tiny/direct-path fixes.
 
-## Concrete Review Examples
-Finding example: the approved plan says synchronous request handling, but the diff adds a background goroutine and in-memory queue.
+## Decision Rubric
+- Flag code that changes structural, lifecycle, contract, durability, fallback, or validation obligations outside approved scope.
+- Do not flag every local helper or refactor as "needs ADR"; conformance matters for decisions with real ownership, behavior, rollout, or proof impact.
+- If the code reveals a better design, make a design escalation instead of rewriting the plan inside the review.
+- If approved artifacts are absent because the task is legitimately tiny, review against local correctness and do not invent a documentation gate.
+- Cite the exact section when possible: `spec.md` Decisions, Scope / Non-goals, `design/sequence.md`, `plan.md`, or `tasks.md`.
 
+## Imitate
 ```text
 [critical] [go-design-review] internal/infra/http/imports.go:97
 Issue: The endpoint now defers work to an in-memory background queue, but the approved spec describes synchronous request handling.
@@ -16,7 +24,7 @@ Suggested fix: Restore the synchronous flow, or reopen the spec/design to decide
 Reference: task `spec.md` Decisions and `design/sequence.md` if present.
 ```
 
-Finding example: code adds a fallback to skip dependency admission when a service is slow.
+Copy this shape when implementation changes the runtime model.
 
 ```text
 [high] [go-design-review] cmd/service/internal/bootstrap/dependencies.go:58
@@ -26,17 +34,7 @@ Suggested fix: Remove the fallback or route the new fail-open policy through app
 Reference: `docs/repo-architecture.md` startup path and task reliability decisions if present.
 ```
 
-Finding example: the diff leaves TODO-driven ownership for a later phase.
-
-```text
-[medium] [go-design-review] internal/app/imports/service.go:114
-Issue: The TODO leaves classification ownership to be decided after merge while the code already branches on that classification.
-Impact: A planning-time decision becomes a hidden runtime contract, making the next reviewer inherit an undocumented seam.
-Suggested fix: Either keep the behavior behind the currently approved owner or reopen the design to assign classification ownership.
-Reference: task `plan.md` and `tasks.md` phase scope if present.
-```
-
-Finding example: a PR updates code generated from a contract but the spec/decision artifact says contract changes are out of scope.
+Copy this shape when a fallback or lifecycle policy is smuggled through code.
 
 ```text
 [high] [go-design-review] api/openapi/service.yaml:142
@@ -46,26 +44,28 @@ Suggested fix: Remove the schema change from this diff or reopen the spec for an
 Reference: task `spec.md` Scope / Non-goals.
 ```
 
-## Non-Findings To Avoid
-- Do not demand an ADR for every local helper or refactor. Decision documentation matters for important, risky, expensive, or structural choices.
-- Do not flag code for lacking a spec when the task is an eligible tiny/direct-path fix and no approved artifact exists.
-- Do not override repo intent with external best-practice links. If the approved spec is clear, review against it.
-- Do not conflate an implementation detail with a hidden decision unless it changes ownership, external behavior, lifecycle, or validation obligations.
+Copy this shape when a scoped-out decision appears in implementation.
 
-## Smallest Safe Correction
-- Restore the approved behavior and keep the review finding local.
-- If the new behavior is intentional, require a spec/design update rather than accepting the code as the new authority.
-- Add a compact design escalation note that identifies the missing decision, affected owner, and proof obligation.
-- Cite the exact approved section when possible.
+## Reject
+```text
+[low] [go-design-review] internal/app/widgets/format.go:18
+Issue: This helper was not mentioned in the spec.
+```
 
-## Escalation Rules
-- Escalate to `go-design-spec` or `go-architect-spec` when the code proposes a new structural decision.
-- Escalate to `api-contract-designer-spec` when conformance drift changes client-visible REST behavior.
-- Escalate to `go-reliability-spec` when conformance drift changes timeout, retry, fallback, startup, shutdown, or degradation semantics.
-- Escalate to `go-devops-spec` when conformance drift changes generated-code, CI, rollout, release, or compatibility policy.
+Reject because local implementation details do not need explicit approval unless they change a decision surface.
 
-## Exa Source Links
-- [arc42 Section 9 - Architecture Decisions](https://docs.arc42.org/section-9/)
-- [Example Decision: Use ADRs in Nygard format - arc42](https://docs.arc42.org/examples/decision-use-adrs/)
-- [Architecture Decision Record - Martin Fowler](https://martinfowler.com/bliki/ArchitectureDecisionRecord.html)
-- [Decision record template by Michael Nygard](https://github.com/joelparkerhenderson/architecture-decision-record/blob/main/locales/en/templates/decision-record-template-by-michael-nygard/index.md)
+```text
+[medium] [go-design-review] internal/infra/http/imports.go:97
+Issue: Async is bad.
+Suggested fix: Make it sync.
+```
+
+Reject because the finding must be about conformance to approved behavior, not generic architectural preference.
+
+## Agent Traps
+- Do not override approved repo intent with outside best-practice links.
+- Do not accept TODO-driven ownership after merge when code already branches on that decision.
+- Do not bury a conformance issue as a handoff; make the design drift visible, then hand off specialist proof if needed.
+
+## Validation Shape
+Compare the diff against approved scope, decisions, sequence, and task ledger. Proof is not "tests pass"; proof is that the implementation still matches the approved behavior or that the task has been explicitly reopened for a new decision.

@@ -68,6 +68,22 @@ Rules:
 - load only the smallest evidence set needed to decide whether the task is truly spec-ready
 - if phase context shows the task already advanced past specification, stop instead of casually reopening an earlier phase
 
+## Lazy Reference Routing
+References are compact rubrics and example banks, not exhaustive checklists, documentation dumps, or second authorities.
+Load at most one reference by default: choose the narrowest file whose symptom matches the active decision pressure.
+Load more than one only when the session clearly spans independent pressures, such as readiness uncertainty plus a separate clarification-gate result.
+If a reference would not change a decision, do not load it.
+These references calibrate this wrapper; they do not override `AGENTS.md`, `docs/spec-first-workflow.md`, `spec-document-designer`, or `spec-clarification-challenge`.
+
+| Symptom | Reference | Behavior Change |
+| --- | --- | --- |
+| Phase ownership is unclear, the input looks under-researched, or the caller asks to approve `spec.md` from partial decisions. | `references/specification-session-readiness.md` | Choose a spec-ready check, bounded assumption, or reopen/block decision instead of approving by momentum. |
+| The session is about to edit files, or the request pressures it toward `design/`, `plan.md`, `tasks.md`, tests, migrations, or implementation. | `references/allowed-writes-and-stop-rules.md` | Keep writes specification-only and record the boundary instead of creating downstream starter artifacts. |
+| Non-trivial `spec.md` approval depends on running, reconciling, blocking, or waiving the clarification gate. | `references/spec-clarification-gate-flow.md` | Reconcile `spec-clarification-challenge` outcomes into final decisions instead of treating the gate as optional, pasting transcripts, or deferring approval blockers to design. |
+| `workflow-plan.md` or `workflow-plans/specification.md` needs repair or handoff updates. | `references/workflow-plan-specification-updates.md` | Keep master routing separate from phase-local orchestration instead of duplicating `spec.md`, adding implementation order, or leaving state in chat. |
+| `spec.md` cannot honestly be approved because of under-framed input, contradictory evidence, unresolved challenge questions, product-only policy, or phase drift. | `references/blocked-specification-examples.md` | Leave `spec.md` draft or blocked with a precise reopen target instead of inventing decisions or punting approval-changing gaps to technical design. |
+| `spec.md` is approved or near-approved and the next session route is being chosen. | `references/handoff-to-technical-design.md` | Record a clean `technical-design` handoff and stop instead of starting design work or hiding assumptions in chat. |
+
 ## Allowed Writes
 This session may write or update only:
 - task-local `spec.md`

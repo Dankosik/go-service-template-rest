@@ -1,33 +1,34 @@
 # Router Topology Patterns
 
+## Behavior Change Thesis
+When loaded for symptom `root router shape, Route/Mount/Group choice, top-level prefix ownership, generated/manual coexistence, or wildcard conflict`, this file makes the model choose one path owner with route-inventory proof instead of likely mistake `let modules, registration order, or broad wildcards decide ownership`.
+
 ## When To Load
-Load this when designing chi root router shape, `Route`/`Mount`/`Group` use, generated/manual route ownership, public vs internal path boundaries, route conflict controls, or route-table validation before coding.
+Load when designing or revising the root router, top-level prefix owners, generated/manual route coexistence, `Route` vs `Mount` vs `Group`, broad catch-all routes, or route conflict controls before coding.
 
-## Recommended Design Options
-- Single root composition point: create one exported `http.Handler`/router factory that owns global transport middleware, fallback policy, and top-level mounts.
-- Prefix-owned subrouters: give each top-level path set one owner, for example `/api`, `/admin`, `/internal`, and `/debug`. Use chi subrouters to keep path-local middleware and handlers near the owner.
-- Generated API surface under one prefix: mount `oapi-codegen` chi handlers at a deterministic API prefix and keep manual routes outside that prefix unless explicitly reserved in the OpenAPI spec.
-- Manual operational routes as separate branches: keep `/internal/health`, `/ready`, `/debug/pprof`, or similar operational handlers separate from public API contract paths.
-- Route inventory as a validation artifact: require `chi.Walk`, `Routes()`, `Match`, `Find`, or `httptest` coverage to prove the registered routes match the design.
+## Decision Rubric
+- Start with path ownership, not package ownership. Name one owner for each top-level path family such as `/api`, `/admin`, `/internal`, `/debug`, or `/metrics`.
+- Use one root composition point to own global transport middleware, fallback policy, and top-level mounts. Subrouters own path-local policy below that point.
+- Use `Mount` when attaching a prebuilt `http.Handler` or generated handler subtree. Treat the mounted prefix as subtree ownership, not an exact-path shortcut.
+- Use `Route` when building a chi subtree inline under a prefix. Middleware added inside the route belongs to that subtree only.
+- Use `Group` when sharing middleware across sibling routes without implying a new path prefix.
+- Keep generated OpenAPI paths and manual operational paths out of the same ownership zone unless the spec explicitly reserves the manual route.
+- Treat catch-all and wildcard routes as fallback owners. Require proof that they do not hide API fallback, operational routes, or generated handlers.
 
-## Rejected Alternatives
-- One large root router where every module registers routes directly. This hides path ownership and makes middleware scope drift easy.
-- Generated and manual routes interleaved under the same prefix without an ownership rule. This makes collision and fallback behavior ambiguous.
-- Depending on duplicate route registration behavior as a feature. Treat duplicates, shadowing, and wildcard overlap as defects to prove away with tests.
-- Mounting a broad wildcard route before proving it cannot swallow specific routes or custom fallback handlers.
-
-## Example Sketches
+## Imitate
 ```go
 func NewHTTPHandler(api http.Handler, admin http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestID, recoverer)
 
-	r.Mount("/api", api)       // generated OpenAPI-owned surface
-	r.Mount("/admin", admin)   // manual admin surface
+	r.Mount("/api", api)     // generated API owner
+	r.Mount("/admin", admin) // manual admin owner
 	r.Get("/internal/health", health)
 	return r
 }
 ```
+
+Copy the ownership shape: one root composition point, one owner per top-level prefix, and operational routes outside the generated API owner.
 
 ```go
 func adminRouter() http.Handler {
@@ -38,16 +39,49 @@ func adminRouter() http.Handler {
 }
 ```
 
-## Testable Acceptance Boundaries
-- Every top-level prefix has one named owner and one registration point.
-- Generated routes and manual routes do not register the same method/path.
-- Route-table tests fail on duplicate method/path, unexpected wildcard routes, or missing expected prefixes.
-- `httptest` proves a representative route from each prefix reaches the intended handler and middleware.
-- If a catch-all route exists, tests prove it does not hide API `404` or operational-route behavior.
+Copy the subrouter shape: local middleware sits next to the path owner instead of drifting into the root.
 
-## Source Links Gathered Through Exa
-- go-chi README, router interface, stdlib compatibility, `Route`, `Mount`, examples: https://github.com/go-chi/chi/blob/master/README.md
-- chi package docs, `Routes`, `Middlewares`, `Match`, route patterns: https://pkg.go.dev/github.com/go-chi/chi/v5
-- chi REST example with resource routes and mounted admin router: https://github.com/go-chi/chi/blob/master/_examples/rest/main.go
-- chi mux source for `Mount`, `Route`, `Group`, route matching, `Find`, and fallback flow: https://github.com/go-chi/chi/blob/master/mux.go
-- chi tree source for route traversal and `Walk`: https://github.com/go-chi/chi/blob/master/tree.go
+```go
+api := chi.NewRouter()
+generated.RegisterHandlers(api, impl)
+api.Get("/debug/routes", debugRoutes)
+root.Mount("/api", api)
+```
+
+Copy only when the manual route is intentionally inside the API owner and must share the same API middleware, fallback, and observability policy.
+
+## Reject
+```go
+root.Mount("/api", generated.Handler(impl))
+root.Get("/api/debug/routes", debugRoutes)
+```
+
+Reject because generated and manual routes now share a prefix without one visible owner or collision rule.
+
+```go
+root.Get("/*", spaFallback)
+root.Mount("/api", api)
+```
+
+Reject unless route inventory and HTTP tests prove the catch-all cannot hide API fallback behavior.
+
+```go
+func RegisterRoutes(r chi.Router) {
+	users.Register(r)
+	admin.Register(r)
+	debug.Register(r)
+}
+```
+
+Reject as the primary design shape when it hides which package owns each path family and which middleware/fallback policy applies.
+
+## Agent Traps
+- Do not describe `Route`, `Mount`, and `Group` as stylistic equivalents. They encode different ownership and middleware scope choices.
+- Do not let "module owns its own routes" replace path ownership. The design needs both the module owner and the URL subtree owner.
+- Do not place manual routes under a generated prefix just because it is convenient; decide whether they are part of the API contract first.
+- Do not claim duplicate or shadowed routes are impossible without a route inventory or representative `httptest` proof.
+
+## Validation Shape
+- Route inventory contains every expected top-level prefix and no disallowed generated/manual duplicate method-path pairs.
+- `httptest` proves one representative route from each prefix reaches the intended owner and middleware.
+- Catch-all or wildcard designs include cases for a generated route, an API miss, an operational route, and an unrelated miss.

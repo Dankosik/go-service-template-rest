@@ -1,43 +1,20 @@
 # Trace, Block, Mutex, And Contention Review
 
+## Behavior Change Thesis
+When loaded for symptom "the changed path can create lock wait, channel wait, queueing, fan-out/fan-in stalls, or scheduler pressure," this file makes the model choose a wait-shape and tail-latency finding instead of likely mistake "tune CPU work or recommend a generic worker pool without proving the wait bottleneck."
+
 ## When To Load
-Load this when a review touches locks, channels, worker pools, queueing, goroutine bursts, fan-out/fan-in, scheduler stalls, blocked goroutines, `go tool trace`, block profiles, or mutex profiles.
+Load this when code shape, not just a profile artifact, introduces contention or queueing risk: locks, channels, worker pools, goroutine bursts, fan-out/fan-in, scheduler stalls, block profiles, mutex profiles, or `go tool trace`.
 
-Use this to distinguish CPU work from waiting. Tail latency often moves because goroutines are blocked or queued, not because they are burning CPU.
+## Decision Rubric
+- Name the wait source: mutex wait, channel send/receive wait, fan-in wait, queue wait, runnable backlog, syscall wait, or goroutine explosion.
+- State the bound: request concurrency, shard count, item count, queue capacity, tenant count, or downstream call count.
+- Treat locks held across network, disk, DB, cache, RPC, logging, compression, or expensive merging as tail-latency risk until bounded or measured.
+- Prefer a mutex profile for lock-holder stacks, a block profile for synchronization waits, and trace for scheduler, runnable, fan-out, and wakeup shape.
+- Do not prescribe worker pools by default. The smallest fix may be moving work outside a lock, single-owner merge, bounded fan-out, cancellation-aware fan-in, or avoiding shared state.
+- Escalate to `go-concurrency-review` when correctness, deadlock, race, goroutine lifecycle, or shutdown safety is the primary issue.
 
-## Review Smell Patterns
-- A lock is held while doing network, disk, DB, cache, RPC, logging, or compression work.
-- A shared mutex serializes unrelated request paths or all tenants.
-- Fan-out launches one goroutine per item without bounding concurrency or proving the maximum input size.
-- Fan-in waits for all downstream calls even when cancellation or first-error behavior should stop wasted work.
-- A buffered channel or worker queue can grow with input size or request rate.
-- A trace shows poor CPU utilization or long runnable/blocked periods, but the review treats it as a CPU optimization problem.
-- A block or mutex profile is empty because profiling was not enabled, not because contention was absent.
-- The PR reports average latency only, while the changed path creates queue wait or lock convoy risk at p95/p99.
-
-## Evidence Required
-- Lock contention claim: mutex profile under the concurrent workload, with the contended lock holder stack identified.
-- Channel or synchronization wait claim: block profile, often with `go tool trace` to show scheduling and blocking shape.
-- Fan-out latency claim: trace or request-level timing that separates downstream work time, queue wait, and fan-in wait.
-- Scheduler utilization claim: execution trace, not just CPU profile, because trace records goroutine scheduling, blocking, syscalls, and GC events.
-- Live service contention claim: block/mutex sampling configuration and workload concurrency must be recorded.
-
-## Bad Finding
-```text
-[medium] [go-performance-review] internal/search/search.go:144
-Issue:
-This goroutine fan-out might be too much.
-Impact:
-It may be bad under load.
-Suggested fix:
-Use a worker pool.
-Reference:
-N/A
-```
-
-Why it fails: it has no bound, no workload, no measured wait signal, and prescribes a worker pool without proving fan-out is the dominant cost.
-
-## Good Finding
+## Imitate
 ```text
 [high] [go-performance-review] internal/search/search.go:144
 Issue:
@@ -47,10 +24,36 @@ Under concurrent searches, this can convert shard parallelism into p99 queue wai
 Suggested fix:
 Move sorting/normalization outside the lock or merge per-shard results after fan-in in one owner goroutine. Validate with a mutex or block profile and trace for the 64-shard workload.
 Reference:
-Go diagnostics guidance on mutex/block profiles and execution trace use.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: wait source, bound, why average CPU evidence is insufficient, and the smallest fix that changes the wait shape.
+
+## Reject
+```text
+Issue:
+This goroutine fan-out might be too much.
+Suggested fix:
+Use a worker pool.
+```
+
+Reject it because it has no bound, no workload, no measured wait signal, and prescribes a worker pool without proving fan-out is the dominant cost.
+
+```text
+Issue:
+The CPU profile is neutral, so the lock change is safe.
+```
+
+Reject it because goroutines can be blocked or queued while consuming little CPU.
+
+## Agent Traps
+- Looking only at average latency when the diff creates p95/p99 queue wait or lock convoy risk.
+- Missing that an empty mutex or block profile can mean sampling was not enabled.
+- Treating goroutine-per-item fan-out as safe because tests use small input.
+- Folding performance wait findings into concurrency correctness handoff too early; keep the performance finding when the merge risk is tail latency or capacity.
+- Recommending channels, pools, or locks as generic fixes without proving they reduce the specific wait source.
+
+## Validation Shape
 ```bash
 go test -run '^$' -bench '^BenchmarkSearchFanout64$' -benchmem -blockprofile block.out -mutexprofile mutex.out ./internal/search
 go tool pprof -top block.out
@@ -64,11 +67,3 @@ go tool pprof -top sched.pprof
 ```
 
 For live services, pair `curl -o trace.out 'http://localhost:6060/debug/pprof/trace?seconds=5'` with the request workload that reproduces the fan-out or contention path.
-
-## Source Links From Exa
-- [Go Diagnostics](https://go.dev/doc/diagnostics)
-- [runtime/pprof package](https://pkg.go.dev/runtime/pprof)
-- [runtime/trace package](https://pkg.go.dev/runtime/trace)
-- [cmd/trace](https://go.dev/cmd/trace)
-- [More powerful Go execution traces](https://go.dev/blog/execution-traces-2024)
-

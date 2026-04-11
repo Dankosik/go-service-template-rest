@@ -1,62 +1,56 @@
 # Transactions, Concurrency, And Idempotency
 
+## Behavior Change Thesis
+When loaded for a task where scarce capacity, worker claiming, retries, duplicate callbacks, or competing writers might be solved with vague "transactions" or cache state, this file makes the model choose the smallest invariant-preserving transaction, constraint, lock, lease, and idempotency record instead of likely mistake "raise isolation, add retries, or trust Redis."
+
 ## When To Load
-Load this when the task involves transaction boundaries, isolation level, optimistic concurrency, row locks, advisory locks, work claiming, duplicate callbacks, retries, idempotency keys, holds, leases, scarce capacity, or outbox/inbox semantics.
+Load this for transaction boundaries, isolation, locks, optimistic concurrency, work claiming, retries, idempotency keys, holds, leases, callbacks, or duplicate delivery.
 
-Use it to choose the smallest concurrency mechanism that preserves the invariant. Keep this at the data-spec level: name the transaction scope, constraint, retry class, idempotency record, and recovery consequence without drifting into low-level query tuning.
+## Decision Rubric
+- State the invariant first, then choose the concurrency mechanism. Mechanism follows invariant class, not taste.
+- Keep invariant-preserving writes in one local transaction where possible. Reject cross-service global ACID assumptions.
+- Use uniqueness or partial uniqueness for duplicate prevention; version checks for lost updates; exclusion constraints or explicit lease tables for overlap and scarce allocation; `FOR UPDATE SKIP LOCKED` for queue-like claiming only.
+- Store idempotency records durably with scope, request fingerprint, status/result, expiry or retention, and conflict behavior.
+- Use stronger isolation only for a named anomaly, with retry semantics and tests for serialization/deadlock behavior.
+- Use advisory locks only with stable lock scope, acquisition order, timeout behavior, and deadlock recovery.
 
-## Decision Examples
+## Imitate
 
-### Example 1: Scarce inventory reservation
-Context: Buyers can reserve a scarce item, reservations expire, and duplicate client retries must not consume capacity twice.
+### Scarce inventory reservation
+Context: Buyers can reserve a scarce item, reservations expire, and duplicate retries must not consume capacity twice.
 
-Selected option: Keep reservation creation and capacity update in one local transaction. Use a row lock, constraint, or ledger-style allocation table that matches the invariant. Store a tenant-scoped idempotency key with request fingerprint and resulting reservation ID.
+Keep reservation creation and capacity update in one local transaction. Use a row lock, constraint, exclusion rule, or ledger-style allocation table that matches the invariant. Store a tenant-scoped idempotency key with request fingerprint and resulting reservation ID.
 
-Rejected options:
-- Check available capacity, commit, then insert reservation in a later transaction.
-- Use cache counters as the source of truth for capacity.
-- Rely on a blanket higher isolation level without retry and contention evidence.
+Copy this because it makes the idempotent operation and capacity invariant durable together.
 
-Migration and rollback consequences:
-- Add idempotency storage before enabling automatic client retries.
-- If a new constraint prevents overbooking, clean existing conflicts before validation.
-- Rollback after confirmed reservations are issued usually requires forward release or reconciliation, not deleting evidence rows.
-
-### Example 2: Queue-like work claiming
+### Queue-like work claiming
 Context: Multiple workers claim pending backfill chunks or outbox rows.
 
-Selected option: Use claim rows or lease semantics with `FOR UPDATE SKIP LOCKED` only for queue-like work where an inconsistent snapshot is acceptable. Record lease owner, lease deadline, retry count, and stuck-work recovery.
+Use claim rows or lease semantics with `FOR UPDATE SKIP LOCKED` only where an inconsistent snapshot is acceptable. Record lease owner, lease deadline, retry count, and stuck-work recovery.
 
-Rejected options:
-- Use `SKIP LOCKED` for general user-facing list queries.
-- Hold a transaction open while doing network calls or long CPU work.
-- Use advisory locks without a stable scope, timeout, and deadlock story.
+Copy this because queue claiming is a special workload; it is not a generic list-query pattern.
 
-Migration and rollback consequences:
-- Introduce lease columns additively and allow old workers to drain before requiring them.
-- Rollback must release or ignore leases created by the new worker version.
-- If chunk state was advanced incorrectly, recovery should be idempotent and restart from checkpoints.
+### Provider callback deduplication
+Context: A payment provider can deliver the same callback multiple times and out of event-time order.
 
-### Example 3: Provider callback deduplication
-Context: A payment provider can deliver the same callback multiple times and in a different order than local processing time.
+Store provider event identity and dedupe state in SQL with tenant/provider scope. Preserve event time and processed time separately. Apply local state transitions in one transaction with checks that reject stale or duplicate movement.
 
-Selected option: Store provider event identity and idempotency/dedup state in SQL with tenant/provider scope. Preserve event time and processed time separately. Apply state transitions in one transaction with checks that reject stale or duplicate state movement.
+Copy this because duplicate delivery and late delivery are separate failure modes.
 
-Rejected options:
-- Deduplicate only in memory or cache.
-- Treat arrival time as provider event time.
-- Let provider status strings directly become canonical local lifecycle states.
+## Reject
+- "Check available capacity, commit, then insert reservation later." The gap permits overbooking.
+- "Redis counters are the source of truth for seats or money." Cache loss or split brain becomes a correctness bug.
+- "Use serializable everywhere." Stronger isolation without anomaly, retry, and contention evidence is a blunt instrument.
+- "Use `SKIP LOCKED` for user-facing pages." Skipped rows create misleading lists outside queue-like work.
+- "Deduplicate callbacks in memory." Restarts and parallel instances reprocess duplicates.
 
-Migration and rollback consequences:
-- Backfill dedup keys from raw payload history if available; otherwise mark the gap as an accepted risk.
-- New dedup constraints can change callback behavior, so roll out behind monitoring and replay tests.
-- Once duplicate callbacks are suppressed by persisted state, rollback must not reprocess old duplicates without a replay plan.
+## Agent Traps
+- Do not put network calls or long CPU work inside the invariant transaction.
+- Do not reuse correlation IDs as idempotency keys without a semantic operation fingerprint.
+- Do not describe retries without classifying deadlock, serialization failure, timeout, duplicate request, and provider replay separately.
+- Do not propose advisory locks without a stable key and release story.
 
-## Source Links Gathered Through Exa
-- PostgreSQL, "Transaction Isolation": https://www.postgresql.org/docs/current/transaction-iso.html
-- PostgreSQL, "Explicit Locking": https://www.postgresql.org/docs/current/explicit-locking.html
-- PostgreSQL, "SELECT": https://www.postgresql.org/docs/current/sql-select.html
-- Go, "Executing transactions": https://go.dev/doc/database/execute-transactions
-- Go, "Accessing relational databases": https://go.dev/doc/database
-- Stripe, "Idempotent requests": https://docs.stripe.com/api/idempotent_requests
-
+## Validation Shape
+- Concurrency proof names the invariant, transaction scope, lock or constraint, expected conflict error, retry class, and deadlock or serialization test.
+- Idempotency proof covers duplicate request same-fingerprint, duplicate request different-fingerprint, replay after success, replay after failure, and retention/expiry behavior.
+- Worker proof covers lease expiry, stuck-work recovery, idempotent chunk processing, and rollback behavior for claims created by the new version.

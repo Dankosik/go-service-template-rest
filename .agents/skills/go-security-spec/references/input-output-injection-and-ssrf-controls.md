@@ -1,48 +1,42 @@
-# Input, Output, Injection, And SSRF Control Examples
+# Input, Output, Injection, And SSRF Controls
+
+## Behavior Change Thesis
+When loaded for untrusted input, interpreter, outbound network, or error-output requirements, this file makes the model choose strict parser, allowlist, SSRF dial, and sanitized response requirements instead of likely mistake: denylist validation, late validation, string-built queries, or raw internal error relay.
 
 ## When To Load
-Load this when untrusted request fields, JSON decoding, query parameters, file/path/URL inputs, SQL or other interpreters, outbound HTTP, webhooks, response encoding, or sanitized error behavior are in scope.
+Load this when the spec touches JSON decoding, query parameters, file/path/URL fields, SQL or other interpreters, outbound HTTP, webhooks, response encoding, or client-visible error detail.
 
-## Selected Controls
-- Validate at the earliest trusted boundary with both syntactic checks, such as type, length, range, enum, and format, and semantic checks, such as state and ownership.
-- Use allowlists for structured values such as schemes, hosts, ports, methods, enum values, media types, sort fields, and pagination limits.
-- For mutable JSON requests, require strict decoding where the API contract expects fixed fields: body size limit, content type check, unknown-field rejection, duplicate-key policy when security relevant, trailing-token rejection, and numeric precision choice.
-- Use safe interpreter APIs. For SQL, pass parameters as `database/sql` arguments and keep dynamic identifiers from code-owned allowlists.
-- For SSRF-prone features, require allowed remote origins, schemes, ports, redirect behavior, DNS/IP resolution policy, cloud metadata blocking, response size limit, media type validation, timeout, and no raw internal response relay.
-- Sanitize output and error detail. Return stable problem responses without stack traces, SQL errors, credentials, filesystem paths, or internal addresses.
+## Decision Rubric
+- Validate before the first interpreter, network dial, persistence write, cache key construction, or side effect.
+- For fixed-shape JSON mutation, require body size limit, media-type check, unknown-field policy, duplicate-key policy when security relevant, trailing-token rejection, numeric precision choice, and forbidden-field handling.
+- Use allowlists for schemes, hosts, ports, HTTP methods, media types, enum values, sort fields, table/column identifiers, and pagination limits.
+- For SQL, pass values through `database/sql` or generated-query parameters. Dynamic identifiers must come from code-owned allowlists, not user strings.
+- For SSRF-prone behavior, define allowed origins, scheme and port policy, DNS/IP resolution policy, loopback/private/link-local/metadata blocking, redirect behavior, timeout, response size, media-type validation, and no raw internal response relay.
+- Sanitize output and problem responses. Client-visible errors should not include stack traces, SQL errors, credentials, filesystem paths, internal hosts, or raw user-supplied error strings.
 
-## Rejected Controls
-- Reject denylist-only validation such as blocking `localhost`, `127.0.0.1`, or `' OR 1=1` while allowing arbitrary URLs or query fragments.
-- Reject "validation later in business logic" when an interpreter or outbound network call happens first.
-- Reject `fmt.Sprintf` or string concatenation for SQL values.
-- Reject automatic binding of request bodies into domain or persistence objects when sensitive/internal fields exist.
-- Reject following redirects from third-party APIs or user-provided URLs unless the redirect target is explicitly allowed.
-- Reject logging raw request bodies, tokens, secrets, or user-supplied error strings without sanitization.
+## Imitate
+- "For mutable JSON requests, unknown fields and trailing tokens are rejected before domain-object construction; forbidden mutable fields use the property-authorization rule, not struct binding side effects." Copy the parse-before-domain boundary.
+- "For user-selected sorting, only code-owned column aliases are accepted; unapproved values return validation failure rather than falling back to string interpolation." Copy the dynamic-identifier allowlist.
+- "For user-provided callback URLs, reject loopback, link-local, private ranges, metadata endpoints, non-HTTP schemes, userinfo tricks, and redirects to disallowed targets before dialing." Copy the pre-dial SSRF policy.
 
-## Fail-Closed Examples
-- Unknown JSON field in a mutable protected request returns a client error instead of silently changing internal state.
-- Oversized body returns `413` and no handler side effect.
-- Unsupported media type returns `415` and no decode attempt.
-- User-provided URL with a disallowed scheme, host, port, private IP, loopback target, link-local target, metadata endpoint, or redirect target is rejected before dialing.
-- SQL identifier not in the code-owned allowlist returns validation failure rather than falling back to raw string interpolation.
+## Reject
+- "Block `localhost` and `127.0.0.1`." This denylist misses encoded hosts, DNS rebinding, link-local targets, private ranges, metadata endpoints, redirects, and IPv6 forms.
+- "Validate in business logic after fetch." The unsafe interpreter or network side effect has already happened.
+- "Use `fmt.Sprintf` for a trusted query fragment." Trust depends on a code-owned allowlist, not the absence of scary characters.
+- "Return the upstream error to the client." This risks leaking internal addresses, credentials, query detail, or provider behavior.
 
-## Testable Requirements
-- Given trailing JSON tokens, unknown mutable fields, duplicate security-relevant keys, invalid UTF-8, or overly large numbers, the endpoint rejects or handles according to a documented strictness policy.
-- Given a malicious SQL value, the query uses parameters and does not change the query structure.
-- Given an unapproved sort field, table name, or column name, the service rejects rather than interpolating it.
-- Given URL payloads for loopback, link-local metadata, private network ranges, userinfo tricks, encoded hosts, redirects, and non-HTTP schemes, the outbound client refuses the request.
-- Given an internal error, the API response is stable and sanitized while server-side logs retain only bounded diagnostic fields.
+## Agent Traps
+- Do not conflate strict JSON syntax with semantic authorization. Parser strictness does not prove the caller may set the field.
+- Do not treat generated handlers or request structs as an input-security control unless their rejection behavior is explicit.
+- Do not claim SSRF is solved by timeout alone. Timeout limits blast radius; it does not authorize a target.
+
+## Validation Shape
+- Parser cases: unknown mutable fields, duplicate security-relevant keys, trailing tokens, invalid UTF-8, oversized bodies, unsupported media types, and overly large numbers.
+- Injection cases: malicious SQL values remain parameters, and unapproved dynamic identifiers are rejected.
+- SSRF cases: loopback, private, link-local, metadata, userinfo, encoded host, redirect, non-HTTP scheme, oversized response, slow response, and invalid media type fail before dial or persist.
+- Output cases: internal errors produce stable sanitized problem responses while logs retain only bounded diagnostic fields.
 
 ## Repo-Local Anchors
-- `internal/infra/http/middleware.go` already includes `RequestFramingGuard`, `RequestBodyLimit`, and `SecurityHeaders`; new request parsing requirements should preserve those transport protections.
+- `internal/infra/http/middleware.go` includes `RequestFramingGuard`, `RequestBodyLimit`, and `SecurityHeaders`; new parsing requirements should preserve those transport protections.
 - `internal/infra/http/problem.go` is the local problem-response surface. Security requirements should call for sanitized details when errors cross the API boundary.
 - `internal/infra/postgres` and `sqlc` generated query paths are preferred over hand-built SQL for service-owned queries.
-
-## Exa Source Links
-- OWASP Input Validation Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html
-- OWASP Injection Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
-- OWASP API7:2023 Server Side Request Forgery: https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/
-- OWASP Error Handling Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html
-- Go `encoding/json` security considerations: https://pkg.go.dev/encoding/json
-- Go `net/http` documentation for request body limiting and client/server APIs: https://pkg.go.dev/net/http
-- Go avoiding SQL injection risk: https://go.dev/doc/database/sql-injection

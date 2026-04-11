@@ -1,64 +1,51 @@
 # Flaky Reproduction Controls For Go
 
-## Purpose
-Shrink intermittent Go failures into a repeatable signal without masking the real bug.
+## Behavior Change Thesis
+When loaded for intermittent Go test failures, this file makes the model isolate repetition, order, race, CPU, and environment variables instead of mixing knobs or claiming a flake is fixed from one lucky pass.
 
-## Repetition And Order Controls
+## When To Load
+Load when a Go test fails only under repetition, CI, `-race`, `-shuffle`, a specific CPU count, slower machines, environment differences, or wider package scope.
 
-Use the narrowest package and test first:
+## Decision Rubric
+- Change one diagnostic variable at a time until the failure class is named.
+- Use narrow single-test repetition for local lifecycle, timing, and shared-state suspicion.
+- Use wider `-run` or package scope only when order dependence or leaked package state is the hypothesis.
+- Treat `-shuffle` as meaningful only when multiple tests or subtests remain in scope; replay the failing seed before editing.
+- Keep `-race`, `-cpu`, env, and shuffle experiments separate unless a later hypothesis requires a combined stress shape.
+- Record frequency as data, for example `7/100`, not as "sometimes".
+
+## Imitate
 
 ```bash
-go test ./path/to/pkg -run '^TestName$' -count=100
-go test ./path/to/pkg -run '^TestName$' -shuffle=on -count=100
-go test ./path/to/pkg -run '^TestName$' -race -count=50
-go test ./path/to/pkg -run '^TestName$' -cpu=1,4
+go test ./internal/orders -run '^TestCheckout$' -count=100 -v
+go test ./internal/orders -run '^TestCheckout$' -race -count=50 -v
+go test ./internal/orders -run '^TestCheckout$' -cpu=1,4 -count=50 -v
+go test ./internal/orders -run '^(TestCheckout|TestCacheRefresh)$' -shuffle=on -count=50 -v
+go test ./internal/orders -run '^(TestCheckout|TestCacheRefresh)$' -shuffle=1700000000000000000 -count=1 -v
 ```
 
-Notes:
-- `-count` helps estimate frequency and confirms whether the signal is real.
-- `-shuffle=on` surfaces order dependence only when multiple tests or subtests are actually in scope. Capture the printed seed and reuse it with `-shuffle=<seed>` once a failing order is found.
-- If you narrow to one top-level test with `-run '^TestName$'`, `-shuffle` often stops being meaningful for package-level order. In that case use a wider pattern or the full package for the order experiment, and keep the narrow command for local race or lifecycle proof.
-- `-race` is essential when shared-state or goroutine ownership is even mildly suspicious.
-- `-cpu=1,4` is useful when scheduler sensitivity or accidental parallelism is part of the failure mode.
+Copy the separation: each command tests a different failure class, and the failing shuffle seed gets replayed as its own reproducer.
 
-## Common Flake Classes
+## Reject
 
-### Sleep-Based Coordination
-- `time.Sleep` guesses readiness instead of proving it
-- background work sometimes finishes before the sleep and sometimes after it
-- fix by waiting on a condition, event, or channel, not by inflating the delay
+```bash
+go test ./internal/orders -run '^TestCheckout$' -shuffle=on -race -cpu=1,4 -count=100 -v
+```
 
-### Shared State Leakage
-- env vars, temp dirs, ports, global singletons, caches, or registries persist between tests
-- order changes the visible state
-- fix by isolating state and cleaning up with `t.Cleanup`
+This mixes order, race, and scheduler variables while `-run` may be too narrow for shuffle to prove package-order leakage.
 
-### Time And Randomness
-- test uses wall clock, implicit `time.Now`, default random seed, or real timers
-- slower CI or fast local machines move behavior across thresholds
-- fix with fake clocks, explicit seeds, and deterministic timer control when possible
+```text
+Fixed: CI passed once after increasing the sleep.
+```
 
-### Goroutine Lifecycle
-- worker goroutines outlive the test
-- channel senders or receivers remain blocked across test boundaries
-- `t.Parallel` overlaps cleanup and background work
-- fix by owning shutdown and waiting for completion explicitly
+This does not name the failure class, preserve the reproducer, or prove the old race/timing/order condition is gone.
 
-### External Dependency Leakage
-- test depends on real network, DB, cache, or clock skew
-- local pass is luck; CI fails under latency or ordering variation
-- fix by isolating the dependency or at least making its timing and cleanup explicit
+## Agent Traps
+- Treating a single local pass as evidence against a CI flake.
+- Forgetting to capture or replay the `-shuffle` seed.
+- Running a package-wide command first and losing the smallest failing scope.
+- Reporting only the final failure summary instead of the first distinct failing stack or assertion.
+- Disabling the test before proving whether the behavior is test-only or production-relevant.
 
-## Good Artifact Hygiene
-For each flake run, record:
-- exact command
-- package and test name
-- `-count`, `-shuffle`, `-race`, `-cpu`, and timeout settings
-- failing seed or order if known
-- the first distinct failure symptom, not every duplicate line
-
-## Escalation Clues
-Escalate beyond test-only repair when:
-- the flake is really a production concurrency bug that the test happened to expose
-- the only plausible fix changes timeout, retry, or API contract behavior
-- the test cannot be made deterministic without first changing the production ownership model
+## Validation Shape
+Capture the exact command, working directory, package/test selector, relevant env, `-count`, `-shuffle` seed, `-race`, `-cpu`, timeout, first failure signal, and failure frequency. After the fix, rerun the same defect-shaped command, then add only the broader package or CI-shaped smoke that increases confidence for the named failure class.

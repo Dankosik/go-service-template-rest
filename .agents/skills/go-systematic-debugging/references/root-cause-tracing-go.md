@@ -1,53 +1,29 @@
 # Root-Cause Tracing For Go Services
 
+## Behavior Change Thesis
+When loaded for deterministic symptoms with upstream bad state, this file makes the model backtrack to the first broken invariant instead of patching the crash site or adding a defensive nil guard.
+
 ## When To Load
-Load this reference when the symptom is deterministic or mostly deterministic but the failing line may not be where the bad state was created: panics, typed-nil surprises, bad payload shape, incorrect state transitions, unexpected `context` errors, and integration regressions.
+Load when the symptom is deterministic or mostly deterministic, but the failing line may not be where the bad state was created: panics, typed-nil surprises, bad payload shape, incorrect state transitions, unexpected context errors, and integration regressions.
 
-Use it to walk backward from symptom to first broken invariant before choosing a fix.
+## Decision Rubric
+- Preserve the first stack trace, first failed assertion, or first error-chain mismatch before editing.
+- Inspect the immediate input at the symptom line, then walk one caller or boundary upstream at a time.
+- Stop when you find where the value first became invalid or where validation first allowed it through.
+- Fix at the earliest boundary that owns the invariant; add downstream guardrails only when they prevent recurrence or improve the error contract.
+- Escalate instead of silently changing API, data, retry, timeout, security, or architecture semantics under defect pressure.
 
-## Commands
-Keep the first command narrow and replayable:
+## Imitate
 
-```bash
-go test ./path/to/pkg -run '^TestName$' -count=1 -v
-go test ./path/to/pkg -run '^TestName$' -count=1 -failfast -json
-go test ./path/to/pkg -run '^TestName$' -race -count=1 -v
-go test ./path/to/pkg -run '^TestName$' -count=1 -timeout=30s -v
-go build ./path/to/pkg
+```text
+Symptom: panic in handler response mapping.
+Immediate bad value: *Order is nil inside an interface typed as Result.
+Upstream boundary: repository returned (*Order)(nil), nil error for missing row.
+First broken invariant: repository contract promises either non-nil *Order or ErrNotFound.
+Fix scope: repository missing-row mapping plus regression test at repository boundary.
 ```
 
-When request or fixture shape matters, save the smallest input that still fails and make the test consume that input directly.
-
-## Evidence To Capture
-- exact reproducer command and first failing signal
-- first stack trace, first failed assertion, or first error-chain mismatch
-- concrete input payload or fixture that crosses the boundary
-- current invariant and where it should have been enforced
-- caller and callee state at each boundary: transport, app, domain, persistence, cache, queue, and external dependency
-- accepted and rejected hypotheses, with the command or observation that rejected each one
-
-## Boundary Backtracking Pattern
-1. Record the symptom location: `file:line`, panic or error message, failing test, and exact command.
-2. Inspect the immediate inputs at that location.
-3. Move one caller or boundary up and ask who created or accepted that value.
-4. Repeat until the value first became invalid or first bypassed validation.
-5. Fix at the earliest valid ownership boundary.
-6. Add downstream guardrails only when they prevent useful recurrence or improve the error contract.
-
-## Minimal Temporary Instrumentation
-Use temporary diagnostics only when the existing test or logs cannot show the boundary.
-
-```go
-func debugBoundary(stage string, fields map[string]any) {
-	fields["stage"] = stage
-	log.Printf("debug boundary: %+v", fields)
-}
-```
-
-Keep fields low-cardinality and secret-free. Remove the helper once the fix is proven unless the log has clear ongoing operational value.
-
-## Error And Context Checks
-Preserve typed error semantics while tracing:
+Copy the backtracking: the fix goes to the contract boundary that created bad state, not the mapper that crashed later.
 
 ```go
 if err != nil {
@@ -64,25 +40,30 @@ if err != nil {
 }
 ```
 
-Do not stringify typed errors before the caller that owns the decision has a chance to inspect them.
+Copy the typed-error preservation: do not stringify errors before the policy-owning caller can inspect them.
 
-## Bad Debugging Moves
-- patching the panic site before finding who produced the bad value
-- adding a nil guard that converts a contract violation into silent success
-- replacing `ctx` with `context.Background()` to make an error disappear
-- logging broad request or DB payloads that may contain secrets
-- changing API, data, retry, or timeout behavior under the banner of a local bug fix
+## Reject
 
-## Good Debugging Moves
-- name the invariant in one sentence before editing
-- keep the reproducer stable while moving up the call chain
-- prove the first boundary where the invariant was already broken
-- keep short-lived diagnostics easy to remove
-- escalate when the fix belongs to API, data, reliability, security, or architecture policy
+```go
+if result == nil {
+	return nil
+}
+```
 
-## Source Links
-- [Go diagnostics](https://go.dev/doc/diagnostics)
-- [context package](https://pkg.go.dev/context)
-- [Go blog: context](https://go.dev/blog/context)
-- [errors package](https://pkg.go.dev/errors)
-- [testing package](https://pkg.go.dev/testing)
+This may convert a contract violation into silent success while the upstream invalid value continues to leak.
+
+```go
+ctx := context.Background()
+```
+
+Using a new root context to make cancellation disappear destroys the caller's budget and hides the real boundary failure.
+
+## Agent Traps
+- Treating the panic site as the root cause because it has the loudest stack frame.
+- Adding broad debug logs that include request bodies, SQL payloads, tokens, or PII.
+- Forgetting typed-nil interface cases where `err != nil` or `value != nil` checks lie about the concrete value.
+- Changing API or persistence behavior without naming the owning boundary and escalation.
+- Keeping temporary boundary logging after the regression test proves the fix.
+
+## Validation Shape
+Record the narrow reproducer, the first broken invariant, the boundary where it first failed, the rejected hypotheses, and the exact command that proves the boundary-level regression now passes.

@@ -1,7 +1,13 @@
 # Exception Governance
 
+## Behavior Change Thesis
+When loaded for symptom "a gate, protection, scan, or rollout rule needs a waiver," this file makes the model choose a bounded exception record with owner, expiry, compensating proof, and reopen condition instead of likely mistake silently downgrading a blocking control to informational.
+
 ## When To Load
-Load this when a delivery spec allows temporary bypasses, informational-only downgrades, release-risk acceptance, vulnerability suppressions, branch-protection bypass, scan exceptions, migration rollback exceptions, or manual release overrides.
+Load only when the prompt includes temporary bypasses, informational-only downgrades, release-risk acceptance, vulnerability suppressions, branch-protection bypass, scan exceptions, migration rollback exceptions, or manual release overrides.
+
+## Role
+This is a challenge and smell-triage reference, not primary design guidance. Prefer a narrower positive reference first when the task is mainly CI, branch protection, migrations, containers, or supply-chain trust; load this when an exception path itself is the decision pressure.
 
 ## Local Source Of Truth
 - `scripts/dev/configure-branch-protection.sh` defaults to admin enforcement, strict checks, code-owner review, stale-review dismissal, conversation resolution, force-push denial, and deletion denial.
@@ -9,35 +15,31 @@ Load this when a delivery spec allows temporary bypasses, informational-only dow
 - `.github/workflows/ci.yml`, `.github/workflows/nightly.yml`, and `.github/workflows/cd.yml` are the evidence surfaces for gate results.
 - `SECURITY.md`, `CONTRIBUTING.md`, `.github/CODEOWNERS`, and `.github/pull_request_template.md` are required governance artifacts under guardrails.
 
-## Enforceable Policy Examples
-- Every exception must name owner, approver, scope, affected gate, reason, compensating controls, expiry date or expiry event, follow-up issue, and reopen condition.
-- No blocking gate may be downgraded to informational by editing workflow YAML alone; the policy change must update the spec/release plan and guardrail expectations in the same review.
-- Branch-protection bypass is disallowed by default. If a ruleset or branch protection exception exists, it must be visible in exported GitHub settings or API evidence and tied to an audit event.
+## Decision Rubric
+- Every exception must name owner, approver, scope, affected gate/artifact, reason, compensating controls, expiry date or event, follow-up issue, and reopen condition.
+- No blocking gate may be downgraded by editing workflow YAML alone; the policy/spec and guardrail expectations must change in the same review.
+- Branch-protection bypass is disallowed by default. If a ruleset or branch-protection exception exists, it needs exported settings/API evidence and an audit event.
 - Vulnerability or scan suppressions must include finding identifier, affected artifact, version or digest, severity, rationale, expiry, and rescan proof.
 - Migration rollback exceptions must record why reversal cannot be rehearsed, whether the release is forward-only, and what restore or compensating proof gates publish.
 
-## Non-Enforceable Anti-Patterns
-- "Temporary waiver" with no expiry or owner.
-- "Accept risk" without naming the exact gate and artifact affected.
-- Bypass lists that accumulate actors without periodic review.
-- Suppression comments in CI config without linked issue, expiry, or rescan condition.
-- Allowing manual releases after failed CI because an operator says the change is safe.
-- Leaving a broken required check unrequired instead of fixing, renaming, or formally replacing it.
+## Imitate
+- "Accept HIGH Trivy finding CVE-... for image digest ... until 2026-05-01; owner ..., approver ..., compensating control ..., rescan command ..., reopen if fixed base image releases earlier." Copy the bounded scan-exception shape.
+- "Emergency branch-protection bypass requires named actor, scope-limited branch/ruleset change, audit link, follow-up issue, and post-merge reconciliation gate." Copy the bypass accountability shape.
+- "Forward-only migration exception records why down rehearsal is impossible and which restore drill or backup proof replaces it." Copy the proof-substitution pattern.
 
-## Evidence Artifacts
-- Exception record in the task spec, release issue, or PR with owner, approver, expiry, compensating control, and follow-up.
-- GitHub branch protection or ruleset export showing bypass actors and enforcement status.
-- CI/CD run proving the compensating gate passed.
-- Linked issue or scheduled follow-up for expiry review.
-- Rescan, rerun, rollback rehearsal, or post-release verification log that closes the exception.
+## Reject
+- "Temporary waiver." This lacks owner, expiry, affected gate, and proof.
+- "Accept risk for this release." This lacks the artifact and reopen condition.
+- "Comment out the failing check until the release is done." This hides policy drift and bypasses guardrails.
+- "Operator says it is safe." This is not delivery evidence.
+
+## Agent Traps
+- Do not accept product, security, data-loss, API-breaking, or distributed-consistency risk in this delivery reference. Record delivery impact and require the owning specialist/spec to accept the underlying risk.
+- Do not let bypass lists accumulate without review/expiry.
+- Do not confuse a compensating control with a promise to fix later; compensating proof must be observable before release.
+
+## Validation Shape
+Use exception records in the task spec, release issue, or PR; exported branch protection/ruleset settings; CI/CD run proving compensating gates; linked expiry follow-up; and rescan, rerun, rollback rehearsal, or post-release verification logs that close the exception.
 
 ## Hand-Off Boundary
-Do not accept product, security, data-loss, API-breaking, or distributed-consistency risk inside this delivery reference. Record delivery impact and require the owning specialist/spec to accept the underlying risk.
-
-## Exa Source Links
-- GitHub Docs: [About protected branches](https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-- GitHub Docs: [Managing a branch protection rule](https://docs.github.com/en/github/administering-a-repository/enabling-required-status-checks)
-- GitHub Docs: [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
-- GitHub REST Docs: [REST API endpoints for rules](https://docs.github.com/en/rest/orgs/rules)
-- GitHub Docs: [Script injections](https://docs.github.com/en/actions/concepts/security/script-injections)
-
+Do not accept product, security, data-loss, API-breaking, or distributed-consistency risk here. Record delivery impact and require the owning specialist/spec to accept the underlying risk.

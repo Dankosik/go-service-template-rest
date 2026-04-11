@@ -1,101 +1,83 @@
 # Exported API And Interface Shape
 
-## When To Load It
-Load this reference when a Go review touches exported names, package names, doc comments, constructors, interface definitions, return types, option structs, public method/function signatures, compatibility promises, package globals, `init` side effects, or public zero-value behavior.
+## Behavior Change Thesis
+When loaded for exported-surface symptoms, this file makes the model review consumer-owned abstraction, compatibility, and public contracts instead of likely mistake "small interfaces are good", "return concrete types always", or "add a doc comment."
 
-## Exa Source Links
-- [Go Code Review Comments: Interfaces, Package Names, Doc Comments, Pass Values](https://go.dev/wiki/CodeReviewComments)
-- [Go Doc Comments](https://go.dev/doc/comment)
-- [Package names](https://go.dev/blog/package-names)
-- [Keeping Your Modules Compatible](https://go.dev/blog/module-compatibility)
-- [Backward Compatibility, Go 1.21, and Go 2](https://go.dev/blog/compat)
-- [Effective Go](https://go.dev/doc/effective_go), with the official caveat that Effective Go is not actively updated.
+## When To Load
+Load when a Go review touches exported names, package names, doc comments, constructors, interface definitions, return types, option structs, public signatures, compatibility promises, package globals, `init` side effects, or public zero-value behavior.
 
-## Review Cues
-- A producer package exports an interface that mirrors its only implementation.
-- An exported function returns an interface for mocking rather than a real consumer-side behavior boundary.
-- A public function signature changes instead of adding a compatible new function or method.
-- Exported docs restate names but omit behavior, nil/zero-value constraints, ownership, or error contract.
-- A package name is `api`, `types`, `interfaces`, `common`, `util`, or otherwise hides responsibility.
-- A package-level mutable variable or `init` hook changes process-wide behavior implicitly.
-- An exported struct gains a field whose zero value changes old behavior.
+## Decision Rubric
+- Ask whether the exported shape is a public contract, not just whether it compiles or looks idiomatic.
+- Prefer concrete return types from producer packages unless the exported interface is the intended behavior boundary.
+- Prefer consumer-defined interfaces when the consumer needs substitution over a narrow subset of behavior.
+- Treat breaking public signatures in v1+ modules as high risk unless an approved versioning/API decision exists.
+- Prefer additive APIs, option structs, or new methods when they preserve existing callers and make future expansion likely.
+- Review docs for behavior that callers must know: nil/zero-value usability, ownership, concurrency promises, error inspection, and required initialization. Do not raise doc findings that only restate the name.
+- Treat package-level mutable variables and `init` hooks as public behavior when they change process-wide state or test order.
+- Avoid package names that hide responsibility (`common`, `util`, `types`, `interfaces`) only when the name makes ownership or imports harder to reason about.
 
-## Bad Review Examples
-Bad review:
-
-```text
-Interfaces should be small.
-```
-
-Why it is bad: small is not enough. The question is whether the interface belongs to the consumer and encodes a real behavior boundary.
-
-Bad review:
-
-```text
-Return a concrete type because Go says so.
-```
-
-Why it is bad: concrete returns are a default, not a law. Some APIs intentionally hide implementation or define an abstraction boundary.
-
-Bad review:
-
-```text
-Add a doc comment because exported things need docs.
-```
-
-Why it is bad: a merge-risk review should explain what public behavior is ambiguous without the doc.
-
-## Good Review Examples
-Good finding:
-
+## Imitate
 ```text
 [medium] [go-idiomatic-review] internal/email/sender.go:17
 Issue: The producer package exports Sender as an interface with the same methods as its only concrete type, only to support tests.
 Impact: Returning the interface freezes the producer-owned abstraction and makes future concrete methods harder to add without another exported seam.
 Suggested fix: Return *SMTPClient from New and let consumer packages define the narrow interface they need.
-Reference: https://go.dev/wiki/CodeReviewComments
+Reference: consumer-owned interface rule
 ```
 
-Good finding:
+Copy the boundary test: the problem is who owns the abstraction, not the number of methods.
 
 ```text
 [high] [go-idiomatic-review] pkg/client/client.go:44
 Issue: The exported Do signature now requires context.Context, replacing the old Do(req Request) API.
 Impact: Existing callers of the public module will fail to compile even though a compatible additive path exists.
-Suggested fix: Add DoContext(ctx, req) and keep Do(req) delegating with an appropriate root context, or route the breaking change through an approved API/version decision.
-Reference: https://go.dev/blog/module-compatibility
+Suggested fix: Add DoContext(ctx, req) and keep Do(req) delegating through the existing contract, or route the breaking change through an approved API/version decision.
+Reference: Go module compatibility contract
 ```
 
-Good finding:
+Copy the compatibility framing: exported breakage is stronger than local style preference.
 
 ```text
 [medium] [go-idiomatic-review] pkg/cache/cache.go:12
 Issue: Cache is exported but its doc does not state whether the zero value is usable or whether callers own returned maps.
 Impact: Callers can reasonably use var c Cache or mutate returned state and get panics or invariant corruption that are not visible from the API.
 Suggested fix: Document the zero-value and ownership contract, and adjust the implementation if the intended contract is zero-value usable.
-Reference: https://go.dev/doc/comment
+Reference: exported doc behavior contract
 ```
 
-## Real Merge-Risk Impact
-- Public interface changes can break every external implementation.
-- Producer-owned interfaces can freeze the wrong abstraction and push test seams into production API.
-- Signature changes in v1+ modules can require a major version or an additive compatibility path.
-- Weak docs can leave nil, zero-value, ownership, and error contracts ambiguous at the package boundary.
-- Mutable globals and `init` side effects create hidden process-wide behavior and test coupling.
+Copy the doc standard: the missing comment matters because it hides a callable contract.
 
-## Smallest Safe Correction
-- Return concrete types from producer packages unless the interface is the intended public abstraction.
-- Define interfaces in consumer packages when they describe what the consumer needs.
-- Add new exported functions or methods for new parameters instead of breaking existing signatures.
-- Use option structs when future expansion is likely and zero values can preserve old behavior.
-- Write exported docs that state behavior, constraints, ownership, nil/zero-value semantics, and error contracts when those affect callers.
-- Keep package names short, lower-case, and responsibility-revealing; avoid junk-drawer names.
+## Reject
+```text
+Interfaces should be small.
+```
 
-## Validation Ideas
-- Add compile-time assertions for intended public interface satisfaction only when they guard a real contract.
-- Run package tests with examples or documentation tests when exported usage changed.
-- Use API compatibility tooling or a deliberate public API review for module-facing changes.
-- Add zero-value and ownership tests for exported types.
+Reject because small is not sufficient. The interface must represent a useful consumer-facing behavior boundary.
+
+```text
+Return a concrete type because Go says so.
+```
+
+Reject because concrete returns are a default, not a law. Some APIs intentionally hide implementation or expose a stable behavior contract.
+
+```text
+Add a doc comment because exported things need docs.
+```
+
+Reject unless the missing doc hides behavior, compatibility, ownership, zero-value, or error semantics callers need.
+
+## Agent Traps
+- Do not use this file to redesign package boundaries from taste; prove exported caller impact or hand off to design/architecture review.
+- Do not break public APIs in the suggested fix unless the finding explicitly routes through an approved compatibility decision.
+- Do not recommend an option struct if the zero value cannot preserve old behavior.
+- Do not treat `internal/` vs exported as only naming hygiene; it is a dependency and compatibility surface.
+- Do not duplicate nil/ownership findings here when the risk is purely runtime-local; load the narrower nil or ownership reference instead.
+
+## Validation Shape
+- Compile representative callers or add package tests/examples when exported usage changes.
+- Add zero-value tests for exported types when the contract says they are usable or harmless.
+- Add ownership tests for exported getters/setters that return or accept mutable values.
+- Use API compatibility tooling or explicit public API review when module-facing signatures changed.
 
 ## Handoffs
 - Hand off public API contract and versioning decisions to API/design review.

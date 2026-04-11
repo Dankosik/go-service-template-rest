@@ -1,110 +1,92 @@
 # Standard-Library-First Modern Go Review
 
-## When To Load It
-Load this reference when a Go review touches helper packages that duplicate builtins or the standard library, compatibility shims, generic slice/map helpers, sorting/comparison helpers, URL/header wrappers, string/byte manipulation, custom error traversal, or loop-variable folklore.
+## Behavior Change Thesis
+When loaded for helper-reinvention symptoms, this file makes the model check effective Go version and semantic deltas before choosing standard-library replacement or preserving a wrapper instead of likely mistake "stdlib is always better" or outdated loop-variable folklore.
 
-## Exa Source Links
-- [Go 1.21 release notes](https://go.dev/doc/go1.21)
-- [Go 1.22 release notes](https://go.dev/doc/go1.22)
-- [Go 1.23 release notes](https://go.dev/doc/go1.23)
-- [slices package](https://pkg.go.dev/slices)
-- [maps package](https://pkg.go.dev/maps)
-- [errors package](https://pkg.go.dev/errors)
-- [strings package](https://pkg.go.dev/strings)
-- [net/http Header](https://pkg.go.dev/net/http#Header)
-- [net/url Values](https://pkg.go.dev/net/url#Values)
-- [Fixing For Loops in Go 1.22](https://go.dev/blog/loopvar-preview)
+## When To Load
+Load when a Go review touches helper packages that duplicate builtins or the standard library, compatibility shims, generic slice/map helpers, sorting/comparison helpers, URL/header wrappers, string/byte manipulation, custom error traversal, or loop-variable capture claims.
 
-## Review Cues
-- A repository helper does what `min`, `max`, `clear`, `slices`, `maps`, `cmp`, `errors`, `strings`, `bytes`, `net/http`, or `net/url` already does for the declared Go version.
-- A compatibility helper remains after `go.mod` has moved to a version that includes the stdlib feature.
-- A review comment repeats pre-Go-1.22 loop-variable capture warnings without checking the module/file version.
-- A helper almost matches stdlib behavior but quietly differs in nilness, ordering, deep/shallow copy, canonicalization, or error exposure.
-- The helper carries domain meaning, and replacing it with stdlib would erase policy.
+## Decision Rubric
+- Identify the effective Go version from `go.mod`, build tags, or file constraints before recommending newer builtins or packages.
+- Replace local helpers when they exactly duplicate supported builtins or standard-library behavior and add no compatibility, ownership, normalization, or domain contract.
+- Keep local helpers when they intentionally carry policy: deep copy, nil/empty normalization, canonicalization, redaction, validation, compatibility with older supported versions, or domain naming.
+- Check shallow/deep semantics before replacing clone helpers with `slices.Clone` or `maps.Clone`.
+- Check error-tree semantics before preserving custom error traversal; `errors.Is` and `errors.As` cover standard wrapping and joined errors.
+- Check loop-variable capture claims against effective Go version; Go 1.22 changed common range-loop capture behavior for modules/files using the new semantics.
+- Treat wrapper removal as a public API/design question when the helper is exported or has broad callers.
+- When the stdlib is almost enough, name the remaining semantic gap and decide whether it is real or accidental.
 
-## Bad Review Examples
-Bad review:
-
-```text
-Replace this with slices.Clone; stdlib is always better.
-```
-
-Why it is bad: `slices.Clone` is shallow and preserves nilness. If the local helper deep-copies elements or normalizes nil to empty, it carries extra contract.
-
-Bad review:
-
-```text
-This loop variable capture is broken.
-```
-
-Why it is bad: Go 1.22 changed loop variable semantics for modules/files using the new version. The finding must check the effective Go version.
-
-Bad review:
-
-```text
-Delete this wrapper around url.Values.
-```
-
-Why it is bad: wrappers can be justified when they enforce encoding, normalization, redaction, or domain validation policy.
-
-## Good Review Examples
-Good finding:
-
+## Imitate
 ```text
 [medium] [go-idiomatic-review] internal/slices/clone.go:14
 Issue: cloneStrings duplicates slices.Clone exactly now that the module declares go 1.21.
-Impact: The local helper adds another copy contract to review and can drift from the stdlib's nil-preserving behavior.
+Impact: The local helper adds another copy contract to review and can drift from the standard library's nil-preserving behavior.
 Suggested fix: Use slices.Clone at call sites, or keep the helper only if it intentionally changes nil/empty behavior and document that policy.
-Reference: https://pkg.go.dev/slices
+Reference: Go 1.21 slices package availability
 ```
 
-Good finding:
+Copy the version-and-delta proof: the finding says why the helper no longer carries unique behavior.
 
 ```text
 [medium] [go-idiomatic-review] internal/errors/contains.go:22
 Issue: containsErr walks Unwrap manually but misses joined errors.
 Impact: Callers can fail to recognize an error returned through errors.Join, while errors.Is already handles the standard error tree contract.
 Suggested fix: Replace containsErr(err, target) with errors.Is(err, target).
-Reference: https://pkg.go.dev/errors
+Reference: errors.Is traversal contract
 ```
 
-Good finding:
+Copy the semantic mismatch: this is not just shorter code; the custom helper is observably incomplete.
 
 ```text
 [low] [go-idiomatic-review] internal/math/min.go:8
 Issue: minInt duplicates the predeclared min builtin while the package is built with Go 1.21 or newer.
 Impact: The helper adds unnecessary local surface and makes reviewers verify behavior the toolchain already provides.
 Suggested fix: Use min(a, b) directly unless this package still supports an older Go version through build tags.
-Reference: https://go.dev/doc/go1.21
+Reference: Go 1.21 builtin availability
 ```
 
-Good non-finding:
+Copy the compatibility caveat: the fix is conditional on supported toolchain.
 
 ```text
 No finding: cloneHeaders intentionally deep-copies []string values inside http.Header and preserves canonical keys; replacing it with maps.Clone would make only a shallow copy.
-Reference: https://pkg.go.dev/net/http#Header
+Reference: http.Header ownership semantics
 ```
 
-## Real Merge-Risk Impact
-- Reinvented helpers can miss newer stdlib semantics, such as joined error traversal or nil preservation.
-- Compatibility shims can become misleading once the module version moves forward.
-- Premature stdlib replacement can erase local policy around normalization, ownership, or API compatibility.
-- Outdated folklore can create noisy review findings and unnecessary churn.
+Copy the non-finding: stdlib-first review still preserves local helpers that encode real policy.
 
-## Smallest Safe Correction
-- Check the effective Go version before recommending a builtin or stdlib replacement.
-- Replace exact duplicates with stdlib helpers when behavior matches.
-- Keep local helpers that encode domain policy, compatibility, nil/empty normalization, ownership isolation, or deep-copy behavior.
-- Document the semantic delta when a helper intentionally differs from stdlib.
-- For Go 1.23 or newer, consider `slices.Sorted(maps.Keys(m))` for deterministic sorted keys when it matches version and behavior.
+## Reject
+```text
+Replace this with slices.Clone; stdlib is always better.
+```
 
-## Validation Ideas
-- Add tests that prove nil preservation, shallow/deep copy, or ordering before replacing a helper.
-- Run `go test ./...` after replacing helper call sites.
-- Use `go vet` with Go 1.23 or newer to catch stdlib symbol version mismatches through the `stdversion` analyzer.
-- Add compile-time version/build-tag checks only when the repo already uses that pattern.
+Reject because `slices.Clone` is shallow and preserves nilness. The local helper may intentionally deep-copy elements or normalize empty values.
+
+```text
+This loop variable capture is broken.
+```
+
+Reject until you check effective Go version and whether the captured variable still has the old bug shape.
+
+```text
+Delete this wrapper around url.Values.
+```
+
+Reject when the wrapper enforces encoding, normalization, redaction, validation, or domain policy.
+
+## Agent Traps
+- Do not recommend a package or builtin that the module cannot use under its declared Go version.
+- Do not remove exported helpers as "cleanup" without routing public API compatibility.
+- Do not miss local policy hidden in tests: nil preservation, deep copy, sorting, redaction, or validation often distinguishes wrappers from stdlib.
+- Do not keep stale compatibility shims just because they already exist; once the toolchain baseline moves, they can become misleading.
+- Do not use this file for boundary aliasing itself; load the ownership reference when the defect is caller mutation.
+
+## Validation Shape
+- Add tests that prove nil preservation, shallow/deep copy, ordering, redaction, or validation before replacing a helper.
+- Run focused package tests after replacing helper call sites.
+- Use `go vet` with a modern toolchain when standard-library symbol version mismatches are plausible.
+- For exported helper removal, require API/design review or compatibility tooling rather than only `go test`.
 
 ## Handoffs
 - Hand off performance claims about helper replacement to performance review.
 - Hand off API compatibility of removing exported helpers to design/API review.
-- Hand off security-sensitive stdlib wrapper behavior, such as URL or header redaction, to security review.
+- Hand off security-sensitive standard-library wrapper behavior, such as URL or header redaction, to security review.

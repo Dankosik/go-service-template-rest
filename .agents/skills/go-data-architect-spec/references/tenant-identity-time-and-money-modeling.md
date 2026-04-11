@@ -1,61 +1,57 @@
 # Tenant, Identity, Time, And Money Modeling
 
+## Behavior Change Thesis
+When loaded for a task where tenant scope, public references, partner IDs, idempotency keys, business dates, event time, processed time, balances, credits, or money could blur together, this file makes the model choose explicit scoped domain types instead of likely mistake "reuse one identifier, one timestamp, or one numeric column everywhere."
+
 ## When To Load
-Load this when the task involves tenant isolation, public IDs, partner references, idempotency keys, local business dates, event/effective/processed time, money, balances, credits, quotas, or user-visible amounts.
+Load this for tenant-scoped identity, external references, time semantics, money, quota, credit, or user-visible amount decisions.
 
-Use it to make identity and domain types explicit before table shape hardens. Tenant, time, and money mistakes are expensive because they leak across constraints, indexes, pagination, retention, reporting, and rollback.
+## Decision Rubric
+- Use stable internal surrogate keys for joins and ownership; model public references, partner references, correlation IDs, and idempotency keys as separate concepts.
+- Scope uniqueness to the authority that owns it: usually `(tenant_id, key)` or `(tenant_id, provider, external_id)`, not global by habit.
+- Put `tenant_id` in invariant-bearing uniqueness, child ownership, and access-path indexes for shared-table tenancy.
+- Use row-level security only when tenant context is reliably set, tests prove fail-closed behavior, and migration/admin roles are accounted for.
+- Model real instants, effective time, provider event time, processing time, and user-local business dates separately when policy or reporting depends on the distinction.
+- Use exact money representation with currency and rounding policy. Do not use floating-point types for money, credits, quotas, or billable usage.
 
-## Decision Examples
+## Imitate
 
-### Example 1: Shared-table tenant isolation
-Context: A service stores customer accounts for many tenants in shared tables. Account names only need to be unique inside one tenant, and support operators must not accidentally see another tenant's rows.
+### Shared-table tenant isolation
+Context: Account names are unique only within a tenant, and support operators must not accidentally see another tenant's rows.
 
-Selected option: Include `tenant_id` in invariant-bearing keys and indexes, such as `UNIQUE (tenant_id, account_slug)`. Propagate tenant identity into foreign keys where the child row belongs inside the same tenant boundary. Use row-level security only when the service can reliably set tenant context and test fail-closed behavior.
+Choose `UNIQUE (tenant_id, account_slug)`, tenant-aware foreign keys where child rows belong to the same tenant, and optional RLS only after context propagation and fail-closed behavior are testable.
 
-Rejected options:
-- Global uniqueness for tenant-local concepts such as account slug or external reference.
-- Application-only tenant filters with no database-level guard on critical tables.
-- Cross-tenant foreign keys that make tenant isolation depend on convention.
+Copy this because tenant scope belongs in the invariant and access path, not only in application filters.
 
-Migration and rollback consequences:
-- Add `tenant_id` additively, backfill from a trusted owner, validate coverage, then add tenant-scoped unique constraints.
-- Enabling RLS is a compatibility checkpoint: old code paths and migration roles must be checked before `FORCE ROW LEVEL SECURITY`.
-- Rollback is conditional once constraints or RLS policies start rejecting cross-tenant rows that older code might still write.
+### Public, partner, and internal identity
+Context: A payment intent has an internal row ID, a public customer reference, a provider payment ID, a caller idempotency key, and a request correlation ID.
 
-### Example 2: Public, partner, and internal identity
-Context: A payment intent has an internal row ID, a public reference shown to customers, a provider payment ID, and an idempotency key from the caller.
+Use the internal ID as primary key. Store public references, provider references, and idempotency keys in separate columns with scoped uniqueness such as `(tenant_id, provider, provider_payment_id)` and `(tenant_id, idempotency_key)`.
 
-Selected option: Use a stable internal primary key for joins and ownership. Store public references, provider references, and idempotency keys as separate columns with scoped unique constraints that match their authority, for example `(tenant_id, provider, provider_payment_id)` and `(tenant_id, idempotency_key)`.
+Copy this because each identifier answers a different authority question.
 
-Rejected options:
-- Use mutable provider IDs as primary keys.
-- Reuse correlation IDs as idempotency keys.
-- Put partner payload IDs only in `jsonb` when they define uniqueness or reconciliation.
-
-Migration and rollback consequences:
-- Backfill new identity columns from deterministic evidence and quarantine rows with ambiguous mapping.
-- Add unique constraints only after duplicate detection and cleanup.
-- Rolling back an identity change may be restore-based if external clients have already observed new public references.
-
-### Example 3: Money and time semantics
+### Money and time semantics
 Context: Billing stores usage charges, plan prices, invoice dates, provider callbacks, and customer-local billing periods.
 
-Selected option: Use exact numeric modeling for money, either integer minor units plus currency or `numeric(precision, scale)` with a documented rounding policy. Use `timestamptz` for real instants, separate `business_date` or effective-time fields for policy dates, and track provider event time separately from processing time when late delivery matters.
+Use integer minor units plus currency, or `numeric(precision, scale)` plus currency and rounding policy. Use `timestamptz` for real instants, separate `business_date` or effective-time fields for policy dates, and separate provider event time from processing time for late callbacks.
 
-Rejected options:
-- Floating-point columns for money or billable usage.
-- One `created_at` timestamp to mean event time, processing time, effective time, and local business date.
-- Database `money` type without an explicit currency and rounding policy.
+Copy this because customer-visible balances and invoices need explainable precision and date semantics.
 
-Migration and rollback consequences:
-- Converting money representation requires expand/backfill/verify/contract with parity checks by currency and aggregate.
-- Time-model changes need dual-read or comparison windows because reports may change around timezone and late-arrival boundaries.
-- Once invoices or customer-visible balances are issued from the new representation, rollback usually requires forward correction rather than blind schema revert.
+## Reject
+- "Provider payment ID is the primary key." Provider identifiers may be mutable, reused by scope, or absent before provider handoff.
+- "Use a correlation ID as the idempotency key." Correlation traces a request; idempotency proves safe replay for a semantic operation.
+- "All rows filter by tenant in code, so database constraints can stay global or tenant-free." That makes isolation depend on convention.
+- "Store provider IDs in `jsonb`; reconciliation can search payloads." If the ID defines uniqueness or repair, make it relational.
+- "Use `created_at` for provider event time, invoice business date, and processing time." That destroys late-arrival and reporting semantics.
+- "Use float for money because values are small." Small values still need exact representation and rounding.
 
-## Source Links Gathered Through Exa
-- PostgreSQL, "Row Security Policies": https://www.postgresql.org/docs/current/ddl-rowsecurity.html
-- PostgreSQL, "Constraints": https://www.postgresql.org/docs/current/ddl-constraints.html
-- PostgreSQL, "Date/Time Types": https://www.postgresql.org/docs/current/datatype-datetime.html
-- PostgreSQL, "Numeric Types": https://www.postgresql.org/docs/current/datatype-numeric.html
-- Stripe, "Idempotent requests": https://docs.stripe.com/api/idempotent_requests
+## Agent Traps
+- Do not mark every unique key as global just because it is easier to describe.
+- Do not propose RLS without naming how service, migration, and support roles set or bypass tenant context.
+- Do not assume UTC instants solve user-local business-date policy.
+- Do not collapse balances, credits, and quotas into one generic numeric type if their rounding, currency, or lifecycle differs.
 
+## Validation Shape
+- Identity proof lists each identifier, its authority, uniqueness scope, exposure level, and reconciliation use.
+- Tenant proof includes constraints or indexes with `tenant_id`, fail-closed access tests, and migration-role behavior when RLS is used.
+- Money/time proof includes precision, currency, rounding, event/effective/processed time mapping, and parity checks for representation changes.

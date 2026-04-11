@@ -1,18 +1,21 @@
 # Error-Path Simplification
 
+Behavior Change Thesis: When loaded for deduplicated or normalized error handling, this file makes the model protect inspectability, status mapping, cancellation, and cleanup precedence instead of likely mistake of accepting generic error helpers that remove visible repetition.
+
 ## When To Load
 Load this when a diff deduplicates, wraps, unwraps, normalizes, logs, maps, joins, or reorders error handling, especially when the stated goal is to reduce repetition.
 
-Simpler error code must preserve the error contract readers and callers rely on: error identity, type inspection, cancellation, status mapping, cleanup precedence, and operator diagnosis.
+Use this when the simplification risk is the error contract itself. If the risk is mainly temporal ordering around rollback or audit, use `control-flow-and-temporal-coupling.md`.
 
-## Review Lens
-- Keep distinct failure classes distinct when callers, operators, retries, or transports must reason about them differently.
+## Decision Rubric
+- Keep distinct failure classes distinct when callers, operators, retries, transports, or tests must reason about them differently.
 - Flag helpers that collapse validation, conflict, retryable, not-found, timeout, cancellation, and internal errors into one generic bucket.
-- Preserve `errors.Is` and `errors.As` behavior when that is the contract.
-- Keep which error wins explicit when cleanup, audit, rollback, or notification can also fail.
+- Preserve `errors.Is` and `errors.As` behavior when inspectability is part of the contract.
+- Do not demand `%w` for every wrapped error; wrapping can expose internals when callers should not inspect them.
+- Keep which error wins explicit when cleanup, audit, rollback, notification, or logging can also fail.
 
-## Real Finding Examples
-Finding example: a generic helper destroyed error identity.
+## Imitate
+Finding shape to copy when a generic helper destroys error identity:
 
 ```text
 [high] [go-language-simplifier-review] internal/app/users/service.go:118
@@ -22,7 +25,9 @@ Suggested fix: Preserve the original wrapping contract with `%w` for inspectable
 Reference: references/error-path-simplification.md
 ```
 
-Finding example: dedupe merged cancellation with internal errors.
+Copy the move: name the error identity that callers or transports rely on.
+
+Finding shape to copy when dedupe merges cancellation with internal errors:
 
 ```text
 [medium] [go-language-simplifier-review] internal/infra/http/export.go:91
@@ -32,14 +37,10 @@ Suggested fix: Keep cancellation and deadline checks explicit before the generic
 Reference: references/error-path-simplification.md
 ```
 
-## Non-Findings To Avoid
-- Do not flag a shared error boundary when it intentionally centralizes one stable status-mapping policy and preserves inspectability.
-- Do not demand `%w` for every wrapped error; wrapping can expose internals as a contract when callers should not inspect them.
-- Do not reject a typed or sentinel error helper that keeps errors inspectable and improves context.
-- Do not treat repeated `if err != nil { return ... }` as simplification debt unless it hides a stable shared policy or makes diagnosis worse.
+Copy the move: name the failure classes that should remain distinct and why.
 
-## Bad And Good Simplifications
-Bad: generic formatting hides the cause.
+## Reject
+Reject generic formatting when it hides inspectable causes:
 
 ```go
 func serviceErr(op string, err error) error {
@@ -47,7 +48,7 @@ func serviceErr(op string, err error) error {
 }
 ```
 
-Good: preserve inspection when callers own that contract.
+Preserve inspection when callers own that contract:
 
 ```go
 func serviceErr(op string, err error) error {
@@ -55,7 +56,7 @@ func serviceErr(op string, err error) error {
 }
 ```
 
-Bad: a shared mapper collapses all failure classes.
+Reject a shared mapper that collapses all failure classes:
 
 ```go
 func writeError(w http.ResponseWriter, err error) {
@@ -63,7 +64,7 @@ func writeError(w http.ResponseWriter, err error) {
 }
 ```
 
-Good: keep stable classes explicit before falling back.
+Prefer stable classes before fallback:
 
 ```go
 func writeUserError(w http.ResponseWriter, err error) {
@@ -80,14 +81,11 @@ func writeUserError(w http.ResponseWriter, err error) {
 }
 ```
 
-## Escalation Guidance
-- Escalate to `go-idiomatic-review` for deep error wrapping, typed errors, nil behavior, context handling, or standard-library contract questions.
-- Escalate to `api-contract-designer-spec` when the simplification changes client-visible error shape or status semantics.
-- Escalate to `go-reliability-review` when cancellation, deadline, retry, or degradation semantics are being collapsed.
-- Escalate to `go-qa-review` when tests assert error strings while the contract is identity, type, or status mapping.
+## Agent Traps
+- Do not treat repeated `if err != nil { return ... }` as debt unless there is stable shared policy or diagnosis harm.
+- Do not require wrapping when the original boundary intentionally hid internals.
+- Do not let a "logging cleanup" reorder logging before the context needed for diagnosis exists.
+- Do not make simplification review the final authority on subtle Go error trees; hand off deep wrapping or nil behavior questions to `go-idiomatic-review`.
 
-## Source Anchors
-- [errors package](https://pkg.go.dev/errors): `errors.Is` and `errors.As` inspect wrapped error trees.
-- [Error handling and Go](https://go.dev/doc/articles/error_handling.html): error values can carry context and structured information for callers.
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): handle errors, do not panic for normal errors, and keep error flow readable.
-- Repository pattern: `go-coder/references/errors-context-and-boundary-mapping.md`.
+## Validation Shape
+Ask for proof that inspectable errors still satisfy `errors.Is` or `errors.As`, cancellation/deadline paths still map distinctly, and transport status mapping remains stable. For cleanup precedence, also verify the primary error remains visible according to the existing contract.

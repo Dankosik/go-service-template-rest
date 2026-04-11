@@ -1,23 +1,21 @@
 # Mutable State And Aliasing
 
+## Behavior Change Thesis
+When loaded for mutable-boundary pressure, this file makes the model clone or preserve pointer identity at the ownership boundary instead of leaking aliases, copying synchronization state, or changing observable nil/empty semantics.
+
 ## When To Load
-Load this when work touches slices, maps, `[]byte`, pointer receivers, returned snapshots, cache entries, JSON nil/empty behavior, structs containing synchronization primitives, or any mutation after data crosses a boundary.
+Load this when work touches slices, maps, `[]byte`, pointer receivers, returned snapshots, cache entries, JSON nil/empty behavior, structs with synchronization fields, or mutation after data crosses a boundary.
 
-## Good/Bad Examples
+## Decision Rubric
+- Decide who owns mutable data after each call returns.
+- Clone at the ownership boundary, not repeatedly inside unrelated code.
+- Treat `slices.Clone`, `maps.Clone`, and `bytes.Clone` as shallow top-level clones.
+- Preserve nil versus non-nil empty shape when JSON, SQL, cache, or API behavior observes it.
+- Use pointer receivers when identity matters or copying would duplicate locks, atomics, pools, builders, or large mutable state.
+- Avoid `sync.Map` as a shortcut for unresolved ownership; it does not protect the mutability of stored values.
 
-Bad: caller-owned state is retained and later mutations leak in.
-
-```go
-type Cache struct {
-	values map[string][]byte
-}
-
-func (c *Cache) Put(key string, value []byte) {
-	c.values[key] = value
-}
-```
-
-Good: copy at the ownership boundary.
+## Imitate
+Copy both on write and on read when cache callers must not share buffers.
 
 ```go
 type Cache struct {
@@ -37,23 +35,7 @@ func (c *Cache) Get(key string) ([]byte, bool) {
 }
 ```
 
-Bad: exposing internal maps lets callers mutate package state.
-
-```go
-func (s *Settings) Labels() map[string]string {
-	return s.labels
-}
-```
-
-Good: return a snapshot. Remember this is a shallow clone.
-
-```go
-func (s *Settings) Labels() map[string]string {
-	return maps.Clone(s.labels)
-}
-```
-
-Bad: shallow-copying a type that contains a mutex.
+Use pointer receivers for types with synchronization state.
 
 ```go
 type Registry struct {
@@ -61,17 +43,6 @@ type Registry struct {
 	items map[string]Item
 }
 
-func (r Registry) Get(name string) (Item, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	item, ok := r.items[name]
-	return item, ok
-}
-```
-
-Good: use pointer receivers when identity or synchronization state matters.
-
-```go
 func (r *Registry) Get(name string) (Item, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -80,15 +51,7 @@ func (r *Registry) Get(name string) (Item, bool) {
 }
 ```
 
-Bad: a clone idiom changes observable nil/empty semantics.
-
-```go
-func cloneIDs(ids []ID) []ID {
-	return append([]ID(nil), ids...)
-}
-```
-
-Good: use `slices.Clone` when top-level shallow clone and nilness preservation are the intended semantics.
+Use `slices.Clone` when nilness preservation and shallow cloning are intended.
 
 ```go
 func cloneIDs(ids []ID) []ID {
@@ -96,26 +59,53 @@ func cloneIDs(ids []ID) []ID {
 }
 ```
 
-## Common False Simplifications
-- Cloning the top-level slice while elements still point at mutable structs, maps, slices, or byte buffers.
-- Treating `maps.Clone` or `slices.Clone` as deep copy operations.
+## Reject
+Reject retaining caller-owned mutable data.
+
+```go
+func (c *Cache) Put(key string, value []byte) {
+	c.values[key] = value
+}
+```
+
+Reject returning internal maps as snapshots.
+
+```go
+func (s *Settings) Labels() map[string]string {
+	return s.labels
+}
+```
+
+Reject value receivers that copy locks.
+
+```go
+func (r Registry) Get(name string) (Item, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.items[name], true
+}
+```
+
+Reject clone idioms that change observable shape.
+
+```go
+func cloneIDs(ids []ID) []ID {
+	return append([]ID(nil), ids...)
+}
+```
+
+This collapses a non-nil empty slice to `nil`.
+
+## Agent Traps
+- Cloning the top-level slice while elements still point at mutable structs, maps, slices, or buffers.
+- Returning internal maps or slices to "avoid allocation" when callers can mutate config, repository, or cache state.
 - Copying structs with `sync.Mutex`, `sync.RWMutex`, `sync.Once`, `sync.WaitGroup`, atomics, pools, or builders.
-- Returning internal maps or slices to "avoid allocation" when callers can mutate repository, cache, or config state.
 - Replacing a nil-preserving clone with an append idiom that changes nil versus empty behavior.
-- Adding `sync.Map` to avoid deciding ownership; it can help specific concurrent access patterns but does not fix aliasing of stored values.
+- Capturing loop variables or receiver copies in callbacks or goroutines while trying to simplify code.
 
-## Validation Or Test Patterns
-- Add two-way aliasing tests: mutate the caller's input after `Put`, and mutate the returned value after `Get`.
-- Cover nil and non-nil empty slices when JSON, SQL, cache, or API shape observes the difference.
-- Run `go vet` or the repository's lint target when receiver changes may copy locks.
+## Validation Shape
+- Add two-way aliasing tests: mutate caller input after `Put`, and mutate returned data after `Get`.
+- Cover nil and non-nil empty slices or maps when shape is observable.
+- Run `go vet` or the repository lint target when receiver changes might copy locks.
 - Run `go test -race` when mutation or synchronization changed.
-- For shallow clones, add a test or comment at the boundary if nested mutable values remain intentionally shared.
-
-## Source Links Gathered Through Exa
-- [Go Slices: usage and internals](https://go.dev/doc/articles/slices_usage_and_internals.html)
-- [The Go Programming Language Specification](https://go.dev/doc/go_spec.html)
-- [slices package](https://pkg.go.dev/slices)
-- [maps package](https://pkg.go.dev/maps)
-- [bytes package](https://pkg.go.dev/bytes)
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
-- [Go FAQ](https://go.dev/doc/faq)
+- For intentional shallow clones, add a focused test or boundary comment if nested mutable values remain shared by contract.

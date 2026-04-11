@@ -1,80 +1,50 @@
 # Boundary Decomposition Examples
 
+## Behavior Change Thesis
+When loaded for unclear boundary placement, this file makes the model choose invariant and ownership boundaries before topology, instead of splitting by table, entity name, handler package, or read-query convenience.
+
 ## When To Load
-Load this when the hard question is where a module, runtime, or service boundary belongs, who owns write truth, whether a direct data dependency is acceptable, or whether Go package/module structure is being mistaken for service architecture.
+Load when the hard question is where a module, runtime, or service boundary belongs, who owns write truth, whether direct data dependency is acceptable, or whether Go package/module structure is being mistaken for service architecture.
 
-Keep the output at the architecture-decision level. Use these examples to sharpen ownership, invariant locality, dependency direction, and operational cost. Do not turn them into endpoint payloads, table designs, generated clients, or handler wiring.
+## Decision Rubric
+- Start with the invariant-bearing truth: the owner is the boundary that can accept or reject the business state change.
+- Use domain capability, data ownership, team ownership, and transaction boundary as the decomposition axes; package names are enforcement aids, not proof.
+- Prefer an in-process domain module when ownership is still one team, one datastore, and one transaction boundary.
+- Treat steady-state cross-service DB reads as architecture coupling, even when "read-only".
+- Justify sensitive-data isolation with exclusive data authority, narrow API, threat model, and operability, not with local-call convenience.
+- Record extraction posture: `stay in-process`, `separate runtime`, `candidate for extraction`, or `service now`.
 
-## Decision Examples
+## Imitate
 
-### Example 1: Read-heavy catalog composition
-Context: `catalog` owns product mutation. Category pages need product, price, and inventory summaries. Category reads can be stale for 90 seconds, but checkout cannot. A proposed `catalog-read-service` would directly join `pricing` and `inventory` databases.
+### Tax Logic In A Growing Monolith
+Context: Tax calculation is spread across checkout, cart, and order creation. One organization owns the flow, and no independent runtime or data-isolation requirement exists yet.
 
-Selected option: Keep product, price, and inventory write truth with their owning services. Serve category pages through a derived read path, such as a service-owned projection, an API composition layer, or a BFF that is explicit about staleness. Checkout must query or command the write owners for correctness-critical state.
+Choose: create an internal tax domain module with one public entrypoint and explicit ownership of tax logic. Keep it in-process until compliance isolation, team ownership, runtime scaling, or stable extraction evidence appears.
 
-Rejected options:
-- A read service that directly joins other services' databases, because it makes database schemas the integration contract and weakens service autonomy.
-- Moving checkout correctness to the category-page projection, because the projection is derived and stale by design.
-- Extracting a new service only because read volume is high, because read scale is not the same as write ownership.
+Copy: this separates domain truth from caller sprawl without pretending network isolation is the first fix.
 
-Evidence that would change the decision:
-- Category pages require strict freshness near checkout semantics and cannot tolerate stale summaries.
-- One team becomes the durable owner of the composed read product and accepts projection lag, rebuild, and support obligations.
-- Pricing and inventory ownership changes so the proposed boundary becomes a real capability owner, not only a query shortcut.
-- Current owner APIs cannot support read load even after projection, caching, or aggregator alternatives are measured.
+### Category Composition With Stale Reads
+Context: `catalog` owns product mutation. Category pages need product, price, and inventory summaries that can be stale, while checkout cannot use stale price or inventory.
 
-Failure modes and rollback implications:
-- Projection lag can show stale category data; disclose freshness and keep correctness-critical paths off the projection.
-- Cross-service schema reads can break independently deployed owners; rollback requires removing DB credentials and replacing direct queries with contracts.
-- If a projection corrupts, rebuild from source owners or fall back to a slower read path; do not promote the projection to write authority.
+Choose: keep product, price, and inventory write truth with their owners. Serve category pages from a derived read path or BFF with a freshness contract. Keep checkout on owner commands or correctness-critical reads.
 
-### Example 2: Tax logic in a growing monolith
-Context: A large monolith has tax calculation logic spread across checkout, cart, and order creation. The same organization still owns the full flow, and there is no independent runtime or data-isolation requirement yet.
+Copy: this rejects direct DB joins because the issue is composed reads, not a new write owner.
 
-Selected option: Create an internal domain component/module for tax with one public entrypoint, explicit request/response contract, and ownership of tax logic. Keep it in-process until independent deployability, isolation, or scaling evidence exists.
+### Sensitive Vault Boundary
+Context: a broad product monolith handles sensitive identity or payment material that should not flow through unrelated product code.
 
-Rejected options:
-- Immediate tax microservice extraction, because the first risk is unclear ownership and tangled dependencies, not network isolation.
-- Keeping tax behavior scattered under callers, because each caller will keep encoding partial tax truth.
-- A generic `common` or `util` package, because that hides the domain boundary and invites unrelated dependencies.
+Choose: consider a separate service or isolated runtime only if the sensitive capability has clear owner, narrow API, exclusive data authority, independent threat model, and accepted operational cost.
 
-Evidence that would change the decision:
-- Tax processing requires separate compliance isolation, secrets handling, release cadence, or runtime scaling.
-- A separate team owns tax with independent deployability and support responsibility.
-- The module's public contract becomes stable and the remaining in-process dependency graph is narrow enough for extraction.
+Copy: this isolates the sensitive truth first and avoids splitting adjacent workflows just because they are nearby.
 
-Failure modes and rollback implications:
-- A broad module interface becomes a second monolith inside the monolith; reduce the public surface before extraction.
-- If the new module differs behaviorally, run old and new paths side by side and compare before switching.
-- Rolling back an in-process componentization is usually a code-path switch or module dependency revert; rolling back a service extraction also involves routing, data ownership, and compatibility windows.
+## Reject
+- "Create one service per table." Bad because table shape is not ownership, transaction scope, or runtime isolation.
+- "Put shared business structs in `common` so modules can move faster." Bad because it hides the domain boundary and invites cross-module invariants.
+- "A read service can join private service databases because it never writes." Bad because schemas become integration contracts and releases coordinate through the database.
+- "Extract now and leave the old monolith writing the same data until later." Bad because it creates competing write authority unless one side is explicitly non-authoritative and bounded.
 
-### Example 3: Payments vaulting or sensitive identity material
-Context: A monolith handles a sensitive value that should not flow through broad product code, and the capability has stricter isolation and audit expectations than adjacent workflows.
-
-Selected option: Consider a separate service or highly isolated runtime boundary if the sensitive capability has clear ownership, narrow API, independent threat model, and accepted operational cost.
-
-Rejected options:
-- Keeping the capability in a broad shared module only for local-call convenience.
-- Splitting every adjacent payment workflow at the same time; isolate the sensitive truth first and leave orchestration boundaries explicit.
-- Sharing the sensitive datastore directly with the monolith after extraction.
-
-Evidence that would change the decision:
-- Security and compliance review finds in-process isolation is enough and the team cannot operate a new runtime safely.
-- The boundary still requires chatty synchronous calls across a long request path, indicating the split is premature.
-- Data ownership cannot be made exclusive during rollout.
-
-Failure modes and rollback implications:
-- A split that keeps shared storage is fake isolation; rollback does not remove exposure until data access is also constrained.
-- Extra network hops can put sensitive flows on a fragile critical path; require timeouts, idempotency, and clear degradation.
-- If extraction fails after data authority moves, rollback may be a forward fix or route-back with dual-read validation, not a simple deploy revert.
-
-## Source Links Gathered Through Exa
-- Go, "Organizing a Go module": https://go.dev/doc/modules/layout
-- Go Blog, "Package names": https://go.dev/blog/package-names
-- Microservices.io, "Decompose by business capability": https://microservices.io/patterns/decomposition/decompose-by-business-capability.html
-- Microservices.io, "Database per service": https://microservices.io/patterns/data/database-per-service.html
-- Microservices.io, "Shared database": https://microservices.io/patterns/data/shared-database.html
-- Shopify Engineering, "Deconstructing the Monolith": https://shopify.engineering/deconstructing-monolith-designing-software-maximizes-developer-productivity
-- Shopify Engineering, "Componentizing Shopify's Tax Engine": https://engineering.shopify.com/blogs/engineering/componentizing-shopify-tax-engine
-- AWS Prescriptive Guidance, "Anti-corruption layer pattern": https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/acl.html
-
+## Agent Traps
+- Do not overfit to Go directory layout. Use `internal/` packages and module boundaries to enforce decisions after ownership is clear.
+- Do not treat high read volume as service-extraction proof. Read scale can often use projections, caches, BFFs, or worker runtimes without moving write truth.
+- Do not collapse orchestration into a peer module when one application layer coordinates multiple module-owned truths.
+- Do not call a boundary "independent" while it still shares direct database access or coordinated release requirements.

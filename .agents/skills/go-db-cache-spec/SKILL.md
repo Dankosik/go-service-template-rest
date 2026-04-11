@@ -21,22 +21,22 @@ Do not use this skill to own primary data modeling, schema migration strategy, e
 
 ## Operating Loop
 1. Frame the runtime path: operation class, read/write ownership, consistency requirement, hot-path evidence, and failure mode.
-2. Load only the relevant reference files from the selector below. Use them for examples and official-source reminders instead of expanding SKILL.md.
+2. Load at most one reference by default from the selector below. Load more only when the task clearly spans independent decision pressures, such as transaction retry plus cache invalidation plus outage behavior.
 3. Compare viable options, including the no-cache option, and reject options that cannot meet correctness, staleness, failure, or proof obligations.
 4. Write section-ready spec content with selected and rejected choices, explicit assumptions, acceptance checks, and downstream handoffs.
 5. Stop at the specification boundary. Do not drift into implementation code or schema-architecture ownership.
 
 ## Reference Files
-Load reference files lazily. Pick the smallest set that matches the active DB/cache seam.
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load lazily for the symptom that matches the active seam; if a reference would not change a decision, do not load it.
 
-| Need | Load |
+| Symptom | Behavior Change | Load |
 | --- | --- |
-| Query shape, query budgets, N+1 risk, pagination, generated SQL contracts, SQL telemetry grouping | `references/sql-access-discipline-and-query-budget.md` |
-| Transaction scope, isolation, retries, `ON CONFLICT`, idempotency, cache invalidation linked to writes | `references/transaction-retry-and-idempotency-contracts.md` |
-| Context propagation, DB/cache deadlines, pool capacity, connection return safety, timeout hierarchy | `references/context-timeout-and-connection-budget.md` |
-| Cache approval, no-cache decision, local vs distributed vs hybrid topology, client-side caching | `references/cache-necessity-and-topology.md` |
-| Staleness windows, TTL, jitter, invalidation source, key versioning, stale-while-revalidate, negative caching | `references/cache-invalidation-staleness-and-ttl.md` |
-| Cache outage policy, origin protection, observability, low-cardinality telemetry, degraded-mode tests | `references/cache-failure-observability-and-testing.md` |
+| Slow SQL, N+1, dynamic filters, pagination, generated-query contract, or cache proposed before origin shape is proven | Makes the model require a named, bounded origin query contract and reject cache-as-cover instead of approving Redis around an undefined query path | `references/sql-access-discipline-and-query-budget.md` |
+| Write transaction boundary, retry eligibility, idempotency keys, `ON CONFLICT`, or cache invalidation coupled to writes | Makes the model choose whole-use-case retry plus idempotent write and durable invalidation linkage instead of statement-level retry or best-effort dual writes | `references/transaction-retry-and-idempotency-contracts.md` |
+| DB/cache deadline hierarchy, request cancellation, pool saturation, dedicated connection use, or fallback budget | Makes the model budget cache, origin, and pool waits explicitly instead of assuming a handler timeout or larger pool setting is enough | `references/context-timeout-and-connection-budget.md` |
+| Cache requested because a path is slow, or topology is unclear across no-cache, local, distributed, hybrid, or client-side caching | Makes the model compare no-cache and topology tradeoffs with evidence, divergence, memory, and key-safety constraints instead of defaulting to Redis | `references/cache-necessity-and-topology.md` |
+| Freshness window, TTL, jitter, invalidation source, versioned keys, stale-while-revalidate, negative caching, or key transitions | Makes the model assign an operation-level freshness class and invalidation contract instead of treating TTL as correctness proof | `references/cache-invalidation-staleness-and-ttl.md` |
+| Cache outage, fail-open/fail-closed policy, origin protection, telemetry labels, degraded-mode proof, or test obligations | Makes the model specify containment and low-cardinality proof for degraded cache paths instead of saying "fall back to DB" or testing only hits | `references/cache-failure-observability-and-testing.md` |
 
 ## Core Defaults
 - Keep SQL access query-first and explicit: stable query names, explicit column lists, bounded round trips, and deterministic pagination for list paths.

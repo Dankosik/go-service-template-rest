@@ -1,48 +1,40 @@
-# Authentication, Authorization, And Tenant Isolation Examples
+# Authentication, Authorization, And Tenant Isolation
+
+## Behavior Change Thesis
+When loaded for identity or access-control requirements, this file makes the model choose caller/subject/tenant-bound object, property, and function rules instead of likely mistake: role-only authorization, trusted identity headers, or `subject_id == path_id` shortcuts.
 
 ## When To Load
-Load this when a flow needs an identity model, bearer/JWT requirements, caller versus subject rules, tenant binding, object-level authorization, property-level authorization, function-level authorization, admin boundaries, or authorization negative tests.
+Load this when a flow needs authentication requirements, JWT or bearer-token rules, caller versus subject separation, tenant binding, object-level authorization, property-level authorization, function-level authorization, admin boundaries, or authorization negative tests.
 
-## Selected Controls
-- Define one `AuthContext` contract with caller, subject, tenant, scopes/roles/attributes, authentication method, issuer, audience, expiry, and assurance requirements.
-- Authenticate at the request boundary and enforce authorization in the trusted service layer before side effects. Repository/data access must also enforce tenant scoping where persisted records are tenant-owned.
-- Require object-level checks for every endpoint that accepts object identifiers from path, query, header, or body.
-- Require property-level checks for response fields and mutable request fields. Return or update only fields the caller may see or change.
-- Require function-level checks for privileged methods regardless of URL shape. Admin-looking paths are not the only admin functions.
-- For JWT or OAuth-style access tokens, require explicit issuer, audience, expiry/not-before, signature algorithm, key-source, and token type rules. Do not trust the token header to select verification policy.
+## Decision Rubric
+- Define one auth context contract: caller, subject, tenant, scopes or roles, relevant attributes, authentication method, issuer, audience, expiry, assurance level, and source of truth.
+- Authenticate at the request boundary, then authorize in trusted service behavior before side effects. Tenant-owned persistence still needs tenant scoping at the data-access boundary.
+- Require object-level checks for identifiers from path, query, header, body, async payload, or derived lookup.
+- Require property-level checks for both mutable request fields and response fields. Reject or explicitly ignore forbidden mutable fields according to the API contract.
+- Require function-level checks for privileged actions regardless of URL shape. Admin behavior is a capability, not a path prefix.
+- For JWT or OAuth-style tokens, require issuer, audience, expiry/not-before, signature algorithm allowlist, key-source, token type, and key-rotation failure behavior. Never let the token header choose verification policy.
 
-## Rejected Controls
-- Reject using API keys as user authentication. API keys may identify clients or plans, not end-user authority.
-- Reject comparing only `subject_id == path_id` as a BOLA solution when ownership, relationship, role, tenant, or delegated access can differ.
-- Reject client-filtered responses or mass assignment into internal objects as a property-level authorization control.
-- Reject unsigned request headers such as `X-User-Id`, `X-Tenant-Id`, or role headers as trusted identity unless they are authenticated by an explicit upstream contract.
-- Reject broad RBAC-only policy when the domain requires object, tenant, relationship, or environment attributes.
+## Imitate
+- "For `GET /accounts/{account_id}`, require the caller's tenant and relationship to `account_id` before the repository read; same-role callers in other tenants receive `403` or an approved concealment response with no data disclosure." Copy the object plus tenant rule before data access.
+- "For update payloads, `role`, `tenant_id`, and internal status fields are rejected unless the caller has the specific property-level permission." Copy the property-specific rule instead of relying on domain-object binding.
+- "For service-to-service admin actions, the service credential must carry the target audience and admin scope; end-user JWTs are not propagated through async payloads." Copy caller/subject and credential-purpose separation.
 
-## Fail-Closed Examples
-- Missing or invalid token maps to `401` for protected endpoints; authenticated but unauthorized access maps to `403`.
-- Unknown tenant, conflicting tenant, tenant omitted on tenant-scoped data, or tenant from an untrusted source denies before read/write.
-- Auth policy lookup failure, stale key set without approved cache semantics, or malformed token denies the request.
-- Sensitive action requiring step-up reauthentication denies when the assurance level is missing or stale.
+## Reject
+- "Check `subject_id == path_id`." This misses delegated access, tenant ownership, relationships, and admin support roles.
+- "API key means user is authenticated." API keys can identify clients or plans, not end-user authority unless a separate user binding exists.
+- "Use RBAC." RBAC is insufficient when object, property, tenant, relationship, or environment attributes decide access.
+- "Trust `X-User-Id`, `X-Tenant-Id`, or role headers from internal callers." These are data until bound to an authenticated upstream contract.
 
-## Testable Requirements
-- Given account A and account B with the same role in different tenants, account B cannot read, update, delete, bulk list, or infer account A objects.
-- Given an admin-only function under a non-admin-looking path, a non-admin caller receives `403` and no side effect.
-- Given a payload that includes a sensitive or internal property, the service rejects the change or ignores it only when the API contract explicitly allows ignore semantics.
-- Given a JWT with `alg: none`, wrong issuer, wrong audience, expired `exp`, future `nbf`, unknown `kid`, altered claims, or missing signature, authentication fails.
-- Given a valid user token but wrong tenant binding, object access fails before repository mutation.
+## Agent Traps
+- Do not merge authentication failure and authorization failure. Protected endpoints should usually distinguish `401` for missing/invalid authentication from `403` for authenticated-but-denied access unless concealment is explicitly chosen.
+- Do not authorize only at the route boundary when service methods or repositories can be reached from async workers or other handlers.
+- Do not call tenant isolation "covered by roles"; tenant is a scope dimension, not a role name.
+
+## Validation Shape
+- Authorization matrix: caller role/scope -> tenant -> object relation -> mutable fields -> response fields -> allowed action -> denial response.
+- JWT negative cases: `alg: none`, wrong issuer, wrong audience, expired `exp`, future `nbf`, unknown `kid`, altered claims, missing signature, wrong token type, and stale key-set behavior.
+- Tenant-crossing checks with two accounts or tenants, including read, update, delete, bulk/list, and inference paths.
 
 ## Repo-Local Anchors
-- `api/openapi/service.yaml` includes a `bearerAuth` JWT scheme but the current global security array is empty; new protected operations should make security requirements explicit in the contract or in task-local API design.
+- `api/openapi/service.yaml` includes a `bearerAuth` JWT scheme but the current global security array is empty; new protected operations should make security requirements explicit in the contract or task-local API design.
 - `internal/infra/http` currently provides transport middleware, not a full auth context. Any new auth model should define where it is created and where service-layer authorization occurs.
-
-## Exa Source Links
-- OWASP Authentication Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
-- OWASP Authorization Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
-- OWASP ASVS V4 Access Control: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V4-Access-Control.md
-- OWASP API1:2023 Broken Object Level Authorization: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
-- OWASP API2:2023 Broken Authentication: https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/
-- OWASP API3:2023 Broken Object Property Level Authorization: https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/
-- OWASP API5:2023 Broken Function Level Authorization: https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/
-- OWASP REST Security Cheat Sheet for JWT and access control: https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
-- OWASP OAuth2 Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html
-- OWASP WSTG Testing JSON Web Tokens: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/10-Testing_JSON_Web_Tokens

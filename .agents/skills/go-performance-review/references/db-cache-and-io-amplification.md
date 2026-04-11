@@ -1,43 +1,20 @@
 # DB, Cache, And I/O Amplification Review
 
+## Behavior Change Thesis
+When loaded for symptom "request-path performance depends on DB/cache/query count, pagination, dependency calls, or I/O inside loops," this file makes the model choose a round-trip amplification finding instead of likely mistake "treat the issue as generic DB/cache correctness or trust zero-latency unit tests."
+
 ## When To Load
-Load this when a performance review touches `database/sql`, query count, DB round trips, cache hit/miss behavior, origin fallback, pagination, dependency calls, request-path HTTP/RPC fan-out, or I/O inside loops.
+Load this when the performance review touches `database/sql`, query count, DB round trips, cache hit/miss behavior, origin fallback, pagination, dependency calls, request-path HTTP/RPC fan-out, or I/O inside loops.
 
-Keep ownership performance-focused. Hand off correctness, invalidation, transaction, tenant isolation, and cache key issues to the DB/cache or security review lanes when those are the primary risk.
+## Decision Rubric
+- Count calls as a function of input size: rows, IDs, page size, cache misses, tenants, downstream endpoints, or retries.
+- Ask whether proof includes query/dependency call count before and after the change, not just handler CPU time.
+- Treat fake DB/cache benchmarks as local code proof only; they cannot prove round-trip or pool-saturation safety.
+- Use DB pool stats, dependency timings, cache hit/miss/error/fallback data, or integration/load evidence when the risk is request-path latency or saturation.
+- Keep ownership performance-focused. Hand off correctness, invalidation, transaction, tenant isolation, and cache-key issues when they are the primary risk.
+- Use `retry-overload-and-tail-latency.md` when the dominant issue is retry or outage fallback amplification rather than normal request-path round trips.
 
-## Review Smell Patterns
-- A handler loops over IDs and issues one DB query, cache lookup, HTTP call, or RPC per item.
-- A cache miss path fans out to origin once per item instead of batching or coalescing when the contract allows it.
-- A fallback path calls the origin on every cache error and can multiply load during cache outage.
-- The diff adds deep `OFFSET` pagination or client-side filtering after over-fetching.
-- Repeated identical reads happen in the same request without a local reuse or explicit reason.
-- `database/sql` `DBStats` wait counters or dependency timings are ignored even though connection-pool wait is the suspected bottleneck.
-- A benchmark uses a fake DB or cache with no latency, so it cannot prove round-trip amplification is safe.
-- The PR reports endpoint CPU improvement while DB query count or downstream calls increased.
-
-## Evidence Required
-- Query or dependency call count before and after the change, tied to input size.
-- Representative dependency timing or integration/load evidence for request-path latency claims.
-- DB connection pool evidence when the risk is saturation: `DBStats`, wait duration, open/in-use connections, or repo-specific DB metrics.
-- Cache hit, miss, stale, error, and fallback path evidence when cache behavior drives latency.
-- For API-visible pagination or payload shape, state the dataset size and max page/filter contract that bounds work.
-
-## Bad Finding
-```text
-[medium] [go-performance-review] internal/users/handler.go:103
-Issue:
-This looks like N+1.
-Impact:
-It will be slow.
-Suggested fix:
-Batch it.
-Reference:
-N/A
-```
-
-Why it fails: it does not show the amplification dimension, the changed request path, the evidence needed, or whether batching preserves the contract.
-
-## Good Finding
+## Imitate
 ```text
 [high] [go-performance-review] internal/users/handler.go:103
 Issue:
@@ -47,10 +24,36 @@ This can turn one list request into hundreds of downstream operations and satura
 Suggested fix:
 Batch avatar loading for the returned IDs or reuse avatar data from the main query if that preserves the response contract. Add a query/dependency-count assertion for max page size and a representative integration or load measurement if batching is not possible.
 Reference:
-Go `database/sql` context/query and `DBStats` docs, plus Go diagnostics guidance for request-path latency evidence.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: input-to-call multiplier, why current proof cannot observe it, and a fix that preserves contract or asks for targeted proof.
+
+## Reject
+```text
+Issue:
+This looks like N+1.
+Suggested fix:
+Batch it.
+```
+
+Reject it because it does not show the amplification dimension, changed request path, evidence needed, or whether batching preserves the contract.
+
+```text
+Issue:
+The benchmark is fast, so DB latency is fine.
+```
+
+Reject it when the benchmark uses a fake DB/cache or removes network and pool wait from the measured path.
+
+## Agent Traps
+- Letting "DB/cache" automatically become a DB/cache correctness finding when the actual merge risk is query count, dependency load, or p99 latency.
+- Ignoring `database/sql` wait counters or dependency timing when pool wait is the suspected bottleneck.
+- Missing that client-side filtering after over-fetching can be a performance contract problem, not just a local loop issue.
+- Accepting endpoint CPU improvement while DB query count or downstream calls increased.
+- Asking for broad load testing when a query-count assertion at max page size would expose the regression.
+
+## Validation Shape
 ```bash
 go test ./internal/users -run '^TestListUsersAvatarQueryCount$' -count=1
 go test ./internal/users -run '^TestListUsersMaxPageDependencyCalls$' -count=1
@@ -60,12 +63,4 @@ go test -run '^$' -bench '^BenchmarkListUsers/page=200$' -trace trace.out ./inte
 go tool trace trace.out
 ```
 
-For live or integration proof, record the workload, cache state, page size, downstream latency fixture, query count, and DB pool stats rather than only total handler time.
-
-## Source Links From Exa
-- [database/sql package](https://pkg.go.dev/database/sql)
-- [Go SQL interface examples](https://go.dev/wiki/SQLInterface)
-- [Go Diagnostics](https://go.dev/doc/diagnostics)
-- [runtime/trace package](https://pkg.go.dev/runtime/trace)
-- [net/http/pprof package](https://pkg.go.dev/net/http/pprof)
-
+For live or integration proof, record workload, cache state, page size, downstream latency fixture, query count, and DB pool stats rather than only total handler time.

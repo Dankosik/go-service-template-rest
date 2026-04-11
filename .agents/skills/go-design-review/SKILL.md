@@ -25,16 +25,16 @@ Use the strongest local evidence first:
 If approved specs or design docs exist, cite them before external style or architecture sources.
 
 ## Reference Files Selector
-Load only the reference file needed for the active drift pattern:
+References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the file whose symptom matches the strongest review pressure. Load multiple references only when the diff spans independent decision pressures, such as a dependency-direction bug plus a separate source-of-truth drift.
 
-| Load this file | When the diff suggests |
-| --- | --- |
-| `references/boundary-and-ownership-drift.md` | package responsibility moved, a component bypassed its owner, or behavior crossed app/infra/bootstrap/domain boundaries |
-| `references/dependency-direction-and-hidden-coupling.md` | imports, globals, callbacks, registration, or adapter wiring create a hidden dependency direction change |
-| `references/source-of-truth-seam-drift.md` | generated code, config, migrations, contracts, or stable local policy now have multiple competing owners |
-| `references/accidental-complexity-and-helper-buckets.md` | helper packages, wrapper layers, premature interfaces, or indirection obscure ownership without reducing real risk |
-| `references/approved-decision-conformance.md` | code introduces behavior or architecture decisions not present in the approved spec/design/plan |
-| `references/cross-domain-handoff-examples.md` | the design review detects a seam but the deep correctness question belongs to API, data, security, reliability, performance, concurrency, QA, or delivery review |
+| Load this file | Symptom | Behavior change when loaded |
+| --- | --- | --- |
+| `references/boundary-and-ownership-drift.md` | behavior, policy, or construction moved across app/domain/infra/HTTP/config/bootstrap boundaries | choose the owning boundary and smallest move back instead of giving generic layering advice |
+| `references/dependency-direction-and-hidden-coupling.md` | imports, callbacks, registration, globals, adapter wiring, or test helpers change who depends on whom | review the coupling mechanism and composition root instead of treating the import as style or demanding interfaces everywhere |
+| `references/source-of-truth-seam-drift.md` | generated code, config, migrations, contracts, or stable local policy now have competing owners | route the fix through the canonical source or owning-package seam instead of accepting local copies or global helpers |
+| `references/accidental-complexity-and-helper-buckets.md` | helpers, wrappers, premature interfaces, option bags, manager types, or `common` packages obscure ownership | distinguish useful seams from speculative indirection instead of reflexively praising or banning abstraction |
+| `references/approved-decision-conformance.md` | code introduces behavior, ownership, lifecycle, fallback, contract, async, or rollout decisions outside approved artifacts | treat implementation as drift or a reopen trigger instead of letting code become the decision record |
+| `references/cross-domain-handoff-examples.md` | design review found a seam, but deep correctness belongs to API, chi, data/cache, security, reliability, concurrency, performance, QA, or delivery review | write one design-shaped finding plus a targeted handoff instead of doing every specialist review or handoff spam |
 
 ## Boundaries
 Do not:

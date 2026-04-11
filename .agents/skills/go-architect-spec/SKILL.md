@@ -33,15 +33,20 @@ Do not:
 ## Escalate When
 Escalate if the recommendation depends on unresolved ownership, missing invariant or write-authority assumptions, undefined failure behavior, unclear rollout compatibility, or cross-domain trade-offs that materially affect API, data, security, or operability.
 
-## Reference Files
-Load only the narrow reference file that matches the decision pressure; keep the main output architecture-first and route API payloads, SQL migration mechanics, low-level resilience tuning, and CI/container details to specialist skills.
+## Reference Loading
+Load at most one reference by default, and only when its behavior-change thesis matches the task. A reference should make you choose a more discriminating architecture answer than the `SKILL.md` body alone; if the prompt only needs the broad rule, stay in this file.
 
-- [boundary-decomposition-examples.md](references/boundary-decomposition-examples.md) - service or module boundary decisions, source-of-truth ownership, shared-data pressure, and Go package/module boundary evidence.
-- [modular-monolith-vs-service-extraction.md](references/modular-monolith-vs-service-extraction.md) - modular monolith, separate runtime, or true service extraction trade-offs.
-- [sync-async-workflow-ownership.md](references/sync-async-workflow-ownership.md) - request-path vs async work, saga ownership, choreography/orchestration, durable process manager, or workflow-engine choices.
-- [read-write-topology-and-projections.md](references/read-write-topology-and-projections.md) - CQRS, read projections, materialized views, aggregators/BFFs, and derived-read correctness boundaries.
-- [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) - strangler, shadow/dark read, canary, expand/contract, mixed-version rollout, and rollback-limit decisions.
-- [architecture-anti-patterns.md](references/architecture-anti-patterns.md) - distributed monolith, shared database, dual-write, retry storm, untested fallback, and permanent-shim smell checks.
+Keep the main output architecture-first. Route API payloads, SQL migration mechanics, low-level resilience tuning, and CI/container details to specialist skills instead of expanding architecture references into documentation dumps.
+
+| Symptom in the prompt | Load | Behavior change |
+| --- | --- | --- |
+| Boundary placement, write ownership, shared-data pressure, or Go package layout being treated as architecture | [boundary-decomposition-examples.md](references/boundary-decomposition-examples.md) | Choose invariant and ownership boundaries instead of service-per-entity, direct DB reads, or generic packages. |
+| Debate between modular monolith, internal module, separate worker/runtime, or true service extraction | [modular-monolith-vs-service-extraction.md](references/modular-monolith-vs-service-extraction.md) | Apply the all-conditions extraction test instead of treating traffic or team preference as sufficient. |
+| Request-path vs queue, saga, process manager, choreography, orchestration, or workflow engine | [sync-async-workflow-ownership.md](references/sync-async-workflow-ownership.md) | Name the process owner, pivot, and client-visible completion model instead of choosing a broker/tool first. |
+| CQRS, read services, projections, materialized views, search indexes, exports, dashboards, aggregators, or stale reads | [read-write-topology-and-projections.md](references/read-write-topology-and-projections.md) | Keep projections derived-only with freshness and bypass rules instead of letting query convenience become write truth. |
+| External provider, partner lifecycle, webhook state, vendor status vocabulary, or ambiguous third-party result semantics | [external-provider-anti-corruption.md](references/external-provider-anti-corruption.md) | Normalize provider evidence behind a local lifecycle owner instead of importing vendor states as internal truth. |
+| Ownership move, service extraction rollout, source-of-truth change, mixed-version window, canary, shadow read, or rollback boundary | [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) | Select phased compatibility with one authoritative writer per phase instead of big-bang cutover or indefinite bridges. |
+| Premature microservices, distributed monolith, shared database, service-per-table, direct cross-service DB reads, dual writes, retry storm, fragile fallback, or permanent shim smell | [architecture-anti-patterns.md](references/architecture-anti-patterns.md) | Convert the smell into a blocker, accepted risk, or reopen condition with concrete failure consequences. |
 
 ## Core Defaults
 - Prefer modular monolith boundaries until service extraction is justified by domain capability, data ownership, team ownership, transaction boundaries, and runtime isolation needs.

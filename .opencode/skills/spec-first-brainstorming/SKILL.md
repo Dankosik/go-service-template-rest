@@ -15,6 +15,21 @@ Turn a mostly chosen request into a concrete, falsifiable, challenge-ready probl
 - seed prioritized open questions with owner and unblock condition
 - decide whether the request is ready for deeper design and whether a pre-spec challenge pass is required, recommended, or skippable
 
+## Lazy Reference Loading
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Before loading a reference, name the symptom and the behavior change you need. Load at most one reference by default; load multiple only when the task clearly spans independent decision pressures, such as solution-led framing plus a separate readiness-blocker decision.
+
+| Symptom | Reference | Behavior Change |
+| --- | --- | --- |
+| The prompt is a proposed mechanism, slogan, or vague improvement and needs actor/current/desired/boundary phrasing. | `references/problem-and-behavior-delta.md` | Choose a falsifiable behavior delta instead of restating the requested implementation as the problem. |
+| Scope is expanding, non-goals are vague, or constraints may reshape downstream design. | `references/scope-constraints-and-non-goals.md` | Separate approved framing scope from adjacent ideas and delivery promises instead of letting scope creep enter the handoff. |
+| The frame depends on implied facts, missing owner decisions, risky assumptions, or an unprioritized question pile. | `references/assumptions-and-open-questions.md` | Convert uncertainty into labeled assumptions and owner-routed blocking questions instead of inventing answers or listing generic TODOs. |
+| Multiple plausible framing approaches remain, but the task is beyond raw ideation. | `references/approach-comparison-and-direction-selection.md` | Compare behavior-level frames and recommend or block one direction instead of carrying every option forward or designing architecture. |
+| The pre-spec challenge recommendation is hard to classify or needs sharper seams. | `references/challenge-recommendation-examples.md` | Tie `required`, `recommended`, or `skippable` to concrete risk seams instead of recommending challenge as ritual. |
+| The pass/fail readiness decision is close, blocked, or drifting into "ready enough." | `references/readiness-decision-examples.md` | Emit a decisive readiness outcome with next handoff or minimum missing data instead of vague approval. |
+| The draft starts smuggling architecture/API/data/security/reliability decisions, task breakdown, implementation design, or stakeholder theater. | `references/framing-anti-patterns.md` | Use this as smell triage to remove downstream design drift instead of treating it as primary framing guidance. |
+
+Treat reference examples as calibration only. Repository-local spec-first workflow rules stay authoritative.
+
 ## Boundaries
 Do not:
 - run open-ended ideation when the real problem is that no concrete direction has been chosen yet; use `idea-refine` first

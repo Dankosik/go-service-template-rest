@@ -1,25 +1,19 @@
 # Workflow Plan Update Examples
 
+## Behavior Change Thesis
+When loaded for master `workflow-plan.md` updates, this file makes the model record cross-phase planning state and handoff facts in the master artifact instead of leaving them in chat or only in `workflow-plans/planning.md`.
+
 ## When To Load
-Load this reference when repairing the task-local master `workflow-plan.md`, aligning it with `workflow-plans/planning.md`, or making planning status, artifact status, readiness, adequacy challenge status, and next-session handoff explicit.
+Load when repairing or writing the master `workflow-plan.md` planning status, artifact status, readiness status, adequacy challenge status, blockers, or next-session handoff.
 
-This file gives examples only. `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative.
+## Decision Rubric
+- Keep `workflow-plan.md` cross-phase: status, artifact inventory, blockers, readiness, challenge state, boundary, and next session.
+- Do not copy `plan.md`, `tasks.md`, `spec.md`, or design details into the master file.
+- Master and `workflow-plans/planning.md` must agree on whether planning is `complete`, `blocked`, `reopened`, or `in_progress`.
+- If readiness is `FAIL`, `Next session starts with` points to the reopen target, not an implementation phase.
+- Adequacy challenge status must say whether blocking findings were reconciled, waived under an eligible rationale, or still block handoff.
 
-## Good Session Outcomes
-- `workflow-plan.md` remains the cross-phase control artifact and does not absorb `plan.md`, `tasks.md`, `spec.md`, or `design/` content.
-- Planning status, artifact status, blocker status, implementation-readiness status, adequacy challenge resolution, session boundary, and next-session start point are explicit.
-- The master file and `workflow-plans/planning.md` agree on whether planning is complete, blocked, reopened, or still in progress.
-- The update records later phase-control files as created, not expected, or blocked on a reopen.
-
-## Bad Session Outcomes
-- `workflow-plan.md` says planning is complete while `workflow-plans/planning.md` still says in progress.
-- The master file records `implementation-readiness: PASS` while expected `tasks.md` is missing.
-- The master file starts implementation by changing `Current phase` to `implementation-phase-1` before the planning session has stopped.
-- Adequacy challenge findings are summarized as "done" without recording whether blocking findings were reconciled or waived.
-
-## Example Handoff Notes
-Complete planning master update:
-
+## Imitate
 ```markdown
 Current phase: planning
 Phase status: complete
@@ -42,7 +36,7 @@ Workflow plan adequacy challenge: completed; blocking findings reconciled
 Blockers: none
 ```
 
-Blocked planning master update:
+Copy this shape: it makes the cross-phase state scannable without duplicating the plan.
 
 ```markdown
 Current phase: planning
@@ -61,31 +55,25 @@ Blocker: implementation order depends on a missing ownership decision in the des
 Reopen target: technical-design
 ```
 
-CONCERNS master update:
+Copy this shape: the blocked master update routes upstream instead of implying implementation can start.
 
+## Reject
 ```markdown
-Current phase: planning
-Phase status: complete
-Session boundary reached: yes
-Ready for next session: yes
-Next session starts with: implementation-phase-1
-Implementation readiness: CONCERNS
-Accepted risks: benchmark threshold is estimated from existing design evidence.
-Proof obligations: `implementation-phase-1` must record benchmark evidence before phase completion.
-Workflow plan adequacy challenge: completed; no blocking findings remain.
+Current phase: implementation-phase-1
+Planning status: complete
+Implementation readiness: PASS
 ```
 
-## Blocker Handling
-- If master and phase-local status conflict, repair both in the planning session before marking handoff ready.
-- If implementation-readiness is `FAIL`, set the next session to the named reopen target, not an implementation phase.
-- If adequacy challenge findings are blocking, keep phase status blocked or in progress until reconciled.
-- If a direct/local skip rationale is eligible, record it in the master update instead of leaving missing artifacts unexplained.
+Failure: the planning session has not stopped yet; the next session starts implementation later.
 
-## Exa Calibration Source Links
-Found through Exa MCP search before these examples were written. Use these links only for calibration; local repo guidance wins.
+```markdown
+Workflow plan adequacy challenge: done.
+```
 
-- arc42 documentation: https://arc42.org/documentation/
-- arc42 method: https://arc42.org/method
-- Martin Fowler on Architecture Decision Records: https://martinfowler.com/bliki/ArchitectureDecisionRecord.html
-- Asana implementation plan guide: https://www.asana.com/resources/implementation-plan
+Failure: it hides whether blocking findings existed and whether they were reconciled.
 
+## Agent Traps
+- Letting master and phase-local files contradict each other.
+- Recording `tasks.md: approved` while the task ledger is missing or still speculative.
+- Treating `workflow-plan.md` as a full planning document.
+- Omitting `Session boundary reached` or `Next session starts with`, forcing the next agent to infer state from chat.

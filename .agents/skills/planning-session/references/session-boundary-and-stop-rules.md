@@ -1,26 +1,19 @@
-# Session Boundary And Stop Rule Examples
+# Session Boundary And Stop Rules
+
+## Behavior Change Thesis
+When loaded for planning closeout, this file makes the model stop with a named next session or reopen target instead of starting implementation, editing upstream artifacts, or declaring completion with an incomplete handoff.
 
 ## When To Load
-Load this reference when closing a planning session, resolving whether a planning phase is complete or blocked, or writing stop rules that prevent drift into implementation, review, validation, or silent spec/design changes.
+Load when closing a planning session or resolving whether the phase is complete, blocked, reopened, or still in progress.
 
-This file gives examples only. `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative.
+## Decision Rubric
+- Mark `Session boundary reached: yes` only after planning artifacts, workflow-control artifacts, readiness status, and required adequacy challenge findings agree.
+- Set `Ready for next session: yes` only when readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`.
+- If readiness is `FAIL`, the boundary is not reached for implementation; next session starts with the named reopen target.
+- The final planning action is a handoff update, not a code, review, validation, rollout, closeout, `spec.md`, or `design/` action.
+- If the user asks to keep going into implementation, repeat the recorded handoff and stop unless an eligible upfront direct/local waiver already exists.
 
-## Good Session Outcomes
-- The session marks `Session boundary reached: yes` only after planning artifacts, workflow-control artifacts, readiness status, and required adequacy challenge findings agree.
-- The session sets `Ready for next session: yes` only when implementation may start under `PASS`, eligible `CONCERNS`, or eligible `WAIVED`.
-- The session sets `Next session starts with` to the first named implementation phase or to a reopen target when readiness fails.
-- The final planning action is a handoff update, not a code, review, or validation action.
-
-## Bad Session Outcomes
-- The session says "planning complete" and then begins T001.
-- The session marks `Session boundary reached: yes` while readiness is `FAIL`.
-- The session leaves `Next session starts with` blank, forcing the next agent to infer the phase from chat.
-- The session records "continue implementation" when no implementation phase has started yet.
-- The session updates `spec.md` or `design/` to clear a blocker instead of stopping at the planning boundary.
-
-## Example Handoff Notes
-Complete stop:
-
+## Imitate
 ```markdown
 Planning phase complete.
 Session boundary reached: yes.
@@ -29,7 +22,7 @@ Next session starts with: implementation-phase-1.
 Stop rule: do not perform code, test, migration, review, validation, rollout execution, or closeout work in this planning session.
 ```
 
-Blocked stop:
+Copy this shape: it closes the phase and names the next phase without entering it.
 
 ```markdown
 Planning phase blocked.
@@ -39,7 +32,7 @@ Next session starts with: technical-design.
 Stop rule: do not create implementation tasks that depend on the missing ownership decision.
 ```
 
-CONCERNS stop:
+Copy this shape: a blocked stop names the reopen target and the forbidden shortcut.
 
 ```markdown
 Planning phase complete with CONCERNS.
@@ -49,17 +42,25 @@ Next session starts with: implementation-phase-1.
 Stop rule: the next session must satisfy the proof obligations before widening scope.
 ```
 
-## Blocker Handling
-- If completion criteria are not met, leave planning `in_progress` or `blocked`; do not mark the boundary reached.
-- If the next step is a reopen target, name that target and stop rather than repairing upstream artifacts in the same planning session.
-- If the user asks to continue into implementation immediately, answer with the recorded handoff and stop unless an eligible upfront waiver already covers same-session phase collapse.
-- If an adequacy challenge has unresolved blocking findings, keep planning open or blocked and record the exact additions needed before handoff.
+Copy this shape: `CONCERNS` can still cross the boundary only because the risk and proof are visible.
 
-## Exa Calibration Source Links
-Found through Exa MCP search before these examples were written. Use these links only for calibration; local repo guidance wins.
+## Reject
+```markdown
+Planning complete. Beginning T001 now.
+```
 
-- arc42 documentation: https://arc42.org/documentation/
-- arc42 method: https://arc42.org/method
-- Martin Fowler on Architecture Decision Records: https://martinfowler.com/bliki/ArchitectureDecisionRecord.html
-- Asana implementation plan guide: https://www.asana.com/resources/implementation-plan
+Failure: it crosses into implementation after the planning boundary.
 
+```markdown
+Session boundary reached: yes.
+Implementation readiness: FAIL.
+Next session starts with: implementation-phase-1.
+```
+
+Failure: FAIL routes to a reopen target, not implementation.
+
+## Agent Traps
+- Leaving `Next session starts with` blank because the chat already says what to do.
+- Saying "continue implementation" when no implementation session has started.
+- Clearing a planning blocker by editing `spec.md` or `design/` in the same session.
+- Treating unresolved adequacy challenge findings as a final closeout detail.

@@ -6,7 +6,7 @@ Load this when a contract change affects existing clients, status codes, error s
 ## Decision Rubric
 - Classify each change as `additive`, `behavior-change`, or `breaking`, and name the client assumption that makes it so.
 - Treat status codes, problem types, retry/idempotency/precondition behavior, async behavior, pagination, sorting, and consistency as compatibility surface, not cleanup.
-- Keep the major API version in the URI prefix by this skill's default. Do not put minor or patch versions in REST paths unless the API already does.
+- Keep the major API version in the URI prefix by this skill's default, but preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it. Do not put minor or patch versions in REST paths unless the API already does.
 - Distinguish OpenAPI document version from API product version. `openapi: 3.1.1` is not `/v2`.
 - Adding response fields is safer only when clients are expected to ignore unknown fields. Strict decoders and generated SDKs can still break.
 - Adding enum values is a compatibility decision. Document unknown-value tolerance or avoid expanding a closed enum in place.

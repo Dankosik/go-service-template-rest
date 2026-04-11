@@ -1,101 +1,57 @@
 # Architecture Anti Patterns
 
+## Behavior Change Thesis
+When loaded for an architecture smell, this file makes the model turn the smell into a specific blocker, accepted risk, or reopen condition instead of giving a generic "be careful" warning.
+
 ## When To Load
-Load this when a proposed architecture smells like premature microservices, distributed monolith, shared database, service-per-table, direct cross-service DB reads, dual writes, retry storms, fragile fallback, permanent compatibility shims, or technology-led topology.
+Load when a proposed architecture smells like premature microservices, distributed monolith, shared database, service-per-table, direct cross-service DB reads, dual writes, retry storms, fragile fallback, permanent compatibility shims, or technology-led topology.
 
-Use it as a challenge checklist. Reject or reopen the decision when the smell affects ownership, invariant preservation, failure containment, or rollout safety. Keep the response architecture-first and route lower-level remediation to the right specialist.
+## Decision Rubric
+- Block the smell when it changes ownership, invariant preservation, failure containment, release autonomy, or rollback truth.
+- Convert "maybe okay" smells into explicit acceptance criteria: owner, duration, signal, exit condition, and proof command or operational drill.
+- Prefer smaller architecture moves when the smell solves the wrong pressure: module seam for ownership sprawl, projection for reads, worker runtime for batch work, bounded retry for dependency distress.
+- Route low-level remediation to specialist skills; keep this file at architecture risk and decision level.
 
-## Decision Examples
+## Imitate
 
-### Example 1: "It is only reads" shared database coupling
-Context: A team proposes a read service that directly joins multiple owners' operational databases.
+### "It Is Only Reads" Shared Database Coupling
+Context: a read service directly joins multiple owners' operational databases.
 
-Selected option: Treat this as a shared database/distributed monolith smell. Use owner APIs, API composition, event-fed projections, or a derived read model with a support owner and staleness contract.
+Choose: treat it as shared database/distributed-monolith risk. Use owner APIs, API composition, event-fed projections, or a derived read model with support owner and staleness contract.
 
-Rejected options:
-- Direct reads of private service tables as steady state.
-- Shared credentials that let multiple services access each other's tables.
-- Calling the read service independent while it still couples every owner schema.
+Copy: this names why read-only still couples schemas, releases, connection pools, locks, and noisy-neighbor behavior.
 
-Evidence that would change the decision:
-- The system is explicitly still a modular monolith and logical table ownership is enforced under one deployment and one team.
-- The read store is a derived copy owned by the consuming surface, not the owners' operational database.
-- A temporary migration bridge has a removal date, access controls, and reconciliation plan.
+### Indefinite Dual Writes
+Context: during extraction, both old and new paths write the same business state. A temporary compatibility topic has no removal condition.
 
-Failure modes and rollback implications:
-- Schema changes become coordinated releases across services.
-- Long read queries can create runtime coupling through locks, pool exhaustion, or noisy neighbors.
-- Rollback requires removing database access, replacing consumers with contracts, and proving no hidden queries remain.
+Choose: declare one authoritative writer per phase. Bound comparison writes or bridge events with owner, drift metric, reconciliation rule, and contraction task.
 
-### Example 2: Indefinite dual writes and compatibility shims
-Context: During extraction, both old and new paths write the same business state. A "temporary" compatibility topic is proposed with no removal condition.
+Copy: this rejects "temporary" as a substitute for ownership.
 
-Selected option: Declare one authoritative writer per phase. If dual-read, shadow write, or bridge events are used, bound them with reconciliation ownership, drift metrics, and contraction criteria.
+### Untested Fallback
+Context: a service normally uses cache/projection but falls back to primary DB or provider when the fast path fails.
 
-Rejected options:
-- Two active write owners for one invariant-bearing entity.
-- Permanent compatibility topics, adapters, or data copy jobs.
-- Treating event publication as proof of decoupling while consumers still require coordinated deploys.
+Choose: prefer safer degradation, proactive data push, primary-path hardening, or a continuously exercised failover mode. If fallback remains, prove capacity and semantics under realistic failure.
 
-Evidence that would change the decision:
-- One write path is explicitly non-authoritative and used only for comparison.
-- The bridge is a finite migration artifact with owner, exit metric, and deletion task.
-- Business accepts a write freeze or one-time cutover instead of coexistence.
+Copy: this avoids turning partial outage into full outage by concentrating load on a dependency.
 
-Failure modes and rollback implications:
-- Divergent writes make neither side trustworthy; rollback requires reconciliation and possibly customer repair.
-- Permanent shims become hidden source-of-truth routes.
-- Once consumers depend on a compatibility topic, removing it can become harder than the original extraction.
+### Retry Storm
+Context: a flow adds several synchronous calls with retries at each hop and no deadline budget.
 
-### Example 3: Untested fallback under dependency failure
-Context: A service uses a cache or projection for normal reads and falls back to a primary database or external provider when the fast path is unavailable.
+Choose: bound the critical path with end-to-end deadline, per-hop timeout, one controlled retry layer, idempotency classification, and bulkhead/circuit behavior. Move non-final work async when finality is not required.
 
-Selected option: Prefer improving the primary path, pushing data proactively, failing fast with a controlled degraded response, or turning fallback into a regularly exercised failover mode. If fallback remains, prove capacity and test it under realistic failure.
+Copy: this turns reliability smell into architecture constraints instead of sprinkling retries.
 
-Rejected options:
-- Fallback that triggers only during rare incidents and sends all traffic to a dependency that cannot handle it.
-- Fallback that changes semantics silently.
-- Fallback that bypasses authorization, tenant isolation, or freshness rules.
+## Reject
+- "The shared DB is fine because consumers only read." Bad because independent deployability still breaks through private schema coupling.
+- "We will remove the shim later" with no owner or exit metric. Bad because later is not an architecture state.
+- "Fallback is safer than failing." Bad when fallback semantics, authorization, freshness, and capacity are not proved.
+- "Circuit breaker fixes retry storms." Bad because a breaker is not a deadline, idempotency, or business exception policy.
+- "Use microservices because the repo is large." Bad because codebase size alone does not prove domain, data, or runtime independence.
 
-Evidence that would change the decision:
-- The fallback path is exercised continuously in production and sized as a valid mode, not a panic path.
-- The dependency can handle full fallback load and failure injection proves it.
-- The degraded response is safer than retrying or fallback and is accepted by the business.
-
-Failure modes and rollback implications:
-- Fallback can turn a partial outage into a full-site outage by amplifying load.
-- Rare code paths collect latent bugs; test and observe them before relying on them.
-- Rollback may be a breaker/flag that disables fallback and preserves the primary system for recovery.
-
-### Example 4: Retry storm and fragile sync chain
-Context: A proposed flow adds several synchronous service calls with retries at each hop and no deadline budget.
-
-Selected option: Bound the critical path with end-to-end deadline, per-hop timeout, retry budget, idempotency classification, and circuit or bulkhead policy. Move non-final work to async execution when immediate finality is not required.
-
-Rejected options:
-- Retrying every error at every layer.
-- Missing or very long timeouts on remote calls.
-- Treating a circuit breaker as a replacement for business exception handling.
-- Queueing work without a DLQ and owner.
-
-Evidence that would change the decision:
-- Calls are local/in-process and do not consume remote failure budget.
-- The operation is idempotent and retried at one controlled layer with backoff and jitter.
-- A synchronous dependency is required for a hard invariant and fits the deadline budget.
-
-Failure modes and rollback implications:
-- Retrying at multiple layers multiplies traffic during dependency distress.
-- Slow dependencies can consume threads/connections and cause unrelated failures.
-- Rollback should remove the new sync hop or disable retry amplification, not just lower traffic after overload begins.
-
-## Source Links Gathered Through Exa
-- Microservices.io, "Shared database": https://microservices.io/patterns/data/shared-database.html
-- Microservices.io, "Database per service": https://microservices.io/patterns/data/database-per-service.html
-- Microservices.io, "Transactional outbox": https://microservices.io/patterns/data/transactional-outbox.html
-- AWS Builders' Library, "Avoiding fallback in distributed systems": https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/
-- AWS Builders' Library, "Timeouts, retries, and backoff with jitter": https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter
-- Azure Architecture Center, "Retry Storm antipattern": https://learn.microsoft.com/en-us/azure/architecture/antipatterns/retry-storm/
-- Azure Architecture Center, "Circuit Breaker pattern": https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker
-- Azure Architecture Center, "Bulkhead pattern": https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead
-- Martin Fowler, "Circuit Breaker": https://martinfowler.com/bliki/CircuitBreaker.html
-
+## Agent Traps
+- Do not over-correct every smell into a hard rejection. Some are valid as bounded migration mechanisms.
+- Do not call a shim temporary unless the plan includes deletion criteria and consumer inventory.
+- Do not accept cross-service table reads as steady state just because the query is convenient.
+- Do not recommend fallback without checking whether it bypasses auth, tenant isolation, freshness, or dependency capacity.
+- Do not let "we already have Kafka/gRPC/Temporal" become the architecture reason.

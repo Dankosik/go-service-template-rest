@@ -1,18 +1,21 @@
 # Test Readability And Proof Shape
 
+Behavior Change Thesis: When loaded for test cleanup, this file makes the model protect the proof's readable setup, trigger, and assertion shape instead of likely mistake of approving giant tables or helpers that shorten tests while hiding what behavior is proven.
+
 ## When To Load
 Load this when a diff changes tests by adding or removing table tests, subtests, assertion helpers, custom comparison helpers, fixture builders, terse failure messages, or broad "test cleanup."
 
-This file is for simplification review of the proof's readability. Coverage completeness belongs to `go-qa-review` unless the readability issue itself creates merge risk.
+Use this for simplification review of proof readability. Coverage completeness, nondeterminism, and validation readiness belong to `go-qa-review` unless the readability issue itself creates merge risk.
 
-## Review Lens
-- Tests should make setup, trigger, and expected outcome obvious on first read.
-- A table is clearer when entries share the same setup and assertion logic; split tests when each row needs mode-specific checks.
-- Helper layers are useful for setup or stable comparisons, but harmful when they hide which branch or invariant is being proven.
-- Failure messages should identify the function, inputs, got value, and wanted value when practical.
+## Decision Rubric
+- A table is clearer when entries share setup, trigger, and assertion shape.
+- Split tests when rows require different setup modes, hidden assertion modes, or branch-specific proof.
+- Keep helpers when they name stable setup/comparison policy, call `t.Helper()` where appropriate, and report useful diagnostics.
+- Flag helpers that hide which branch, invariant, or side effect is being proven.
+- Failure messages should identify the function or behavior, relevant input, got value, and wanted value when practical.
 
-## Real Finding Examples
-Finding example: a giant table hides different proof shapes.
+## Imitate
+Finding shape to copy when a giant table hides different proof shapes:
 
 ```text
 [medium] [go-language-simplifier-review] internal/app/orders/service_test.go:52
@@ -22,7 +25,9 @@ Suggested fix: Split the table into success and failure groups, or use subtests 
 Reference: references/test-readability-and-proof-shape.md
 ```
 
-Finding example: an assertion helper hides diagnosis.
+Copy the move: identify the mixed proof shapes and the assertion that can be skipped.
+
+Finding shape to copy when an assertion helper hides diagnosis:
 
 ```text
 [low] [go-language-simplifier-review] internal/infra/http/problem_test.go:39
@@ -32,14 +37,10 @@ Suggested fix: Either compare the stable response struct with a diff at the call
 Reference: references/test-readability-and-proof-shape.md
 ```
 
-## Non-Findings To Avoid
-- Do not reject table-driven tests when every row uses the same setup and assertions.
-- Do not require verbose tests when a helper has a policy name, calls `t.Helper()`, and produces useful diagnostics.
-- Do not flag `t.Fatal` for setup failures that prevent the test from continuing.
-- Do not turn test readability into a demand for more coverage unless the changed behavior has a real proof gap.
+Copy the move: connect hidden helper output to slower diagnosis, not personal formatting taste.
 
-## Bad And Good Simplifications
-Bad: one table encodes several unrelated assertion modes.
+## Reject
+Reject one table that encodes several unrelated assertion modes:
 
 ```go
 tests := []struct {
@@ -51,7 +52,7 @@ tests := []struct {
 }{/* success, conflict, canceled, malformed */}
 ```
 
-Good: split by proof shape so each assertion reads directly.
+Prefer grouping by proof shape:
 
 ```go
 func TestCreateOrderSuccess(t *testing.T) {
@@ -63,7 +64,7 @@ func TestCreateOrderRejectsInvalidInput(t *testing.T) {
 }
 ```
 
-Bad: terse failure messages make diagnosis depend on reading the helper.
+Reject failure messages that erase diagnosis:
 
 ```go
 if got != want {
@@ -71,7 +72,7 @@ if got != want {
 }
 ```
 
-Good: name the function, input, got value, and want value.
+Prefer messages that name the behavior and values:
 
 ```go
 if got != want {
@@ -79,14 +80,11 @@ if got != want {
 }
 ```
 
-## Escalation Guidance
-- Hand off to `go-qa-review` when the issue is missing scenarios, weak assertion strength, nondeterminism, or validation readiness.
-- Hand off to `go-domain-invariant-review` when the test hides the business invariant or transition being proven.
-- Hand off to `go-concurrency-review` when test simplification hides synchronization, cancellation, race, or goroutine-lifecycle proof.
-- Escalate to planning/spec skills only when the required proof obligation is not defined by existing task artifacts.
+## Agent Traps
+- Do not reject table-driven tests when every row uses the same setup and assertions.
+- Do not require verbose tests when a helper has a policy name and useful diagnostics.
+- Do not flag `t.Fatal` for setup failures that prevent the test from continuing.
+- Do not turn a readability finding into a demand for more coverage unless hidden assertions create a real proof gap.
 
-## Source Anchors
-- [Go Test Comments](https://go.dev/wiki/TestComments): readable subtest names, got-before-want, input identification, helper guidance, and table-driven test boundaries.
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): useful test failures and table-driven test calibration.
-- [testing package](https://pkg.go.dev/testing): `T.Helper`, `T.Run`, `T.Fatal`, `T.Error`, and cleanup behavior.
-- Repository pattern: `go-qa-review/SKILL.md`.
+## Validation Shape
+Validation is the test itself: after the fix, each subtest or helper failure should identify which behavior broke and why. When the diff simplified production behavior too, pair this reference with the production-side reference only if the proof shape and production simplification are independent decision pressures.

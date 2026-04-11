@@ -35,6 +35,24 @@ Escalate if core business terms are undefined, invariants conflict across actors
 - Treat invariant violations as explicit outcomes such as reject, deny, compensate, forward-recover, or manual intervention.
 - Prefer compatibility-first invariant evolution across mixed-version rollout.
 
+## Source Authority
+- Prefer the current task's product notes, `spec.md`, workflow artifacts, repository docs, and existing domain code as the source of truth for behavior.
+- Keep this pass domain-decision-first. Do not choose transport status codes, SQL constraints, infra topology, or implementation mechanics until the business rule and violation semantics are explicit.
+- Use general DDD, aggregate, state-machine, and idempotency knowledge only as background vocabulary. Do not import external sample domains as task decisions.
+
+## Reference Loading
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default: choose the narrowest file that matches the current symptom. Load a second only when the task clearly spans independent decision pressures, such as ambiguous domain vocabulary plus retry/replay semantics.
+
+| Reference | Load For Symptom | Behavior Change |
+| --- | --- | --- |
+| `references/domain-language-and-boundaries.md` | Domain terms, actors, ownership, approval, "done", "active", tenant, or source-of-truth vocabulary is ambiguous before rules are written. | Makes the model define the local policy boundary before writing invariants instead of encoding vague nouns or transport/storage labels as business rules. |
+| `references/invariant-register-patterns.md` | A spec needs invariant statements, owner assignment, source-of-truth authority, enforcement-point choices, or review of descriptive-only rules. | Makes the model write falsifiable owner-backed rules instead of broad "business logic" bullets with no pass/fail signal. |
+| `references/state-machine-and-transition-rules.md` | Lifecycle states, phase boundaries, terminal states, transition guards, invalid transitions, timeout, or stuck-state behavior matters. | Makes the model define legal movement and forbidden paths instead of narrating event order or implementation progress. |
+| `references/acceptance-criteria-and-corner-cases.md` | Domain rules exist but acceptance behavior, edge cases, or proof obligations are too vague for planning or QA handoff. | Makes the model produce observable positive, negative, and edge-case outcomes instead of happy-path prose or implementation hints. |
+| `references/invariant-violation-semantics.md` | A rule says what must be true but not what happens when it is false. | Makes the model choose reject, deny, defer, compensate, recover, manual intervention, or accepted risk instead of returning false success or "handle error". |
+| `references/idempotency-replay-and-async-domain-rules.md` | Retries, duplicate requests, replay, out-of-order events, async commands, side effects, eventual consistency, or reconciliation are in scope. | Makes the model define domain sameness, effect boundaries, and replay policy before transport keys, queues, or dedupe tables. |
+| `references/api-data-reliability-test-traceability.md` | Stable domain decisions need downstream handoff into API, data, distributed, reliability, security, observability, or tests. | Makes the model preserve traceability from invariant IDs to downstream obligations instead of letting API/schema/retry/test details become competing sources of truth. |
+
 ## Expertise
 
 ### Invariant Modeling And Ownership

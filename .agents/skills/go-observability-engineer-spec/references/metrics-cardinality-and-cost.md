@@ -1,49 +1,47 @@
 # Metrics Cardinality And Cost
 
-## When To Load This
-Load this reference when choosing metric names, labels, histogram buckets, aggregation levels, retention, sampling, dashboards, alert inputs, cost controls, or when a draft proposes user IDs, tenant IDs, paths, trace IDs, request IDs, message IDs, or error strings as metric labels.
+## Behavior Change Thesis
+When loaded for metric naming, labels, histograms, dashboards, retention, or cost symptoms, this file makes the model choose bounded aggregations or logs/traces for detail instead of likely mistake high-cardinality metric labels from IDs, raw paths, trace context, or error strings.
 
-## Operational Questions
-- Which aggregation must the operator run during an incident?
-- Can `sum()` or `avg()` across all label dimensions still mean something?
-- Is every label bounded, stable, documented, and useful for alerting or diagnosis?
-- Could an attacker or traffic pattern create new label values without limit?
-- What is the cost and retention impact of adding this metric or label?
-- Should this detail live in logs/traces instead of metrics?
+## When To Load
+Load this when a draft proposes or may imply metric labels from user IDs, tenant IDs, account IDs, raw paths, request IDs, trace IDs, message IDs, job IDs, raw error messages, timestamps, dynamic destinations, or "whatever helps debugging."
 
-## Good Telemetry Examples
-- `http.server.request.duration` histogram with route template, method, status code, and low-cardinality `error.type`.
-- `outbound_client_request_duration_seconds{dependency="fraud", method="Decide", outcome="timeout"}` when dependency and method are fixed service catalog values.
-- `worker_backlog_oldest_age_seconds{worker="invoice-consumer", queue="invoice"}` because it answers whether queued work is violating freshness.
-- `reconciliation_drift_items_total{result="repaired", partner="adyen"}` when partner names are bounded and operator-owned.
-- Histogram buckets aligned with SLO cut points, not arbitrary high-resolution buckets that nobody queries.
+## Decision Rubric
+- A metric label survives only if it is bounded, stable, queryable during an incident, and meaningful under aggregation.
+- Prefer route templates, status classes, bounded `outcome`, bounded `error.type`, retry reason taxonomies, service class, region, and dependency catalog names.
+- Reject labels whose values can be created by users, traffic, data shape, timestamps, exception text, or generated IDs.
+- Keep SLO and paging metrics separate from forensic identifiers. Use exemplars, traces, or structured logs for representative request or entity pivots.
+- Align histogram buckets with SLO or operational decision cut points; do not add high-resolution buckets because the backend permits them.
+- Treat new labels on high-traffic paths as a cost and retention decision, not a harmless schema change.
 
-## Bad Telemetry Examples
-- `request_duration_seconds{path="/accounts/123/reconcile", user_id="u9", trace_id="..."}`.
-- `error_total{message="sql: connection refused: host 10.2.4.9:5432"}` instead of `error.type="db_unavailable"`.
-- `job_last_run{timestamp="2026-04-10T12:00:00Z"}`.
-- A custom metric per tenant or per account when the operator only needs tier, region, or service class.
-- Copying all span attributes into metric labels because the backend can technically ingest them.
+## Imitate
+- `http.server.request.duration` with route template, method, status code or status class, and bounded `error.type`.
+  Copy the route-template and bounded-error shape, not raw URL or exception text.
+- `outbound_client_request_duration_seconds{dependency="fraud", method="Decide", outcome="timeout"}` when dependency and method are fixed service-catalog values.
+  Copy the catalog-backed dimensions.
+- `worker_backlog_oldest_age_seconds{worker="invoice-consumer", queue="invoice"}` for freshness risk.
+  Copy the "age plus ownership" decision, not just queue depth.
+- `reconciliation_drift_items_total{result="repaired", partner="adyen"}` only when partner values are controlled and operationally owned.
+  Copy the bounded partner exception rule.
 
-## Cardinality Traps
-- High-cardinality labels multiply together; one "mostly fine" label can become expensive when combined with route, status, dependency, region, version, and instance.
-- Raw paths are not route templates. Use framework route templates such as `/users/{id}` only when available.
-- Error strings drift over time and often contain IDs, addresses, SQL details, or user input.
-- Partition labels can be useful for Kafka-style debugging but multiply with topic, consumer group, and region. Use them only where operators need partition-level action.
-- Per-version labels are useful during rollout diagnosis, but stale versions and build IDs can create churn. Bound and expire them.
+## Reject
+- `request_duration_seconds{path="/accounts/123/reconcile", user_id="u9", trace_id="..."}` because every label can explode cardinality or leak identifiers.
+- `error_total{message="sql: connection refused: host 10.2.4.9:5432"}` because raw messages drift and can contain sensitive data.
+- `job_last_run{timestamp="2026-04-10T12:00:00Z"}` because time belongs in a sample value or event, not a label.
+- A custom metric per tenant or account when operators only act by tier, region, product, or service class.
+- Copying span attributes into metric labels without a separate metric-label budget.
 
-## Selected And Rejected Options
-- Select low-cardinality route templates over raw paths.
-- Select bounded taxonomies such as `outcome`, `status_class`, `error.type`, `retry_reason`, and `service_class` over raw exception strings.
-- Select metrics for page and SLO inputs only when they can be aggregated predictably.
-- Select logs/traces for request IDs, trace IDs, entity IDs, message IDs, and support handles.
-- Select backend cost checks or metrics-management review when adding new labels to high-traffic paths.
-- Reject one metric per customer, dynamic metric names, raw-label extraction from logs, and labels that exist only for dashboard curiosity.
+## Agent Traps
+- Calling a label "low cardinality" because today's dataset is small. Judge the value space, not current volume.
+- Forgetting label multiplication: route x status x dependency x region x version x instance can turn one extra label into many series.
+- Treating partition labels as harmless. Use them only when operators act at partition level.
+- Keeping build ID or version labels forever after a rollout. Bound and expire rollout dimensions.
+- Designing dashboard variables from entity IDs, which quietly recreates the same cardinality problem.
 
-## Exa Source Links
-- OpenTelemetry HTTP metrics semantic conventions: https://opentelemetry.io/docs/specs/semconv/http/http-metrics/
-- OpenTelemetry metrics semantic conventions: https://opentelemetry.io/docs/specs/semconv/general/metrics
-- Prometheus metric and label naming: https://prometheus.io/docs/practices/naming/
-- Google Cloud log-based metric label constraints and cost warning: https://cloud.google.com/logging/docs/logs-based-metrics/labels
-- Google Cloud Metrics Management cardinality and cost guidance: https://cloud.google.com/monitoring/docs/metrics-management
-- Google Cloud Managed Service for Prometheus cost controls: https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/cost-controls
+## Validation Shape
+- List every proposed metric label and mark its value source as fixed taxonomy, service catalog, deployment catalog, or rejected dynamic value.
+- For high-traffic paths, require a cost/cardinality review or an accepted-risk note for any new label.
+- Check that metrics meant for SLO or alerting can be aggregated without losing their meaning.
+
+## Canonical Verification Pointer
+Use the current OpenTelemetry and Prometheus metric naming/semantic-convention docs when a name or unit choice depends on standards status.

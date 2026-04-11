@@ -42,14 +42,19 @@ Do not:
 - Prefer the smallest safe correction that restores deterministic concurrent behavior.
 
 ## Reference Selection
-Keep this file focused on the review workflow. Load only the reference file that matches the changed concurrency surface:
+Keep this file focused on the review workflow. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load a second only when the diff clearly spans independent decision pressures, such as a channel close race plus weak validation evidence.
 
-- `references/happens-before-and-publication.md` for shared state publication, unsafe readiness flags, mixed atomic and non-atomic access, `atomic.Value`, immutable snapshots, or missing visibility edges.
-- `references/goroutine-lifecycle-and-cancellation.md` for fire-and-forget goroutines, context propagation, early return leaks, pipeline abandonment, `errgroup` cancellation, or shutdown joins.
-- `references/channels-select-and-close-ownership.md` for channel close ownership, send-on-closed risk, blocked sends or receives, `select` default spin, nil-channel gating, or fragile buffer assumptions.
-- `references/waitgroups-locks-and-atomics.md` for `WaitGroup` ordering, copied sync values, lock scope, `sync.Cond` predicates, `RWMutex` misuse, atomic pointers, and lock-free claims.
-- `references/timers-tickers-and-shutdown.md` for timer/ticker reset or stop behavior, `time.After` loops, sleep polling, `AfterFunc` completion, fake-clock tests, and shutdown timing.
-- `references/concurrency-review-validation.md` for deciding whether evidence is enough: `go test -race`, leak or liveness tests, deterministic coordination, `testing/synctest`, and residual risk wording.
+Choose by symptom and behavior change:
+
+| Symptom in the diff | Load | Behavior change |
+| --- | --- | --- |
+| shared state visibility, unsafe readiness flags, mixed atomic/non-atomic access, `atomic.Value`, immutable snapshots, or missing visibility edges | `references/happens-before-and-publication.md` | makes the review require a concrete happens-before edge or immutable snapshot instead of trusting goroutine order, `single writer`, or an atomic readiness flag |
+| fire-and-forget goroutines, context propagation, early return leaks, pipeline abandonment, `errgroup` cancellation, or shutdown joins | `references/goroutine-lifecycle-and-cancellation.md` | makes the review require owner, stop signal, and join or accepted abandonment semantics instead of vague "use context" advice |
+| channel close ownership, send-on-closed risk, blocked sends or receives, `select` default spin, nil-channel gating, or fragile buffer assumptions | `references/channels-select-and-close-ownership.md` | makes the review assign one channel owner and explicit progress/full-queue policy instead of trusting receiver close, buffers, or `default` branches |
+| `WaitGroup` ordering, copied sync values, lock scope, `sync.Cond` predicates, `RWMutex` misuse, or local lock-free claims | `references/sync-primitives-identity-and-locking.md` | makes the review treat sync primitives as identity-bearing state and review the protected invariant instead of filing style nits or defaulting to `RWMutex`/atomics |
+| per-item goroutine fan-out, worker pools, semaphores, `errgroup.SetLimit`, buffered job/result queues, async send wrappers, or producer/consumer backpressure | `references/bounded-work-and-backpressure.md` | makes the review prove active work and queued work are both bounded instead of accepting worker-pool or semaphore-shaped code as safe |
+| timer/ticker reset or stop behavior, `time.After` loops, sleep polling, `AfterFunc` completion, fake-clock tests, or shutdown timing | `references/timers-tickers-and-shutdown.md` | makes the review focus on timer ownership and prompt unblock semantics instead of stale timer-leak folklore or sleep-as-synchronization |
+| evidence quality, `go test -race`, leak or liveness tests, deterministic coordination, `testing/synctest`, or residual risk wording | `references/concurrency-review-validation.md` | makes the review match proof to the failure mode instead of treating "tests passed" or race-clean output as blanket validation |
 
 When you load a reference, translate the example into the current diff's concrete `file:line`, failure mode, smallest safe correction, and validation command. Do not paste generic examples as final review output.
 

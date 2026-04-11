@@ -1,6 +1,6 @@
 ---
 name: go-security-review
-description: "Review Go code changes for trust-boundary enforcement, authorization and tenant isolation, injection and SSRF risk, secret handling, and abuse resistance."
+description: "Review Go code changes for trust-boundary enforcement, authn/authz and tenant isolation, browser session/CORS/CSRF risk, token and credential flows, injection/SSRF/path risk, secret handling, and abuse resistance."
 ---
 
 # Go Security Review
@@ -17,6 +17,8 @@ Protect changed code from exploitable vulnerabilities and security-contract drif
 ## Scope
 - review untrusted-input handling and strict boundary validation
 - review authentication, authorization, tenant isolation, and object-level access checks
+- review browser session controls, CSRF, credentialed CORS, and cookie hardening when touched
+- review credential and token flows: JWT verification, header-derived identity, password reset, token storage, and password hashing
 - review injection, query safety, SSRF, path traversal, and unsafe file or upload handling
 - review secret, token, PII, and sensitive-data handling in code, errors, logs, traces, and metrics
 - review abuse resistance: time budgets, concurrency, queue bounds, and expensive-path controls
@@ -38,16 +40,24 @@ Do not:
 - Missing limits, missing timeout budgets, and missing tenant checks are defects until proven safe.
 - Prefer the smallest safe correction that closes the exploit or removes the unsafe assumption.
 
-## Lazy Reference Examples
-When a touched diff matches one security axis and you need concrete review examples, load only the relevant reference file:
+## Reference Files Selector
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default: choose the file whose symptom matches the strongest review pressure. Load multiple references only when the diff spans independent security decisions, such as an authz defect plus a separate SSRF defect.
 
-- `references/trust-boundary-and-input-validation-review.md` for inbound HTTP, config, async message, or external feed validation.
-- `references/authz-tenant-and-object-access-review.md` for authn/authz separation, object-level access, tenant binding, and IDOR/BOLA risk.
-- `references/injection-query-and-command-safety.md` for SQL, query-builder, template, shell, and `os/exec` review.
-- `references/ssrf-outbound-and-redirect-safety.md` for user-influenced outbound HTTP, webhooks, URL previews, remote imports, and redirect behavior.
-- `references/path-upload-and-filesystem-safety.md` for file paths, archive extraction, uploads, static serving, and user-controlled filenames.
-- `references/secrets-pii-and-telemetry-disclosure.md` for secrets, PII, config sources, errors, logs, traces, and metrics.
-- `references/abuse-resistance-and-resource-bounds.md` for size, time, concurrency, pagination, retry, batch, and third-party cost controls.
+Choose references by symptom and expected behavior change:
+
+| Symptom in the diff | Load | Behavior change |
+| --- | --- | --- |
+| Inbound HTTP, generated handler, config, env, CLI, async message, cache payload, or partner-feed data is normalized before action | `references/trust-boundary-and-input-validation-review.md` | Choose boundary-first typed parsing, allowlists, and pre-side-effect rejection instead of "sanitize later" or relying on internal caller trust. |
+| Authentication, caller identity, tenant propagation, object-by-ID lookup, admin checks, or access-control failure handling changes | `references/authz-tenant-and-object-access-review.md` | Separate authn, authz, tenant binding, and object ownership instead of treating login, role strings, or object IDs as enough. |
+| Browser-callable routes, cookie sessions, credentialed CORS, CSRF exposure, or session cookie attributes change | `references/browser-session-cors-and-csrf-review.md` | Review browser-state attack paths instead of treating CORS as authorization or relying on server authz alone. |
+| JWT parsing, header-derived identity, session/API/reset tokens, password reset, invitation links, or password hashing changes | `references/token-and-credential-flow-review.md` | Inspect token verification, entropy, storage, replay, and password hashing instead of only asking for throttling or redaction. |
+| SQL, query builders, filter DSLs, templates, subprocesses, or interpreter-like strings use caller-influenced values | `references/injection-query-and-command-safety.md` | Trace attacker-controlled data into interpreter syntax and choose bind/allowlist/no-shell fixes instead of generic injection warnings. |
+| User, tenant, partner, webhook, preview, import, redirect, callback, or config input influences outbound HTTP/network targets | `references/ssrf-outbound-and-redirect-safety.md` | Review scheme, host, redirect, DNS, IP-class, timeout, and response limits instead of just saying "validate URL." |
+| User-controlled paths, upload names/content, multipart data, archive members, static serving, downloads, temp files, or config file paths change | `references/path-upload-and-filesystem-safety.md` | Choose root-constrained file access and storage isolation instead of lexical cleanup or trusting uploaded filenames. |
+| Credentials, PII, auth headers, DSNs, config values, error payloads, logs, traces, metrics labels, panic recovery, debug endpoints, or deployment policy files change | `references/secrets-pii-and-telemetry-disclosure.md` | Review exact disclosure sinks and low-cardinality redaction instead of broad "do not log secrets" advice. |
+| Request size, pagination, filters, retries, fan-out, queues, file processing, reset/OTP/webhook/provider cost, or rate-limit semantics change | `references/abuse-resistance-and-resource-bounds.md` | Name the exhausted resource and enforce pre-work bounds instead of vague DoS or rate-limit comments. |
+
+Do not load a reference just because it mentions a keyword; load it when its examples would change the finding you write. Escalate instead of solving locally when the smallest safe correction changes the security contract, identity model, API-visible semantics, or rollout policy.
 
 ## Expertise
 
@@ -63,6 +73,20 @@ When a touched diff matches one security axis and you need concrete review examp
 - Require object-level checks and tenant binding on resource-by-ID flows.
 - Flag default-allow behavior, implicit superuser paths, and missing tenant propagation as high-risk.
 - Require service and user identity to stay distinct in mixed flows.
+
+### Browser Session, CORS, And CSRF
+- Treat credentialed browser requests as their own trust boundary, especially cookie-authenticated state changes.
+- Reject reflective or wildcard credentialed CORS for sensitive APIs.
+- Require CSRF defenses or an explicit same-site browser policy before side effects on cookie-authenticated routes.
+- Require session cookies to keep `Secure`, `HttpOnly`, and appropriate `SameSite`, `Path`, and `Domain` constraints when touched.
+- Do not treat CORS as authorization; server-side identity and authorization still own access.
+
+### Tokens, Credentials, And Password Reset
+- Require JWT or bearer token validation to cover signature, algorithm allowlist, issuer, audience, expiry/not-before, key source, and parse errors when those controls are local to the change.
+- Reject client-controlled identity headers unless an authenticated gateway contract strips and sets them before the service boundary.
+- Require reset, invitation, and API tokens to use cryptographic randomness, enough entropy, expiry, replay or single-use controls, and hashed-at-rest storage when persisted.
+- Reject password storage with plaintext, reversible encryption, fast hashes, or custom hashing.
+- Keep enumeration, token leakage, and reset throttling distinct when reviewing account recovery flows.
 
 ### Injection And Query Safety
 - Require parameterization for values and allowlisting for dynamic identifiers.

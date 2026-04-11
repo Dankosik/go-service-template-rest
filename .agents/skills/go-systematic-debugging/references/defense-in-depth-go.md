@@ -1,54 +1,32 @@
 # Defense-In-Depth After Root-Cause Fix
 
+## Behavior Change Thesis
+When loaded after a root-cause fix, this file makes the model add only the owning-layer guardrail justified by the failure mode instead of broad hardening, retries, metrics, or redesign.
+
 ## When To Load
-Load this reference after the root cause is proven and the local fix is clear, but recurrence prevention is still a question.
+Load after the root cause is proven and the local fix is clear, but recurrence prevention, diagnostics, or an additional guardrail is still being considered.
 
-Use it to add only the guardrails justified by the discovered failure mode.
+## Decision Rubric
+- Fix the earliest valid boundary first; guardrails come after root cause, not instead of it.
+- Add a guardrail only when it blocks the same defect class or materially improves future triage.
+- Put the guardrail at the layer that owns the invariant: transport, application/domain, infrastructure adapter, or diagnostics.
+- Reject plausible guardrails explicitly when they add complexity without blocking recurrence.
+- Escalate if the guardrail changes API, timeout, retry, durability, security, data, or rollout semantics.
 
-## Commands
-Verify the source-level fix before adding guardrails:
-
-```bash
-go test ./path/to/pkg -run '^TestName$' -count=1 -v
-go test ./path/to/pkg -run '^TestName$' -race -count=1 -v
-go test ./path/to/pkg/...
-go build ./...
-```
-
-When guardrails add diagnostics, run the command that exercises the bad input or failure path:
-
-```bash
-go test ./path/to/pkg -run '^TestRejectsBadInput$' -count=1 -v
-go test ./path/to/pkg -run '^TestPreservesContextCancellation$' -count=1 -v
-```
-
-## Evidence To Capture
-- proven root cause and first broken invariant
-- guardrail layer: transport, application, domain, infrastructure, or diagnostics
-- why each guardrail blocks recurrence of this defect class
-- RED/GREEN proof for the old failure and any new guardrail test
-- explicit note when a plausible guardrail was rejected as over-hardening
-
-## Layer Model
-1. Transport boundary: decode, size limits, required fields, semantic validation.
-2. Application or use-case layer: business preconditions and transition checks.
-3. Infrastructure adapters: persistence, network, cache, context propagation, and resource ownership.
-4. Diagnostics layer: bounded logs, metrics, traces, or error wrapping for future forensics.
-
-## Go Example
+## Imitate
 
 ```go
-// Layer 1: transport validation.
+// Transport boundary: reject impossible request shape.
 if req.AccountID == "" {
 	return problem.BadRequest("account_id is required")
 }
 
-// Layer 2: domain/application invariant.
+// Domain/application invariant: reject invalid state transition.
 if amount <= 0 {
 	return ErrInvalidAmount
 }
 
-// Layer 3: infrastructure safety.
+// Infrastructure safety: preserve caller context and bound adapter work.
 ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 defer cancel()
 if err := repo.Save(ctx, entity); err != nil {
@@ -56,22 +34,37 @@ if err := repo.Save(ctx, entity); err != nil {
 }
 ```
 
-## Bad Debugging Moves
-- adding unrelated validation, retries, metrics, and refactors because the file is already open
-- hiding the root cause behind a defensive nil check with no regression test
-- adding diagnostics with secret leakage or high-cardinality fields
-- changing API, timeout, retry, or data semantics without escalating the decision
-- keeping broad guardrails that no longer connect to the proven failure
+Copy the ownership: each guardrail lives at the boundary that can enforce the specific invariant.
 
-## Good Debugging Moves
-- fix the earliest valid boundary first
-- add one guardrail at the layer that owns the invariant
-- keep diagnostics bounded and useful for recurrence triage
-- reject over-hardening explicitly when it adds complexity without blocking the defect class
-- verify the original failure and the new guardrail path separately
+```text
+Rejected guardrail: package-wide nil checks in handlers.
+Reason: the proven defect was repository missing-row mapping; handler checks would hide the contract violation and add no new detection.
+```
 
-## Source Links
-- [Go diagnostics](https://go.dev/doc/diagnostics)
-- [context package](https://pkg.go.dev/context)
-- [errors package](https://pkg.go.dev/errors)
-- [testing package](https://pkg.go.dev/testing)
+Copy the explicit rejection when hardening sounds plausible but does not block the recurrence.
+
+## Reject
+
+```text
+Also added retries, extra validation, metrics, and a cache fallback while fixing the nil panic.
+```
+
+This expands a local root-cause fix into unrelated policy and observability changes.
+
+```go
+if result == nil {
+	return nil
+}
+```
+
+This may hide the bad state instead of adding a guardrail at the owner of the invariant.
+
+## Agent Traps
+- Treating "defense in depth" as permission for unrelated refactors.
+- Adding diagnostics with secrets, PII, or unbounded-cardinality fields.
+- Keeping a guardrail only because it was useful during debugging.
+- Forgetting to prove the original failure separately from the new guardrail path.
+- Changing retries or timeouts as a guardrail without reliability/design approval.
+
+## Validation Shape
+Record the proven root cause, first broken invariant, guardrail layer, why the guardrail blocks recurrence, RED/GREEN proof for the original failure, and a separate command for any new guardrail behavior.

@@ -9,7 +9,7 @@ description: "Verify correctness or readiness claims with fresh command evidence
 Prevent false-positive completion claims by requiring fresh verification evidence that matches the scope of the claim.
 
 ## Scope
-- verify statements such as “fixed”, “tests pass”, “lint clean”, “build succeeds”, or “ready for handoff”
+- verify statements such as "fixed", "tests pass", "lint clean", "build succeeds", or "ready for handoff"
 - map each claim to the smallest command set that honestly proves it
 - run commands, inspect results, and report factual outcomes
 - block optimistic completion language when proof is missing or weaker than the claim
@@ -32,16 +32,16 @@ Do not:
 - If command output shows cached or skipped work, keep the conclusion narrower than an executed green run unless the cache or skip semantics are sufficient for the claim.
 
 ## Lazy References
-Load only the reference needed for the claim shape:
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default. Load more only when the claim clearly spans independent decision pressures, such as delegated work plus generated API drift plus a failed proof command.
 
-| Reference | Load when |
-|---|---|
-| `references/claim-to-proof-mapping.md` | choosing the proof set for ambiguous completion, readiness, test, lint, build, or handoff claims |
-| `references/focused-vs-repository-wide-verification.md` | deciding whether focused package proof is enough or a repository-wide claim needs broader checks |
-| `references/go-test-build-race-and-lint-evidence.md` | matching Go test, build, race detector, vet, and lint claims to command evidence |
-| `references/generated-api-and-migration-verification.md` | generated API, OpenAPI, sqlc, migration, or contract drift changed |
-| `references/delegated-work-verification.md` | another agent, tool, CI snippet, or prior session claims work is done |
-| `references/failure-and-gap-reporting.md` | any required proof failed, was skipped, was not run, or is weaker than the requested claim |
+Before loading, name the behavior-change thesis you need: "When loaded for symptom X, this file makes me choose Y instead of likely mistake Z." If no reference has a concrete thesis for the symptom, stay in `SKILL.md` and inspect live repo files such as `Makefile` or `docs/build-test-and-development-commands.md` as needed.
+
+| Reference | Symptom | Behavior change |
+|---|---|---|
+| `references/claim-to-proof-mapping.md` | ambiguous "fixed", "green", "ready", test, lint, build, race, package, or repo claim | choose the narrowest sufficient proof for the exact claim instead of either over-running unrelated checks or generalizing a focused pass to repo readiness |
+| `references/generated-api-and-migration-verification.md` | OpenAPI, generated API, mocks, stringer, sqlc, query, or migration surface changed | add drift or migration rehearsal proof instead of treating compile/tests as enough or accepting skipped migration output as validation |
+| `references/delegated-work-verification.md` | another agent, tool, CI snippet, or prior session says work is done | rebind the delegated claim to current workspace evidence instead of treating a report or stale log as proof |
+| `references/failure-and-gap-reporting.md` | proof failed, skipped, was missing, was cached unexpectedly, or is weaker than the requested claim | report "not verified" or "partially verified" with the blocking signal and next verification action instead of writing a positive closeout |
 
 ## Expertise
 
@@ -64,7 +64,7 @@ Use these defaults unless the claim scope requires something stricter:
 - readiness claim: combine the checks required by the changed surface; never use one green check as proof for unrelated surfaces
 
 ### Freshness And Scope
-- “Fresh” means executed in the current iteration against the current workspace state.
+- "Fresh" means executed in the current iteration against the current workspace state.
 - Focused verification is valid only for a focused claim.
 - Broad claims require broad proof.
 - Do not extrapolate from targeted checks to repository-wide success.

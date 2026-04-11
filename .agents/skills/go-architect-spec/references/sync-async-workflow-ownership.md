@@ -1,78 +1,52 @@
 # Sync Async Workflow Ownership
 
+## Behavior Change Thesis
+When loaded for request-path vs async workflow decisions, this file makes the model name the process owner, pivot, durable state, and completion contract instead of choosing a queue, saga, cron, or workflow engine as the architecture.
+
 ## When To Load
-Load this when a task asks whether work belongs on the request path, in a queue, in a saga, behind a process manager, through choreography, or in a workflow engine.
+Load when a task asks whether work belongs on the request path, in a queue, in a saga, behind a process manager, through choreography, or in a workflow engine.
 
-Use it to name the process owner, pivot transaction, command/event distinction, state machine, retry and timer ownership, manual repair owner, and client-visible completion model. Do not choose a broker or workflow engine because it is available.
+## Decision Rubric
+- Keep hard acceptance invariants inside one local transaction boundary when possible.
+- Use synchronous calls only when the caller needs immediate finality and the deadline, retry, idempotency, and fail-closed behavior are explicit.
+- Use events for independent reactions that cannot decide whether the source fact exists.
+- Use commands or queues for owned work distribution where one owner accepts responsibility.
+- Use orchestration when one owner must track timers, retries, approvals, cancellation, ambiguous outcomes, or operator repair.
+- Use choreography only when independent reactions do not need a central status, cancellation, or repair owner.
+- Consider a workflow engine only after internal state machine/process manager limits are named: long timers, human tasks, replay/debug needs, fleet-wide operations, or cross-owner orchestration.
 
-## Decision Examples
+## Imitate
 
-### Example 1: Merchant refunds with partner reversals
-Context: Refunds require partner reversal calls, 24-hour retry timers, finance approval over $10k, manual repair for ambiguous partner outcomes, and an auditable requester-visible status. One engineer wants a workflow engine immediately; another wants cron jobs plus status flags in `payments`.
+### Refund With Partner Reversal
+Context: refunds require partner reversal calls, 24-hour retry timers, finance approval over a threshold, manual repair for ambiguous partner outcomes, and an auditable requester-visible status.
 
-Selected option: Make `payments` the process owner and model refunds as a durable state machine or process manager first. Use orchestration because one owner must track timers, approvals, retries, ambiguous outcomes, cancellation, and manual repair. Return a durable status resource/operation after starting the flow instead of holding the request open until the partner reversal is final.
+Choose: make `payments` the process owner and model refunds as a durable state machine or process manager first. Return a durable operation/status resource after starting the flow.
 
-Rejected options:
-- Plain cron plus ad hoc flags, because it hides process state and makes stuck detection and repair ownership ambiguous.
-- Immediate workflow-engine adoption without criteria, because the architecture decision is durable workflow ownership, not tool selection.
-- Pure choreography, because independent events do not provide one authoritative owner for timers, approvals, and repair.
+Copy: this chooses durable ownership and client-visible progress before deciding whether the implementation needs a workflow engine.
 
-Evidence that would change the decision:
-- Workflow volume, human approvals, long timers, replay/debug needs, or cross-owner orchestration exceed what an internal state machine can operate safely.
-- A platform workflow engine already exists with proven operational support and migration path.
-- The flow becomes a simple fire-and-forget domain reaction with no central status, repair, or cancellation requirement.
-- A hard invariant must remain inside one local transaction, pushing more of the flow back into a single owner.
+### Independent Order Reactions
+Context: order placement should notify analytics, send marketing email, and update a recommendation index. None of those consumers can decide whether the order exists.
 
-Failure modes and rollback implications:
-- Ambiguous partner outcomes can double-refund unless partner calls are idempotent and reconciled.
-- A workflow engine migration can strand in-flight executions; define drain, replay, and operator repair before switching engines.
-- Rolling back after the pivot may require forward recovery, not compensation; name the pivot and what rollback cannot undo.
+Choose: publish an event from the owner transaction using an outbox or equivalent atomic linkage. Let consumers handle duplicates, retries, poison messages, and replay under their own ownership.
 
-### Example 2: Independent downstream reactions
-Context: Order placement should notify analytics, send marketing email, and update a recommendation index. None of these reactions can decide whether the order exists.
+Copy: this avoids over-orchestrating unrelated side effects.
 
-Selected option: Publish events from the owning order transaction using an outbox or equivalent atomic linkage. Let independent consumers react asynchronously with idempotency, retry, and dead-letter ownership.
+### Checkout Acceptance Before Pivot
+Context: checkout must ensure a credit or inventory invariant before accepting the order.
 
-Rejected options:
-- A central saga orchestrator for unrelated side effects.
-- Synchronous calls from order creation to every downstream consumer.
-- Publishing events without an outbox or equivalent when the order write and event emission must agree.
+Choose: keep the hard acceptance invariant in one local transaction where possible. If the invariant spans owners, use reservation or pending semantics only when eventual consistency and compensation are accepted.
 
-Evidence that would change the decision:
-- A downstream step becomes part of the business decision to accept the order.
-- A reaction requires ordered process state and user-visible repair owned by one team.
-- A consumer cannot tolerate event lag and must be on a correctness-critical path.
+Copy: this avoids remote calls after a non-compensable pivot without recovery.
 
-Failure modes and rollback implications:
-- Duplicate or reordered events can corrupt derived consumers unless handlers are idempotent and ordering assumptions are explicit.
-- A poison message can block a queue; define DLQ ownership and replay rules.
-- If event emission is broken, rollback may be a relay disable plus outbox replay, not a data rollback.
+## Reject
+- "Put it in Kafka because we have Kafka." Bad because transport does not define ownership, state, retry, or repair.
+- "Cron plus status flags is enough." Bad when timers, approvals, ambiguous outcomes, and manual repair need one durable owner.
+- "Use pure choreography for a user-visible long-running process." Bad when cancellation, status, repair, and retry authority must be centralized.
+- "Hold the HTTP request open until every side effect completes." Bad when only acceptance needs to be synchronous.
+- "Add distributed locks to preserve a hard cross-owner invariant." Bad because it usually signals the ownership boundary is wrong.
 
-### Example 3: Synchronous decision before a pivot
-Context: Checkout must ensure an order does not exceed a local credit or inventory invariant before the order is accepted.
-
-Selected option: Keep hard acceptance invariants in one local transaction boundary when possible. If the invariant spans owners, use a saga only when eventual consistency and compensation are acceptable; otherwise revisit the ownership boundary.
-
-Rejected options:
-- Remote calls after a non-compensable pivot without reconciliation.
-- Stretching the HTTP request until every downstream side effect completes.
-- Distributed locks as the primary correctness mechanism.
-
-Evidence that would change the decision:
-- The operation can be expressed as a reservation or pending state with explicit timeout and compensation.
-- Business accepts eventual consistency and exposes a pending status instead of immediate finality.
-- The invariant is not actually hard and can become a derived read or notification concern.
-
-Failure modes and rollback implications:
-- Remote calls on the critical path consume deadline and failure budget; define timeout and fail-closed behavior.
-- Compensation may not be possible after money movement, partner submission, or legal notification.
-- If the ownership boundary is wrong, rollback should collapse the flow back into one owner rather than adding more distributed coordination.
-
-## Source Links Gathered Through Exa
-- Microservices.io, "Saga": https://microservices.io/patterns/data/saga
-- Microservices.io, "Transactional outbox": https://microservices.io/patterns/data/transactional-outbox.html
-- AWS Prescriptive Guidance, "Saga choreography pattern": https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-choreography.html
-- AWS Compute Blog, "Building a serverless distributed application using a saga orchestration pattern": https://aws.amazon.com/blogs/compute/building-a-serverless-distributed-application-using-a-saga-orchestration-pattern/
-- AWS Prescriptive Guidance, "Transactional outbox pattern": https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html
-- Azure Architecture Center, "CQRS pattern": https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs
-
+## Agent Traps
+- Do not call every multi-step flow a saga. Name the pivot and whether each step is compensable or forward-recoverable.
+- Do not publish events without atomic linkage when the DB state and emitted fact must agree.
+- Do not leave DLQ ownership implicit. A dead letter is a business and operations queue, not a trash can.
+- Do not introduce a workflow engine without in-flight migration, replay, operator repair, and rollback consequences.

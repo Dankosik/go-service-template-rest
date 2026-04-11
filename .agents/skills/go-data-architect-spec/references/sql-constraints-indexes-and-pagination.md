@@ -1,61 +1,56 @@
 # SQL Constraints, Indexes, And Pagination
 
+## Behavior Change Thesis
+When loaded for a task where uniqueness, overlap, JSONB, indexes, or list pagination might be left to application code or query convenience, this file makes the model choose database-enforced invariants and access-pattern indexes instead of likely mistake "the app checks it first, JSON stores it flexibly, and offset pagination is good enough."
+
 ## When To Load
-Load this when the task involves schema shape, uniqueness, foreign keys, `CHECK` constraints, partial indexes, exclusion constraints, composite index order, JSONB placement, partitioned uniqueness, or operational-list pagination.
+Load this for invariant-bearing SQL constraints, physical index shape, JSONB placement, partitioned uniqueness, or deterministic operational pagination.
 
-Use it to encode data invariants in SQL where the database can enforce them, while keeping index choices tied to known access patterns and rollout cost.
+## Decision Rubric
+- Prefer SQL constraints for row-local and relation-local invariants the database can enforce: `UNIQUE`, composite `UNIQUE`, `NOT NULL`, `CHECK`, foreign keys inside one owner boundary, partial unique indexes, and exclusion constraints.
+- Use application checks only as user-friendly preflight; they do not replace the write-time constraint.
+- Keep invariant-bearing, join-critical, or heavily filtered fields relational. Use `jsonb` for bounded adjunct attributes with weak invariants and explicit query limits.
+- Tie every index to a filter, join, sort, uniqueness, retention, or partition-pruning need. Every index adds write cost, storage cost, and rollout cost.
+- Align composite index order with equality filters first, then range or sort columns, then a unique tie-breaker when pagination needs deterministic order.
+- Use keyset pagination for high-churn operational lists; use offset only when the workload tolerates drift and cost.
 
-## Decision Examples
+## Imitate
 
-### Example 1: One active subscription per tenant and product
+### One active subscription per tenant and product
 Context: A tenant can have many historical subscriptions for a product, but only one active subscription at a time.
 
-Selected option: Model current and historical state explicitly, and enforce active uniqueness with a partial unique index such as `(tenant_id, product_id) WHERE ended_at IS NULL` or an equivalent status predicate if that is the canonical active marker.
+Model current and historical state explicitly. Enforce active uniqueness with a partial unique index such as `(tenant_id, product_id) WHERE ended_at IS NULL`, or an equivalent status predicate if that is the canonical active marker.
 
-Rejected options:
-- Check active uniqueness only in application code.
-- Use one mutable `subscription_status` JSONB field without a relational constraint.
-- Make `(tenant_id, product_id)` globally unique and lose history.
+Copy this because the database guards the one-active invariant while history remains possible.
 
-Migration and rollback consequences:
-- Detect and repair duplicate active rows before creating the partial unique index.
-- Build the index concurrently on live PostgreSQL tables when write blocking matters.
-- Rollback is conditional after the database starts rejecting duplicates; old code that allowed multiple active rows must not be redeployed without a compatibility decision.
+### Time interval overlap rule
+Context: Confirmed reservations must not overlap for the same tenant and resource.
 
-### Example 2: Time interval overlap rule
-Context: A resource booking table must reject overlapping confirmed reservations per tenant and resource.
+Use an exclusion constraint or an explicit lease/hold model when interval overlap is the invariant. Keep pending, confirmed, expired, and canceled states separate if overlap rules differ.
 
-Selected option: Use an exclusion constraint or a carefully modeled lease/hold table when the invariant is truly interval overlap. Keep pending, confirmed, expired, and canceled states separate if overlap rules differ by state.
+Copy this because cross-row interval rules need a real concurrency story, not a row-local `CHECK`.
 
-Rejected options:
-- Use a `CHECK` constraint that tries to inspect other rows.
-- Depend on `SELECT` then `INSERT` without a lock or constraint.
-- Collapse pending and confirmed reservations into one generic status if their overlap behavior differs.
+### Operational pagination under churn
+Context: A worker or API lists recent records while new rows are inserted.
 
-Migration and rollback consequences:
-- Exclusion constraints require test data that exercises boundary inclusivity and cancellation states.
-- Existing overlaps must be resolved before validation.
-- If the constraint is removed during rollback, identify who repairs conflicts created while it is absent.
+Use keyset pagination with a stable sort and unique tie-breaker, such as `(tenant_id, created_at DESC, id DESC)`, and add an index aligned with equality filters and sort order.
 
-### Example 3: Operational pagination under churn
-Context: An API or worker list needs deterministic pages of recent records while new records are being inserted.
+Copy this because it prevents duplicate or missing rows during churn and keeps the access path explicit.
 
-Selected option: Use keyset pagination with a stable sort and unique tie-breaker, such as `(tenant_id, created_at DESC, id DESC)`, and create an index aligned with equality filters and sort order.
+## Reject
+- "Check active uniqueness before insert." Two writers can pass the check unless the database enforces the invariant.
+- "Put subscription state in JSONB and validate in Go." That hides uniqueness and query semantics from the database.
+- "Use `CHECK` to prevent overlapping reservations." Row-local checks cannot inspect competing rows.
+- "Sort by `created_at` only." Equal timestamps make cursor order unstable without a unique tie-breaker.
+- "Add a covering index for every list field." Untethered indexes increase write cost and migration risk without proving selectivity.
 
-Rejected options:
-- Offset pagination as the default for high-churn operational lists.
-- Sorting only by `created_at` when many rows can share the same timestamp.
-- Adding broad covering indexes without checking write cost and predicate selectivity.
+## Agent Traps
+- Do not use a plain unique constraint when historical rows require partial uniqueness.
+- Do not suggest cross-service foreign keys; keep referential integrity inside one service-owned data boundary.
+- Do not imply partitioned uniqueness works globally unless the partition key participates in the unique definition or the engine supports the exact shape.
+- Do not treat index removal as always correctness-neutral if it backed uniqueness or exclusion.
 
-Migration and rollback consequences:
-- Add supporting indexes before switching readers, preferably concurrently for live large tables.
-- Keep old list behavior available until cursors generated by old clients or workers are drained.
-- Removing the index is usually safe for correctness but can be a performance rollback; removal should consider query plans and write amplification.
-
-## Source Links Gathered Through Exa
-- PostgreSQL, "Constraints": https://www.postgresql.org/docs/current/ddl-constraints.html
-- PostgreSQL, "Partial Indexes": https://www.postgresql.org/docs/current/indexes-partial.html
-- PostgreSQL, "Multicolumn Indexes": https://www.postgresql.org/docs/current/indexes-multicolumn.html
-- PostgreSQL, "CREATE INDEX": https://www.postgresql.org/docs/current/sql-createindex.html
-- PostgreSQL, "SELECT": https://www.postgresql.org/docs/current/sql-select.html
-
+## Validation Shape
+- Constraint proof includes duplicate or conflict detection before creation, expected constraint definition, and what happens to legacy violating rows.
+- Pagination proof includes stable sort columns, unique tie-breaker, cursor contents, and index shape.
+- JSONB proof names which fields are adjunct, which fields stay relational, and which queries are intentionally unsupported or bounded.

@@ -1,43 +1,20 @@
 # Allocation, GC, And SyncPool Review
 
+## Behavior Change Thesis
+When loaded for symptom "the diff claims or risks allocation churn, GC pressure, buffer reuse, retained backing arrays, or `sync.Pool` behavior," this file makes the model choose evidence-backed allocation and retention review instead of likely mistake "recommend pooling or manual reuse as a default optimization."
+
 ## When To Load
-Load this when a review touches allocation churn, GC pressure, heap profiles, allocs profiles, `-benchmem`, buffer reuse, `sync.Pool`, object pooling, large retained backing arrays, or runtime memory metrics.
+Load this when the review touches allocation churn, GC pressure, heap profiles, allocs profiles, `-benchmem`, buffer reuse, `sync.Pool`, object pooling, large retained backing arrays, or runtime memory metrics.
 
-Use this to separate real allocation bottlenecks from speculative allocation cleanup. Pooling and manual reuse add complexity and should earn their keep with evidence.
+## Decision Rubric
+- Separate allocation churn from retained memory: use `-benchmem` and allocs or allocation-space evidence for churn; use in-use heap evidence for retention.
+- Require old-vs-new `-benchmem` when allocation, GC, buffer reuse, or `sync.Pool` claims are used to justify complexity.
+- Treat `sync.Pool` as suspicious until evidence shows pooled objects are short-lived, reused often, reset safely, and reduce allocation or GC pressure under the real workload.
+- Check for oversized backing arrays, request-specific data leakage, missing reset discipline, and single-threaded toy benchmarks for pooled objects.
+- Prefer reducing duplicate materialization, avoiding hot-loop conversions, and changing data flow before adding pooling.
+- Use `hot-path-cost-model.md` when the allocation issue is mainly repeated encode/decode or copy amplification in a loop.
 
-## Review Smell Patterns
-- A PR adds `sync.Pool` without `-benchmem`, heap/allocs profile, or a measured allocation bottleneck.
-- A pool stores large buffers or structs without bounding or resetting them before reuse.
-- A pooled object may carry request-specific data into the next request.
-- The diff converts between `[]byte` and `string` in a hot loop or materializes the same payload repeatedly.
-- A handler allocates a new `bytes.Buffer`, encoder, decoder, map, slice, regex, or scratch object per item.
-- A heap profile is used to prove allocation churn even though the claim is about total allocations, not live objects.
-- Runtime memory metrics are sampled without explaining whether the metric is cumulative, instantaneous, or a distribution.
-- A pool is benchmarked only in a single-threaded toy workload while production use is concurrent.
-
-## Evidence Required
-- Allocation claim: `-benchmem` old-vs-new results, ideally with benchstat.
-- Total allocation churn: allocs profile or memory profile viewed with allocation-space/object focus, plus benchmark allocation metrics.
-- Retained memory claim: heap profile with in-use focus and a workload that reaches steady state.
-- GC pressure claim: runtime metrics, GC stats, heap/allocs profile, or representative load evidence that connects allocation rate to latency or CPU.
-- `sync.Pool` claim: proof that pooled objects are short-lived, reused across many calls, reset safely, and reduce allocations or GC pressure under the real workload.
-
-## Bad Finding
-```text
-[medium] [go-performance-review] internal/encode/encode.go:57
-Issue:
-Use sync.Pool for this buffer.
-Impact:
-It will reduce GC.
-Suggested fix:
-Pool buffers.
-Reference:
-N/A
-```
-
-Why it fails: it prescribes pooling without proving allocation churn or GC pressure, and it ignores reset and retention risk.
-
-## Good Finding
+## Imitate
 ```text
 [medium] [go-performance-review] internal/encode/encode.go:57
 Issue:
@@ -47,10 +24,36 @@ The pool may retain rare multi-megabyte buffers and increase steady-state heap w
 Suggested fix:
 First prove the allocation bottleneck with old-vs-new `-benchmem` and an allocs profile for typical and large responses. If pooling still helps, reset buffers and discard oversized ones before `Put`.
 Reference:
-Go `sync.Pool` purpose and runtime/pprof heap vs allocs profile guidance.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: distinguish churn from retention, name the pool-specific hazard, and require proof before keeping the complexity.
+
+## Reject
+```text
+Issue:
+Use sync.Pool for this buffer.
+Impact:
+It will reduce GC.
+```
+
+Reject it because it prescribes pooling without proving allocation churn or GC pressure, and it ignores reset and retention risk.
+
+```text
+Issue:
+The heap profile is smaller, so total allocations improved.
+```
+
+Reject it because in-use heap can improve while allocation churn remains high.
+
+## Agent Traps
+- Recommending `sync.Pool` to look performance-savvy when the simpler fix is fewer conversions or one materialization.
+- Missing that rare large responses can poison a pool with oversized buffers.
+- Forgetting pooled objects can carry request-specific data across requests if reset discipline is incomplete.
+- Treating runtime memory metrics as proof without checking whether each metric is cumulative, instantaneous, or a distribution.
+- Ignoring concurrency when a pool benchmark only covers single-threaded reuse.
+
+## Validation Shape
 ```bash
 go test -run '^$' -bench '^BenchmarkEncodeResponse/(size=small|size=large)$' -benchmem -count=10 ./internal/encode > new.txt
 benchstat old.txt new.txt
@@ -60,12 +63,4 @@ go tool pprof -top -inuse_space mem.out
 go test -run '^$' -bench '^BenchmarkEncodeResponseParallel$' -benchmem -count=10 ./internal/encode > parallel.txt
 ```
 
-For runtime memory evidence, state the metric names and whether rates were derived from cumulative metrics such as heap allocation counters.
-
-## Source Links From Exa
-- [sync.Pool docs](https://pkg.go.dev/sync#Pool)
-- [runtime/pprof package](https://pkg.go.dev/runtime/pprof)
-- [runtime/metrics package](https://pkg.go.dev/runtime/metrics)
-- [Go Diagnostics](https://go.dev/doc/diagnostics)
-- [testing package benchmarks](https://pkg.go.dev/testing)
-
+For runtime memory evidence, state metric names and whether rates were derived from cumulative metrics such as heap allocation counters.

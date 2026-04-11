@@ -1,44 +1,40 @@
 # Reliability Fail-Path Test Obligations
 
+## Behavior Change Thesis
+When loaded for symptom "the behavior involves timeouts, retries, cancellation, shutdown, degradation, or async failure", this file makes the model require deterministic fail-path proof instead of likely mistake "say to test retries/timeouts without failure classes or side-effect observables."
+
 ## When To Load
-Load this when test strategy must cover timeouts, cancellation, retry budgets, retry/non-retry classification, idempotency under retry, backpressure, degradation, startup/shutdown, poison messages, or async recovery.
+Load this when test strategy must cover timeout propagation, caller cancellation, retry budgets, retry/non-retry/poison classification, idempotency under retry, backpressure, degradation, startup/shutdown, or async recovery.
 
-## Source Grounding
-- Use approved reliability requirements for timeout durations, retry eligibility, backpressure policy, and degradation outcomes.
-- Use Go context and race-detector docs to calibrate cancellation and concurrency proof, but do not design reliability behavior here.
-- Use repo commands to name runnable evidence only after selecting the proof level.
+## Decision Rubric
+- Cancellation proof must preserve recognizable deadline/cancellation semantics when the contract depends on them, and must prove no success side effect after cancellation.
+- Retry proof must separate first-success, transient-then-success, exhausted retry, and non-retryable paths; add poison handling for async flows.
+- Idempotency under retry must prove duplicate side-effect suppression, not just duplicate response shape.
+- Shutdown proof must use deterministic lifecycle signals: drain, join, flush, abandon, readiness/draining state, or deadline outcome. Do not rely on sleep luck.
+- Backpressure proof must name accepted, rejected, queued, shed, or degraded behavior plus bounded resource expectations if approved.
+- Degradation proof must state fail-open, fail-closed, queued, skipped, stale-read, or escalated behavior from the approved reliability spec.
+- Use integration only when real DB/network/cache/runtime behavior is the proof target; use component/unit proof when deterministic fakes can honestly drive the failure.
 
-## Selected/Rejected Level Examples
-| Fail-path obligation | Selected level | Rejected level | Why |
+## Imitate
+| Reliability Behavior | Required Rows | Selected Proof | Observable To Copy |
 | --- | --- | --- | --- |
-| Pure retry classifier maps errors to retry/non-retry/poison | Unit | E2E | The policy can be proven deterministically without runtime orchestration. |
-| DB query cancellation or transaction rollback on context deadline | Integration | Fake-only unit | The proof depends on `Context` propagation into real DB operations or transaction semantics. |
-| Worker shutdown closes input, drains in-flight work, and joins goroutines | Targeted component test under race execution | Broad API smoke | The risky behavior is goroutine lifecycle and shared state, not HTTP success. |
-| Retry after transport timeout must not duplicate a side effect | Contract plus integration if durable idempotency is storage-backed | Happy-path unit | The observable is duplicate suppression across the public or persistence boundary. |
-| Dependency outage follows degraded-mode policy | Integration or component test with controlled dependency failure | Live e2e outage test | Controlled failure proves the exact degraded outcome without fragile environment dependence. |
-| Poison async message is escalated and not retried forever | Integration or process-level component test | Unit-only classifier | The strategy must prove durable state, retry stopping, and escalation signal where those are owned. |
+| Timeout propagation | completes before deadline; dependency exceeds deadline; caller cancels | unit with controlled dependency or integration for DB/network boundary | recognizable context-derived error, no success side effect after cancellation |
+| Retry budget | first attempt succeeds; transient failure then success; exhausted retries; non-retryable error | unit for policy, integration when side effects are durable | attempt count, final error class, no duplicate durable write |
+| Graceful shutdown | no in-flight work; in-flight completes before deadline; in-flight exceeds deadline | component scenario under `-race` when shared state exists | draining state, joined goroutines, flushed or abandoned work per policy |
+| Poison async message | retryable; non-retryable; poison; replay duplicate; stuck item reconciliation | integration or process component | state transition, retry counter, DLQ/escalation, reconciliation marker |
 
-## Scenario Matrix Examples
-| Reliability behavior | Required rows | Selected proof | Pass/fail observable |
-| --- | --- | --- | --- |
-| Timeout propagation | completes before deadline, dependency exceeds deadline, caller cancels request | Unit with fake clock/dependency or integration for DB/network boundary | context-derived error remains recognizable, no success side effect after cancellation |
-| Retry budget | first attempt succeeds, transient failure then success, exhausted retries, non-retryable error | Unit for policy, integration when side effects are durable | attempt count, backoff budget if specified, final error class, no duplicate durable write |
-| Backpressure or load shedding | under limit accepted, over limit rejected or queued as specified, recovery after pressure drops | Component or contract depending on boundary | explicit overload status/error, queue size/state, no unbounded goroutine or memory growth claim |
-| Graceful shutdown | no in-flight work, in-flight completes before deadline, in-flight exceeds shutdown deadline | Component test under race when shared state exists | readiness/draining state, joined goroutines, flushed/abandoned work per policy |
-| Async failure classes | retryable, non-retryable, poison, replay duplicate, stuck item reconciliation | Integration or process-level component | state transition, retry counter, DLQ/escalation, reconciliation marker |
+## Reject
+- "Test timeout" with no controlled slow dependency or cancellation trigger.
+- "Test retry" without non-retryable and exhausted-retry rows.
+- "Run race tests" without a scenario that executes worker lifecycle or shared state.
+- "Shutdown should complete" without a join/drain/flush/abandon observable.
+- "Degraded mode works" without naming the approved degraded outcome.
 
-## Pass/Fail Observables
-- Cancellation proof preserves recognizable context/deadline semantics when the contract depends on it.
-- Retry tests name retryable and non-retryable classes separately.
-- Idempotency proof covers duplicate side-effect suppression, not just duplicate response shape.
-- Shutdown proof names lifecycle state and completion/join signal; it must not rely on sleep luck.
-- Race validation is required for shared-state or goroutine-lifecycle changes and must execute the risky path.
-- Degradation proof states whether failure is fail-open, fail-closed, queued, skipped, or escalated.
+## Agent Traps
+- Do not invent timeout durations, retry counts, poison policy, or degradation mode. Mark missing reliability semantics as blockers.
+- Do not use live outage e2e as the primary proof when a controlled dependency failure can prove the behavior deterministically.
+- Do not let idempotency proof stop at response equality; durable side effects are the usual bug.
+- Do not claim cancellation propagation if the planned observable only checks "some error."
 
-## Exa Source Links
-- [Canceling in-progress operations](https://go.dev/doc/database/cancel-operations)
-- [Executing transactions](https://go.dev/doc/database/execute-transactions)
-- [Data Race Detector](https://go.dev/doc/articles/race_detector.html)
-- [Go security best practices](https://go.dev/doc/security/best-practices)
-- [go command testing flags](https://pkg.go.dev/cmd/go#hdr-Testing_flags)
-
+## Validation Shape
+For each reliability behavior, name failure trigger, failure class, selected proof level, side-effect observable, and whether race or integration execution is required.

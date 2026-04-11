@@ -1,39 +1,43 @@
 # Cache Invalidation Staleness And TTL
 
+## Behavior Change Thesis
+When loaded for cache freshness, TTL, invalidation, stale-while-revalidate, negative caching, or key transition ambiguity, this file makes the model choose an operation-level freshness and invalidation contract instead of likely mistake `treat TTL as proof of correctness or rely on broad key scans`.
+
 ## When To Load
-Load this when the spec must define freshness classes, TTL, jitter, write-triggered invalidation, event-driven invalidation, stale-while-revalidate, negative caching, key versioning, or cache-key transitions. Use it before coding any cache path whose correctness depends on invalidation timing.
+Load this when the spec must define freshness classes, TTL, jitter, write-triggered invalidation, event-driven invalidation, stale-while-revalidate, negative caching, key versioning, or cache-key transitions.
 
 Stay out of primary schema ownership. If the invalidation answer requires a durable outbox table, projection rebuild, or cross-service event contract, write the DB/cache requirement and hand off the detailed data/distributed design.
 
-## Viable Options
-- TTL-only: viable when bounded staleness is acceptable and write volume or ownership makes exact invalidation unnecessary.
-- Write-triggered delete/update: viable when the writer owns all affected keys and can target them deterministically.
-- Event-driven invalidation: viable when a durable publication mechanism, idempotent consumer, replay, and lag observability are in scope.
-- Versioned key namespace: viable during rollout or when broad invalidation by prefix would otherwise require unsafe key scans.
-- Stale-while-revalidate: viable when serving stale data is product-acceptable and the spec names fresh TTL, stale window, refresh owner, and concurrency guard.
-- Negative caching: viable for expensive repeated misses, with a short TTL and separate handling for business negatives vs dependency failures.
+## Decision Rubric
+- Name the freshness class per operation: strong, bounded stale, stale-while-revalidate, or best-effort.
+- Use TTL-only only when bounded staleness is product-acceptable and exact invalidation is not required.
+- Use write-triggered invalidation only when the writer owns all affected keys or can target them deterministically.
+- Use event-driven invalidation only with durable publication, idempotent consumer, replay, lag observability, and reader behavior while lagged.
+- Use versioned namespaces for rollout or broad invalidation when wildcard key scans would otherwise be tempting; include cleanup so old versions do not leak memory.
+- Use stale-while-revalidate only with fresh TTL, stale window, refresh owner, coalescing, eligible consumers, and refresh-failure behavior.
+- Use negative caching only for expensive repeated business misses, with short TTL and separate treatment for transient dependency failures.
 
-## Selected And Rejected Examples
-Selected example: public profile reads may be stale for up to 30 seconds, so use cache-aside with `fresh_ttl=30s`, tenant/user/version key dimensions, and origin fallback on miss. Admin permission reads bypass cache or require a fresh permission version.
+## Imitate
+- Public profile read: cache-aside with `fresh_ttl=30s`, tenant/user/version key dimensions, and origin fallback; admin permission reads bypass cache or require a fresh permission version. Copy the split between public bounded-stale and admin strong paths.
+- Catalog copy: admin writer triggers targeted invalidation plus TTL fallback, with exact key dimensions or versioned namespace. Copy the habit of avoiding production wildcard scans.
+- Public catalog stale-while-revalidate: define fresh TTL, stale window, request coalescing, stale-eligible consumers, and refresh-failure behavior. Copy only when stale serving is product-acceptable.
 
-Selected example: catalog copy can use write-triggered invalidation from the admin writer plus TTL fallback. The spec names exact key dimensions and either targeted keys or a versioned namespace; it does not depend on production wildcard key scans.
+## Reject
+- Redis expired keyspace notifications as the exact moment a user-visible freshness window ends. Reject because expiry events are not exact wall-clock freshness proof.
+- TTL-only for permissions or API key rotation when admin changes must reflect immediately. Reject because bounded stale violates the operation class.
+- Negative caching dependency failures as if the resource truly does not exist. Reject because transient origin failure is not a business negative.
 
-Selected example: stale-while-revalidate for expensive public catalog pages defines `fresh_ttl`, `stale_window`, request coalescing, who can receive stale responses, and what happens when refresh fails.
+## Agent Traps
+- Do not use TTL as a substitute for invalidation when the contract requires immediate or strong behavior.
+- Do not invalidate with `KEYS` or broad runtime wildcard scans from production request paths.
+- Do not forget tenant, authorization, locale, version, price rule, and other response-shaping dimensions in the key.
 
-Rejected example: relying on Redis expired keyspace notifications as the exact moment a user-visible freshness window ends. Redis documents expired events as generated when the key is deleted, not exactly when TTL reaches zero.
-
-Rejected example: TTL-only for permissions or API key rotation when the admin UI must reflect changes immediately.
-
-Rejected example: negative caching dependency failures as if the user or resource truly does not exist. Cache business negatives separately from transient origin failures.
-
-## Staleness And Failure Semantics
+## Validation Shape
 - State the freshness class per operation: strong, bounded stale, stale-while-revalidate, or best-effort.
 - TTL is a maximum cache age, not proof that invalidation happened at a specific wall-clock moment.
 - Event-driven invalidation must define lag behavior, replay, duplicate handling, and what readers do while invalidation is delayed.
 - Versioned keys should include rollout and cleanup behavior so old versions do not become unbounded memory leaks.
 - Decode failure normally behaves like a miss plus an error counter; do not serve undecodable data.
-
-## Acceptance Checks
 - Every cacheable operation has a named staleness window or explicit strong-consistency bypass.
 - Every entry has TTL or equivalent bounded freshness; large synchronized groups use jitter.
 - Invalidation source is named: TTL-only, write-triggered, event-driven, versioned namespace, or manual purge.
@@ -41,9 +45,3 @@ Rejected example: negative caching dependency failures as if the user or resourc
 - No production request path depends on `KEYS` or broad runtime wildcard scans.
 - Stale-while-revalidate has fresh TTL, stale window, refresh owner, concurrency bound, and failure behavior.
 - Negative caching has a short TTL and does not cache dependency errors as business negatives.
-
-## Exa Source Links
-- [Redis `EXPIRE`](https://redis.io/docs/latest/commands/expire)
-- [Redis keys and values, including key expiration and `SCAN`/`KEYS`](https://redis.io/docs/latest/develop/using-commands/keyspace)
-- [Redis keyspace notifications](https://redis.io/docs/latest/develop/pubsub/keyspace-notifications/)
-- [Redis client-side caching reference](https://redis.io/docs/latest/develop/reference/client-side-caching/)

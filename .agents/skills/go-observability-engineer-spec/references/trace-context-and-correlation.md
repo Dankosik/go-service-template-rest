@@ -1,46 +1,47 @@
 # Trace Context And Correlation
 
-## When To Load This
-Load this reference when the spec needs request IDs, trace propagation, baggage, log correlation, async message correlation, span links, cross-service propagation, retry linkage, or DLQ/redrive correlation.
+## Behavior Change Thesis
+When loaded for request IDs, propagation, baggage, async correlation, retries, DLQ, redrive, batch, or fan-in symptoms, this file makes the model preserve safe trace/correlation continuity and use span links where lineage is not single-parent instead of likely mistake request-ID-only tracing, unfiltered baggage, or IDs as metric labels.
 
-## Operational Questions
-- How does the operator move from an alerting metric to one representative trace and then to related logs?
-- Which boundaries must preserve trace context: HTTP, gRPC, worker enqueue, message broker, retry queue, DLQ, redrive, or reconciliation?
-- Is there a single parent-child relationship, or should spans use links for batch, fan-in, retries, or ambient HTTP plus message contexts?
-- Which correlation fields are safe to propagate outside the trust boundary?
-- Which identifiers belong only in logs/traces and must never become metric labels?
+## When To Load
+Load this when the spec needs W3C Trace Context, baggage, request IDs, log correlation, cross-service propagation, async message correlation, span links, retry linkage, DLQ/redrive correlation, or a support handle that crosses boundaries.
 
-## Good Telemetry Examples
-- HTTP services accept and propagate W3C `traceparent` and `tracestate`, generate a request ID when missing, and include trace/log correlation fields on structured logs.
-- Async producers inject message creation context into message headers and record `correlation_id`, `message_id`, and `attempt` in logs/traces, not in metric labels.
-- Batch consumers use span links from the batch process span to message creation contexts, with per-message attributes on links when values vary.
-- Retry and DLQ transitions preserve the original correlation ID and message ID in logs/traces while metrics use bounded labels such as `reason="timeout"` and `queue="invoice-dlq"`.
-- Baggage is allowlisted, documented, and stripped or rewritten before leaving trusted boundaries.
+## Decision Rubric
+- Default HTTP-compatible propagation to W3C `traceparent` and `tracestate`; document any repo or platform exception.
+- Use request IDs as client/support handles and log correlation fields, not metric labels.
+- Use baggage only from an allowlist. Strip or rewrite it before crossing trust boundaries when the receiving side should not see the value.
+- Use parent-child spans for direct causality; use span links for batch, fan-in, retry/redrive, or processing under another ambient context.
+- Preserve original correlation/message identity through retry and DLQ transitions in logs/traces while metrics use bounded reason and destination labels.
+- Do not require one ID to solve every problem. Trace ID, request ID, message ID, correlation ID, and idempotency key can have different privacy and lifetime rules.
 
-## Bad Telemetry Examples
-- `requests_total{trace_id="..."}` because it creates one time series per trace and destroys metric usability.
-- Propagating `user_id`, raw tenant ID, account ID, email, token, or plan name in baggage without an allowlist and egress rule.
-- Forcing a batch consumer span to choose one producer as parent when it processed messages from many producers.
-- Regenerating a new correlation ID on every retry, making the operator unable to connect the original attempt, DLQ entry, and redrive.
+## Imitate
+- HTTP service accepts and propagates `traceparent` and `tracestate`, generates a request ID when missing, and includes trace/log correlation fields on structured logs.
+  Copy the boundary propagation plus support-handle split.
+- Async producer injects creation context into message headers and records `correlation_id`, `message_id`, and `attempt` in logs/traces only.
+  Copy the "headers/logs/traces, not metric labels" placement.
+- Batch consumer creates a process span with links to message creation contexts instead of choosing one producer as parent.
+  Copy the link-based lineage model.
+- DLQ/redrive keeps original correlation ID and message ID in logs/traces while metrics use `reason="timeout"` and `queue="invoice-dlq"`.
+  Copy the stable retry ancestry.
+
+## Reject
+- `requests_total{trace_id="..."}` or `consumer_failures_total{message_id="..."}`.
+- Propagating `user_id`, raw tenant ID, account ID, email, token, or plan name in baggage without allowlist and egress policy.
+- Regenerating a new correlation ID on every retry so the operator cannot connect original attempt, DLQ entry, and redrive.
 - Putting trace context only in logs while failing to inject or extract it on outbound calls.
+- Forcing a batch process to pretend one message is the parent of all others.
 
-## Cardinality Traps
-- Trace IDs, span IDs, request IDs, message IDs, correlation IDs, and retry job IDs as metric labels.
-- Baggage keys whose value space is unbounded or user-controlled.
-- Destination names derived from customer, tenant, or account identifiers.
-- Link attributes copied from full message headers instead of a bounded allowlist.
+## Agent Traps
+- Confusing correlation with causality. A shared correlation ID does not make a parent-child span relationship true.
+- Copying all message headers into span attributes or link attributes.
+- Treating third-party propagation as safe because values are "just metadata."
+- Letting trace context appear in alerts or metric labels rather than using trace links, exemplars, or logs.
+- Forgetting async retry/redrive ancestry when the happy path trace looks correct.
 
-## Selected And Rejected Options
-- Select W3C Trace Context as the default cross-service propagation format for HTTP-compatible boundaries.
-- Select baggage only for allowlisted, low-risk context that is needed downstream; document egress behavior.
-- Select request ID as a log and response correlation aid when clients need a support handle; do not use it as a metric dimension.
-- Select span links for batch, fan-in, DLQ/redrive, or message processing under another ambient context.
-- Reject `trace_id` metric labels and "search the metrics by request ID" workflows. Use exemplars or backend trace links if the platform supports them.
-- Reject unfiltered baggage propagation to third-party services.
+## Validation Shape
+- For every boundary, name inject/extract behavior and the fields permitted to cross it.
+- For every async retry, DLQ, redrive, or batch flow, state whether lineage is parent-child or linked and why.
+- Verify at least one alert-to-trace-to-log pivot without raw IDs in metric labels.
 
-## Exa Source Links
-- W3C Trace Context Recommendation: https://www.w3.org/TR/trace-context/
-- OpenTelemetry Context Propagation: https://opentelemetry.io/docs/concepts/context-propagation/
-- OpenTelemetry Baggage: https://opentelemetry.io/docs/concepts/signals/baggage/
-- OpenTelemetry Logs Overview and correlation model: https://opentelemetry.io/docs/reference/specification/logs/overview/
-- OpenTelemetry Messaging Spans: https://opentelemetry.io/docs/specs/semconv/messaging/messaging-spans/
+## Canonical Verification Pointer
+Use the W3C Trace Context recommendation and current OpenTelemetry context/baggage guidance when propagation semantics or standards status affects the spec.

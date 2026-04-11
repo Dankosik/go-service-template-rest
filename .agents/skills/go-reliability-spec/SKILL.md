@@ -23,19 +23,19 @@ Design reliability contracts for Go services before coding. The output should ma
 6. Attach verification obligations that can fail the plan before coding starts.
 
 ## Reference Files
-Load only the files needed for the current reliability question.
+References are compact rubrics and example banks, not exhaustive checklists or reliability tutorials. Load at most one reference by default: choose the file matching the highest-risk independent decision pressure. Load multiple references only when the prompt clearly spans separate pressures, such as retry policy plus shutdown lifecycle.
 
-| Load this file | When the task asks about |
-| --- | --- |
-| `references/dependency-criticality-and-failure-contracts.md` | dependency classes, fail-open/fail-closed behavior, fallback safety, owner accountability |
-| `references/timeout-and-deadline-budgets.md` | context propagation, request deadlines, per-hop budgets, fail-fast thresholds, shutdown deadlines |
-| `references/retry-budget-jitter-and-never-retry.md` | retry eligibility, retry budgets, jitter, transient faults, idempotency, never-retry cases |
-| `references/overload-backpressure-and-bulkheads.md` | throttling, load shedding, bounded queues, queue-based load leveling, concurrency isolation |
-| `references/circuit-breaking-and-degradation.md` | circuit breaker state, soft breakers, fallback modes, stale/deferred responses, graceful degradation |
-| `references/startup-readiness-liveness-shutdown-contracts.md` | startup/readiness/liveness probes, health endpoints, draining, graceful shutdown, hijacked or long-lived connections |
-| `references/resilience-verification-and-rollout.md` | failure testing, load tests, fault injection, chaos experiments, staged rollout, rollback and recovery evidence |
+| Load this file | Symptom trigger | Behavior change when loaded |
+| --- | --- | --- |
+| `references/dependency-criticality-and-failure-contracts.md` | dependency failure, fail-open/fail-closed, fallback safety, owner accountability | Choose an explicit criticality, fallback, caller signal, and recovery owner instead of vague "retry or degrade" language. |
+| `references/timeout-and-deadline-budgets.md` | inbound deadlines, outbound per-hop budgets, context propagation, async handoff, shutdown deadlines | Derive deadlines from the caller budget and bounded handoff rules instead of fixed timeouts or `context.Background()`. |
+| `references/retry-budget-jitter-and-never-retry.md` | retry eligibility, jitter, transient faults, idempotency, nested retries, retry budgets | Bound retries by idempotency, deadline, owner layer, and retry budget instead of retrying all errors a fixed number of times. |
+| `references/overload-backpressure-and-bulkheads.md` | throttling, load shedding, bounded queues, queue-based load leveling, bulkheads, tenant or workload isolation | Pick reject, shed, queue, or isolate from a named overload signal instead of absorbing spikes with unbounded work. |
+| `references/circuit-breaking-and-degradation.md` | circuit breakers, stale or deferred fallback, feature shutoff, degraded modes | Decide whether a breaker is needed and define entry, exit, probe, and fallback rules instead of adding a breaker or stale fallback by reflex. |
+| `references/startup-readiness-liveness-shutdown-contracts.md` | startup checks, readiness/liveness, health endpoints, draining, graceful shutdown, long-lived connections | Separate restart, traffic admission, diagnostics, and drain contracts instead of mixing dependency health into liveness or leaving shutdown unbounded. |
+| `references/resilience-verification-and-rollout.md` | proof obligations, fault injection, load tests, chaos experiments, staged rollout, rollback, recovery drills | Choose the smallest proof and rollout guardrail that can falsify the reliability claim instead of relying on dashboards or generic chaos testing. |
 
-If a prompt crosses many files, load the dependency-criticality file first, then the file for the highest-risk control. Avoid loading all references by default.
+If a prompt crosses many files, start with dependency criticality only when the safe failure mode is still unknown. Otherwise load the file for the highest-risk control and stop once the decision rubric has answered the question.
 
 ## Decision Quality Bar
 Major reliability recommendations should make these concrete:

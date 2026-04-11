@@ -38,6 +38,21 @@ Default to the smallest mode that can prove the bug:
 
 Do not let deep-dive tooling delay a narrow deterministic fix that is already proven.
 
+## Lazy Reference Selector
+Use `SKILL.md` as the lane selector. References are compact rubrics and example banks, not exhaustive Go documentation or generic checklists. Load at most one reference by default: choose the file most likely to change the next diagnostic decision. Load multiple references only when the task clearly spans independent decision pressures, such as a CI-only flake that also contains sleep-based synchronization, or a live hang where the profile type is genuinely unclear.
+
+| Reference | Symptom trigger | Behavior change thesis |
+|---|---|---|
+| `references/flaky-repro-controls-go.md` | CI-only, order-sensitive, scheduler-sensitive, repeated, `-race`, `-shuffle`, CPU-count, or environment-shaped test failures | When loaded for intermittent Go test failures, this file makes the model isolate repetition, order, race, CPU, and environment variables instead of mixing knobs or claiming a flake is fixed from one lucky pass. |
+| `references/condition-based-waiting-go.md` | `time.Sleep`, guessed polling, async readiness, or slower-CI timing failures in tests | When loaded for sleep-based async tests, this file makes the model wait on an observable condition or event instead of inflating sleeps or hiding goroutine lifecycle bugs. |
+| `references/root-cause-tracing-go.md` | Deterministic panics, bad state, typed-nil surprises, payload/state regressions, or error-chain mismatches where the failing line may not be the source | When loaded for deterministic symptoms with upstream bad state, this file makes the model backtrack to the first broken invariant instead of patching the crash site or adding a defensive nil guard. |
+| `references/runtime-forensics-go.md` | Live hangs, deadlocks, goroutine leaks, process stalls, stuck shutdown, SIGQUIT dumps, or volatile runtime evidence | When loaded for a live stalled or leaking Go process, this file makes the model capture the most perishable runtime artifact before restart or edits instead of destroying evidence. |
+| `references/pprof-trace-and-profile-selection.md` | CPU, heap, goroutine, block, mutex, or execution-trace evidence is needed but the right artifact is unclear | When loaded for ambiguous profile or trace choices, this file makes the model select the artifact that matches active CPU, retention, waiting, or timeline questions instead of collecting everything or using CPU profiles for blocked work. |
+| `references/context-timeout-and-saturation-debugging.md` | `context.Canceled`, `context.DeadlineExceeded`, test timeouts, HTTP latency, DB pool wait, queue wait, retry amplification, or saturation | When loaded for timeout or saturation symptoms, this file makes the model attribute time to the budget owner, capacity wait, work time, or retry amplification instead of raising timeouts or adding retries first. |
+| `references/build-and-generated-artifact-debugging.md` | `go build`, test compilation, generated files, build tags, `GOOS`/`GOARCH`, `CGO_ENABLED`, module/workspace, embedding, or generator drift | When loaded for build or generated-artifact failures, this file makes the model prove selected files, tags, toolchain, and generator source of truth instead of changing runtime logic or hand-editing generated output. |
+| `references/defense-in-depth-go.md` | Root cause is proven and recurrence guardrails are being considered | When loaded after a root-cause fix, this file makes the model add only the owning-layer guardrail justified by the failure mode instead of broad hardening, retries, metrics, or redesign. |
+| `references/fix-verification-and-scaffolding-cleanup.md` | Likely fix is in place or success is about to be reported | When loaded before a completion claim, this file makes the model match RED/GREEN proof to the original defect and remove temporary diagnostics instead of overclaiming from a narrow pass. |
+
 ## Expertise
 
 ### Choose The Debugging Lane
@@ -46,25 +61,29 @@ Pick the dominant lane first, then broaden only if the evidence forces it.
 - `compile or build failure`
   - confirm the exact failing package, build tags, generated files, and toolchain or env drift
   - start with `go build ./...` or the narrow failing package before touching runtime reasoning
+  - read `references/build-and-generated-artifact-debugging.md` when generated files, build constraints, or toolchain drift are plausible
 
 - `deterministic test or panic`
   - reduce to the narrowest failing test with `go test ./path/to/pkg -run '^TestName$' -count=1 -v`
   - preserve the first stack trace and first broken assertion; later noise is secondary
   - check nil or typed-nil, zero-value misuse, context replacement, aliasing, and state ownership before rewriting logic
+  - read `references/root-cause-tracing-go.md` when the crash site might not be the first broken boundary
 
 - `flake or order-sensitive test`
   - characterize frequency and trigger conditions with repetition, `-shuffle`, `-race`, and controlled CPU parallelism
   - isolate time, randomness, global state, environment, temp-path, port, and cleanup leakage
-  - read `references/condition-based-waiting-go.md` and `references/flaky-repro-controls-go.md` when sleep, order, or scheduler luck is involved
+  - read `references/flaky-repro-controls-go.md` when the next decision is reproducer shape; read `references/condition-based-waiting-go.md` when sleep or readiness replacement is the next decision
 
 - `hang, deadlock, or goroutine leak`
   - capture goroutine state before editing code
   - inspect who is blocked on send, receive, lock, wait, or shutdown drain
   - use `references/runtime-forensics-go.md` for dump and profile capture patterns
+  - use `references/pprof-trace-and-profile-selection.md` when the first artifact choice is not obvious
 
 - `timeout, cancellation, or saturation incident`
   - identify who owned the budget, where time was spent, and whether the failure is real work, queue wait, lock wait, connection-pool wait, or retry amplification
   - preserve `context.Canceled` and `context.DeadlineExceeded` semantics; do not normalize them into vague timeout strings
+  - read `references/context-timeout-and-saturation-debugging.md` before widening timeouts or adding retries
 
 - `data or integration failure`
   - trace payload shape, query shape, lock scope, retry behavior, DNS or TLS or connectivity, cache staleness, and transaction scope
@@ -181,7 +200,7 @@ Treat flakes as a class of defect, not as “probably timing”.
 - Replace sleep-based guesses with condition-based waiting.
 - Do not “fix” a flake only by inflating timeouts unless timing itself is the behavior under test.
 
-Read `references/condition-based-waiting-go.md` and `references/flaky-repro-controls-go.md` when the bug only appears in CI or under repetition.
+Read `references/flaky-repro-controls-go.md` when the bug only appears in CI or under repetition. Add `references/condition-based-waiting-go.md` only when the fix also turns on sleep/readiness replacement.
 
 ### External Boundary And Resource Diagnostics
 When the symptom sits around I/O, queues, DB, or caches, identify the concrete wait or failure source before changing policy.
@@ -219,6 +238,7 @@ Validation guidance:
 - do not claim repository-wide safety from a narrow passing command
 
 Fresh command evidence is required before any positive completion language.
+Read `references/fix-verification-and-scaffolding-cleanup.md` when choosing the final proof set or removing temporary diagnostics.
 
 ## Boundaries And Handoffs
 Keep workflow touchpoints minimal:

@@ -57,14 +57,18 @@ Strong implementation work usually gets these details right before review:
 - tests prove the changed behavior with deterministic evidence at the smallest sufficient layer
 
 ## Reference Files
-Load these lazily when the implementation task touches the topic; do not read them all by default. They contain compact examples and official Go source links gathered via Exa.
-- `references/stdlib-first-modern-go.md` - builtins, stdlib packages, modern Go APIs, and version-aware replacement of custom helpers or dependencies.
-- `references/helper-extraction-and-package-ownership.md` - helper extraction, same-package policy ownership, export decisions, interfaces, and package boundaries.
-- `references/errors-context-and-boundary-mapping.md` - error wrapping, `errors.Is`/`As`/`AsType`, context propagation, cancellation, and transport-boundary mapping.
-- `references/resource-lifetime-io-and-transactions.md` - readers, rows, files, response bodies, bounded reads, cleanup, and `database/sql` transaction scope.
-- `references/mutable-state-aliasing.md` - slices, maps, `[]byte`, nil/empty semantics, receiver choice, copy boundaries, and synchronization-bearing structs.
-- `references/concurrency-and-background-work.md` - goroutines, channels, bounded fan-out, worker lifecycle, cancellation, shutdown, and race/leak proof.
-- `references/testing-verification-patterns.md` - deterministic tests, useful failure messages, table tests, fuzzing, race checks, repeated runs, and verification scope.
+References are compact rubrics and example banks, not exhaustive checklists or Go documentation dumps. Load at most one reference by default, chosen by the decision pressure that is most likely to change the implementation. Load multiple references only when the task clearly spans independent pressures, such as generated SQL plus transaction lifetime.
+
+| Symptom / Decision Pressure | Reference | Behavior Change |
+| --- | --- | --- |
+| A custom helper, dependency, or older idiom may duplicate a builtin, `slices`, `maps`, `cmp`, `errors`, or another current stdlib feature. | [references/stdlib-first-modern-go.md](references/stdlib-first-modern-go.md) | Choose language or stdlib facilities when they preserve the contract instead of writing wrapper helpers or adding dependencies by habit. |
+| The change may extract helpers, move code across packages, introduce interfaces, export for tests, or centralize repeated package policy. | [references/helper-extraction-and-package-ownership.md](references/helper-extraction-and-package-ownership.md) | Choose direct code or a seam-named same-package owner instead of generic `util` buckets, provider-side interfaces, or test-only exports. |
+| The change touches wrapped errors, cancellation, request context, domain-to-transport mapping, repository translation, or log-and-return behavior. | [references/errors-context-and-boundary-mapping.md](references/errors-context-and-boundary-mapping.md) | Preserve inspectable error identity and caller context at the right boundary instead of string-matching, status-code leakage, or accidental detachment. |
+| The change touches `Rows`, scanners, bodies, files, locks, timers, derived contexts, transactions, or cleanup helper extraction. | [references/resource-lifetime-io-and-transactions.md](references/resource-lifetime-io-and-transactions.md) | Keep acquisition, cleanup, terminal errors, and transaction scope explicit instead of hiding ownership or leaving partial resource handling. |
+| The change stores or returns slices, maps, `[]byte`, snapshots, cache entries, pointer receivers, nil/empty API shape, or mutex-bearing structs. | [references/mutable-state-aliasing.md](references/mutable-state-aliasing.md) | Clone or use pointer identity at the ownership boundary instead of leaking aliases, copying locks, or changing observable nil/empty semantics. |
+| The change starts goroutines, uses channels, adds fan-out or worker pools, changes shutdown, timers/tickers, or async request-scoped work. | [references/concurrency-and-background-work.md](references/concurrency-and-background-work.md) | Make lifecycle, cancellation, bounds, and proof visible instead of hiding unbounded background work or synchronizing with sleeps. |
+| The change adds or revises tests, fuzzing, benchmarks, deterministic seams, failure messages, or final verification commands. | [references/testing-verification-patterns.md](references/testing-verification-patterns.md) | Prove the changed behavior at the smallest reliable layer instead of adding broad, brittle, stale, or ceremonial tests. |
+| The change touches OpenAPI, sqlc, mockgen, stringer, generated files, generation configs, or drift checks. | [references/generated-source-of-truth-and-drift.md](references/generated-source-of-truth-and-drift.md) | Change the owning source and regenerate/check drift instead of hand-editing generated output or leaving source and artifacts half-updated. |
 
 ## Engineering Defaults
 

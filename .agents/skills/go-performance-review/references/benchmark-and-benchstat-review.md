@@ -1,46 +1,21 @@
 # Benchmark And Benchstat Review
 
+## Behavior Change Thesis
+When loaded for symptom "the diff adds or relies on Go benchmark or `benchstat` evidence," this file makes the model choose a benchmark-methodology finding instead of likely mistake "trust the benchmark table without checking timer boundaries, workload dimensions, allocation metrics, or noisy deltas."
+
 ## When To Load
-Load this when a review touches Go benchmarks, benchmark claims in a PR, `testing.B`, `B.Loop`, `-benchmem`, custom benchmark metrics, `benchstat`, or performance CI evidence.
+Load this when the review touches `testing.B`, `B.Loop`, `b.N`, `-benchmem`, custom benchmark metrics, `benchstat`, benchmark CI, or PR benchmark claims.
 
-Use this to review methodology, not to demand benchmark ceremony for every small change.
+## Decision Rubric
+- Verify the benchmark measures the changed cost, not setup, fixture generation, random data generation, DB seeding, or mocked-away dependencies.
+- Check timer boundaries. For `b.N`, expensive setup usually needs `b.ResetTimer`; for `B.Loop`, still check that workload setup and dimensions are realistic.
+- Require `-benchmem` when the claim mentions allocations, GC, buffer reuse, or `sync.Pool`.
+- Prefer old and new results collected with the same benchmark, flags, package, Go version, input size, `GOMAXPROCS`, cache state, and environment.
+- Use repeated runs plus `benchstat` when the delta is small, noisy, or used to justify complexity.
+- Separate statistical significance from practical significance. A tiny significant win may not justify a harder implementation.
+- For the target repo's toolchain, verify `go doc testing.B.Loop` before recommending `B.Loop` in new benchmark code.
 
-## Review Smell Patterns
-- Only one benchmark sample is shown for old and new code.
-- The benchmark omits `-benchmem` while claiming fewer allocations or lower GC pressure.
-- Setup, fixture generation, random data generation, or DB seeding runs inside the timed loop.
-- A `b.N` benchmark forgets `b.ResetTimer` after expensive setup.
-- A benchmark uses tiny toy inputs to justify production hot-path complexity.
-- The benchmark removes the changed cost with mocks or precomputed fixtures.
-- A pure computation benchmark has no observable result or sink and may be optimized away. `B.Loop` reduces this risk, but does not fix unrealistic workloads.
-- `benchstat` shows `~` or a wide confidence interval, but the PR treats the delta as proven.
-- A custom metric lacks a clear "higher is better" or "lower is better" interpretation.
-- Old and new benchmark runs used different flags, environment, data size, `GOMAXPROCS`, cache state, or Go versions without explanation.
-
-## Evidence Required
-- Use the same benchmark pattern, input sizes, package, flags, Go version, and environment for old and new runs.
-- Prefer `B.Loop` for new benchmarks when the repository's Go version supports it; otherwise verify the `b.N` loop and timer boundaries.
-- Use `-benchmem` for allocation, GC, buffer reuse, and `sync.Pool` claims.
-- Prefer at least 10 old/new samples for benchstat when the benchmark is noisy or the delta is small.
-- Treat statistical significance and practical significance separately: a tiny but significant delta may not justify complexity.
-- Explain the workload dimensions the benchmark varies, such as input bytes, row count, page size, fan-out width, or concurrency.
-
-## Bad Finding
-```text
-[low] [go-performance-review] internal/parser/parser_test.go:31
-Issue:
-Benchmarks should use benchstat.
-Impact:
-The numbers are less good.
-Suggested fix:
-Run it more.
-Reference:
-N/A
-```
-
-Why it fails: it does not name the claim, the missing metric, the benchmark weakness, or the merge risk.
-
-## Good Finding
+## Imitate
 ```text
 [medium] [go-performance-review] internal/parser/parser_test.go:31
 Issue:
@@ -48,12 +23,40 @@ Axis: Evidence; `BenchmarkParseBatch` builds the 10k-record JSON fixture inside 
 Impact:
 The benchmark can hide a real parser regression or falsely approve the new buffering code, especially because the PR also claims lower allocations without `-benchmem`.
 Suggested fix:
-Move fixture construction before the benchmark loop, use `B.Loop` or reset the timer before the `b.N` loop, run old and new with `-benchmem -count=10`, and compare with `benchstat`.
+Move fixture construction before the benchmark loop, use `B.Loop` if the repo toolchain supports it or reset the timer before the `b.N` loop, run old and new with `-benchmem -count=10`, and compare with `benchstat`.
 Reference:
-Go `testing.B` benchmark timing rules and benchstat A/B comparison guidance.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: identify the invalid measured cost, tie it to the PR claim, and request a same-workload A/B rerun.
+
+## Reject
+```text
+Issue:
+Benchmarks should use benchstat.
+Impact:
+The numbers are less good.
+Suggested fix:
+Run it more.
+```
+
+Reject it because it does not name the claim, missing metric, benchmark weakness, or merge risk.
+
+```text
+Issue:
+Use `B.Loop` everywhere.
+```
+
+Reject it when the repo toolchain does not support `B.Loop`, the existing benchmark is correct, or the real problem is unrealistic workload shape.
+
+## Agent Traps
+- Flagging lack of `benchstat` on a tiny local benchmark where no performance claim is being used for merge approval.
+- Missing that mocks or precomputed fixtures remove the changed I/O, serialization, or allocation cost.
+- Treating `~` or wide confidence intervals as proof because the direction looks favorable.
+- Ignoring custom metric direction, units, or whether a reported metric is per-op, total, or derived.
+- Forgetting result sinks for pure computation benchmarks when optimizer elimination is plausible.
+
+## Validation Shape
 ```bash
 go test -run '^$' -bench '^BenchmarkParseBatch$' -benchmem -count=10 ./internal/parser > old.txt
 go test -run '^$' -bench '^BenchmarkParseBatch$' -benchmem -count=10 ./internal/parser > new.txt
@@ -63,10 +66,3 @@ go test -run '^$' -bench '^BenchmarkParseBatch/size=(1k|10k|100k)$' -benchmem -c
 ```
 
 When the benchmark is parallel, include the intended `-cpu` list and state why it matches production concurrency.
-
-## Source Links From Exa
-- [testing package benchmarks](https://pkg.go.dev/testing)
-- [More predictable benchmarking with testing.B.Loop](https://go.dev/blog/testing-b-loop)
-- [benchstat command](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat)
-- [Go Benchmark Data Format](https://go.dev/design/14313-benchmark-format)
-

@@ -81,6 +81,20 @@ Do not:
 - preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
 - a finished research session hands off evidence and routing; it does not convert that evidence into approved `Decisions`
 
+## Lazy-Loaded References
+Keep this `SKILL.md` as the protocol. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load more only when the task clearly spans multiple independent decision pressures, such as both mode selection and final fan-in handoff.
+
+Treat every reference as non-authoritative support under `AGENTS.md` and `docs/spec-first-workflow.md`. Use live repository files or current external sources when freshness matters instead of keeping link dumps in the skill.
+
+| Symptom | Behavior change | Reference |
+| --- | --- | --- |
+| Research questions are too broad, solution-led, biased, or mixed with future decisions. | Makes the model write answerable evidence-targeted questions instead of asking research to decide the solution, check everything, or draft later-phase artifacts. | `references/research-question-framing.md` |
+| The hard choice is whether the session should stay `local` or use read-only `fan-out`. | Makes the model choose mode by evidence surface, risk, and independent-question shape instead of choosing fan-out because "more agents is safer" or staying local to hide cross-domain uncertainty. | `references/local-vs-fanout-mode-selection.md` |
+| Mode is chosen or likely, but `workflow-plans/research.md` has vague lanes, unclear roles, weak source targets, or missing parallelism. | Makes the model assign one owned question, one role, one skill, one evidence target, and a fan-in path per lane instead of using broad domain labels, multi-skill lanes, write-capable workers, or decision-approving subagents. | `references/research-lane-planning.md` |
+| The session must decide whether to preserve `research/*.md`, or an existing research note has poor source hygiene. | Makes the model write compact evidence notes with source relevance, limitations, and handoff value instead of dumping generic notes, command output, links, or `spec.md` decisions. | `references/evidence-note-structure.md` |
+| Research lanes are complete, partial, or blocked and need a clean boundary handoff. | Makes the model hand off comparable evidence, conflicts, readiness, and next-session routing instead of converting research into approved `spec.md` decisions or drifting into design and planning. | `references/fan-in-handoff-examples.md` |
+| A research session has concrete drift smells across multiple surfaces, or no narrower positive reference matches. | Makes the model stop, repair the boundary, or route back to the right phase instead of treating `research-session` as a catch-all path into specification, design, planning, implementation, or note sprawl. | `references/research-session-anti-patterns.md` |
+
 ## Boundary With Future `specification-session`
 - `research-session` may write `workflow-plan.md`, `workflow-plans/research.md`, and optional `research/*.md`
 - the future `specification-session` owns approved `spec.md`, `workflow-plans/specification.md`, and the handoff into `technical design`

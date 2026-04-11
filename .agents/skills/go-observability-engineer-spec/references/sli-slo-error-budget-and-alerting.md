@@ -1,49 +1,47 @@
 # SLI/SLO, Error Budget, And Alerting
 
-## When To Load This
-Load this reference when the spec needs user-impacting SLIs, SLO windows, error budgets, burn-rate alerts, alert severity, low-traffic event floors, runbook/dashboard ownership, or release/degradation policy tied to budget state.
+## Behavior Change Thesis
+When loaded for SLI, SLO, error budget, or alerting symptoms, this file makes the model define good/total events, exclusions, event floors, owner, runbook, and proportional response instead of likely mistake raw threshold pages such as "any 5xx > 0" or dashboards without operator action.
 
-## Operational Questions
-- What user or workflow promise is being measured?
-- What are `good_events`, `total_events`, and exclusions?
-- Is the SLI measured at admission, logical completion, delivery, freshness, or downstream workflow completion?
-- Which budget burn should page a human, create a ticket, gate release, or trigger degradation?
-- What event floor prevents low-traffic noise?
-- Which dashboard and runbook does the alert open, and who owns it?
+## When To Load
+Load this when the spec needs user-impacting SLIs, SLO windows, budget policy, burn-rate alerts, alert severity, low-traffic event floors, runbook/dashboard ownership, or release/degradation policy tied to budget state.
 
-## Good Telemetry Examples
-- Availability SLI: `good_events = POST /v1/payouts completed synchronously or accepted for durable async retry when the product promise allows async completion`; `total_events = valid payout create requests`; exclude caller validation failures.
+## Decision Rubric
+- Start from the user or workflow promise, then define `good_events`, `total_events`, exclusions, measurement source, and window.
+- Separate admission, durable async handoff, final completion, stream continuity, and freshness when they are different promises.
+- Do not let fast failures improve latency health. Define failed-request handling for latency SLIs.
+- Page only when budget burn is meaningful, event floors are met, ownership is clear, and the runbook names a first action.
+- Use ticket-only, dashboard-only, or release/degrade policy when the response is not immediate human wake-up.
+- Keep dependency labels out of user-facing SLO math unless the operator response truly differs by bounded dependency.
+
+## Imitate
+- Availability SLI: `good_events = valid payout create requests completed synchronously or durably accepted for async retry when that is the product promise`; `total_events = valid payout create requests`; exclude caller validation failures.
+  Copy the explicit promise boundary.
 - Async completion SLI: `good_events = invoice messages processed and completion event emitted before freshness target`; `total_events = valid invoice messages delivered to the consumer`.
-- Latency SLI: `good_events = successful GET /v1/payouts/{id} responses under 200 ms`; track failed-request latency separately so fast 500s do not look healthy.
-- Alert: page only when both short and long burn windows breach the selected threshold and the event floor is met; create tickets for slow burn or non-urgent budget consumption.
-- Runbook: starts from SLO panel, then dependency panel, then traces/log queries for representative failing route or workflow.
+  Copy the final-completion/freshness split.
+- Latency SLI: `good_events = successful GET /v1/payouts/{id} responses under 200 ms`; failed requests tracked separately so fast 500s do not look healthy.
+  Copy the failed-request guard.
+- Alert: page on multi-window burn only after event floor is met; create ticket for slow budget consumption; link SLO panel, dependency panel, and trace/log queries from the runbook.
+  Copy the proportional response.
 
-## Bad Telemetry Examples
+## Reject
 - "Pager on any 5xx > 0 in 5 minutes" for a low-QPS service.
-- Average latency SLO with no percentile or good/total threshold.
-- Counting `202 Accepted` as final success when the product promise is durable downstream completion.
-- One SLO for all endpoints when admin, polling, SSE, and create flows have different user promises.
-- Page with no runbook, no owner, no dashboard, and no defined operator action.
+- Average latency SLO with no percentile, threshold, or good/total event definition.
+- Counting `202 Accepted` as final success when the product promise is downstream completion.
+- One SLO across admin, polling, streaming, and create flows with different user promises.
+- Page with no owner, no runbook, no dashboard or query entry point, and no defined operator action.
 
-## Cardinality Traps
-- Per-tenant, per-user, per-account, or per-message SLO labels by default.
-- Route labels from raw paths instead of route templates.
-- SLO metrics split by every dependency, turning user-impacting SLOs into implementation-detail alerts.
-- Alert labels that include raw error messages or exception strings.
-- Separate SLOs for every status code instead of a bounded good/bad classification.
+## Agent Traps
+- Treating transport success as product success for async workflows.
+- Adding per-tenant, per-user, per-account, per-message, or raw-error labels to SLO metrics by default.
+- Splitting SLOs by every dependency and accidentally alerting on implementation details rather than user impact.
+- Choosing a 28-day window by reflex when traffic, release cadence, or product promise makes it misleading.
+- Writing budget policy the team cannot enforce.
 
-## Selected And Rejected Options
-- Select good/total ratio SLIs because they produce clear error-budget math and comparable tooling.
-- Select a 28-day or organization-standard rolling SLO window unless the product promise, traffic pattern, or release policy requires a different window.
-- Select separate SLIs for admission, final completion, stream continuity, and freshness when those promises differ.
-- Select multi-window burn-rate alerts for paging when the service has enough traffic and a meaningful error budget.
-- Select event floors or ticket-only alerts for low-traffic services to avoid paging on a single event without context.
-- Select release/degradation policy tied to budget state only when the team can enforce it.
-- Reject raw threshold alerts that are not tied to SLO impact, operator action, or proportional response.
+## Validation Shape
+- For each SLI, verify `good_events`, `total_events`, exclusions, source metric, aggregation labels, and window.
+- For each paging alert, verify burn condition, event floor or low-traffic policy, owner, runbook, dashboard/query entry point, and first operator action.
+- Verify async workflows do not count admission as final success unless that is explicitly the product promise.
 
-## Exa Source Links
-- Google SRE Workbook, Implementing SLOs: https://sre.google/workbook/implementing-slos/
-- Google SRE Workbook, Alerting on SLOs: https://sre.google/workbook/alerting-on-slos/
-- Google SRE Workbook, Monitoring: https://sre.google/workbook/monitoring/
-- Google SRE Book, Practical Alerting: https://sre.google/sre-book/practical-alerting/
-- OpenTelemetry HTTP metrics semantic conventions: https://opentelemetry.io/docs/specs/semconv/http/http-metrics/
+## Canonical Verification Pointer
+Use the Google SRE Workbook chapters on implementing SLOs and alerting on SLOs when burn-rate or error-budget policy details affect the spec.

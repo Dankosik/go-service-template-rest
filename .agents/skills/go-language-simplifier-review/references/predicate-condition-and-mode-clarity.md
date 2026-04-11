@@ -1,18 +1,21 @@
 # Predicate, Condition, And Mode Clarity
 
+Behavior Change Thesis: When loaded for compound predicates, boolean clusters, or raw modes, this file makes the model preserve call-site decision clarity instead of likely mistake of accepting shorter conditions or extracted predicates that hide policy.
+
 ## When To Load
-Load this when a diff adds or rewrites compound conditions, negative predicates, boolean clusters, string modes, raw status codes, option decoding, or extracted predicate helpers.
+Load this when a diff adds or rewrites compound conditions, negative predicates, boolean clusters, same-typed positional arguments, string modes, raw status codes, option decoding, or extracted predicate helpers.
 
-This file is about whether the decision reads clearly at the call site and in the branch, not whether the predicate is shorter.
+Use this when the review question is "can a reader tell which decision is being made here?" If the issue is helper economics beyond the predicate itself, use `helper-extraction-economics.md`; if the issue is domain state semantics, hand off to domain review.
 
-## Review Lens
-- Flag predicates that force mental De Morgan expansion or require hidden mode decoding.
-- Treat clusters of booleans, same-typed positional arguments, and raw strings as likely hidden state.
-- Prefer names that reveal the policy decision, not only the mechanical inputs.
-- Be skeptical of extracted predicates that hide policy terms the reader must still inspect elsewhere.
+## Decision Rubric
+- Flag predicates that force mental De Morgan expansion or require the reader to inspect a helper to learn the policy terms.
+- Flag boolean clusters, same-typed positional arguments, raw strings, raw status codes, and option bags when they encode modes that can form invalid combinations.
+- Prefer names that reveal the policy decision, not just mechanical inputs.
+- Keep a one-use condition inline when named subexpressions make the decision clearer than a generic helper.
+- Do not reject every boolean. A call like `SetEnabled(true)` can read clearly when the method name supplies the predicate.
 
-## Real Finding Examples
-Finding example: a predicate helper hides the actual decision.
+## Imitate
+Finding shape to copy when a predicate helper hides the actual decision:
 
 ```text
 [medium] [go-language-simplifier-review] internal/app/reports/filter.go:47
@@ -22,7 +25,9 @@ Suggested fix: Rename and narrow the predicate to the policy it answers, such as
 Reference: references/predicate-condition-and-mode-clarity.md
 ```
 
-Finding example: a public signature exposes hidden modes.
+Copy the move: identify the policy terms hidden behind the generic predicate name.
+
+Finding shape to copy when an API exposes hidden modes:
 
 ```text
 [high] [go-language-simplifier-review] internal/app/exports/service.go:29
@@ -32,14 +37,10 @@ Suggested fix: Restore named options or split the modes into policy-named entry 
 Reference: references/predicate-condition-and-mode-clarity.md
 ```
 
-## Non-Findings To Avoid
-- Do not flag common local checks such as `if err != nil` or one obvious guard.
-- Do not require a helper for a condition that is clearer inline and used once.
-- Do not reject every boolean. A call like `SetEnabled(true)` can read clearly when the method name supplies the predicate.
-- Do not turn a private predicate rename into a public API redesign unless callers or contracts are affected.
+Copy the move: state the invalid-combination risk and whether the boundary needs design escalation.
 
-## Bad And Good Simplifications
-Bad: a shorter condition hides the policy.
+## Reject
+Reject a shorter condition when it hides the policy:
 
 ```go
 if !user.Disabled && (user.Admin || !report.Archived) && mode != "private" {
@@ -47,7 +48,7 @@ if !user.Disabled && (user.Admin || !report.Archived) && mode != "private" {
 }
 ```
 
-Good: name the policy terms the reader must verify.
+Prefer named policy terms the reader must verify:
 
 ```go
 canViewArchived := user.Admin || !report.Archived
@@ -57,13 +58,13 @@ if !user.Disabled && canViewArchived && allowedMode {
 }
 ```
 
-Bad: positional flags make callers decode modes.
+Reject positional flags that make callers decode modes:
 
 ```go
 svc.Send(ctx, id, true, false)
 ```
 
-Good: either use policy-named entry points or a named option shape.
+Prefer policy-named entry points or a named option shape:
 
 ```go
 svc.SendPreview(ctx, id)
@@ -73,14 +74,11 @@ svc.Send(ctx, id, SendOptions{
 })
 ```
 
-## Escalation Guidance
-- Escalate to `go-design-review` when mode shape belongs to a public or cross-package boundary.
-- Escalate to `api-contract-designer-spec` when raw modes or flags are part of client-visible REST behavior.
-- Escalate to `go-domain-invariant-review` when the predicate encodes business eligibility, state transitions, or acceptance rules.
-- Escalate to `go-idiomatic-review` when the issue depends on Go exported API, typed constants, zero values, or method-set behavior.
+## Agent Traps
+- Do not create a helper for a condition that is clearer inline and used once.
+- Do not treat a private predicate rename as a public API redesign unless callers or contracts are affected.
+- Do not miss negative predicates that become especially risky when combined, such as `!disabled && !archived && !skip`.
+- Do not approve `map[string]any` or raw string option bags as "flexible" simplification without a named boundary and validation owner.
 
-## Source Anchors
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): variable names, named result parameters, line length, interfaces, and in-band errors.
-- [Effective Go](https://go.dev/doc/effective_go): names affect visibility and readability in Go.
-- [Package names](https://go.dev/blog/package-names): names provide context and help maintainers decide what belongs together.
-- Repository pattern: `go-language-simplifier-review/evals/evals.json` includes boolean mode and option-bag review cases.
+## Validation Shape
+Ask for targeted tests when mode combinations, operator precedence, or option decoding changed. The proof should include at least one case for each behavior class, not only the happy path.

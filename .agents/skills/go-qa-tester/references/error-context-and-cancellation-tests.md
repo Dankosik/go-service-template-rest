@@ -1,23 +1,22 @@
 # Error, Context, And Cancellation Tests
 
+## Behavior Change Thesis
+When loaded for wrapped errors, sentinel or typed categories, context propagation, cancellation, or deadlines, this file makes the model test inspectable error and context contracts instead of likely mistake: raw string comparison, nil-only checks, swallowed cancellation, or accidental `context.Background()` replacement.
+
 ## When To Load
-Load this when tests touch wrapped errors, sentinel or typed error categories, context propagation, cancellation, deadlines, shutdown, fail-fast behavior, context values, or accidental replacement with `context.Background()`.
+Load this when tests touch wrapped errors, sentinel or typed error categories, context propagation, cancellation categories, deadlines, shutdown error shape, fail-fast behavior, context values, or suspected parent-context loss. If goroutine scheduling or timer determinism is the hard part, load `deterministic-concurrency-and-time-tests.md` instead.
 
-## Error Rules
-- Use `errors.Is` for sentinel errors and context cancellation categories.
-- Use `errors.As` for typed errors or structured error details.
-- Compare raw strings only when exact text is part of public behavior.
-- If an error should include human context and preserve a cause, assert both the category and a minimal context fragment.
-- Do not require internal error wording at process boundaries unless the contract exposes it.
+## Decision Rubric
+- Use `errors.Is` for sentinel errors and cancellation categories.
+- Use `errors.As` for typed errors or structured causes.
+- Compare raw strings only when exact text is public behavior.
+- When an error should include human context and preserve a cause, assert both the category and a minimal context fragment.
+- At process or HTTP boundaries, assert the stable external category and behavior; do not leak private internal wording into the test unless the contract exposes it.
+- Pass parent context through fakes that record deadline, value, cancellation, or cause when propagation is the obligation.
+- For derived contexts, call the cancel function and prove bounded exit only if the code can block.
+- Use `context.WithoutCancel` only when approved lifecycle behavior requires parent cancellation to be ignored.
 
-## Context Rules
-- Pass parent context through; do not hide a lost parent behind top-level cancellation checks.
-- Verify `context.Canceled` and `context.DeadlineExceeded` remain recognizable.
-- For derived contexts, call the cancel function and prove bounded exit when work blocks.
-- Use context values in tests only when the approved behavior depends on propagation of request-scoped data.
-- Use `context.WithoutCancel` only when the approved lifecycle behavior requires parent cancellation to be ignored.
-
-## Good Example
+## Imitate
 ```go
 func TestRepositoryCreateWrapsQueryError(t *testing.T) {
 	sentinel := errors.New("write failed")
@@ -40,25 +39,17 @@ func TestRepositoryCreateWrapsQueryError(t *testing.T) {
 }
 ```
 
-## Bad Example
-```go
-func TestRepositoryCreateWrapsQueryError(t *testing.T) {
-	_, err := repo.Create(context.Background(), "payload")
-	if err.Error() != "create record: write failed" {
-		t.Fatal("wrong error")
-	}
-}
-```
+Copy the shape: preserve the durable cause and a minimal operation clue without pinning exact formatting.
 
-Why it is bad: it can panic on nil and overfits string formatting while missing error inspectability.
-
-## Good Context Propagation Example
 ```go
 func TestHelperReceivesParentContextDeadlineAndValue(t *testing.T) {
 	type contextKey struct{}
 	key := contextKey{}
 
-	parent, cancel := context.WithTimeout(context.WithValue(context.Background(), key, "request-1"), time.Minute)
+	parent, cancel := context.WithTimeout(
+		context.WithValue(context.Background(), key, "request-1"),
+		time.Minute,
+	)
 	defer cancel()
 
 	var gotDeadline bool
@@ -67,7 +58,7 @@ func TestHelperReceivesParentContextDeadlineAndValue(t *testing.T) {
 		call: func(ctx context.Context) error {
 			_, gotDeadline = ctx.Deadline()
 			gotValue = ctx.Value(key)
-			return ctx.Err()
+			return nil
 		},
 	}
 
@@ -83,30 +74,39 @@ func TestHelperReceivesParentContextDeadlineAndValue(t *testing.T) {
 }
 ```
 
-This catches accidental `context.Background()` replacement inside the call chain.
+Copy the shape: the fake catches accidental replacement with `context.Background()` inside the call chain.
 
-## Assertion Patterns
-- `if !errors.Is(err, context.Canceled) { ... }`
-- `if !errors.Is(err, context.DeadlineExceeded) { ... }`
-- `var target *SomeError; if !errors.As(err, &target) { ... }`
-- For shutdown: assert event order, timeout/deadline presence, ignored or honored parent cancellation per approved behavior, and wrapped root cause.
-- For fail-fast: assert sibling cancellation and original fatal cause preservation.
+## Reject
+```go
+func TestRepositoryCreateWrapsQueryError(t *testing.T) {
+	_, err := repo.Create(context.Background(), "payload")
+	if err.Error() != "create record: write failed" {
+		t.Fatal("wrong error")
+	}
+}
+```
 
-## Deterministic Coordination Patterns
-- Use an already-canceled context to prove early cancellation behavior.
-- Use an expired deadline context to prove deadline category without waiting.
-- Use a fake dependency that records the context it receives.
-- Use `readyToBlock` channels before canceling a running goroutine.
-- Use `synctest.Test` for timeout behavior when fake-time support fits the code under test.
+Reject because it can panic on nil, overfits private formatting, and misses error inspectability.
 
-## Repository-Local Cues
-- `cmd/service/internal/bootstrap/main_shutdown_test.go` checks shutdown ordering, deadline presence, ignored parent cancellation, and wrapped shutdown failures.
-- `cmd/service/internal/bootstrap/startup_dependencies_additional_test.go` checks context cancellation and deadline categories.
-- `internal/config/config_test.go` checks wrapped load and parse categories with `errors.Is`.
+```go
+func TestWorkerCancel(t *testing.T) {
+	err := runWorker(context.Background(), fakeSource{})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+```
 
-## Exa Source Links
-- [Go errors package](https://pkg.go.dev/errors)
-- [Go context package](https://pkg.go.dev/context)
-- [testing/synctest package](https://pkg.go.dev/testing/synctest)
-- [Go race detector article](https://go.dev/doc/articles/race_detector.html)
+Reject because it does not pass or trigger a canceled context, so it cannot prove cancellation behavior.
 
+## Agent Traps
+- Comparing `err == context.Canceled` when wrapping is allowed by contract.
+- Testing only the top-level function's pre-canceled path while the real bug is lost cancellation in a downstream dependency.
+- Requiring exact message text for internal errors just because it is currently convenient.
+- Treating `context.WithTimeout` duration expiry as a deterministic test clock. Use already-expired contexts when possible.
+- Forgetting that process shutdown tests often need both event order and error category.
+
+## Validation Shape
+- Focused test command for the named error/context scenario.
+- Add race-aware validation only when the cancellation path includes goroutines or shared state.
+- When context propagation is tested through a fake, package-level tests should still compile and exercise nearby real call sites.

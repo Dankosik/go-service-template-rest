@@ -1,11 +1,14 @@
 # Invalidation TTL And Staleness Review
 
+## Behavior Change Thesis
+When loaded for changed freshness, TTL, negative-cache, or stale-serving behavior, this file makes the model choose an exact freshness owner and TTL/error-class correction instead of likely mistakes such as TTL-only handwaving, wildcard deletion, or caching transient dependency failure as business truth.
+
 ## When To Load
 Load this reference when a Go diff changes cache write-through/cache-aside logic, `Set` TTLs, `Del` invalidation, negative caching, client-side cache invalidation, cache freshness comments, or stale fallback behavior.
 
 Keep findings local: ask for the smallest correction that restores the existing freshness contract. Escalate API-visible stale windows, new read-your-writes expectations, outbox/event invalidation, or broader consistency policy.
 
-## Review Smell Patterns
+## Decision Rubric
 - A write path updates the database but does not invalidate or update the exact cache keys it can make stale.
 - Invalidation happens before the DB transaction commits.
 - `SET` overwrites a Redis key without preserving or replacing its TTL.
@@ -107,6 +110,13 @@ func (s *Store) Product(ctx context.Context, id string) (Product, error) {
 
 The local finding is that transient source errors must not be converted into cached business truth. If the API contract for negative caching is unclear, escalate.
 
+## Agent Traps
+- Do not accept "TTL will fix it" when the package has an existing write-driven freshness pattern or a read-your-writes expectation.
+- Do not require cache invalidation failure to fail the write if the repository's existing contract is best-effort; preserve the contract and ask for observability when local patterns do.
+- Do not use wildcard deletes in request paths as a "simple" invalidation fix; prefer exact keys or escalate to a tag/index design.
+- Do not cache every repository error as "missing"; negative cache is only for authoritative misses such as `sql.ErrNoRows` when the contract allows it.
+- Do not overwrite a Redis key with a zero TTL unless persistent cache entries are the explicit contract.
+
 ## Smallest Safe Fix
 - Delete or refresh exact keys after successful writes when the current package already owns those keys.
 - Move invalidation after successful commit for transactional writes.
@@ -115,15 +125,8 @@ The local finding is that transient source errors must not be converted into cac
 - Replace wildcard request-path invalidation with exact key builders, tags/sets already present in the codebase, or a design escalation.
 - When stale serving is intentional, require a named stale window and validation path rather than silent fallback.
 
-## Validation Ideas
+## Validation Shape
 - Add read-after-write tests that prime cache, update DB, then verify the next read does not return stale cached data.
 - Add a TTL assertion using Redis `TTL`/client equivalent after cache writes.
 - Add tests distinguishing `sql.ErrNoRows` from transient DB/cache errors in negative-cache paths.
 - Add a transaction test proving cache invalidation does not run if the transaction rolls back.
-
-## Source Links From Exa
-- Redis `EXPIRE` command and TTL behavior: https://redis.io/docs/latest/commands/expire/
-- Redis `SET` command and expiration options: https://redis.io/docs/latest/commands/set/
-- Redis keys and key expiration overview: https://redis.io/docs/latest/develop/using-commands/keyspace/
-- Redis cache-aside query caching tutorial: https://redis.io/learn/howtos/solutions/microservices/caching
-- Redis client-side caching invalidation reference: https://redis.io/docs/latest/develop/reference/client-side-caching/

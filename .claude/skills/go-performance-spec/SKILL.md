@@ -17,6 +17,32 @@ Turn performance intent into measurable, reproducible pre-coding contracts for l
 ## Scope
 Use this skill to define or review latency, throughput, allocation, contention, and capacity behavior, including hot-path budgets, measurement protocol, acceptance thresholds, and production validation signals.
 
+## Operating Loop
+1. Frame the affected operation class, workload, hot path, and user-visible or system-visible performance objective.
+2. Load at most one reference by default from the selector below. Load more only when the task clearly spans independent decision pressures, such as memory budgets plus overload semantics.
+3. Compare viable options before selecting a performance contract. Keep unproven numeric targets marked as assumptions.
+4. Write section-ready spec content with budgets, workload shape, selected and rejected options, measurement protocol, thresholds, runtime telemetry, and rollout checkpoints.
+5. Stop at the pre-coding boundary. Do not drift into low-level optimization, implementation review, or benchmark result interpretation without a specification decision to support.
+
+## Reference Files
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load a reference only when its behavior-change thesis matches the symptom in the prompt. If you cannot name the likely mistake it prevents, do not load it. If a narrower positive reference matches, prefer it over a broad neighboring reference.
+
+| Symptom | Behavior Change | Load |
+| --- | --- | --- |
+| The request says "make X faster" or lacks a budgeted hot path | Choose operation budgets, component reserve, and a measurable bottleneck hypothesis instead of generic speed goals or dashboard averages | `references/budget-modeling-and-hot-path-maps.md` |
+| The proof depends on traffic mix, tenant skew, cache state, dependency state, or fixture size | Choose representative workload buckets and labels instead of median-only or toy fixtures | `references/workload-profile-and-input-shape.md` |
+| The spec must decide what kind of proof is sufficient | Choose a symptom-matched measurement protocol and variance rule instead of a familiar microbenchmark or single best run | `references/measurement-protocols.md` |
+| The proof type is known but the spec needs concrete Go benchmark/profile/trace commands | Write executable proof obligations and avoid benchmark/profile traps instead of vague "run benchmarks" instructions | `references/benchmark-profile-and-trace-plans.md` |
+| The proposed optimization class is under-justified or disproportionately complex | Choose the least-complex option that can meet the budget instead of reaching for cache, PGO, pooling, or fan-out by habit | `references/option-selection-and-complexity-bounds.md` |
+| The performance idea adds fan-out, queues, workers, locks, or capacity changes | Require bounded concurrency, saturation signals, and cancellation/deadline proof instead of "more goroutines" or "more workers" | `references/concurrency-contention-and-capacity.md` |
+| The bottleneck crosses DB, cache, pagination, retry, or API-visible behavior | Surface contract handoffs and fallback budgets instead of hiding semantic changes inside "performance" | `references/db-cache-api-performance-contracts.md` |
+| The decision needs canary, rollback, runtime telemetry, or production validation | Tie rollout gates to budget metrics and actions instead of "watch dashboards" | `references/runtime-telemetry-and-rollout-checkpoints.md` |
+| The risk is allocation rate, live heap, GC CPU, GOGC/GOMEMLIMIT, or container memory | Specify memory envelopes and GC trade-offs instead of vague "reduce allocations" or unsafe tuning | `references/memory-allocation-and-gc-budgets.md` |
+| The proposal involves PGO, default.pgo, profile merging, profile freshness, or source skew | Require representative CPU profile lifecycle and rollback checks instead of enabling PGO because it "usually helps" | `references/pgo-profile-lifecycle.md` |
+| The performance envelope depends on overload, shedding, degraded results, queues, retries, or tenant fairness | Define capacity-protection semantics and retry limits instead of best-effort overload behavior | `references/overload-backpressure-and-load-shedding.md` |
+| The spec must connect latency to SLI/SLO, histograms, aggregation windows, or error-budget risk | Use percentile/window/label-aware thresholds instead of averages or copied dashboard values | `references/latency-sli-slo-and-histogram-thresholds.md` |
+| Payload shape, JSON work, response size, streaming, flushing, or large-body behavior dominates | Bound representation and streaming semantics instead of optimizing serialization around unbounded payloads | `references/payload-serialization-and-streaming-budgets.md` |
+
 ## Boundaries
 Do not:
 - optimize by instinct, anecdote, or microbenchmark alone

@@ -24,18 +24,22 @@ Protect changed failure paths from outage, cascading-failure, retry-amplificatio
 - review async and distributed reliability touchpoints when they appear in changed code
 - review validation signals for fail-path behavior
 
-## Lazy Reference Loading
-Keep this `SKILL.md` as the review decision guide. Load examples from `references/` only when the diff touches that review surface or you need a sharper local finding pattern:
+## Reference Loading
+Load references lazily as compact rubrics and example banks, not as exhaustive checklists or documentation dumps. Load at most one reference by default. Load multiple references only when the diff clearly spans independent decision pressures, such as retry idempotency plus rollback compatibility.
 
-- `references/timeout-deadline-and-cancellation-review.md` - request context propagation, derived deadlines, DB/HTTP cancellation, and dropped-caller cancellation.
-- `references/retry-budget-and-idempotency-review.md` - retry eligibility, per-request budget, backoff or jitter, retry amplification, and idempotency protection.
-- `references/backpressure-overload-and-bulkheads.md` - overload rejection, bounded fan-out, queue growth, bulkhead isolation, and circuit-breaker interaction.
-- `references/startup-readiness-liveness-shutdown.md` - startup probes, readiness versus liveness, graceful HTTP shutdown, drain order, and health-check death spirals.
-- `references/degradation-fallback-and-fail-open-closed.md` - degraded responses, fallback correctness, fail-open versus fail-closed choices, and hidden mode transitions.
-- `references/async-durable-side-effect-review.md` - local state plus message durability, outbox or relay behavior, ack or commit ordering, dedup, DLQ, and replay safety.
-- `references/rollout-rollback-safety-review.md` - canaries, progressive rollout, rollback traps, mixed-version compatibility, and capacity-sensitive releases.
+Pick the narrowest matching reference by symptom:
 
-Do not bulk-load the reference directory. Keep findings failure-path-first and local to the changed code. Hand off broader distributed, DB/cache, security, concurrency, performance, API, or delivery ownership when the smallest safe fix no longer fits this review lane.
+| Reference | Load For Symptom | Behavior Change |
+| --- | --- | --- |
+| [references/timeout-deadline-and-cancellation-review.md](references/timeout-deadline-and-cancellation-review.md) | request context propagation, derived deadlines, DB/HTTP cancellation, sleeps, polling, or detached request work | makes the model report dropped caller cancellation and unbounded waits instead of accepting `context.Background`, arbitrary local timeouts, or context-unaware APIs |
+| [references/retry-budget-and-idempotency-review.md](references/retry-budget-and-idempotency-review.md) | retry loops, backoff, jitter, retry classification, redrive, idempotency keys, duplicate suppression, or replay behavior | makes the model require retry eligibility, a bounded budget, cancellation, and duplicate-effect protection instead of treating retries as harmless resilience |
+| [references/backpressure-overload-and-bulkheads.md](references/backpressure-overload-and-bulkheads.md) | fan-out, worker pools, semaphores, queues, buffered channels, rate limits, circuit breakers, or shared dependency pools | makes the model ask how work is bounded, rejected, or isolated instead of accepting more goroutines, larger queues, or hidden wait-until-timeout behavior |
+| [references/startup-readiness-liveness-shutdown.md](references/startup-readiness-liveness-shutdown.md) | service bootstrap, health endpoints, Kubernetes probes, readiness gates, liveness checks, signal handling, HTTP drain, or shutdown sequencing | makes the model distinguish process liveness, traffic readiness, and drain completion instead of approving one health endpoint or fire-and-forget shutdown |
+| [references/degradation-fallback-and-fail-open-closed.md](references/degradation-fallback-and-fail-open-closed.md) | fallback behavior, stale data, optional dependency handling, degraded responses, feature-disable paths, or fail-open/fail-closed decisions | makes the model check whether degradation is bounded, observable, and contract-safe instead of accepting silent defaults, origin storms, or fail-open access behavior |
+| [references/async-durable-side-effect-review.md](references/async-durable-side-effect-review.md) | async side effects, event publishing, message acking, outbox/inbox logic, webhook enqueueing, relays, DLQs, dedup, or redrive | makes the model find dual-write, ack-before-durable-effect, and replay holes instead of assuming eventual retry makes async side effects reliable |
+| [references/rollout-rollback-safety-review.md](references/rollout-rollback-safety-review.md) | feature flags, config rollout, mixed-version compatibility, schema compatibility, canary signals, rollback behavior, or capacity-sensitive release paths | makes the model preserve safe partial rollout and rollback instead of assuming all instances, config, data, and capacity change together |
+
+If a narrower positive reference matches, prefer it over broad smell triage. If a finding crosses references, name the primary reliability behavior in the finding and use the second reference only to sharpen validation. Keep findings failure-path-first and local to the changed code. Hand off broader distributed, DB/cache, security, concurrency, performance, API, or delivery ownership when the smallest safe fix no longer fits this review lane.
 
 ## Boundaries
 Do not:

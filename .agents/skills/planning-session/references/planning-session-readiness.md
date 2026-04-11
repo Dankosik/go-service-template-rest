@@ -1,55 +1,54 @@
-# Planning Session Readiness Examples
+# Planning Session Readiness
+
+## Behavior Change Thesis
+When loaded for a planning pass with uncertain inputs, this file makes the model block or reopen upstream instead of planning from `spec.md` alone or inventing missing `design/` context inside `plan.md` or `tasks.md`.
 
 ## When To Load
-Load this reference when deciding whether a `planning-session` may begin, when checking required inputs, or when a planning attempt exposes missing context before `plan.md` or `tasks.md` writes.
+Load when required planning inputs are missing, stale, contradictory, or not yet checked before artifact writes.
 
-This file gives examples only. `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative.
+## Decision Rubric
+- Begin planning only from stable `spec.md` plus required approved design artifacts, unless an explicit eligible direct-path design-skip rationale already exists.
+- Treat `workflow-plan.md` and `workflow-plans/planning.md` as repairable planning inputs, not as optional chat memory.
+- Check triggered conditional design artifacts before task breakdown; if sequencing, validation, rollout, data, contract, ownership, or dependency order depends on one, it must exist or planning blocks.
+- If a missing decision would change implementation order, proof shape, ownership, compatibility, or rollout, record a reopen target instead of turning it into a task.
+- Do not downgrade missing required inputs to `CONCERNS`; missing required inputs normally make readiness `FAIL` or planning blocked.
 
-## Good Session Outcomes
-- The session confirms task-local `workflow-plan.md` points to `planning`, `workflow-plans/planning.md` is active or repairable, `spec.md` is approved, and required `design/` artifacts are approved before planning work begins.
-- The session identifies triggered conditional design artifacts before task breakdown, such as `design/data-model.md` or `design/contracts/`, and confirms they exist when they affect sequencing, validation, or rollout.
-- The session treats an explicit recorded design-skip rationale as a narrow exception only for eligible tiny or direct-path work.
-- The session produces or repairs `plan.md` and expected `tasks.md` from approved `spec.md + design/`, then records implementation readiness and stops.
-
-## Bad Session Outcomes
-- Planning starts from `spec.md` alone for non-trivial work after the design-bundle stage is expected.
-- The session invents an ownership, data, API, or rollout answer inside `tasks.md` because a design artifact is missing.
-- The session writes implementation files after sketching the first task.
-- The session treats a missing `workflow-plans/planning.md` as harmless chat memory instead of repairing the phase-control file during planning.
-
-## Example Handoff Notes
-Good handoff note:
-
+## Imitate
 ```markdown
-Planning status: complete.
-Inputs: `spec.md` approved; core `design/` approved; no triggered conditional design artifacts are missing.
-Outputs: `plan.md` approved; `tasks.md` approved; `test-plan.md` not expected; `rollout.md` not expected.
-Implementation readiness: PASS.
-Next session starts with: `implementation-phase-1`.
-Stop rule: do not begin implementation in this planning session.
+Planning status: blocked.
+Reason: `design/ownership-map.md` is missing, and task ordering depends on source-of-truth ownership.
+Reopen target: technical-design.
+Writes performed: none.
 ```
 
-Concern handoff note:
+Copy this shape: it names the missing input, why it matters to planning, and the upstream phase.
 
 ```markdown
-Planning status: complete with CONCERNS.
-Accepted risk: one performance budget is estimated from current design evidence.
-Proof obligation: first implementation phase must include a benchmark or trace-backed measurement before expanding scope.
-Next session starts with: `implementation-phase-1`.
-Stop rule: implementation starts in a later session only.
+Planning inputs confirmed:
+- `spec.md`: approved
+- core `design/`: approved
+- conditional design artifacts: none triggered by sequencing or rollout
+- `workflow-plans/planning.md`: missing but repairable in this session
+Next action: repair `workflow-plans/planning.md`, then produce `plan.md` and expected `tasks.md`.
 ```
 
-## Blocker Handling
-- If `spec.md` is missing, draft, or has a planning-critical open question, mark planning blocked, record the upstream blocker in `workflow-plan.md` and `workflow-plans/planning.md`, and stop.
-- If required core design artifacts are missing without an eligible design-skip rationale, mark planning blocked with reopen target `technical design`; do not create or edit `design/` here.
-- If task breakdown requires a missing rollout, data, security, reliability, or ownership decision, record the blocker and stop instead of hiding the gap in optimistic task wording.
-- If an expected `tasks.md` is missing after implementation has already started, planning should be reopened in a new planning session rather than invented in a post-code phase.
+Copy this shape: it distinguishes a repairable planning-control gap from a blocking decision/design gap.
 
-## Exa Calibration Source Links
-Found through Exa MCP search before these examples were written. Use these links only for calibration; local repo guidance wins.
+## Reject
+```markdown
+`spec.md` has enough context, so create `tasks.md` now and add any missing ownership details as task notes.
+```
 
-- arc42 documentation: https://arc42.org/documentation/
-- arc42 method: https://arc42.org/method
-- Martin Fowler on Architecture Decision Records: https://martinfowler.com/bliki/ArchitectureDecisionRecord.html
-- Asana implementation plan guide: https://www.asana.com/resources/implementation-plan
+Failure: it makes `tasks.md` a replacement for missing design authority.
 
+```markdown
+Planning can proceed with CONCERNS because `design/data-model.md` is missing but the migration tasks look straightforward.
+```
+
+Failure: a missing triggered data artifact changes ordering and validation, so the handoff should block or reopen.
+
+## Agent Traps
+- Treating "the spec looks detailed" as a substitute for the required design bundle.
+- Creating a tidy task ledger that hides unresolved ownership, rollout, or contract decisions.
+- Calling a missing `workflow-plans/planning.md` harmless instead of repairing it during planning.
+- Forgetting that implementation already having started means missing planning artifacts require a planning reopen, not mid-implementation artifact invention.

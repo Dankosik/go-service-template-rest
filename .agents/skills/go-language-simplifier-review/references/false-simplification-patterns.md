@@ -1,28 +1,33 @@
 # False Simplification Patterns
 
+Behavior Change Thesis: When loaded for a broad cleanup or DRY claim with no narrower dominant symptom, this file makes the model challenge whether the diff lowers reader state instead of likely mistake of treating shorter code as simpler code.
+
 ## When To Load
-Load this when a diff claims cleanup, deduplication, readability, DRY, or shorter code and the change might have hidden policy, ownership, cleanup, error contracts, or public behavior.
+Load this as a challenge/smell triage reference when a cleanup spans several simplification axes, or when the prompt only says "simplify", "dedupe", "readability", or "cleanup" and no narrower reference clearly owns the risk.
 
-Use this as the first calibration file when you are unsure whether a change is actually simpler. Official Go guidance treats formatting and line count as secondary to clear program construction, names, explicit errors, and readable control flow.
+Do not load this by default when a narrower reference already matches the primary symptom, such as helper extraction, error mapping, control-flow ordering, predicate modes, test proof shape, naming, source-of-truth drift, or Go-semantic stop signs.
 
-## Review Lens
-- Ask what facts the reader must now carry across the function, package, or call chain.
-- Treat helper extraction, deduplication, and flattening as neutral until they reduce tracked state or exposed call-site burden.
-- Separate structural duplication from semantic duplication. Similar-looking code can still own different behavior.
-- Prefer local, behavior-preserving corrections over broad rewrites.
+## Decision Rubric
+- Finding-worthy: the cleanup reduces visible structure while making readers remember hidden branch state, hidden modes, side-effect order, ownership, cleanup, error identity, or caller-visible behavior.
+- Finding-worthy: similar-looking branches were merged even though they intentionally own different statuses, retries, notifications, audit writes, cleanup, or error classes.
+- Not a finding: a longer rewrite makes each behavior name, phase, or side effect easier to audit.
+- Not a finding: repetition remains local because each repeated branch carries a distinct contract.
+- Smallest safe fix: usually restore the semantic boundary, or extract only the stable presentation/policy part after each branch has chosen its outcome.
 
-## Real Finding Examples
-Finding example: a "dedupe" helper merged distinct branches.
+## Imitate
+Finding shape to copy when a dedupe helper merges failure semantics:
 
 ```text
 [high] [go-language-simplifier-review] internal/app/orders/complete.go:88
 Issue: The new `finishOrderFailure` helper merges validation, inventory conflict, and payment retry failures behind one status and notification path.
-Impact: Reviewers now have to inspect the helper inputs to recover which branch owns customer-visible status and retry behavior, and future changes can silently route a conflict like a validation error.
+Impact: Reviewers now have to inspect helper inputs to recover which branch owns customer-visible status and retry behavior, and future changes can silently route a conflict like a validation error.
 Suggested fix: Keep the repeated response shape local, or extract only the shared formatting after each branch has selected its stable failure class.
 Reference: references/false-simplification-patterns.md
 ```
 
-Finding example: a cleanup made side effects harder to trace.
+Copy the move: name the collapsed semantic classes, explain the concrete future misroute, and suggest a smaller extraction boundary.
+
+Finding shape to copy when a loop hides operation order:
 
 ```text
 [medium] [go-language-simplifier-review] internal/infra/http/export.go:57
@@ -32,14 +37,18 @@ Suggested fix: Keep the step order explicit or name each step result so the audi
 Reference: references/false-simplification-patterns.md
 ```
 
-## Non-Findings To Avoid
-- Do not flag a longer rewrite when each line now carries a distinct, named behavior and lowers reader burden.
-- Do not demand helper extraction for one-off local logic with no stable second use.
-- Do not penalize repetition when each branch must preserve a different error, status, cleanup, or ownership contract.
-- Do not call a guard clause false simplification when it preserves side-effect order and removes real nesting.
+Copy the move: make "why order matters" the defect, not "loops are bad."
 
-## Bad And Good Simplifications
-Bad: the helper reduces lines but creates hidden modes.
+## Reject
+Reject this kind of finding:
+
+```text
+Issue: This code is longer than necessary and should use a helper.
+```
+
+It is taste-only unless it identifies the policy a helper would own and the merge-risk of leaving it local.
+
+Reject this refactor as "simpler":
 
 ```go
 func finish(w http.ResponseWriter, err error, status int, retry bool) {
@@ -50,7 +59,7 @@ func finish(w http.ResponseWriter, err error, status int, retry bool) {
 }
 ```
 
-Good: keep branch meaning explicit, and extract only stable presentation policy.
+The flags make the caller decode failure policy. Prefer names that expose stable outcomes:
 
 ```go
 func writeRetryableConflict(w http.ResponseWriter, err error) {
@@ -63,7 +72,7 @@ func writeValidationProblem(w http.ResponseWriter, err error) {
 }
 ```
 
-Bad: the loop hides operation order that was previously the point.
+Reject this refactor when order is the contract:
 
 ```go
 for _, step := range []func(context.Context) error{s.reserve, s.charge, s.audit} {
@@ -73,7 +82,7 @@ for _, step := range []func(context.Context) error{s.reserve, s.charge, s.audit}
 }
 ```
 
-Good: preserve phase order when the sequence is part of the contract.
+Prefer explicit phases when future edits must see the sequence:
 
 ```go
 if err := s.reserve(ctx); err != nil {
@@ -85,14 +94,11 @@ if err := s.charge(ctx); err != nil {
 return s.audit(ctx)
 ```
 
-## Escalation Guidance
-- Escalate to `go-design-review` when the simplification crosses package ownership, public API shape, or approved design boundaries.
-- Escalate to `go-domain-invariant-review` when separate business states or transitions were merged.
-- Escalate to `go-idiomatic-review` when the risk depends on Go semantics such as nil behavior, mutable aliasing, method sets, or error wrapping.
-- Ask for targeted tests or hand off to `go-qa-review` when the simplification relies on subtle branch or precedence preservation.
+## Agent Traps
+- Do not use this file as a generic checklist after a narrower reference already explains the defect.
+- Do not ask for extraction just because two branches have matching shape.
+- Do not praise a guard-clause or loop cleanup until cleanup order, side-effect order, and which error wins remain obvious.
+- Do not call protective code ceremony when it preserves ownership, lifetime, or caller-visible contracts.
 
-## Source Anchors
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): supplement to Effective Go; useful for explicit errors, indentation of error flow, package names, interfaces, and useful test failures.
-- [Effective Go](https://go.dev/doc/effective_go): clear Go construction and naming, with the official note that it is not actively updated.
-- Repository pattern: `go-design-review/references/accidental-complexity-and-helper-buckets.md`.
-- Repository pattern: `go-coder/references/helper-extraction-and-package-ownership.md`.
+## Validation Shape
+Ask for focused proof only when the finding depends on subtle behavior preservation: branch-specific status/error mapping, side-effect order, cleanup precedence, or inspectable error identity. Green broad tests are not enough if they never distinguish the collapsed branches.

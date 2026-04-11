@@ -6,8 +6,9 @@ Load this when a write can be retried, a timeout may hide whether mutation happe
 ## Decision Rubric
 - Separate HTTP method idempotency from API-contract idempotency. `PUT` and `DELETE` have method idempotency; `POST` and `PATCH` need extra rules for safe retries.
 - For retryable non-idempotent writes, require `Idempotency-Key` or expose a recovery read that cannot create duplicate work.
-- The Idempotency-Key header work is still an Internet-Draft; use it as strong design input, not as a final RFC guarantee.
+- Verify the current `Idempotency-Key` status before claiming RFC compliance; when it is still an Internet-Draft, use it as strong design input, not as a final RFC guarantee.
 - Define key syntax, entropy expectations, tenant/account scope, operation scope, route or method scope, and TTL. This skill's default TTL is `24h`.
+- For new `Idempotency-Key` contracts, prefer draft-compatible Structured Field string syntax, for example `Idempotency-Key: "8e03978e-40d5-43e8-bc93-6894a57f9324"`. Preserve an established unquoted or provider-specific convention only as an explicit compatibility choice.
 - Compare retried payloads at the normalized contract level when irrelevant JSON formatting, object order, or defaults can differ.
 - Same key plus same normalized payload should return an equivalent prior outcome after the durable boundary.
 - Same key plus different normalized payload should fail with a stable conflict or validation problem.

@@ -1,30 +1,41 @@
 # Rollout Compatibility And Risk Questions
 
+## Behavior Change Thesis
+When loaded for rollout or compatibility claims, this file makes the model test mixed-version and rollback state instead of forcing release ceremony or ignoring hard-to-reverse deployment risk.
+
 ## When To Load
 Load this when the candidate synthesis mentions rollout, migration, feature flags, canary, backward compatibility, mixed versions, destructive state changes, data backfill, or rollback. Do not use it to force rollout ceremony onto tiny reversible local work.
 
-## Strong Vs Weak Questions
-| Strong | Weak |
-| --- | --- |
-| "Can old and new binaries read the same persisted state during the rollout, and what breaks if rollback happens after new writes?" | "Is rollback safe?" |
-| "Which metric or guardrail would stop the canary before broad exposure, and is the sample representative enough to catch the failure mode?" | "Should we canary?" |
-| "If the feature flag is turned off after partial exposure, which data or async side effects remain and who cleans them up?" | "Can we use flags?" |
-| "Does the migration require expand-contract ordering, or can the candidate plan deploy code and schema together safely?" | "How do we migrate?" |
+## Decision Rubric
+- Skip rollout questions for tiny, local, easily reverted work with no persisted state or external behavior.
+- Challenge mixed-version safety when old and new binaries, clients, workers, or schema may coexist.
+- Challenge rollback when new writes, cache entries, artifacts, side effects, or irreversible state can remain after disabling the feature.
+- Challenge global rollout when fallback can hide rather than solve load, tenant-isolation, or correctness failures.
+- Ask for a canary or flag only if it changes implementation order, observability, blast radius, or cleanup obligations.
+- Do not ask for a rollout percentage unless the representative population and stopping signal matter to planning.
 
-## Blocker Classifications
-- `blocks_planning`: rollback, migration order, or mixed-version compatibility can change implementation phases or require an expand-contract path.
-- `blocks_specific_domain`: only delivery, data, or reliability evidence is missing, and the candidate path is otherwise stable.
-- `non_blocking`: rollout detail is useful but the change is local, reversible, and validation can prove it before release.
+## Imitate
+- "Can old and new binaries read the same persisted state during the rollout, and what breaks if rollback happens after new writes?"
+  - Copy the mixed-version plus rollback-after-write shape.
+- "If Redis fallback sends all traffic back to Postgres during global enablement, what guardrail prevents a load spike from becoming the rollback trigger too late?"
+  - Copy the test that fallback may preserve availability while hiding capacity risk.
+- "If the feature flag is turned off after partial exposure, which data or async side effects remain and who cleans them up?"
+  - Copy the distinction between disabling code paths and undoing durable effects.
+- "Does the migration require expand-contract ordering, or can code and schema deploy together safely?"
+  - Copy the question that can change implementation phasing.
 
-## Next-Action Examples
-- `answer`: "Use existing rollout policy or prior migration pattern if the repository already has a compatible precedent."
-- `re-research`: "Reopen delivery/reliability research when guardrail metrics, rollback trigger, or canary population are not evidenced."
-- `ask_user`: "Ask only if rollout cohort or launch timing is a business choice."
-- `defer`: "Defer flag cleanup naming if the temporary flag owner and removal trigger are already explicit."
-- `accept_risk`: "Accept no canary only for low-blast-radius work with a named fallback and fresh validation path."
+## Reject
+- "Should we canary?"
+  - Fails because it adds ceremony without naming the failure mode or guardrail.
+- "Is rollback safe?"
+  - Fails because it does not identify the state that survives rollback.
+- "Use a feature flag to make it safe."
+  - Fails because a flag may not undo writes, artifacts, cache entries, or external side effects.
+- "What percentage should launch first?"
+  - Fails unless cohort size affects the ability to detect the specific risk.
 
-## Exa Sources
-- [Martin Fowler: Canary Release](https://martinfowler.com/bliki/CanaryRelease.html) for limiting production risk with gradual exposure and rollback by rerouting.
-- [Martin Fowler: Feature Toggles](https://martinfowler.com/articles/feature-toggles.html) for separating deployment from release and classifying toggle lifetimes.
-- [Google Cloud: Reliable releases and rollbacks](https://cloudplatform.googleblog.com/2017/03/reliable-releases-and-rollbacks-CRE-life-lessons.html) for treating rollback readiness as part of release safety.
-- [ACM Queue: Canary Analysis Service](https://queue.acm.org/detail.cfm?id=3194655) for representative canary populations, clear metrics, and pass/fail evaluation.
+## Agent Traps
+- Treating fallback as rollback when durable state or load shape has already changed.
+- Treating a feature flag as cleanup.
+- Requiring a canary for every change rather than only when it reduces planning risk.
+- Ignoring old-client or old-worker behavior because the candidate path only describes new code.

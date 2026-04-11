@@ -1,9 +1,18 @@
 # Runtime Forensics For Go Incidents
 
-## When To Load
-Load this reference when a Go process or test is alive but not making progress, deadlocked, leaking goroutines, growing memory, stuck in shutdown, or producing a panic whose first stack is insufficient.
+## Behavior Change Thesis
+When loaded for a live stalled or leaking Go process, this file makes the model capture the most perishable runtime artifact before restart or edits instead of destroying evidence.
 
-Use it before restarting or editing when the next action could destroy runtime evidence.
+## When To Load
+Load when a Go process or test is alive but not making progress, deadlocked, leaking goroutines, growing memory, stuck in shutdown, or producing a panic whose first stack is insufficient.
+
+## Decision Rubric
+- Capture volatile evidence before restart when operationally safe.
+- Pick the first artifact that matches the wait or growth class; do not collect every profile by habit.
+- Use two time-separated samples when claiming goroutine, heap, or RSS growth.
+- Prefer goroutine dumps for "who is blocked now"; use block/mutex profiles for accumulated wait and contention.
+- Use execution trace when ordering and timing relationships matter more than aggregate samples.
+- Remove or close temporary runtime endpoints after capture.
 
 ## Fast Artifact Map
 
@@ -13,86 +22,57 @@ Use it before restarting or editing when the next action could destroy runtime e
 | goroutine count grows | goroutine profile over time | distinguishes warmup from leaked owners |
 | memory or RSS grows | heap profile over time | shows retained objects or allocation pressure |
 | high CPU | CPU profile | shows active hot paths |
-| low CPU but high latency | goroutine dump, block profile, trace | points at waiting, serialization, or scheduler behavior |
+| low CPU but high latency | goroutine dump, block profile, or trace | points at waiting, serialization, or scheduler behavior |
 | lock or channel wait | block or mutex profile | shows wait sites and contention |
 | scheduler or wakeup mystery | execution trace | shows timing and goroutine state transitions |
 
-## Commands
-If the service exposes `net/http/pprof`:
-
-```bash
-curl -o goroutine.txt 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2'
-curl -o heap.pprof 'http://127.0.0.1:6060/debug/pprof/heap'
-curl -o block.pprof 'http://127.0.0.1:6060/debug/pprof/block'
-curl -o mutex.pprof 'http://127.0.0.1:6060/debug/pprof/mutex'
-curl -o cpu.pprof 'http://127.0.0.1:6060/debug/pprof/profile?seconds=30'
-curl -o trace.out 'http://127.0.0.1:6060/debug/pprof/trace?seconds=5'
-go tool pprof -top cpu.pprof
-go tool pprof -top heap.pprof
-go tool trace trace.out
-```
-
-For a local or test reproducer:
-
-```bash
-go test ./path/to/pkg -run '^TestName$' -count=1 -timeout=30s -v
-go test ./path/to/pkg -run '^TestName$' -trace trace.out -count=1
-go test ./path/to/pkg -run '^TestName$' -blockprofile block.out -blockprofilerate=1 -count=1
-go test ./path/to/pkg -run '^TestName$' -mutexprofile mutex.out -mutexprofilefraction=1 -count=1
-go test ./path/to/pkg -run '^TestName$' -cpuprofile cpu.out -memprofile mem.out -count=1
-go tool pprof -top block.out
-go tool pprof -top mutex.out
-go tool pprof -top cpu.out
-go tool pprof -top mem.out
-go tool trace trace.out
-```
-
-For a stuck process, capture a dump before restart when operationally safe:
+## Imitate
 
 ```bash
 kill -QUIT <pid>
 docker kill --signal=QUIT <container>
 ```
 
-When panic output hides relevant goroutines:
+Use this before restarting a stuck process when doing so is operationally safe.
+
+```bash
+curl -o goroutine-1.txt 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2'
+sleep 30
+curl -o goroutine-2.txt 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2'
+```
+
+Use two samples when the claim is "goroutines are leaking" rather than "goroutines are currently blocked."
 
 ```bash
 GOTRACEBACK=all go test ./path/to/pkg -run '^TestName$' -count=1 -v
 ```
 
-When scheduler or GC runtime events are relevant:
+Use this when panic output hides relevant goroutines.
+
+## Reject
 
 ```bash
-GODEBUG=schedtrace=1000,scheddetail=1 go test ./path/to/pkg -run '^TestName$' -count=1 -v
-GODEBUG=gctrace=1 go test ./path/to/pkg -run '^TestName$' -count=1 -v
+curl -o cpu.pprof .../profile
+curl -o heap.pprof .../heap
+curl -o block.pprof .../block
+curl -o mutex.pprof .../mutex
+curl -o trace.out .../trace
 ```
 
-## Evidence To Capture
-- timestamp, process identity, version or commit, and load condition
-- exact capture command and artifact path
-- two samples when growth or leak is suspected, with elapsed time between them
-- top repeated goroutine stacks and blocked operation type
-- profile top output plus the profile file when it must be revisited
-- whether pprof endpoints were temporary or already protected operational endpoints
+This over-collects, adds overhead, and can blur which artifact proved which hypothesis.
 
-## Bad Debugging Moves
-- restarting a hung process before capturing the goroutine state
-- collecting CPU, heap, block, mutex, and trace at once and treating the combined picture as precise
-- using CPU profiles to debug a process that is mostly waiting
-- exposing pprof endpoints broadly or leaving temporary debug ports open
-- assuming one heap snapshot proves a leak without a second point in time
+```text
+Restarted the stuck service, then started investigating the deadlock.
+```
 
-## Good Debugging Moves
-- pick the artifact that matches the wait or growth class
-- keep tools isolated when one profiler can distort another
-- compare goroutine or heap profiles across time for leak claims
-- use execution trace when ordering and timing relationships matter more than aggregate samples
-- remove or close any temporary runtime endpoint after the evidence is captured
+This destroys the blocked goroutine state that would have shown the owner cycle.
 
-## Source Links
-- [Go diagnostics](https://go.dev/doc/diagnostics)
-- [runtime/pprof package](https://pkg.go.dev/runtime/pprof)
-- [net/http/pprof package](https://pkg.go.dev/net/http/pprof)
-- [runtime/trace package](https://pkg.go.dev/runtime/trace)
-- [cmd/trace tool](https://pkg.go.dev/cmd/trace)
-- [Go blog: execution traces](https://go.dev/blog/execution-traces-2024)
+## Agent Traps
+- Using CPU profiles to debug mostly waiting processes.
+- Assuming one heap snapshot proves a leak.
+- Ignoring process identity, commit/version, timestamp, and load condition.
+- Leaving temporary pprof endpoints reachable after the investigation.
+- Checking in `*.pprof`, `trace.out`, or dumps by accident.
+
+## Validation Shape
+Record timestamp, process identity, version or commit, load condition, exact capture command, artifact path, repeated blocked stack or profile top summary, elapsed time between samples for growth claims, and whether runtime endpoints were already protected or temporary.

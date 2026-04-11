@@ -1,51 +1,92 @@
 # Route Context And Match Probing
 
-## When To Read
-Read this when a diff reads `chi.RouteContext`, calls `RoutePattern`, uses `Match` or `Find`, computes custom `Allow` or `OPTIONS` responses, probes alternate methods, or builds observability labels from route state.
+## Behavior Change Thesis
+When loaded for symptom `RouteContext, RoutePattern, Match, Find, custom Allow, OPTIONS, or alternate-method probing appears in the diff`, this file makes the model choose post-routing route-pattern reads and isolated probe contexts instead of likely mistake `reuse the live request route context or trust an incomplete route template`.
 
-## Review Smell Patterns
-- Middleware reads `RoutePattern()` before `next.ServeHTTP` and treats it as the final route template.
-- Custom `405`, `Allow`, or `OPTIONS` code calls `router.Match(chi.RouteContext(r.Context()), method, path)`.
-- A helper reuses one probe context across multiple paths or methods without resetting it.
-- A probe mutates the live request route context and then the request continues to downstream handlers.
-- A fallback label uses `r.URL.Path` after route-template extraction fails.
+## When To Load
+Load when a diff reads `chi.RouteContext`, calls `RoutePattern`, calls `Match` or `Find`, computes `Allow` or `OPTIONS`, probes alternate methods, or derives route labels from route state.
 
-## Minimal Examples
+## Decision Rubric
+- `RoutePattern()` changes during routing. Middleware should read it after `next.ServeHTTP` when it needs the final template.
+- `Match` and `Find` mutate the `*chi.Context` they receive. Use `chi.NewRouteContext()` for each independent method/path probe.
+- Reusing one probe context across a loop is reviewable risk unless the code clearly resets it before every probe.
+- Do not call `router.Match(chi.RouteContext(r.Context()), ...)` for custom `405`, `Allow`, `OPTIONS`, or telemetry discovery.
+- Do not infer `HEAD` support from a `GET` match unless the router has explicit `Head(...)` routes or `middleware.GetHead` installed before routes. Load `http-fallback-head-options-cors.md` when method policy is the primary issue.
+- If the only defect is raw-path metric cardinality, load `route-observability-labels.md` as the primary reference.
 
-```diff
- func allowed(router chi.Routes, r *http.Request, method string) bool {
--  rctx := chi.RouteContext(r.Context())
-+  rctx := chi.NewRouteContext()
-   return router.Match(rctx, method, r.URL.Path)
- }
+## Imitate
+
+```go
+func allowed(router chi.Routes, method, path string) bool {
+	rctx := chi.NewRouteContext()
+	return router.Match(rctx, method, path)
+}
 ```
 
-Review finding shape: `Match` and `Find` update the `*chi.Context` they receive. The smallest safe fix is a fresh probe context per check, or an explicit reset before reuse when a loop needs to avoid allocations.
+Copy the probe shape: fresh route context per independent check, no mutation of the live request.
 
-```diff
- func instrument(next http.Handler) http.Handler {
-   return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
--    route := chi.RouteContext(r.Context()).RoutePattern()
-     next.ServeHTTP(w, r)
-+    route := chi.RouteContext(r.Context()).RoutePattern()
-+    if route == "" {
-+      route = "unmatched"
-+    }
-     recordRoute(route)
-   })
- }
+```go
+func instrument(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		route := chi.RouteContext(r.Context()).RoutePattern()
+		if route == "" {
+			route = "unmatched"
+		}
+		recordRoute(route)
+	})
+}
 ```
 
-Review finding shape: read route templates after downstream routing, and keep unmatched labels bounded.
+Copy the timing shape: read the final route template after downstream routing and bound the unmatched fallback.
 
-## Validation
-- For probe helpers, call the helper for two methods on the same request and assert the live request still serves the original route correctly.
-- For `Allow` logic, test at least one allowed method, one disallowed method on an existing path, and one method on an unknown path.
-- For route label middleware, send two concrete parameter values, such as `/users/1` and `/users/2`, and assert they collapse to the same route template.
-- Suggested validation command: `go test ./... -run 'Test.*Allow|Test.*RouteContext|Test.*RoutePattern|Test.*Probe'`.
+```go
+for _, method := range []string{http.MethodGet, http.MethodPost} {
+	if router.Match(chi.NewRouteContext(), method, path) {
+		allowed = append(allowed, method)
+	}
+}
+```
 
-## Sources Gathered With Exa
-- [chi package docs on pkg.go.dev for Routes.Match](https://pkg.go.dev/github.com/go-chi/chi/v5)
-- [go-chi mux.go source for Match and Find context mutation notes](https://raw.githubusercontent.com/go-chi/chi/master/mux.go)
-- [go-chi context.go source for RouteContext, NewRouteContext, and RoutePattern timing](https://raw.githubusercontent.com/go-chi/chi/master/context.go)
+Copy the loop shape: each method probe receives a new context unless the helper has an obvious reset.
 
+## Reject
+
+```go
+func allowed(router chi.Routes, r *http.Request, method string) bool {
+	return router.Match(chi.RouteContext(r.Context()), method, r.URL.Path)
+}
+```
+
+Reject because the helper mutates the live request route context while computing alternate method state.
+
+```go
+rctx := chi.NewRouteContext()
+for _, method := range methods {
+	if router.Match(rctx, method, path) {
+		allowed = append(allowed, method)
+	}
+}
+```
+
+Reject unless the context is reset per iteration. The subtle failure is stale route state from the previous method probe.
+
+```go
+route := chi.RouteContext(r.Context()).RoutePattern()
+next.ServeHTTP(w, r)
+recordRoute(route)
+```
+
+Reject because the route template is read before final route resolution.
+
+## Agent Traps
+- Do not call live `RouteContext` mutation a cleanup concern. It can corrupt request-local routing state.
+- Do not say "use `Match`" without also naming the required fresh context.
+- Do not advertise `HEAD` support just because `GET` matched.
+- Do not hide an incomplete route-template bug under a general observability complaint; call out timing if that is the defect.
+
+## Validation Shape
+- Probe helpers: call the helper for two methods on the same request and verify the original request still serves correctly.
+- Custom `Allow`: test an allowed method, a disallowed method on an existing path, and an unknown path.
+- Route template timing: send two concrete parameter values and verify the same template is recorded after routing.
+- Suggested command: `go test ./... -run 'Test.*Allow|Test.*RouteContext|Test.*RoutePattern|Test.*Probe|Test.*Head'`.

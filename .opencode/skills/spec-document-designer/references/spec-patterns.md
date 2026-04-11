@@ -1,114 +1,68 @@
 # Spec Patterns Reference
 
-Use this file as a compact pattern bank when designing or repairing repository-native `spec.md` documents.
+## Behavior Change Thesis
+When loaded for foreign-template pressure or coverage gaps, this file makes the model translate only behavior-changing coverage concerns into repo-native `spec.md` sections instead of copying PRD, BMAD, Spec Kit, Superpowers, or SDD headings wholesale.
 
-Rule: these patterns are prompts for coverage, not a second source of truth and not headings to copy mechanically.
+## When To Load
+Load this when the prompt mentions an external spec framework, the draft has template-shaped section sprawl, or the spec feels under-covered but not because of a narrower artifact-placement, depth, clarification, or validation problem.
 
-## Default Repo Shape
+## Decision Rubric
+- Start from the repository shape: `Context`, `Scope / Non-goals`, `Constraints`, `Decisions`, `Open Questions / Assumptions`, `Plan Summary / Link`, `Validation`, `Outcome`.
+- Borrow a concern only when it changes planning, design, acceptance semantics, or proof. Do not borrow a heading because a framework names it.
+- Translate user journeys into affected actors or acceptance semantics only when they change behavior.
+- Translate requirement lists into stable decisions plus validation hooks; do not preserve `FR-001` numbering unless it is already an external contract.
+- Translate NFRs into `Constraints` only when they shape design or validation. Omit irrelevant categories.
+- Translate architecture, roadmap, task, or rollout material into `design/`, `plan.md`, `tasks.md`, or `rollout.md`; keep only the stable decision or link in `spec.md`.
+- Preserve rejected alternatives only when planning is likely to revive the wrong path without them.
 
-The default `spec.md` sections are:
+## Imitate
 
-1. `Context`
-2. `Scope / Non-goals`
-3. `Constraints`
-4. `Decisions`
-5. `Open Questions / Assumptions`
-6. `Plan Summary / Link`
-7. `Validation`
-8. `Outcome`
+Foreign prompt:
 
-Use all of them only when they materially help the reader.
+```text
+Fill out personas, user journeys, FR/NFR sections, architecture, and sprint tasks for async usage export.
+```
 
-## External Pattern Bank
+Repo-native translation:
 
-### Spec Kit
+```markdown
+## Context
+Admins need usage exports without synchronous request timeouts.
 
-Borrow when the spec needs:
-- independently testable slices
-- explicit edge cases
-- clear capability requirements
-- measurable success criteria
-- explicit assumptions
+## Scope / Non-goals
+- In scope: admin-only async export for usage data.
+- Non-goal: self-serve user exports.
 
-Do not copy:
-- PRD-style section sprawl
-- task structure into `spec.md`
-- multi-artifact packs as default behavior
+## Constraints
+- Export access remains workspace-scoped.
+- Export status must survive process restarts.
 
-### BMAD
+## Decisions
+- Export jobs use `queued -> running -> ready -> failed` states.
+- Each workspace may have one active export job at a time.
 
-Borrow when the spec needs:
-- discovery-first assembly
-- user journeys to expose hidden capability gaps
-- scope ladder (`MVP / later / not now`)
-- selective NFRs only when relevant
-- a polish pass for duplication, contradictions, or dropped soft constraints
+## Validation
+- Tests prove workspace-scoped download access and restart-stable job status.
+```
 
-Do not copy:
-- rigid step-file choreography
-- forced menus or interaction rituals
-- full PRD + architecture pack as the baseline artifact model
+Copy this: the useful actor, state, scope, and proof concerns were retained, while personas, FR numbering, architecture, and sprint tasks were not.
 
-### Superpowers
+## Reject
 
-Borrow when the spec needs:
-- design-before-plan discipline
-- a `2-3` approach comparison before locking a decision
-- anti-placeholder self-review
-- human-readable design narrative
+```markdown
+## Personas
+## User Journeys
+## FR-001 Through FR-019
+## NFR Catalog
+## Architecture
+## Sprint Plan
+```
 
-Do not copy:
-- highly interactive one-question workflow when the repository does not need it
-- implementation-plan detail into the spec
+Failure: the spec now inherits a foreign artifact model and forces later phases to rediscover which parts are final decisions.
 
-### Spec-Driven Workflow
-
-Borrow when the spec needs:
-- a clarification sufficiency check
-- latest-standards research when current guidance materially changes the design
-- demoable units
-- proof artifacts
-- repository standards as an explicit constraint
-
-Do not copy:
-- full numbered audit/proofs artifact structure by default
-- verbose product-spec sections when the task only needs a lean decision record
-
-## Concern -> Artifact Mapping
-
-| Concern | Ask yourself | Likely home |
-|---|---|---|
-| Behavior delta | What changes for the user/operator and what stays the same? | `Context`, `Decisions` |
-| Independently testable slices | What are the smallest meaningful behavior slices or user-visible checkpoints? | `Decisions`, `Validation` |
-| Edge cases / failure semantics | Which corner cases could change planning or acceptance semantics? | `Constraints`, `Decisions`, `Open Questions / Assumptions` |
-| Capability contract | What must the system be able to do, without implementation leakage? | `Decisions` |
-| Key entities / state | Which domain objects or state transitions matter for reasoning about the change? | `Context`, `Decisions` |
-| Scope ladder | What is in scope now, later, and explicitly not now? | `Scope / Non-goals` |
-| Relevant NFRs | Which quality constraints actually shape design: performance, security, compliance, etc.? | `Constraints` |
-| Alternatives / rejected paths | Did the team reject a materially different path that planning should not quietly revive? | `Decisions` |
-| Proof / validation expectations | What evidence would show the feature is real, correct, or ready? | `Validation` |
-| Repository standards | Which repo-specific patterns, compatibility rules, or workflow constraints shape the spec? | `Context`, `Constraints` |
-| Unresolved ambiguity | What is still unknown, who owns it, and what unblocks it? | `Open Questions / Assumptions` |
-| Execution order | What must happen first, in phases, or at checkpoints? | `plan.md`, not `spec.md` |
-
-## Translation Rules
-
-1. If it is a stable decision, keep it in `Decisions`.
-2. If it is evidence, comparison, benchmark output, or external research, move it to `research/*.md`.
-3. If it is execution order, task decomposition, or coder instructions, move it to `plan.md`.
-4. If it is unresolved but visible, keep it in `Open Questions / Assumptions`.
-5. If the detail is too large for `spec.md`, summarize the decision and link out.
-6. If a foreign section adds no planning value here, do not import it.
-
-## Lightweight Self-Review
-
-Before finishing the spec, check:
-
-1. Is this request mature enough for spec design, or should it go back to framing?
-2. Can planning proceed without silently reopening core design?
-3. Did any raw research leak into `Decisions`?
-4. Did any task list or implementation sequence leak into `spec.md`?
-5. Are scope cuts and non-goals explicit enough to prevent drift?
-6. Are material edge cases or proof expectations visible?
-7. Did I import only the patterns that help this task, rather than all possible sections?
-8. If a specialist contradiction remains, did I escalate instead of smoothing it over?
+## Agent Traps
+- Treating "coverage" as permission to add every possible section.
+- Copying framework vocabulary into headings instead of translating the concern.
+- Filling NFR categories with generic availability, performance, or security text that does not constrain this task.
+- Keeping architecture or task breakdown because it was useful in the source prompt.
+- Omitting non-goals after collapsing a foreign "future work" section.

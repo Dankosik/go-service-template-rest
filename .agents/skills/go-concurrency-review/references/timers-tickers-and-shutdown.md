@@ -1,61 +1,56 @@
-# Timers, Tickers, And Shutdown Examples
+# Timers, Tickers, And Shutdown
+
+Behavior Change Thesis: When loaded for timer, ticker, sleep, or time-based shutdown symptoms, this file makes the model review ownership and prompt unblock semantics instead of repeating stale `time.After` leak folklore or accepting sleep as synchronization.
 
 ## When To Load
-Load this when a review touches `time.After`, `time.Tick`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc`, `Timer.Stop`, `Timer.Reset`, `Ticker.Stop`, sleeps in tests or loops, retry timing, fake clocks, or shutdown races around time.
+Symptom: the diff touches `time.After`, `time.Tick`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc`, `Timer.Stop`, `Timer.Reset`, `Ticker.Stop`, sleeps in loops or tests, retry timing, fake clocks, or shutdown races around time.
 
-## Review Lens
-Time is not a synchronization substitute. Review whether a timer or ticker has an owner, whether shutdown unblocks the loop, and whether Stop/Reset/AfterFunc completion semantics are version-aware.
+## Decision Rubric
+- Time is not a synchronization substitute. Ask which signal unblocks the goroutine when shutdown or cancellation happens.
+- Long-lived tickers need a clear owner and `Stop` on every exit path.
+- `time.After` in a loop is not automatically a leak on modern Go; focus the finding on timer churn, delayed shutdown, lost reset semantics, or version-sensitive retention when that is the actual merge risk.
+- `AfterFunc.Stop` does not wait for an already-running function; require explicit completion coordination when the callback touches shared state or shutdown depends on it.
+- `Timer.Reset` needs coordination when another goroutine may receive the old tick or the previous callback may still run.
+- Sleep-based tests should usually be replaced with gates, fake clocks, or `testing/synctest` when the project can rely on it.
 
-## Bad Review Example
+## Imitate
+```text
+[high] [go-concurrency-review] poller/poller.go:67
+Issue:
+Axis: Timers, Tickers, And Time-Based Coordination; the worker recreates `time.After(interval)` on every loop and the select has no `<-ctx.Done()` or `<-stop>` case. `Stop` closes `p.stop`, but this goroutine remains parked until the next timer fires.
+Impact:
+Shutdown latency is bounded by the poll interval and tests can hang under long intervals; this is merge-risk lifecycle drift, not just allocation style.
+Suggested fix:
+Create one owned `time.NewTicker(interval)`, `defer ticker.Stop()`, and select on both `ticker.C` and the stop or context channel. If using `AfterFunc`, coordinate explicitly when `Stop` returns false because it does not wait for the function to complete.
+Reference:
+Validate with `go test ./internal/poller -run TestStopReturnsImmediately -count=100 -timeout=5s`.
+```
+
+Copy the shape: it avoids outdated leak claims and anchors the defect in prompt shutdown and ownership.
+
+## Reject
 ```text
 [medium] poller/poller.go:67
 time.After in a loop leaks. Use a ticker.
 ```
 
-Why it fails: Go 1.23 changed GC behavior for unreferenced timers/tickers. The finding should focus on the actual merge risk: timer churn, stale/reset semantics in version-sensitive code, or no cancellation path.
+Reject this shape: it may be stale for the Go version and misses the concrete liveness defect that matters to review.
 
-## Good Review Example
-```text
-[high] [go-concurrency-review] poller/poller.go:67
-Issue:
-Axis: Timers, Tickers, And Time-Based Coordination; the worker recreates `time.After(interval)` on every loop and the select has no `<-ctx.Done()` or `stop` case. `Stop` closes `p.stop` but this goroutine remains parked until the next timer fires.
-Impact:
-Shutdown latency is bounded by the poll interval and tests can hang under long intervals; this is merge-risk lifecycle drift, not just allocation style.
-Suggested fix:
-Create one `time.NewTicker(interval)`, `defer ticker.Stop()`, and select on both `ticker.C` and the stop or context channel. If using `AfterFunc`, coordinate explicitly when `Stop` returns false because it does not wait for the function to complete.
-Reference:
-`time` package docs for `Timer`, `Ticker`, `Stop`, and `Reset`; validate with `go test ./internal/poller -run TestStopReturnsImmediately -count=100 -timeout=5s`.
+```go
+time.Sleep(10 * time.Millisecond)
+require.True(t, stopped)
 ```
 
-## Failure Mode
-Write a finding when:
-- a loop uses `time.Sleep` or `time.After` instead of a real stop signal and can delay shutdown;
-- a ticker is created in a long-lived worker without a clear `Stop` on every exit path;
-- `AfterFunc.Stop` is treated as if it waits for the function to finish;
-- `Timer.Reset` can overlap with another goroutine receiving from the timer or running the previous callback without coordination;
-- a test relies on sleep duration rather than a completion signal, fake clock, or `testing/synctest`;
-- a review calls `time.After` or `time.Tick` a leak without checking Go version and actual retention behavior.
+Reject this as primary proof: scheduler timing does not prove the stop signal was observed or the goroutine exited.
 
-## Smallest Safe Correction
-Prefer corrections like:
-- use one owned `Ticker` with `defer ticker.Stop()` in the goroutine that owns the loop;
-- include `<-ctx.Done()` or `<-stop>` in the same `select` as timer/ticker receives;
-- coordinate `AfterFunc` callbacks with a completion channel or `WaitGroup` when `Stop` returns false;
-- use `time.NewTimer` plus version-aware Stop/Reset handling when the timer must be reused;
-- replace sleep polling tests with explicit gates, fake clocks, or `testing/synctest` when the project can target a Go version that includes it.
+## Agent Traps
+- Do not flag `time.After` solely from memory of older Go behavior; tie the finding to the repo's Go version or to a version-independent issue.
+- Do not forget `Ticker.Stop` when the ticker is created outside the loop owner.
+- Do not treat a false return from `AfterFunc.Stop` as callback completion.
+- Do not replace every timer with a ticker; one-shot timers, reused timers, and fake clocks may be the smaller correction.
 
-## Validation Evidence
-Use validation that proves prompt shutdown and removes timing luck:
-```bash
-go test ./internal/poller -run TestStopReturnsImmediately -count=100 -timeout=5s
-go test -race ./internal/poller -run TestTickerLoopStops -count=100
-```
-
-For code using `testing/synctest`, require a self-contained test bubble and avoid external I/O that prevents durable blocking.
-
-## Source Links From Exa
-- [time package docs](https://pkg.go.dev/time)
-- [testing/synctest package docs](https://pkg.go.dev/testing/synctest)
-- [Testing concurrent code with testing/synctest](https://go.dev/blog/synctest)
-- [context package docs](https://pkg.go.dev/context)
-
+## Validation Shape
+- Prove prompt shutdown with a completion signal and test timeout.
+- Use race evidence when timer callbacks touch shared state.
+- For fake-clock or `testing/synctest` tests, keep the test bubble self-contained; external I/O or goroutines outside the bubble can make the proof misleading.
+- Good commands look like `go test ./internal/poller -run TestStopReturnsImmediately -count=100 -timeout=5s` and `go test -race ./internal/poller -run TestTickerLoopStops -count=100`.

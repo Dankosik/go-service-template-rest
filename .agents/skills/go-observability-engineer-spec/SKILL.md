@@ -44,17 +44,22 @@ Do not:
 6. Call out assumptions, blockers, and reopen conditions when signal quality, convention stability, privacy, or cost tradeoffs are not yet proven.
 
 ## Reference Selection
-Load references lazily. Read only the files relevant to the current spec question:
+Load references lazily. Load at most one reference by default unless the task clearly spans multiple independent decision pressures, such as async DLQ behavior plus SLO alert policy. Treat references as compact rubrics and example banks, not exhaustive checklists or documentation dumps.
 
-- `references/signal-contract-matrix.md` for component-by-component signal matrices across logs, metrics, traces, correlation, owners, and validation.
-- `references/trace-context-and-correlation.md` for W3C Trace Context, baggage, request IDs, async correlation IDs, span links, and cross-boundary propagation.
-- `references/metrics-cardinality-and-cost.md` for metric names, label budgets, histograms, cardinality traps, cost controls, retention, and "logs/traces instead of metrics" decisions.
-- `references/structured-logs-and-privacy.md` for structured log event design, redaction, PII/secrets handling, sanitized DB/query data, and log-to-trace correlation.
-- `references/sli-slo-error-budget-and-alerting.md` for SLI ratios, SLO windows, error budget policy, multi-window burn-rate alerting, low-traffic event floors, and alert ownership.
-- `references/async-dlq-lag-and-reconciliation-observability.md` for producer/consumer/retry/DLQ/redrive, lag/backlog/oldest-age, idempotency, and reconciliation telemetry.
-- `references/runtime-diagnostics-and-debug-endpoints.md` for `/livez`, `/readyz`, `/startupz`, pprof, expvar, admin listeners, shutdown drain/flush, and incident-only diagnostics.
+Pick the reference whose symptom most directly changes the model's decision:
 
-When extending examples or source guidance, research primary sources first. Prefer OpenTelemetry docs and semantic conventions, W3C Trace Context, Google SRE book/workbook chapters, Go and Kubernetes docs, Prometheus docs, and official cloud observability docs. Keep source links in the relevant reference file.
+| Reference | Load Symptom | Behavior Change |
+| --- | --- | --- |
+| `references/signal-contract-matrix.md` | Broad observability section, telemetry contract, or component-by-component coverage. | Makes the model write an operator-decision matrix per changed runtime path instead of disconnected lists of "add logs, metrics, and traces." |
+| `references/resource-identity-and-semantic-conventions.md` | Service identity, resource attributes, semantic conventions, metric/span names, instrumentation scope, or cross-signal naming drift. | Makes the model reuse stable OpenTelemetry/resource conventions and mark unstable conventions explicitly instead of inventing custom names or inconsistent labels. |
+| `references/metrics-cardinality-and-cost.md` | Metric names, labels, histograms, retention, cost, dashboards, or any draft label using IDs, paths, error strings, or request context. | Makes the model choose bounded aggregations or move detail to logs/traces instead of creating high-cardinality or costly metric labels. |
+| `references/structured-logs-and-privacy.md` | Structured log event design, redaction, PII/secrets, request or DB/query data, log-to-trace pivots, or support fields. | Makes the model design allowlisted forensic logs with privacy controls instead of raw body/header logging or log-scrape alerting. |
+| `references/trace-context-and-correlation.md` | Request IDs, W3C Trace Context, baggage, async correlation, span links, retry/DLQ/redrive correlation, or cross-service propagation. | Makes the model preserve safe trace/correlation continuity and use links where lineage is not single-parent instead of forcing IDs into metric labels or losing retry ancestry. |
+| `references/sli-slo-error-budget-and-alerting.md` | SLIs, SLO windows, error budgets, burn-rate alerts, event floors, alert ownership, runbooks, dashboards, or release/degradation policy. | Makes the model define good/total events and proportional operator response instead of raw threshold pages or unactionable dashboards. |
+| `references/async-dlq-lag-and-reconciliation-observability.md` | Producers, consumers, queues, retries, DLQs, redrive, backlog, lag, oldest age, idempotency, scheduled jobs, or reconcilers. | Makes the model separate attempt, logical completion, freshness, DLQ, redrive, and reconciliation visibility instead of treating "consumer lag" as sufficient. |
+| `references/runtime-diagnostics-and-debug-endpoints.md` | Health probes, graceful shutdown, pprof, expvar, runtime diagnostics, admin/debug listener policy, crash diagnostics, or telemetry flush behavior. | Makes the model separate orchestration and incident-debug decisions with access controls instead of sharing probe semantics or exposing debug surfaces. |
+
+When extending standards-sensitive examples, research primary sources first. Prefer OpenTelemetry docs and semantic conventions, W3C Trace Context, Google SRE book/workbook chapters, Go and Kubernetes docs, Prometheus docs, and official cloud observability docs. Do not keep source-link dumps; keep only tiny canonical verification pointers when freshness or standards status materially changes the guidance.
 
 ## Decision Quality Bar
 For every material recommendation, include:

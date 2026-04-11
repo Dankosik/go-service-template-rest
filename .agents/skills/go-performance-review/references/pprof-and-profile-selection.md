@@ -1,43 +1,20 @@
 # Pprof And Profile Selection Review
 
+## Behavior Change Thesis
+When loaded for symptom "a PR uses CPU, heap, allocs, goroutine, block, mutex, or live `pprof` output as performance evidence," this file makes the model choose symptom-matched profile review instead of likely mistake "treat any profile screenshot as proof, or use CPU profiles to explain waiting and heap profiles to explain allocation churn."
+
 ## When To Load
-Load this when a review touches CPU, heap, allocs, goroutine, block, or mutex profiles; `runtime/pprof`; `net/http/pprof`; pprof screenshots; live profile collection; or profile-based performance claims.
+Load this when profile selection, collection quality, or profile interpretation is the deciding issue. Prefer `trace-block-mutex-and-contention.md` when the primary issue is a code-level lock, channel, fan-out, or queueing defect rather than a profile artifact.
 
-Use profile selection to fit the symptom. A profile is evidence only when it was collected under a workload that exercises the changed path.
+## Decision Rubric
+- Ask whether the profile type can observe the claimed symptom: CPU for on-CPU work, allocs or `-alloc_space` for churn, in-use heap for retention, block/mutex for wait, trace for scheduler and blocking shape.
+- Require the workload, command, duration, binary/commit, and profile type for profile evidence used to clear risk.
+- Check that the changed function or its caller/callee path appears in the profile before treating it as evidence about the diff.
+- Do not clear p99, lock wait, network wait, DB wait, or queue wait with CPU samples alone.
+- For live `net/http/pprof`, record endpoint, sampling duration, request workload, target replica, and any runtime sampling configuration needed for block or mutex profiles.
+- Avoid demanding every profile at once. Ask for the next profile that would discriminate the disputed claim.
 
-## Review Smell Patterns
-- CPU profile is used to explain time spent waiting on locks, network, disk, DB, or channels.
-- Heap profile is interpreted as "all allocation churn" without checking `allocs`, `-alloc_space`, or `-benchmem`.
-- A pprof screenshot has no command, duration, workload, binary, commit, or profile type.
-- The changed function does not appear in the profile and no caller/callee path ties it to the claimed bottleneck.
-- Live `net/http/pprof` is enabled but the service path, port, or sampling duration is not recorded.
-- Multiple profilers are enabled at once even though diagnostics can interfere with each other.
-- The PR optimizes a line visible in `top` without checking cumulative cost, call path, or whether the cost is setup outside the hot request.
-- A pprof result from synthetic data is used to clear production tail-latency risk.
-
-## Evidence Required
-- CPU-bound claim: CPU profile from representative load, with the changed stack present and enough duration to sample the hot path.
-- Allocation churn claim: `-benchmem` plus heap or allocs profile, using `-alloc_space` or `-alloc_objects` when total churn matters.
-- Live server claim: `net/http/pprof` collection command, profile duration, endpoint/workload, and whether the profile was collected from one representative replica.
-- Contention claim: block or mutex profile, and often `go tool trace`; CPU profile alone is usually not enough.
-- Memory retention claim: heap profile with `inuse_space` or `inuse_objects`, plus workload timing around GC if retention is the claim.
-
-## Bad Finding
-```text
-[high] [go-performance-review] internal/cache/cache.go:119
-Issue:
-CPU pprof says this is bad.
-Impact:
-It is slow.
-Suggested fix:
-Rewrite the cache.
-Reference:
-pprof
-```
-
-Why it fails: it does not identify the profile type, workload, stack, measured cost, or why a rewrite is the smallest safe fix.
-
-## Good Finding
+## Imitate
 ```text
 [high] [go-performance-review] internal/cache/cache.go:119
 Issue:
@@ -47,10 +24,36 @@ The change can move tail latency from origin latency to queue wait behind one cr
 Suggested fix:
 Collect a mutex or block profile under the concurrent miss workload, or move the origin call outside the lock if the existing cache contract allows it. Use the profile to verify the changed lock path no longer dominates wait time.
 Reference:
-Go diagnostics and runtime/pprof profile selection guidance.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: name why the supplied profile cannot observe the claim, then ask for the discriminating profile or smallest safe code correction.
+
+## Reject
+```text
+Issue:
+CPU pprof says this is bad.
+Suggested fix:
+Rewrite the cache.
+```
+
+Reject it because it does not identify profile type, workload, stack, measured cost, or why a rewrite is the smallest safe fix.
+
+```text
+Issue:
+The heap profile is lower, so allocations are fixed.
+```
+
+Reject it when the claim is allocation churn. Use allocs, `-alloc_space`, or `-benchmem` before clearing churn.
+
+## Agent Traps
+- Treating a `top` line as a defect without checking cumulative cost, call path, and whether the cost is in setup outside the hot path.
+- Accepting pprof screenshots that omit command, workload, commit, duration, and profile type.
+- Treating an empty block or mutex profile as proof when sampling was not enabled.
+- Using synthetic data profiles to clear production tail-latency risk without explaining why the workload matches.
+- Ignoring profiler interference when many diagnostic modes were enabled together.
+
+## Validation Shape
 ```bash
 go test -run '^$' -bench '^BenchmarkCacheMissParallel$' -benchmem -cpuprofile cpu.out ./internal/cache
 go tool pprof -top cpu.out
@@ -63,11 +66,3 @@ curl -o allocs.out 'http://localhost:6060/debug/pprof/allocs?seconds=30'
 ```
 
 For live block or mutex profiles, verify the program enables the relevant runtime sampling rate before treating an empty profile as proof of no contention.
-
-## Source Links From Exa
-- [Go Diagnostics](https://go.dev/doc/diagnostics)
-- [runtime/pprof package](https://pkg.go.dev/runtime/pprof)
-- [net/http/pprof package](https://pkg.go.dev/net/http/pprof)
-- [Profiling Go Programs](https://go.dev/blog/pprof)
-- [cmd/pprof](https://pkg.go.dev/cmd/pprof)
-

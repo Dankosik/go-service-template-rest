@@ -1,18 +1,21 @@
 # Source-Of-Truth Extraction
 
+Behavior Change Thesis: When loaded for repeated same-package policy or vague helper buckets, this file makes the model choose a seam-named local owner instead of likely mistake of either tolerating drift-prone copies or extracting to global `common` code.
+
 ## When To Load
 Load this when the same package repeats stable normalization, mapping, validation, classification, label shaping, section reading, or error mapping logic across files, or when a diff moves such policy into a vague helper bucket.
 
-This file is for local simplification review. If the owner is unclear or the policy crosses API, data, config, or package boundaries, escalate instead of inventing ownership.
+Use this for local simplification review only. If no package clearly owns the policy, escalate to design rather than inventing ownership.
 
-## Review Lens
-- Under-extraction is real when repeated stable policy is likely to drift and a same-package owner would reduce future edits.
-- Over-extraction is real when the helper erases ownership, needs modes or callbacks, or forces callers to know hidden policy.
-- Prefer same-package, policy-named helpers over global `util/common/shared` packages.
+## Decision Rubric
+- Under-extraction is finding-worthy when repeated stable policy is likely to drift and a same-package owner would reduce future edits.
+- Over-extraction is finding-worthy when the new helper erases ownership, needs modes or callbacks, or forces callers to know hidden policy.
+- Prefer same-package, policy-named helpers over global `util`, `common`, `shared`, `helpers`, `types`, or `interfaces` packages.
 - Do not extract orchestration order just to remove lines. Request lifecycle, startup, transaction, and response phases often read better locally.
+- Keep response writing, side effects, and policy selection separate unless one local owner is already stable.
 
-## Real Finding Examples
-Finding example: repeated local policy needs one same-package owner.
+## Imitate
+Finding shape to copy when repeated local policy needs one owner:
 
 ```text
 [medium] [go-language-simplifier-review] internal/infra/http/problems.go:66
@@ -22,7 +25,9 @@ Suggested fix: Extract a same-package helper such as `classifyProblem` and keep 
 Reference: references/source-of-truth-extraction.md
 ```
 
-Finding example: extraction moved policy to a vague bucket.
+Copy the move: separate the stable classification source of truth from caller-specific response work.
+
+Finding shape to copy when extraction moves policy to a vague bucket:
 
 ```text
 [high] [go-language-simplifier-review] internal/common/normalize.go:12
@@ -32,14 +37,10 @@ Suggested fix: Keep the helper in the users package with a policy name such as `
 Reference: references/source-of-truth-extraction.md
 ```
 
-## Non-Findings To Avoid
-- Do not extract one-off logic without a stable second use.
-- Do not flag intentionally local test setup that keeps tests independent and readable.
-- Do not recommend global helpers as the default source-of-truth fix.
-- Do not require extraction when repeated shape hides distinct statuses, errors, or side effects.
+Copy the move: name the lost owner and the specific contract that can be reused incorrectly.
 
-## Bad And Good Simplifications
-Bad: a helper name hides which policy owns the normalization.
+## Reject
+Reject this global extraction:
 
 ```go
 package common
@@ -49,7 +50,9 @@ func Normalize(s string) string {
 }
 ```
 
-Good: keep policy in the package that owns its meaning and error contract.
+It hides who owns the normalization and which error contract travels with it.
+
+Prefer a package-owned rule:
 
 ```go
 package users
@@ -63,7 +66,7 @@ func canonicalEmail(raw string) (string, error) {
 }
 ```
 
-Bad: extraction makes one helper serve distinct callers through mode flags.
+Reject mode-heavy source-of-truth helpers:
 
 ```go
 func classify(err error, transport string, exposeDetails bool) int {
@@ -71,7 +74,7 @@ func classify(err error, transport string, exposeDetails bool) int {
 }
 ```
 
-Good: keep one owner per stable classification rule.
+Prefer one owner per stable classification rule:
 
 ```go
 func classifyProblem(err error) int {
@@ -86,14 +89,11 @@ func classifyProblem(err error) int {
 }
 ```
 
-## Escalation Guidance
-- Escalate to `go-design-review` when no package clearly owns the repeated policy.
-- Escalate to `api-contract-designer-spec` when the source of truth is an external REST contract.
-- Escalate to `go-data-architect-spec` or `go-db-cache-spec` when the repeated policy reflects schema, query, transaction, or cache truth.
-- Escalate to `go-domain-invariant-review` when the repeated policy encodes business state or transition rules.
+## Agent Traps
+- Do not treat every duplicate shape as source-of-truth drift; distinct statuses, errors, side effects, or lifecycles can justify local repetition.
+- Do not extract one-off logic without a stable second use.
+- Do not flag intentionally local test setup that keeps tests independent and readable.
+- Do not repair ownership drift by creating a broader ownership problem.
 
-## Source Anchors
-- [Organizing a Go module](https://go.dev/doc/modules/layout): packages can be split by ownership and internal packages can protect non-public implementation.
-- [Package names](https://go.dev/blog/package-names): package names help users and maintainers know what belongs in the package.
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): avoid meaningless package names like `util`, `common`, `misc`, `api`, `types`, and `interfaces`.
-- Repository pattern: `go-design-review/references/source-of-truth-seam-drift.md`.
+## Validation Shape
+When recommending extraction, ask for proof that all former copies now call the same package-local owner and that caller-specific behavior remains local. When rejecting an extraction, ask for proof that the policy returns to its owner without changing public behavior.

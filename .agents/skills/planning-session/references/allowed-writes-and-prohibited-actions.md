@@ -1,54 +1,55 @@
-# Allowed Writes And Prohibited Actions Examples
+# Allowed Writes And Prohibited Actions
+
+## Behavior Change Thesis
+When loaded for a planning session with scope pressure, this file makes the model write only planning-phase artifacts instead of editing code, tests, migrations, `spec.md`, `design/`, or surprise phase-control files.
 
 ## When To Load
-Load this reference when the planning session needs concrete examples of what may be written, what must stay untouched, or how to respond when the user asks to combine planning with coding, review, validation, or spec/design changes.
+Load immediately before writes when the requested action may cross from planning into implementation, review, validation, specification, or technical design.
 
-This file gives examples only. `AGENTS.md` and `docs/spec-first-workflow.md` remain authoritative.
+## Decision Rubric
+- Allowed writes are `plan.md`, `tasks.md`, triggered `test-plan.md`, triggered `rollout.md`, `workflow-plan.md`, `workflow-plans/planning.md`, and later phase-control files already required by the approved phase structure.
+- A later `workflow-plans/<phase>.md` file is allowed only when the approved phase structure names that phase or planning explicitly creates it for a named future checkpoint.
+- `spec.md` and `design/` are read-only in this session. Missing decisions route upstream.
+- Code, tests, migrations, generated output, runtime config, review execution, validation execution, rollout execution, and closeout are out of scope.
+- When scope is ambiguous, choose the narrower planning-only write and record a blocker or next-session handoff.
 
-## Good Session Outcomes
-- The session writes or repairs only planning-phase artifacts: `plan.md`, `tasks.md`, optional `test-plan.md`, optional `rollout.md`, `workflow-plan.md`, `workflow-plans/planning.md`, and pre-code phase-control files already called for by the approved phase structure.
-- The session creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` only when the approved plan expects those later phases.
-- The session records blockers and reopen targets in workflow-control artifacts without editing `spec.md`, `design/`, production code, tests, migrations, generated output, or runtime configuration.
-- The session stops after implementation-readiness handoff instead of starting the first implementation task.
-
-## Bad Session Outcomes
-- Creating `internal/.../*.go`, `*_test.go`, migrations, generated artifacts, configs, or runtime files during the planning session.
-- Editing `spec.md` decisions or writing new `design/` artifacts from inside planning to make task breakdown easier.
-- Creating review or validation phase-control files "just in case" when the phase structure does not call for them.
-- Recording `Current phase: implementation` in `workflow-plan.md` before the planning session has stopped and the later implementation session has begun.
-- Marking `tasks.md` approved while it still contains speculative decisions that should belong to `spec.md` or `design/`.
-
-## Example Handoff Notes
-Allowed-write handoff:
-
+## Imitate
 ```markdown
-Planning writes completed:
-- `plan.md` approved.
-- `tasks.md` approved.
-- `workflow-plan.md` updated with implementation-readiness PASS.
-- `workflow-plans/planning.md` updated with stop rule and next-session handoff.
-- `workflow-plans/implementation-phase-1.md` created because `plan.md` names that phase.
+Allowed writes used:
+- `plan.md`
+- `tasks.md`
+- `workflow-plan.md`
+- `workflow-plans/planning.md`
+- `workflow-plans/implementation-phase-1.md` because `plan.md` names that phase
 
-No code, test, migration, generated, runtime config, `spec.md`, or `design/` writes were performed.
+Out of scope and untouched: `spec.md`, `design/`, code, tests, migrations, generated artifacts, runtime config.
 ```
 
-Prohibited request response:
+Copy this shape: it records both the positive write set and the surfaces deliberately left untouched.
 
 ```markdown
-Planning is ready, but coding the first task is outside this session. I recorded `Next session starts with: implementation-phase-1` and stopped at the planning boundary.
+Planning is ready, but coding T001 is outside this session.
+Recorded handoff: `Next session starts with: implementation-phase-1`.
+Stop rule: implementation begins in a later session.
 ```
 
-## Blocker Handling
-- If the user asks for a combined planning-and-code pass, finish the planning handoff and stop; implementation belongs to a later implementation session unless an eligible upfront direct/local waiver already exists.
-- If planning needs a missing spec or design decision, record the blocker and reopen target; do not edit `spec.md` or `design/` inside this planning session.
-- If a later phase-control file seems useful but the approved phase structure does not call for it, record it as not expected instead of creating a surprise file.
-- If the allowed write set is ambiguous, prefer the narrower planning-only write and leave a blocker note rather than broadening scope silently.
+Copy this shape: it answers a bundled planning-and-coding request without starting implementation.
 
-## Exa Calibration Source Links
-Found through Exa MCP search before these examples were written. Use these links only for calibration; local repo guidance wins.
+## Reject
+```markdown
+I created `workflow-plans/review-phase-1.md` in case review is useful later.
+```
 
-- arc42 documentation: https://arc42.org/documentation/
-- arc42 method: https://arc42.org/method
-- Martin Fowler on Architecture Decision Records: https://martinfowler.com/bliki/ArchitectureDecisionRecord.html
-- Asana implementation plan guide: https://www.asana.com/resources/implementation-plan
+Failure: just-in-case phase files create control artifacts not called for by the approved phase structure.
 
+```markdown
+I updated `design/sequence.md` with the missing migration order so the plan can be approved.
+```
+
+Failure: planning exposed a technical-design gap and must reopen that phase instead of editing design.
+
+## Agent Traps
+- Treating "only a tiny test" or "only a quick migration" as harmless during a planning session.
+- Editing `spec.md` or `design/` to make a task ledger easier to write.
+- Changing `workflow-plan.md` to `Current phase: implementation` before the planning session has stopped.
+- Marking speculative tasks approved when their facts belong upstream.

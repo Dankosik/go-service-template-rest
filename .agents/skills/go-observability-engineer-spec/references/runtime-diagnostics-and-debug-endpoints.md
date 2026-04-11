@@ -1,46 +1,45 @@
 # Runtime Diagnostics And Debug Endpoints
 
-## When To Load This
-Load this reference when the spec needs health probes, graceful shutdown telemetry, pprof, expvar, runtime diagnostics, admin/debug listener policy, incident-only debug controls, crash diagnostics, or telemetry flush behavior.
+## Behavior Change Thesis
+When loaded for health probes, shutdown, pprof, expvar, debug endpoints, runtime diagnostics, or telemetry flush symptoms, this file makes the model separate orchestration and incident-debug decisions with access, expiry, and privacy controls instead of likely mistake shared liveness/readiness checks, public debug handlers, or shutdown with no flush proof.
 
-## Operational Questions
-- Which endpoint tells the orchestrator to restart the process, and which endpoint removes it from traffic?
-- How does startup readiness differ from steady-state dependency readiness?
-- During shutdown, how does the operator see readiness fail, drain begin, in-flight work finish, telemetry flush, and bounded exit?
-- Which runtime diagnostics are available during an incident, who can access them, and how do they expire?
-- What sensitive data can pprof, expvar, traces, heap profiles, goroutine dumps, command lines, or debug variables reveal?
+## When To Load
+Load this when the spec needs `/livez`, `/readyz`, `/startupz`, graceful shutdown telemetry, pprof, expvar, admin/debug listener policy, incident-only debug controls, crash diagnostics, runtime metrics, or exporter flush behavior.
 
-## Good Telemetry Examples
-- `/livez` answers "should the process be restarted?" and avoids fragile downstream dependency checks unless the process cannot recover without restart.
-- `/readyz` answers "should this instance receive traffic?" and can fail during dependency outage, overload, warmup, drain, or maintenance.
-- `/startupz` answers "has initialization completed?" and protects slow startup from premature liveness restarts.
-- Shutdown emits bounded events or metrics for readiness-fail time, drain duration, in-flight requests, worker stop, exporter flush success/failure, and final exit reason.
-- pprof and expvar are on an internal-only or loopback/admin listener with auth/network controls, disabled by default or guarded by a time-bound incident switch.
+## Decision Rubric
+- `/livez` answers "should this process be restarted?" Avoid downstream dependency checks unless the process cannot recover without restart.
+- `/readyz` answers "should this instance receive traffic?" It may fail for warmup, dependency outage, overload, maintenance, paused workers, drain, or shutdown.
+- `/startupz` answers "has initialization completed?" It protects slow startup from premature liveness restarts.
+- Shutdown must expose readiness-fail time, drain begin/end, in-flight work, worker stop, exporter flush success/failure, and bounded exit reason.
+- Put pprof, expvar, and expensive diagnostics on an isolated internal/admin listener or loopback-only surface with auth/network controls, audit, owner, and time-bound activation.
+- Treat profiles, heap dumps, goroutine dumps, command lines, environment, and debug vars as potentially sensitive data.
 
-## Bad Telemetry Examples
-- Liveness and readiness both run the same DB ping, causing dependency outages to restart otherwise healthy pods.
-- Public `/debug/pprof` or `/debug/vars` mounted on the main customer router.
+## Imitate
+- `/livez` avoids DB ping; `/readyz` includes dependency or overload state when traffic should stop; `/startupz` guards slow initialization.
+  Copy the orchestration-decision split.
+- Shutdown emits events or metrics for readiness fail, drain duration, in-flight requests, worker stop, exporter flush result, and final exit reason.
+  Copy the proof that telemetry survived the exit path.
+- pprof and expvar run on an internal-only/admin listener, disabled by default or guarded by time-bound incident activation with audit logging.
+  Copy isolation plus expiry.
+
+## Reject
+- Liveness and readiness both run the same DB ping, causing dependency outages to restart healthy pods.
+- Public `/debug/pprof` or `/debug/vars` on the main customer router.
 - "Enable pprof during incidents" with no owner, access control, expiry, audit log, or privacy note.
 - Graceful shutdown that stops accepting requests but drops traces/logs/metrics before exporter flush.
-- Readiness always returns 200 even while workers are paused, backlog is not draining, or the instance is in shutdown.
+- Readiness always returns 200 while workers are paused, backlog is not draining, or shutdown is in progress.
 
-## Cardinality Traps
-- Exporting goroutine names, request IDs, job IDs, queue item IDs, or per-entity debug variables as labels.
-- Using expvar for arbitrary maps keyed by tenant, account, request, message, or job IDs.
-- Encoding incident IDs or timestamps as metric labels for debug activation state.
-- Adding one metric per debug endpoint or profile name when a bounded `profile` label is enough.
+## Agent Traps
+- Treating health probes as monitoring dashboards. Probes drive orchestration decisions and should stay narrow.
+- Exporting expvar maps keyed by tenant, account, request, message, or job IDs.
+- Adding incident IDs or timestamps as metric labels for debug activation state.
+- Forgetting that profiles and goroutine dumps can reveal request data, env values, command-line flags, and secrets.
+- Making debug endpoints incident-only but never specifying how they expire or who can activate them.
 
-## Selected And Rejected Options
-- Select distinct `/livez`, `/readyz`, and `/startupz` semantics because they drive different orchestration decisions.
-- Select an isolated admin/debug listener over mounting debug handlers on the public API router.
-- Select time-bound incident activation with audit logging for expensive or sensitive diagnostics.
-- Select runtime metrics such as goroutine count, heap, CPU, file descriptors, queue wait, and telemetry exporter failures when they support capacity or incident decisions.
-- Reject dependency-heavy liveness checks unless a failed dependency makes the process unrecoverable.
-- Reject public debug endpoints and always-on profiling when no access, retention, and privacy policy exists.
+## Validation Shape
+- Verify liveness, readiness, and startup checks have distinct failure semantics and orchestration outcomes.
+- Verify debug surfaces are absent from public/customer routers and protected by network/auth/audit/expiry controls.
+- Verify shutdown proof includes readiness transition, drain, worker stop, telemetry exporter flush, and bounded exit.
 
-## Exa Source Links
-- Kubernetes Liveness, Readiness, and Startup Probes: https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/
-- Kubernetes Configure Liveness, Readiness and Startup Probes: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-- Go `net/http/pprof`: https://pkg.go.dev/net/http/pprof
-- Go `expvar`: https://pkg.go.dev/expvar
-- Google SRE Workbook, Monitoring: https://sre.google/workbook/monitoring/
+## Canonical Verification Pointer
+Use current Kubernetes probe docs and Go `net/http/pprof` or `expvar` docs when endpoint behavior or exposure defaults affect the spec.

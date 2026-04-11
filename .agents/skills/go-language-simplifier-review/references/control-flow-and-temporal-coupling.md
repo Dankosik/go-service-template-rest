@@ -1,18 +1,21 @@
 # Control Flow And Temporal Coupling
 
+Behavior Change Thesis: When loaded for branch flattening or phase-order changes, this file makes the model protect explicit side-effect and error precedence instead of likely mistake of praising guard clauses, loops, or tail switches that hide temporal coupling.
+
 ## When To Load
-Load this when a diff changes branching, nesting, guard clauses, shared sentinels, named returns, deferred cleanup, rollback, audit, or phase ordering.
+Load this when a diff changes branching, nesting, guard clauses, shared sentinels, named returns, deferred cleanup, rollback, audit, notification, or phase ordering.
 
-The goal is readable control flow with explicit side-effect order. Guard clauses are often good, but only when they preserve cleanup and which error wins.
+Use this when the review question is "does the order still read safely?" If the issue is mostly error identity or status mapping, use `error-path-simplification.md`; if it is cleanup code that protects Go semantics, use `go-semantic-stop-signs.md`.
 
-## Review Lens
-- Prefer a straight-line happy path when error handling can return early without hiding side effects.
-- Flag delayed interpretation through `status`, `action`, `mode`, shared `err`, or booleans decoded at the tail.
-- Narrow mutable local lifetimes. Long-lived locals make readers carry branch state through the whole function.
-- When flattening, verify defer order, cleanup order, audit order, rollback behavior, and primary-vs-cleanup error precedence.
+## Decision Rubric
+- Guard clauses are good only when they preserve side-effect order, cleanup order, and which error wins.
+- Flag delayed interpretation through `status`, `action`, `mode`, shared `err`, shared result structs, or booleans decoded at the tail.
+- Flag loops over operations when the order is part of the contract and the step names no longer expose the durable boundary.
+- Prefer narrowing mutable local lifetimes; long-lived locals make readers carry branch state through the function.
+- Do not flag nesting that is required to keep a transaction, lock, response lifecycle, or cleanup boundary obvious.
 
-## Real Finding Examples
-Finding example: sentinel state creates a hidden phase machine.
+## Imitate
+Finding shape to copy when sentinel state creates a hidden phase machine:
 
 ```text
 [high] [go-language-simplifier-review] internal/app/imports/run.go:103
@@ -22,7 +25,9 @@ Suggested fix: Return from each branch after selecting the explicit outcome, or 
 Reference: references/control-flow-and-temporal-coupling.md
 ```
 
-Finding example: flattening changed which error wins.
+Copy the move: explain the inconsistent-combination risk created by long-lived branch state.
+
+Finding shape to copy when flattening changes error precedence:
 
 ```text
 [high] [go-language-simplifier-review] internal/infra/postgres/uow.go:74
@@ -32,14 +37,10 @@ Suggested fix: Keep the primary operation error explicit and attach cleanup fail
 Reference: references/control-flow-and-temporal-coupling.md
 ```
 
-## Non-Findings To Avoid
-- Do not flag nesting that is required to keep a transaction, lock, or response lifecycle obvious.
-- Do not require guard clauses when shared cleanup must run once at the end and the code names that contract clearly.
-- Do not object to a short-lived local result when it is consumed immediately and does not encode hidden state.
-- Do not turn a control-flow finding into a full architecture review unless package ownership is the real blocker.
+Copy the move: identify which error used to win and why callers or operators care.
 
-## Bad And Good Simplifications
-Bad: delayed interpretation by tail state.
+## Reject
+Reject delayed interpretation like this:
 
 ```go
 status := http.StatusOK
@@ -53,7 +54,7 @@ if err := validate(input); err != nil {
 writeStatus(w, status, notify)
 ```
 
-Good: branch outcomes stay visible.
+Prefer branch outcomes that stay visible:
 
 ```go
 if err := validate(input); err != nil {
@@ -67,7 +68,7 @@ if err := reserve(ctx, input); err != nil {
 writeOK(w)
 ```
 
-Bad: cleanup failure overwrites the primary failure without saying so.
+Reject cleanup precedence that hides the primary failure:
 
 ```go
 if err := apply(ctx); err != nil {
@@ -78,7 +79,7 @@ if err := apply(ctx); err != nil {
 }
 ```
 
-Good: the precedence is explicit.
+Prefer explicit precedence:
 
 ```go
 if err := apply(ctx); err != nil {
@@ -89,14 +90,11 @@ if err := apply(ctx); err != nil {
 }
 ```
 
-## Escalation Guidance
-- Escalate to `go-concurrency-review` when control-flow changes hide goroutine, channel, lock, wait, or shutdown ownership.
-- Escalate to `go-reliability-review` when timeout, retry, backpressure, startup, or shutdown behavior is at stake.
-- Escalate to `go-db-cache-review` when transaction, rollback, rows cleanup, or cache invalidation order is unclear.
-- Escalate to `go-idiomatic-review` when the finding depends on named returns, defer behavior, nil behavior, or error wrapping semantics.
+## Agent Traps
+- Do not call every early return simpler; first prove shared cleanup still runs exactly when intended.
+- Do not convert a lifecycle into a slice of anonymous functions when phase names carry operational meaning.
+- Do not treat named returns, defer, and rollback precedence as style-only; they often define contracts.
+- Do not escalate to architecture unless package ownership, not local order, is the blocker.
 
-## Source Anchors
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): indent error flow, handle errors, goroutine lifetimes, and useful test failures.
-- [Effective Go](https://go.dev/doc/effective_go): Go programs should be clear to other Go programmers and follow established conventions.
-- Repository pattern: `go-language-simplifier-review/evals/evals.json` includes handler state and hidden precedence scenarios.
-- Repository pattern: `go-db-cache-review/references/transaction-boundary-review.md` for transaction order handoff.
+## Validation Shape
+Ask for targeted tests around each branch whose order or error precedence changed: primary error preserved, cleanup failure represented according to contract, audit/notification emitted only after the durable boundary, and cancellation/rollback behavior unchanged.

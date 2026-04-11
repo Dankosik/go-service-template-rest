@@ -73,16 +73,17 @@ Do not:
 - For non-trivial work, stop after the workflow artifacts are updated. Research or another recorded next phase begins in a new session unless an approved waiver already exists.
 
 ## Lazily Loaded References
-Keep `SKILL.md` as the wrapper protocol. After reading `AGENTS.md` and `docs/spec-first-workflow.md`, load only the reference file that matches the routing question in front of you:
+Keep `SKILL.md` as the wrapper protocol. References are compact rubrics and example banks, not exhaustive checklists or alternate authority. After reading `AGENTS.md` and `docs/spec-first-workflow.md`, load at most one reference by default: choose the symptom whose behavior change matches the current uncertainty. Load multiple references only when the task clearly spans independent decision pressures, and never bulk-load the whole directory.
 
-- [execution-shape-selection.md](references/execution-shape-selection.md) - load when choosing or checking `direct path`, `lightweight local`, or `full orchestrated`, including escalation triggers.
-- [research-mode-and-fanout-lanes.md](references/research-mode-and-fanout-lanes.md) - load when deciding `local` versus `fan-out`, planning lanes, assigning one skill per lane, or checking good/bad lane rows.
-- [artifact-expectation-matrix.md](references/artifact-expectation-matrix.md) - load when marking later artifacts as expected, missing, draft, approved, not expected, or explicitly waived.
-- [workflow-plan-authoring-examples.md](references/workflow-plan-authoring-examples.md) - load when writing or repairing the master `workflow-plan.md` handoff fields.
-- [workflow-planning-phase-file-examples.md](references/workflow-planning-phase-file-examples.md) - load when writing or repairing `workflow-plans/workflow-planning.md` and keeping it phase-local.
-- [adequacy-challenge-and-stop-boundary.md](references/adequacy-challenge-and-stop-boundary.md) - load when routing the workflow-plan adequacy challenge, reconciling findings, or marking the session boundary.
+| Reference | Load When The Symptom Is... | Behavior Change |
+| --- | --- | --- |
+| [execution-shape-selection.md](references/execution-shape-selection.md) | choosing or checking `direct path`, `lightweight local`, or `full orchestrated` | chooses the smallest defensible execution shape with escalation triggers instead of forcing ceremony or under-routing cross-domain work |
+| [research-mode-and-fanout-lanes.md](references/research-mode-and-fanout-lanes.md) | deciding `local` versus `fan-out`, or writing lane rows | plans read-only lanes by owned evidence question and one skill per lane instead of broad owner lanes, worker lanes, multi-skill lanes, or same-session research |
+| [artifact-expectation-matrix.md](references/artifact-expectation-matrix.md) | marking later artifacts as expected, missing, draft, approved, conditional, not expected, or waived | records trigger-aware artifact status instead of inventing completeness, creating later artifacts early, or marking everything "not applicable" |
+| [control-file-authoring-split.md](references/control-file-authoring-split.md) | deciding what belongs in `workflow-plan.md` versus `workflow-plans/workflow-planning.md` | keeps cross-phase status in the master and session-local orchestration in the phase file instead of duplicating details or drifting into later artifacts |
+| [adequacy-challenge-and-stop-boundary.md](references/adequacy-challenge-and-stop-boundary.md) | routing the workflow-plan adequacy challenge, recording a skip, stopping at the boundary, or avoiding an existing phase-control collision | keeps the gate read-only and boundary-safe instead of treating short waits as failure, spawning research early, or creating competing control files |
 
-Reference snippets are examples, not authority. If any example conflicts with `AGENTS.md` or `docs/spec-first-workflow.md`, follow the repo-local contract. Do not bulk-load all references, and do not use an example as permission to start research, write `spec.md`, create `design/`, write `plan.md` or `tasks.md`, or create implementation artifacts.
+If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow.md`, follow the repo-local contract. Do not use an example as permission to start research, write `spec.md`, create `design/`, write `plan.md` or `tasks.md`, or create implementation artifacts.
 
 ## Workflow
 

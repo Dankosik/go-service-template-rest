@@ -1,61 +1,55 @@
 # Source Of Truth And Derived Surfaces
 
+## Behavior Change Thesis
+When loaded for a task where audit logs, outbox rows, CDC, events, search, dashboards, exports, or projections might be treated as authoritative, this file makes the model choose one invariant-bearing write authority plus classified derived surfaces instead of likely mistake "the stream/view/log becomes the business source of truth because it is convenient."
+
 ## When To Load
-Load this when the task asks which data surface is authoritative, introduces an audit log, outbox table, CDC feed, event stream, materialized view, search index, dashboard table, export, or projection.
+Load this for authority ambiguity across current-state tables, history/evidence, integration feeds, and read surfaces.
 
-Use it to keep write authority, evidence history, and read convenience separate. A projection may be rebuilt, a CDC stream may notify, and an audit log may explain, but none of them becomes the business source of truth unless the spec explicitly chooses that model.
+## Decision Rubric
+- Name the authoritative owner for each invariant-bearing entity or process before naming delivery or query surfaces.
+- Classify each extra surface as one of: current truth, append-only evidence, integration outbox or CDC feed, read projection, search index, export, or analytics copy.
+- For every derived surface, state lag budget, rebuild source, correction owner, and which correctness-critical paths must bypass it.
+- Keep audit rows, domain events, and projections distinct. Audit explains actor and change context; events publish business facts; projections answer read queries.
+- Treat provider payloads and webhook states as evidence to normalize, not as local lifecycle truth.
+- If a derived surface becomes acceptance-critical, reopen the data specification because the truth boundary changed.
 
-## Decision Examples
+## Imitate
 
-### Example 1: Order lifecycle with downstream notifications
-Context: `orders` owns order acceptance, fulfillment status, and cancellation. Fulfillment and notifications need events, and support needs a customer-facing read surface.
+### Order lifecycle with downstream notifications
+Context: `orders` owns acceptance, fulfillment status, and cancellation. Notifications need events and support needs a fast search view.
 
-Selected option: Keep `orders` current state and invariant-bearing transitions in the service-owned OLTP tables. Write an outbox row in the same local transaction for downstream delivery. Treat notification topics, search documents, dashboard tables, and materialized views as derived-only surfaces with lag, replay, rebuild, and correction owners.
+Choose service-owned OLTP order tables for current truth and invariant-bearing transitions. Write an outbox row in the same local transaction for downstream delivery. Treat notification topics, search documents, dashboard tables, and materialized views as derived-only surfaces with replay, rebuild, lag, and correction owners.
 
-Rejected options:
-- Make the Kafka topic or CDC consumer the source of truth for order lifecycle.
-- Let support dashboards update order status directly.
-- Use an audit log as the only authoritative model when the business process needs current-state constraints.
+Copy this because it separates write authority, atomic integration evidence, and query convenience without denying that projections are useful.
 
-Migration and rollback consequences:
-- If the outbox route misbehaves, pause the connector or consumer and replay from the authoritative tables or outbox position.
-- If a projection is corrupt, rebuild it from order truth or event history; do not repair it with writes that bypass the owner.
-- Contracting old event fields is conditional on all consumers tolerating the new envelope and on replay from the retained source.
+### Audit trail vs domain event stream
+Context: Compliance wants to know who changed payout settings. Other services need to react to payout approval and reversal.
 
-### Example 2: Audit trail vs domain event stream
-Context: Compliance wants to know who changed payout settings, while other services need to react to payout approval and reversal.
+Use an audit table for actor, reason, before/after metadata, and operator traceability. Use domain events or outbox records for consumed business facts. Keep payout state tables or ledger facts authoritative for business decisions.
 
-Selected option: Keep an audit table for actor, reason, before/after metadata, and operator traceability. Keep domain events or outbox records for business facts that downstream systems consume. The payout state table or ledger facts remain authoritative for business decisions.
+Copy this because auditability alone does not imply event sourcing or a generic `events` table for every purpose.
 
-Rejected options:
-- Use one generic `events` table for audit, replay, integration, and read model materialization without separate semantics.
-- Treat provider webhook payloads as the local lifecycle truth.
-- Adopt event sourcing only because auditability is required.
+### Customer health projection
+Context: Product wants a "customer health" page combining orders, refunds, support cases, and usage facts.
 
-Migration and rollback consequences:
-- Audit records are append-only evidence; redaction, retention, and legal hold rules must be explicit before destructive changes.
-- If event consumers need a new field, add it compatibly and keep old fields until replay and mixed-version consumers are handled.
-- If event sourcing is later approved, plan a separate migration because existing audit rows usually lack complete domain replay semantics.
+Build a projection or materialized view with a freshness budget. Keep correctness-critical actions on owner data paths. State the rebuild and reconciliation owner.
 
-### Example 3: Customer metrics projection
-Context: Product wants a fast "customer health" page that combines orders, refunds, support cases, and usage events.
+Copy this because it gives product the read shape while preserving the owner data paths.
 
-Selected option: Build a projection or materialized view for the page with a freshness budget. Keep correctness-critical actions on owner data paths and state the rebuild and reconciliation owner.
+## Reject
+- "Kafka is the source of truth for order lifecycle because every transition is emitted." This confuses integration evidence with the invariant owner.
+- "Support can update the dashboard row to repair order status." This bypasses the write owner and creates split truth.
+- "A single `events` table covers audit, replay, integration, and read models." This hides incompatible semantics and retention needs.
+- "A CDC consumer owns the current status because it sees every change." CDC observes local truth; it does not own it unless the spec explicitly changes the model.
 
-Rejected options:
-- Cross-service direct table reads into private databases.
-- Updating customer health as if it were the owner of order, refund, or support state.
-- Changing owner schemas primarily to fit dashboard query shape.
+## Agent Traps
+- Do not use "event" to mean audit row, outbox envelope, domain fact, and projection update in the same paragraph.
+- Do not recommend direct cross-service table reads for a projection unless a temporary exception and removal path are explicit.
+- Do not repair corrupted projections with ad hoc writes when the authoritative source can rebuild them.
+- Do not say "event sourcing" when the prompt only asks for auditability or downstream notifications.
 
-Migration and rollback consequences:
-- Roll back by disabling the projection reader and falling back to owner APIs or a slower query path.
-- Rebuild drifted projection data from source facts; keep projection writes idempotent.
-- If the projection becomes acceptance-critical, reopen the data specification because source-of-truth ownership changed.
-
-## Source Links Gathered Through Exa
-- PostgreSQL, "Logical Decoding": https://www.postgresql.org/docs/current/logicaldecoding.html
-- PostgreSQL, "Logical Replication Publication": https://www.postgresql.org/docs/current/logical-replication-publication.html
-- PostgreSQL, "CREATE MATERIALIZED VIEW": https://www.postgresql.org/docs/current/sql-creatematerializedview.html
-- PostgreSQL, "REFRESH MATERIALIZED VIEW": https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html
-- Debezium, "Outbox Event Router": https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html
-
+## Validation Shape
+- Truth map lists each critical entity or fact, owner, authoritative table or fact stream, derived surfaces, and forbidden writers.
+- Projection proof covers freshness, rebuild command or source, idempotent correction path, and bypass rules for correctness-critical reads.
+- Integration proof covers same-transaction outbox or equivalent linkage and replay from retained source evidence.

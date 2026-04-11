@@ -38,10 +38,10 @@ Escalate if resource ownership, client audience, consistency model, retry expect
 
 ## Core Defaults
 - REST over HTTP with JSON payloads; OpenAPI must mirror the approved wire contract rather than outrank it.
-- Keep API major version in the URI prefix.
+- Keep API major version in the URI prefix as this skill's default; preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it.
 - Use `application/problem+json` as the default HTTP error model.
 - Prefer resource or operation resources over action-RPC endpoints.
-- Cursor pagination is the default; offset pagination is exception-only.
+- Prefer cursor pagination for mutable or large collections; use offset only when drift, bounded size, and jump-to-page UX are acceptable.
 - Prefer honest async acknowledgement over fake synchronous success.
 - Treat the prompt's stated client problem as the contract budget. Do not widen media types, enum values, flows, or control surfaces unless they remove a concrete ambiguity.
 - Missing contract facts become explicit assumptions or blockers, not implementation guesses.
@@ -97,8 +97,8 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Use `202 Accepted` when the work is accepted but not complete.
 - Use `204 No Content` only when no response body is useful.
 - Keep `409 Conflict`, `412 Precondition Failed`, and `428 Precondition Required` distinct.
-- `PUT` on a missing target defaults to `404`; upsert is exception-only and must be explicit.
-- Default patch media type is `application/merge-patch+json`.
+- HTTP allows `PUT` to create a target resource, but this skill's default for a missing target is `404` unless client-chosen identity or upsert is explicit.
+- Default patch media type is `application/merge-patch+json` only when null-as-removal and whole-array replacement semantics fit; otherwise choose a more precise patch contract.
 - Unknown or immutable mutable-field writes should fail consistently.
 - When multiple mutation surfaces can change the same resource during migration, define whether they share the same version source, `ETag` space, and stale-write behavior or are intentionally inconsistent during coexistence.
 - Endpoint matrices, examples, and detailed rules must agree. If idempotent replay, conditional success, or legacy coexistence changes the returned success status, surface it where clients scan first.
@@ -117,7 +117,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 
 ### Error Model And Negative-Path Semantics
 - Use one stable Problem Details profile across the API surface.
-- Required fields are `type`, `title`, `status`, and `detail`; include `instance` when available.
+- Define profile-required Problem Details members explicitly. This skill's default profile includes `type`, `title`, `status`, and `detail`; include `instance` when available.
 - Stable extensions may include `code`, `request_id`, and field-level `errors`.
 - Choose the `400` vs `422` boundary once and keep it consistent.
 - Validation behavior should say whether unknown fields are rejected, whether one or all caller-fixable field errors are returned, and whether field-error ordering is deterministic.
@@ -132,11 +132,11 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Classify every endpoint as retry-safe by protocol, retry-safe by contract, or retry-unsafe.
 - For every non-idempotent write, define the durable acceptance boundary: which outcomes mean no durable work exists, and which outcomes mean the client must poll, read, or replay a stored result.
 - Retry-unsafe operations that may be retried by clients should require `Idempotency-Key`.
-- Default idempotency dedup TTL is `24h`.
+- Use `24h` as the starting heuristic for idempotency dedup TTL; change it when duplicate-work risk, operation duration, or product policy requires.
 - Key scope should include tenant or account, operation, and route or method.
 - Define payload comparison at the normalized contract level, not only at raw-byte level, when retries may differ in insignificant formatting.
 - Same key with same payload returns equivalent outcome.
-- Same key with different payload returns conflict.
+- Same key with different payload returns a stable conflict or validation problem.
 - When same-key replay hits a stored terminal result, define whether the contract returns `200 OK`, `201 Created`, or `202 Accepted`; do not leave terminal replay semantics implicit.
 - When replay returns a stored outcome, say whether `Location`, `ETag`, operation IDs, and advisory headers such as `Retry-After` are identical or merely equivalent.
 - Distinguish failures that do not reserve the idempotency key from accepted attempts that do reserve it and later fail during async processing.
@@ -145,11 +145,11 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Conditional reads with `If-None-Match` should support `304`.
 - High-contention writes should require `If-Match`.
 - Missing required preconditions should fail explicitly rather than collapsing into a generic conflict.
-- Successful writes should return the updated `ETag` when concurrency control is used.
+- Successful writes should return the updated `ETag` when concurrency control is used, except successful `PUT` responses must not include a validator unless the saved representation matches the submitted representation and the validator reflects it.
 
 ### Async, Bulk, Upload, And Webhook Contracts
-- Async contract is mandatory when duration is often greater than a couple of seconds, fan-out exists, or completion time is highly variable.
-- `202 Accepted` should mean the service accepted responsibility for durable processing, not merely that it attempted to enqueue work.
+- Async contract is mandatory when duration often exceeds the caller's request-timeout or UX budget, fan-out exists, or completion time is highly variable. Use `10s` as a rough trigger only when no repo or product policy exists.
+- HTTP `202 Accepted` is noncommittal about final outcome; this skill uses it only when the API also accepts durable recovery or reporting responsibility, not merely when it attempted to enqueue work.
 - Start endpoints should return `202 Accepted` plus an operation-status location and may include `Retry-After`.
 - Once the business request is accepted, keep one clear control-plane resource for the async lifecycle unless a second resource removes a concrete client ambiguity.
 - If returning both the operation resource and the authoritative business-resource reference reduces retry ambiguity, do that explicitly.

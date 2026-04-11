@@ -1,18 +1,21 @@
 # Helper Extraction Economics
 
+Behavior Change Thesis: When loaded for helper extraction or inlining, this file makes the model judge whether the helper compresses stable policy at the call site instead of likely mistake of treating every wrapper as either free readability or useless indirection.
+
 ## When To Load
 Load this when a diff extracts, inlines, moves, renames, or generalizes helpers, wrappers, interfaces, callbacks, option bags, or helper packages.
 
-The review question is whether the helper reduces reasoning load at the call site and preserves ownership, not whether the original function got shorter.
+Use this as the primary reference for helper economics. If the helper mainly changes error identity, use `error-path-simplification.md`; if it mainly hides Go-semantic protection, use `go-semantic-stop-signs.md`.
 
-## Review Lens
-- A helper earns its keep when its name compresses a stable policy or protects ownership, cleanup, stdlib quirks, error classification, or defaulting.
-- A helper is suspect when it is single-use, pass-through, mode-driven, callback-heavy, or named `util`, `common`, `shared`, `helpers`, or similar.
-- Inline a helper only when doing so preserves semantics and makes the local decision easier to read.
-- Keep small helpers when they protect clone-before-store, error inspection, cancellation, cleanup order, lock scope, or a package-owned policy.
+## Decision Rubric
+- Keep or recommend a helper when its name compresses stable package policy, defaulting, cleanup scope, stdlib quirks, error classification, alias isolation, or ownership.
+- Flag a helper when it is single-use and only moves nearby assignments away from the decision that consumes them.
+- Flag a helper when it uses positional booleans, raw modes, callbacks, or option blobs to merge callers with different semantics.
+- Flag a helper package when it turns a package-owned rule into `util`, `common`, `shared`, `helpers`, or a similar bucket.
+- Inline only when inlining preserves semantics and makes the local decision easier to read.
 
-## Real Finding Examples
-Finding example: a helper adds jumps without semantic compression.
+## Imitate
+Finding shape to copy when a helper adds jumps without semantic compression:
 
 ```text
 [medium] [go-language-simplifier-review] internal/app/users/create.go:34
@@ -22,7 +25,9 @@ Suggested fix: Inline the validation back into `CreateUser`, or rename and narro
 Reference: references/helper-extraction-economics.md
 ```
 
-Finding example: a generic helper merged callers through booleans.
+Copy the move: show the call-site cost and leave a path for a better policy-named helper if the policy is real.
+
+Finding shape to copy when a generic helper merges callers through flags:
 
 ```text
 [high] [go-language-simplifier-review] internal/infra/http/respond.go:72
@@ -32,14 +37,31 @@ Suggested fix: Split the helper into policy-named functions such as `writeCached
 Reference: references/helper-extraction-economics.md
 ```
 
-## Non-Findings To Avoid
-- Do not flag a small helper that isolates stable package policy, even if it is only a few lines.
-- Do not inline helpers that exist to preserve alias isolation, cleanup ordering, or error identity.
-- Do not require a new helper just because two branches have the same shape while their semantics differ.
-- Do not turn a same-package helper recommendation into a new global utility package.
+Copy the move: name the hidden policies and the invalid-combination risk.
 
-## Bad And Good Simplifications
-Bad: a helper forces the reader to decode flags.
+## Reject
+Reject this wrapper when it only copies a method name:
+
+```go
+func load(ctx context.Context, id OrderID) (Order, error) {
+	return repo.Load(ctx, id)
+}
+```
+
+It creates a jump without owning policy.
+
+Do not reject this thin helper:
+
+```go
+func cloneOrderForCaller(order Order) Order {
+	order.Tags = slices.Clone(order.Tags)
+	return order
+}
+```
+
+It protects alias isolation. The helper is short, but it owns a contract a reader should not have to rediscover.
+
+Reject flag-driven helper APIs like this:
 
 ```go
 func writeOrder(w http.ResponseWriter, order Order, includePrivate bool, cached bool) {
@@ -50,7 +72,7 @@ func writeOrder(w http.ResponseWriter, order Order, includePrivate bool, cached 
 }
 ```
 
-Good: the names expose policy at the call site.
+Prefer policy-named helpers when behavior classes are stable:
 
 ```go
 func writePublicCachedOrder(w http.ResponseWriter, order Order) {
@@ -63,31 +85,11 @@ func writePrivateOrder(w http.ResponseWriter, order Order) {
 }
 ```
 
-Bad: a dead wrapper copies a method name without adding meaning.
+## Agent Traps
+- Do not inline helpers that exist to preserve alias isolation, cleanup ordering, error identity, lock scope, cancellation, or package-owned defaults.
+- Do not create a new global helper bucket as the fix for repeated same-package policy.
+- Do not flag a single-use helper when it names a lifecycle boundary or hides a sharp stdlib contract intentionally.
+- Do not approve callback-heavy helpers just because they remove repeated `if err != nil` blocks.
 
-```go
-func load(ctx context.Context, id OrderID) (Order, error) {
-	return repo.Load(ctx, id)
-}
-```
-
-Good: a thin helper can still be worth keeping when it owns policy.
-
-```go
-func cloneOrderForCaller(order Order) Order {
-	order.Tags = slices.Clone(order.Tags)
-	return order
-}
-```
-
-## Escalation Guidance
-- Escalate to `go-design-review` if the helper move crosses package ownership or creates a new abstraction boundary.
-- Escalate to `go-idiomatic-review` if the helper replaces a standard-library or builtin operation without preserving extra semantics.
-- Escalate to `go-concurrency-review` if a helper hides lock, channel, goroutine, or lifecycle ownership.
-- Escalate to `go-qa-review` when a helper is acceptable but tests no longer reveal which branch or invariant failed.
-
-## Source Anchors
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): package names, interfaces, error flow, and line-length guidance are useful for helper calibration.
-- [Package names](https://go.dev/blog/package-names): avoid meaningless package names and use package names to focus ownership.
-- [Organizing Go code](https://go.dev/blog/organizing-go-code): avoid grab-bag packages, but do not over-split into package design overhead.
-- Repository pattern: `go-coder/references/helper-extraction-and-package-ownership.md`.
+## Validation Shape
+When a helper changes branch selection or behavior modes, ask for proof that each old behavior class still maps to the same status, error identity, side effect, and cleanup path. When the issue is only local call-site clarity, validation can be a targeted compile/test command plus reviewer inspection of the corrected call sites.

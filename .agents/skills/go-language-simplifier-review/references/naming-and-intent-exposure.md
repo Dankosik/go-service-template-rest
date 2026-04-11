@@ -1,18 +1,21 @@
 # Naming And Intent Exposure
 
+Behavior Change Thesis: When loaded for renaming or vocabulary drift, this file makes the model require names to expose policy, role, phase, or ownership instead of likely mistake of treating naming as taste or blindly preferring shorter names.
+
 ## When To Load
 Load this when a diff changes helper names, receiver names, package-facing names, booleans, modes, exported identifiers, comments, or feature vocabulary in a way that affects reviewability.
 
-This file is not for taste-only renaming. Use it when names hide role, phase, ownership, policy, or call-site meaning.
+Do not load this for ordinary local names unless the rename changes branch-misread risk. If the issue is a boolean cluster or mode API, prefer `predicate-condition-and-mode-clarity.md`.
 
-## Review Lens
-- Good names reduce the context a reader must load before changing code.
-- Prefer names that reveal role, phase, or policy over generic mechanism words such as `data`, `process`, `result`, `do`, `handle`, or `helper`.
-- Keep vocabulary stable inside one feature area. Drift between `archive`, `disable`, `deactivate`, and `delete` can hide behavior differences.
-- Boolean names should read clearly at the call site, usually as facts or options.
+## Decision Rubric
+- Finding-worthy: a name hides lifecycle state, policy, role, phase, ownership, or call-site meaning that a future change depends on.
+- Finding-worthy: feature vocabulary drifts inside one package or workflow and makes synonyms look like new behavior.
+- Not a finding: idiomatic short names such as `ctx`, `err`, `w`, `r`, `tx`, or a consistent one-letter receiver in small scope.
+- Not a finding: a local short name is clear from type and nearby use.
+- Comments should explain constraints, invariants, or surprising choices; do not ask for comments that only narrate code.
 
-## Real Finding Examples
-Finding example: a helper name hides a policy distinction.
+## Imitate
+Finding shape to copy when a helper name hides a policy distinction:
 
 ```text
 [medium] [go-language-simplifier-review] internal/app/accounts/lifecycle.go:63
@@ -22,7 +25,9 @@ Suggested fix: Split or rename the helper around the lifecycle policy it owns, s
 Reference: references/naming-and-intent-exposure.md
 ```
 
-Finding example: vocabulary drift makes a cleanup risky.
+Copy the move: connect the generic name to a specific wrong reuse risk.
+
+Finding shape to copy when vocabulary drift makes cleanup risky:
 
 ```text
 [low] [go-language-simplifier-review] internal/app/reports/archive.go:28
@@ -32,14 +37,10 @@ Suggested fix: Keep the existing archive vocabulary, or rename the whole local p
 Reference: references/naming-and-intent-exposure.md
 ```
 
-## Non-Findings To Avoid
-- Do not flag idiomatic short names like `ctx`, `err`, `w`, `r`, `tx`, or a consistent one-letter receiver when scope is small.
-- Do not demand long names for locals whose meaning is obvious from type and nearby use.
-- Do not block on package stutter or initialism style unless it affects exported API clarity or future maintenance.
-- Do not rewrite comments that already explain constraints, invariants, or why a surprising step exists.
+Copy the move: explain the semantic ambiguity created by vocabulary drift.
 
-## Bad And Good Simplifications
-Bad: names reduce characters but hide meaning.
+## Reject
+Reject names that reduce characters but hide meaning:
 
 ```go
 func process(data Account, flag bool) error {
@@ -50,7 +51,7 @@ func process(data Account, flag bool) error {
 }
 ```
 
-Good: names expose the lifecycle decision.
+Prefer names that expose the lifecycle decision:
 
 ```go
 func applyAccountLifecycle(account Account, removeCredentials bool) error {
@@ -61,28 +62,25 @@ func applyAccountLifecycle(account Account, removeCredentials bool) error {
 }
 ```
 
-Bad: a comment narrates the code.
+Reject comments that narrate the next line:
 
 ```go
 // Set archived to true.
 report.Archived = true
 ```
 
-Good: keep comments for non-obvious constraints.
+Keep comments for constraints a reader cannot infer:
 
 ```go
 // Preserve the original owner so audit exports can still group archived reports.
 report.Archived = true
 ```
 
-## Escalation Guidance
-- Escalate to `go-idiomatic-review` when naming affects exported docs, package names, initialisms, receiver choices, or public Go API shape.
-- Escalate to `go-design-review` when vocabulary drift reflects unclear ownership or a cross-package concept split.
-- Escalate to `go-domain-invariant-review` when a rename may collapse distinct domain states.
-- Keep purely local taste suggestions out of findings unless they reduce real branch-misread or maintenance risk.
+## Agent Traps
+- Do not block on package stutter, initialism style, or receiver naming unless it affects exported API clarity or future maintenance.
+- Do not ask for long names where type and local scope already supply meaning.
+- Do not treat a rename as harmless if it collapses domain vocabulary such as archive, disable, deactivate, and delete.
+- Do not rewrite comments that already record invariants or surprising constraints.
 
-## Source Anchors
-- [Effective Go](https://go.dev/doc/effective_go): names are important in Go and affect exported visibility.
-- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): package names, receiver names, variable names, initialisms, and doc comments.
-- [Package names](https://go.dev/blog/package-names): names provide context and help maintain package focus.
-- Repository pattern: `go-idiomatic-review/SKILL.md` naming and exported-surface guidance.
+## Validation Shape
+Naming findings are usually validated by reviewer inspection plus compile/test after rename. When vocabulary drift may signal behavior change, ask for proof that public docs, tests, and domain terms remain aligned or escalate to domain/design review.

@@ -22,15 +22,18 @@ Protect changed Go hot paths from measurable latency, throughput, allocation, co
 - review performance-visible API shape when synchronous behavior, pagination, payload size, or fallback strategy creates deterministic latency cliffs
 
 ## Lazy Reference Loading
-Keep this `SKILL.md` as the review routing guide. Load examples from `references/` only when the diff touches that surface or you need a sharper evidence pattern:
+Keep this `SKILL.md` as the review routing guide. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load more only when the review clearly spans multiple independent decision pressures, such as benchmark methodology plus cache round-trip amplification.
 
-- `references/performance-evidence-quality.md` - claim-to-evidence fit, missing proof findings, residual-risk wording, and proof gaps for local vs service-level performance claims.
-- `references/benchmark-and-benchstat-review.md` - benchmark methodology, `testing.B`, `B.Loop`, `-benchmem`, repeated runs, benchstat interpretation, and noisy or non-representative benchmark findings.
-- `references/pprof-and-profile-selection.md` - CPU, heap, allocs, goroutine, block, and mutex profile selection; live `net/http/pprof` collection; and pprof evidence review.
-- `references/trace-block-mutex-and-contention.md` - execution trace, block and mutex profiles, scheduler stalls, lock contention, queueing, and fan-out/fan-in tail-latency evidence.
-- `references/hot-path-cost-model.md` - loops, asymptotic regressions, repeated encode/decode work, copy amplification, serialization, batching, and fan-out cost models.
-- `references/db-cache-and-io-amplification.md` - `N+1`, query count, DB round trips, cache miss/fallback amplification, dependency timing, and request-path I/O proof.
-- `references/allocation-gc-and-syncpool-review.md` - allocation churn, GC pressure, heap vs allocs profiles, runtime metrics, `sync.Pool` review, and buffer reuse evidence.
+| Reference | Load for symptom | Behavior change |
+| --- | --- | --- |
+| `references/performance-evidence-quality.md` | The main question is whether a performance claim is proven, and no narrower benchmark/profile/contention reference dominates. | Makes the model write a precise missing-proof or residual-risk finding instead of accepting a vague "faster" claim or demanding broad load tests by reflex. |
+| `references/benchmark-and-benchstat-review.md` | The diff adds, changes, or relies on Go benchmark or `benchstat` evidence. | Makes the model inspect timer boundaries, workload dimensions, `-benchmem`, and statistical versus practical significance instead of treating any benchmark table as proof. |
+| `references/pprof-and-profile-selection.md` | The review turns on a CPU, heap, allocs, goroutine, block, mutex, or live `pprof` artifact. | Makes the model match the profile type to the symptom and workload instead of using CPU profiles to explain waiting or heap profiles to explain allocation churn. |
+| `references/trace-block-mutex-and-contention.md` | The changed code introduces lock, channel, fan-out, fan-in, queueing, or scheduler-wait risk. | Makes the model frame tail-latency wait as the defect and ask for trace/block/mutex proof instead of proposing generic worker pools or CPU tuning. |
+| `references/hot-path-cost-model.md` | The changed hot path adds loops, copies, serialization, batching changes, fan-out growth, or repeated parse/encode/decode work. | Makes the model name the scaling dimension and smallest structural fix instead of blocking on isolated micro-optimization folklore. |
+| `references/db-cache-and-io-amplification.md` | Request-path performance depends on DB/cache/query count, dependency calls, pagination, or I/O inside loops. | Makes the model review round-trip amplification and proof shape while handing off correctness and cache-policy ownership instead of treating all DB/cache concerns as performance findings. |
+| `references/allocation-gc-and-syncpool-review.md` | The diff claims or risks allocation churn, GC pressure, buffer reuse, retained backing arrays, or `sync.Pool` behavior. | Makes the model require allocation evidence and retention/reset discipline instead of recommending pooling as a default optimization. |
+| `references/retry-overload-and-tail-latency.md` | The diff changes retries, fallback, admission, queueing, or deadline behavior in a hot request path. | Makes the model identify load amplification and tail-latency collapse as performance merge risk instead of treating retries and fallbacks only as reliability policy. |
 
 Use the reference examples to shape local findings, not to invent blockers. Prefer the smallest evidence-backed correction and escalate when the performance fix changes architecture, data ownership, retry policy, or API semantics.
 

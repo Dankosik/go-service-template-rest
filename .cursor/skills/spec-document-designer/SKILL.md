@@ -53,7 +53,6 @@ Rule: load the smallest sufficient set of artifacts. Do not bulk-load folders by
 Always load:
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
-- `references/spec-patterns.md`
 
 Load by trigger:
 - existing spec rewrite or continuation: the active `spec.md`
@@ -70,6 +69,28 @@ Conflict resolution:
 
 Unknowns:
 - if critical facts are missing, mark them as `[assumption]` or escalate
+
+## Reference Files Selector
+
+References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default after core context. Load more than one only when the task clearly spans independent decision pressures, such as both clarification-gate reconciliation and validation closeout.
+
+Before loading a reference, use this behavior-change thesis test: "When loaded for symptom X, this file makes the model choose Y instead of likely mistake Z." If no row below matches that sentence, do not load a reference.
+
+| Symptom | Behavior change | Load |
+|---|---|---|
+| Foreign-template pressure, framework vocabulary, or coverage gaps without a narrower symptom | Translate only behavior-changing coverage concerns into repo-native sections instead of copying PRD, BMAD, Spec Kit, Superpowers, or SDD headings | `references/spec-patterns.md` |
+| A spec is too thin, too bloated, or hard to size | Choose risk-proportional section depth instead of writing either "add X, test it" or a full PRD/design bundle | `references/spec-section-depth-examples.md` |
+| `spec.md` mixes final decisions with research, design detail, tasks, or transcripts | Move each fact to its owning artifact instead of using `spec.md` as an all-purpose dump | `references/decision-placement-and-artifact-ownership.md` |
+| The draft has `TODO`, `TBD`, blockers, soft assumptions, or user-only decisions | Label and route uncertainty by unblock path instead of inventing certainty or hiding blockers in `Decisions` | `references/open-questions-and-assumptions.md` |
+| A `spec-clarification-challenge` pass returned findings, or non-trivial spec approval is questionable | Reconcile findings into final spec sections and gate status instead of pasting transcripts or approving through blockers | `references/clarification-gate-reconciliation.md` |
+| Validation language is vague, acceptance criteria need proof shaping, or `Outcome` is being written | Separate forward-looking proof obligations from evidence-backed outcome claims instead of writing "run tests" or "done" | `references/validation-and-outcome-sections.md` |
+| A non-trivial spec is at `spec.md -> design/` handoff, or design detail leaks into the spec | Keep `spec.md` at behavior-decision level with explicit handoff and reopen conditions instead of stuffing component maps, sequences, ownership maps, or task lists into the spec | `references/spec-handoff-to-technical-design.md` |
+
+Neighboring-reference rule:
+- For mixed-content cleanup, prefer `decision-placement-and-artifact-ownership.md`.
+- For final handoff readiness or design leakage at approval time, prefer `spec-handoff-to-technical-design.md`.
+- For foreign-template sprawl plus depth problems, prefer `spec-section-depth-examples.md` if the main decision is sizing; prefer `spec-patterns.md` if the main decision is translating framework concerns.
+- Do not load a broad reference when a narrower row already matches the symptom.
 
 ## Hard Skills
 
@@ -161,7 +182,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - If a foreign framework suggests extra sections, translate the useful concern into an existing repo section or a linked artifact.
 
 ### 4. Build A Coverage Pass
-- Use `references/spec-patterns.md` to ask which concerns matter here:
+- If the task has foreign-template pressure or under-covered acceptance semantics, use `references/spec-patterns.md` to ask which concerns matter here:
   - user-visible slices
   - edge cases
   - key entities or state

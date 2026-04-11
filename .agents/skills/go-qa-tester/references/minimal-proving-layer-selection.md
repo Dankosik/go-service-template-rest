@@ -1,18 +1,22 @@
 # Minimal Proving Layer Selection
 
+## Behavior Change Thesis
+When loaded for test-layer ambiguity, this file makes the model choose the smallest layer that can observe the regression instead of likely mistake: defaulting to slow integration coverage or faking away behavior that only a boundary test can prove.
+
 ## When To Load
-Load this when you must choose between unit, integration, contract, fuzz, benchmark, or example tests for already-approved behavior.
+Load this when the task must choose among unit, handler or contract, integration, fuzz, benchmark, or example tests for already-approved behavior.
 
-## Selection Heuristics
-- Use a unit test when local logic, validation, mapping, or state transition can prove the obligation.
-- Use a contract or handler test when method, status, headers, payload, strict decode, idempotency, or transport error semantics are the behavior.
-- Use an integration test when the behavior depends on a real datastore, migration, cache, network, generated SQL, process lifecycle, or multi-component seam.
-- Use fuzz tests for parsers, decoders, serializers, validators, and protocol logic where many inputs can expose bugs beyond named examples.
-- Use benchmarks only when latency, allocation, throughput, or contention behavior is an approved obligation.
-- Use examples for public package usage documentation when executable docs are part of the value.
+## Decision Rubric
+- Start with the regression signal: what would be wrong if the behavior broke?
+- Use a unit test when local validation, mapping, error wrapping, state transition, or side-effect suppression can prove the obligation.
+- Use a handler or contract test when method, path, status, headers, content type, body shape, strict decode, idempotency, or generated/manual route integration is the behavior.
+- Use an integration test when real SQL, migrations, transactions, locks, driver behavior, process lifecycle, cache backend behavior, or multi-component wiring is part of the obligation.
+- Use fuzz tests for parsers, decoders, serializers, validators, and protocol logic where input variety matters beyond named examples.
+- Use benchmarks only for approved latency, allocation, throughput, contention, or capacity obligations.
+- Use examples only when executable public usage documentation is part of the value.
 
-## Good Example
-Approved obligation: "repository rejects a null `created_at` returned by the query layer."
+## Imitate
+Mapper behavior belongs at unit level:
 
 ```go
 func TestPingHistoryRepositoryCreateRejectsNullCreatedAt(t *testing.T) {
@@ -32,40 +36,69 @@ func TestPingHistoryRepositoryCreateRejectsNullCreatedAt(t *testing.T) {
 }
 ```
 
-Why it is good: a unit-level fake query result proves mapper behavior without starting Postgres.
+Copy the shape: fake the query result because the obligation is local mapper/error behavior, not Postgres.
 
-## Bad Example
+Query ordering belongs at integration level:
+
 ```go
-func TestCreateRejectsNullCreatedAtThroughDockerPostgres(t *testing.T) {
-	// Starts a real database, writes custom rows, and drives the full service
-	// even though the obligation is mapper behavior.
+func TestPingHistoryRepositorySQLCReadWriteReturnsNewestFirst(t *testing.T) {
+	pool := setupPostgresPoolWithMigrations(t)
+	repo := postgres.NewPingHistoryRepository(pool.DB())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	first, err := repo.Create(ctx, "first")
+	if err != nil {
+		t.Fatalf("Create(first) error = %v", err)
+	}
+	second, err := repo.Create(ctx, "second")
+	if err != nil {
+		t.Fatalf("Create(second) error = %v", err)
+	}
+
+	got, err := repo.ListRecent(ctx, 2)
+	if err != nil {
+		t.Fatalf("ListRecent() error = %v", err)
+	}
+	if got[0].ID != second.ID || got[1].ID != first.ID {
+		t.Fatalf("IDs = [%d,%d], want [%d,%d]", got[0].ID, got[1].ID, second.ID, first.ID)
+	}
 }
 ```
 
-Why it is bad: it pushes a local invariant to a slower, more failure-prone layer.
+Copy the shape: real migration/query behavior is the reason to pay integration-test cost.
 
-## Assertion Patterns By Layer
-- Unit: assert returned values, sentinel or typed errors, dependency call counts, and local state transitions.
-- Contract: assert method, path, status, headers, content type, body shape, and strict boundary behavior only where approved.
-- Integration: assert durable state, transaction boundaries, migration compatibility, real query ordering, and cleanup.
-- Fuzz: assert invariants such as round-trip, no panic, stable parse/format relation, and accepted/rejected categories.
-- Benchmark: keep setup outside `b.Loop()` and assert only benchmark-specific setup errors.
+## Reject
+```go
+func TestCreateRejectsNullCreatedAtThroughDockerPostgres(t *testing.T) {
+	// Starts a real database and drives the full service even though the
+	// obligation is mapper behavior.
+}
+```
 
-## Deterministic Coordination Patterns
-- Start small and add a higher layer only for behavior the smaller layer cannot observe.
-- Use build tags like `//go:build integration` for Docker or external dependency tests when the repo already follows that pattern.
-- Use seed corpora for fuzz tests so `go test` runs known regression inputs even when fuzzing is not enabled.
-- Keep benchmarks free of network and wall-clock dependencies unless the approved performance obligation requires them.
+Reject because it pushes a local invariant to a slower and more failure-prone layer.
 
-## Repository-Local Cues
-- `test/postgres_sqlc_integration_test.go` uses `//go:build integration` for real Postgres plus migrations.
-- `internal/infra/http/openapi_contract_test.go` stays at handler/contract level for runtime HTTP behavior.
-- `internal/infra/postgres/ping_history_repository_test.go` uses fakes for repository mapper and error wrapping paths.
+```go
+func TestCreateWidgetAcceptsRequestByCallingServiceDirectly(t *testing.T) {
+	err := NewWidgetService(fakeStore{}).Create(context.Background(), Widget{Name: "a"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+}
+```
 
-## Exa Source Links
-- [Go testing package](https://pkg.go.dev/testing)
-- [Go fuzzing documentation](https://go.dev/doc/fuzz/)
-- [Go command documentation](https://pkg.go.dev/cmd/go)
-- [Go database querying documentation](https://go.dev/doc/database/querying)
-- [database/sql example tests](https://go.dev/src/database/sql/example_test.go)
+Reject when the approved obligation is HTTP status, content type, strict decode, or generated contract behavior. A service unit test cannot prove transport mapping.
 
+## Agent Traps
+- Choosing integration tests because they feel more "real" even when they do not observe the targeted failure better.
+- Mocking an HTTP handler's request parser or a SQL driver's ordering behavior, then claiming contract or integration proof.
+- Adding fuzz tests for ordinary branch coverage instead of input-heavy invariants.
+- Writing benchmarks without an approved performance obligation.
+- Treating examples as tests for internal packages where executable docs add no user value.
+
+## Validation Shape
+- Unit or handler test: focused `go test <package> -run '^TestName$' -count=1`, then package-level command when helpers changed.
+- Integration test: repository integration target or `go test -tags=integration ./test/...`, following the repo's Docker skip/fail policy.
+- Fuzz target: plain `go test` for seed regressions plus a bounded fuzz command only when exploration is part of the obligation.
+- Benchmark: run the named benchmark with stable setup and report that it is measurement evidence, not functional proof.

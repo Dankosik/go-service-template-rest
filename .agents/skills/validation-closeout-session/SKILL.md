@@ -69,22 +69,23 @@ Rules:
 - do not broad-read the repository once the closeout claim and proof scope are clear
 - if phase context shows the task is not yet at validation or closeout, stop and point to the correct reopen point instead of validating by momentum
 
-## Lazy References
-Load only the example file needed for the closeout decision in front of you. These references contain examples only; the `Read First` authorities still own the rules.
+## Reference Loading
+References are compact rubrics and example banks, not exhaustive checklists or replacement documentation. Load at most one reference by default. Load more than one only when the closeout task clearly spans multiple independent decision pressures, such as choosing proof scope and then updating a separate task ledger.
 
-| Reference | Load when |
-|---|---|
-| `references/closeout-readiness-examples.md` | deciding whether a dedicated validation closeout session may proceed or must reopen an earlier phase |
-| `references/claim-to-proof-closeout.md` | mapping a closeout claim such as `task done`, `phase complete`, or `ready for handoff` to fresh command evidence |
-| `references/spec-validation-outcome-updates.md` | updating `spec.md` `Validation` and `Outcome` without overstating the proof |
-| `references/tasks-progress-update-examples.md` | updating existing `tasks.md` checkbox/progress state from fresh proof only |
-| `references/workflow-plan-completion-vs-reopen.md` | choosing and recording master workflow completion versus explicit reopen routing |
-| `references/failed-proof-and-reopen-handling.md` | handling failed, missing, stale, skipped, or too-narrow proof without drifting into fixes |
+| Reference | Symptom | Behavior change |
+|---|---|---|
+| `references/closeout-readiness-examples.md` | unsure whether this session may proceed as validation closeout | choose proceed, skip, or reopen before running commands instead of validating by momentum |
+| `references/claim-to-proof-closeout.md` | closeout claim is explicit but proof scope is uncertain | narrow the command set and success wording to the claim instead of treating one green check as task-wide proof |
+| `references/spec-validation-outcome-updates.md` | updating `spec.md` `Validation` or `Outcome` | write a proof-shaped closeout record instead of vague "tests pass" or optimistic outcome prose |
+| `references/tasks-progress-update-examples.md` | existing `tasks.md` needs checkbox or progress alignment | update only ledger items proved by fresh evidence instead of bulk-checking or creating tasks during validation |
+| `references/workflow-plan-completion-vs-reopen.md` | existing workflow routing must record complete, blocked, or reopened state | make master and phase routing agree instead of leaving "mostly done" or `TBD` state |
+| `references/failed-proof-and-reopen-handling.md` | required proof fails, is missing, stale, skipped, or too narrow | record the narrowest reopen target and stop instead of fixing code or softening failure during closeout |
 
 Reference rules:
-- do not bulk-load all examples for routine closeout
-- do not let an example override `AGENTS.md`, `docs/spec-first-workflow.md`, or `go-verification-before-completion`
-- do not copy example snippets blindly; bind them to the current task's artifacts, commands, and observed results
+- do not bulk-load references for routine closeout
+- do not let a reference override `AGENTS.md`, `docs/spec-first-workflow.md`, or `go-verification-before-completion`
+- do not copy snippets blindly; bind them to the current task's artifacts, commands, and observed results
+- prefer the narrowest matching reference; broad failure handling is a challenge rubric, not the default when a narrower positive update reference matches
 - if an example would require implementing a fix, creating a missing phase file, creating missing `tasks.md`, or softening failed proof into completion language, reject the example and reopen instead
 
 ## Allowed Writes

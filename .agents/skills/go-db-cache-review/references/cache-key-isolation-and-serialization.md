@@ -1,11 +1,14 @@
 # Cache Key Isolation And Serialization
 
+## Behavior Change Thesis
+When loaded for changed cache key or cached payload behavior, this file makes the model choose complete key dimensions, deterministic key material, and safe decode/version handling instead of likely mistakes such as "just hash it", missing tenant scope, or silently serving corrupt zero values.
+
 ## When To Load
 Load this reference when a Go diff changes cache key construction, cached value serialization, decode behavior, tenant/auth/locale/feature scoping, cache schema versions, or query-response caching.
 
 Keep findings local: identify the missing key dimension or unsafe decode path in the changed code. Escalate security policy, API-visible consistency, or data ownership changes instead of inventing broad cache contracts here.
 
-## Review Smell Patterns
+## Decision Rubric
 - Cache key omits tenant, organization, auth scope, locale, feature flag, role, or response version when those inputs change the value.
 - Cache key uses raw user-provided strings without a stable delimiter, escaping, or hashing strategy.
 - Different resources share a prefix and can collide, such as `user:` for both profile and permissions.
@@ -120,6 +123,12 @@ func productSearchKey(filter ProductFilter) (string, error) {
 
 Use the repository's existing canonicalization helper if one exists. The review finding should demand deterministic, complete key material, not a particular hash algorithm.
 
+## Agent Traps
+- Do not suggest hashing while still omitting a correctness dimension such as tenant, locale, role, feature, page, or payload version.
+- Do not accept JSON over maps or option bags as deterministic key material unless the repository has an explicit canonicalization policy.
+- Do not treat decode failures as harmless misses forever; repeated corrupt entries can pin an expensive miss path or hide a schema mismatch.
+- Do not "fix" an isolation breach only in cache code if the same missing tenant/auth scope exists in the underlying DB query; hand off or add the paired finding.
+
 ## Smallest Safe Fix
 - Add missing key dimensions required by the current response contract.
 - Add a version segment when cached value shape changed.
@@ -128,14 +137,8 @@ Use the repository's existing canonicalization helper if one exists. The review 
 - Delete or bypass corrupt entries after decode errors; do not serve partial zero values.
 - Escalate tenant or sensitive-data exposure to `go-security-review` in addition to the local cache finding.
 
-## Validation Ideas
+## Validation Shape
 - Add table tests proving distinct tenants, locales, pages, roles, or feature flags produce distinct keys.
 - Add a corrupt-cache-entry test and assert the code refetches or invalidates instead of serving a zero-value response.
 - Add a cache-version migration test when payload shape changes.
 - Add a test that delimiters in user input cannot collide with another key.
-
-## Source Links From Exa
-- Redis keys and values, key namespace conventions: https://redis.io/docs/latest/develop/using-commands/keyspace/
-- Redis cache-aside query caching tutorial: https://redis.io/learn/howtos/solutions/microservices/caching
-- Redis client-side caching invalidation reference: https://redis.io/docs/latest/develop/reference/client-side-caching/
-- Redis `SET` command and TTL overwrite behavior: https://redis.io/docs/latest/commands/set/

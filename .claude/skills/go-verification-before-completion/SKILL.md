@@ -9,7 +9,7 @@ description: "Verify correctness or readiness claims with fresh command evidence
 Prevent false-positive completion claims by requiring fresh verification evidence that matches the scope of the claim.
 
 ## Scope
-- verify statements such as “fixed”, “tests pass”, “lint clean”, “build succeeds”, or “ready for handoff”
+- verify statements such as "fixed", "tests pass", "lint clean", "build succeeds", or "ready for handoff"
 - map each claim to the smallest command set that honestly proves it
 - run commands, inspect results, and report factual outcomes
 - block optimistic completion language when proof is missing or weaker than the claim
@@ -29,6 +29,19 @@ Do not:
 - If verification fails or was not run, say so explicitly.
 - Consume existing task artifacts and fresh command output when they exist; do not author new process artifacts from this skill.
 - If proof depends on missing expected context, report the proof gap and the smallest unblock action instead of inventing replacement context.
+- If command output shows cached or skipped work, keep the conclusion narrower than an executed green run unless the cache or skip semantics are sufficient for the claim.
+
+## Lazy References
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default. Load more only when the claim clearly spans independent decision pressures, such as delegated work plus generated API drift plus a failed proof command.
+
+Before loading, name the behavior-change thesis you need: "When loaded for symptom X, this file makes me choose Y instead of likely mistake Z." If no reference has a concrete thesis for the symptom, stay in `SKILL.md` and inspect live repo files such as `Makefile` or `docs/build-test-and-development-commands.md` as needed.
+
+| Reference | Symptom | Behavior change |
+|---|---|---|
+| `references/claim-to-proof-mapping.md` | ambiguous "fixed", "green", "ready", test, lint, build, race, package, or repo claim | choose the narrowest sufficient proof for the exact claim instead of either over-running unrelated checks or generalizing a focused pass to repo readiness |
+| `references/generated-api-and-migration-verification.md` | OpenAPI, generated API, mocks, stringer, sqlc, query, or migration surface changed | add drift or migration rehearsal proof instead of treating compile/tests as enough or accepting skipped migration output as validation |
+| `references/delegated-work-verification.md` | another agent, tool, CI snippet, or prior session says work is done | rebind the delegated claim to current workspace evidence instead of treating a report or stale log as proof |
+| `references/failure-and-gap-reporting.md` | proof failed, skipped, was missing, was cached unexpectedly, or is weaker than the requested claim | report "not verified" or "partially verified" with the blocking signal and next verification action instead of writing a positive closeout |
 
 ## Expertise
 
@@ -42,22 +55,16 @@ Before any success or readiness claim:
 6. report evidence or report the gap
 
 ### Claim-To-Proof Mapping
-Use these defaults unless the scope requires something stricter:
-
-| Claim | Minimum proof |
-|---|---|
-| Targeted fix works | the reproducible failing command now passes |
-| Scoped package behavior is green | `go test ./path/to/pkg/...` |
-| Repository tests pass | `make test` |
-| Concurrency-safe for the changed path | `make test-race` or `go test -race ./...` |
-| Lint clean | `make lint` |
-| Build succeeds | `make build` |
-| API contract/runtime checks green | `make openapi-check` |
-| Migration safety checked | `make migration-validate` |
-| Ready for handoff or review | scope-required tests plus the required quality checks for the changed surface |
+Use these defaults unless the claim scope requires something stricter:
+- targeted fix: rerun the exact failing command or the narrowest reproducer that covers the fixed path
+- scoped package behavior: run the relevant `go test` package pattern, with `-run` and `-count=1` when a specific test or uncached execution matters
+- repository test claim: run the repository test target or an explicit repository-wide `go test` pattern
+- race-safety claim: run race-detector coverage for the changed concurrent path
+- lint, build, generated API, and migration claims: run the repository target that owns that proof
+- readiness claim: combine the checks required by the changed surface; never use one green check as proof for unrelated surfaces
 
 ### Freshness And Scope
-- “Fresh” means executed in the current iteration against the current workspace state.
+- "Fresh" means executed in the current iteration against the current workspace state.
 - Focused verification is valid only for a focused claim.
 - Broad claims require broad proof.
 - Do not extrapolate from targeted checks to repository-wide success.

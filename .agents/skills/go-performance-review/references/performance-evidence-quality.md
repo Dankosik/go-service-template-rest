@@ -1,45 +1,20 @@
 # Performance Evidence Quality Review
 
+## Behavior Change Thesis
+When loaded for symptom "the PR claims faster, lower-latency, or lower-allocation behavior but the proof is thin or mismatched," this file makes the model choose a precise evidence-gap finding instead of likely mistake "accept the claim because some number exists" or "demand broad load testing when a narrow proof would clear the risk."
+
 ## When To Load
-Load this when a review needs to decide whether performance proof is sufficient, when a PR claims faster/lower-allocation/lower-latency behavior, or when the right finding is an evidence gap rather than a proven code defect.
+Load this when proof sufficiency is the main review question and no narrower benchmark, profile, contention, allocation, DB/cache, or retry-overload reference is the better fit.
 
-Use this reference to keep performance review evidence-first. Do not block on folklore, personal taste, or micro-optimization preference when the changed path is not hot or the impact is not measurable.
+## Decision Rubric
+- Ask what claim is being cleared: local CPU, allocation, contention, request-path latency, service-level latency, dependency load, or capacity.
+- Match evidence to that claim. CPU samples do not prove wait reduction; heap in-use does not prove allocation churn; a microbenchmark does not prove service p99.
+- Require baseline-vs-current comparison when the PR claims improvement.
+- Require workload shape when the claim depends on input size, page size, fan-out width, cache state, DB row count, concurrency, or downstream latency.
+- State the smallest proof that would change the decision. Do not ask for load tests when an old-vs-new benchmark with `-benchmem` proves the local claim.
+- Treat missing proof as merge-risk only when the changed path is hot, the impact can be material, or the implementation adds complexity that needs to earn its keep.
 
-## Review Smell Patterns
-- A PR says "faster" but provides no baseline-vs-current comparison.
-- A service-level latency claim is supported only by a tiny microbenchmark.
-- A benchmark is run once, without `-benchmem` for allocation or GC claims.
-- `benchstat` output is absent even though old and new benchmark files exist.
-- A CPU profile is used to explain lock wait, network wait, or queue wait.
-- A heap profile is used to prove allocation churn without checking `allocs` or `-benchmem`.
-- Trace, CPU, heap, block, and mutex tools were collected together without explaining profiler interference.
-- The workload shape is not stated: input size, fan-out width, cache hit rate, DB row count, or concurrency level is unknown.
-- Evidence uses mocks that remove the actual bottleneck under review, such as DB or network round trips.
-
-## Evidence Required
-- Local CPU or allocation claim: old and new benchmark files, repeated runs, realistic inputs, `-benchmem` when allocation or GC is part of the claim, and `benchstat` for the comparison.
-- CPU hot spot claim: a CPU profile collected under a representative workload, plus the changed code path visible in `top`, `list`, or call graph output.
-- Allocation or GC pressure claim: `-benchmem`, heap or allocs profile, and the workload that makes the allocation rate relevant.
-- Contention or queueing claim: block or mutex profile and often `go tool trace`, not just CPU samples.
-- Request-path or service-level latency claim: representative request/load evidence, dependency timing or query-count data, and p50/p95/p99 where tail latency is the risk.
-- Missing proof: state the smallest evidence that would clear the claim; do not demand broad load testing when a narrow benchmark would prove the local risk.
-
-## Bad Finding
-```text
-[medium] [go-performance-review] internal/render/render.go:88
-Issue:
-This probably allocates too much.
-Impact:
-It may be slower.
-Suggested fix:
-Use a pool.
-Reference:
-N/A
-```
-
-Why it fails: the finding names no hot path, no measured allocation signal, no scale, and jumps to an optimization before proving allocations are the bottleneck.
-
-## Good Finding
+## Imitate
 ```text
 [medium] [go-performance-review] internal/render/render.go:88
 Issue:
@@ -49,10 +24,36 @@ At the list endpoint's existing page size, the change can add one encode allocat
 Suggested fix:
 Add an old-vs-new benchmark or integration measurement using the endpoint's typical and max page sizes, run it with `-benchmem -count=10`, and compare with `benchstat`. If the delta is noisy or neutral, keep the simpler implementation.
 Reference:
-Go diagnostics guidance on profiling/tool selection and Go benchmark/benchstat methodology.
+N/A
 ```
 
-## Validation Command Examples
+Copy the shape: claim, changed hot path, missing workload dimension, smallest clearing proof.
+
+## Reject
+```text
+Issue:
+This probably allocates too much.
+Suggested fix:
+Use a pool.
+```
+
+Reject it because it names no hot path, no measured allocation signal, no scale, and jumps to an optimization before proving allocations are the bottleneck.
+
+```text
+Issue:
+The PR needs a load test before merge.
+```
+
+Reject it when the risk is local and bounded. Ask for the narrowest benchmark or profile that can prove the claim.
+
+## Agent Traps
+- Converting "no evidence" into a blocker even when the changed path is cold and the implementation is simpler.
+- Treating any numeric result as proof without checking baseline, workload, sample count, variance, and metric relevance.
+- Clearing service-level p99 or capacity claims with a single function benchmark.
+- Asking for every diagnostic tool at once instead of the one that fits the symptom.
+- Hiding residual risk in summary text instead of writing a finding when missing proof is merge-relevant.
+
+## Validation Shape
 ```bash
 go test -run '^$' -bench '^BenchmarkRenderList$' -benchmem -count=10 ./internal/render > new.txt
 benchstat old.txt new.txt
@@ -61,12 +62,4 @@ go tool pprof -top cpu.out
 go tool pprof -top -alloc_space mem.out
 ```
 
-For service-level claims, prefer the repo's existing load or integration command and record the exact workload, for example page size, concurrency, cache state, and downstream fixture size.
-
-## Source Links From Exa
-- [Go Diagnostics](https://go.dev/doc/diagnostics)
-- [testing package benchmarks](https://pkg.go.dev/testing)
-- [benchstat command](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat)
-- [runtime/pprof package](https://pkg.go.dev/runtime/pprof)
-- [Go execution trace docs](https://pkg.go.dev/runtime/trace)
-
+For service-level claims, prefer the repo's existing load or integration command and record workload dimensions such as page size, concurrency, cache state, and downstream fixture size.

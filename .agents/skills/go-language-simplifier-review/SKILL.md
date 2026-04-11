@@ -38,18 +38,21 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 - review whether touched validation is enough to protect subtle precedence or branch behavior
 
 ## Reference Files Selector
-Keep this skill compact. Load only the reference file that matches the review risk in front of you:
+References are compact rubrics and example banks, not exhaustive checklists or Go documentation. Load at most one reference by default: choose the file whose symptom best matches the primary review pressure. Load a second reference only when the diff clearly spans multiple independent decision pressures, and name both references in the finding only if each materially shaped the review judgment.
 
-| Reference | Load When |
-| --- | --- |
-| `references/false-simplification-patterns.md` | a cleanup, deduplication, or "readability" change may have collapsed semantics, ownership, cleanup, or behavior |
-| `references/helper-extraction-economics.md` | helpers, wrappers, interfaces, option bags, callbacks, or vague helper buckets were added, removed, or renamed |
-| `references/source-of-truth-extraction.md` | stable same-package policy is repeated, drifting, or moved away from its owner |
-| `references/control-flow-and-temporal-coupling.md` | branching, guard clauses, sentinels, named returns, defer, cleanup, or phase ordering changed |
-| `references/predicate-condition-and-mode-clarity.md` | compound predicates, negative conditions, boolean clusters, raw modes, or option decoding make a decision hard to read |
-| `references/error-path-simplification.md` | error handling was deduplicated, wrapped, normalized, mapped, logged, or reordered |
-| `references/test-readability-and-proof-shape.md` | tests were simplified with tables, helpers, assertions, or terse failure messages that may hide proof intent |
-| `references/naming-and-intent-exposure.md` | names, receiver names, helper names, booleans, exported identifiers, or vocabulary drift obscure intent |
+Use `false-simplification-patterns.md` as broad challenge/smell triage only when no narrower positive reference owns the risk.
+
+| Reference | Symptom | Behavior Change |
+| --- | --- | --- |
+| `references/false-simplification-patterns.md` | broad cleanup, deduplication, readability, or DRY claim spans several axes and no narrower reference dominates | makes the model challenge line-count reduction and identify hidden semantics instead of accepting shorter code as simpler |
+| `references/helper-extraction-economics.md` | helpers, wrappers, interfaces, option bags, callbacks, or helper buckets were added, removed, renamed, or generalized | makes the model judge whether a helper compresses stable policy at the call site instead of treating wrappers as automatically good or bad |
+| `references/source-of-truth-extraction.md` | stable same-package policy is repeated, drifting, or moved away from its owner | makes the model choose a seam-named local owner instead of tolerating drift-prone copies or extracting to global `common` code |
+| `references/control-flow-and-temporal-coupling.md` | branching, guard clauses, sentinels, named returns, defer, cleanup, rollback, audit, or phase ordering changed | makes the model protect explicit side-effect and error precedence instead of praising flatter control flow that hides temporal coupling |
+| `references/predicate-condition-and-mode-clarity.md` | compound predicates, negative conditions, boolean clusters, raw modes, same-typed args, or option decoding make a decision hard to read | makes the model preserve call-site decision clarity instead of accepting shorter conditions or generic predicate helpers |
+| `references/error-path-simplification.md` | error handling was deduplicated, wrapped, normalized, mapped, logged, joined, or reordered | makes the model protect inspectability, status mapping, cancellation, and cleanup precedence instead of accepting generic error helpers |
+| `references/test-readability-and-proof-shape.md` | tests were simplified with tables, helpers, assertions, fixtures, or terse failure messages that may hide proof intent | makes the model protect readable setup, trigger, and assertion shape instead of approving test shortcuts that obscure what behavior is proven |
+| `references/naming-and-intent-exposure.md` | names, receiver names, helper names, comments, exported identifiers, or feature vocabulary drift obscure role, phase, ownership, or policy | makes the model treat naming as merge-risk only when it changes intent exposure instead of raising taste-only rename comments |
+| `references/go-semantic-stop-signs.md` | simplification touches clone/copy isolation, nil versus empty behavior, receiver or method-set shape, zero-value usability, cleanup ownership, or stdlib wrapper contracts | makes the model stop before flagging protective Go semantics as clutter and route deep semantic questions to `go-idiomatic-review` |
 
 ## Boundaries
 Do not:
@@ -79,7 +82,7 @@ Do not:
 - Naming and tests: suggest naming or test simplification only when it lowers future reasoning and diagnosis load.
 
 ### Go-Semantic Stop-Signs
-- Do not recommend simplification that removes code protecting ownership, lifetime, or public contract just because it looks ceremonial.
+- Do not recommend simplification that removes code protecting ownership, lifetime, or public contract just because it looks ceremonial. Load `references/go-semantic-stop-signs.md` when this risk is central to the review.
 Stop-sign examples:
 - slice or map alias isolation such as `slices.Clone`, `maps.Clone`, or copy-before-store
 - `nil` versus empty behavior that is externally observable

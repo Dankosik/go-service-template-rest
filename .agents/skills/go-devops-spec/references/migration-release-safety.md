@@ -1,40 +1,41 @@
 # Migration Release Safety
 
+## Behavior Change Thesis
+When loaded for symptom "a release includes schema migrations or data-moving rollout," this file makes the model choose rehearsal, rollback classification, mixed-version compatibility, and one-migrator ownership instead of likely mistake "run migrations before deploy" or treating a successful `up` as enough.
+
 ## When To Load
-Load this when a delivery spec needs migration rehearsal, release sequencing, rollback class, mixed-version compatibility windows, backfill gating, one-migrator policy, or deployment promotion criteria.
+Load for migration rehearsal, release sequencing, rollback class, mixed-version compatibility windows, backfill gates, one-migrator policy, or promotion criteria tied to migrations.
 
 ## Local Source Of Truth
-- `.github/workflows/ci.yml` runs `migration-validate` only when `env/migrations/` changes and validates on ephemeral Postgres.
+- `.github/workflows/ci.yml` runs `migration-validate` on ephemeral Postgres when `env/migrations/` changes.
 - `Makefile` exposes `migration-validate` and `docker-migration-validate`.
-- `scripts/dev/docker-tooling.sh` runs migration up, down one step, and up one step against a temporary Postgres network.
-- `railway.toml` records non-secret deploy policy, healthcheck, overlap, draining, restart policy, and replica baseline comments.
+- `scripts/dev/docker-tooling.sh` runs migration up, down one step, and up one step against temporary Postgres.
+- `railway.toml` records healthcheck, overlap, draining, restart policy, and replica baseline comments that affect rollout windows.
 
-## Enforceable Policy Examples
-- Migration changes block merge unless `migration-validate` proves `up -> down 1 -> up 1` on an ephemeral database, or an exception states why rollback rehearsal is impossible and what compensating proof replaces it.
-- Release specs must classify migrations as reversible, forward-only, or destructive; forward-only and destructive changes require explicit rollback and restore strategy.
-- Rolling or overlapping deploys require mixed-version compatibility for every schema phase visible during the overlap window; if compatibility is unknown, delivery status is blocked and data/API ownership must decide.
-- Use one controlled migrator job/process for production migration execution; do not run migrations opportunistically on every app pod or process startup unless the owning data spec proves idempotence and concurrency safety.
-- Phased schema release policy should name the actual gates for `expand`, backfill or migrate, verify, and `contract`; the delivery spec should not treat `contract` as release-safe until compatibility and rollback evidence exist.
+## Decision Rubric
+- Migration changes block merge unless CI proves `up -> down 1 -> up 1` on ephemeral Postgres, or an exception states why rollback rehearsal is impossible and what compensating proof replaces it.
+- Release specs must classify migrations as reversible, forward-only, or destructive; forward-only and destructive changes require explicit rollback/restore strategy.
+- Rolling or overlapping deploys require mixed-version compatibility across the overlap window. If compatibility is unknown, delivery is blocked and data/API ownership must decide.
+- Use one controlled migrator job/process for production execution. Do not run migrations opportunistically on every app pod or process startup unless the owning data spec proves idempotence and concurrency safety.
+- Phased schema release must name gates for expand, backfill/migrate, verify, and contract; do not mark contract release-safe until compatibility and rollback evidence exist.
 
-## Non-Enforceable Anti-Patterns
-- "Run migrations before deploy" without naming the migrator owner, command, database target, lock behavior, and rollback class.
-- Treating a successful `up` as enough for reversible migrations when the local policy has a down/up rehearsal.
-- Combining schema contraction and application rollout in a single irreversible release without a mixed-version compatibility decision.
-- Backfills with no budget, checkpoint, retry, or verification artifact.
-- Relying on app startup migration when autoscaling, restarts, or parallel deploys can create multiple migrators.
+## Imitate
+- "For migration PRs, require CI `migration-validate` with `MIGRATION_DSN` against ephemeral Postgres and evidence of `up -> down 1 -> up 1`." Copy the exact rehearsal sequence.
+- "A destructive contract step is release-blocked until the data spec owns compatibility, restore, and verification; delivery records the blocker rather than approving the schema decision." Copy the handoff behavior.
+- "Backfill release requires budget, checkpoint, retry, and verification artifact before promotion." Copy the data-moving proof shape.
 
-## Evidence Artifacts
-- `migration-validate` CI logs for changed migrations.
-- Production migration run identifier, command, operator or automation identity, start/end time, and target database/environment.
-- Backfill checkpoint and verification query output for data-moving releases.
-- Rollback class recorded in the release spec, with restore drill or backup evidence when rollback depends on restore.
-- Deployment health evidence tied to `railway.toml` healthcheck, overlap, draining, and restart policy when Railway is the target.
+## Reject
+- "Run migrations before deploy." This omits migrator owner, target DB, lock/concurrency behavior, rollback class, and proof.
+- "Local `make migration-validate` printed a skip because Docker was unavailable, so migrations are validated." A skip is not proof.
+- "Rolling deploy plus schema contraction in one release." This collapses compatibility, rollback, and deployment windows into one irreversible step.
+
+## Agent Traps
+- Do not let app startup migrations become the default when autoscaling or restarts can create concurrent migrators.
+- Do not equate successful `up` with reversible-migration proof.
+- Do not design schema shape, transaction safety, or event semantics here; require proof and route decisions to data or distributed-consistency specs.
+
+## Validation Shape
+Use `migration-validate` CI logs, production migration run identifier, command, automation/operator identity, target database/environment, backfill checkpoint output, verification queries, rollback class, and restore/backup evidence when rollback depends on restore.
 
 ## Hand-Off Boundary
 Do not design schema shape, data invariants, transaction boundaries, or event publication semantics here. Delivery can require proof and block release, but data and distributed-consistency specs own those decisions.
-
-## Exa Source Links
-- GitHub Docs: [Workflow syntax for GitHub Actions](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions)
-- GitHub Docs: [Control the concurrency of workflows and jobs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
-- Kubernetes Docs: [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment)
-

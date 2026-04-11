@@ -1,40 +1,42 @@
-# Data, Cache, Privacy, And Secret Handling Examples
+# Data, Cache, Privacy, And Secret Handling
+
+## Behavior Change Thesis
+When loaded for sensitive data, cache, privacy, secret, config, logging, or telemetry requirements, this file makes the model choose classification, minimization, cache scoping, secret-source, and redaction requirements instead of likely mistake: shared cache keys, secret config files, encryption-as-authorization, or raw diagnostic leakage.
 
 ## When To Load
 Load this when requirements touch sensitive data, privacy, data minimization, retention, logging/redaction, cache keys, DB privileges, tenant-scoped data, secrets, key management, config source policy, telemetry headers, or CI secret scanning.
 
-## Selected Controls
-- Classify data before choosing storage, cache, logging, or telemetry rules. Treat personal data, credentials, tokens, API keys, connection strings, health data, financial data, and business secrets as sensitive by default.
-- Minimize storage and cache copies of sensitive data. Avoid storing sensitive data when not required and define deletion/retention when it is required.
-- Keep tenant, subject, scope, and data-classification dimensions in cache keys for tenant-scoped or permission-scoped data.
-- Define cache fail-open versus fail-closed behavior. Authorization, tenant isolation, and secret lookups should fail closed unless a safer contract is explicitly proven.
-- Store secrets in approved secret stores or environment secret channels, not YAML, code, logs, generated artifacts, cache values, or test snapshots.
-- Require secret lifecycle requirements: owner, purpose, consumers, rotation, revocation, expiry when possible, and audit trail.
-- Redact tokens, credentials, DSNs, `Authorization` headers, OTLP headers, and sensitive personal data in logs, traces, errors, and test output.
-- Use repository-native security gates where applicable: `govulncheck`, `gosec`, `gitleaks`, and container scanning.
+## Decision Rubric
+- Classify data before choosing storage, cache, logging, telemetry, or retention behavior. Treat personal data, credentials, tokens, API keys, connection strings, health data, financial data, and business secrets as sensitive by default.
+- Minimize copies of sensitive data. If storage or caching is required, define purpose, owner, retention/deletion, access scope, and redaction behavior.
+- Include tenant, subject, scope, relationship, property-filter, and data-classification dimensions in cache keys when access to the cached value depends on them.
+- Authorization, tenant isolation, and secret lookups fail closed unless a safer contract is explicitly proven.
+- Store secrets in approved secret stores or environment secret channels, not YAML, code, logs, generated artifacts, cache values, examples, task artifacts, or test snapshots.
+- Define secret lifecycle: owner, purpose, consumers, rotation, revocation, expiry when possible, reload window, and audit trail.
+- Redact tokens, credentials, DSNs, `Authorization` headers, OTLP headers, and sensitive personal data in logs, traces, problem responses, and tests.
 
-## Rejected Controls
-- Reject cache keys that include only object ID when data access also depends on tenant, caller, role, scope, relationship, or property filtering.
-- Reject shared caches for sensitive or tenant-scoped data without explicit key isolation, TTL, and invalidation rules.
-- Reject secrets in config YAML, `railway.toml`, examples, fixtures, logs, or task artifacts.
-- Reject reversible encryption for passwords or custom cryptography.
-- Reject logging full request bodies, SQL text with sensitive values, config snapshots, or outbound headers by default.
-- Reject treating encrypted data as authorization. Encrypted identifiers still require access control.
+## Imitate
+- "Tenant-scoped cache keys include tenant and authorization context, or cache only public fields; cache service failure for an authorization decision causes source-of-truth lookup or deny, never permit." Copy the access dimensions and fail-closed cache behavior.
+- "YAML config may contain non-secret defaults only; secret-like keys are rejected at load time and must be supplied through `APP__...` environment secret channels." Copy the repo-specific secret boundary.
+- "Parse errors that include secret-like input values are redacted before returning or logging; classifier failure omits the field." Copy conservative redaction.
 
-## Fail-Closed Examples
-- Cache miss or cache service failure for an authorization decision causes a policy lookup or deny, not permit.
-- Tenant-scoped cache key missing tenant binding denies cache use and forces a scoped source-of-truth read.
-- Secret manager or required environment secret unavailable at startup blocks the dependent feature instead of falling back to insecure defaults.
-- Redaction classifier failure causes logs to omit the field rather than logging the raw value.
-- Data-classification unknown means no shared cache and no telemetry value export until classification is resolved.
+## Reject
+- "Cache by object ID." Object ID alone is wrong when tenant, caller, role, scope, relationship, or property filtering affects access.
+- "Encrypt the identifier, so authorization is covered." Encryption may protect confidentiality; it does not prove the caller may access the object.
+- "Put example credentials in fixtures." Examples and task artifacts are not secret stores.
+- "Log full request/config snapshots for debugging." Debuggability does not justify raw secrets or sensitive personal data.
 
-## Testable Requirements
-- Given two tenants with the same object ID, cache lookups never return the other tenant's value.
-- Given role/property-filtered responses, cached values are scoped to the authorization context or only store public fields.
-- Given secret-like keys in YAML, config loading rejects them according to repo policy.
-- Given parse or validation errors that include secret-like input values, returned errors and logs do not contain raw secrets.
-- Given a deleted, revoked, or rotated secret, dependent code stops using the old value within the documented rotation or reload window.
-- Given CI or local security checks, `make go-security` and `make secrets-scan` remain the expected proof path when code or config changes are in scope.
+## Agent Traps
+- Do not treat encrypted data as public data. Access control and classification still apply.
+- Do not use shared caches for sensitive or tenant-scoped data without key isolation, TTL, invalidation, and stale-data behavior.
+- Do not push privacy and redaction entirely to observability work when the security spec owns whether sensitive data may leave the boundary.
+
+## Validation Shape
+- Cross-tenant cache tests with same object IDs prove no tenant bleed.
+- Property-filtered response tests prove cached data is scoped to auth context or contains only public fields.
+- Config tests prove secret-like keys in YAML are rejected and secret-like parse errors redact raw values.
+- Redaction tests prove logs, traces, problem responses, and test output omit tokens, DSNs, `Authorization` headers, and sensitive fields.
+- Secret rotation or revocation tests prove dependent code stops using old values within the documented reload window when code/config changes are in scope.
 
 ## Repo-Local Anchors
 - `docs/configuration-source-policy.md` states YAML is for non-secret defaults and environment variables are for secret values.
@@ -42,11 +44,3 @@ Load this when requirements touch sensitive data, privacy, data minimization, re
 - `internal/config/config_test.go` includes negative tests for secret policy, raw secret-like parse errors, symlink paths, world-writable configs, and outside-root configs.
 - `railway.toml` is documented as non-secret deployment policy; Railway variables hold secrets.
 - `Makefile` defines `go-security` using `govulncheck` and `gosec`, plus `secrets-scan` using `gitleaks`.
-
-## Exa Source Links
-- OWASP Secrets Management Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
-- OWASP Logging Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html
-- OWASP Cryptographic Storage Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
-- OWASP Developer Guide, Protect Data Everywhere: https://devguide.owasp.org/en/04-design/02-web-app-checklist/08-protect-data/
-- Go avoiding SQL injection risk: https://go.dev/doc/database/sql-injection
-- Go executing transactions: https://go.dev/doc/database/execute-transactions

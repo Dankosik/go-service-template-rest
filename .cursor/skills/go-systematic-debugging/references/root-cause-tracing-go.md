@@ -1,65 +1,69 @@
 # Root-Cause Tracing For Go Services
 
-## Overview
-When a defect appears deep in the stack, fixing the crash point usually treats the symptom instead of the cause.
-Trace backward until you find where the bad state was first created or first allowed through.
+## Behavior Change Thesis
+When loaded for deterministic symptoms with upstream bad state, this file makes the model backtrack to the first broken invariant instead of patching the crash site or adding a defensive nil guard.
 
-## Trace Procedure
-1. Record the symptom location: `file:line`, panic or error message, failing test, and exact command.
-2. Identify the immediate caller and the input values at that point.
-3. Move one layer up and ask: who provided this value or state?
-4. Repeat until you reach the first boundary where the invariant was already broken.
-5. Fix at that boundary, then add downstream guardrails only if they prevent useful recurrence.
+## When To Load
+Load when the symptom is deterministic or mostly deterministic, but the failing line may not be where the bad state was created: panics, typed-nil surprises, bad payload shape, incorrect state transitions, unexpected context errors, and integration regressions.
 
-## Minimal Go Instrumentation Pattern
-Use short-lived diagnostics while tracing.
+## Decision Rubric
+- Preserve the first stack trace, first failed assertion, or first error-chain mismatch before editing.
+- Inspect the immediate input at the symptom line, then walk one caller or boundary upstream at a time.
+- Stop when you find where the value first became invalid or where validation first allowed it through.
+- Fix at the earliest boundary that owns the invariant; add downstream guardrails only when they prevent recurrence or improve the error contract.
+- Escalate instead of silently changing API, data, retry, timeout, security, or architecture semantics under defect pressure.
 
-```go
-func debugBoundary(ctx context.Context, stage string, fields map[string]any) {
-	fields["stage"] = stage
-	fields["trace_id"] = traceIDFromContext(ctx) // optional helper
-	log.Printf("debug boundary: %+v", fields)
-}
+## Imitate
+
+```text
+Symptom: panic in handler response mapping.
+Immediate bad value: *Order is nil inside an interface typed as Result.
+Upstream boundary: repository returned (*Order)(nil), nil error for missing row.
+First broken invariant: repository contract promises either non-nil *Order or ErrNotFound.
+Fix scope: repository missing-row mapping plus regression test at repository boundary.
 ```
 
-Use near boundary transitions:
-
-```go
-debugBoundary(ctx, "http->app", map[string]any{
-	"method": r.Method,
-	"path":   r.URL.Path,
-})
-
-result, err := svc.Execute(ctx, cmd)
-
-debugBoundary(ctx, "app->infra", map[string]any{
-	"operation": "save_order",
-	"has_error": err != nil,
-})
-```
-
-## Error-Chain Tracing Pattern
+Copy the backtracking: the fix goes to the contract boundary that created bad state, not the mapper that crashed later.
 
 ```go
 if err != nil {
-	if errors.Is(err, context.DeadlineExceeded) {
-		// timeout path
+	if errors.Is(err, context.Canceled) {
+		// caller canceled the work
 	}
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) {
-		// DB-specific origin
+	if errors.Is(err, context.DeadlineExceeded) {
+		// owned budget expired
+	}
+	var target *SomeTypedError
+	if errors.As(err, &target) {
+		// origin-specific failure
 	}
 }
 ```
 
-## Test-Focused Backtracking
-- run the narrowest failing test first
-- inspect the first failing assertion or panic
-- search upstream call paths
-- if the issue is flaky, repeat the narrow test and capture timestamps or context IDs
+Copy the typed-error preservation: do not stringify errors before the policy-owning caller can inspect them.
 
-## Stop Condition
-Tracing is complete only when you can answer:
-- which invariant failed first
-- where that invariant should have been enforced
-- why downstream layers did not stop the symptom earlier
+## Reject
+
+```go
+if result == nil {
+	return nil
+}
+```
+
+This may convert a contract violation into silent success while the upstream invalid value continues to leak.
+
+```go
+ctx := context.Background()
+```
+
+Using a new root context to make cancellation disappear destroys the caller's budget and hides the real boundary failure.
+
+## Agent Traps
+- Treating the panic site as the root cause because it has the loudest stack frame.
+- Adding broad debug logs that include request bodies, SQL payloads, tokens, or PII.
+- Forgetting typed-nil interface cases where `err != nil` or `value != nil` checks lie about the concrete value.
+- Changing API or persistence behavior without naming the owning boundary and escalation.
+- Keeping temporary boundary logging after the regression test proves the fix.
+
+## Validation Shape
+Record the narrow reproducer, the first broken invariant, the boundary where it first failed, the rejected hypotheses, and the exact command that proves the boundary-level regression now passes.

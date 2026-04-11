@@ -52,14 +52,16 @@ Escalate if:
 - Do not let `tasks.md` absorb phase strategy, design decisions, or speculative tasking that should reopen design.
 
 ## Lazily Loaded References
-Keep this file as the operating contract. Load reference examples only when the current planning question needs them, and treat repository-local `AGENTS.md`, `docs/spec-first-workflow.md`, stable `spec.md`, approved `design/`, and existing task artifacts as higher authority than any example or external link.
+Keep this file as the operating contract. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the task clearly spans independent decision pressures, such as dependency ordering plus implementation-readiness proof. Treat repository-local `AGENTS.md`, `docs/spec-first-workflow.md`, stable `spec.md`, approved `design/`, and existing task artifacts as higher authority than any example.
 
-- `references/phase-strategy-examples.md`: load when choosing phase boundaries, session stops, review/validation checkpoints, or single-pass versus phased execution.
-- `references/dependency-ordered-task-ledgers.md`: load when task order, `[P]` markers, generated artifacts, migrations, or source-of-truth-first sequencing is unclear.
-- `references/task-sizing-and-slicing.md`: load when tasks are too large, too horizontal, too vague, or difficult to verify in one focused session.
-- `references/acceptance-criteria-and-proof-obligations.md`: load when acceptance criteria, proof commands, manual checks, or `CONCERNS` obligations need calibration.
-- `references/checkpoints-and-reopen-conditions.md`: load when writing stop points, implementation-readiness handoff, blockers, reopen targets, or validation/reconciliation triggers.
-- `references/planning-anti-patterns.md`: load when reviewing a draft plan or ledger for drift, invented decisions, duplicate authority, or artifact-boundary mistakes.
+| Reference | Load For Symptom | Behavior Change |
+| --- | --- | --- |
+| `references/phase-strategy-examples.md` | phase boundaries, session stops, review/validation checkpoints, or single-pass versus phased execution are unclear | chooses one risk-bounded phase with a real handoff instead of a giant "implement everything" phase or a ceremony-only checkpoint |
+| `references/dependency-ordered-task-ledgers.md` | task order, `[P]` markers, generated artifacts, migrations, or source-of-truth-first sequencing is unclear | derives dependencies from approved design artifacts and source-of-truth flow instead of marking everything parallel or starting with derived files |
+| `references/task-sizing-and-slicing.md` | tasks are too large, too horizontal, too vague, hard to review, or hard to verify in one focused session | splits work into reviewable, proof-bound slices instead of hiding independent surfaces behind one broad task |
+| `references/acceptance-criteria-and-proof-obligations.md` | acceptance criteria, proof commands, manual checks, or `CONCERNS` obligations are vague | states task-specific truths and matching proof commands instead of "looks good", "run tests", or optimistic readiness language |
+| `references/checkpoints-and-reopen-conditions.md` | stop points, implementation-readiness handoff, blockers, reopen targets, or validation/reconciliation triggers need wording | names executable checkpoints and exact reopen targets instead of asking implementation to improvise or create missing workflow artifacts after coding starts |
+| `references/planning-anti-patterns.md` | reviewing a draft plan or ledger for drift, invented decisions, duplicate authority, false parallelism, vague proof, or artifact misuse | challenges smell patterns as triage instead of treating a plausible-looking plan as ready by checklist momentum |
 
 Reference snippets are patterns, not decisions. If an example would require an architecture, API, data, security, reliability, migration, rollout, or ownership choice not already approved in `spec.md + design/`, stop and reopen the right earlier phase instead of copying the snippet.
 

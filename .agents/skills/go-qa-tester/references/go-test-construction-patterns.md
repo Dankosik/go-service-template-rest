@@ -1,19 +1,23 @@
 # Go Test Construction Patterns
 
+## Behavior Change Thesis
+When loaded for ordinary Go test construction, this file makes the model keep scenario intent, fixtures, helpers, and assertions visible instead of likely mistake: helper-heavy tests, table-driven theater, opaque assertion frameworks, or unsafe `t.Parallel()` use.
+
 ## When To Load
-Load this when writing or refactoring ordinary Go tests, helpers, subtests, fixtures, fuzz tests, benchmarks, or examples.
+Load this when writing or refactoring ordinary Go tests, subtests, fixtures, helpers, fuzz seeds, benchmarks, or examples and no narrower API, data, concurrency, or error reference owns the decision.
 
-## Construction Rules
+## Decision Rubric
 - Put tests in `*_test.go`; use same-package tests for unexported behavior and `_test` package tests for black-box exported behavior.
-- Prefer standard `testing` structure unless the repository already standardizes a helper library.
-- Use `t.Run` for named subcases and table-driven tests when shared setup improves clarity.
-- Use `t.Helper()` in helpers that can fail the test.
-- Use `t.Setenv`, `t.TempDir`, and `t.Cleanup` instead of global cleanup comments.
-- Use `t.Parallel()` only when all state, environment, ports, temp files, mocks, and global hooks are isolated.
-- For fuzz tests, call `f.Add` with small seed inputs and then one `f.Fuzz` target.
-- For benchmarks, prefer `b.Loop()` on Go versions that support it and keep setup outside the measured loop.
+- Prefer standard `testing` assertions unless nearby tests already standardize another helper style.
+- Use table-driven tests when case differences stay readable and shared setup reduces noise; otherwise write separate tests.
+- Use `t.Run` to name subcases that can fail independently.
+- Use `t.Helper()` in helpers that can fail the test, and keep helpers thin enough that the behavior remains visible at the call site.
+- Use `t.Setenv`, `t.TempDir`, and `t.Cleanup` for local resource control. Do not hand-roll global cleanup when testing already gives a scoped primitive.
+- Use `t.Parallel()` only when environment, temp files, ports, mocks, package globals, and shared fakes are isolated.
+- For fuzz tests, add small regression seeds with `f.Add` and one `f.Fuzz` target.
+- For benchmarks, keep setup outside the measured loop and use the repo's current Go-version idiom.
 
-## Good Example
+## Imitate
 ```go
 func TestParseLimit(t *testing.T) {
 	testCases := []struct {
@@ -40,19 +44,8 @@ func TestParseLimit(t *testing.T) {
 }
 ```
 
-## Bad Example
-```go
-func TestParseLimit(t *testing.T) {
-	got, _ := ParseLimit("many")
-	if got == 0 {
-		t.Fatal("bad")
-	}
-}
-```
+Copy the shape: case names are behavior statements, assertions include input, and the error category is explicit.
 
-Why it is bad: it ignores the error contract, hides the input in the assertion, and accepts many wrong outcomes.
-
-## Fuzz Example
 ```go
 func FuzzParseLimit(f *testing.F) {
 	for _, seed := range []string{"", "1", "100", "-1", "many"} {
@@ -71,29 +64,37 @@ func FuzzParseLimit(f *testing.F) {
 }
 ```
 
-## Assertion Patterns
-- Include inputs in failure messages when they explain the failure.
-- Use `t.Fatal` or `t.Fatalf` when the rest of the test depends on the result.
-- Use `t.Error` or `t.Errorf` when collecting independent assertion failures is helpful.
-- Avoid comparing whole complex structs when only selected fields are contractually meaningful.
-- Avoid `reflect.DeepEqual` on HTTP responses, errors, timestamps, or structs with unexported/unstable fields unless the exact whole value is the contract.
+Copy the shape: fuzzing asserts an invariant and includes named regression seeds.
 
-## Deterministic Coordination Patterns
-- Use `t.TempDir` for filesystem tests; avoid shared fixture directories for mutable state.
-- Use `t.Setenv` instead of manually saving/restoring environment variables.
-- Use `t.Cleanup` for resource teardown and make cleanup failures visible with `t.Errorf`.
-- For I/O behavior, prefer `testing/iotest` helpers such as `ErrReader`, `OneByteReader`, or `TimeoutReader` when they model the failure honestly.
-- For filesystem abstractions, consider `testing/fstest.MapFS` and `fstest.TestFS` when the code accepts `fs.FS`.
+## Reject
+```go
+func TestParseLimit(t *testing.T) {
+	got, _ := ParseLimit("many")
+	if got == 0 {
+		t.Fatal("bad")
+	}
+}
+```
 
-## Repository-Local Cues
-- `internal/config/config_test.go` uses `t.Setenv`, `t.TempDir`, sentinel errors, and focused configuration fail-path assertions.
-- `internal/infra/http/router_test.go` favors explicit handler assertions over assertion frameworks.
-- `test/postgres_integration_test.go` uses `t.Cleanup` for containers and pools.
+Reject because it ignores the error contract, hides the expected result, and accepts many wrong outcomes.
 
-## Exa Source Links
-- [Go testing package](https://pkg.go.dev/testing)
-- [Go fuzzing documentation](https://go.dev/doc/fuzz/)
-- [testing/iotest](https://pkg.go.dev/testing/iotest)
-- [testing/fstest](https://pkg.go.dev/testing/fstest)
-- [testing/slogtest](https://pkg.go.dev/testing/slogtest)
+```go
+func TestEverything(t *testing.T) {
+	h := newHugeHarness(t)
+	h.RunAll()
+}
+```
 
+Reject because the review cannot see which scenario failed, which behavior was asserted, or whether helper logic mirrors implementation.
+
+## Agent Traps
+- Turning every pair of cases into a table even when a named standalone test would be clearer.
+- Comparing whole complex structs when only selected fields are contractually meaningful.
+- Using `reflect.DeepEqual` on errors, HTTP responses, timestamps, or structs with unstable fields.
+- Calling `t.Parallel()` inside tests that share environment variables, package-level fakes, ports, or mutable fixtures.
+- Letting cleanup errors disappear. Use `t.Cleanup` and report cleanup failures with `t.Errorf` when they matter.
+
+## Validation Shape
+- Focused test name first after construction changes.
+- Package-level command when helpers, fixtures, or table shared setup can affect neighboring tests.
+- Broader repository command only when test helpers are shared outside the package or generated/testdata assets changed.
