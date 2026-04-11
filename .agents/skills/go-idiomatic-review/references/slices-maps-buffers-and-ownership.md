@@ -11,6 +11,7 @@ Load when a Go review touches slice/map returns, `[]byte`, `bytes.Buffer`, `stri
 - Clone on boundary crossing when callers must not mutate internal state or when the callee must not retain caller-owned mutable state.
 - Do not clone when aliasing or ownership transfer is the documented contract; document the transfer instead.
 - Check whether a clone is shallow. `maps.Clone` and `slices.Clone` do not deep-copy nested maps, slices, pointers, or `http.Header` values.
+- For `http.Header`, use `Header.Clone()` when the intended contract is a full header copy; `maps.Clone` only copies the top-level map and still aliases the value slices.
 - Sort map keys only when order is externally observable or correctness-relevant: signatures, hashes, stable serialized output, or golden tests.
 - Use `http.Header` and `url.Values` methods when canonicalization, first/all value semantics, or encoding matters; raw map access is fine only when those semantics are intentionally bypassed.
 - Watch for retained sub-slices of large buffers in long-lived objects. Clone or copy when the goal is to let the large backing array be collected; use a full-slice expression or `slices.Clip` only when the goal is to prevent later appends from reusing spare capacity.

@@ -12,7 +12,7 @@ Load this when the API contract needs Problem Details, validation errors, auth o
 - Keep `409`, `412`, and `428` separate: state conflict, failed supplied precondition, and missing required precondition.
 - Choose one concealment policy for inaccessible resources. Cross-tenant lookups should not drift between `403` and `404` by endpoint.
 - If the contract uses `401`, include the required authentication challenge header; if a challenge would mislead clients, choose `403` or the API's concealment policy instead.
-- For rate-limit or overload problems, define whether the contract uses only `Retry-After`, existing vendor quota headers, or draft `RateLimit` fields; do not label `RateLimit` fields as stable RFC semantics unless the current spec status is rechecked.
+- For rate-limit or overload problems, define whether the contract uses only `Retry-After`, existing vendor quota headers, or the IETF `RateLimit` draft fields. Verify current draft status and field names; recent drafts use `RateLimit` and `RateLimit-Policy`, not the older separate `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` shape.
 - Never hide failure in a `2xx` body, and never leak stack traces, SQL, secrets, hostnames, shard IDs, or cross-tenant identifiers.
 
 ## Imitate

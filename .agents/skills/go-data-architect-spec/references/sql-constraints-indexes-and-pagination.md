@@ -4,10 +4,10 @@
 When loaded for a task where uniqueness, overlap, JSONB, indexes, or list pagination might be left to application code or query convenience, this file makes the model choose database-enforced invariants and access-pattern indexes instead of likely mistake "the app checks it first, JSON stores it flexibly, and offset pagination is good enough."
 
 ## When To Load
-Load this for invariant-bearing SQL constraints, physical index shape, JSONB placement, partitioned uniqueness, or deterministic operational pagination.
+Load this for invariant-bearing SQL constraints, physical index shape, JSONB placement, partitioned uniqueness, temporal-overlap rules, or deterministic operational pagination.
 
 ## Decision Rubric
-- Prefer SQL constraints for row-local and relation-local invariants the database can enforce: `UNIQUE`, composite `UNIQUE`, `NOT NULL`, `CHECK`, foreign keys inside one owner boundary, partial unique indexes, and exclusion constraints.
+- Prefer SQL constraints for row-local and relation-local invariants the database can enforce: `UNIQUE`, composite `UNIQUE`, `NOT NULL`, `CHECK`, foreign keys inside one owner boundary, partial unique indexes, exclusion constraints, and version-gated temporal constraints such as PostgreSQL 18+ `WITHOUT OVERLAPS`.
 - For nullable unique keys, decide whether duplicate nulls are allowed. Use `NOT NULL` or `NULLS NOT DISTINCT` when "missing" should still be unique.
 - Use application checks only as user-friendly preflight; they do not replace the write-time constraint.
 - Keep invariant-bearing, join-critical, or heavily filtered fields relational. Use `jsonb` for bounded adjunct attributes with weak invariants and explicit query limits.
@@ -27,7 +27,7 @@ Copy this because the database guards the one-active invariant while history rem
 ### Time interval overlap rule
 Context: Confirmed reservations must not overlap for the same tenant and resource.
 
-Use an exclusion constraint or an explicit lease/hold model when interval overlap is the invariant. Keep pending, confirmed, expired, and canceled states separate if overlap rules differ.
+Use an exclusion constraint, PostgreSQL 18+ `WITHOUT OVERLAPS` when the target engine supports it, or an explicit lease/hold model when interval overlap is the invariant. Keep pending, confirmed, expired, and canceled states separate if overlap rules differ.
 
 Copy this because cross-row interval rules need a real concurrency story, not a row-local `CHECK`.
 

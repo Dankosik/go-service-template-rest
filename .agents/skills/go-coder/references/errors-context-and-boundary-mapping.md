@@ -11,6 +11,7 @@ Load this when implementation work touches error wrapping, sentinel or typed err
 - Preserve inspectable identity with `%w`, `errors.Is`, and Go-version-appropriate `errors.AsType` or `errors.As` when callers branch on the error.
 - Do not wrap an internal error with `%w` if exposing it would become an API contract.
 - Pass `context.Context` as the first argument through request-scoped work; detach only when the approved design says so.
+- For approved detached work that must retain request values, consider `context.WithoutCancel` plus an explicit new timeout or lifecycle owner; do not use it to silently ignore cancellation.
 - Treat `context.Canceled` and `context.DeadlineExceeded` as control-flow signals, not generic internal failures.
 - Add operation context to returned errors; avoid logging and returning the same error at every layer.
 
@@ -86,6 +87,7 @@ func (s *Service) Sync(_ context.Context, id OrderID) error {
 - Matching exact error text in tests when the contract is identity, type, or status mapping.
 - Wrapping every error with `%w` even when callers must not inspect the internal cause.
 - Storing `context.Context` in long-lived structs instead of passing it through request operations.
+- Swapping request context for `context.Background()` in approved detached work and accidentally dropping trace, tenant, or auth values.
 - Mapping cancellations, deadlines, validation failures, conflicts, and missing resources to one generic internal error.
 
 ## Validation Shape

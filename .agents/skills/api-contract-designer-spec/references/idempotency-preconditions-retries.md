@@ -13,6 +13,7 @@ Load this when a write can be retried, a timeout may hide whether mutation happe
 - Same key plus same normalized payload should return an equivalent prior outcome after the durable boundary.
 - Same key plus different normalized payload should fail as a stable caller-fixable validation problem, not an in-progress conflict. The current Idempotency-Key draft uses `422`; concurrent same-key attempts use `409`.
 - Same key while the first attempt is still in progress needs its own response, often `409 Conflict` with polling or retry guidance.
+- If an endpoint requires `Idempotency-Key` and the client omits it, treat that as a request-validation problem, typically `400` with a problem or documentation link. Do not reuse `428 Precondition Required`; HTTP preconditions are `If-Match`/`If-None-Match`-style validators, not idempotency keys.
 - Define which failures reserve the key. Strict decode errors usually should not; accepted async work usually should.
 - If lost updates matter, expose `ETag` on reads and successful writes, require `If-Match` on risky mutations, return `412` for false supplied preconditions, and return `428` when required preconditions are missing.
 

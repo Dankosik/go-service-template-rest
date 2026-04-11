@@ -9,6 +9,7 @@ Symptom: the diff starts goroutines, uses `context.Context`, `errgroup`, worker 
 - For every goroutine, identify the owner, stop trigger, and join path. If it is intentionally process-lifetime, the code or surrounding contract should say so.
 - Context only helps when every blocking operation in the goroutine observes the derived context.
 - `errgroup.WithContext` is not enough by itself; workers must pass the derived context into downstream calls and select blocking sends/receives against it.
+- The context returned by `errgroup.WithContext` is canceled when the first worker returns a non-nil error or when `Wait` returns; do not use it for post-`Wait` cleanup or follow-up work.
 - Early return from one pipeline stage must unblock upstream senders or drain intentionally.
 - Creating a `CancelFunc` creates a lifecycle obligation; call it on every path unless the parent cancellation is the documented owner.
 - Handler/request code that replaces the caller context with `context.Background()` or `context.TODO()` usually severs cancellation and deadline ownership.
@@ -45,6 +46,7 @@ Reject this shape unless each sibling actually observes the derived context whil
 ## Agent Traps
 - Do not equate "goroutine exits when channel closes" with proof that the channel is always closed.
 - Do not miss sender leaks when reviewing receiver-side early returns.
+- Do not treat an `errgroup`-derived context as a general child context after `Wait`; create a separate cleanup context when cleanup must outlive the group.
 - Do not accept process-lifetime goroutines in request-scoped code without a clear ownership boundary.
 - Do not recommend a context parameter without also routing it into sends, receives, waits, sleeps, retries, and I/O.
 

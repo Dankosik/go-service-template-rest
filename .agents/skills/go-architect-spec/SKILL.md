@@ -78,7 +78,7 @@ Before recommending topology, make these facts explicit:
 - Reject technology-led decisions such as “use Kafka because we have Kafka” or “split a service because traffic is rising” unless the workload and ownership model actually require them.
 
 ### Boundaries And Decomposition
-- Use the four-axis boundary model for every boundary decision: domain capability, data ownership, team ownership, and transaction boundary.
+- Use a four-axis boundary prompt for every boundary decision: domain capability, data ownership, team ownership, and transaction boundary.
 - Require explicit source-of-truth ownership for each critical entity and process.
 - Internal module seams may follow invariant ownership, change cadence, or failure isolation, not only entity names.
 - When modular-monolith seams are the hard part, express each module in terms of `owns truth`, `must not own`, `sync seam`, `async seam`, and `extraction posture` if that removes ambiguity.

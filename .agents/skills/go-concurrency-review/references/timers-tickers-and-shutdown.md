@@ -7,10 +7,10 @@ Symptom: the diff touches `time.After`, `time.Tick`, `time.NewTimer`, `time.NewT
 
 ## Decision Rubric
 - Time is not a synchronization substitute. Ask which signal unblocks the goroutine when shutdown or cancellation happens.
-- Owned tickers need a clear stop story when ticks must stop after the owner exits; on Go 1.23+ do not frame `Stop` as required only for garbage collection.
+- Owned tickers need a clear stop story when ticks must stop after the owner exits; in Go 1.23+ timer mode, do not frame `Stop` as required only for garbage collection.
 - Stopping a ticker does not close `Ticker.C`; a goroutine ranging on or selecting only that channel still needs a separate stop, context, or owner-exit signal.
 - `time.After` in a loop is not automatically a leak on modern Go; focus the finding on timer churn, delayed shutdown, lost reset semantics, or version-sensitive retention when that is the actual merge risk.
-- For channel timers on Go 1.23+, do not require the old stop-and-drain pattern for stale values after `Stop` or `Reset` returns unless `GODEBUG=asynctimerchan=1` is in effect; still require owner coordination when another goroutine may already be acting on a tick.
+- For channel timers, key the stale-tick drain rule to the effective timer mode: Go 1.23+ semantics require a main module with `go 1.23` or later unless `GODEBUG` overrides it. Under `asynctimerchan=1`, the old drain concerns still apply.
 - `time.AfterFunc` and `context.AfterFunc` stop paths do not wait for an already-running callback; require explicit completion coordination when the callback touches shared state or shutdown depends on it. For `time.AfterFunc`, `Reset` can allow overlapping callbacks when the docs say it returns false.
 - Sleep-based tests should usually be replaced with gates, fake clocks, or `testing/synctest` when the project can rely on it.
 
@@ -45,10 +45,11 @@ require.True(t, stopped)
 Reject this as primary proof: scheduler timing does not prove the stop signal was observed or the goroutine exited.
 
 ## Agent Traps
-- Do not flag `time.After` solely from memory of older Go behavior; tie the finding to the repo's Go version, timer mode, or a version-independent issue.
-- Do not forget `Ticker.Stop` when ticks can continue to drive work after the owner exits, but do not claim an unreferenced Go 1.23+ ticker leaks solely because it was not stopped.
+- Do not flag `time.After` solely from memory of older Go behavior; tie the finding to the repo's effective timer mode or a version-independent issue.
+- Do not forget `Ticker.Stop` when ticks can continue to drive work after the owner exits, but do not claim an unreferenced ticker leaks solely because it was not stopped under Go 1.23+ timer mode.
 - Do not expect `Ticker.Stop` to make ticker-channel receivers exit; it only stops future ticks.
 - Do not treat a false return from `time.AfterFunc` or `context.AfterFunc` stop as callback completion.
+- Do not write tests that assume a closed or canceled channel always beats a very short timer in `select`; in Go 1.23+ timer mode both cases can be ready and selection is random.
 - Do not replace every timer with a ticker; one-shot timers, reused timers, and fake clocks may be the smaller correction.
 
 ## Validation Shape

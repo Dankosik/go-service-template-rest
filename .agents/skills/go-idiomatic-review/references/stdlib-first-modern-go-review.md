@@ -4,13 +4,15 @@
 When loaded for helper-reinvention symptoms, this file makes the model check effective Go version and semantic deltas before choosing standard-library replacement or preserving a wrapper instead of likely mistake "stdlib is always better" or outdated loop-variable folklore.
 
 ## When To Load
-Load when a Go review touches helper packages that duplicate builtins or the standard library, compatibility shims, generic slice/map helpers, sorting/comparison helpers, URL/header wrappers, string/byte manipulation, custom error traversal, simple `sync.WaitGroup` goroutine-launch helpers, or loop-variable capture claims.
+Load when a Go review touches helper packages that duplicate builtins or the standard library, compatibility shims, generic slice/map helpers, optional-pointer helpers, sorting/comparison helpers, URL/header wrappers, header clone helpers, string/byte manipulation, custom error traversal, simple `sync.WaitGroup` goroutine-launch helpers, or loop-variable capture claims.
 
 ## Decision Rubric
 - Identify the effective Go version from `go.mod`, build tags, or file constraints before recommending newer builtins or packages.
 - Replace local helpers when they exactly duplicate supported builtins or standard-library behavior and add no compatibility, ownership, normalization, or domain contract.
 - Keep local helpers when they intentionally carry policy: deep copy, nil/empty normalization, canonicalization, redaction, validation, compatibility with older supported versions, or domain naming.
+- On Go 1.26+, consider `new(expr)` for trivial pointer-to-value helpers only when the helper does nothing beyond allocating an initialized copy; keep helpers that carry nil policy, validation, domain naming, or older-Go compatibility.
 - Check shallow/deep semantics before replacing clone helpers with `slices.Clone` or `maps.Clone`.
+- For `http.Header`, prefer `Header.Clone()` over `maps.Clone` or a local clone loop when the local helper only copies header keys and value slices; keep wrappers that filter, redact, normalize, or preserve a documented non-standard shape.
 - Check error-tree semantics before preserving custom error traversal; `errors.Is` and `errors.As` cover standard wrapping and joined errors.
 - On Go 1.25+, consider `sync.WaitGroup.Go` only for simple fire-and-wait tasks where `f` must not panic; keep local helpers or hand off when they carry error return, panic recovery, cancellation, concurrency limits, or lifecycle policy.
 - Check loop-variable capture claims against effective Go version and declaration shape; in Go 1.22+ files or packages, variables declared by the loop get per-iteration instances, but preexisting variables assigned inside the loop can still have the old capture hazard.
@@ -49,7 +51,7 @@ Reference: Go 1.21 builtin availability
 Copy the compatibility caveat: the fix is conditional on supported toolchain.
 
 ```text
-No finding: cloneHeaders intentionally deep-copies []string values inside http.Header and preserves canonical keys; replacing it with maps.Clone would make only a shallow copy.
+No finding: cloneHeaders filters hop-by-hop headers and redacts secrets before copying values; replacing it with http.Header.Clone or maps.Clone would drop policy, while maps.Clone would also make only a shallow copy.
 Reference: http.Header ownership semantics
 ```
 
@@ -79,6 +81,12 @@ Replace every Add/go/Done wrapper with WaitGroup.Go.
 ```
 
 Reject unless the wrapper is only simple fire-and-wait launch and `f` must not panic; `WaitGroup.Go` does not carry error, panic-recovery, cancellation, or concurrency-limit policy.
+
+```text
+Replace every ptr.To(x) helper with new(x).
+```
+
+Reject unless the module is Go 1.26+ and the helper exactly means "allocate an initialized copy"; pointer helpers often carry compatibility, nil policy, or domain naming.
 
 ## Agent Traps
 - Do not recommend a package or builtin that the module cannot use under its declared Go version.

@@ -10,6 +10,7 @@ Load when a task asks whether work belongs on the request path, in a queue, in a
 - Keep hard acceptance invariants inside one local transaction boundary when possible.
 - Use synchronous calls only when the caller needs an immediate answer or command finality and the deadline, retry, idempotency, and fail-closed behavior are explicit.
 - Use events for independent reactions that cannot decide whether the source fact exists.
+- Shape events as domain facts with enough context for consumers; reject table, CRUD, or generic change events that make consumers infer intent from private schema deltas.
 - Use commands or queues for owned work distribution where one owner accepts responsibility.
 - Use orchestration when one owner must track timers, retries, approvals, cancellation, ambiguous outcomes, or operator repair.
 - Use choreography only when independent reactions do not need a central status, cancellation, or repair owner.

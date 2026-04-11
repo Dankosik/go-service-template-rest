@@ -15,6 +15,7 @@ Load when a design depends on an external provider, partner webhook, vendor stat
 - Treat callbacks as evidence only after authenticity, account or tenant context, replay, and recency handling are assigned to the local boundary.
 - Fail closed when provider ambiguity could authorize money movement, entitlement, identity verification, tenant access, or irreversible notification.
 - Reconcile independently of provider push events when missing, duplicate, delayed, or contradictory callbacks are plausible.
+- Keep the adapter in-process unless separate ownership, scale, isolation, or release control justifies the extra service boundary.
 
 ## Imitate
 

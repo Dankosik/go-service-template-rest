@@ -12,8 +12,9 @@ Load this when implementation work adds or changes tests, fuzz tests, benchmarks
 - Use direct tests for one or two clear cases; use tables when cases are genuinely parallel.
 - Make failure messages include the operation, input, got value, and expected value when practical.
 - Control clocks, randomness, goroutine completion, temp files, external I/O, and generated IDs.
+- For Go 1.24+ tests that pass context into background work, prefer `t.Context()` when the work should stop with the test; use a derived context when the assertion needs an earlier cancellation point.
 - For Go 1.25+ self-contained concurrent/time tests, consider `testing/synctest`; avoid it when correctness depends on goroutines outside the synctest bubble, real network, external process, or non-durably-blocking I/O/lock behavior.
-- Use `t.TempDir` for ordinary scratch files; reserve Go 1.26+ `t.ArtifactDir` for outputs a human or CI needs to inspect, and remember they persist only when `-artifacts` is set.
+- Use `t.TempDir` for ordinary scratch files; reserve Go 1.26+ `t.ArtifactDir` for outputs a human or CI needs to inspect, and remember they persist beyond the test run only when `-artifacts` is set.
 - Match verification commands to the claim; do not claim repository-wide readiness from a stale or too-narrow command.
 
 ## Imitate

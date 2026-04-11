@@ -9,6 +9,7 @@ Symptom: the diff reads or publishes shared fields, maps, slices, pointers, inte
 - Name the exact visibility edge before accepting the code: mutex unlock/lock, matched channel send/receive, channel close observed by receive, `sync.Once`, documented `sync.Map` behavior, or atomic operations that protect the whole published value.
 - Treat an atomic flag that gates non-atomic fields as suspicious. Observing the atomic store can publish prior writes, but it does not protect later mutation or make mutable maps, slices, or multi-field invariants atomic.
 - Accept atomic snapshot publication only when the stored value is fully built before publication and is immutable afterward or separately synchronized.
+- For `sync.Map`, verify the exact operation semantics being relied on; `Range` is not a consistent snapshot and can observe mappings from different moments during the call.
 - Reject `single writer` arguments when aliases escape to readers without a visibility rule.
 - If the invariant spans more than one field, prefer one mutex, one owner goroutine, or one immutable snapshot over per-field atomics.
 
@@ -43,6 +44,7 @@ Reject this shape: goroutine execution order is not synchronization. The review 
 
 ## Agent Traps
 - Do not say "atomic makes it safe" unless the observed atomic operation protects the whole publication being read and later mutation is impossible or separately synchronized.
+- Do not treat `sync.Map` as a drop-in replacement for a map plus lock when callers need a multi-key or snapshot invariant.
 - Do not treat goroutine exit, elapsed time, or "initialized during startup" as a visibility edge.
 - Do not bury a real race behind "consider a mutex"; state the broken invariant and failure mode.
 - Do not require a mutex when immutable snapshot ownership transfer is the smaller correction.

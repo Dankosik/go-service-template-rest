@@ -20,11 +20,11 @@ Load when the routing design touches logs, metrics, traces, span names, `http.ro
 func observe(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-		pattern := "<unmatched>"
+		label := "<unmatched>" // repo metric/log label; do not put fallback labels in http.route
 		if rctx := chi.RouteContext(r.Context()); rctx != nil && rctx.RoutePattern() != "" {
-			pattern = rctx.RoutePattern()
+			label = rctx.RoutePattern()
 		}
-		record(pattern)
+		recordRouteLabel(label)
 	})
 }
 ```

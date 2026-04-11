@@ -10,7 +10,7 @@ Use this when the simplification risk is the error contract itself. If the risk 
 ## Decision Rubric
 - Keep distinct failure classes distinct when callers, operators, retries, transports, or tests must reason about them differently.
 - Flag helpers that collapse validation, conflict, retryable, not-found, timeout, cancellation, and internal errors into one generic bucket.
-- Preserve `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` behavior when inspectability is part of the contract and the module supports it.
+- Preserve `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` behavior when inspectability is part of the contract and the module supports it. Prefer `AsType` for concrete error-type checks in Go 1.26+ modules, but keep `errors.As` when the target is a non-error interface because `AsType` is constrained to error types.
 - Do not demand `%w` for every wrapped error; wrapping can expose internals when callers should not inspect them.
 - Keep which error wins explicit when cleanup, audit, rollback, notification, or logging can also fail.
 
@@ -84,6 +84,7 @@ func writeUserError(w http.ResponseWriter, err error) {
 ## Agent Traps
 - Do not treat repeated `if err != nil { return ... }` as debt unless there is stable shared policy or diagnosis harm.
 - Do not require wrapping when the original boundary intentionally hid internals.
+- Do not approve an `errors.As` to `errors.AsType` cleanup unless the target type itself implements `error`.
 - Do not let a "logging cleanup" reorder logging before the context needed for diagnosis exists.
 - Do not make simplification review the final authority on subtle Go error trees; hand off deep wrapping or nil behavior questions to `go-idiomatic-review`.
 

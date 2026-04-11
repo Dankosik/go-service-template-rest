@@ -46,7 +46,7 @@ Keep the main output data-architecture-first. Route endpoint contracts, cache tu
 | --- | --- | --- |
 | Audit log, outbox, CDC, event stream, materialized view, dashboard table, export, search index, projection, or uncertainty about which surface is authoritative | [source-of-truth-and-derived-surfaces.md](references/source-of-truth-and-derived-surfaces.md) | Choose one invariant-bearing write authority and classify other surfaces as evidence, integration, or derived views instead of letting a stream, dashboard, or audit table become accidental truth. |
 | Tenant isolation, public IDs, partner references, idempotency keys, local business dates, event/effective/processed time, money, balances, credits, quotas, or user-visible amounts | [tenant-identity-time-and-money-modeling.md](references/tenant-identity-time-and-money-modeling.md) | Scope identity, tenancy, time, and money types deliberately instead of using global uniqueness, reused IDs, overloaded timestamps, or floating-point amounts. |
-| Uniqueness, foreign keys, `CHECK` constraints, partial indexes, exclusion constraints, composite index order, JSONB placement, partitioned uniqueness, or operational-list pagination | [sql-constraints-indexes-and-pagination.md](references/sql-constraints-indexes-and-pagination.md) | Encode enforceable invariants and access-pattern indexes in SQL instead of application-only checks, invariant-bearing JSONB, offset pagination, or broad untethered indexes. |
+| Uniqueness, foreign keys, `CHECK` constraints, partial indexes, exclusion or temporal-overlap constraints, composite index order, JSONB placement, partitioned uniqueness, or operational-list pagination | [sql-constraints-indexes-and-pagination.md](references/sql-constraints-indexes-and-pagination.md) | Encode enforceable invariants and access-pattern indexes in SQL instead of application-only checks, invariant-bearing JSONB, offset pagination, or broad untethered indexes. |
 | Transaction boundary, isolation level, optimistic concurrency, row or advisory locks, work claiming, duplicate callbacks, retries, idempotency records, holds, leases, scarce capacity, or outbox/inbox linkage | [transactions-concurrency-and-idempotency.md](references/transactions-concurrency-and-idempotency.md) | Select the smallest transaction, constraint, lock, lease, and idempotency mechanism that preserves the invariant instead of blanket isolation, cache counters, or unscoped locks. |
 | New datastore engine, JSONB-as-flexibility, event sourcing, document or key-value stores, Redis/search as truth, time-series or columnar storage, or datastore choice driven by scale or auditability claims | [datastore-fit-and-event-sourcing.md](references/datastore-fit-and-event-sourcing.md) | Require an access-pattern and recovery fit test before changing truth storage instead of adopting a fashionable engine, event sourcing, or flexible JSON model by default. |
 | Live schema change, added or tightened constraint, column rename or split, type/source-of-truth change, live index creation, partitioned index, or backfill | [schema-evolution-and-backfills.md](references/schema-evolution-and-backfills.md) | Plan expand, migrate or backfill, verify, and contract with rollback class instead of one-shot DDL, giant transactions, or fake reversibility. |
@@ -117,7 +117,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
   - `NOT NULL` by default for required fields
   - `CHECK` constraints where row-local correctness materially matters
   - partial `UNIQUE` indexes when uniqueness applies only to active or current rows
-  - exclusion constraints when interval or overlap rules are central
+  - exclusion or version-gated temporal constraints when interval or overlap rules are central
 - Keep referential integrity inside one service boundary.
 - Build index policy from actual or explicitly expected access patterns:
   - align composite index order with filter then sort usage
@@ -134,7 +134,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Reject cross-service global ACID assumptions.
 - Choose concurrency control by invariant class:
   - row uniqueness -> `UNIQUE` or partial `UNIQUE`
-  - interval, overlap, or scarce allocation -> exclusion constraint, lease table, or explicit lock ownership
+  - interval, overlap, or scarce allocation -> exclusion constraint, supported temporal constraint, lease table, or explicit lock ownership
   - lost updates on mutable rows -> version checks or compare-and-swap semantics
   - work claiming or queue consumption -> lease semantics or `FOR UPDATE SKIP LOCKED`
   - anomalies that constraints cannot encode locally -> selective stronger isolation or explicit coordination model
@@ -178,7 +178,7 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
   - non-concurrent index builds can take disruptive locks
   - `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block and failure can leave invalid indexes
   - PostgreSQL partitioned-table indexes need special handling because concurrent builds are not supported on the partitioned parent
-  - foreign-key and check validation can run long; PostgreSQL 17 `SET NOT NULL` scans unless a valid `CHECK` proves non-null
+  - foreign-key, check, and not-null validation can run long; not-null tightening is version-sensitive, so use PostgreSQL 17-safe `CHECK` proof or scan budgeting unless the target engine explicitly supports newer `NOT VALID` not-null constraints
   - some defaults, type changes, or table rewrites can be more expensive than they look
   - long backfill transactions create bloat, replica lag, and rollback pain
 - Prefer additive columns, concurrent index builds, phased constraint validation, and compatibility-safe reads before contract when the table is already live.

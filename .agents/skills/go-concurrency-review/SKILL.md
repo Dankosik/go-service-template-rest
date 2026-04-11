@@ -78,6 +78,7 @@ When you load a reference, translate the example into the current diff's concret
 - Require the derived context to reach all blocking downstream calls and sibling workers.
 - Flag request-path replacement of request context with `context.Background()` or `context.TODO()`.
 - `errgroup.WithContext` only helps if workers actually observe the derived context; otherwise leaked work remains.
+- Do not use an `errgroup`-derived context for post-`Wait` cleanup; it is canceled when the first worker returns an error or when `Wait` returns.
 - Distinguish fail-fast `errgroup` semantics from collect-all semantics; returning the first error may still require explicit result draining or cleanup.
 - Spawning new work after group-context cancellation is usually a lifecycle or rollback defect.
 
@@ -100,14 +101,14 @@ When you load a reference, translate the example into the current diff's concret
 - Use `sync/atomic` for single-word state, counters, or immutable snapshot publication, not for multi-field invariants.
 - Flag CAS or spin loops with no backoff, no cancellation, or no progress guarantee.
 - `atomic.Value` and atomic pointer publication require type consistency and immutable-or-separately-synchronized pointed-to data.
-- On portability-sensitive code, be careful with 64-bit atomic alignment assumptions on 32-bit targets.
+- On portability-sensitive 32-bit targets, prefer typed 64-bit atomics; pointer-based `sync/atomic` 64-bit operations still put alignment responsibility on the caller.
 - If the reviewer cannot explain the invariant in one sentence, the code is probably not safely lock-free.
 
 ### Timers, Tickers, And Time-Based Coordination
-- `time.After` in hot or long-lived loops creates timer churn and often hides cancellation or reset semantics; account for Go version differences before calling it a timer leak.
-- Owned tickers that can keep driving work after the owner exits need `Stop` on exit paths; do not frame Go 1.23+ unreferenced tickers as GC leaks.
+- `time.After` in hot or long-lived loops creates timer churn and often hides cancellation or reset semantics; account for the effective timer mode before calling it a timer leak.
+- Owned tickers that can keep driving work after the owner exits need `Stop` on exit paths; do not frame unreferenced tickers as GC leaks when the effective timer mode is Go 1.23+.
 - `Ticker.Stop` does not close `Ticker.C`; loops waiting only on the ticker channel still need a separate stop, context, or owner-exit signal.
-- `Timer.Stop` or `Reset` flows need ownership and completion coordination; on Go 1.23+ channel timers do not need the old stale-tick drain dance unless `GODEBUG=asynctimerchan=1` is in effect, while `time.AfterFunc`, `context.AfterFunc`, and concurrent receivers still need an explicit story.
+- `Timer.Stop` or `Reset` flows need ownership and completion coordination; in Go 1.23+ timer mode, channel timers do not need the old stale-tick drain dance unless `GODEBUG=asynctimerchan=1` is in effect, while `time.AfterFunc`, `context.AfterFunc`, and concurrent receivers still need an explicit story.
 - Sleep-based polling is not an acceptable substitute for a real signal or bounded retry strategy.
 
 ### Bounded Concurrency And Backpressure

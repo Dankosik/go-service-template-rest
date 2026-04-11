@@ -26,13 +26,13 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 - Findings come first and must be ordered by merge risk, not by section order or taste.
 - Green tests do not prove a cleanup preserved local reasoning safety.
 - Always check touched helper or policy changes for source-of-truth drift: flag stable same-package policy still scattered across files and bogus extraction into vague helper buckets only when there is concrete future-change risk.
-- Prefer official Go docs, Go Code Review Comments, Effective Go, Go module/package organization docs, and repository-local review patterns over external clean-code advice. Treat generic clean-code material as calibration only.
+- Prefer official Go docs, Go Code Review Comments, Go module/package organization docs, and repository-local review patterns over external clean-code advice. Treat Effective Go as enduring core-language idiom guidance, not sole authority for modules, generics, or newer standard-library behavior; treat generic clean-code material as calibration only.
 
 ## Scope
 - review control flow, state shape, and predicate clarity
 - review abstraction cost, helper economics, and call-site burden
 - review false simplification in error paths, ownership seams, and thin policy wrappers
-- review whether stable same-package policy is scattered across files when one seam-named helper file should own it
+- review whether stable same-package policy is scattered across files when one seam-named helper or local owner should own it
 - review whether a new helper actually reduces reasoning or just hides policy in a `util/common/shared` bucket
 - review naming and test readability when they materially affect safe future changes
 - review whether touched validation is enough to protect subtle precedence or branch behavior
@@ -78,7 +78,7 @@ Do not:
 - Control flow: prefer guard clauses and straight-line happy paths only when side-effect ordering, cleanup, and which error wins stay explicit.
 - Predicate clarity: flag compound negatives, boolean clusters, and hidden mode decoding when the decision no longer reads at the call site.
 - API and call-site burden: flag same-typed positional parameters, raw strings with hidden meaning, `map[string]any` option blobs, and exported-surface changes that need design escalation.
-- Error paths: preserve distinct failure classes, `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` inspectability when the module supports it, status mapping, context cancellation, and cleanup/audit precedence.
+- Error paths: preserve distinct failure classes, `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` inspectability when the module supports it, while keeping `errors.As` where a non-error interface target is intentional; preserve status mapping, context cancellation, and cleanup/audit precedence.
 - Naming and tests: suggest naming or test simplification only when it lowers future reasoning and diagnosis load.
 
 ### Go-Semantic Stop-Signs

@@ -13,6 +13,7 @@ Load this when a contract change affects existing clients, status codes, error s
 - Tightening validation, making optional fields required, changing defaults, changing null-vs-omitted behavior, or changing timestamp precision can be breaking.
 - Adding pagination to an unpaginated collection can be breaking because old clients may silently miss data.
 - Deprecation means "discourage new dependence and plan migration"; Sunset means "may become unavailable." Use both only when both meanings are true.
+- `Deprecation` uses an RFC 9745 Structured Field Date such as `@1688169599`; `Sunset` uses an RFC 8594 HTTP-date. Do not normalize them to the same timestamp syntax.
 - When old and new endpoints coexist, define which is authoritative for validation, state transitions, idempotency key scope, `ETag` space, error mapping, and consistency.
 
 ## Imitate
