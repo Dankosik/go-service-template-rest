@@ -160,11 +160,11 @@ func validatePostgres(cfg PostgresConfig) error {
 }
 
 func validateRedis(cfg RedisConfig) error {
-	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	mode := cfg.ModeValue()
 	if mode == "" {
 		return fmt.Errorf("%w: redis.mode cannot be empty", ErrValidate)
 	}
-	if mode != "cache" && mode != "store" {
+	if mode != RedisModeCache && mode != RedisModeStore {
 		return fmt.Errorf("%w: redis.mode must be one of [cache,store]", ErrValidate)
 	}
 
@@ -177,7 +177,7 @@ func validateRedis(cfg RedisConfig) error {
 		}
 	}
 
-	if mode == "store" {
+	if cfg.StoreMode() {
 		// ARCH-008: v1 only supports guard/reject behavior for store mode.
 		if !cfg.AllowStoreMode {
 			return fmt.Errorf("%w: redis.mode=store is blocked unless redis.allow_store_mode=true", ErrValidate)
@@ -274,8 +274,7 @@ func validateReadinessProbeBudgets(cfg Config) error {
 		})
 	}
 
-	redisMode := strings.ToLower(strings.TrimSpace(cfg.Redis.Mode))
-	if cfg.Redis.Enabled && (cfg.FeatureFlags.RedisReadinessProbe || redisMode == "store") {
+	if cfg.RedisReadinessProbeRequired() {
 		budgets = append(budgets, readinessProbeBudget{
 			name:   "redis.dial_timeout",
 			budget: cfg.Redis.DialTimeout,

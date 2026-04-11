@@ -63,18 +63,6 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 		}
 	})
 
-	t.Run("redisStartupMode", func(t *testing.T) {
-		if got := redisStartupMode(" STORE "); got != "store" {
-			t.Fatalf("redisStartupMode(STORE) = %q, want store", got)
-		}
-		if got := redisStartupMode("cache"); got != "cache" {
-			t.Fatalf("redisStartupMode(cache) = %q, want cache", got)
-		}
-		if got := redisStartupMode("unexpected"); got != "cache" {
-			t.Fatalf("redisStartupMode(unexpected) = %q, want cache", got)
-		}
-	})
-
 	t.Run("shouldRetryStartupProbe", func(t *testing.T) {
 		if shouldRetryStartupProbe(nil, 3, 3) {
 			t.Fatal("shouldRetryStartupProbe() = true at max attempts, want false")

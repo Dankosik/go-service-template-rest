@@ -109,14 +109,6 @@ func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duratio
 	return nil
 }
 
-func redisStartupMode(rawMode string) string {
-	mode := strings.ToLower(strings.TrimSpace(rawMode))
-	if mode == startupDependencyModeStore {
-		return startupDependencyModeStore
-	}
-	return startupDependencyModeCache
-}
-
 func probeRedisWithContext(ctx context.Context, cfg config.RedisConfig) error {
 	timeout := cfg.DialTimeout
 	if timeout <= 0 {

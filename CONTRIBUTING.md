@@ -72,9 +72,13 @@ make guardrails-check
 
 - Go formatting is mandatory (`goimports` via `make fmt`/`make fmt-check`).
 - Prefer explicit, readable Go code over framework-heavy abstractions.
+- Before adding production feature code, use the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code). The local boundary bullets below are only a summary, not the full placement rule set.
 - Keep module boundaries intact:
-  - business logic: `internal/app`
-  - transport/runtime wiring: `internal/infra/http`
+  - business logic and consumer-owned ports: `internal/app/<feature>`
+  - HTTP mapping and generated-route policy: `internal/infra/http`
+  - data adapters and SQLC mapping: `internal/infra/postgres`
+  - config snapshot policy: `internal/config`
+  - broad integration scenarios: `test/`
 - Do not merge generated drift:
   - run `make openapi-generate`
   - verify with `make openapi-drift-check`

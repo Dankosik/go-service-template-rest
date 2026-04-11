@@ -18,6 +18,16 @@ Placement rules:
 - Use `package integration_test` by default so tests exercise exported package boundaries. Use a same-package integration test only when the test must prove unexported integration behavior.
 - Every integration test file must start with `//go:build integration`.
 
+Feature-author placement:
+
+| Surface | Prefer tests |
+| --- | --- |
+| Handler mapping, OpenAPI contract policy, Problem responses, generated-route ownership, and route labels | Beside `internal/infra/http`. |
+| App use-case behavior and app-owned ports | Beside `internal/app/<feature>`. |
+| Repository mapping and SQLC adapter behavior | Beside `internal/infra/postgres`; use `test/` only for container-backed behavior. |
+| Telemetry instruments and lifecycle/bootstrap behavior | Beside `internal/infra/telemetry` or `cmd/service/internal/bootstrap`, matching the owner. |
+| Generated drift for OpenAPI, SQLC, mocks, and stringer | Use the owning make targets instead of integration tests. |
+
 Docker behavior:
 - Local `make test-integration` skips when Docker is unavailable.
 - `make docker-test-integration` runs the same tests through the Docker tooling image and passes the Docker socket when available.

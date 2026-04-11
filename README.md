@@ -293,6 +293,8 @@ make check
 make run
 ```
 
+Before adding production feature code, start with the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code). It gives the short path for app-only behavior, strict-server endpoints, Postgres-backed features, workers, bootstrap wiring, and test placement.
+
 ### Create Your Own Repository From This Template
 
 Recommended flow:
@@ -380,7 +382,8 @@ Typical next steps:
 2. Read [AGENTS.md](AGENTS.md). Claude-facing compatibility is mirrored in [CLAUDE.md](CLAUDE.md).
 3. For non-trivial or agent-backed work, open [docs/spec-first-workflow.md](docs/spec-first-workflow.md) before workflow planning or subagent fan-out.
 4. If the task reaches technical design, load [docs/repo-architecture.md](docs/repo-architecture.md) before writing task-local `design/`.
-5. Start with an artifact-driven, phase-bounded prompt, not with direct code generation.
+5. For feature code, use the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code) before choosing packages or tests.
+6. Start with an artifact-driven, phase-bounded prompt, not with direct code generation.
 
 Example kickoff prompt:
 
@@ -441,8 +444,11 @@ Local entry points:
 - `make openapi-check` - OpenAPI generation, drift, runtime contract, lint, and schema validation checks
 - `BASE_OPENAPI=<base> make openapi-breaking` - OpenAPI breaking-change compatibility check
 - `make sqlc-check` - generated SQL artifact drift checks
+- `make migration-validate` / `make docker-migration-validate` - migration rehearsal for changed migrations
 - `make test-integration` - integration tests
 - `make gh-protect BRANCH=main` - branch protection setup helper
+
+Migration rehearsal targets may skip when no `MIGRATION_DSN` is provided and Docker is unavailable; skip output is not migration proof.
 
 Repository and CI guardrails include:
 

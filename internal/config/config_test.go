@@ -404,6 +404,62 @@ func TestRedisStoreGuardAllowsConfiguredModeForV1GuardPath(t *testing.T) {
 	}
 }
 
+func TestRedisModePolicyHelpers(t *testing.T) {
+	t.Parallel()
+
+	if got := (RedisConfig{Mode: " STORE "}).ModeValue(); got != RedisModeStore {
+		t.Fatalf("ModeValue(STORE) = %q, want %q", got, RedisModeStore)
+	}
+	if !(RedisConfig{Mode: "store"}).StoreMode() {
+		t.Fatal("StoreMode(store) = false, want true")
+	}
+	if got := (RedisConfig{Mode: "unexpected"}).ModeValue(); got != "unexpected" {
+		t.Fatalf("ModeValue(unexpected) = %q, want unexpected", got)
+	}
+
+	testCases := []struct {
+		name string
+		cfg  Config
+		want bool
+	}{
+		{
+			name: "disabled store mode",
+			cfg: Config{
+				Redis: RedisConfig{Mode: RedisModeStore},
+			},
+		},
+		{
+			name: "enabled cache without flag",
+			cfg: Config{
+				Redis: RedisConfig{Enabled: true, Mode: RedisModeCache},
+			},
+		},
+		{
+			name: "enabled cache with flag",
+			cfg: Config{
+				Redis:        RedisConfig{Enabled: true, Mode: RedisModeCache},
+				FeatureFlags: FeatureFlagsConfig{RedisReadinessProbe: true},
+			},
+			want: true,
+		},
+		{
+			name: "enabled store mode",
+			cfg: Config{
+				Redis: RedisConfig{Enabled: true, Mode: RedisModeStore},
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.RedisReadinessProbeRequired(); got != tc.want {
+				t.Fatalf("RedisReadinessProbeRequired() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNonLocalRejectsSymlinkConfig(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation can require elevated privileges on Windows")

@@ -203,13 +203,13 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		return nil, nil
 	}
 
-	redisMode := redisStartupMode(runtime.cfg.Redis.Mode)
+	redisMode := runtime.cfg.Redis.ModeValue()
 	redisCriticality := startupDependencyModeOptionalFailOpen
-	if redisMode == startupDependencyModeStore {
+	if redisMode == config.RedisModeStore {
 		redisCriticality = startupDependencyModeCriticalFailClosed
 	}
 	runtime.metrics.SetStartupDependencyStatus(labels.dependency, redisCriticality, false)
-	if redisMode == startupDependencyModeCache {
+	if redisMode == config.RedisModeCache {
 		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeFeatureOff, false)
 	}
 
@@ -244,7 +244,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		budget:       redisProbeBudget,
 		minRemaining: startupFailFastThreshold,
 		probe: func(probeCtx context.Context) error {
-			if redisMode == startupDependencyModeStore {
+			if redisMode == config.RedisModeStore {
 				return probeRedisWithRetry(probeCtx, runtime.cfg.Redis)
 			}
 			return probeRedisWithContext(probeCtx, runtime.cfg.Redis)
@@ -263,7 +263,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			)
 			return nil, dependencyInitAbortFailure(labels.dependency, probeResult)
 		}
-		if redisMode == startupDependencyModeStore {
+		if redisMode == config.RedisModeStore {
 			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
 			recordDependencyProbeRejection(
 				bootstrapCtx,
@@ -293,10 +293,10 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	}
 
 	runtime.metrics.SetStartupDependencyStatus(labels.dependency, redisCriticality, true)
-	if redisMode == startupDependencyModeCache {
+	if redisMode == config.RedisModeCache {
 		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeFeatureOff, false)
 	}
-	if runtime.cfg.FeatureFlags.RedisReadinessProbe || redisMode == startupDependencyModeStore {
+	if runtime.cfg.RedisReadinessProbeRequired() {
 		return startupNamedProbe{
 			name: labels.dependency,
 			check: func(ctx context.Context) error {

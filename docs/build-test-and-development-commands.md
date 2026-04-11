@@ -503,6 +503,8 @@ Bootstrap shortcuts:
 
 ### Feature implementation (native)
 
+Choose the package and test location from [Project Structure & Module Organization](./project-structure-and-module-organization.md#4-where-to-put-new-code) before running this checklist. Green commands prove the surfaces they execute; they do not by themselves prove architecture, ownership, or rollout readiness.
+
 1. `make fmt`
 2. `make test`
 3. `make vet`
@@ -515,6 +517,8 @@ Bootstrap shortcuts:
 10. If stringer directives or generated enum strings changed: `make stringer-drift-check`
 
 ### Feature implementation (zero-setup)
+
+Choose the package and test location from [Project Structure & Module Organization](./project-structure-and-module-organization.md#4-where-to-put-new-code) before running this checklist. A green Docker command is still scoped proof, not a substitute for placement and design review when the change is architectural.
 
 1. `make docker-fmt-check`
 2. `make docker-test`

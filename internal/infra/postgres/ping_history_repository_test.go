@@ -265,6 +265,58 @@ func TestPingHistoryRepositoryListRecentErrors(t *testing.T) {
 	}
 }
 
+func TestPingHistoryRepositoryListRecentRejectsOverSampleLimit(t *testing.T) {
+	t.Parallel()
+
+	var listCalled bool
+	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
+		create: func(context.Context, string) (sqlcgen.PingHistory, error) { return sqlcgen.PingHistory{}, nil },
+		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
+			listCalled = true
+			return nil, nil
+		},
+	})
+
+	_, err := repo.ListRecent(context.Background(), pingHistorySampleMaxListLimit+1)
+	if err == nil {
+		t.Fatal("ListRecent(over sample max) error = nil, want non-nil")
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("ListRecent(over sample max) error = %v, want ErrPingHistoryRepository", err)
+	}
+	if !strings.Contains(err.Error(), "limit must be <=") {
+		t.Fatalf("ListRecent(over sample max) error = %q, want limit max detail", err.Error())
+	}
+	if listCalled {
+		t.Fatal("ListRecent(over sample max) called query, want rejection before SQL")
+	}
+}
+
+func TestPingHistoryRepositoryCreateAndListRecentInTxRejectsOverSampleLimit(t *testing.T) {
+	t.Parallel()
+
+	var beginCalled bool
+	repo := &PingHistoryRepository{
+		db: fakePingHistoryDB{
+			beginTx: func(context.Context, pgx.TxOptions) (pgx.Tx, error) {
+				beginCalled = true
+				return nil, errors.New("unexpected begin")
+			},
+		},
+	}
+
+	_, _, err := repo.createAndListRecentInTx(context.Background(), "payload", pingHistorySampleMaxListLimit+1)
+	if err == nil {
+		t.Fatal("createAndListRecentInTx(over sample max) error = nil, want non-nil")
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("createAndListRecentInTx(over sample max) error = %v, want ErrPingHistoryRepository", err)
+	}
+	if beginCalled {
+		t.Fatal("createAndListRecentInTx(over sample max) began transaction, want rejection before SQL")
+	}
+}
+
 func TestPingHistoryRepositoryCreateAndListRecentInTxBeginError(t *testing.T) {
 	t.Parallel()
 

@@ -260,7 +260,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 	}
 }
 
-func TestOpenAPIOperationsDeclareSecurityDecisions(t *testing.T) {
+func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) {
 	swagger := mustOpenAPISwagger(t)
 
 	for path, item := range swagger.Paths.Map() {
@@ -370,9 +370,6 @@ func operationHasProblemResponse(swagger *openapi3.T, operation *openapi3.Operat
 	mediaType := response.Content.Get("application/problem+json")
 	if mediaType == nil || mediaType.Schema == nil {
 		return false
-	}
-	if mediaType.Schema.Ref == "" {
-		return mediaType.Schema.Value != nil
 	}
 	return mediaType.Schema.Ref == "#/components/schemas/Problem"
 }

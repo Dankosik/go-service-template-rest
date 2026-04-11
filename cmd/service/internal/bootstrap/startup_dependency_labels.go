@@ -38,8 +38,6 @@ const (
 	startupDependencyModeOptionalFailOpen        = "optional_fail_open"
 	startupDependencyModeFeatureOff              = "feature_off"
 	startupDependencyModeDegradedReadOnlyOrStale = "degraded_read_only_or_stale"
-	startupDependencyModeStore                   = "store"
-	startupDependencyModeCache                   = "cache"
 )
 
 const (

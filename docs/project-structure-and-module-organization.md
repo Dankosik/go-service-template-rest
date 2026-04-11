@@ -171,15 +171,22 @@ Use these paths as starting points before choosing a narrower recipe below:
 
 | Feature shape | Put the code here | Prove it with |
 | --- | --- | --- |
+| App-only behavior | Put use-case rules, feature-local request/result types, and consumer-owned ports in `internal/app/<feature>` without adding transport or adapter packages. | App package tests beside `internal/app/<feature>`, plus the caller package tests if an existing adapter starts using it. |
 | Simple read-only endpoint | Add use-case behavior in `internal/app/<feature>`, update `api/openapi/service.yaml`, regenerate `internal/api`, implement `strictHandlers.<Operation>` in `internal/infra/http`, and keep manual `/api/...` routes out of the root router. | Contract and handler tests near `internal/infra/http`, app tests near `internal/app/<feature>`, and `make openapi-check`. |
 | Postgres-backed endpoint | Keep app behavior and app-owned ports in `internal/app/<feature>`, evolve `env/migrations`, add sqlc queries under `internal/infra/postgres/queries`, regenerate `sqlcgen`, map rows in a hand-written Postgres repository, then inject the concrete adapter in bootstrap. | Repository tests under `internal/infra/postgres`, integration tests under `test/` when container-backed behavior matters, `make sqlc-check`, and migration rehearsal. |
 | Background job or worker | Keep business behavior in `internal/app/<feature>`, put queue/scheduler/database/external-system mechanics in `internal/infra/<integration>`, and create a `cmd/<binary>` composition root when lifecycle or scaling differs from the HTTP service. | App tests near the feature, adapter tests near the integration, bootstrap/lifecycle tests for the new binary, and shutdown/cancellation proof for worker loops. |
+
+Existing examples to inspect before adding new surfaces:
+- `internal/app/ping` for small app-owned behavior.
+- `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
+- `internal/infra/postgres/ping_history_repository.go` for the temporary SQLC sample shape to replace, not production business ownership.
+- `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
 
 Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
 
 New HTTP endpoint:
 1. Add or update contract in `api/openapi/service.yaml`.
-2. Record the endpoint security decision: public by design, protected by real auth, or blocked pending security design. For protected endpoints, define OpenAPI `security`, 401/403 Problem responses, identity middleware, tenant/object authorization rules, and negative tests.
+2. Record the endpoint security decision: public by design, protected by real auth, or blocked pending security design. For protected endpoints, define OpenAPI `security`, 401/403 Problem responses using the canonical `Problem` schema, scoped generated/strict middleware or an explicitly designed equivalent, identity middleware, tenant/object authorization rules, unauthenticated-call tests, and public-route non-regression tests.
 3. Generate or refresh API artifacts in `internal/api`.
 4. Add use-case logic in `internal/app/<feature>`.
 5. Add handler mapping in `internal/infra/http`; do not bypass generated routing with a manual `/api/...` chi route.
@@ -188,14 +195,15 @@ New HTTP endpoint:
 8. Validate with `make openapi-check`, plus targeted handler/app tests for the changed behavior.
 
 New Postgres persistence:
-1. Add a deterministic migration under `env/migrations`.
-2. Add SQLC query sources under `internal/infra/postgres/queries/*.sql`.
-3. Regenerate `internal/infra/postgres/sqlcgen` with `make sqlc-generate`; do not hand-edit generated files.
-4. Add a hand-written repository under `internal/infra/postgres` that maps generated rows/types into app-facing records.
-5. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter; use `internal/domain` only for a genuinely shared stable contract.
-6. Wire the concrete repository in `cmd/service/internal/bootstrap`.
-7. Clamp bounded list limits before values reach SQL `LIMIT`; the API/app contract or repository must define the upper bound instead of trusting caller input.
-8. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
+1. Replace the template `ping_history` sample with real feature-owned schema and queries instead of wiring the sample into app behavior.
+2. Add a deterministic migration under `env/migrations`.
+3. Add SQLC query sources under `internal/infra/postgres/queries/*.sql`.
+4. Regenerate `internal/infra/postgres/sqlcgen` with `make sqlc-generate`; do not hand-edit generated files.
+5. Add a hand-written repository under `internal/infra/postgres` that maps generated rows/types into app-facing records.
+6. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter; use `internal/domain` only for a genuinely shared stable contract.
+7. Wire the concrete repository in `cmd/service/internal/bootstrap`.
+8. Clamp bounded list limits before values reach SQL `LIMIT`; the API/app contract or repository must define the upper bound instead of trusting caller input.
+9. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
 
 Transaction recipe:
 1. Start the transaction with the caller context.
@@ -261,6 +269,8 @@ Test placement matrix:
 | Postgres pool and hand-written repository mapping | `internal/infra/postgres`. |
 | Migration-backed read/write behavior and container-backed database scenarios | `test/` with the `integration` build tag. |
 | Broad cross-package or end-to-end scenarios | `test/` or a focused subdirectory below it, using an external package such as `integration_test` when possible. |
+
+See [test/README.md](../test/README.md) for integration-test ownership, build-tag rules, Docker behavior, and migration-backed helper guidance.
 
 ## 5) Why This Structure Scales
 

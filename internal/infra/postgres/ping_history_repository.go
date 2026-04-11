@@ -14,9 +14,13 @@ import (
 // ErrPingHistoryRepository classifies errors from the template ping_history sample repository.
 var ErrPingHistoryRepository = errors.New("ping history repository")
 
-const txRollbackTimeout = 5 * time.Second
+const (
+	pingHistorySampleMaxListLimit int32 = 100
+	txRollbackTimeout                   = 5 * time.Second
+)
 
 // PingHistoryRecord is the adapter-safe representation of one template ping_history sample row.
+// It is sample-local; future app-facing records and ports belong beside internal/app/<feature>.
 type PingHistoryRecord struct {
 	ID        int64
 	Payload   string
@@ -64,8 +68,8 @@ func (r *PingHistoryRepository) Create(ctx context.Context, payload string) (Pin
 }
 
 func (r *PingHistoryRepository) ListRecent(ctx context.Context, limit int32) ([]PingHistoryRecord, error) {
-	if limit <= 0 {
-		return nil, fmt.Errorf("%w: limit must be > 0", ErrPingHistoryRepository)
+	if err := validatePingHistoryListLimit(limit); err != nil {
+		return nil, err
 	}
 
 	rows, err := r.queries.ListRecentPingHistory(ctx, limit)
@@ -86,8 +90,8 @@ func (r *PingHistoryRepository) ListRecent(ctx context.Context, limit int32) ([]
 }
 
 func (r *PingHistoryRepository) createAndListRecentInTx(ctx context.Context, payload string, limit int32) (PingHistoryRecord, []PingHistoryRecord, error) {
-	if limit <= 0 {
-		return PingHistoryRecord{}, nil, fmt.Errorf("%w: limit must be > 0", ErrPingHistoryRepository)
+	if err := validatePingHistoryListLimit(limit); err != nil {
+		return PingHistoryRecord{}, nil, err
 	}
 	if r.db == nil {
 		return PingHistoryRecord{}, nil, fmt.Errorf("%w: transaction starter is not configured", ErrPingHistoryRepository)
@@ -133,6 +137,16 @@ func (r *PingHistoryRepository) createAndListRecentInTx(ctx context.Context, pay
 	}
 
 	return created, recent, nil
+}
+
+func validatePingHistoryListLimit(limit int32) error {
+	if limit <= 0 {
+		return fmt.Errorf("%w: limit must be > 0", ErrPingHistoryRepository)
+	}
+	if limit > pingHistorySampleMaxListLimit {
+		return fmt.Errorf("%w: limit must be <= %d", ErrPingHistoryRepository, pingHistorySampleMaxListLimit)
+	}
+	return nil
 }
 
 func mapPingHistoryRecord(row sqlcgen.PingHistory) (PingHistoryRecord, error) {

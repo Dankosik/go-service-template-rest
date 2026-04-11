@@ -12,11 +12,14 @@ Current server mode: `chi-server: true` + `strict-server: true`.
 ## Adding A Strict-Server Endpoint
 
 1. Change `api/openapi/service.yaml`; do not hand-edit generated Go.
-2. Run `make openapi-generate` or `go generate ./internal/api`.
-3. Confirm the generated `api.StrictServerInterface` includes the new operation.
-4. Implement the matching `strictHandlers.<Operation>` method in `internal/infra/http`.
-5. Wire the handler through the existing `Handlers` construction instead of adding a manual `/api/...` route.
-6. Add contract/policy tests for status codes, Problem responses, generated-route ownership, and security behavior.
-7. Run `make openapi-check`.
+2. Put use-case behavior in `internal/app/<feature>` before adding transport mapping; handlers should call app behavior instead of owning business logic.
+3. Run `make openapi-generate` or `go generate ./internal/api`.
+4. Confirm the generated `api.StrictServerInterface` includes the new operation.
+5. Implement the matching `strictHandlers.<Operation>` method in `internal/infra/http`; split handler files by feature when one file stops being readable.
+6. Wire the handler through the existing `Handlers` construction instead of adding a manual `/api/...` route.
+7. For protected operations, declare real OpenAPI `security`, provide 401/403 `application/problem+json` responses backed by `#/components/schemas/Problem`, and add scoped generated/strict middleware or an explicitly designed equivalent. Do not add broad root middleware that accidentally protects health, metrics, or public sample routes.
+8. Map domain-specific failures to Problem responses at the HTTP boundary; do not leak transport status codes into app use-case behavior.
+9. Add contract/policy tests for status codes, Problem responses, generated-route ownership, security behavior, unauthenticated protected calls, and public-route non-regression.
+10. Run `make openapi-check`.
 
 For future parameterized endpoints, also prove that route labels in logs, metrics, and spans use OpenAPI route templates rather than concrete IDs.

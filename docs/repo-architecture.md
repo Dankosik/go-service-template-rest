@@ -21,7 +21,7 @@ It does not restate the full tree, every command, or task-local design choices.
 | `api/openapi/service.yaml` | Source of truth for the REST contract. | Hand-written runtime logic or transport implementation. |
 | `internal/api/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
 | `internal/app/` | Use-case behavior and service-level orchestration that should stay transport-agnostic. | HTTP details, driver details, process lifecycle. |
-| `internal/domain/` | Small stable contracts/types used to decouple app behavior from adapters when needed. | Framework code, transport code, concrete integration code. |
+| `internal/domain/` | Small stable contracts/types only after a consumer-owned app-local contract is genuinely shared or cross-adapter. | Framework code, transport code, concrete integration code, speculative future abstractions. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/postgres/` | Postgres connection/pool lifecycle and repository code. | Process lifecycle, HTTP behavior, config precedence rules. |
 | `internal/infra/telemetry/` | Prometheus metrics and OpenTelemetry tracing setup/adapters. | Feature semantics or request routing decisions. |
@@ -60,7 +60,7 @@ internal/infra/http
   -> internal/app/*
 
 internal/app/*
-  -> internal/domain/*   (when an abstraction is needed)
+  -> internal/domain/*   (only after a consumer-owned app-local contract becomes genuinely shared)
 
 internal/infra/postgres, internal/infra/telemetry
   -> external libraries
@@ -70,7 +70,7 @@ internal/infra/postgres, internal/infra/telemetry
 Stable direction rules:
 - `internal/app` must not depend on `internal/infra/http` or other concrete transport packages.
 - Concrete integration packages belong under `internal/infra/*` and may depend on external libraries.
-- `internal/domain` should stay small and stable; add contracts there only when the app layer needs an abstraction.
+- `internal/domain` should stay small and stable; start with a consumer-owned interface or type beside `internal/app/<feature>`, and promote only when a real shared stable contract exists.
 - `cmd/service/internal/bootstrap` is allowed to know concrete adapters because it is the composition root.
 
 ## Primary Runtime Flows
