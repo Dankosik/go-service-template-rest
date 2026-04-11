@@ -6,132 +6,39 @@ This document explains the `go-service-template-rest` repository layout: what is
 
 ```text
 .
-├── .agents/
-│   └── skills/
-├── .claude/
-│   └── skills/
-├── .cursor/
-│   └── skills/
-├── .gemini/
-│   └── skills/
-├── .opencode/
-│   └── skills/
-├── .github/
-│   ├── CODEOWNERS
-│   ├── dependabot.yml
-│   ├── pull_request_template.md
-│   ├── skills/
-│   └── workflows/
-│       ├── cd.yml
-│       ├── ci.yml
-│       └── nightly.yml
+├── .agents/                    # canonical project skill sources
+├── .codex/, .claude/, ...       # agent/runtime mirrors and agent configs
+├── .github/                     # CI, release, skills mirror, repository policy
+├── .artifacts/test/             # generated local test reports, not source
 ├── api/
-│   ├── openapi/
-│   │   └── service.yaml
-│   └── proto/
-│       └── service/
-│           └── v1/
-│               └── service.proto
-├── build/
-│   ├── ci/
-│   │   └── README.md
-│   └── docker/
-│       ├── Dockerfile
-│       └── tooling-images.Dockerfile
-├── cmd/
-│   └── service/
-│       ├── main.go
-│       └── internal/
-│           └── bootstrap/
-│               ├── run.go
-│               ├── startup_bootstrap.go
-│               ├── startup_common.go
-│               ├── startup_dependencies.go
-│               ├── startup_probe_addresses.go
-│               ├── startup_probe_helpers.go
-│               ├── startup_server.go
-│               ├── shutdown.go
-│               └── network_policy*.go
-├── docs/
-│   ├── llm/
-│   │   └── go-instructions/
-│   │       ├── README.md
-│   │       ├── 10-go-errors-and-context.md
-│   │       ├── 20-go-concurrency.md
-│   │       ├── 30-go-project-layout-and-modules.md
-│   │       ├── 40-go-testing-and-quality.md
-│   │       ├── 50-go-public-api-and-docs.md
-│   │       ├── 60-go-performance-and-profiling.md
-│   │       └── 70-go-review-checklist.md
-│   └── project-structure-and-module-organization.md
+│   ├── openapi/service.yaml     # REST contract source of truth
+│   └── proto/                   # reserved protobuf contract surface
+├── build/                       # Docker and CI build assets
+├── cmd/service/                 # service binary and bootstrap lifecycle
+├── docs/                        # repository and delivery documentation
 ├── env/
-│   ├── .env.example
+│   ├── config/                  # non-secret config file examples
 │   ├── docker-compose.yml
-│   └── migrations/
-│       ├── 000001_init.up.sql
-│       ├── 000001_init.down.sql
-│       ├── 000002_ping_history_recent_index.up.sql
-│       └── 000002_ping_history_recent_index.down.sql
+│   └── migrations/              # SQL migration source of truth
 ├── internal/
-│   ├── api/
-│   │   ├── README.md
-│   │   ├── doc.go
-│   │   └── oapi-codegen.yaml
-│   ├── app/
-│   │   ├── health/
-│   │   │   ├── service.go
-│   │   │   └── service_test.go
-│   │   └── ping/
-│   │       └── service.go
-│   ├── config/
-│   │   ├── config.go
-│   │   └── config_test.go
-│   ├── domain/
+│   ├── api/                     # generated OpenAPI bindings plus generation config
+│   ├── app/                     # use-case behavior
+│   ├── config/                  # config loading, defaults, validation, snapshot
+│   ├── domain/                  # small shared contracts only when stable
 │   └── infra/
-│       ├── http/
-│       │   ├── handlers.go
-│       │   ├── middleware.go
-│       │   ├── openapi_contract_test.go
-│       │   ├── problem.go
-│       │   ├── router.go
-│       │   ├── router_test.go
-│       │   ├── server.go
-│       │   └── goleak_test.go
-│       ├── postgres/
-│       │   ├── queries/
-│       │   ├── sqlcgen/
-│       │   ├── postgres.go
-│       │   └── ping_history_repository.go
-│       └── telemetry/
-│           ├── metrics.go
-│           ├── metrics_test.go
-│           ├── tracing.go
-│           └── tracing_test.go
-├── scripts/
-│   ├── ci/
-│   │   ├── docs-drift-check.sh
-│   │   └── required-guardrails-check.sh
-│   ├── dev/
-│   │   ├── configure-branch-protection.sh
-│   │   ├── doctor.sh
-│   │   ├── sync-skills.sh
-│   │   └── setup.sh
-│   ├── gen.sh
-│   └── init-module.sh
-├── test/
-│   ├── README.md
-│   ├── postgres_integration_test.go
-│   └── postgres_sqlc_integration_test.go
-├── .dockerignore
-├── .gitignore
-├── .golangci.yml
-├── .redocly.yaml
-├── AGENTS.md
+│       ├── http/                # HTTP adapter, middleware, route policy
+│       ├── postgres/            # Postgres pool, repositories, sqlc sources/output
+│       └── telemetry/           # shared metrics and tracing setup
+├── scripts/                     # developer and CI helper scripts
+├── specs/                       # spec-first task records and implementation history
+├── test/                        # integration and broad scenario tests
 ├── Makefile
 ├── README.md
 ├── go.mod
 └── go.sum
 ```
+
+Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*`, mock/stringer artifacts, coverage files, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
 
 ## 2) Layer and Folder Responsibilities
 
@@ -155,6 +62,8 @@ Why: this behavior can be reused by HTTP handlers, background jobs, CLI commands
 Minimal shared domain contracts and types only when more than one app package needs the same abstraction.
 Why: consumer-owned interfaces stay beside their app consumer by default; readiness probes are owned by `internal/app/health.Probe`.
 
+Domain type decision rule: keep feature-local request/result/value types in `internal/app/<feature>` until two app packages need the same abstraction or the type represents a stable cross-adapter contract. Do not promote a type into `internal/domain` just because a future repository, handler, or worker might use it later.
+
 ### `internal/infra/`
 Infrastructure adapters: HTTP, Postgres, telemetry.  
 Why: framework and integration details are isolated from business code; replacing an adapter affects minimal code.
@@ -164,6 +73,8 @@ HTTP route ownership: normal API endpoints are added through `api/openapi/servic
 Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/infra/postgres/queries/*.sql` owns query sources, and `internal/infra/postgres/sqlcgen` is generated output. Hand-written repositories under `internal/infra/postgres` translate generated rows into app-facing types instead of leaking `sqlcgen` into `internal/app`.
 
 `ping_history` is retained as a template SQLC sample because the current generator setup requires at least one query to prove drift checks. It is not production business state and must not be wired into `ping` as a side effect. New services should replace the sample with real feature-owned migrations, queries, repositories, and app ports.
+
+Feature telemetry placement: HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`, using shared instruments from `internal/infra/telemetry` where appropriate. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
 
 ### `internal/config/`
 Environment-based config loading and validation, including defaults.  
@@ -189,6 +100,8 @@ Why: everything needed for local reproducible runs is versioned and kept togethe
 
 Migrations are deterministic by default: use plain `CREATE` / `DROP` statements so unexpected schema drift fails loudly. Use `IF NOT EXISTS` / `IF EXISTS` only for an explicitly reviewed repair or idempotent migration.
 
+Online production safety is a separate question from deterministic local rehearsal. Prefer additive expand-first migrations for online systems. Destructive changes, type rewrites, large backfills, new constraints, and new indexes need an explicit lock/backfill/mixed-version rollout plan sized to the table and traffic shape. `make migration-validate` and `make docker-migration-validate` rehearse migration mechanics; they do not prove production lock safety, backfill safety, or mixed-version compatibility. Escalate schema ownership, retention, backfill, and rollout questions to data-architecture design before coding.
+
 ### `test/`
 Integration/e2e tests and larger test scenarios (separate from unit tests in `internal/...`).  
 Why: fast unit tests stay close to code, while heavier scenarios run separately with the `integration` tag.
@@ -208,7 +121,7 @@ Key scripts:
 - `scripts/dev/docker-tooling.sh`: zero-setup wrappers for test/lint/OpenAPI/security/CI flows without host Go/Node toolchain; tooling image references are read from `build/docker/tooling-images.Dockerfile`.
 
 ### `docs/`
-Engineering documentation (including LLM instructions and this document).  
+Engineering documentation, including this document and the stable repository architecture baseline.
 Why: development rules and structure should be explicit and versioned, not scattered in code comments.
 
 ### `.agents/skills`
@@ -252,6 +165,18 @@ Browser-callable endpoint checklist:
 
 ## 4) Where to Put New Code
 
+### Worked Feature Paths
+
+Use these paths as starting points before choosing a narrower recipe below:
+
+| Feature shape | Put the code here | Prove it with |
+| --- | --- | --- |
+| Simple read-only endpoint | Add use-case behavior in `internal/app/<feature>`, update `api/openapi/service.yaml`, regenerate `internal/api`, implement `strictHandlers.<Operation>` in `internal/infra/http`, and keep manual `/api/...` routes out of the root router. | Contract and handler tests near `internal/infra/http`, app tests near `internal/app/<feature>`, and `make openapi-check`. |
+| Postgres-backed endpoint | Keep app behavior and app-owned ports in `internal/app/<feature>`, evolve `env/migrations`, add sqlc queries under `internal/infra/postgres/queries`, regenerate `sqlcgen`, map rows in a hand-written Postgres repository, then inject the concrete adapter in bootstrap. | Repository tests under `internal/infra/postgres`, integration tests under `test/` when container-backed behavior matters, `make sqlc-check`, and migration rehearsal. |
+| Background job or worker | Keep business behavior in `internal/app/<feature>`, put queue/scheduler/database/external-system mechanics in `internal/infra/<integration>`, and create a `cmd/<binary>` composition root when lifecycle or scaling differs from the HTTP service. | App tests near the feature, adapter tests near the integration, bootstrap/lifecycle tests for the new binary, and shutdown/cancellation proof for worker loops. |
+
+Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
+
 New HTTP endpoint:
 1. Add or update contract in `api/openapi/service.yaml`.
 2. Record the endpoint security decision: public by design, protected by real auth, or blocked pending security design. For protected endpoints, define OpenAPI `security`, 401/403 Problem responses, identity middleware, tenant/object authorization rules, and negative tests.
@@ -259,7 +184,8 @@ New HTTP endpoint:
 4. Add use-case logic in `internal/app/<feature>`.
 5. Add handler mapping in `internal/infra/http`; do not bypass generated routing with a manual `/api/...` chi route.
 6. Add tests near changed code and add integration tests in `test/` when needed.
-7. Validate with `make openapi-check`, plus targeted handler/app tests for the changed behavior.
+7. For parameterized routes, prove logs, metrics, and spans use route templates such as `/users/{id}` rather than concrete IDs.
+8. Validate with `make openapi-check`, plus targeted handler/app tests for the changed behavior.
 
 New Postgres persistence:
 1. Add a deterministic migration under `env/migrations`.
@@ -268,7 +194,21 @@ New Postgres persistence:
 4. Add a hand-written repository under `internal/infra/postgres` that maps generated rows/types into app-facing records.
 5. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter; use `internal/domain` only for a genuinely shared stable contract.
 6. Wire the concrete repository in `cmd/service/internal/bootstrap`.
-7. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
+7. Clamp bounded list limits before values reach SQL `LIMIT`; the API/app contract or repository must define the upper bound instead of trusting caller input.
+8. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
+
+Transaction recipe:
+1. Start the transaction with the caller context.
+2. Bind sqlc queries to the transaction for the duration of the operation.
+3. Defer rollback next to transaction creation and use a bounded cleanup context when the driver requires context for cleanup.
+4. Commit once, with the caller context, after all side effects that belong inside the transaction have succeeded.
+5. Do not add a generic transaction helper until repeated production code shows one stable local policy.
+
+DB-required feature bootstrap:
+1. Validate required Postgres config before constructing feature repositories.
+2. Construct repositories only after an initialized pool exists and the dependency is enabled for that feature.
+3. Inject the concrete repository through an app-owned port beside `internal/app/<feature>`.
+4. Test disabled, ready, and partial-initialization cleanup paths in bootstrap.
 
 App-facing persistence port sketch:
 
@@ -284,6 +224,8 @@ type Store interface {
 ```
 
 The port belongs beside the app feature that consumes it. The Postgres implementation belongs under `internal/infra/postgres`, and bootstrap wires the concrete adapter into the app service. Do not add a generic runtime port package just to prepare for future repositories.
+
+Redis and Mongo extension note: current Redis and Mongo config/probe keys are guard-only extension stubs unless a real feature owns adapter behavior. They validate planned dependency exposure and readiness policy; they are not full cache, store, or database adapters. Add `internal/infra/redis` or `internal/infra/mongo` only when an app feature needs real runtime behavior, and do not grow cache/store semantics in `internal/config` or bootstrap alone.
 
 New integration (Redis, Kafka, S3, external API):
 1. Add adapter in `internal/infra/<integration>`.
@@ -309,12 +251,16 @@ Changes to startup/lifecycle flow of the `service` binary:
 2. Add/modify logic in `cmd/service/internal/bootstrap/*`.
 3. Add tests near modified bootstrap files (`*_test.go` in the same folder).
 
-Test placement by layer:
-- Unit tests for app/domain behavior stay beside the package under `internal/app` or `internal/domain`.
-- HTTP mapping, generated-route ownership, CORS, and Problem response tests stay under `internal/infra/http`.
-- Bootstrap lifecycle, config wiring, dependency admission, and shutdown tests stay under `cmd/service/internal/bootstrap`.
-- Postgres pool and repository unit tests stay under `internal/infra/postgres`; migration-backed read/write tests stay under `test/` with the `integration` build tag.
-- Cross-package or end-to-end scenarios belong under `test/` or a focused subdirectory below it, using an external package such as `integration_test` when possible.
+Test placement matrix:
+
+| Behavior under test | Owning test location |
+| --- | --- |
+| App/domain use-case rules, feature-local types, and app-owned ports | Beside the package under `internal/app/<feature>` or `internal/domain` when a stable shared contract exists. |
+| HTTP mapping, generated-route ownership, manual route exceptions, CORS, Problem responses, route labels, metrics, and span naming | `internal/infra/http`. |
+| Bootstrap lifecycle, config wiring, dependency admission, disabled/ready/cleanup paths, and shutdown | `cmd/service/internal/bootstrap`. |
+| Postgres pool and hand-written repository mapping | `internal/infra/postgres`. |
+| Migration-backed read/write behavior and container-backed database scenarios | `test/` with the `integration` build tag. |
+| Broad cross-package or end-to-end scenarios | `test/` or a focused subdirectory below it, using an external package such as `integration_test` when possible. |
 
 ## 5) Why This Structure Scales
 

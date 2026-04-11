@@ -38,3 +38,19 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`.
 
 Some keys exist as extension points and may be wired later by service authors.
 If a key is documented as an extension point, absence of runtime behavior is intentional and non-breaking for the baseline template.
+
+Redis and Mongo keys are guard-only extension stubs in the baseline template. They let bootstrap validate planned dependency exposure, timeout budgets, and readiness policy, but they do not provide cache, store, or database adapters. Add `internal/infra/redis` or `internal/infra/mongo` only when a real app feature needs runtime behavior; do not turn config or bootstrap checks into hidden cache/store semantics.
+
+## Adding A Config Key
+
+When a feature needs a new runtime config key:
+
+1. Add the typed field and `koanf` tag in `internal/config/types.go`.
+2. Add the default in `internal/config/defaults.go` when the key has a baseline value.
+3. Thread the value into the immutable runtime snapshot in `internal/config/snapshot.go`.
+4. Add validation in `internal/config/validate.go` when the key has bounds, mode-specific rules, or security-sensitive behavior.
+5. Update `env/config/default.yaml`, `env/config/local.yaml`, and `env/.env.example` only where the key belongs for non-secret examples or env-driven secrets.
+6. Update docs that explain the feature's config behavior, especially secret-source or runtime-budget rules.
+7. Add or update `internal/config` tests so the key reaches the built `Config` snapshot and validation rejects invalid values.
+
+Do not list every existing key in this recipe. The source of truth is the typed config shape, defaults, snapshot construction, validation, and tests.

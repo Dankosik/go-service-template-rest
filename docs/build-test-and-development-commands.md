@@ -314,10 +314,11 @@ Bootstrap shortcuts:
   - Runs: `go generate ./internal/api`
 
 - `make openapi-drift-check`
-  - Checks tracked and untracked codegen drift in `internal/api`.
+  - Checks tracked and untracked codegen drift in `internal/api/openapi.gen.go`.
 
 - `make openapi-runtime-contract-check`
   - Runs: `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1`
+  - Purpose: run the HTTP runtime contract guardrail tests selected by the Makefile target. Keep this target aligned with generated-route ownership, fallback, manual-route exception, and route-label policy tests as those tests evolve.
 
 - `make openapi-lint`
   - Runs: `npx @redocly/cli@2.20.3 lint --config .redocly.yaml api/openapi/service.yaml`
@@ -327,6 +328,7 @@ Bootstrap shortcuts:
 
 - `make openapi-breaking`
   - Runs `go tool oasdiff breaking` against `BASE_OPENAPI` and current spec.
+  - Purpose: check OpenAPI breaking-change compatibility against an explicit base contract. This requires `BASE_OPENAPI=<base>` and is intentionally separate from `make openapi-check`.
 
 - `make openapi-check`
   - Composite target:
@@ -336,6 +338,7 @@ Bootstrap shortcuts:
     - `openapi-runtime-contract-check`
     - `openapi-lint`
     - `openapi-validate`
+  - Purpose: prove OpenAPI generation, generated-artifact drift, generated package compileability, runtime contract guardrails, lint, and schema validation. It does not run breaking-change compatibility checks; use `BASE_OPENAPI=<base> make openapi-breaking` for that proof.
 
 - `make docker-openapi-check`
   - Docker equivalent of `make openapi-check`.

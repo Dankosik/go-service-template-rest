@@ -38,6 +38,12 @@ func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	if second.ID <= first.ID {
 		t.Fatalf("expected monotonic ids: first=%d second=%d", first.ID, second.ID)
 	}
+	if first.Payload != "first" || second.Payload != "second" {
+		t.Fatalf("created payloads = [%q %q], want [first second]", first.Payload, second.Payload)
+	}
+	if first.CreatedAt.IsZero() || second.CreatedAt.IsZero() {
+		t.Fatalf("created timestamps must be non-zero: first=%v second=%v", first.CreatedAt, second.CreatedAt)
+	}
 
 	recent, err := repo.ListRecent(ctx, 2)
 	if err != nil {
@@ -48,6 +54,12 @@ func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	}
 	if recent[0].ID != second.ID || recent[1].ID != first.ID {
 		t.Fatalf("ListRecent order mismatch: got [%d %d], want [%d %d]", recent[0].ID, recent[1].ID, second.ID, first.ID)
+	}
+	if recent[0].Payload != second.Payload || recent[1].Payload != first.Payload {
+		t.Fatalf("ListRecent payloads = [%q %q], want [%q %q]", recent[0].Payload, recent[1].Payload, second.Payload, first.Payload)
+	}
+	if !recent[0].CreatedAt.Equal(second.CreatedAt) || !recent[1].CreatedAt.Equal(first.CreatedAt) {
+		t.Fatalf("ListRecent timestamps = [%v %v], want [%v %v]", recent[0].CreatedAt, recent[1].CreatedAt, second.CreatedAt, first.CreatedAt)
 	}
 }
 

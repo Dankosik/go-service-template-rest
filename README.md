@@ -399,6 +399,8 @@ Write decisions to `specs/tenant-export-jobs/spec.md`, task-local technical desi
 
 ## Repository Layout
 
+Start feature work with the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code); it covers the short path for HTTP endpoints, Postgres-backed features, and workers without duplicating the workflow rules here.
+
 - `cmd/service` - service entrypoint and bootstrap lifecycle orchestration
 - `internal/app` - use-case layer
 - `internal/domain` - domain contracts and types
@@ -436,7 +438,8 @@ Local entry points:
 - `make check-full` - CI-like verification
 - `make ci-local` - native CI-style flow
 - `make docker-ci` - Docker-based CI-style flow
-- `make openapi-check` - OpenAPI generation, drift, lint, and compatibility checks
+- `make openapi-check` - OpenAPI generation, drift, runtime contract, lint, and schema validation checks
+- `BASE_OPENAPI=<base> make openapi-breaking` - OpenAPI breaking-change compatibility check
 - `make sqlc-check` - generated SQL artifact drift checks
 - `make test-integration` - integration tests
 - `make gh-protect BRANCH=main` - branch protection setup helper

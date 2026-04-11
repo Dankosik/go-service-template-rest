@@ -1,9 +1,30 @@
 package bootstrap
 
+type startupDependencyProbeLabels struct {
+	dependency   string
+	operation    string
+	resolveStage string
+	probeStage   string
+	probeName    string
+}
+
+func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLabels {
+	return startupDependencyProbeLabels{
+		dependency:   dependency,
+		operation:    dependency + "_probe",
+		resolveStage: "startup.resolve." + dependency,
+		probeStage:   "startup.probe." + dependency,
+		probeName:    dependency + "_startup_probe",
+	}
+}
+
+var (
+	startupPostgresDependencyLabels = newStartupDependencyProbeLabels("postgres")
+	startupRedisDependencyLabels    = newStartupDependencyProbeLabels("redis")
+	startupMongoDependencyLabels    = newStartupDependencyProbeLabels("mongo")
+)
+
 const (
-	startupDependencyPostgres      = "postgres"
-	startupDependencyRedis         = "redis"
-	startupDependencyMongo         = "mongo"
 	startupDependencyTelemetry     = "telemetry"
 	startupDependencyNetworkPolicy = "network_policy"
 	startupDependencyIngressPolicy = "ingress_policy"
@@ -26,19 +47,4 @@ const (
 
 	startupOperationTelemetryInit  = "telemetry_init"
 	startupOperationTelemetryFlush = "telemetry_shutdown"
-	startupOperationPostgresProbe  = "postgres_probe"
-	startupOperationRedisProbe     = "redis_probe"
-	startupOperationMongoProbe     = "mongo_probe"
-)
-
-const (
-	startupResolveStagePostgres = "startup.resolve.postgres"
-	startupResolveStageRedis    = "startup.resolve.redis"
-	startupResolveStageMongo    = "startup.resolve.mongo"
-	startupProbeStagePostgres   = "startup.probe.postgres"
-	startupProbeStageRedis      = "startup.probe.redis"
-	startupProbeStageMongo      = "startup.probe.mongo"
-	startupProbeNamePostgres    = "postgres_startup_probe"
-	startupProbeNameRedis       = "redis_startup_probe"
-	startupProbeNameMongo       = "mongo_startup_probe"
 )

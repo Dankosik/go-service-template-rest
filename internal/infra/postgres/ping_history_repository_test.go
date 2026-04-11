@@ -18,6 +18,10 @@ type fakePingHistoryQuerier struct {
 	list   func(ctx context.Context, limit int32) ([]sqlcgen.PingHistory, error)
 }
 
+func newPingHistoryRepositoryWithQuerier(queries pingHistoryQuerier) *PingHistoryRepository {
+	return &PingHistoryRepository{queries: queries}
+}
+
 func (f fakePingHistoryQuerier) CreatePingHistory(ctx context.Context, payload string) (sqlcgen.PingHistory, error) {
 	return f.create(ctx, payload)
 }
@@ -221,6 +225,12 @@ func TestPingHistoryRepositoryListRecent(t *testing.T) {
 	}
 	if got[0].ID != 10 || got[1].ID != 9 {
 		t.Fatalf("ListRecent() IDs = [%d,%d], want [10,9]", got[0].ID, got[1].ID)
+	}
+	if got[0].Payload != "a" || got[1].Payload != "b" {
+		t.Fatalf("ListRecent() payloads = [%q,%q], want [a,b]", got[0].Payload, got[1].Payload)
+	}
+	if !got[0].CreatedAt.Equal(firstAt) || !got[1].CreatedAt.Equal(secondAt) {
+		t.Fatalf("ListRecent() CreatedAt = [%v,%v], want [%v,%v]", got[0].CreatedAt, got[1].CreatedAt, firstAt, secondAt)
 	}
 }
 

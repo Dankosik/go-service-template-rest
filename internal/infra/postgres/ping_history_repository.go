@@ -49,10 +49,6 @@ func NewPingHistoryRepository(db pingHistoryDB) *PingHistoryRepository {
 	}
 }
 
-func newPingHistoryRepositoryWithQuerier(queries pingHistoryQuerier) *PingHistoryRepository {
-	return &PingHistoryRepository{queries: queries}
-}
-
 func (r *PingHistoryRepository) Create(ctx context.Context, payload string) (PingHistoryRecord, error) {
 	row, err := r.queries.CreatePingHistory(ctx, payload)
 	if err != nil {

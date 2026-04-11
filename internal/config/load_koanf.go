@@ -141,7 +141,7 @@ func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, localEnvir
 	if err := fileConfig.Load(rawbytes.Provider(content), yaml.Parser()); err != nil {
 		return fmt.Errorf("%w: parse config file %q: %w", ErrParse, cleanPath, err)
 	}
-	if err := enforceSecretSourcePolicy(fileConfig, cleanPath, localEnvironment); err != nil {
+	if err := enforceSecretSourcePolicy(fileConfig, cleanPath); err != nil {
 		return err
 	}
 	if err := k.Load(confmap.Provider(fileConfig.Raw(), keyDelimiter), nil); err != nil {
@@ -207,7 +207,7 @@ func enforceConfigFilePolicy(path string, localEnvironment bool) (string, os.Fil
 	return resolvedPath, resolvedInfo, nil
 }
 
-func enforceSecretSourcePolicy(k *koanf.Koanf, path string, _ bool) error {
+func enforceSecretSourcePolicy(k *koanf.Koanf, path string) error {
 	keys := k.Keys()
 	sort.Strings(keys)
 	for _, key := range keys {

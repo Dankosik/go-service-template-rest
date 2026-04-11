@@ -1,6 +1,7 @@
 SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
+OPENAPI_GENERATED_FILES := internal/api/openapi.gen.go
 REDOCLY_CLI_VERSION := 2.20.3
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
@@ -348,10 +349,10 @@ openapi-generate:
 	go generate ./internal/api
 
 openapi-drift-check:
-	@git diff --quiet -- internal/api || (echo "tracked openapi codegen drift detected in internal/api"; git diff -- internal/api; exit 1)
-	@untracked="$$(git ls-files --others --exclude-standard -- internal/api)"; \
+	@git diff --quiet -- $(OPENAPI_GENERATED_FILES) || (echo "tracked openapi codegen drift detected in $(OPENAPI_GENERATED_FILES)"; git diff -- $(OPENAPI_GENERATED_FILES); exit 1)
+	@untracked="$$(git ls-files --others --exclude-standard -- $(OPENAPI_GENERATED_FILES))"; \
 	if [ -n "$$untracked" ]; then \
-		echo "untracked openapi artifacts detected in internal/api"; \
+		echo "untracked openapi artifacts detected in $(OPENAPI_GENERATED_FILES)"; \
 		echo "$$untracked"; \
 		echo "run 'make openapi-generate' and commit updated generated files"; \
 		exit 1; \

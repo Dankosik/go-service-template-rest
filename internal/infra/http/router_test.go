@@ -105,7 +105,7 @@ func TestRouterEndpoints(t *testing.T) {
 	})
 }
 
-func TestRouterHTTPPolicy(t *testing.T) {
+func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -474,7 +474,7 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	}
 }
 
-func TestAccessLogIncludesCorrelationFields(t *testing.T) {
+func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	h := mustNewRouter(t, log, Handlers{
@@ -560,7 +560,7 @@ func TestAccessLogResponseControllerCanReachWrappedWriter(t *testing.T) {
 	}
 }
 
-func TestMetricsExposeDurationHistogram(t *testing.T) {
+func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -599,7 +599,7 @@ func TestMetricsExposeDurationHistogram(t *testing.T) {
 	}
 }
 
-func TestRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
+func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
 	apiSubrouter := chi.NewRouter()
 	apiSubrouter.Get("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -646,36 +646,35 @@ func TestRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
 	})
 }
 
-func TestManualRootRouteGeneratedOverlapsAreDocumented(t *testing.T) {
+func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing.T) {
 	openAPIRoutes := openAPIOperationRoutes(t)
 	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	manualRouteKeys := make(map[manualRootRouteKey]struct{}, len(manualRoutes))
 
 	for _, route := range manualRoutes {
-		if route.reason == "" {
-			t.Fatalf("manual route %s %s has an empty root-route reason", route.key.method, route.key.path)
-		}
+		manualRouteKeys[route.key] = struct{}{}
 		if strings.HasPrefix(route.key.path, "/api/") {
 			t.Fatalf("manual route %s %s uses API namespace; add it through OpenAPI instead", route.key.method, route.key.path)
 		}
-		if _, generated := openAPIRoutes[route.key]; !generated {
-			continue
-		}
 
-		reason, allowed := documentedManualGeneratedRouteOverlaps[route.key]
+		reason, allowed := documentedManualRootRouteExceptions[route.key]
 		if !allowed {
-			t.Fatalf("manual route %s %s overlaps generated OpenAPI route without a documented root exception", route.key.method, route.key.path)
+			t.Fatalf("manual route %s %s is missing a documented root exception", route.key.method, route.key.path)
 		}
-		if reason != route.reason {
-			t.Fatalf("manual route %s %s reason = %q, want documented overlap reason %q", route.key.method, route.key.path, route.reason, reason)
+		if reason == "" {
+			t.Fatalf("manual route %s %s has an empty documented root exception reason", route.key.method, route.key.path)
 		}
 	}
 
-	for key, reason := range documentedManualGeneratedRouteOverlaps {
+	for key, reason := range documentedManualRootRouteExceptions {
 		if reason == "" {
 			t.Fatalf("documented root exception %s %s has an empty reason", key.method, key.path)
 		}
-		if _, generated := openAPIRoutes[key]; !generated {
-			t.Fatalf("documented root exception %s %s no longer overlaps OpenAPI; remove the exception or update route ownership docs", key.method, key.path)
+		if _, manual := manualRouteKeys[key]; !manual {
+			t.Fatalf("documented root exception %s %s has no matching manual root route", key.method, key.path)
+		}
+		if _, generated := openAPIRoutes[key]; generated && reason != metricsRootRouteReason {
+			t.Fatalf("documented generated-route overlap %s %s reason = %q, want %q", key.method, key.path, reason, metricsRootRouteReason)
 		}
 	}
 }
@@ -700,7 +699,7 @@ func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 	return routes
 }
 
-func TestRouteTemplateUsedForOTelSpanName(t *testing.T) {
+func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),

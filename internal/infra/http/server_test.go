@@ -70,7 +70,7 @@ func TestNewServerUsesNotFoundHandlerWhenHandlerNil(t *testing.T) {
 	}
 }
 
-func TestServerRunAndShutdown(t *testing.T) {
+func TestServerServeAndShutdown(t *testing.T) {
 	t.Parallel()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -78,9 +78,6 @@ func TestServerRunAndShutdown(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	if err := listener.Close(); err != nil {
-		t.Fatalf("close listener: %v", err)
-	}
 
 	srv := New(Config{Addr: addr}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -88,26 +85,21 @@ func TestServerRunAndShutdown(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- srv.Run()
+		runErrCh <- srv.Serve(listener)
 	}()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		req, err := http.NewRequest(http.MethodGet, "http://"+addr, nil)
-		if err != nil {
-			t.Fatalf("new request: %v", err)
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			break
-		}
-
-		if time.Now().After(deadline) {
-			t.Fatalf("server did not start in time: %v", err)
-		}
-		time.Sleep(20 * time.Millisecond)
+	client := http.Client{Timeout: time.Second}
+	req, err := http.NewRequest(http.MethodGet, "http://"+addr, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("client.Do() error = %v, want nil", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
