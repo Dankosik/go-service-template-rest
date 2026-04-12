@@ -163,7 +163,7 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
@@ -271,7 +271,7 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T) {
@@ -316,7 +316,7 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
@@ -360,7 +360,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {

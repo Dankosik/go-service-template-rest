@@ -14,7 +14,8 @@ import (
 )
 
 type ValidationOptions struct {
-	Strict bool
+	Strict                bool
+	AdditionalUnknownKeys []string
 }
 
 type ValidationResult struct {
@@ -27,7 +28,7 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		return ValidationResult{}, err
 	}
 
-	unknownKeys := findUnknownKeys(k.Keys())
+	unknownKeys := findUnknownKeys(k, opts.AdditionalUnknownKeys)
 	if len(unknownKeys) > 0 {
 		if opts.Strict {
 			return ValidationResult{}, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeys, ", "))
@@ -111,25 +112,34 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 	return result, nil
 }
 
-func findUnknownKeys(allKeys []string) []string {
+func findUnknownKeys(k *koanf.Koanf, additionalUnknownKeys []string) []string {
 	knownKeys := knownConfigKeys()
+	knownSections := knownConfigSections()
+	unknownSet := make(map[string]struct{})
 	unknown := make([]string, 0)
-	for _, key := range allKeys {
+	for _, key := range additionalUnknownKeys {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		if _, ok := unknownSet[key]; ok {
+			continue
+		}
+		unknownSet[key] = struct{}{}
+		unknown = append(unknown, key)
+	}
+	for _, key := range k.Keys() {
 		if _, ok := knownKeys[key]; ok {
 			continue
 		}
 
-		knownAsPrefix := false
-		for known := range knownKeys {
-			if strings.HasPrefix(known, key+".") {
-				knownAsPrefix = true
-				break
-			}
-		}
-		if knownAsPrefix {
+		if _, ok := knownSections[key]; ok && configSectionValueIsMap(k.Get(key)) {
 			continue
 		}
 
+		if _, ok := unknownSet[key]; ok {
+			continue
+		}
+		unknownSet[key] = struct{}{}
 		unknown = append(unknown, key)
 	}
 
@@ -231,9 +241,6 @@ func validateMongo(cfg MongoConfig) error {
 		return fmt.Errorf("%w: mongo.uri is required when mongo.enabled=true", ErrSecretPolicy)
 	}
 	if cfg.Enabled {
-		if cfg.URI != strings.TrimSpace(cfg.URI) {
-			return fmt.Errorf("%w: mongo.uri must be parseable", ErrValidate)
-		}
 		if _, err := MongoProbeAddress(cfg.URI); err != nil {
 			return fmt.Errorf("mongo.uri must be parseable: %w", err)
 		}
@@ -359,6 +366,9 @@ func MongoProbeAddress(rawURI string) (string, error) {
 	uri := strings.TrimSpace(rawURI)
 	if uri == "" {
 		return "", mongoProbeAddressError("empty mongo uri")
+	}
+	if uri != rawURI {
+		return "", mongoProbeAddressError("mongo uri must not include surrounding whitespace")
 	}
 
 	lower := strings.ToLower(uri)

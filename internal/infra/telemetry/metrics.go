@@ -16,7 +16,7 @@ type Metrics struct {
 	requestsTotal            *prometheus.CounterVec
 	requestDuration          *prometheus.HistogramVec
 	configLoadDuration       *prometheus.HistogramVec
-	configValidationFailures *prometheus.CounterVec
+	configFailures           *prometheus.CounterVec
 	startupRejections        *prometheus.CounterVec
 	telemetryInitFailures    *prometheus.CounterVec
 	configUnknownKeyWarnings prometheus.Counter
@@ -33,6 +33,26 @@ const (
 
 	// ConfigLoadResultOther is the bounded fallback label for unknown config load results.
 	ConfigLoadResultOther = "other"
+)
+
+const (
+	// ConfigFailureReasonLoad is the bounded label for config load failures.
+	ConfigFailureReasonLoad = "load"
+
+	// ConfigFailureReasonParse is the bounded label for config parse failures.
+	ConfigFailureReasonParse = "parse"
+
+	// ConfigFailureReasonValidate is the bounded label for config validation failures.
+	ConfigFailureReasonValidate = "validate"
+
+	// ConfigFailureReasonStrictUnknownKey is the bounded label for strict unknown-key failures.
+	ConfigFailureReasonStrictUnknownKey = "strict_unknown_key"
+
+	// ConfigFailureReasonSecretPolicy is the bounded label for secret policy failures.
+	ConfigFailureReasonSecretPolicy = "secret_policy"
+
+	// ConfigFailureReasonOther is the bounded fallback label for unknown config failures.
+	ConfigFailureReasonOther = "other"
 )
 
 const (
@@ -69,6 +89,9 @@ const (
 
 	// StartupRejectionReasonConfigValidate is the bounded startup rejection label for config validation failures.
 	StartupRejectionReasonConfigValidate = "config_validate"
+
+	// StartupRejectionReasonConfigStartupCompatibility is the bounded startup rejection label for bootstrap config compatibility failures.
+	StartupRejectionReasonConfigStartupCompatibility = "config_startup_compatibility"
 
 	// StartupRejectionReasonConfigStrictUnknownKey is the bounded startup rejection label for strict unknown key failures.
 	StartupRejectionReasonConfigStrictUnknownKey = "config_strict_unknown_key"
@@ -118,10 +141,10 @@ func New() *Metrics {
 		[]string{"stage", "result"},
 	)
 
-	configValidationFailures := prometheus.NewCounterVec(
+	configFailures := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "config_validation_failures_total",
-			Help: "Total number of config validation failures by reason.",
+			Name: "config_failures_total",
+			Help: "Total number of config failures by bounded reason.",
 		},
 		[]string{"reason"},
 	)
@@ -171,7 +194,7 @@ func New() *Metrics {
 		requestsTotal,
 		requestDuration,
 		configLoadDuration,
-		configValidationFailures,
+		configFailures,
 		startupRejections,
 		telemetryInitFailures,
 		configUnknownKeyWarnings,
@@ -184,7 +207,7 @@ func New() *Metrics {
 		requestsTotal:            requestsTotal,
 		requestDuration:          requestDuration,
 		configLoadDuration:       configLoadDuration,
-		configValidationFailures: configValidationFailures,
+		configFailures:           configFailures,
 		startupRejections:        startupRejections,
 		telemetryInitFailures:    telemetryInitFailures,
 		configUnknownKeyWarnings: configUnknownKeyWarnings,
@@ -214,11 +237,11 @@ func (m *Metrics) ObserveConfigLoadDuration(stage, result string, duration time.
 	m.configLoadDuration.WithLabelValues(stage, normalizeConfigLoadResult(result)).Observe(duration.Seconds())
 }
 
-func (m *Metrics) IncConfigValidationFailure(reason string) {
-	if m == nil || m.configValidationFailures == nil {
+func (m *Metrics) IncConfigFailure(reason string) {
+	if m == nil || m.configFailures == nil {
 		return
 	}
-	m.configValidationFailures.WithLabelValues(reason).Inc()
+	m.configFailures.WithLabelValues(normalizeConfigFailureReason(reason)).Inc()
 }
 
 func (m *Metrics) IncStartupRejection(reason string) {
@@ -293,6 +316,24 @@ func normalizeConfigLoadResult(result string) string {
 	}
 }
 
+func normalizeConfigFailureReason(reason string) string {
+	normalized := strings.TrimSpace(strings.ToLower(reason))
+	switch normalized {
+	case ConfigFailureReasonLoad:
+		return ConfigFailureReasonLoad
+	case ConfigFailureReasonParse:
+		return ConfigFailureReasonParse
+	case ConfigFailureReasonValidate:
+		return ConfigFailureReasonValidate
+	case ConfigFailureReasonStrictUnknownKey:
+		return ConfigFailureReasonStrictUnknownKey
+	case ConfigFailureReasonSecretPolicy:
+		return ConfigFailureReasonSecretPolicy
+	default:
+		return ConfigFailureReasonOther
+	}
+}
+
 func normalizeConfigStartupOutcome(outcome string) string {
 	normalized := strings.TrimSpace(strings.ToLower(outcome))
 	switch normalized {
@@ -314,6 +355,8 @@ func normalizeStartupRejectionReason(reason string) string {
 		return StartupRejectionReasonConfigParse
 	case StartupRejectionReasonConfigValidate:
 		return StartupRejectionReasonConfigValidate
+	case StartupRejectionReasonConfigStartupCompatibility:
+		return StartupRejectionReasonConfigStartupCompatibility
 	case StartupRejectionReasonConfigStrictUnknownKey:
 		return StartupRejectionReasonConfigStrictUnknownKey
 	case StartupRejectionReasonConfigSecretPolicy:

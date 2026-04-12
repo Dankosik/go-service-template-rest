@@ -31,11 +31,12 @@ const (
 )
 
 type loadMetadata struct {
-	loadDefaultsDuration time.Duration
-	loadFileDuration     time.Duration
-	loadEnvDuration      time.Duration
-	failedStage          string
-	failedStageDuration  time.Duration
+	loadDefaultsDuration     time.Duration
+	loadFileDuration         time.Duration
+	loadEnvDuration          time.Duration
+	failedStage              string
+	failedStageDuration      time.Duration
+	ignoredSectionScalarKeys []string
 }
 
 func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadata, error) {
@@ -62,21 +63,25 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	filePolicy := configFilePolicyForLoad(hasExplicitConfigFiles(opts))
 	filesStarted := time.Now()
 	if strings.TrimSpace(opts.ConfigPath) != "" {
-		if err := loadConfigFile(ctx, k, opts.ConfigPath, filePolicy); err != nil {
+		ignoredSectionKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath, filePolicy)
+		if err != nil {
 			metadata.failedStage = StageLoadFile
 			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
 		}
+		metadata.ignoredSectionScalarKeys = append(metadata.ignoredSectionScalarKeys, ignoredSectionKeys...)
 	}
 	for _, overlayPath := range opts.ConfigOverlays {
 		if strings.TrimSpace(overlayPath) == "" {
 			continue
 		}
-		if err := loadConfigFile(ctx, k, overlayPath, filePolicy); err != nil {
+		ignoredSectionKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath, filePolicy)
+		if err != nil {
 			metadata.failedStage = StageLoadFile
 			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
 		}
+		metadata.ignoredSectionScalarKeys = append(metadata.ignoredSectionScalarKeys, ignoredSectionKeys...)
 	}
 	metadata.loadFileDuration = time.Since(filesStarted)
 	if err := checkContext(ctx); err != nil {
@@ -87,6 +92,11 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 
 	envStarted := time.Now()
 	namespaceValues := collectNamespaceValues(os.Environ())
+	if len(namespaceValues) > 0 {
+		var ignoredSectionKeys []string
+		namespaceValues, ignoredSectionKeys = filterConfigSectionScalars(namespaceValues)
+		metadata.ignoredSectionScalarKeys = append(metadata.ignoredSectionScalarKeys, ignoredSectionKeys...)
+	}
 	if len(namespaceValues) > 0 {
 		if err := k.Load(confmap.Provider(namespaceValues, keyDelimiter), nil); err != nil {
 			metadata.failedStage = StageLoadEnv
@@ -105,25 +115,30 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 }
 
 func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, policy configFilePolicy) error {
+	_, err := loadConfigFileWithMetadata(ctx, k, path, policy)
+	return err
+}
+
+func loadConfigFileWithMetadata(ctx context.Context, k *koanf.Koanf, path string, policy configFilePolicy) ([]string, error) {
 	if err := checkContext(ctx); err != nil {
-		return err
+		return nil, err
 	}
 
 	trimmedPath := strings.TrimSpace(path)
 	if trimmedPath == "" {
-		return fmt.Errorf("%w: empty config path", ErrLoad)
+		return nil, fmt.Errorf("%w: empty config path", ErrLoad)
 	}
 	cleanPath := filepath.Clean(trimmedPath)
 
 	resolvedPath, pathInfo, err := enforceConfigFilePolicy(cleanPath, policy)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// #nosec G304 -- resolvedPath is normalized and validated by enforceConfigFilePolicy.
 	fileHandle, err := os.Open(resolvedPath)
 	if err != nil {
-		return fmt.Errorf("%w: open config file %q: %w", ErrLoad, cleanPath, err)
+		return nil, fmt.Errorf("%w: open config file %q: %w", ErrLoad, cleanPath, err)
 	}
 	defer func() {
 		_ = fileHandle.Close()
@@ -131,34 +146,37 @@ func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, policy con
 
 	openedInfo, err := fileHandle.Stat()
 	if err != nil {
-		return fmt.Errorf("%w: stat opened config file %q: %w", ErrLoad, cleanPath, err)
+		return nil, fmt.Errorf("%w: stat opened config file %q: %w", ErrLoad, cleanPath, err)
 	}
 	if !os.SameFile(pathInfo, openedInfo) {
-		return fmt.Errorf("%w: config file %q changed during policy checks", ErrSecretPolicy, cleanPath)
+		return nil, fmt.Errorf("%w: config file %q changed during policy checks", ErrSecretPolicy, cleanPath)
 	}
 
 	content, err := io.ReadAll(io.LimitReader(fileHandle, maxConfigFileSizeBytes+1))
 	if err != nil {
-		return fmt.Errorf("%w: read config file %q: %w", ErrLoad, cleanPath, err)
+		return nil, fmt.Errorf("%w: read config file %q: %w", ErrLoad, cleanPath, err)
 	}
 	if int64(len(content)) > maxConfigFileSizeBytes {
-		return fmt.Errorf("%w: config file %q exceeds max size limit %d bytes", ErrSecretPolicy, cleanPath, maxConfigFileSizeBytes)
+		return nil, fmt.Errorf("%w: config file %q exceeds max size limit %d bytes", ErrSecretPolicy, cleanPath, maxConfigFileSizeBytes)
 	}
 
 	fileConfig := koanf.New(keyDelimiter)
 	if err := fileConfig.Load(rawbytes.Provider(content), yaml.Parser()); err != nil {
-		return fmt.Errorf("%w: parse config file %q: %w", ErrParse, cleanPath, err)
+		return nil, fmt.Errorf("%w: parse config file %q: %w", ErrParse, cleanPath, err)
 	}
 	if err := enforceSecretSourcePolicy(fileConfig, cleanPath); err != nil {
-		return err
+		return nil, err
 	}
-	if err := k.Load(confmap.Provider(fileConfig.Raw(), keyDelimiter), nil); err != nil {
-		return fmt.Errorf("%w: merge config file %q: %w", ErrLoad, cleanPath, err)
+	fileValues, ignoredSectionKeys := filterConfigSectionScalars(fileConfig.Raw())
+	if len(fileValues) > 0 {
+		if err := k.Load(confmap.Provider(fileValues, keyDelimiter), nil); err != nil {
+			return nil, fmt.Errorf("%w: merge config file %q: %w", ErrLoad, cleanPath, err)
+		}
 	}
 	if err := checkContext(ctx); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return ignoredSectionKeys, nil
 }
 
 func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.FileInfo, error) {
@@ -259,6 +277,33 @@ func collectNamespaceValues(environ []string) map[string]any {
 	}
 
 	return values
+}
+
+func filterConfigSectionScalars(values map[string]any) (map[string]any, []string) {
+	ignoredKeys := removeConfigSectionScalars(values, "", knownConfigSections())
+	return values, ignoredKeys
+}
+
+func removeConfigSectionScalars(values map[string]any, prefix string, knownSections map[string]struct{}) []string {
+	ignoredKeys := make([]string, 0)
+	for key, value := range values {
+		fullKey := key
+		if prefix != "" {
+			fullKey = prefix + keyDelimiter + key
+		}
+
+		if _, ok := knownSections[fullKey]; ok && !configSectionValueIsMap(value) {
+			ignoredKeys = append(ignoredKeys, fullKey)
+			delete(values, key)
+			continue
+		}
+		nested, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		ignoredKeys = append(ignoredKeys, removeConfigSectionScalars(nested, fullKey, knownSections)...)
+	}
+	return ignoredKeys
 }
 
 func namespaceEnvToKey(envKey string) string {

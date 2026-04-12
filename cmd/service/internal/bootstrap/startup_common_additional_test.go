@@ -370,7 +370,7 @@ func TestBootstrapConfigStageRecordsConfigFailureAndStartupRejection(t *testing.
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_validation_failures_total{reason="load"} 1`) {
+	if !strings.Contains(metricsText, `config_failures_total{reason="load"} 1`) {
 		t.Fatalf("metrics output missing config load failure:\n%s", metricsText)
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonConfigLoad)
@@ -436,7 +436,7 @@ func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testin
 
 	metricsText := collectServiceMetricsText(t, metrics)
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 	if !strings.Contains(logBuffer.String(), `"dependency":"metrics_exposure"`) {
 		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want metrics exposure dependency", logBuffer.String())
 	}
@@ -471,7 +471,7 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 		t.Fatalf("metrics output missing rejected startup outcome:\n%s", metricsText)
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
@@ -621,11 +621,11 @@ func assertStartupRejectionMetric(t *testing.T, metricsText string, reason strin
 	}
 }
 
-func assertConfigValidationFailureMetricAbsent(t *testing.T, metricsText string, reason string) {
+func assertConfigFailureMetricAbsent(t *testing.T, metricsText string, reason string) {
 	t.Helper()
 
-	pattern := `config_validation_failures_total{reason="` + reason + `"}`
+	pattern := `config_failures_total{reason="` + reason + `"}`
 	if strings.Contains(metricsText, pattern) {
-		t.Fatalf("metrics output unexpectedly contains config validation failure %q:\n%s", reason, metricsText)
+		t.Fatalf("metrics output unexpectedly contains config failure %q:\n%s", reason, metricsText)
 	}
 }

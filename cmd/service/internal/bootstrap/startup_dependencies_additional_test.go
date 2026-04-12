@@ -162,8 +162,8 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 
 	metricsText := collectServiceMetricsText(t, metrics)
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonDependencyInit)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonDependencyInit)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonDependencyInit)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
 func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
@@ -196,7 +196,7 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 
 	metricsText := collectServiceMetricsText(t, metrics)
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
-	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
 func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) {

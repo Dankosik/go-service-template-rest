@@ -161,7 +161,7 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 	}
 }
 
-func TestBootstrapConfigStageRecordsStartupCompatibilityFailureAsConfigValidation(t *testing.T) {
+func TestBootstrapConfigStageRecordsStartupCompatibilityFailureSeparately(t *testing.T) {
 	resetBootstrapConfigEnv(t)
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
@@ -177,10 +177,22 @@ func TestBootstrapConfigStageRecordsStartupCompatibilityFailureAsConfigValidatio
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_validation_failures_total{reason="validate"} 1`) {
-		t.Fatalf("metrics output missing config validation failure:\n%s", metricsText)
+	if !strings.Contains(metricsText, `config_failures_total{reason="`+telemetry.ConfigFailureReasonOther+`"} 1`) {
+		t.Fatalf("metrics output missing bounded startup compatibility config failure:\n%s", metricsText)
 	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonConfigValidate)
+	if strings.Contains(metricsText, `config_failures_total{reason="validate"} 1`) {
+		t.Fatalf("metrics output classified startup compatibility as generic validate:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `config_failures_total{reason="`+startupConfigCompatibilityReason+`"} 1`) {
+		t.Fatalf("metrics output used unbounded startup compatibility reason:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `config_load_duration_seconds_count{result="error",stage="`+startupConfigCompatibilityStage+`"} 1`) {
+		t.Fatalf("metrics output missing startup compatibility config load duration:\n%s", metricsText)
+	}
+	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonConfigStartupCompatibility)
+	if strings.Contains(metricsText, `startup_rejections_total{reason="`+telemetry.StartupRejectionReasonConfigValidate+`"} 1`) {
+		t.Fatalf("metrics output classified startup rejection as generic config validate:\n%s", metricsText)
+	}
 	if strings.Contains(metricsText, `config_load_duration_seconds_count{result="success"`) {
 		t.Fatalf("metrics output contains config success metrics after compatibility failure:\n%s", metricsText)
 	}

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +12,38 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestMain(m *testing.M) {
+	restore := clearPostgresEnvForTests()
+	code := m.Run()
+	restore()
+	os.Exit(code)
+}
+
+func clearPostgresEnvForTests() func() {
+	type envState struct {
+		name  string
+		value string
+		set   bool
+	}
+
+	states := make([]envState, 0, len(recognizedPostgresEnvVars))
+	for _, name := range recognizedPostgresEnvVars {
+		value, set := os.LookupEnv(name)
+		states = append(states, envState{name: name, value: value, set: set})
+		_ = os.Unsetenv(name)
+	}
+
+	return func() {
+		for _, state := range states {
+			if state.set {
+				_ = os.Setenv(state.name, state.value)
+				continue
+			}
+			_ = os.Unsetenv(state.name)
+		}
+	}
+}
 
 func TestNewRejectsEmptyDSN(t *testing.T) {
 	t.Parallel()
@@ -135,6 +168,218 @@ func TestNewInvalidDSNIsRedacted(t *testing.T) {
 	}
 }
 
+func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		dsn  string
+	}{
+		{
+			name: "url",
+			dsn:  "postgres://user:pass@localhost:5432/app?sslmode=disable",
+		},
+		{
+			name: "keyword value",
+			dsn:  "user='user' password='pass' host='localhost' port='5432' dbname='app' sslmode='disable'",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			config, err := parsePoolConfig(tc.dsn)
+			if err != nil {
+				t.Fatalf("parsePoolConfig() error = %v", err)
+			}
+			if config.ConnConfig.Host != "localhost" {
+				t.Fatalf("Host = %q, want localhost", config.ConnConfig.Host)
+			}
+			if config.ConnConfig.Port != 5432 {
+				t.Fatalf("Port = %d, want 5432", config.ConnConfig.Port)
+			}
+			if config.ConnConfig.User != "user" {
+				t.Fatalf("User = %q, want user", config.ConnConfig.User)
+			}
+			if config.ConnConfig.Password != "pass" {
+				t.Fatalf("Password = %q, want pass", config.ConnConfig.Password)
+			}
+			if config.ConnConfig.Database != "app" {
+				t.Fatalf("Database = %q, want app", config.ConnConfig.Database)
+			}
+			if len(config.ConnConfig.Fallbacks) != 0 {
+				t.Fatalf("Fallbacks len = %d, want 0", len(config.ConnConfig.Fallbacks))
+			}
+		})
+	}
+}
+
+func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
+	validDSN := "postgres://user:pass@localhost:5432/app?sslmode=disable"
+
+	for _, envName := range recognizedPostgresEnvVars {
+		envName := envName
+		t.Run(envName, func(t *testing.T) {
+			t.Setenv(envName, "ambient-value")
+
+			_, err := parsePoolConfig(validDSN)
+			requirePostgresConfigError(t, err, "postgres dsn uses unsupported ambient PG environment")
+			requireErrorDoesNotContain(t, err, "ambient-value", envName)
+		})
+	}
+
+	t.Run("empty dsn rejects environment only parsing", func(t *testing.T) {
+		t.Setenv("PGHOST", "ambient-host")
+
+		_, err := parsePoolConfig("")
+		requirePostgresConfigError(t, err, "postgres dsn is empty")
+		requireErrorDoesNotContain(t, err, "ambient-host")
+	})
+}
+
+func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *testing.T) {
+	testCases := []struct {
+		name             string
+		dsn              string
+		want             string
+		forbiddenDetails []string
+	}{
+		{
+			name:             "service",
+			dsn:              "service=prodservice user=user password=pass host=localhost port=5432 dbname=app sslmode=disable",
+			want:             "postgres dsn uses unsupported service/passfile source",
+			forbiddenDetails: []string{"prodservice"},
+		},
+		{
+			name:             "servicefile",
+			dsn:              "servicefile=/tmp/pg_service.conf user=user password=pass host=localhost port=5432 dbname=app sslmode=disable",
+			want:             "postgres dsn uses unsupported service/passfile source",
+			forbiddenDetails: []string{"/tmp/pg_service.conf"},
+		},
+		{
+			name:             "passfile",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=disable&passfile=/tmp/.pgpass",
+			want:             "postgres dsn uses unsupported service/passfile source",
+			forbiddenDetails: []string{"/tmp/.pgpass"},
+		},
+		{
+			name:             "sslcert",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=require&sslcert=/tmp/client.crt",
+			want:             "postgres dsn uses unsupported TLS file source",
+			forbiddenDetails: []string{"/tmp/client.crt"},
+		},
+		{
+			name:             "sslkey",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=require&sslkey=/tmp/client.key",
+			want:             "postgres dsn uses unsupported TLS file source",
+			forbiddenDetails: []string{"/tmp/client.key"},
+		},
+		{
+			name:             "sslpassword",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=require&sslpassword=client-secret",
+			want:             "postgres dsn uses unsupported TLS file source",
+			forbiddenDetails: []string{"client-secret"},
+		},
+		{
+			name:             "sslrootcert",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=require&sslrootcert=/tmp/root.crt",
+			want:             "postgres dsn uses unsupported TLS file source",
+			forbiddenDetails: []string{"/tmp/root.crt"},
+		},
+		{
+			name:             "missing password",
+			dsn:              "postgres://user@localhost:5432/app?sslmode=disable",
+			want:             "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+			forbiddenDetails: []string{"user@localhost"},
+		},
+		{
+			name: "missing host",
+			dsn:  "user=user password=pass port=5432 dbname=app sslmode=disable",
+			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+		},
+		{
+			name: "missing port",
+			dsn:  "postgres://user:pass@localhost/app?sslmode=disable",
+			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+		},
+		{
+			name: "missing user",
+			dsn:  "postgres://:pass@localhost:5432/app?sslmode=disable",
+			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+		},
+		{
+			name: "missing database",
+			dsn:  "postgres://user:pass@localhost:5432/?sslmode=disable",
+			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+		},
+		{
+			name: "missing sslmode",
+			dsn:  "postgres://user:pass@localhost:5432/app",
+			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := parsePoolConfig(tc.dsn)
+			requirePostgresConfigError(t, err, tc.want)
+			requireErrorDoesNotContain(t, err, tc.dsn)
+			for _, forbidden := range tc.forbiddenDetails {
+				requireErrorDoesNotContain(t, err, forbidden)
+			}
+		})
+	}
+}
+
+func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
+	testCases := []struct {
+		name string
+		dsn  string
+		want string
+	}{
+		{
+			name: "multi-host url",
+			dsn:  "postgres://user:pass@first:5432,second:5432/app?sslmode=disable",
+			want: "postgres dsn fallback targets are not supported",
+		},
+		{
+			name: "multi-host keyword value",
+			dsn:  "user=user password=pass host=first,second port=5432 dbname=app sslmode=disable",
+			want: "postgres dsn fallback targets are not supported",
+		},
+		{
+			name: "omitted sslmode",
+			dsn:  "postgres://user:pass@localhost:5432/app",
+			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
+		},
+		{
+			name: "sslmode prefer",
+			dsn:  "postgres://user:pass@localhost:5432/app?sslmode=prefer",
+			want: "postgres dsn fallback targets are not supported",
+		},
+		{
+			name: "sslmode allow",
+			dsn:  "postgres://user:pass@localhost:5432/app?sslmode=allow",
+			want: "postgres dsn fallback targets are not supported",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := parsePoolConfig(tc.dsn)
+			requirePostgresConfigError(t, err, tc.want)
+		})
+	}
+}
+
 func TestProbeAddress(t *testing.T) {
 	t.Parallel()
 
@@ -174,17 +419,45 @@ func TestProbeAddress(t *testing.T) {
 	t.Run("invalid probe target shape", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := ProbeAddress("user=user password=pass host=/var/run/postgresql dbname=app")
+		_, err := ProbeAddress("user=user password=pass host=/var/run/postgresql port=5432 dbname=app sslmode=disable")
 		if err == nil {
 			t.Fatal("ProbeAddress() error = nil, want non-nil")
 		}
 		if !errors.Is(err, ErrConfig) {
 			t.Fatalf("ProbeAddress() error = %v, want ErrConfig", err)
 		}
-		if !strings.Contains(err.Error(), "invalid postgres probe address") {
-			t.Fatalf("ProbeAddress() error = %v, want invalid probe target context", err)
+		if !strings.Contains(err.Error(), "postgres dsn requires valid single tcp host and port") {
+			t.Fatalf("ProbeAddress() error = %v, want invalid target context", err)
 		}
 	})
+}
+
+func requirePostgresConfigError(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("error = nil, want %q", want)
+	}
+	if !errors.Is(err, ErrConfig) {
+		t.Fatalf("error = %v, want ErrConfig", err)
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want to contain %q", err, want)
+	}
+}
+
+func requireErrorDoesNotContain(t *testing.T, err error, forbidden ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("error = nil, want non-nil")
+	}
+	for _, value := range forbidden {
+		if value == "" {
+			continue
+		}
+		if strings.Contains(err.Error(), value) {
+			t.Fatalf("error = %v, leaked %q", err, value)
+		}
+	}
 }
 
 func TestPoolHelpersWithoutConnection(t *testing.T) {

@@ -142,8 +142,8 @@ func probeMongoWithRetry(ctx context.Context, cfg config.MongoConfig) error {
 }
 
 func probeWithRetry(ctx context.Context, maxAttempts int, probe func(context.Context) error) error {
-	if maxAttempts <= 1 {
-		return probe(ctx)
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
 
 	var lastErr error

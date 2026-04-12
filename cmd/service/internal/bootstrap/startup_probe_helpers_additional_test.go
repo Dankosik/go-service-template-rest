@@ -118,6 +118,35 @@ func TestProbeWithRetry(t *testing.T) {
 			t.Fatalf("probeWithRetry() err = %v, want %v", err, context.Canceled)
 		}
 	})
+
+	t.Run("canceled before single attempt", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			maxAttempts int
+		}{
+			{name: "one attempt", maxAttempts: 1},
+			{name: "zero normalizes to one attempt", maxAttempts: 0},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				called := false
+				err := probeWithRetry(ctx, tt.maxAttempts, func(context.Context) error {
+					called = true
+					return nil
+				})
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("probeWithRetry() err = %v, want %v", err, context.Canceled)
+				}
+				if called {
+					t.Fatal("probeWithRetry() called probe after context cancellation")
+				}
+			})
+		}
+	})
 }
 
 func TestProbeTCPAndDependencyWrappers(t *testing.T) {

@@ -6,17 +6,24 @@ import (
 )
 
 func knownConfigKeys() map[string]struct{} {
-	return configSchemaLeafKeySet(reflect.TypeOf(Config{}), "")
+	leafKeys, _ := configSchemaKeySets(reflect.TypeOf(Config{}), "")
+	return leafKeys
 }
 
-func configSchemaLeafKeySet(typ reflect.Type, prefix string) map[string]struct{} {
+func knownConfigSections() map[string]struct{} {
+	_, sectionKeys := configSchemaKeySets(reflect.TypeOf(Config{}), "")
+	return sectionKeys
+}
+
+func configSchemaKeySets(typ reflect.Type, prefix string) (map[string]struct{}, map[string]struct{}) {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
-	keys := make(map[string]struct{})
+	leafKeys := make(map[string]struct{})
+	sectionKeys := make(map[string]struct{})
 	if typ.Kind() != reflect.Struct {
-		return keys
+		return leafKeys, sectionKeys
 	}
 
 	for i := 0; i < typ.NumField(); i++ {
@@ -32,15 +39,20 @@ func configSchemaLeafKeySet(typ reflect.Type, prefix string) map[string]struct{}
 		}
 
 		if configSchemaHasTaggedFields(field.Type) {
-			for nestedKey := range configSchemaLeafKeySet(field.Type, key) {
-				keys[nestedKey] = struct{}{}
+			sectionKeys[key] = struct{}{}
+			nestedLeafKeys, nestedSectionKeys := configSchemaKeySets(field.Type, key)
+			for nestedKey := range nestedLeafKeys {
+				leafKeys[nestedKey] = struct{}{}
+			}
+			for nestedKey := range nestedSectionKeys {
+				sectionKeys[nestedKey] = struct{}{}
 			}
 			continue
 		}
-		keys[key] = struct{}{}
+		leafKeys[key] = struct{}{}
 	}
 
-	return keys
+	return leafKeys, sectionKeys
 }
 
 func configSchemaHasTaggedFields(typ reflect.Type) bool {
@@ -56,4 +68,9 @@ func configSchemaHasTaggedFields(typ reflect.Type) bool {
 		}
 	}
 	return false
+}
+
+func configSectionValueIsMap(value any) bool {
+	_, ok := value.(map[string]any)
+	return ok
 }

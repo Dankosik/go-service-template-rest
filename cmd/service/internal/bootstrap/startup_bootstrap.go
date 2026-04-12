@@ -106,7 +106,7 @@ func bootstrapConfigStage(
 		failedStage, failedDuration := failedStageDetails(configReport)
 		errorType := config.ErrorType(err)
 		metrics.ObserveConfigLoadDuration(failedStage, telemetry.ConfigLoadResultError, failedDuration)
-		metrics.IncConfigValidationFailure(errorType)
+		metrics.IncConfigFailure(errorType)
 		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
 		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 		slog.Error(
@@ -129,19 +129,19 @@ func bootstrapConfigStage(
 		if failedDuration <= 0 {
 			failedDuration = time.Millisecond
 		}
-		errorType := config.ErrorType(err)
-		metrics.ObserveConfigLoadDuration(config.StageValidate, telemetry.ConfigLoadResultError, failedDuration)
-		metrics.IncConfigValidationFailure(errorType)
-		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
+		errorType := startupConfigCompatibilityReason
+		metrics.ObserveConfigLoadDuration(startupConfigCompatibilityStage, telemetry.ConfigLoadResultError, failedDuration)
+		metrics.IncConfigFailure(errorType)
+		metrics.IncStartupRejection(telemetry.StartupRejectionReasonConfigStartupCompatibility)
 		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 		slog.Error(
 			"config_load_failed",
 			startupLogArgs(
 				startupCtx,
 				"config_loader",
-				"validate",
+				"startup_compatibility",
 				"error",
-				"stage", config.StageValidate,
+				"stage", startupConfigCompatibilityStage,
 				"error.type", errorType,
 			)...,
 		)

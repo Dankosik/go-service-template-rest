@@ -344,6 +344,55 @@ unknown:
 	}
 }
 
+func TestStrictUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		envKey  string
+		wantKey string
+	}{
+		{name: "root section", envKey: "APP__HTTP", wantKey: "http"},
+		{name: "nested section", envKey: "APP__OBSERVABILITY__OTEL", wantKey: "observability.otel"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv(tc.envKey, "oops")
+
+			_, report, err := LoadDetailed(LoadOptions{Strict: true})
+			if err == nil {
+				t.Fatalf("LoadDetailed() expected strict unknown key error")
+			}
+			if !errors.Is(err, ErrStrictUnknownKey) {
+				t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantKey) {
+				t.Fatalf("error = %v, want unknown section key %q", err, tc.wantKey)
+			}
+			if report.FailedStage != StageValidate {
+				t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
+			}
+		})
+	}
+}
+
+func TestPermissiveUnknownKeyWarnsAndIgnoresScalarSectionKey(t *testing.T) {
+	resetConfigEnv(t)
+
+	configPath := writeTempConfig(t, `
+http: oops
+`)
+
+	cfg, report, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if !containsString(report.UnknownKeyWarnings, "http") {
+		t.Fatalf("UnknownKeyWarnings = %v, want http", report.UnknownKeyWarnings)
+	}
+	if cfg.HTTP.Addr != ":8080" {
+		t.Fatalf("HTTP.Addr = %q, want default :8080 after ignored section scalar", cfg.HTTP.Addr)
+	}
+}
+
 func TestRemovedObservabilityKeysRejectInStrictMode(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1401,8 +1450,12 @@ func resetConfigEnv(t *testing.T) {
 
 func configEnvResetKeys() []string {
 	knownKeys := knownConfigKeys()
-	keySet := make(map[string]struct{}, len(knownKeys)+1)
+	knownSections := knownConfigSections()
+	keySet := make(map[string]struct{}, len(knownKeys)+len(knownSections)+1)
 	for key := range knownKeys {
+		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
+	}
+	for key := range knownSections {
 		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
 	}
 	keySet[allowedConfigRootsEnvVar] = struct{}{}
@@ -1459,6 +1512,16 @@ func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
 	sort.Strings(tagKeys)
 	if !reflect.DeepEqual(knownKeys, tagKeys) {
 		t.Fatalf("knownConfigKeys() = %v, want Config koanf leaf keys %v", knownKeys, tagKeys)
+	}
+}
+
+func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
+	knownSections := sortedStringSetKeys(knownConfigSections())
+
+	tagSections := configSectionKeysFromType(t, reflect.TypeOf(Config{}), "")
+	sort.Strings(tagSections)
+	if !reflect.DeepEqual(knownSections, tagSections) {
+		t.Fatalf("knownConfigSections() = %v, want Config koanf section keys %v", knownSections, tagSections)
 	}
 }
 
@@ -1528,6 +1591,35 @@ func configLeafKeysFromType(t *testing.T, typ reflect.Type, prefix string) []str
 			continue
 		}
 		keys = append(keys, key)
+	}
+	return keys
+}
+
+func configSectionKeysFromType(t *testing.T, typ reflect.Type, prefix string) []string {
+	t.Helper()
+
+	if typ.Kind() != reflect.Struct {
+		t.Fatalf("configSectionKeysFromType(%s) called with non-struct type", typ)
+	}
+
+	keys := make([]string, 0)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		tag := strings.TrimSpace(field.Tag.Get("koanf"))
+		if tag == "" || tag == "-" {
+			t.Fatalf("%s.%s must declare a concrete koanf tag", typ.Name(), field.Name)
+		}
+
+		key := tag
+		if prefix != "" {
+			key = prefix + keyDelimiter + tag
+		}
+
+		if !hasKoanfTaggedFields(field.Type) {
+			continue
+		}
+		keys = append(keys, key)
+		keys = append(keys, configSectionKeysFromType(t, field.Type, key)...)
 	}
 	return keys
 }
@@ -1889,6 +1981,28 @@ func TestMongoURIMustBeParseable(t *testing.T) {
 	}
 }
 
+func TestMongoURIWithSurroundingWhitespaceRejected(t *testing.T) {
+	resetConfigEnv(t)
+
+	rawURI := " mongodb://user:secret@localhost:27017/app "
+	t.Setenv("APP__MONGO__ENABLED", "true")
+	t.Setenv("APP__MONGO__URI", rawURI)
+	t.Setenv("APP__MONGO__DATABASE", "app")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for whitespace-padded mongo uri")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	for _, leaked := range []string{rawURI, "user", "secret"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("error = %v, leaked %q", err, leaked)
+		}
+	}
+}
+
 func TestMongoURIMustUseNumericTCPPort(t *testing.T) {
 	for _, uri := range []string{
 		"mongodb://localhost:notaport/app",
@@ -1995,6 +2109,23 @@ func TestMongoProbeAddress(t *testing.T) {
 					t.Fatalf("error = %v, want ErrValidate", err)
 				}
 			})
+		}
+	})
+
+	t.Run("rejects surrounding whitespace", func(t *testing.T) {
+		rawURI := " mongodb://user:top-secret@localhost:27017/app "
+
+		_, err := MongoProbeAddress(rawURI)
+		if err == nil {
+			t.Fatal("MongoProbeAddress() error = nil, want whitespace error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		for _, leaked := range []string{rawURI, "user", "top-secret"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("error = %v, leaked %q", err, leaked)
+			}
 		}
 	})
 

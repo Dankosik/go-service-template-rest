@@ -19,6 +19,11 @@ type configStageDuration struct {
 	duration time.Duration
 }
 
+const (
+	startupConfigCompatibilityStage  = "startup.config.compatibility"
+	startupConfigCompatibilityReason = "startup_compatibility"
+)
+
 func configLoadStageDurations(report config.LoadReport) []configStageDuration {
 	return []configStageDuration{
 		{stage: config.StageLoadDefaults, duration: report.LoadDefaultsDuration},

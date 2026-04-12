@@ -44,6 +44,24 @@ func TestStartupProbeAddresses(t *testing.T) {
 		}
 	})
 
+	t.Run("postgres fallback dsn fails before admission", func(t *testing.T) {
+		_, err := postgresStartupProbeAddress(config.PostgresConfig{
+			DSN: "postgres://user:pass@localhost:5432,api.example.com:5432/app?sslmode=disable",
+		})
+		if err == nil {
+			t.Fatal("postgresStartupProbeAddress() error = nil, want non-nil")
+		}
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
+		}
+		if !errors.Is(err, postgres.ErrConfig) {
+			t.Fatalf("err = %v, want wrapped postgres ErrConfig", err)
+		}
+		if !strings.Contains(err.Error(), "postgres dsn fallback targets are not supported") {
+			t.Fatalf("err = %v, want fallback rejection", err)
+		}
+	})
+
 	t.Run("redis empty", func(t *testing.T) {
 		_, err := redisStartupProbeAddress(config.RedisConfig{Addr: "   "})
 		if err == nil {

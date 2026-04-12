@@ -40,10 +40,12 @@ func TestNormalizeStartupRejectionReason(t *testing.T) {
 		{name: "config load", input: StartupRejectionReasonConfigLoad, want: StartupRejectionReasonConfigLoad},
 		{name: "config parse", input: "CONFIG_PARSE", want: StartupRejectionReasonConfigParse},
 		{name: "config validate", input: StartupRejectionReasonConfigValidate, want: StartupRejectionReasonConfigValidate},
+		{name: "config startup compatibility", input: StartupRejectionReasonConfigStartupCompatibility, want: StartupRejectionReasonConfigStartupCompatibility},
 		{name: "strict unknown key", input: StartupRejectionReasonConfigStrictUnknownKey, want: StartupRejectionReasonConfigStrictUnknownKey},
 		{name: "secret policy", input: StartupRejectionReasonConfigSecretPolicy, want: StartupRejectionReasonConfigSecretPolicy},
 		{name: "config load taxonomy alias rejected", input: "load", want: StartupRejectionReasonOther},
 		{name: "config validate taxonomy alias rejected", input: "validate", want: StartupRejectionReasonOther},
+		{name: "startup compatibility taxonomy alias rejected", input: "startup_compatibility", want: StartupRejectionReasonOther},
 		{name: "strict unknown key taxonomy alias rejected", input: "strict_unknown_key", want: StartupRejectionReasonOther},
 		{name: "secret policy taxonomy alias rejected", input: "secret_policy", want: StartupRejectionReasonOther},
 		{name: "policy violation", input: StartupRejectionReasonPolicyViolation, want: StartupRejectionReasonPolicyViolation},
@@ -86,6 +88,31 @@ func TestNormalizeConfigLoadResult(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfigFailureReason(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "load", input: ConfigFailureReasonLoad, want: ConfigFailureReasonLoad},
+		{name: "parse upper", input: "PARSE", want: ConfigFailureReasonParse},
+		{name: "validate", input: ConfigFailureReasonValidate, want: ConfigFailureReasonValidate},
+		{name: "strict unknown key", input: ConfigFailureReasonStrictUnknownKey, want: ConfigFailureReasonStrictUnknownKey},
+		{name: "secret policy", input: ConfigFailureReasonSecretPolicy, want: ConfigFailureReasonSecretPolicy},
+		{name: "unknown", input: "startup_compatibility", want: ConfigFailureReasonOther},
+		{name: "empty", input: "", want: ConfigFailureReasonOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeConfigFailureReason(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeConfigFailureReason(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeConfigStartupOutcome(t *testing.T) {
 	testCases := []struct {
 		name  string
@@ -113,7 +140,7 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	m := New()
 
 	m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
-	m.IncConfigValidationFailure("validate")
+	m.IncConfigFailure(ConfigFailureReasonValidate)
 	m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 	m.IncStartupRejection("dns_failure")
 	m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
@@ -124,13 +151,13 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 
 	expected := []string{
 		`http_requests_total`,
-		`config_validation_failures_total`,
+		`config_failures_total`,
 		`startup_rejections_total`,
 		`telemetry_init_failure_total`,
 		`config_startup_outcome_total`,
 		`startup_dependency_status`,
 		`route="/ping"`,
-		`config_validation_failures_total{reason="validate"} 1`,
+		`config_failures_total{reason="validate"} 1`,
 		`startup_rejections_total{reason="` + StartupRejectionReasonDependencyInit + `"} 1`,
 		`startup_rejections_total{reason="` + StartupRejectionReasonOther + `"} 1`,
 		`outcome="` + ConfigStartupOutcomeReady + `"`,
@@ -147,6 +174,7 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 		`deploy_health_admission_total`,
 		`rollback_execution_total`,
 		`config_drift_detected_total`,
+		`config_validation_failures_total`,
 		`network_policy_violation_total`,
 	}
 	for _, pattern := range removed {
@@ -156,15 +184,46 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	}
 }
 
+func TestConfigFailureMetricUsesBoundedReasons(t *testing.T) {
+	m := New()
+
+	m.IncConfigFailure(ConfigFailureReasonLoad)
+	m.IncConfigFailure(ConfigFailureReasonParse)
+	m.IncConfigFailure(ConfigFailureReasonValidate)
+	m.IncConfigFailure(ConfigFailureReasonStrictUnknownKey)
+	m.IncConfigFailure(ConfigFailureReasonSecretPolicy)
+	m.IncConfigFailure("new_reason")
+
+	metricsText := collectMetricsText(t, m)
+	expected := []string{
+		`config_failures_total{reason="` + ConfigFailureReasonLoad + `"} 1`,
+		`config_failures_total{reason="` + ConfigFailureReasonParse + `"} 1`,
+		`config_failures_total{reason="` + ConfigFailureReasonValidate + `"} 1`,
+		`config_failures_total{reason="` + ConfigFailureReasonStrictUnknownKey + `"} 1`,
+		`config_failures_total{reason="` + ConfigFailureReasonSecretPolicy + `"} 1`,
+		`config_failures_total{reason="` + ConfigFailureReasonOther + `"} 1`,
+	}
+	for _, pattern := range expected {
+		if !strings.Contains(metricsText, pattern) {
+			t.Fatalf("metrics output does not contain %q\n%s", pattern, metricsText)
+		}
+	}
+	if strings.Contains(metricsText, `reason="new_reason"`) {
+		t.Fatalf("metrics output contains unbounded config failure reason:\n%s", metricsText)
+	}
+}
+
 func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 	m := New()
 
 	m.ObserveConfigLoadDuration("load", "unexpected-result", time.Millisecond)
+	m.IncConfigFailure("startup_compatibility")
 	m.IncConfigStartupOutcome("degraded")
 
 	metricsText := collectMetricsText(t, m)
 	expected := []string{
 		`config_load_duration_seconds_count{result="` + ConfigLoadResultOther + `",stage="load"} 1`,
+		`config_failures_total{reason="` + ConfigFailureReasonOther + `"} 1`,
 		`config_startup_outcome_total{outcome="` + ConfigStartupOutcomeOther + `"} 1`,
 	}
 	for _, pattern := range expected {
@@ -173,7 +232,7 @@ func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 		}
 	}
 
-	for _, rawLabel := range []string{`result="unexpected-result"`, `outcome="degraded"`} {
+	for _, rawLabel := range []string{`result="unexpected-result"`, `reason="startup_compatibility"`, `outcome="degraded"`} {
 		if strings.Contains(metricsText, rawLabel) {
 			t.Fatalf("metrics output contains unbounded label %q:\n%s", rawLabel, metricsText)
 		}
@@ -185,7 +244,7 @@ func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
 		m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
 		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)
 		m.ObserveConfigLoadDuration("load", "ok", time.Millisecond)
-		m.IncConfigValidationFailure("dependency_init")
+		m.IncConfigFailure("dependency_init")
 		m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 		m.AddConfigUnknownKeyWarnings(1)
 		m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)

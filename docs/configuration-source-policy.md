@@ -62,6 +62,8 @@ The remaining Redis cache/store knobs (`redis.username`, `redis.password`, `redi
 
 Postgres DSN driver parsing belongs to `internal/infra/postgres`. `internal/config` validates required presence and generic bounds, while bootstrap asks the Postgres adapter for a sanitized probe address before egress admission. A malformed `postgres.dsn` is therefore classified as dependency initialization during bootstrap address resolution, not as generic config validation, and adapter parse errors must not echo credentials.
 
+The baseline Postgres DSN contract is intentionally strict. The DSN must come from the typed `postgres.dsn` value, which in deployments means `APP__POSTGRES__DSN`, and it must explicitly include host, port, database, user, non-empty password, and `sslmode`. URL and keyword/value DSNs are accepted when they describe one TCP target. The adapter rejects empty DSNs; recognized pgx/libpq `PG*` environment inputs, including `PGSSLSNI`; `service`, `servicefile`, and `passfile`; caller-provided TLS file keys such as `sslcert`, `sslkey`, `sslrootcert`, and `sslpassword`; multi-host or fallback targets; default, `prefer`, or `allow` `sslmode`; and Unix socket hosts. Before calling pgx, the adapter also clears pgx's implicit passfile and TLS file defaults so `.pgpass` and `~/.postgresql/*` files cannot become side-effect config sources.
+
 `MongoProbeAddress` is part of that guard-only path: `internal/config` owns extracting a probe-ready address from the typed config snapshot so validation and bootstrap admission can stay deterministic. A future Mongo adapter should own runtime connection, database, retry, query, and store semantics under `internal/infra/mongo` instead of growing them around the config helper.
 
 ## Adding A Config Key
