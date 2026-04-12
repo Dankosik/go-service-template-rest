@@ -20,4 +20,4 @@
 
 - If `.claude/agents` diverges from `.codex/agents`, `make agents-check` fails.
 - If skill mirrors miss the new review skills, `make skills-check` fails.
-- If model/reasoning fields drift out of the documented policy, targeted validation checks fail.
+- If model/reasoning fields are reintroduced in subagent TOML, targeted validation checks fail.

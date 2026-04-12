@@ -2,7 +2,7 @@
 
 ## Context
 
-The audit found that the repository's orchestration-first/spec-first model is strong, but the agent portfolio has drift and maintenance risks: repeated boilerplate in agent files, no agents mirror check comparable to skills sync, review-skill gaps for delivery/distributed/observability, implicit model/reasoning policy, aggressive fan-out ceiling, missing reusable subagent brief template, inconsistent fan-in envelope, and an unrecorded compatibility check for `.codex/config.toml` agent registry wiring.
+The audit found that the repository's orchestration-first/spec-first model is strong, but the agent portfolio has drift and maintenance risks: repeated boilerplate in agent files, no agents mirror check comparable to skills sync, review-skill gaps for delivery/distributed/observability, implicit fan-out/config policy, missing reusable subagent brief template, inconsistent fan-in envelope, and an unrecorded compatibility check for `.codex/config.toml` agent registry wiring.
 
 ## Scope / Non-goals
 
@@ -32,9 +32,7 @@ Out of scope:
 - Add `docs/subagent-contract.md` as the shared per-agent invariant and fan-in envelope so individual agent files can point to one common surface instead of repeating every rule.
 - Add `docs/subagent-brief-template.md` as the reusable orchestrator prompt template for read-only specialist lanes.
 - Keep `max_threads = 20` per repository preference and keep `max_depth = 1`.
-- Pin high-scrutiny roles to `gpt-5.4` with `high` reasoning: `challenger-agent`, `security-agent`, `reliability-agent`, and `quality-agent`.
-- Pin read-heavy specialist roles to `gpt-5.4-mini` with `medium` reasoning: architecture, API, data, delivery, design-integrator, distributed, domain, observability, performance, and QA.
-- Pin concurrency to `gpt-5.4` with `medium` reasoning because concurrent behavior review is small enough to justify stronger local reasoning.
+- Do not pin specific models or reasoning effort in subagent files; subagents inherit the active session defaults.
 - Add `go-devops-review`, `go-distributed-review`, and `go-observability-review` as concise instruction-only review skills.
 - Route delivery, distributed, and observability agents to those review skills in review mode.
 - Add `scripts/dev/sync-agents.sh`, `make agents-sync`, `make agents-check`, and Docker/CI integration.
@@ -62,4 +60,4 @@ Implementation follows `plan.md` and `tasks.md` in this task bundle.
 
 ## Outcome
 
-All audit findings are addressed in the repository surfaces: shared subagent contract and brief template are added, review-skill gaps are closed, model/reasoning and fan-out policy are explicit, `.codex` to `.claude` agent mirror checks are automated, skill mirrors are synced, and docs now describe the updated operating model.
+All audit findings are addressed in the repository surfaces: shared subagent contract and brief template are added, review-skill gaps are closed, fan-out policy is explicit, subagent model selection is left inherited by request, `.codex` to `.claude` agent mirror checks are automated, skill mirrors are synced, and docs now describe the updated operating model.

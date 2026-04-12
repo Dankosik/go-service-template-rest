@@ -19,7 +19,7 @@ Make targeted repository-instruction changes in one local phase, then validate w
 - `make agents-check`
 - `make skills-check`
 - `make guardrails-check`
-- targeted `rg` checks for model/reasoning policy and new review skill routing
+- targeted `rg` checks for inherited model policy, fan-out policy, and new review skill routing
 
 ## Reopen Conditions
 

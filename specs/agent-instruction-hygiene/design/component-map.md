@@ -3,7 +3,7 @@
 | Surface | Change |
 | --- | --- |
 | `.codex/config.toml` | Retain the repository fan-out ceiling, retain depth, and add registry compatibility comment. |
-| `.codex/agents/*.toml` | Add shared-contract reference and model/reasoning fields; update review routing for delivery/distributed/observability. |
+| `.codex/agents/*.toml` | Add shared-contract reference and update review routing for delivery/distributed/observability; leave model/reasoning inherited. |
 | `.claude/agents/*.md` | Regenerate from Codex agent files using the new sync script. |
 | `.agents/skills` | Add `go-devops-review`, `go-distributed-review`, and `go-observability-review`. |
 | Runtime skill mirrors | Receive the three new skills through existing skill sync. |
