@@ -132,6 +132,11 @@ sync_skills_mirrors() {
 	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --sync
 }
 
+sync_agent_mirrors() {
+	echo "Syncing subagent mirrors..."
+	bash "${ROOT_DIR}/scripts/dev/sync-agents.sh" --sync
+}
+
 maybe_infer_codeowner_from_origin() {
 	local detected_module inferred_codeowner
 
@@ -279,6 +284,7 @@ setup_native() {
 	fi
 
 	sync_skills_mirrors || return 1
+	sync_agent_mirrors || return 1
 
 	echo "Setup complete (native mode)."
 	echo "Next steps:"
@@ -305,6 +311,7 @@ setup_docker() {
 	bash "${ROOT_DIR}/scripts/dev/doctor.sh" --mode docker || return 1
 
 	sync_skills_mirrors || return 1
+	sync_agent_mirrors || return 1
 
 	echo "Setup complete (docker mode)."
 	echo "Next steps:"

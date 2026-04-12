@@ -28,6 +28,7 @@ These are configured by `scripts/dev/configure-branch-protection.sh`.
 ## Ongoing Gate Expectations
 
 - Keep generated artifacts in sync (`openapi`, `sqlc`, `mockgen`, `stringer`).
+- Keep agent mirrors and skill mirrors in sync (`make agents-check`, `make skills-check`).
 - Keep docs-drift gate green when behavior/contract/CI-sensitive files change.
 - Keep security gates green (`govulncheck`, `gosec`, `gitleaks`, Trivy).
 - Keep `check` and `check-full` usable for local developer feedback loops.

@@ -56,7 +56,7 @@ Bootstrap shortcuts:
     - create `.env` from `env/.env.example` when missing,
     - `go mod download` when local `go` is available,
     - otherwise pre-pull Docker tooling images when Docker daemon is reachable.
-  - Does not run template/admin rewiring (`go.mod` module init, CODEOWNERS replacement, skills sync).
+  - Does not run template/admin rewiring (`go.mod` module init, CODEOWNERS replacement, skills or agent mirror sync).
 
 - `make check`
   - Purpose: quick local validation for daily feature work.
@@ -77,7 +77,8 @@ Bootstrap shortcuts:
     - module path auto-init from `git remote origin` when needed,
     - CODEOWNERS placeholder auto-replacement (with origin inference or explicit `CODEOWNER`),
     - environment doctor checks,
-    - skills mirror sync.
+    - skills mirror sync,
+    - agent mirror sync.
 
 - `make setup`
   - Runs: `bash ./scripts/dev/setup.sh`
@@ -105,7 +106,8 @@ Bootstrap shortcuts:
     - module path auto-init (when clone origin differs from template module),
     - `go mod download`,
     - `make doctor-native`,
-    - `make skills-sync`.
+    - `make skills-sync`,
+    - `make agents-sync`.
 
 - `make template-init-native-strict` / `make setup-native-strict`
   - Runs: `bash ./scripts/dev/setup.sh --native --strict`
@@ -120,7 +122,8 @@ Bootstrap shortcuts:
     - pull pinned tool images,
     - module path auto-init in Docker mode (when clone origin differs from template module),
     - `make doctor-docker`,
-    - `make skills-sync`.
+    - `make skills-sync`,
+    - `make agents-sync`.
 
 - `make doctor`
   - Runs: `bash ./scripts/dev/doctor.sh --mode auto`
@@ -395,6 +398,9 @@ Bootstrap shortcuts:
 - `make docker-skills-check`
   - Runs skill mirror consistency check.
 
+- `make docker-agents-check`
+  - Runs Codex/Claude agent mirror consistency check.
+
 - `make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs docs drift policy check through Docker mode wrapper.
 
@@ -408,6 +414,8 @@ Bootstrap shortcuts:
   - Zero-setup composite check (closest local equivalent to CI gates):
     - `mod-check`
     - `guardrails-check`
+    - `agents-check`
+    - `skills-check`
     - `fmt-check`
     - `lint`
     - `test`
@@ -440,7 +448,20 @@ Bootstrap shortcuts:
     - when `MIGRATION_DSN` is empty and Docker daemon is available, falls back to `make docker-migration-validate`;
     - when both `MIGRATION_DSN` and Docker daemon are unavailable, prints warning and skips with success.
 
-### Skills distribution and sync
+### Agent and skill distribution and sync
+
+- `make agents-sync`
+  - Runs: `scripts/dev/sync-agents.sh`
+  - Purpose: render Claude Code agent mirrors from canonical Codex agent sources.
+  - Source:
+    - `.codex/agents/*.toml`
+  - Mirror:
+    - `.claude/agents/*.md`
+
+- `make agents-check`
+  - Runs: `scripts/dev/sync-agents.sh --check`
+  - Purpose: validate `.claude/agents` against canonical `.codex/agents`.
+  - Note: blocking CI gate in `repo-integrity`.
 
 - `make skills-sync`
   - Runs: `scripts/dev/sync-skills.sh`
@@ -456,7 +477,7 @@ Bootstrap shortcuts:
 - `make skills-check`
   - Runs: `scripts/dev/sync-skills.sh --check`
   - Purpose: validate mirrors against canonical source `.agents/skills`.
-  - Note: manual maintenance helper; not a blocking CI gate.
+  - Note: blocking CI gate in `repo-integrity`.
 
 ### Run and build
 
@@ -536,7 +557,7 @@ Choose the package and test location from [Project Structure & Module Organizati
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
@@ -550,6 +571,7 @@ Local commands map directly to CI jobs:
 Zero-setup wrappers:
 - `make docker-ci` runs a near-parity local CI baseline without local Go/Node installs.
 - `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+- `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:

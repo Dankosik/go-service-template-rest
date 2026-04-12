@@ -10,6 +10,7 @@ required_files=(
   ".gitattributes"
   ".golangci.yml"
   ".redocly.yaml"
+  ".codex/config.toml"
   ".github/CODEOWNERS"
   ".github/dependabot.yml"
   ".github/pull_request_template.md"
@@ -23,6 +24,10 @@ required_files=(
   "env/docker-compose.yml"
   "build/docker/Dockerfile"
   "build/docker/tooling-images.Dockerfile"
+  "docs/subagent-contract.md"
+  "docs/subagent-brief-template.md"
+  "scripts/dev/sync-skills.sh"
+  "scripts/dev/sync-agents.sh"
 )
 
 missing=()
@@ -88,6 +93,11 @@ require_regex '-f build/docker/Dockerfile' ".github/workflows/cd.yml" "cd workfl
 # Keep the runtime bridge from AGENTS.md to the detailed workflow reference.
 require_regex 'docs/spec-first-workflow\.md' "AGENTS.md" "AGENTS.md must point to docs/spec-first-workflow.md for non-trivial workflow execution"
 require_regex 'follow `AGENTS\.md`' "docs/spec-first-workflow.md" "spec-first-workflow doc must declare AGENTS.md as the controlling contract"
+require_regex '^max_threads = 8$' ".codex/config.toml" "Codex subagent fan-out ceiling must stay explicit and bounded"
+require_regex '^max_depth = 1$' ".codex/config.toml" "Codex subagent nesting depth must stay at the documented default"
+require_regex 'agents\.<name>\.config_file' ".codex/config.toml" "Codex registry compatibility note must stay documented"
+require_regex 'make agents-check' ".github/workflows/ci.yml" "CI must check Codex/Claude agent mirror drift"
+require_regex 'AGENTS_SYNC_SCRIPT' "Makefile" "Makefile must expose agent mirror sync/check targets"
 
 # Keep branch protection required checks aligned with CI job contexts.
 required_contexts=(

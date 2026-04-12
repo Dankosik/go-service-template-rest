@@ -96,6 +96,7 @@ usage() {
 	echo "  secrets-scan"
 	echo "  guardrails-check"
 	echo "  skills-check"
+	echo "  agents-check"
 	echo "  docs-drift-check <base-ref> <head-ref>"
 	echo "  migration-validate"
 	echo "  container-security"
@@ -488,6 +489,9 @@ guardrails-check)
 skills-check)
 	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --check
 	;;
+agents-check)
+	bash "${ROOT_DIR}/scripts/dev/sync-agents.sh" --check
+	;;
 docs-drift-check)
 	base_ref="${1:-}"
 	head_ref="${2:-}"
@@ -506,6 +510,8 @@ container-security)
 ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" agents-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test

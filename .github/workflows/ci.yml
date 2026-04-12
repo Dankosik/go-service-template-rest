@@ -41,6 +41,12 @@ jobs:
       - name: Verify required repository guardrails
         run: make guardrails-check
 
+      - name: Verify agent mirror drift
+        run: make agents-check
+
+      - name: Verify skill mirror drift
+        run: make skills-check
+
       - name: Verify formatting drift
         run: make fmt-check
 

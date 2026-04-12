@@ -104,7 +104,8 @@ This repository distinguishes between two different things:
 - **Skills** are portable workflow playbooks loaded on demand by the orchestrator or a subagent.
 
 The repository ships with project-scoped, read-only subagents for focused reasoning and review.
-Codex agent instructions live in `.codex/agents/*.toml` and are loaded through `.codex/config.toml`. Claude Code mirrors live in `.claude/agents/`; keep the two surfaces semantically aligned when changing an agent.
+Codex agent instructions live in `.codex/agents/*.toml` and are loaded through `.codex/config.toml`; this registry layer uses Codex-supported `agents.<name>.config_file` entries while keeping each agent as a standalone custom-agent file. Claude Code mirrors live in `.claude/agents/` and are generated from the Codex source with `make agents-sync`; verify them with `make agents-check`.
+Shared subagent invariants live in [docs/subagent-contract.md](docs/subagent-contract.md), and reusable lane prompts start from [docs/subagent-brief-template.md](docs/subagent-brief-template.md).
 Click an agent name to open its Codex instruction file.
 
 | Agent | Owns | Use when | Returns |
@@ -127,7 +128,7 @@ Click an agent name to open its Codex instruction file.
 
 All of these agents stay advisory and read-only. Write-capable delegates are not part of this subagent model. Final decisions always stay with the orchestrator in the main flow.
 Agent files own scope, mode routing, and handoff. If a lane uses a skill, the skill owns the procedure and exact output shape; the agent fallback return shape applies only when the chosen skill does not define one.
-`delivery-agent`, `distributed-agent`, and `observability-agent` currently have spec/design skills but no dedicated review skills, so use them for targeted research or adjudication rechecks rather than routine review fan-out.
+`delivery-agent`, `distributed-agent`, and `observability-agent` now have dedicated review skills (`go-devops-review`, `go-distributed-review`, and `go-observability-review`) for targeted review of their owned surfaces; routine application-code diff review still belongs to the matching code-domain reviewer.
 
 ### How They Are Called
 
@@ -233,9 +234,12 @@ The catalog has two layers:
 | [`go-design-review`](.agents/skills/go-design-review/SKILL.md) | architecture alignment, boundary integrity, accidental complexity | a diff may hide broader design drift |
 | [`go-chi-review`](.agents/skills/go-chi-review/SKILL.md) | router ownership, middleware order, HTTP fallback semantics | chi routing or transport behavior changed |
 | [`go-db-cache-review`](.agents/skills/go-db-cache-review/SKILL.md) | SQL safety, transaction scope, cache correctness, fallback risk | DB or cache code changed |
+| [`go-devops-review`](.agents/skills/go-devops-review/SKILL.md) | CI/CD gates, release policy, runtime hardening, deployment trust | delivery or platform policy changed |
+| [`go-distributed-review`](.agents/skills/go-distributed-review/SKILL.md) | async workflow, outbox/inbox, replay, recovery | cross-service or durable async behavior changed |
 | [`go-domain-invariant-review`](.agents/skills/go-domain-invariant-review/SKILL.md) | business-invariant preservation and side-effect safety | behavior changes carry semantic risk |
 | [`go-idiomatic-review`](.agents/skills/go-idiomatic-review/SKILL.md) | idiomatic Go, error handling, context flow, naming | you want merge-risk review on Go code quality |
 | [`go-language-simplifier-review`](.agents/skills/go-language-simplifier-review/SKILL.md) | lower cognitive complexity and cleaner control flow | the code works but feels noisy or over-abstracted |
+| [`go-observability-review`](.agents/skills/go-observability-review/SKILL.md) | logs, metrics, traces, SLOs, alerts, telemetry privacy and cardinality | observability behavior changed |
 | [`go-concurrency-review`](.agents/skills/go-concurrency-review/SKILL.md) | goroutines, channels, cancellation, shutdown safety | concurrent behavior changed or races are suspected |
 | [`go-performance-review`](.agents/skills/go-performance-review/SKILL.md) | hot-path regression, allocation and contention risk | performance is a review concern |
 | [`go-qa-review`](.agents/skills/go-qa-review/SKILL.md) | coverage quality, assertion strength, determinism | review depends on test quality and proof strength |
@@ -255,6 +259,8 @@ These repository-native skill locations keep the workflow portable:
 
 The source of truth stays in `.agents/skills`, so you do not have to hand-maintain separate skill instructions per tool.
 Refresh the runtime mirrors with `bash ./scripts/dev/sync-skills.sh` or `make skills-sync`, and verify them with `bash ./scripts/dev/sync-skills.sh --check` or `make skills-check`.
+
+Agent mirrors follow the same hygiene: `.codex/agents` is canonical for project subagents, `.claude/agents` is generated, `make agents-sync` refreshes it, and `make agents-check` is a CI-backed drift check.
 
 ## This Is An Orchestrator Project
 
@@ -462,7 +468,7 @@ Repository and CI guardrails include:
 - unit tests, race tests, and coverage thresholds
 - OpenAPI generation drift, validation, lint, and breaking-change checks
 - `sqlc` generation drift checks
-- docs and skills mirror drift checks
+- docs, agent mirror, and skills mirror drift checks
 - `govulncheck`, `gosec`, and `gitleaks`
 - container image scanning with Trivy
 - GHCR publishing, CycloneDX SBOM generation, and Cosign signing in release flows

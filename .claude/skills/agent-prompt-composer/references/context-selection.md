@@ -78,15 +78,22 @@ Validation to mention:
 
 ### Skills / Prompts / Agents / Workflow Tooling
 Signals:
-- `skill`, `prompt`, `agent`, `workflow`, `skills-sync`, `mirror`, `codex`, `claude`, `cursor`
+- `skill`, `prompt`, `agent`, `workflow`, `skills-sync`, `agents-sync`, `mirror`, `codex`, `claude`, `cursor`
 
 Inspect first:
 - `.agents/skills/`
+- `.codex/agents/`
+- `.claude/agents/`
 - `scripts/dev/sync-skills.sh`
+- `scripts/dev/sync-agents.sh`
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
+- `docs/subagent-contract.md`
+- `docs/subagent-brief-template.md`
 
 Validation to mention:
+- `make agents-sync`
+- `make agents-check`
 - `make skills-sync`
 - `make skills-check`
 - `git diff --check` when files are created or edited

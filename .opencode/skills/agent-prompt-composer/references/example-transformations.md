@@ -89,12 +89,16 @@ Confirmed Signals And Exact Identifiers
 
 Relevant Repository Context
 - Canonical local skills live under `.agents/skills/`.
-- Runtime mirrors are maintained by `scripts/dev/sync-skills.sh` and the corresponding `make skills-sync` / `make skills-check` flows.
+- Canonical Codex subagents live under `.codex/agents/`; Claude mirrors live under `.claude/agents/`.
+- Runtime skill mirrors are maintained by `scripts/dev/sync-skills.sh` and the corresponding `make skills-sync` / `make skills-check` flows.
+- Agent mirrors are maintained by `scripts/dev/sync-agents.sh` and the corresponding `make agents-sync` / `make agents-check` flows.
 - This repo uses a spec-first workflow with master control in `specs/<feature-id>/workflow-plan.md`, phase-local routing in `specs/<feature-id>/workflow-plans/<phase>.md`, decisions in `specs/<feature-id>/spec.md`, and explicit validation evidence.
 
 Inspect First
 - `.agents/skills/`
+- `.codex/agents/`
 - `scripts/dev/sync-skills.sh`
+- `scripts/dev/sync-agents.sh`
 - `README.md`
 - `AGENTS.md`
 
@@ -116,6 +120,7 @@ Acceptance Criteria / Expected Outcome
 - The skill output is clearly better than literal translation or prompt polish alone and is tailored to this repository.
 
 Validation / Verification
+- Run `make agents-check` if subagent surfaces changed.
 - Run `make skills-sync` and `make skills-check`.
 - Validate any structured eval file such as `evals/evals.json`.
 - Use realistic messy fixtures across more than one language style to review whether the produced context handoff is repo-aware and actionable.

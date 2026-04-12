@@ -64,6 +64,7 @@ It captures only durable facts that materially improve downstream context and ha
 - Integration tests: `make test-integration`
 - Security scans: `make go-security`, `make secrets-scan`
 - Migration rehearsal: `make migration-validate`
+- Agent mirrors: `make agents-sync`, `make agents-check`
 - Skill mirrors: `make skills-sync`, `make skills-check`
 
 ## Context Rules For This Skill

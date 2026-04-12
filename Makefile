@@ -16,6 +16,7 @@ GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
 BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
 DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
 SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
+AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 
 .DEFAULT_GOAL := help
 
@@ -23,10 +24,10 @@ SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
 	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check \
+	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-vet docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
-	docker-guardrails-check docker-skills-check docker-docs-drift-check docker-migration-validate docker-container-security \
+	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
 help:
@@ -50,6 +51,8 @@ help:
 	@echo "  make migration-validate      # migration rehearsal"
 	@echo "  make mocks-drift-check       # mockgen drift checks"
 	@echo "  make stringer-drift-check    # stringer drift checks"
+	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
+	@echo "  make skills-check            # skill mirror drift check"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-sqlc-check       # Docker SQLC validation"
 	@echo "  make docker-test-integration # Docker integration tests"
@@ -281,7 +284,7 @@ secrets-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
-	$(MAKE) mod-check guardrails-check fmt-check lint test vet test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
@@ -395,6 +398,12 @@ skills-sync:
 skills-check:
 	$(SKILLS_SYNC_SCRIPT) --check
 
+agents-sync:
+	$(AGENTS_SYNC_SCRIPT)
+
+agents-check:
+	$(AGENTS_SYNC_SCRIPT) --check
+
 docker-go-security:
 	$(DOCKER_TOOLING_SCRIPT) go-security
 
@@ -406,6 +415,9 @@ docker-guardrails-check:
 
 docker-skills-check:
 	$(DOCKER_TOOLING_SCRIPT) skills-check
+
+docker-agents-check:
+	$(DOCKER_TOOLING_SCRIPT) agents-check
 
 docker-docs-drift-check:
 	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)
