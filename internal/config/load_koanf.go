@@ -182,11 +182,11 @@ func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.F
 	if fileInfo.IsDir() {
 		return "", nil, fmt.Errorf("%w: config file %q is a directory", ErrLoad, path)
 	}
-	if !fileInfo.Mode().IsRegular() {
-		return "", nil, fmt.Errorf("%w: config file %q must be a regular file", ErrSecretPolicy, path)
+	if policy != configFilePolicyLocal && fileInfo.Mode()&os.ModeSymlink != 0 {
+		return "", nil, fmt.Errorf("%w: symlink config file %q is not allowed outside local environment", ErrSecretPolicy, path)
 	}
-	if fileInfo.Size() > maxConfigFileSizeBytes {
-		return "", nil, fmt.Errorf("%w: config file %q exceeds max size limit %d bytes", ErrSecretPolicy, path, maxConfigFileSizeBytes)
+	if policy != configFilePolicyLocal && !fileInfo.Mode().IsRegular() {
+		return "", nil, fmt.Errorf("%w: config file %q must be a regular file", ErrSecretPolicy, path)
 	}
 
 	resolvedPath, err := filepath.EvalSymlinks(absPath)
@@ -198,6 +198,15 @@ func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.F
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: stat resolved config file %q: %w", ErrSecretPolicy, path, err)
 	}
+	if resolvedInfo.IsDir() {
+		return "", nil, fmt.Errorf("%w: config file %q is a directory", ErrLoad, path)
+	}
+	if !resolvedInfo.Mode().IsRegular() {
+		return "", nil, fmt.Errorf("%w: config file %q must be a regular file", ErrSecretPolicy, path)
+	}
+	if resolvedInfo.Size() > maxConfigFileSizeBytes {
+		return "", nil, fmt.Errorf("%w: config file %q exceeds max size limit %d bytes", ErrSecretPolicy, path, maxConfigFileSizeBytes)
+	}
 
 	if policy == configFilePolicyLocal {
 		return resolvedPath, resolvedInfo, nil
@@ -205,9 +214,6 @@ func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.F
 	allowedRoots := resolveAllowedConfigRoots()
 	if !isPathUnderAllowedRoots(resolvedPath, allowedRoots) {
 		return "", nil, fmt.Errorf("%w: config file %q is outside allowed roots", ErrSecretPolicy, path)
-	}
-	if fileInfo.Mode()&os.ModeSymlink != 0 {
-		return "", nil, fmt.Errorf("%w: symlink config file %q is not allowed outside local environment", ErrSecretPolicy, path)
 	}
 	if resolvedPath != absPath {
 		return "", nil, fmt.Errorf("%w: symlink components in config file path %q are not allowed outside local environment", ErrSecretPolicy, path)

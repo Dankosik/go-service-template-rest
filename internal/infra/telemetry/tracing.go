@@ -118,9 +118,11 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 	if !otelconfig.TraceSamplerArgFinite(arg) {
 		return nil, fmt.Errorf("trace sampler arg must be finite")
 	}
+	if !otelconfig.TraceSamplerArgInRange(arg) {
+		return nil, fmt.Errorf("trace sampler arg must be in range [0,1]")
+	}
 
 	samplerName := otelconfig.TraceSamplerOrDefault(name)
-	ratio := clampRatio(arg)
 
 	switch samplerName {
 	case otelconfig.SamplerAlwaysOn:
@@ -128,22 +130,12 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 	case otelconfig.SamplerAlwaysOff:
 		return sdktrace.NeverSample(), nil
 	case otelconfig.SamplerTraceIDRatio:
-		return sdktrace.TraceIDRatioBased(ratio), nil
+		return sdktrace.TraceIDRatioBased(arg), nil
 	case otelconfig.SamplerParentBasedTraceIDRatio:
-		return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio)), nil
+		return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(arg)), nil
 	default:
 		return nil, fmt.Errorf("unsupported trace sampler %q", name)
 	}
-}
-
-func clampRatio(v float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	if v > 1 {
-		return 1
-	}
-	return v
 }
 
 func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, bool, error) {

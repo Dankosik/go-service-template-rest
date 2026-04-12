@@ -60,6 +60,18 @@ func TestBuildTraceSampler(t *testing.T) {
 			wantErr:     true,
 		},
 		{
+			name:        "negative sampler arg",
+			samplerName: "traceidratio",
+			samplerArg:  -0.1,
+			wantErr:     true,
+		},
+		{
+			name:        "greater than one sampler arg",
+			samplerName: "traceidratio",
+			samplerArg:  1.1,
+			wantErr:     true,
+		},
+		{
 			name:        "positive infinity sampler arg",
 			samplerName: "traceidratio",
 			samplerArg:  math.Inf(1),
@@ -190,39 +202,6 @@ func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 		if got := attrs[key]; got == fallback {
 			t.Fatalf("resource attribute %q used fallback %q; attrs=%v", key, fallback, attrs)
 		}
-	}
-}
-
-func TestClampRatio(t *testing.T) {
-	testCases := []struct {
-		name    string
-		input   float64
-		wantOut float64
-	}{
-		{
-			name:    "below zero",
-			input:   -1,
-			wantOut: 0,
-		},
-		{
-			name:    "above one",
-			input:   2,
-			wantOut: 1,
-		},
-		{
-			name:    "valid range",
-			input:   0.42,
-			wantOut: 0.42,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := clampRatio(tc.input)
-			if got != tc.wantOut {
-				t.Fatalf("clampRatio(%v) = %v, want %v", tc.input, got, tc.wantOut)
-			}
-		})
 	}
 }
 

@@ -9,9 +9,10 @@ import (
 )
 
 type startupSpanController struct {
-	span    trace.Span
-	cleanup func(context.Context)
-	once    sync.Once
+	span        trace.Span
+	cleanup     func(context.Context)
+	endOnce     sync.Once
+	cleanupOnce sync.Once
 }
 
 func newStartupSpanController(span trace.Span, cleanup func(context.Context)) *startupSpanController {
@@ -36,11 +37,13 @@ func (c *startupSpanController) Close(ctx context.Context) {
 		return
 	}
 	c.end()
-	c.cleanup(ctx)
+	c.cleanupOnce.Do(func() {
+		c.cleanup(ctx)
+	})
 }
 
 func (c *startupSpanController) end(attrs ...attribute.KeyValue) {
-	c.once.Do(func() {
+	c.endOnce.Do(func() {
 		if c.span == nil {
 			return
 		}

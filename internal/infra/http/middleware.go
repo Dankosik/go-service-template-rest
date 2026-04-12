@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/felixge/httpsnoop"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/propagation"
@@ -27,29 +28,6 @@ type routeLabelContextKey struct{}
 
 type routeLabelHolder struct {
 	value string
-}
-
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	if code >= 200 && w.status == 0 {
-		w.status = code
-	}
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *statusWriter) Write(b []byte) (int, error) {
-	if w.status == 0 {
-		w.status = http.StatusOK
-	}
-	return w.ResponseWriter.Write(b)
-}
-
-func (w *statusWriter) Unwrap() http.ResponseWriter {
-	return w.ResponseWriter
 }
 
 func RequestCorrelation(next http.Handler) http.Handler {
@@ -156,15 +134,9 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 		routeHolder := &routeLabelHolder{}
 		ctxWithRouteHolder := context.WithValue(r.Context(), routeLabelContextKey{}, routeHolder)
 
-		start := time.Now()
-		sw := &statusWriter{ResponseWriter: w}
-
-		next.ServeHTTP(sw, r.WithContext(ctxWithRouteHolder))
-		duration := time.Since(start)
-
-		if sw.status == 0 {
-			sw.status = http.StatusOK
-		}
+		captured := httpsnoop.CaptureMetricsFn(w, func(capturedWriter http.ResponseWriter) {
+			next.ServeHTTP(capturedWriter, r.WithContext(ctxWithRouteHolder))
+		})
 
 		route := routeHolder.value
 		if route == "" {
@@ -180,16 +152,16 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 			"method", r.Method,
 			"path", r.URL.Path,
 			"route", route,
-			"status", sw.status,
-			"duration_ms", duration.Milliseconds(),
+			"status", captured.Code,
+			"duration_ms", captured.Duration.Milliseconds(),
 			"request_id", requestIDFromContext(r.Context()),
 			"trace_id", traceID,
 			"span_id", spanID,
 		)
 
 		if metrics != nil {
-			metrics.ObserveHTTPRequest(r.Method, route, sw.status)
-			metrics.ObserveHTTPRequestDuration(r.Method, route, sw.status, duration)
+			metrics.ObserveHTTPRequest(r.Method, route, captured.Code)
+			metrics.ObserveHTTPRequestDuration(r.Method, route, captured.Code, captured.Duration)
 		}
 	})
 }

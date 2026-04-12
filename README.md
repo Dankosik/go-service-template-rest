@@ -197,7 +197,7 @@ The catalog has two layers:
 
 | Skill | What it does | Load when |
 |---|---|---|
-| [`ru-agent-prompt-composer`](.agents/skills/ru-agent-prompt-composer/SKILL.md) | turns messy Russian task descriptions into a strong English prompt for coding agents working in this repository | rough Russian or mixed-language notes need intent reconstruction, repo-aware context selection, and a downstream-agent-ready prompt instead of plain translation |
+| [`agent-prompt-composer`](.agents/skills/agent-prompt-composer/SKILL.md) | turns messy, incomplete, repetitive, or multilingual task input into a strong English prompt for coding agents working in this repository | rough user notes need intent reconstruction, repo-aware context selection, and a downstream-agent-ready prompt instead of plain translation or copy editing |
 
 ### System Design And Control Surfaces
 

@@ -164,9 +164,7 @@ func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 	if resp.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 	}
-	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-	}
+	assertProblemContentType(t, resp.Header())
 }
 
 func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {

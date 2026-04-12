@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -127,9 +128,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 		}
-		if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-			t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-		}
+		assertProblemContentType(t, resp.Header())
 		var problem map[string]any
 		if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
 			t.Fatalf("unmarshal problem: %v", err)
@@ -151,9 +150,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
 		}
-		if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-			t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-		}
+		assertProblemContentType(t, resp.Header())
 		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
@@ -204,9 +201,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
 		}
-		if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-			t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-		}
+		assertProblemContentType(t, resp.Header())
 		if !strings.Contains(resp.Body.String(), "cors preflight is not enabled") {
 			t.Fatalf("body = %q, want to contain preflight policy detail", resp.Body.String())
 		}
@@ -225,9 +220,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 		}
-		if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-			t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-		}
+		assertProblemContentType(t, resp.Header())
 	})
 }
 
@@ -297,9 +290,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
 	}
-	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-	}
+	assertProblemContentType(t, resp.Header())
 	var problem map[string]any
 	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
 		t.Fatalf("unmarshal problem: %v", err)
@@ -390,9 +381,7 @@ func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
 	}
-	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-	}
+	assertProblemContentType(t, resp.Header())
 	if !strings.Contains(resp.Body.String(), "invalid request framing") {
 		t.Fatalf("body = %q, want %q", resp.Body.String(), "invalid request framing")
 	}
@@ -420,9 +409,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	if resp.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
 	}
-	if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
-		t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
-	}
+	assertProblemContentType(t, resp.Header())
 	if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
 		t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
 	}
@@ -527,9 +514,16 @@ func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 	}
 }
 
-func TestAccessLogResponseControllerCanReachWrappedWriter(t *testing.T) {
+func TestAccessLogPreservesFlusherInterface(t *testing.T) {
+	var directFlusher bool
 	var flushErr error
 	handler := AccessLog(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		directFlusher = true
+		flusher.Flush()
 		flushErr = http.NewResponseController(w).Flush()
 	}))
 
@@ -537,6 +531,9 @@ func TestAccessLogResponseControllerCanReachWrappedWriter(t *testing.T) {
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 
+	if !directFlusher {
+		t.Fatal("wrapped ResponseWriter does not implement http.Flusher")
+	}
 	if flushErr != nil {
 		t.Fatalf("ResponseController.Flush() error = %v, want nil", flushErr)
 	}
@@ -832,5 +829,22 @@ func assertAllowHeader(t *testing.T, header http.Header, want string) {
 	}
 	if got := header.Values("Allow"); len(got) != 1 || got[0] != want {
 		t.Fatalf("Allow header values = %v, want single value %q", got, want)
+	}
+}
+
+func assertProblemContentType(t *testing.T, header http.Header) {
+	t.Helper()
+
+	got := header.Get("Content-Type")
+	gotMediaType, _, err := mime.ParseMediaType(got)
+	if err != nil {
+		t.Fatalf("Content-Type = %q, want valid problem media type: %v", got, err)
+	}
+	wantMediaType, _, err := mime.ParseMediaType(problemJSONContentType)
+	if err != nil {
+		t.Fatalf("parse problem content type %q: %v", problemJSONContentType, err)
+	}
+	if gotMediaType != wantMediaType {
+		t.Fatalf("Content-Type media type = %q, want %q", gotMediaType, wantMediaType)
 	}
 }

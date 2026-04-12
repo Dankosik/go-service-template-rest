@@ -15,7 +15,7 @@ const (
 )
 
 func loadNetworkPolicyFromEnv() (networkPolicy, error) {
-	ingressEnabled, ingressDeclared, err := parseOptionalBoolEnvWithExplicitDeclaration(envNetworkPublicIngressEnabled, false, "ingress")
+	ingressEnabled, ingressExplicitValue, err := parseOptionalBoolEnvWithExplicitValue(envNetworkPublicIngressEnabled, false, "ingress")
 	if err != nil {
 		return networkPolicy{}, err
 	}
@@ -39,13 +39,13 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 	}
 
 	return networkPolicy{
-		now:                   time.Now,
-		ingressPublicEnabled:  ingressEnabled,
-		ingressPublicDeclared: ingressDeclared,
-		egressAllowlist:       egressAllowlist,
-		egressAllowedSchemes:  egressSchemes,
-		ingressException:      ingressException,
-		egressException:       egressException,
+		now:                        time.Now,
+		ingressPublicEnabled:       ingressEnabled,
+		ingressPublicExplicitValue: ingressExplicitValue,
+		egressAllowlist:            egressAllowlist,
+		egressAllowedSchemes:       egressSchemes,
+		ingressException:           ingressException,
+		egressException:            egressException,
 	}, nil
 }
 
@@ -58,23 +58,22 @@ func networkPolicyErrorLabels(err error) (string, string) {
 }
 
 func parseOptionalBoolEnv(name string, defaultValue bool, policyClass string) (bool, error) {
-	value, _, err := parseOptionalBoolEnvWithExplicitDeclaration(name, defaultValue, policyClass)
+	value, _, err := parseOptionalBoolEnvWithExplicitValue(name, defaultValue, policyClass)
 	return value, err
 }
 
-func parseOptionalBoolEnvWithExplicitDeclaration(name string, defaultValue bool, policyClass string) (bool, bool, error) {
-	raw, declared := os.LookupEnv(name)
-	raw = strings.TrimSpace(raw)
+func parseOptionalBoolEnvWithExplicitValue(name string, defaultValue bool, policyClass string) (bool, bool, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
 		return defaultValue, false, nil
 	}
 	switch strings.ToLower(raw) {
 	case "1", "true", "yes", "on":
-		return true, declared, nil
+		return true, true, nil
 	case "0", "false", "no", "off":
-		return false, declared, nil
+		return false, true, nil
 	default:
-		return false, declared, &networkPolicyConfigError{
+		return false, true, &networkPolicyConfigError{
 			policyClass: policyClass,
 			reasonClass: "invalid_configuration",
 			message:     fmt.Sprintf("%s must be a boolean value", name),

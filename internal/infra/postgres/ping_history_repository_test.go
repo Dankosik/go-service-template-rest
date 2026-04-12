@@ -16,8 +16,16 @@ type fakePingHistoryQuerier struct {
 	list   func(ctx context.Context, limit int32) ([]sqlcgen.PingHistory, error)
 }
 
-func newPingHistoryRepositoryWithQuerier(queries pingHistoryQuerier) *PingHistoryRepository {
-	return &PingHistoryRepository{queries: queries}
+type pingHistoryContextKey struct{}
+
+func newPingHistoryRepositoryWithQuerier(t *testing.T, queries pingHistoryQuerier) *PingHistoryRepository {
+	t.Helper()
+
+	repo, err := newPingHistoryRepository(queries)
+	if err != nil {
+		t.Fatalf("newPingHistoryRepository() error = %v, want nil", err)
+	}
+	return repo
 }
 
 func (f fakePingHistoryQuerier) CreatePingHistory(ctx context.Context, payload string) (sqlcgen.PingHistory, error) {
@@ -46,6 +54,21 @@ func TestNewPingHistoryRepositoryRejectsNilPool(t *testing.T) {
 	}
 	if !errors.Is(err, ErrPingHistoryRepository) {
 		t.Fatalf("NewPingHistoryRepository(nil) error = %v, want ErrPingHistoryRepository", err)
+	}
+}
+
+func TestNewPingHistoryRepositoryRejectsNilQuerier(t *testing.T) {
+	t.Parallel()
+
+	repo, err := newPingHistoryRepository(nil)
+	if err == nil {
+		t.Fatal("newPingHistoryRepository(nil) error = nil, want non-nil")
+	}
+	if repo != nil {
+		t.Fatalf("newPingHistoryRepository(nil) repo = %#v, want nil", repo)
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("newPingHistoryRepository(nil) error = %v, want ErrPingHistoryRepository", err)
 	}
 }
 
@@ -81,8 +104,15 @@ func TestPingHistoryRepositoryCreate(t *testing.T) {
 	t.Parallel()
 
 	createdAt := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
-	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
-		create: func(context.Context, string) (sqlcgen.PingHistory, error) {
+	const contextMarker = "create-context"
+	repo := newPingHistoryRepositoryWithQuerier(t, fakePingHistoryQuerier{
+		create: func(ctx context.Context, payload string) (sqlcgen.PingHistory, error) {
+			if got := ctx.Value(pingHistoryContextKey{}); got != contextMarker {
+				t.Fatalf("CreatePingHistory() context marker = %v, want %q", got, contextMarker)
+			}
+			if payload != "ok" {
+				t.Fatalf("CreatePingHistory() payload = %q, want %q", payload, "ok")
+			}
 			return sqlcgen.PingHistory{
 				ID:      7,
 				Payload: "ok",
@@ -94,7 +124,8 @@ func TestPingHistoryRepositoryCreate(t *testing.T) {
 		},
 	})
 
-	got, err := repo.Create(context.Background(), "ok")
+	ctx := context.WithValue(context.Background(), pingHistoryContextKey{}, contextMarker)
+	got, err := repo.Create(ctx, "ok")
 	if err != nil {
 		t.Fatalf("Create() error = %v, want nil", err)
 	}
@@ -107,7 +138,7 @@ func TestPingHistoryRepositoryCreateWrapsQueryError(t *testing.T) {
 	t.Parallel()
 
 	sentinel := errors.New("write failed")
-	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
+	repo := newPingHistoryRepositoryWithQuerier(t, fakePingHistoryQuerier{
 		create: func(context.Context, string) (sqlcgen.PingHistory, error) {
 			return sqlcgen.PingHistory{}, sentinel
 		},
@@ -128,7 +159,7 @@ func TestPingHistoryRepositoryCreateWrapsQueryError(t *testing.T) {
 func TestPingHistoryRepositoryCreateRejectsNullCreatedAt(t *testing.T) {
 	t.Parallel()
 
-	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
+	repo := newPingHistoryRepositoryWithQuerier(t, fakePingHistoryQuerier{
 		create: func(context.Context, string) (sqlcgen.PingHistory, error) {
 			return sqlcgen.PingHistory{ID: 9, Payload: "x"}, nil
 		},
@@ -151,8 +182,15 @@ func TestPingHistoryRepositoryListRecent(t *testing.T) {
 
 	firstAt := time.Date(2026, time.February, 1, 10, 0, 0, 0, time.UTC)
 	secondAt := firstAt.Add(-time.Minute)
-	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
-		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
+	const contextMarker = "list-context"
+	repo := newPingHistoryRepositoryWithQuerier(t, fakePingHistoryQuerier{
+		list: func(ctx context.Context, limit int32) ([]sqlcgen.PingHistory, error) {
+			if got := ctx.Value(pingHistoryContextKey{}); got != contextMarker {
+				t.Fatalf("ListRecentPingHistory() context marker = %v, want %q", got, contextMarker)
+			}
+			if limit != 2 {
+				t.Fatalf("ListRecentPingHistory() limit = %d, want 2", limit)
+			}
 			return []sqlcgen.PingHistory{
 				{
 					ID:      10,
@@ -174,7 +212,8 @@ func TestPingHistoryRepositoryListRecent(t *testing.T) {
 		},
 	})
 
-	got, err := repo.ListRecent(context.Background(), 2)
+	ctx := context.WithValue(context.Background(), pingHistoryContextKey{}, contextMarker)
+	got, err := repo.ListRecent(ctx, 2)
 	if err != nil {
 		t.Fatalf("ListRecent() error = %v, want nil", err)
 	}
@@ -196,7 +235,7 @@ func TestPingHistoryRepositoryListRecentErrors(t *testing.T) {
 	t.Parallel()
 
 	sentinel := errors.New("read failed")
-	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
+	repo := newPingHistoryRepositoryWithQuerier(t, fakePingHistoryQuerier{
 		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
 			return nil, sentinel
 		},
@@ -226,7 +265,7 @@ func TestPingHistoryRepositoryListRecentRejectsOverSampleLimit(t *testing.T) {
 	t.Parallel()
 
 	var listCalled bool
-	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
+	repo := newPingHistoryRepositoryWithQuerier(t, fakePingHistoryQuerier{
 		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
 			listCalled = true
 			return nil, nil

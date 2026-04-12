@@ -51,9 +51,6 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	if opts.MaxIdleConns < 0 || opts.MaxIdleConns > opts.MaxOpenConns {
 		return nil, fmt.Errorf("%w: max idle conns must be in range [0,max_open_conns]", ErrConfig)
 	}
-	if opts.MaxIdleConns > math.MaxInt32 {
-		return nil, fmt.Errorf("%w: max idle conns must be <= %d", ErrConfig, math.MaxInt32)
-	}
 	if opts.ConnMaxLifetime <= 0 {
 		return nil, fmt.Errorf("%w: conn max lifetime must be > 0", ErrConfig)
 	}
@@ -65,7 +62,7 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	poolConfig.ConnConfig.ConnectTimeout = opts.ConnectTimeout
 	poolConfig.MaxConns = int32(opts.MaxOpenConns) // #nosec G115 -- validated to be <= math.MaxInt32 above.
 	poolConfig.MaxConnLifetime = opts.ConnMaxLifetime
-	installMaxIdleConnLimiter(poolConfig, int32(opts.MaxIdleConns)) // #nosec G115 -- validated to be <= math.MaxInt32 above.
+	installMaxIdleConnLimiter(poolConfig, int32(opts.MaxIdleConns)) // #nosec G115 -- validated via MaxIdleConns <= MaxOpenConns <= math.MaxInt32 above.
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

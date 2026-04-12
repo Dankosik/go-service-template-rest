@@ -122,7 +122,7 @@ func TestBootstrapConfigStageRecordsConfigFailureAndStartupRejection(t *testing.
 	if !strings.Contains(metricsText, `config_validation_failures_total{reason="load"} 1`) {
 		t.Fatalf("metrics output missing config load failure:\n%s", metricsText)
 	}
-	assertStartupRejectionMetric(t, metricsText, "config_load")
+	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonConfigLoad)
 }
 
 func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
@@ -153,8 +153,8 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"}`) {
 		t.Fatalf("metrics output missing rejected startup outcome:\n%s", metricsText)
 	}
-	assertStartupRejectionMetric(t, metricsText, "policy_violation")
-	assertConfigValidationFailureMetricAbsent(t, metricsText, "policy_violation")
+	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {

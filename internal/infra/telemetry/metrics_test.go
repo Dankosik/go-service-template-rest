@@ -37,16 +37,16 @@ func TestNormalizeStartupRejectionReason(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "config load", input: "load", want: "config_load"},
-		{name: "config parse", input: "CONFIG_PARSE", want: "config_parse"},
-		{name: "config validate", input: "validate", want: "config_validate"},
-		{name: "strict unknown key", input: "strict_unknown_key", want: "config_strict_unknown_key"},
-		{name: "secret policy", input: "secret_policy", want: "config_secret_policy"},
-		{name: "policy violation", input: "policy_violation", want: "policy_violation"},
-		{name: "dependency init", input: "dependency_init", want: "dependency_init"},
-		{name: "startup error", input: "startup_error", want: "startup_error"},
-		{name: "unknown", input: "dns_failure", want: "other"},
-		{name: "empty", input: "", want: "other"},
+		{name: "config load", input: "load", want: StartupRejectionReasonConfigLoad},
+		{name: "config parse", input: "CONFIG_PARSE", want: StartupRejectionReasonConfigParse},
+		{name: "config validate", input: "validate", want: StartupRejectionReasonConfigValidate},
+		{name: "strict unknown key", input: "strict_unknown_key", want: StartupRejectionReasonConfigStrictUnknownKey},
+		{name: "secret policy", input: "secret_policy", want: StartupRejectionReasonConfigSecretPolicy},
+		{name: "policy violation", input: StartupRejectionReasonPolicyViolation, want: StartupRejectionReasonPolicyViolation},
+		{name: "dependency init", input: StartupRejectionReasonDependencyInit, want: StartupRejectionReasonDependencyInit},
+		{name: "startup error", input: StartupRejectionReasonStartupError, want: StartupRejectionReasonStartupError},
+		{name: "unknown", input: "dns_failure", want: StartupRejectionReasonOther},
+		{name: "empty", input: "", want: StartupRejectionReasonOther},
 	}
 
 	for _, tc := range testCases {
@@ -64,7 +64,7 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 
 	m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
 	m.IncConfigValidationFailure("validate")
-	m.IncStartupRejection("dependency_init")
+	m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 	m.IncStartupRejection("dns_failure")
 	m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
 	m.IncConfigStartupOutcome("ready")
@@ -81,8 +81,8 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 		`startup_dependency_status`,
 		`route="/ping"`,
 		`config_validation_failures_total{reason="validate"} 1`,
-		`startup_rejections_total{reason="dependency_init"} 1`,
-		`startup_rejections_total{reason="other"} 1`,
+		`startup_rejections_total{reason="` + StartupRejectionReasonDependencyInit + `"} 1`,
+		`startup_rejections_total{reason="` + StartupRejectionReasonOther + `"} 1`,
 		`outcome="ready"`,
 		`dep="telemetry"`,
 		`mode="optional_fail_open"`,
@@ -112,7 +112,7 @@ func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
 		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)
 		m.ObserveConfigLoadDuration("load", "ok", time.Millisecond)
 		m.IncConfigValidationFailure("dependency_init")
-		m.IncStartupRejection("dependency_init")
+		m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 		m.AddConfigUnknownKeyWarnings(1)
 		m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
 		m.IncConfigStartupOutcome("ready")

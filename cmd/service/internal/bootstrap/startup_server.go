@@ -12,7 +12,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -88,16 +87,7 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 		if startupFailureRecorded || args.admission.Ready() {
 			return
 		}
-		if err != nil {
-			args.bootstrapSpan.RecordError(err)
-		}
-		args.bootstrapSpan.SetAttributes(
-			attribute.String("result", "error"),
-			attribute.String("error.type", "startup_error"),
-			attribute.String("failed.stage", stage),
-		)
-		args.metrics.IncStartupRejection("startup_error")
-		args.metrics.IncConfigStartupOutcome("rejected")
+		recordStartupRejection(args.bootstrapSpan, args.metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
 		startupFailureRecorded = true
 	}
 
@@ -222,14 +212,7 @@ func rejectHTTPStartup(
 	stage string,
 	err error,
 ) error {
-	bootstrapSpan.RecordError(err)
-	bootstrapSpan.SetAttributes(
-		attribute.String("result", "error"),
-		attribute.String("error.type", "startup_error"),
-		attribute.String("failed.stage", stage),
-	)
-	metrics.IncStartupRejection("startup_error")
-	metrics.IncConfigStartupOutcome("rejected")
+	recordStartupRejection(bootstrapSpan, metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
 	log.Error(
 		"startup_blocked",
 		startupLogArgs(

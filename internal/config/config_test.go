@@ -494,48 +494,6 @@ func TestRedisModePolicyHelpers(t *testing.T) {
 	if got := (RedisConfig{Mode: "unexpected"}).ModeValue(); got != "unexpected" {
 		t.Fatalf("ModeValue(unexpected) = %q, want unexpected", got)
 	}
-
-	testCases := []struct {
-		name string
-		cfg  Config
-		want bool
-	}{
-		{
-			name: "disabled store mode",
-			cfg: Config{
-				Redis: RedisConfig{Mode: RedisModeStore},
-			},
-		},
-		{
-			name: "enabled cache without flag",
-			cfg: Config{
-				Redis: RedisConfig{Enabled: true, Mode: RedisModeCache},
-			},
-		},
-		{
-			name: "enabled cache with flag",
-			cfg: Config{
-				Redis:        RedisConfig{Enabled: true, Mode: RedisModeCache},
-				FeatureFlags: FeatureFlagsConfig{RedisReadinessProbe: true},
-			},
-			want: true,
-		},
-		{
-			name: "enabled store mode",
-			cfg: Config{
-				Redis: RedisConfig{Enabled: true, Mode: RedisModeStore},
-			},
-			want: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.cfg.RedisReadinessProbeRequired(); got != tc.want {
-				t.Fatalf("RedisReadinessProbeRequired() = %v, want %v", got, tc.want)
-			}
-		})
-	}
 }
 
 func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
@@ -546,6 +504,7 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 		cfg          Config
 		wantPostgres bool
 		wantMongo    bool
+		wantRedis    bool
 	}{
 		{
 			name: "disabled dependencies ignore readiness flags",
@@ -553,7 +512,14 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 				FeatureFlags: FeatureFlagsConfig{
 					PostgresReadinessProbe: true,
 					MongoReadinessProbe:    true,
+					RedisReadinessProbe:    true,
 				},
+			},
+		},
+		{
+			name: "disabled redis store mode does not require readiness",
+			cfg: Config{
+				Redis: RedisConfig{Mode: RedisModeStore},
 			},
 		},
 		{
@@ -561,6 +527,7 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 			cfg: Config{
 				Postgres: PostgresConfig{Enabled: true},
 				Mongo:    MongoConfig{Enabled: true},
+				Redis:    RedisConfig{Enabled: true, Mode: RedisModeCache},
 			},
 		},
 		{
@@ -568,13 +535,23 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 			cfg: Config{
 				Postgres: PostgresConfig{Enabled: true},
 				Mongo:    MongoConfig{Enabled: true},
+				Redis:    RedisConfig{Enabled: true, Mode: RedisModeCache},
 				FeatureFlags: FeatureFlagsConfig{
 					PostgresReadinessProbe: true,
 					MongoReadinessProbe:    true,
+					RedisReadinessProbe:    true,
 				},
 			},
 			wantPostgres: true,
 			wantMongo:    true,
+			wantRedis:    true,
+		},
+		{
+			name: "enabled redis store mode requires readiness without flag",
+			cfg: Config{
+				Redis: RedisConfig{Enabled: true, Mode: RedisModeStore},
+			},
+			wantRedis: true,
 		},
 	}
 
@@ -586,7 +563,36 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 			if got := tc.cfg.MongoReadinessProbeRequired(); got != tc.wantMongo {
 				t.Fatalf("MongoReadinessProbeRequired() = %v, want %v", got, tc.wantMongo)
 			}
+			if got := tc.cfg.RedisReadinessProbeRequired(); got != tc.wantRedis {
+				t.Fatalf("RedisReadinessProbeRequired() = %v, want %v", got, tc.wantRedis)
+			}
 		})
+	}
+}
+
+func TestLocalAllowsSymlinkConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation can require elevated privileges on Windows")
+	}
+
+	resetConfigEnv(t)
+
+	target := writeTempConfig(t, `
+http:
+  addr: ":18080"
+`)
+
+	linkPath := filepath.Join(t.TempDir(), "config-link.yaml")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Fatalf("os.Symlink() error = %v", err)
+	}
+
+	cfg, _, err := LoadDetailed(LoadOptions{ConfigPath: linkPath})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.HTTP.Addr != ":18080" {
+		t.Fatalf("HTTP.Addr = %q, want :18080", cfg.HTTP.Addr)
 	}
 }
 
@@ -681,7 +687,7 @@ func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
 	}
 }
 
-func TestTST005MalformedYAMLReturnsParseError(t *testing.T) {
+func TestMalformedYAMLReturnsParseError(t *testing.T) {
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -1287,22 +1293,35 @@ func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigYAMLIncludesDefaultBackedKeys(t *testing.T) {
-	k := koanf.New(keyDelimiter)
+func TestDefaultConfigYAMLMatchesCodeDefaults(t *testing.T) {
+	defaultKoanf := koanf.New(keyDelimiter)
+	if err := defaultKoanf.Load(confmap.Provider(defaultValues(), keyDelimiter), nil); err != nil {
+		t.Fatalf("load code defaults: %v", err)
+	}
+	defaultSnapshot, err := buildSnapshot(defaultKoanf)
+	if err != nil {
+		t.Fatalf("buildSnapshot(defaultValues()) error = %v", err)
+	}
+
+	yamlKoanf := koanf.New(keyDelimiter)
 	path := filepath.Join("..", "..", "env", "config", "default.yaml")
-	if err := loadConfigFile(context.Background(), k, path, configFilePolicyLocal); err != nil {
+	if err := loadConfigFile(context.Background(), yamlKoanf, path, configFilePolicyLocal); err != nil {
 		t.Fatalf("load default config yaml: %v", err)
 	}
 
-	yamlKeys := make(map[string]struct{})
-	for _, key := range k.Keys() {
-		yamlKeys[key] = struct{}{}
+	defaultKeys := sortedStringSetKeys(defaultValues())
+	yamlKeys := yamlKoanf.Keys()
+	sort.Strings(yamlKeys)
+	if !reflect.DeepEqual(yamlKeys, defaultKeys) {
+		t.Fatalf("env/config/default.yaml keys = %v, want code default keys %v", yamlKeys, defaultKeys)
 	}
 
-	for key := range defaultValues() {
-		if _, ok := yamlKeys[key]; !ok {
-			t.Fatalf("%s missing from env/config/default.yaml", key)
-		}
+	yamlSnapshot, err := buildSnapshot(yamlKoanf)
+	if err != nil {
+		t.Fatalf("buildSnapshot(env/config/default.yaml) error = %v", err)
+	}
+	if !reflect.DeepEqual(yamlSnapshot, defaultSnapshot) {
+		t.Fatalf("env/config/default.yaml snapshot = %+v, want code defaults %+v", yamlSnapshot, defaultSnapshot)
 	}
 }
 

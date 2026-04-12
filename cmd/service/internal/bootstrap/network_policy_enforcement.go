@@ -21,7 +21,7 @@ func (p networkPolicy) withIngressExposure(env, addr string) networkPolicy {
 }
 
 func (p networkPolicy) validatePublicIngress() error {
-	if p.ingressDeclarationRequired && !p.ingressPublicDeclared {
+	if p.ingressDeclarationRequired && !p.ingressPublicExplicitValue {
 		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", errDependencyInit, envNetworkPublicIngressEnabled)
 	}
 	if !p.ingressPublicEnabled {
@@ -80,7 +80,7 @@ func (p networkPolicy) EnforceEgressTarget(target, scheme string) error {
 
 	host, err := extractHost(target)
 	if err != nil {
-		return fmt.Errorf("%w: invalid egress target", errDependencyInit)
+		return fmt.Errorf("%w: invalid egress target: %w", errDependencyInit, err)
 	}
 
 	if classifyHostExposure(host) != "public" {

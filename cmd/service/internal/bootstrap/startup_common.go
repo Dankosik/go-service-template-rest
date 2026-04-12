@@ -47,6 +47,19 @@ func failedStageDetails(report config.LoadReport) (string, time.Duration) {
 	return stage, duration
 }
 
+func recordStartupRejection(bootstrapSpan trace.Span, metrics *telemetry.Metrics, metricReason, errorType, failedStage string, err error) {
+	if err != nil {
+		bootstrapSpan.RecordError(err)
+	}
+	bootstrapSpan.SetAttributes(
+		attribute.String("result", "error"),
+		attribute.String("error.type", errorType),
+		attribute.String("failed.stage", failedStage),
+	)
+	metrics.IncStartupRejection(metricReason)
+	metrics.IncConfigStartupOutcome("rejected")
+}
+
 func rejectStartupForPolicyViolation(
 	ctx context.Context,
 	bootstrapSpan trace.Span,
@@ -56,21 +69,15 @@ func rejectStartupForPolicyViolation(
 	err error,
 	extra ...any,
 ) error {
-	bootstrapSpan.RecordError(err)
-	bootstrapSpan.SetAttributes(
-		attribute.String("result", "error"),
-		attribute.String("error.type", "policy_violation"),
-		attribute.String("failed.stage", "startup.policy."+strings.ToLower(strings.TrimSpace(dependency))),
-	)
-	metrics.IncStartupRejection("policy_violation")
-	metrics.IncConfigStartupOutcome("rejected")
+	dep := strings.ToLower(strings.TrimSpace(dependency))
+	recordStartupRejection(bootstrapSpan, metrics, telemetry.StartupRejectionReasonPolicyViolation, "policy_violation", "startup.policy."+dep, err)
 	args := startupLogArgs(
 		ctx,
 		startupLogComponentStartupProbes,
-		strings.ToLower(strings.TrimSpace(dependency))+"_policy",
+		dep+"_policy",
 		"error",
 		"error.type", "policy_violation",
-		"dependency", strings.ToLower(strings.TrimSpace(dependency)),
+		"dependency", dep,
 		"err", err,
 	)
 	args = append(args, extra...)
@@ -97,14 +104,7 @@ func rejectStartupForDependencyInit(
 	}
 
 	rejectErr := dependencyInitFailure(dep, err)
-	bootstrapSpan.RecordError(rejectErr)
-	bootstrapSpan.SetAttributes(
-		attribute.String("result", "error"),
-		attribute.String("error.type", "dependency_init"),
-		attribute.String("failed.stage", failedStage),
-	)
-	metrics.IncStartupRejection("dependency_init")
-	metrics.IncConfigStartupOutcome("rejected")
+	recordStartupRejection(bootstrapSpan, metrics, telemetry.StartupRejectionReasonDependencyInit, "dependency_init", failedStage, rejectErr)
 	log.Error(
 		"startup_blocked",
 		startupLogArgs(
@@ -140,14 +140,7 @@ func recordDependencyProbeRejection(
 		stage = "startup.probe." + dep
 	}
 
-	runtime.bootstrapSpan.RecordError(err)
-	runtime.bootstrapSpan.SetAttributes(
-		attribute.String("result", "error"),
-		attribute.String("error.type", "dependency_init"),
-		attribute.String("failed.stage", stage),
-	)
-	runtime.metrics.IncStartupRejection("dependency_init")
-	runtime.metrics.IncConfigStartupOutcome("rejected")
+	recordStartupRejection(runtime.bootstrapSpan, runtime.metrics, telemetry.StartupRejectionReasonDependencyInit, "dependency_init", stage, err)
 
 	args := startupLogArgs(
 		ctx,

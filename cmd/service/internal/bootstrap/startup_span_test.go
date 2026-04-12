@@ -33,6 +33,14 @@ func TestStartupSpanControllerMarkReadyEndsSpanBeforeCleanup(t *testing.T) {
 	if ended := spanRecorder.Ended(); len(ended) != 1 {
 		t.Fatalf("ended spans after Close() = %d, want 1", len(ended))
 	}
+
+	controller.Close(context.Background())
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup calls after repeated Close() = %d, want 1", cleanupCalls)
+	}
+	if ended := spanRecorder.Ended(); len(ended) != 1 {
+		t.Fatalf("ended spans after repeated Close() = %d, want 1", len(ended))
+	}
 }
 
 func TestStartupSpanControllerCloseEndsSpanBeforeCleanup(t *testing.T) {
@@ -53,5 +61,13 @@ func TestStartupSpanControllerCloseEndsSpanBeforeCleanup(t *testing.T) {
 	}
 	if ended := spanRecorder.Ended(); len(ended) != 1 {
 		t.Fatalf("ended spans after Close() = %d, want 1", len(ended))
+	}
+
+	controller.Close(context.Background())
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup calls after repeated Close() = %d, want 1", cleanupCalls)
+	}
+	if ended := spanRecorder.Ended(); len(ended) != 1 {
+		t.Fatalf("ended spans after repeated Close() = %d, want 1", len(ended))
 	}
 }

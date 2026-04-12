@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,30 +25,72 @@ func TestLoadNetworkPolicyFromEnvRequiresExceptionMetadata(t *testing.T) {
 	}
 }
 
-func TestLoadNetworkPolicyFromEnvDistinguishesMissingPublicIngressDeclaration(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "")
+func TestLoadNetworkPolicyFromEnvPublicIngressExplicitValue(t *testing.T) {
+	tests := []struct {
+		name              string
+		value             string
+		set               bool
+		wantEnabled       bool
+		wantExplicitValue bool
+		wantErr           string
+	}{
+		{
+			name: "unset",
+		},
+		{
+			name: "empty",
+			set:  true,
+		},
+		{
+			name:              "explicit false",
+			value:             "false",
+			set:               true,
+			wantExplicitValue: true,
+		},
+		{
+			name:              "explicit true",
+			value:             "true",
+			set:               true,
+			wantEnabled:       true,
+			wantExplicitValue: true,
+		},
+		{
+			name:              "invalid",
+			value:             "sometimes",
+			set:               true,
+			wantExplicitValue: true,
+			wantErr:           "NETWORK_PUBLIC_INGRESS_ENABLED must be a boolean value",
+		},
+	}
 
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	if policy.ingressPublicDeclared {
-		t.Fatalf("ingressPublicDeclared = true, want false for missing %s", envNetworkPublicIngressEnabled)
-	}
-	if policy.ingressPublicEnabled {
-		t.Fatalf("ingressPublicEnabled = true, want false for missing %s", envNetworkPublicIngressEnabled)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(envNetworkPublicIngressEnabled, tt.value)
+			} else {
+				unsetEnvForTest(t, envNetworkPublicIngressEnabled)
+			}
 
-	t.Setenv(envNetworkPublicIngressEnabled, "false")
-	policy, err = loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() explicit false error = %v", err)
-	}
-	if !policy.ingressPublicDeclared {
-		t.Fatalf("ingressPublicDeclared = false, want true for explicit false")
-	}
-	if policy.ingressPublicEnabled {
-		t.Fatalf("ingressPublicEnabled = true, want false for explicit false")
+			policy, err := loadNetworkPolicyFromEnv()
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("loadNetworkPolicyFromEnv() error = nil, want non-nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("loadNetworkPolicyFromEnv() error = %v, want %q detail", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+			}
+			if policy.ingressPublicExplicitValue != tt.wantExplicitValue {
+				t.Fatalf("ingressPublicExplicitValue = %v, want %v", policy.ingressPublicExplicitValue, tt.wantExplicitValue)
+			}
+			if policy.ingressPublicEnabled != tt.wantEnabled {
+				t.Fatalf("ingressPublicEnabled = %v, want %v", policy.ingressPublicEnabled, tt.wantEnabled)
+			}
+		})
 	}
 }
 
@@ -229,6 +273,51 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing
 	}
 }
 
+func TestNetworkPolicyEnforceEgressTargetInvalidTargetPreservesLocalReason(t *testing.T) {
+	t.Setenv(envNetworkEgressAllowedSchemes, "tcp")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		target     string
+		wantReason string
+	}{
+		{
+			name:       "empty target",
+			wantReason: "target is empty",
+		},
+		{
+			name:       "empty host",
+			target:     ":443",
+			wantReason: "host is empty",
+		},
+		{
+			name:       "malformed host port",
+			target:     "api.example.com:443:extra",
+			wantReason: "target must be host:port",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := policy.EnforceEgressTarget(tt.target, "tcp")
+			if err == nil {
+				t.Fatal("EnforceEgressTarget() error = nil, want non-nil")
+			}
+			if !errors.Is(err, errDependencyInit) {
+				t.Fatalf("EnforceEgressTarget() error = %v, want wrapped %v", err, errDependencyInit)
+			}
+			if !errorChainContainsExactMessage(err, tt.wantReason) {
+				t.Fatalf("EnforceEgressTarget() error chain = %v, want wrapped %q", err, tt.wantReason)
+			}
+		})
+	}
+}
+
 func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
@@ -284,4 +373,51 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testi
 	if err == nil {
 		t.Fatal("EnforceEgressTarget(single label) error = nil, want non-nil")
 	}
+}
+
+func unsetEnvForTest(t *testing.T, name string) {
+	t.Helper()
+
+	previous, hadPrevious := os.LookupEnv(name)
+	if err := os.Unsetenv(name); err != nil {
+		t.Fatalf("os.Unsetenv(%q) error = %v", name, err)
+	}
+	t.Cleanup(func() {
+		var err error
+		if hadPrevious {
+			err = os.Setenv(name, previous)
+		} else {
+			err = os.Unsetenv(name)
+		}
+		if err != nil {
+			t.Errorf("restore env %q error = %v", name, err)
+		}
+	})
+}
+
+func errorChainContainsExactMessage(err error, want string) bool {
+	if err == nil {
+		return false
+	}
+	if err.Error() == want {
+		return true
+	}
+	type multiUnwrapper interface {
+		Unwrap() []error
+	}
+	if wrapped, ok := err.(multiUnwrapper); ok {
+		for _, child := range wrapped.Unwrap() {
+			if errorChainContainsExactMessage(child, want) {
+				return true
+			}
+		}
+		return false
+	}
+	type singleUnwrapper interface {
+		Unwrap() error
+	}
+	if wrapped, ok := err.(singleUnwrapper); ok {
+		return errorChainContainsExactMessage(wrapped.Unwrap(), want)
+	}
+	return false
 }

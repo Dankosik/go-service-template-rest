@@ -38,6 +38,35 @@ const (
 	TelemetryFailureReasonOther = "other"
 )
 
+const (
+	// StartupRejectionReasonConfigLoad is the bounded startup rejection label for config load failures.
+	StartupRejectionReasonConfigLoad = "config_load"
+
+	// StartupRejectionReasonConfigParse is the bounded startup rejection label for config parse failures.
+	StartupRejectionReasonConfigParse = "config_parse"
+
+	// StartupRejectionReasonConfigValidate is the bounded startup rejection label for config validation failures.
+	StartupRejectionReasonConfigValidate = "config_validate"
+
+	// StartupRejectionReasonConfigStrictUnknownKey is the bounded startup rejection label for strict unknown key failures.
+	StartupRejectionReasonConfigStrictUnknownKey = "config_strict_unknown_key"
+
+	// StartupRejectionReasonConfigSecretPolicy is the bounded startup rejection label for secret policy failures.
+	StartupRejectionReasonConfigSecretPolicy = "config_secret_policy"
+
+	// StartupRejectionReasonPolicyViolation is the bounded startup rejection label for startup policy failures.
+	StartupRejectionReasonPolicyViolation = "policy_violation"
+
+	// StartupRejectionReasonDependencyInit is the bounded startup rejection label for dependency initialization failures.
+	StartupRejectionReasonDependencyInit = "dependency_init"
+
+	// StartupRejectionReasonStartupError is the bounded startup rejection label for HTTP startup failures.
+	StartupRejectionReasonStartupError = "startup_error"
+
+	// StartupRejectionReasonOther is the bounded fallback startup rejection label.
+	StartupRejectionReasonOther = "other"
+)
+
 func New() *Metrics {
 	registry := prometheus.NewRegistry()
 
@@ -233,19 +262,23 @@ func normalizeTelemetryFailureReason(reason string) string {
 func normalizeStartupRejectionReason(reason string) string {
 	normalized := strings.TrimSpace(strings.ToLower(reason))
 	switch normalized {
-	case "config_load", "load":
-		return "config_load"
-	case "config_parse", "parse":
-		return "config_parse"
-	case "config_validate", "validate":
-		return "config_validate"
-	case "config_strict_unknown_key", "strict_unknown_key":
-		return "config_strict_unknown_key"
-	case "config_secret_policy", "secret_policy":
-		return "config_secret_policy"
-	case "policy_violation", "dependency_init", "startup_error":
-		return normalized
+	case StartupRejectionReasonConfigLoad, "load":
+		return StartupRejectionReasonConfigLoad
+	case StartupRejectionReasonConfigParse, "parse":
+		return StartupRejectionReasonConfigParse
+	case StartupRejectionReasonConfigValidate, "validate":
+		return StartupRejectionReasonConfigValidate
+	case StartupRejectionReasonConfigStrictUnknownKey, "strict_unknown_key":
+		return StartupRejectionReasonConfigStrictUnknownKey
+	case StartupRejectionReasonConfigSecretPolicy, "secret_policy":
+		return StartupRejectionReasonConfigSecretPolicy
+	case StartupRejectionReasonPolicyViolation:
+		return StartupRejectionReasonPolicyViolation
+	case StartupRejectionReasonDependencyInit:
+		return StartupRejectionReasonDependencyInit
+	case StartupRejectionReasonStartupError:
+		return StartupRejectionReasonStartupError
 	default:
-		return "other"
+		return StartupRejectionReasonOther
 	}
 }
