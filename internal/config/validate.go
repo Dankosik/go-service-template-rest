@@ -3,13 +3,13 @@ package config
 import (
 	"context"
 	"fmt"
-	"math"
 	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/knadh/koanf/v2"
 )
@@ -41,6 +41,9 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 
 	if strings.TrimSpace(cfg.App.Env) == "" {
 		return ValidationResult{}, fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
+	}
+	if strings.TrimSpace(cfg.App.Version) == "" {
+		return ValidationResult{}, fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
 	}
 	if strings.TrimSpace(cfg.HTTP.Addr) == "" {
 		return ValidationResult{}, fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
@@ -96,6 +99,9 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		return ValidationResult{}, err
 	}
 
+	if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
+		return ValidationResult{}, fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
+	}
 	if err := validateSampler(cfg.Observability.OTel.TracesSampler, cfg.Observability.OTel.TracesSamplerArg); err != nil {
 		return ValidationResult{}, err
 	}
@@ -269,7 +275,7 @@ func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 
 func validateReadinessProbeBudgets(cfg Config) error {
 	budgets := make([]readinessProbeBudget, 0, 3)
-	if cfg.Postgres.Enabled && cfg.FeatureFlags.PostgresReadinessProbe {
+	if cfg.PostgresReadinessProbeRequired() {
 		budgets = append(budgets, readinessProbeBudget{
 			name:   "postgres.healthcheck_timeout",
 			budget: cfg.Postgres.HealthcheckTimeout,
@@ -283,7 +289,7 @@ func validateReadinessProbeBudgets(cfg Config) error {
 		})
 	}
 
-	if cfg.Mongo.Enabled && cfg.FeatureFlags.MongoReadinessProbe {
+	if cfg.MongoReadinessProbeRequired() {
 		budgets = append(budgets, readinessProbeBudget{
 			name:   "mongo.connect_timeout",
 			budget: cfg.Mongo.ConnectTimeout,
@@ -313,29 +319,27 @@ type readinessProbeBudget struct {
 }
 
 func validateSampler(sampler string, samplerArg float64) error {
-	switch strings.ToLower(strings.TrimSpace(sampler)) {
-	case "always_on", "always_off", "traceidratio", "parentbased_traceidratio":
-	default:
+	if !otelconfig.TraceSamplerSupported(sampler) {
 		return fmt.Errorf("%w: observability.otel.traces_sampler is unsupported", ErrValidate)
 	}
 
-	if math.IsNaN(samplerArg) || math.IsInf(samplerArg, 0) {
+	if !otelconfig.TraceSamplerArgFinite(samplerArg) {
 		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be finite", ErrValidate)
 	}
-	if samplerArg < 0 || samplerArg > 1 {
+	if !otelconfig.TraceSamplerArgInRange(samplerArg) {
 		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be in range [0,1]", ErrValidate)
 	}
 	return nil
 }
 
 func validateOTLPExporter(cfg OTelExporterConfig) error {
-	protocol := strings.ToLower(strings.TrimSpace(cfg.OTLPProtocol))
+	protocol := otelconfig.NormalizeOTLPProtocol(cfg.OTLPProtocol)
 	if protocol == "" {
 		return nil
 	}
 
-	if protocol != "http/protobuf" {
-		return fmt.Errorf("%w: observability.otel.exporter.otlp_protocol must be http/protobuf", ErrValidate)
+	if !otelconfig.OTLPProtocolSupported(protocol) {
+		return fmt.Errorf("%w: observability.otel.exporter.otlp_protocol must be %s", ErrValidate, otelconfig.OTLPProtocolHTTPProtobuf)
 	}
 	return nil
 }
@@ -425,7 +429,13 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		return "", fmt.Errorf("empty mongo host")
 	}
 
-	if _, port, err := net.SplitHostPort(trimmed); err == nil {
+	if parsedHost, port, err := net.SplitHostPort(trimmed); err == nil {
+		if strings.TrimSpace(parsedHost) == "" {
+			return "", fmt.Errorf("empty mongo host")
+		}
+		if strings.ContainsAny(parsedHost, "[]") {
+			return "", fmt.Errorf("invalid mongo host %q", host)
+		}
 		if err := validateNumericTCPPort(port); err != nil {
 			return "", err
 		}
@@ -435,16 +445,24 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		return "", fmt.Errorf("invalid mongo host %q", host)
 	}
 
+	if strings.ContainsAny(trimmed, "[]") {
+		if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
+			return "", fmt.Errorf("invalid mongo host %q", host)
+		}
+		bracketedHost := strings.TrimSuffix(strings.TrimPrefix(trimmed, "["), "]")
+		if bracketedHost == "" || strings.ContainsAny(bracketedHost, "[]") {
+			return "", fmt.Errorf("invalid mongo host %q", host)
+		}
+		return net.JoinHostPort(bracketedHost, defaultMongoPort), nil
+	}
+
 	if strings.Count(trimmed, ":") > 1 && !strings.HasPrefix(trimmed, "[") && !strings.HasSuffix(trimmed, "]") {
 		return net.JoinHostPort(trimmed, defaultMongoPort), nil
-	}
-	if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
-		return net.JoinHostPort(strings.Trim(trimmed, "[]"), defaultMongoPort), nil
 	}
 
 	if strings.Contains(trimmed, ":") {
 		return "", fmt.Errorf("invalid mongo host %q", host)
 	}
 
-	return net.JoinHostPort(strings.Trim(trimmed, "[]"), defaultMongoPort), nil
+	return net.JoinHostPort(trimmed, defaultMongoPort), nil
 }

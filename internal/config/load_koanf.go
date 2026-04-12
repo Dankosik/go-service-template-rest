@@ -23,6 +23,13 @@ const (
 	maxConfigFileSizeBytes   = int64(1 << 20)
 )
 
+type configFilePolicy uint8
+
+const (
+	configFilePolicyLocal configFilePolicy = iota
+	configFilePolicyHardened
+)
+
 type loadMetadata struct {
 	loadDefaultsDuration time.Duration
 	loadFileDuration     time.Duration
@@ -52,10 +59,13 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		return nil, metadata, err
 	}
 
-	localEnvironment := isLocalEnvironmentHint(hasExplicitConfigFiles(opts))
+	filePolicy := configFilePolicyHardened
+	if isLocalEnvironmentHint(hasExplicitConfigFiles(opts)) {
+		filePolicy = configFilePolicyLocal
+	}
 	filesStarted := time.Now()
 	if strings.TrimSpace(opts.ConfigPath) != "" {
-		if err := loadConfigFile(ctx, k, opts.ConfigPath, localEnvironment); err != nil {
+		if err := loadConfigFile(ctx, k, opts.ConfigPath, filePolicy); err != nil {
 			metadata.failedStage = StageLoadFile
 			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
@@ -65,7 +75,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		if strings.TrimSpace(overlayPath) == "" {
 			continue
 		}
-		if err := loadConfigFile(ctx, k, overlayPath, localEnvironment); err != nil {
+		if err := loadConfigFile(ctx, k, overlayPath, filePolicy); err != nil {
 			metadata.failedStage = StageLoadFile
 			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
@@ -97,7 +107,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	return k, metadata, nil
 }
 
-func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, localEnvironment bool) error {
+func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, policy configFilePolicy) error {
 	if err := checkContext(ctx); err != nil {
 		return err
 	}
@@ -108,7 +118,7 @@ func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, localEnvir
 	}
 	cleanPath := filepath.Clean(trimmedPath)
 
-	resolvedPath, pathInfo, err := enforceConfigFilePolicy(cleanPath, localEnvironment)
+	resolvedPath, pathInfo, err := enforceConfigFilePolicy(cleanPath, policy)
 	if err != nil {
 		return err
 	}
@@ -154,8 +164,8 @@ func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, localEnvir
 	return nil
 }
 
-func enforceConfigFilePolicy(path string, localEnvironment bool) (string, os.FileInfo, error) {
-	if !localEnvironment && !filepath.IsAbs(path) {
+func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.FileInfo, error) {
+	if policy != configFilePolicyLocal && !filepath.IsAbs(path) {
 		return "", nil, fmt.Errorf("%w: config file path %q must be absolute outside local environment", ErrSecretPolicy, path)
 	}
 
@@ -189,7 +199,7 @@ func enforceConfigFilePolicy(path string, localEnvironment bool) (string, os.Fil
 		return "", nil, fmt.Errorf("%w: stat resolved config file %q: %w", ErrSecretPolicy, path, err)
 	}
 
-	if localEnvironment {
+	if policy == configFilePolicyLocal {
 		return resolvedPath, resolvedInfo, nil
 	}
 	allowedRoots := resolveAllowedConfigRoots()
@@ -232,7 +242,7 @@ func collectNamespaceValues(environ []string) map[string]any {
 		}
 		envKey := parts[0]
 		envValue := strings.TrimSpace(parts[1])
-		if envValue == "" || !strings.HasPrefix(envKey, namespacePrefix) {
+		if !strings.HasPrefix(envKey, namespacePrefix) {
 			continue
 		}
 		targetKey := namespaceEnvToKey(envKey)

@@ -25,6 +25,7 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   ├── app/                     # use-case behavior
 │   ├── config/                  # config loading, defaults, validation, snapshot
 │   ├── domain/                  # small shared contracts only when stable
+│   ├── observability/           # narrow shared observability vocabulary, not SDK setup
 │   └── infra/
 │       ├── http/                # HTTP adapter, middleware, route policy
 │       ├── postgres/            # Postgres pool, repositories, sqlc sources/output
@@ -75,6 +76,12 @@ Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/inf
 `ping_history` is retained as a replaceable SQLC fixture because the current generator setup requires at least one query to prove drift checks. It is not production business state and must not be wired into `ping` as a side effect. New services should replace the fixture with real feature-owned migrations, queries, repositories, and app ports.
 
 Feature telemetry placement: HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`, using shared instruments from `internal/infra/telemetry` where appropriate. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
+
+### `internal/observability/`
+Shared observability vocabulary that is not an adapter.
+Why: OTel config strings used by both `internal/config` and `internal/infra/telemetry` need one neutral owner without reversing the config-to-infra dependency direction.
+
+`internal/observability/otelconfig` owns OTel sampler/protocol names, defaults, and pure validation helpers only. It must not load config, construct OTel SDK resources/exporters, emit metrics, or become a generic observability helper package.
 
 ### `internal/config/`
 Environment-based config loading and validation, including defaults.  

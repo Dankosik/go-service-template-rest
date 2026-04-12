@@ -14,6 +14,8 @@ Runtime config value precedence (last wins):
 3. `--config-overlay` files
 4. `APP__...` environment variables
 
+An empty `APP__...` value is still an explicit final override. Empty values for required keys are not treated as absent; they flow through parsing or validation and fail fast when the key cannot be empty.
+
 ## Operational Network Policy Channel
 
 `NETWORK_*` variables are a separate operator policy channel owned by bootstrap, not ordinary app runtime config. Bootstrap reads them directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.

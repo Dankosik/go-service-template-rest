@@ -169,19 +169,19 @@ func Run(args []string) (runErr error) {
 		MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
 	}, handler)
 
-	return serveHTTPRuntime(
-		signalCtx,
-		bootstrapCtx,
-		bootstrap.bootstrapSpan,
-		bootstrap.cfg,
-		bootstrap.log,
-		metrics,
-		healthSvc,
-		srv,
-		readinessCheck,
-		startupAdmission,
-		bootstrap.cfg.HTTP.ReadinessPropagationDelay,
-	)
+	return serveHTTPRuntime(serveHTTPRuntimeArgs{
+		signalCtx:      signalCtx,
+		bootstrapCtx:   bootstrapCtx,
+		bootstrapSpan:  bootstrap.bootstrapSpan,
+		cfg:            bootstrap.cfg,
+		log:            bootstrap.log,
+		metrics:        metrics,
+		healthSvc:      healthSvc,
+		srv:            srv,
+		readinessCheck: readinessCheck,
+		admission:      startupAdmission,
+		shutdownDelay:  bootstrap.cfg.HTTP.ReadinessPropagationDelay,
+	})
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

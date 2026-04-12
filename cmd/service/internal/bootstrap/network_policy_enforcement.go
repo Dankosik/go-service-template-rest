@@ -61,7 +61,7 @@ func isWildcardHTTPBind(addr string) bool {
 	return ip != nil && ip.IsUnspecified()
 }
 
-func (p networkPolicy) EmitEgressExceptionState() error {
+func (p networkPolicy) ValidateEgressExceptionState() error {
 	if !p.egressException.Active {
 		return nil
 	}

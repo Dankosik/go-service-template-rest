@@ -61,6 +61,7 @@ observability:
     traces_sampler_arg: 0.10
     exporter:
       otlp_endpoint: ""
+      otlp_traces_endpoint: ""
       otlp_headers: ""
       otlp_protocol: http/protobuf
 

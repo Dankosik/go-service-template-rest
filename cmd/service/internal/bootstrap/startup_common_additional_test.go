@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,13 +38,13 @@ func TestFailedStageDetails(t *testing.T) {
 
 func TestTelemetryInitFailureReason(t *testing.T) {
 	t.Parallel()
-	if got := telemetryInitFailureReason(context.DeadlineExceeded); got != "deadline_exceeded" {
+	if got := telemetryInitFailureReason(context.DeadlineExceeded); got != telemetry.TelemetryFailureReasonDeadlineExceeded {
 		t.Fatalf("got %q", got)
 	}
-	if got := telemetryInitFailureReason(context.Canceled); got != "canceled" {
+	if got := telemetryInitFailureReason(context.Canceled); got != telemetry.TelemetryFailureReasonCanceled {
 		t.Fatalf("got %q", got)
 	}
-	if got := telemetryInitFailureReason(errors.New("x")); got != "setup_error" {
+	if got := telemetryInitFailureReason(errors.New("x")); got != telemetry.TelemetryFailureReasonSetupError {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -106,6 +107,24 @@ func TestRecordConfigHelpers(t *testing.T) {
 	}
 }
 
+func TestBootstrapConfigStageRecordsConfigFailureAndStartupRejection(t *testing.T) {
+	t.Setenv("APP__APP__ENV", "local")
+
+	metrics := telemetry.New()
+	missingConfig := filepath.Join(t.TempDir(), "missing.yaml")
+
+	_, _, err := bootstrapConfigStage(context.Background(), config.LoadOptions{ConfigPath: missingConfig}, metrics)
+	if err == nil {
+		t.Fatal("bootstrapConfigStage() error = nil, want non-nil")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `config_validation_failures_total{reason="load"} 1`) {
+		t.Fatalf("metrics output missing config load failure:\n%s", metricsText)
+	}
+	assertStartupRejectionMetric(t, metricsText, "config_load")
+}
+
 func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	t.Parallel()
 
@@ -134,6 +153,8 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"}`) {
 		t.Fatalf("metrics output missing rejected startup outcome:\n%s", metricsText)
 	}
+	assertStartupRejectionMetric(t, metricsText, "policy_violation")
+	assertConfigValidationFailureMetricAbsent(t, metricsText, "policy_violation")
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
@@ -180,9 +201,11 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	recordDependencyProbeRejection(
 		ctx,
 		runtime,
-		" Redis ",
-		" redis_probe ",
-		" startup.probe.redis ",
+		startupDependencyProbeLabels{
+			dependency: " Redis ",
+			operation:  " redis_probe ",
+			probeStage: " startup.probe.redis ",
+		},
 		" cache ",
 		rootCause,
 	)
@@ -270,4 +293,22 @@ func collectServiceMetricsText(t *testing.T, metrics *telemetry.Metrics) string 
 		t.Fatalf("metrics handler status = %d, want %d", resp.Code, http.StatusOK)
 	}
 	return resp.Body.String()
+}
+
+func assertStartupRejectionMetric(t *testing.T, metricsText string, reason string) {
+	t.Helper()
+
+	pattern := `startup_rejections_total{reason="` + reason + `"} 1`
+	if !strings.Contains(metricsText, pattern) {
+		t.Fatalf("metrics output missing startup rejection %q:\n%s", reason, metricsText)
+	}
+}
+
+func assertConfigValidationFailureMetricAbsent(t *testing.T, metricsText string, reason string) {
+	t.Helper()
+
+	pattern := `config_validation_failures_total{reason="` + reason + `"}`
+	if strings.Contains(metricsText, pattern) {
+		t.Fatalf("metrics output unexpectedly contains config validation failure %q:\n%s", reason, metricsText)
+	}
 }

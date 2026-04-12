@@ -2,14 +2,17 @@ package telemetry
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestBuildTraceSampler(t *testing.T) {
@@ -50,6 +53,24 @@ func TestBuildTraceSampler(t *testing.T) {
 			samplerArg:  0.5,
 			wantErr:     true,
 		},
+		{
+			name:        "nan sampler arg",
+			samplerName: "traceidratio",
+			samplerArg:  math.NaN(),
+			wantErr:     true,
+		},
+		{
+			name:        "positive infinity sampler arg",
+			samplerName: "traceidratio",
+			samplerArg:  math.Inf(1),
+			wantErr:     true,
+		},
+		{
+			name:        "negative infinity sampler arg",
+			samplerName: "traceidratio",
+			samplerArg:  math.Inf(-1),
+			wantErr:     true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -59,6 +80,116 @@ func TestBuildTraceSampler(t *testing.T) {
 				t.Fatalf("buildTraceSampler() error = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true")
+	t.Setenv("OTEL_SERVICE_NAME", "env-service-name")
+
+	previousTracerProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+
+	shutdown, err := SetupTracing(context.Background(), TracingConfig{
+		ServiceName:      " config-service ",
+		ServiceVersion:   " config-version ",
+		DeploymentEnv:    " config-env ",
+		TracesSampler:    "always_on",
+		TracesSamplerArg: 0.1,
+	})
+	if err != nil {
+		t.Fatalf("SetupTracing() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown tracing: %v", err)
+		}
+	})
+
+	provider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider)
+	if !ok {
+		t.Fatalf("global tracer provider = %T, want *sdktrace.TracerProvider", otel.GetTracerProvider())
+	}
+	recorder := tracetest.NewSpanRecorder()
+	provider.RegisterSpanProcessor(recorder)
+	t.Cleanup(func() {
+		provider.UnregisterSpanProcessor(recorder)
+	})
+
+	_, span := otel.Tracer("telemetry-test").Start(context.Background(), "resource-test")
+	span.End()
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("ended spans len = %d, want 1", len(spans))
+	}
+	attrs := resourceAttributes(spans[0])
+	for key, want := range map[string]string{
+		"service.name":                "config-service",
+		"service.version":             "config-version",
+		"deployment.environment.name": "config-env",
+	} {
+		got, ok := attrs[key]
+		if !ok || got != want {
+			t.Fatalf("resource attribute %q = %q (present %v), want %q; attrs=%v", key, got, ok, want, attrs)
+		}
+	}
+	if _, ok := attrs["env.only"]; ok {
+		t.Fatalf("resource attribute env.only was read from OTEL_RESOURCE_ATTRIBUTES: %v", attrs)
+	}
+}
+
+func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
+	previousTracerProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+
+	shutdown, err := SetupTracing(context.Background(), TracingConfig{
+		TracesSampler:    "always_on",
+		TracesSamplerArg: 0.1,
+	})
+	if err != nil {
+		t.Fatalf("SetupTracing() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown tracing: %v", err)
+		}
+	})
+
+	provider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider)
+	if !ok {
+		t.Fatalf("global tracer provider = %T, want *sdktrace.TracerProvider", otel.GetTracerProvider())
+	}
+	recorder := tracetest.NewSpanRecorder()
+	provider.RegisterSpanProcessor(recorder)
+	t.Cleanup(func() {
+		provider.UnregisterSpanProcessor(recorder)
+	})
+
+	_, span := otel.Tracer("telemetry-test").Start(context.Background(), "resource-test")
+	span.End()
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("ended spans len = %d, want 1", len(spans))
+	}
+	attrs := resourceAttributes(spans[0])
+	for key, fallback := range map[string]string{
+		"service.name":                "service",
+		"service.version":             "dev",
+		"deployment.environment.name": "unknown",
+	} {
+		if got := attrs[key]; got == fallback {
+			t.Fatalf("resource attribute %q used fallback %q; attrs=%v", key, fallback, attrs)
+		}
 	}
 }
 
@@ -322,4 +453,12 @@ func assertNoCollectorRequest(t *testing.T, paths <-chan string, name string) {
 		t.Fatalf("%s received unexpected request path %q", name, got)
 	default:
 	}
+}
+
+func resourceAttributes(span sdktrace.ReadOnlySpan) map[string]string {
+	attrs := make(map[string]string)
+	for _, attr := range span.Resource().Attributes() {
+		attrs[string(attr.Key)] = attr.Value.AsString()
+	}
+	return attrs
 }

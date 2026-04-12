@@ -96,7 +96,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 	if pg != nil {
 		outcome.postgresPool = pg
 		cleanupStack.add(pg.Close)
-		if runtime.cfg.FeatureFlags.PostgresReadinessProbe {
+		if runtime.cfg.PostgresReadinessProbeRequired() {
 			outcome.probes = append(outcome.probes, pg)
 		}
 	}
@@ -123,11 +123,11 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (*postgres.Pool, error) {
 	labels := startupPostgresDependencyLabels
 	if !runtime.cfg.Postgres.Enabled {
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeDisabled, true)
+		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
 		return nil, nil
 	}
 
-	runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeCriticalFailClosed, false)
+	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailClosed)
 	postgresProbeAddress, addressErr := postgresStartupProbeAddress(runtime.cfg.Postgres)
 	if addressErr != nil {
 		return nil, rejectStartupForDependencyInit(
@@ -169,9 +169,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
-				labels.dependency,
-				labels.operation,
-				labels.probeStage,
+				labels,
 				"",
 				probeResult.err,
 			)
@@ -179,27 +177,25 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 		}
 
 		sanitizedErr := dependencyInitFailure(labels.dependency, probeResult.err)
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeCriticalFailClosed, false)
+		runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailClosed)
 		recordDependencyProbeRejection(
 			bootstrapCtx,
 			runtime,
-			labels.dependency,
-			labels.operation,
-			labels.probeStage,
+			labels,
 			"",
 			sanitizedErr,
 		)
 		return nil, sanitizedErr
 	}
 
-	runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeCriticalFailClosed, true)
+	runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeCriticalFailClosed)
 	return pg, nil
 }
 
 func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (health.Probe, error) {
 	labels := startupRedisDependencyLabels
 	if !runtime.cfg.Redis.Enabled {
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeDisabled, true)
+		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
 		return nil, nil
 	}
 
@@ -208,9 +204,9 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	if redisMode == config.RedisModeStore {
 		redisCriticality = startupDependencyModeCriticalFailClosed
 	}
-	runtime.metrics.SetStartupDependencyStatus(labels.dependency, redisCriticality, false)
+	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, redisCriticality)
 	if redisMode == config.RedisModeCache {
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeFeatureOff, false)
+		runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeFeatureOff)
 	}
 
 	redisProbeAddress, addressErr := redisStartupProbeAddress(runtime.cfg.Redis)
@@ -255,9 +251,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
-				labels.dependency,
-				labels.operation,
-				labels.probeStage,
+				labels,
 				redisMode,
 				probeResult.err,
 			)
@@ -268,9 +262,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
-				labels.dependency,
-				labels.operation,
-				labels.probeStage,
+				labels,
 				redisMode,
 				rejectErr,
 			)
@@ -287,9 +279,9 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		return nil, nil
 	}
 
-	runtime.metrics.SetStartupDependencyStatus(labels.dependency, redisCriticality, true)
+	runtime.metrics.MarkStartupDependencyReady(labels.dependency, redisCriticality)
 	if redisMode == config.RedisModeCache {
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeFeatureOff, false)
+		runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeFeatureOff)
 	}
 	if runtime.cfg.RedisReadinessProbeRequired() {
 		return startupNamedProbe{
@@ -305,11 +297,11 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (health.Probe, error) {
 	labels := startupMongoDependencyLabels
 	if !runtime.cfg.Mongo.Enabled {
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeDisabled, true)
+		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
 		return nil, nil
 	}
 
-	runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeCriticalFailDegraded, false)
+	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailDegraded)
 	mongoProbeAddress, addressErr := mongoStartupProbeAddress(runtime.cfg.Mongo)
 	if addressErr != nil {
 		return nil, rejectStartupForDependencyInit(
@@ -348,9 +340,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
-				labels.dependency,
-				labels.operation,
-				labels.probeStage,
+				labels,
 				startupDependencyModeDegradedReadOnlyOrStale,
 				probeResult.err,
 			)
@@ -366,8 +356,8 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		return nil, nil
 	}
 
-	runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeCriticalFailDegraded, true)
-	if runtime.cfg.FeatureFlags.MongoReadinessProbe {
+	runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeCriticalFailDegraded)
+	if runtime.cfg.MongoReadinessProbeRequired() {
 		return startupNamedProbe{
 			name: labels.dependency,
 			check: func(ctx context.Context) error {
@@ -412,7 +402,7 @@ func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {
 }
 
 func recordDegradedDependencyStartup(ctx context.Context, runtime dependencyProbeRuntime, dependency, operation, mode string) {
-	runtime.metrics.SetStartupDependencyStatus(dependency, mode, true)
+	runtime.metrics.MarkStartupDependencyReady(dependency, mode)
 	runtime.log.Warn(
 		"startup_dependency_degraded",
 		startupLogArgs(

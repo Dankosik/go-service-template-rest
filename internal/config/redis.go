@@ -20,8 +20,3 @@ func normalizeRedisMode(mode string) string {
 func (cfg RedisConfig) StoreMode() bool {
 	return cfg.ModeValue() == RedisModeStore
 }
-
-// RedisReadinessProbeRequired reports whether Redis participates in runtime readiness.
-func (cfg Config) RedisReadinessProbeRequired() bool {
-	return cfg.Redis.Enabled && (cfg.FeatureFlags.RedisReadinessProbe || cfg.Redis.StoreMode())
-}

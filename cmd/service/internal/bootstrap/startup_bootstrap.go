@@ -104,6 +104,7 @@ func bootstrapConfigStage(
 		errorType := config.ErrorType(err)
 		metrics.ObserveConfigLoadDuration(failedStage, "error", failedDuration)
 		metrics.IncConfigValidationFailure(errorType)
+		metrics.IncStartupRejection(errorType)
 		metrics.IncConfigStartupOutcome("rejected")
 		slog.Error(
 			"config_load_failed",
@@ -144,7 +145,7 @@ func bootstrapTelemetryStage(
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
 ) (func(context.Context), error) {
-	metrics.SetStartupDependencyStatus(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen, false)
+	metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
 		ServiceName:      cfg.Observability.OTel.ServiceName,
@@ -162,11 +163,11 @@ func bootstrapTelemetryStage(
 	telemetryCancel()
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.SetStartupDependencyStatus(startupDependencyTelemetry, startupDependencyModeFeatureOff, false)
+		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, telemetryInitErr
 	}
 
-	metrics.SetStartupDependencyStatus(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen, true)
+	metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
 	return func(shutdownBaseCtx context.Context) {
 		log.Info(
 			"telemetry_flush_started",
@@ -320,7 +321,7 @@ func bootstrapNetworkPolicyStage(
 		)
 	}
 
-	if egressErr := netPolicy.EmitEgressExceptionState(); egressErr != nil {
+	if egressErr := netPolicy.ValidateEgressExceptionState(); egressErr != nil {
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,

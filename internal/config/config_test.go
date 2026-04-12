@@ -98,6 +98,75 @@ http:
 	}
 }
 
+func TestEmptyNamespaceEnvOverridesRequiredDefault(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__HTTP__ADDR", "")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for empty env override")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func TestResourceIdentityFieldsCannotBeEmpty(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		envKey     string
+		wantDetail string
+	}{
+		{
+			name:       "app version",
+			envKey:     "APP__APP__VERSION",
+			wantDetail: "app.version cannot be empty",
+		},
+		{
+			name:       "otel service name",
+			envKey:     "APP__OBSERVABILITY__OTEL__SERVICE_NAME",
+			wantDetail: "observability.otel.service_name cannot be empty",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv(tc.envKey, "")
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatal("LoadDetailed() error = nil, want validation error")
+			}
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantDetail) {
+				t.Fatalf("error = %v, want %q", err, tc.wantDetail)
+			}
+		})
+	}
+}
+
+func TestEmptyNamespaceEnvOverridesConfigFileValue(t *testing.T) {
+	resetConfigEnv(t)
+
+	configPath := writeTempConfig(t, `
+observability:
+  otel:
+    exporter:
+      otlp_endpoint: "https://otel.example.com:4318"
+`)
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "")
+
+	cfg, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.Observability.OTel.Exporter.OTLPEndpoint != "" {
+		t.Fatalf("OTLPEndpoint = %q, want empty env override", cfg.Observability.OTel.Exporter.OTLPEndpoint)
+	}
+}
+
 func TestFlatEnvKeysAreIgnored(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -469,6 +538,58 @@ func TestRedisModePolicyHelpers(t *testing.T) {
 	}
 }
 
+func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name         string
+		cfg          Config
+		wantPostgres bool
+		wantMongo    bool
+	}{
+		{
+			name: "disabled dependencies ignore readiness flags",
+			cfg: Config{
+				FeatureFlags: FeatureFlagsConfig{
+					PostgresReadinessProbe: true,
+					MongoReadinessProbe:    true,
+				},
+			},
+		},
+		{
+			name: "enabled dependencies without readiness flags",
+			cfg: Config{
+				Postgres: PostgresConfig{Enabled: true},
+				Mongo:    MongoConfig{Enabled: true},
+			},
+		},
+		{
+			name: "enabled dependencies with readiness flags",
+			cfg: Config{
+				Postgres: PostgresConfig{Enabled: true},
+				Mongo:    MongoConfig{Enabled: true},
+				FeatureFlags: FeatureFlagsConfig{
+					PostgresReadinessProbe: true,
+					MongoReadinessProbe:    true,
+				},
+			},
+			wantPostgres: true,
+			wantMongo:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.PostgresReadinessProbeRequired(); got != tc.wantPostgres {
+				t.Fatalf("PostgresReadinessProbeRequired() = %v, want %v", got, tc.wantPostgres)
+			}
+			if got := tc.cfg.MongoReadinessProbeRequired(); got != tc.wantMongo {
+				t.Fatalf("MongoReadinessProbeRequired() = %v, want %v", got, tc.wantMongo)
+			}
+		})
+	}
+}
+
 func TestNonLocalRejectsSymlinkConfig(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation can require elevated privileges on Windows")
@@ -611,7 +732,7 @@ http:
 func TestLoadConfigFileRejectsWhitespaceOnlyPath(t *testing.T) {
 	t.Parallel()
 
-	err := loadConfigFile(context.Background(), koanf.New(keyDelimiter), " \t\n ", true)
+	err := loadConfigFile(context.Background(), koanf.New(keyDelimiter), " \t\n ", configFilePolicyLocal)
 	if err == nil {
 		t.Fatal("loadConfigFile() error = nil, want non-nil")
 	}
@@ -1070,10 +1191,28 @@ func containsString(values []string, target string) bool {
 func resetConfigEnv(t *testing.T) {
 	t.Helper()
 
+	previousValues := make(map[string]string)
 	for _, key := range configEnvResetKeys() {
-		t.Setenv(key, "")
+		if value, ok := os.LookupEnv(key); ok {
+			previousValues[key] = value
+		}
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
+		}
 	}
-	t.Setenv("APP__APP__ENV", "local")
+	t.Cleanup(func() {
+		for _, key := range configEnvResetKeys() {
+			value, ok := previousValues[key]
+			if !ok {
+				_ = os.Unsetenv(key)
+				continue
+			}
+			_ = os.Setenv(key, value)
+		}
+	})
+	if err := os.Setenv("APP__APP__ENV", "local"); err != nil {
+		t.Fatalf("os.Setenv(APP__APP__ENV) error = %v", err)
+	}
 }
 
 func configEnvResetKeys() []string {
@@ -1129,17 +1268,41 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 	}
 }
 
-func TestKnownConfigKeysMatchSnapshotTagsAndDefaults(t *testing.T) {
-	defaultKeys := sortedStringSetKeys(defaultValues())
+func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
 	knownKeys := sortedStringSetKeys(knownConfigKeys())
-	if !reflect.DeepEqual(knownKeys, defaultKeys) {
-		t.Fatalf("knownConfigKeys() = %v, want default keys %v", knownKeys, defaultKeys)
-	}
 
 	tagKeys := configLeafKeysFromType(t, reflect.TypeOf(Config{}), "")
 	sort.Strings(tagKeys)
-	if !reflect.DeepEqual(tagKeys, defaultKeys) {
-		t.Fatalf("Config koanf leaf keys = %v, want default keys %v", tagKeys, defaultKeys)
+	if !reflect.DeepEqual(knownKeys, tagKeys) {
+		t.Fatalf("knownConfigKeys() = %v, want Config koanf leaf keys %v", knownKeys, tagKeys)
+	}
+}
+
+func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
+	knownKeys := knownConfigKeys()
+	for key := range defaultValues() {
+		if _, ok := knownKeys[key]; !ok {
+			t.Fatalf("defaultValues() contains %q, which is not a known Config koanf leaf key", key)
+		}
+	}
+}
+
+func TestDefaultConfigYAMLIncludesDefaultBackedKeys(t *testing.T) {
+	k := koanf.New(keyDelimiter)
+	path := filepath.Join("..", "..", "env", "config", "default.yaml")
+	if err := loadConfigFile(context.Background(), k, path, configFilePolicyLocal); err != nil {
+		t.Fatalf("load default config yaml: %v", err)
+	}
+
+	yamlKeys := make(map[string]struct{})
+	for _, key := range k.Keys() {
+		yamlKeys[key] = struct{}{}
+	}
+
+	for key := range defaultValues() {
+		if _, ok := yamlKeys[key]; !ok {
+			t.Fatalf("%s missing from env/config/default.yaml", key)
+		}
 	}
 }
 
@@ -1605,6 +1768,34 @@ func TestMongoProbeAddress(t *testing.T) {
 		}
 		if address != "[2001:db8::1]:27017" {
 			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27017", address)
+		}
+	})
+
+	t.Run("bracketed ipv6 host defaults port", func(t *testing.T) {
+		address, err := MongoProbeAddress("mongodb://[2001:db8::1]/app")
+		if err != nil {
+			t.Fatalf("MongoProbeAddress() error = %v", err)
+		}
+		if address != "[2001:db8::1]:27017" {
+			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27017", address)
+		}
+	})
+
+	t.Run("rejects empty and malformed bracket hosts", func(t *testing.T) {
+		for _, uri := range []string{
+			"mongodb://:27017/app",
+			"mongodb://[]/app",
+			"mongodb://[]:27017/app",
+			"mongodb://[2001:db8::1/app",
+			"mongodb://2001:db8::1]/app",
+			"mongodb://[2001:db8::1]]/app",
+			"mongodb://local[host]/app",
+		} {
+			t.Run(uri, func(t *testing.T) {
+				if _, err := MongoProbeAddress(uri); err == nil {
+					t.Fatal("MongoProbeAddress() error = nil, want malformed host error")
+				}
+			})
 		}
 	})
 

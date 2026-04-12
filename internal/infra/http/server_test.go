@@ -151,3 +151,27 @@ func TestServerServeNilListener(t *testing.T) {
 		t.Fatalf("Serve(nil) error = %v, want ErrNilListener", err)
 	}
 }
+
+func TestServerUninitializedUseReturnsInspectableError(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		srv  *Server
+	}{
+		{name: "nil receiver"},
+		{name: "zero value", srv: &Server{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.srv.Run(); !errors.Is(err, ErrUninitializedServer) {
+				t.Fatalf("Run() error = %v, want ErrUninitializedServer", err)
+			}
+			if err := tc.srv.Serve(nil); !errors.Is(err, ErrUninitializedServer) {
+				t.Fatalf("Serve(nil) error = %v, want ErrUninitializedServer", err)
+			}
+			if err := tc.srv.Shutdown(context.Background()); !errors.Is(err, ErrUninitializedServer) {
+				t.Fatalf("Shutdown() error = %v, want ErrUninitializedServer", err)
+			}
+		})
+	}
+}

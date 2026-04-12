@@ -103,12 +103,9 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_validation_failures_total{reason="dependency_init"} 1`) {
-		t.Fatalf("metrics output missing dependency_init classification:\n%s", metricsText)
-	}
-	if strings.Contains(metricsText, `config_validation_failures_total{reason="policy_violation"}`) {
-		t.Fatalf("metrics output unexpectedly contains policy_violation classification:\n%s", metricsText)
-	}
+	assertStartupRejectionMetric(t, metricsText, "dependency_init")
+	assertConfigValidationFailureMetricAbsent(t, metricsText, "dependency_init")
+	assertConfigValidationFailureMetricAbsent(t, metricsText, "policy_violation")
 }
 
 func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
@@ -140,9 +137,8 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_validation_failures_total{reason="policy_violation"} 1`) {
-		t.Fatalf("metrics output missing policy_violation classification:\n%s", metricsText)
-	}
+	assertStartupRejectionMetric(t, metricsText, "policy_violation")
+	assertConfigValidationFailureMetricAbsent(t, metricsText, "policy_violation")
 }
 
 func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) {

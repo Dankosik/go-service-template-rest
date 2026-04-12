@@ -650,29 +650,22 @@ func TestStrictMetricsHandlerIsNotRuntimeOwned(t *testing.T) {
 func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing.T) {
 	openAPIRoutes := openAPIOperationRoutes(t)
 	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	manualRouteKeys := make(map[manualRootRouteKey]struct{}, len(manualRoutes))
+	manualRouteReasons := make(map[manualRootRouteKey]string, len(manualRoutes))
 
 	for _, route := range manualRoutes {
-		manualRouteKeys[route.key] = struct{}{}
+		manualRouteReasons[route.key] = route.reason
 		if strings.HasPrefix(route.key.path, "/api/") {
 			t.Fatalf("manual route %s %s uses API namespace; add it through OpenAPI instead", route.key.method, route.key.path)
 		}
 
-		reason, allowed := documentedManualRootRouteExceptions[route.key]
-		if !allowed {
-			t.Fatalf("manual route %s %s is missing a documented root exception", route.key.method, route.key.path)
-		}
-		if reason == "" {
+		if route.reason == "" {
 			t.Fatalf("manual route %s %s has an empty documented root exception reason", route.key.method, route.key.path)
 		}
 	}
 
-	for key, reason := range documentedManualRootRouteExceptions {
+	for key, reason := range manualRouteReasons {
 		if reason == "" {
 			t.Fatalf("documented root exception %s %s has an empty reason", key.method, key.path)
-		}
-		if _, manual := manualRouteKeys[key]; !manual {
-			t.Fatalf("documented root exception %s %s has no matching manual root route", key.method, key.path)
 		}
 		if _, generated := openAPIRoutes[key]; generated && reason != metricsRootRouteReason {
 			t.Fatalf("documented generated-route overlap %s %s reason = %q, want %q", key.method, key.path, reason, metricsRootRouteReason)
@@ -682,13 +675,14 @@ func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing
 
 func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRoutes(t *testing.T) {
 	openAPIRoutes := openAPIOperationRoutes(t)
+	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
-	expectedCounts := make(map[manualRootRouteKey]int, len(openAPIRoutes)+len(documentedManualRootRouteExceptions))
+	expectedCounts := make(map[manualRootRouteKey]int, len(openAPIRoutes)+len(manualRoutes))
 	for key := range openAPIRoutes {
 		expectedCounts[key]++
 	}
-	for key := range documentedManualRootRouteExceptions {
-		expectedCounts[key]++
+	for _, route := range manualRoutes {
+		expectedCounts[route.key]++
 	}
 
 	apiSubrouter := chi.NewRouter()

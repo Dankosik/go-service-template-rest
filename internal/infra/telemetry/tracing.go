@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
+	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -32,17 +34,8 @@ type TraceExporterConfig struct {
 
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
 	serviceName := strings.TrimSpace(cfg.ServiceName)
-	if serviceName == "" {
-		serviceName = "service"
-	}
 	serviceVersion := strings.TrimSpace(cfg.ServiceVersion)
-	if serviceVersion == "" {
-		serviceVersion = "dev"
-	}
 	deploymentEnv := strings.TrimSpace(cfg.DeploymentEnv)
-	if deploymentEnv == "" {
-		deploymentEnv = "unknown"
-	}
 
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
 	if err != nil {
@@ -51,7 +44,6 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 
 	res, err := resource.New(
 		ctx,
-		resource.WithFromEnv(),
 		resource.WithAttributes(
 			attribute.String("service.name", serviceName),
 			attribute.String("service.version", serviceVersion),
@@ -79,7 +71,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		options = append(options, sdktrace.WithBatcher(exporter))
 	}
 
-	provider := sdktrace.NewTracerProvider(options...)
+	provider := newTracerProvider(options...)
 	otel.SetTracerProvider(provider)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
@@ -89,22 +81,55 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	return provider.Shutdown, nil
 }
 
+func newTracerProvider(options ...sdktrace.TracerProviderOption) *sdktrace.TracerProvider {
+	// OTel SDK v1.40 merges resource.Environment() inside sdktrace.WithResource.
+	// Clear only the resource env keys while the provider is built so config remains the sole resource source.
+	restore := withoutOTELResourceEnv()
+	defer restore()
+	return sdktrace.NewTracerProvider(options...)
+}
+
+func withoutOTELResourceEnv() func() {
+	const (
+		otelResourceAttributesEnv = "OTEL_RESOURCE_ATTRIBUTES"
+		otelServiceNameEnv        = "OTEL_SERVICE_NAME"
+	)
+
+	resourceAttrs, hadResourceAttrs := os.LookupEnv(otelResourceAttributesEnv)
+	serviceName, hadServiceName := os.LookupEnv(otelServiceNameEnv)
+	_ = os.Unsetenv(otelResourceAttributesEnv)
+	_ = os.Unsetenv(otelServiceNameEnv)
+
+	return func() {
+		if hadResourceAttrs {
+			_ = os.Setenv(otelResourceAttributesEnv, resourceAttrs)
+		} else {
+			_ = os.Unsetenv(otelResourceAttributesEnv)
+		}
+		if hadServiceName {
+			_ = os.Setenv(otelServiceNameEnv, serviceName)
+		} else {
+			_ = os.Unsetenv(otelServiceNameEnv)
+		}
+	}
+}
+
 func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
-	samplerName := strings.ToLower(strings.TrimSpace(name))
-	if samplerName == "" {
-		samplerName = "parentbased_traceidratio"
+	if !otelconfig.TraceSamplerArgFinite(arg) {
+		return nil, fmt.Errorf("trace sampler arg must be finite")
 	}
 
+	samplerName := otelconfig.TraceSamplerOrDefault(name)
 	ratio := clampRatio(arg)
 
 	switch samplerName {
-	case "always_on":
+	case otelconfig.SamplerAlwaysOn:
 		return sdktrace.AlwaysSample(), nil
-	case "always_off":
+	case otelconfig.SamplerAlwaysOff:
 		return sdktrace.NeverSample(), nil
-	case "traceidratio":
+	case otelconfig.SamplerTraceIDRatio:
 		return sdktrace.TraceIDRatioBased(ratio), nil
-	case "parentbased_traceidratio":
+	case otelconfig.SamplerParentBasedTraceIDRatio:
 		return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio)), nil
 	default:
 		return nil, fmt.Errorf("unsupported trace sampler %q", name)
@@ -122,11 +147,8 @@ func clampRatio(v float64) float64 {
 }
 
 func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, bool, error) {
-	protocol := strings.ToLower(strings.TrimSpace(cfg.OTLPProtocol))
-	if protocol == "" {
-		protocol = "http/protobuf"
-	}
-	if protocol != "http/protobuf" {
+	protocol := otelconfig.OTLPProtocolOrDefault(cfg.OTLPProtocol)
+	if !otelconfig.OTLPProtocolSupported(protocol) {
 		return nil, false, fmt.Errorf("unsupported otlp protocol %q", cfg.OTLPProtocol)
 	}
 

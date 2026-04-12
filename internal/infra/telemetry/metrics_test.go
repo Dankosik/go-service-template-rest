@@ -14,11 +14,11 @@ func TestNormalizeTelemetryFailureReason(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "setup error", input: "setup_error", want: "setup_error"},
-		{name: "deadline exceeded", input: "deadline_exceeded", want: "deadline_exceeded"},
-		{name: "canceled upper", input: "CANCELED", want: "canceled"},
-		{name: "unknown", input: "dns_failure", want: "other"},
-		{name: "empty", input: "", want: "other"},
+		{name: "setup error", input: TelemetryFailureReasonSetupError, want: TelemetryFailureReasonSetupError},
+		{name: "deadline exceeded", input: TelemetryFailureReasonDeadlineExceeded, want: TelemetryFailureReasonDeadlineExceeded},
+		{name: "canceled upper", input: "CANCELED", want: TelemetryFailureReasonCanceled},
+		{name: "unknown", input: "dns_failure", want: TelemetryFailureReasonOther},
+		{name: "empty", input: "", want: TelemetryFailureReasonOther},
 	}
 
 	for _, tc := range testCases {
@@ -31,25 +31,58 @@ func TestNormalizeTelemetryFailureReason(t *testing.T) {
 	}
 }
 
+func TestNormalizeStartupRejectionReason(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "config load", input: "load", want: "config_load"},
+		{name: "config parse", input: "CONFIG_PARSE", want: "config_parse"},
+		{name: "config validate", input: "validate", want: "config_validate"},
+		{name: "strict unknown key", input: "strict_unknown_key", want: "config_strict_unknown_key"},
+		{name: "secret policy", input: "secret_policy", want: "config_secret_policy"},
+		{name: "policy violation", input: "policy_violation", want: "policy_violation"},
+		{name: "dependency init", input: "dependency_init", want: "dependency_init"},
+		{name: "startup error", input: "startup_error", want: "startup_error"},
+		{name: "unknown", input: "dns_failure", want: "other"},
+		{name: "empty", input: "", want: "other"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeStartupRejectionReason(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeStartupRejectionReason(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	m := New()
 
 	m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
-	m.IncConfigValidationFailure("dependency_init")
-	m.IncTelemetryInitFailure("setup_error")
+	m.IncConfigValidationFailure("validate")
+	m.IncStartupRejection("dependency_init")
+	m.IncStartupRejection("dns_failure")
+	m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
 	m.IncConfigStartupOutcome("ready")
-	m.SetStartupDependencyStatus("telemetry", "optional_fail_open", true)
+	m.MarkStartupDependencyReady("telemetry", "optional_fail_open")
 
 	metricsText := collectMetricsText(t, m)
 
 	expected := []string{
 		`http_requests_total`,
 		`config_validation_failures_total`,
+		`startup_rejections_total`,
 		`telemetry_init_failure_total`,
 		`config_startup_outcome_total`,
 		`startup_dependency_status`,
 		`route="/ping"`,
-		`reason="dependency_init"`,
+		`config_validation_failures_total{reason="validate"} 1`,
+		`startup_rejections_total{reason="dependency_init"} 1`,
+		`startup_rejections_total{reason="other"} 1`,
 		`outcome="ready"`,
 		`dep="telemetry"`,
 		`mode="optional_fail_open"`,
@@ -79,10 +112,11 @@ func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
 		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)
 		m.ObserveConfigLoadDuration("load", "ok", time.Millisecond)
 		m.IncConfigValidationFailure("dependency_init")
+		m.IncStartupRejection("dependency_init")
 		m.AddConfigUnknownKeyWarnings(1)
-		m.IncTelemetryInitFailure("setup_error")
+		m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
 		m.IncConfigStartupOutcome("ready")
-		m.SetStartupDependencyStatus("telemetry", "optional_fail_open", true)
+		m.MarkStartupDependencyReady("telemetry", "optional_fail_open")
 
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		resp := httptest.NewRecorder()

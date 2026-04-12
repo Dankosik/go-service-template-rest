@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,7 +15,6 @@ var ErrPingHistoryRepository = errors.New("ping history repository")
 
 const (
 	pingHistorySampleMaxListLimit int32 = 100
-	txRollbackTimeout                   = 5 * time.Second
 )
 
 // PingHistoryRecord is the adapter-safe representation of one template ping_history sample row.
@@ -33,17 +30,9 @@ type pingHistoryQuerier interface {
 	ListRecentPingHistory(ctx context.Context, limit int32) ([]sqlcgen.PingHistory, error)
 }
 
-type pingHistoryDB interface {
-	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
-	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
-	QueryRow(context.Context, string, ...interface{}) pgx.Row
-	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
-}
-
 // PingHistoryRepository is a template SQLC sample repository, not production ping behavior.
 type PingHistoryRepository struct {
 	queries pingHistoryQuerier
-	db      pingHistoryDB
 }
 
 // NewPingHistoryRepository builds the template sample repository backed by sqlc generated queries.
@@ -51,16 +40,15 @@ func NewPingHistoryRepository(db *pgxpool.Pool) (*PingHistoryRepository, error) 
 	if db == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrPingHistoryRepository)
 	}
-	return newPingHistoryRepository(db)
+	return newPingHistoryRepository(sqlcgen.New(db))
 }
 
-func newPingHistoryRepository(db pingHistoryDB) (*PingHistoryRepository, error) {
-	if db == nil {
-		return nil, fmt.Errorf("%w: database is required", ErrPingHistoryRepository)
+func newPingHistoryRepository(queries pingHistoryQuerier) (*PingHistoryRepository, error) {
+	if queries == nil {
+		return nil, fmt.Errorf("%w: queries are required", ErrPingHistoryRepository)
 	}
 	return &PingHistoryRepository{
-		queries: sqlcgen.New(db),
-		db:      db,
+		queries: queries,
 	}, nil
 }
 
@@ -105,56 +93,6 @@ func (r *PingHistoryRepository) ListRecent(ctx context.Context, limit int32) ([]
 	}
 
 	return records, nil
-}
-
-func (r *PingHistoryRepository) createAndListRecentInTx(ctx context.Context, payload string, limit int32) (PingHistoryRecord, []PingHistoryRecord, error) {
-	if err := validatePingHistoryListLimit(limit); err != nil {
-		return PingHistoryRecord{}, nil, err
-	}
-	if r == nil || r.db == nil {
-		return PingHistoryRecord{}, nil, fmt.Errorf("%w: transaction starter is not configured", ErrPingHistoryRepository)
-	}
-
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return PingHistoryRecord{}, nil, fmt.Errorf("begin ping history transaction: %w", err)
-	}
-	defer func() {
-		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), txRollbackTimeout)
-		defer cancel()
-		_ = tx.Rollback(rollbackCtx)
-	}()
-
-	txQueries := sqlcgen.New(tx)
-
-	createdRow, err := txQueries.CreatePingHistory(ctx, payload)
-	if err != nil {
-		return PingHistoryRecord{}, nil, fmt.Errorf("create ping history in transaction: %w", err)
-	}
-	created, err := mapPingHistoryRecord(createdRow)
-	if err != nil {
-		return PingHistoryRecord{}, nil, fmt.Errorf("create ping history in transaction: %w", err)
-	}
-
-	recentRows, err := txQueries.ListRecentPingHistory(ctx, limit)
-	if err != nil {
-		return PingHistoryRecord{}, nil, fmt.Errorf("list recent ping history in transaction: %w", err)
-	}
-
-	recent := make([]PingHistoryRecord, 0, len(recentRows))
-	for _, row := range recentRows {
-		record, err := mapPingHistoryRecord(row)
-		if err != nil {
-			return PingHistoryRecord{}, nil, fmt.Errorf("list recent ping history in transaction: %w", err)
-		}
-		recent = append(recent, record)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return PingHistoryRecord{}, nil, fmt.Errorf("commit ping history transaction: %w", err)
-	}
-
-	return created, recent, nil
 }
 
 func (r *PingHistoryRepository) requireQueries() error {

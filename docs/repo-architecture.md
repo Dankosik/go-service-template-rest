@@ -25,6 +25,7 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/postgres/` | Postgres connection/pool lifecycle and repository code. | Process lifecycle, HTTP behavior, config precedence rules. |
 | `internal/infra/telemetry/` | Prometheus metrics and OpenTelemetry tracing setup/adapters. | Feature semantics or request routing decisions. |
+| `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
 | `env/migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 
 ## Source-Of-Truth Ownership
@@ -65,6 +66,9 @@ internal/app/*
 internal/infra/postgres, internal/infra/telemetry
   -> external libraries
   -> internal/domain/*   (only if an app-facing contract exists)
+
+internal/config, internal/infra/telemetry
+  -> internal/observability/otelconfig
 ```
 
 Stable direction rules:
@@ -72,6 +76,7 @@ Stable direction rules:
 - Concrete integration packages belong under `internal/infra/*` and may depend on external libraries.
 - `internal/domain` should stay small and stable; start with a consumer-owned interface or type beside `internal/app/<feature>`, and promote only when a real shared stable contract exists.
 - `cmd/service/internal/bootstrap` is allowed to know concrete adapters because it is the composition root.
+- `internal/observability/otelconfig` is a vocabulary package only; it must not import config, infra adapters, or OpenTelemetry SDK packages.
 
 ## Primary Runtime Flows
 

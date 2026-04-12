@@ -91,13 +91,10 @@ type manualRootRouteKey struct {
 type manualRootRoute struct {
 	key     manualRootRouteKey
 	handler http.Handler
+	reason  string
 }
 
 const metricsRootRouteReason = "operational metrics is streamed from the root router while remaining visible in the OpenAPI contract"
-
-var documentedManualRootRouteExceptions = map[manualRootRouteKey]string{
-	{method: http.MethodGet, path: "/metrics"}: metricsRootRouteReason,
-}
 
 func newRootRouter(apiSubrouter http.Handler, metricsHandler http.Handler) chi.Router {
 	root := chi.NewRouter()
@@ -117,6 +114,7 @@ func manualRootRoutes(metricsHandler http.Handler) []manualRootRoute {
 				path:   "/metrics",
 			},
 			handler: metricsHandler,
+			reason:  metricsRootRouteReason,
 		},
 	}
 }

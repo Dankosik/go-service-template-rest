@@ -62,7 +62,7 @@ func rejectStartupForPolicyViolation(
 		attribute.String("error.type", "policy_violation"),
 		attribute.String("failed.stage", "startup.policy."+strings.ToLower(strings.TrimSpace(dependency))),
 	)
-	metrics.IncConfigValidationFailure("policy_violation")
+	metrics.IncStartupRejection("policy_violation")
 	metrics.IncConfigStartupOutcome("rejected")
 	args := startupLogArgs(
 		ctx,
@@ -103,7 +103,7 @@ func rejectStartupForDependencyInit(
 		attribute.String("error.type", "dependency_init"),
 		attribute.String("failed.stage", failedStage),
 	)
-	metrics.IncConfigValidationFailure("dependency_init")
+	metrics.IncStartupRejection("dependency_init")
 	metrics.IncConfigStartupOutcome("rejected")
 	log.Error(
 		"startup_blocked",
@@ -123,17 +123,19 @@ func rejectStartupForDependencyInit(
 func recordDependencyProbeRejection(
 	ctx context.Context,
 	runtime dependencyProbeRuntime,
-	dependency string,
-	operation string,
-	failedStage string,
+	labels startupDependencyProbeLabels,
 	mode string,
 	err error,
 ) {
-	dep := strings.ToLower(strings.TrimSpace(dependency))
+	dep := strings.ToLower(strings.TrimSpace(labels.dependency))
 	if dep == "" {
 		dep = "dependency"
 	}
-	stage := strings.TrimSpace(failedStage)
+	operation := strings.TrimSpace(labels.operation)
+	if operation == "" {
+		operation = dep + "_probe"
+	}
+	stage := strings.TrimSpace(labels.probeStage)
 	if stage == "" {
 		stage = "startup.probe." + dep
 	}
@@ -144,13 +146,13 @@ func recordDependencyProbeRejection(
 		attribute.String("error.type", "dependency_init"),
 		attribute.String("failed.stage", stage),
 	)
-	runtime.metrics.IncConfigValidationFailure("dependency_init")
+	runtime.metrics.IncStartupRejection("dependency_init")
 	runtime.metrics.IncConfigStartupOutcome("rejected")
 
 	args := startupLogArgs(
 		ctx,
 		startupLogComponentStartupProbes,
-		strings.TrimSpace(operation),
+		operation,
 		"error",
 		"error.type", "dependency_init",
 		"dependency", dep,
@@ -185,11 +187,11 @@ func startupLogArgs(ctx context.Context, component, operation, outcome string, e
 func telemetryInitFailureReason(err error) string {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return "deadline_exceeded"
+		return telemetry.TelemetryFailureReasonDeadlineExceeded
 	case errors.Is(err, context.Canceled):
-		return "canceled"
+		return telemetry.TelemetryFailureReasonCanceled
 	default:
-		return "setup_error"
+		return telemetry.TelemetryFailureReasonSetupError
 	}
 }
 

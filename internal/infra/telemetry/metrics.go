@@ -17,11 +17,26 @@ type Metrics struct {
 	requestDuration          *prometheus.HistogramVec
 	configLoadDuration       *prometheus.HistogramVec
 	configValidationFailures *prometheus.CounterVec
+	startupRejections        *prometheus.CounterVec
 	telemetryInitFailures    *prometheus.CounterVec
 	configUnknownKeyWarnings prometheus.Counter
 	configStartupOutcome     *prometheus.CounterVec
 	startupDependencyStatus  *prometheus.GaugeVec
 }
+
+const (
+	// TelemetryFailureReasonSetupError is the bounded label for generic tracing setup failures.
+	TelemetryFailureReasonSetupError = "setup_error"
+
+	// TelemetryFailureReasonDeadlineExceeded is the bounded label for tracing setup deadline failures.
+	TelemetryFailureReasonDeadlineExceeded = "deadline_exceeded"
+
+	// TelemetryFailureReasonCanceled is the bounded label for tracing setup cancellation.
+	TelemetryFailureReasonCanceled = "canceled"
+
+	// TelemetryFailureReasonOther is the bounded fallback label for unknown tracing setup failures.
+	TelemetryFailureReasonOther = "other"
+)
 
 func New() *Metrics {
 	registry := prometheus.NewRegistry()
@@ -56,6 +71,14 @@ func New() *Metrics {
 		prometheus.CounterOpts{
 			Name: "config_validation_failures_total",
 			Help: "Total number of config validation failures by reason.",
+		},
+		[]string{"reason"},
+	)
+
+	startupRejections := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "startup_rejections_total",
+			Help: "Total number of startup rejections by bounded reason.",
 		},
 		[]string{"reason"},
 	)
@@ -98,6 +121,7 @@ func New() *Metrics {
 		requestDuration,
 		configLoadDuration,
 		configValidationFailures,
+		startupRejections,
 		telemetryInitFailures,
 		configUnknownKeyWarnings,
 		configStartupOutcome,
@@ -110,6 +134,7 @@ func New() *Metrics {
 		requestDuration:          requestDuration,
 		configLoadDuration:       configLoadDuration,
 		configValidationFailures: configValidationFailures,
+		startupRejections:        startupRejections,
 		telemetryInitFailures:    telemetryInitFailures,
 		configUnknownKeyWarnings: configUnknownKeyWarnings,
 		configStartupOutcome:     configStartupOutcome,
@@ -145,6 +170,13 @@ func (m *Metrics) IncConfigValidationFailure(reason string) {
 	m.configValidationFailures.WithLabelValues(reason).Inc()
 }
 
+func (m *Metrics) IncStartupRejection(reason string) {
+	if m == nil || m.startupRejections == nil {
+		return
+	}
+	m.startupRejections.WithLabelValues(normalizeStartupRejectionReason(reason)).Inc()
+}
+
 func (m *Metrics) AddConfigUnknownKeyWarnings(count int) {
 	if m == nil || m.configUnknownKeyWarnings == nil || count <= 0 {
 		return
@@ -166,13 +198,17 @@ func (m *Metrics) IncConfigStartupOutcome(outcome string) {
 	m.configStartupOutcome.WithLabelValues(outcome).Inc()
 }
 
-func (m *Metrics) SetStartupDependencyStatus(dep, mode string, ready bool) {
+func (m *Metrics) MarkStartupDependencyReady(dep, mode string) {
+	m.setStartupDependencyStatus(dep, mode, 1)
+}
+
+func (m *Metrics) MarkStartupDependencyBlocked(dep, mode string) {
+	m.setStartupDependencyStatus(dep, mode, 0)
+}
+
+func (m *Metrics) setStartupDependencyStatus(dep, mode string, value float64) {
 	if m == nil || m.startupDependencyStatus == nil {
 		return
-	}
-	value := 0.0
-	if ready {
-		value = 1.0
 	}
 	m.startupDependencyStatus.WithLabelValues(dep, mode).Set(value)
 }
@@ -187,7 +223,27 @@ func (m *Metrics) Handler() http.Handler {
 func normalizeTelemetryFailureReason(reason string) string {
 	normalized := strings.TrimSpace(strings.ToLower(reason))
 	switch normalized {
-	case "setup_error", "deadline_exceeded", "canceled":
+	case TelemetryFailureReasonSetupError, TelemetryFailureReasonDeadlineExceeded, TelemetryFailureReasonCanceled:
+		return normalized
+	default:
+		return TelemetryFailureReasonOther
+	}
+}
+
+func normalizeStartupRejectionReason(reason string) string {
+	normalized := strings.TrimSpace(strings.ToLower(reason))
+	switch normalized {
+	case "config_load", "load":
+		return "config_load"
+	case "config_parse", "parse":
+		return "config_parse"
+	case "config_validate", "validate":
+		return "config_validate"
+	case "config_strict_unknown_key", "strict_unknown_key":
+		return "config_strict_unknown_key"
+	case "config_secret_policy", "secret_policy":
+		return "config_secret_policy"
+	case "policy_violation", "dependency_init", "startup_error":
 		return normalized
 	default:
 		return "other"

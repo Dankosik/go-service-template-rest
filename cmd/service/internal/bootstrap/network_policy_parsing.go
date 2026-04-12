@@ -15,7 +15,7 @@ const (
 )
 
 func loadNetworkPolicyFromEnv() (networkPolicy, error) {
-	ingressEnabled, ingressDeclared, err := parseOptionalBoolEnvWithPresence(envNetworkPublicIngressEnabled, false, "ingress")
+	ingressEnabled, ingressDeclared, err := parseOptionalBoolEnvWithExplicitDeclaration(envNetworkPublicIngressEnabled, false, "ingress")
 	if err != nil {
 		return networkPolicy{}, err
 	}
@@ -58,11 +58,11 @@ func networkPolicyErrorLabels(err error) (string, string) {
 }
 
 func parseOptionalBoolEnv(name string, defaultValue bool, policyClass string) (bool, error) {
-	value, _, err := parseOptionalBoolEnvWithPresence(name, defaultValue, policyClass)
+	value, _, err := parseOptionalBoolEnvWithExplicitDeclaration(name, defaultValue, policyClass)
 	return value, err
 }
 
-func parseOptionalBoolEnvWithPresence(name string, defaultValue bool, policyClass string) (bool, bool, error) {
+func parseOptionalBoolEnvWithExplicitDeclaration(name string, defaultValue bool, policyClass string) (bool, bool, error) {
 	raw, declared := os.LookupEnv(name)
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

@@ -229,7 +229,7 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing
 	}
 }
 
-func TestNetworkPolicyEmitEgressExceptionStateRejectsExpiredException(t *testing.T) {
+func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
 	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-expired")
@@ -245,9 +245,9 @@ func TestNetworkPolicyEmitEgressExceptionStateRejectsExpiredException(t *testing
 	}
 	policy.now = func() time.Time { return now }
 
-	err = policy.EmitEgressExceptionState()
+	err = policy.ValidateEgressExceptionState()
 	if err == nil {
-		t.Fatal("EmitEgressExceptionState() error = nil, want non-nil")
+		t.Fatal("ValidateEgressExceptionState() error = nil, want non-nil")
 	}
 }
 

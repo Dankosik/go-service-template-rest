@@ -1,5 +1,7 @@
 package config
 
+import "github.com/example/go-service-template-rest/internal/observability/otelconfig"
+
 func defaultValues() map[string]any {
 	return map[string]any{
 		"app.env":     "local",
@@ -53,23 +55,15 @@ func defaultValues() map[string]any {
 		"mongo.max_pool_size":            100,
 
 		"observability.otel.service_name":                  "service",
-		"observability.otel.traces_sampler":                "parentbased_traceidratio",
-		"observability.otel.traces_sampler_arg":            0.10,
+		"observability.otel.traces_sampler":                otelconfig.DefaultTracesSampler,
+		"observability.otel.traces_sampler_arg":            otelconfig.DefaultTracesSamplerArg,
 		"observability.otel.exporter.otlp_endpoint":        "",
 		"observability.otel.exporter.otlp_traces_endpoint": "",
 		"observability.otel.exporter.otlp_headers":         "",
-		"observability.otel.exporter.otlp_protocol":        "http/protobuf",
+		"observability.otel.exporter.otlp_protocol":        otelconfig.DefaultOTLPProtocol,
 
 		"feature_flags.postgres_readiness_probe": true,
 		"feature_flags.mongo_readiness_probe":    false,
 		"feature_flags.redis_readiness_probe":    false,
 	}
-}
-
-func knownConfigKeys() map[string]struct{} {
-	keys := make(map[string]struct{}, len(defaultValues()))
-	for key := range defaultValues() {
-		keys[key] = struct{}{}
-	}
-	return keys
 }

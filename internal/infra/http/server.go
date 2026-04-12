@@ -12,8 +12,13 @@ type Server struct {
 	srv *http.Server
 }
 
-// ErrNilListener indicates Serve received a nil listener.
-var ErrNilListener = errors.New("nil listener")
+var (
+	// ErrNilListener indicates Serve received a nil listener.
+	ErrNilListener = errors.New("nil listener")
+
+	// ErrUninitializedServer indicates an exported Server method was called before New.
+	ErrUninitializedServer = errors.New("uninitialized server")
+)
 
 type Config struct {
 	Addr              string
@@ -43,6 +48,9 @@ func New(cfg Config, handler http.Handler) *Server {
 }
 
 func (s *Server) Run() error {
+	if err := s.requireInitialized(); err != nil {
+		return err
+	}
 	listener, err := net.Listen("tcp", s.srv.Addr)
 	if err != nil {
 		return err
@@ -51,6 +59,9 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) Serve(listener net.Listener) error {
+	if err := s.requireInitialized(); err != nil {
+		return err
+	}
 	if listener == nil {
 		return ErrNilListener
 	}
@@ -62,5 +73,15 @@ func (s *Server) Serve(listener net.Listener) error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if err := s.requireInitialized(); err != nil {
+		return err
+	}
 	return s.srv.Shutdown(ctx)
+}
+
+func (s *Server) requireInitialized() error {
+	if s == nil || s.srv == nil {
+		return ErrUninitializedServer
+	}
+	return nil
 }
