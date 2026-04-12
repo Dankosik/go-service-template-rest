@@ -12,12 +12,21 @@ func TestStartupProbeAddresses(t *testing.T) {
 	t.Parallel()
 
 	t.Run("postgres invalid dsn", func(t *testing.T) {
-		_, err := postgresStartupProbeAddress(config.PostgresConfig{DSN: "::bad::dsn"})
+		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
+		_, err := postgresStartupProbeAddress(config.PostgresConfig{DSN: rawDSN})
 		if err == nil {
 			t.Fatal("postgresStartupProbeAddress() error = nil, want non-nil")
 		}
 		if !errors.Is(err, errDependencyInit) {
 			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
+		}
+		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
+			t.Fatalf("err = %v, want redacted parse context", err)
+		}
+		for _, leaked := range []string{rawDSN, "top-secret", "user"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("err = %v, leaked %q", err, leaked)
+			}
 		}
 	})
 

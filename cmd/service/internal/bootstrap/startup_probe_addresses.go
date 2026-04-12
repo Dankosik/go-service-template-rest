@@ -13,7 +13,8 @@ import (
 func postgresStartupProbeAddress(cfg config.PostgresConfig) (string, error) {
 	pgxCfg, err := pgxpool.ParseConfig(cfg.DSN)
 	if err != nil {
-		return "", fmt.Errorf("%w: parse postgres dsn", errDependencyInit)
+		// pgx parse errors can echo the input DSN, including credentials.
+		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", errDependencyInit)
 	}
 	host := strings.TrimSpace(pgxCfg.ConnConfig.Host)
 	if host == "" || pgxCfg.ConnConfig.Port == 0 {

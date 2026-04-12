@@ -1,18 +1,22 @@
 # Example Transformations
 
 These examples show the quality bar for this skill.
-Each example links to a rough user-input fixture and then shows the final English prompt shape.
+Each example links to a rough user-input fixture and then shows the final English context-rich handoff shape.
 
 ## Example 1: HTTP OPTIONS / CORS Policy Bug
 
 Raw fixture:
 - `evals/files/http-options-cors.md`
 
-Final prompt:
+Final handoff prompt:
 
 ```md
 Objective
 Fix and regression-test HTTP `OPTIONS` handling so known routes return the correct `Allow` header and `204 No Content`, while CORS preflight remains explicitly fail-closed when CORS is not enabled.
+
+User Intent And Context
+- The user is pointing at mixed `OPTIONS` behavior, not asking for broad HTTP cleanup.
+- The repeated emphasis is on preserving the CORS fail-closed posture while making known-route `OPTIONS` behavior correct.
 
 Confirmed Signals And Exact Identifiers
 - `OPTIONS`
@@ -62,11 +66,15 @@ Assumptions / Open Questions
 Raw fixture:
 - `evals/files/skill-tooling.md`
 
-Final prompt:
+Final handoff prompt:
 
 ```md
 Objective
-Rename and revise the existing repository-local prompt-composer skill so it turns rough, incomplete, repetitive, or multilingual user task notes into strong English prompts for coding agents working inside this repo.
+Rename and revise the existing repository-local prompt-composer skill so it turns rough, incomplete, repetitive, or multilingual user task notes into a context-rich English handoff for coding agents working inside this repo.
+
+User Intent And Context
+- The user does not want plain translation or prettier prompt wording as the core value.
+- The skill should reconstruct intent and repository context so a downstream LLM understands what the user wants before acting.
 
 Confirmed Signals And Exact Identifiers
 - `skill`
@@ -91,8 +99,8 @@ Inspect First
 - `AGENTS.md`
 
 Requested Change / Problem Statement
-- Rename and update the existing repo-local prompt-composition skill so it reconstructs intent from messy, incomplete, repetitive, or multilingual input instead of treating any single language as the special trigger.
-- The resulting prompt should help another coding agent start in the right repo surfaces, preserve exact identifiers, and include the right validation direction.
+- Rename and update the existing repo-local prompt-composition skill so it reconstructs intent and missing task context from messy, incomplete, repetitive, or multilingual input instead of treating any single language as the special trigger.
+- The resulting handoff prompt should help another coding agent start in the right repo surfaces, preserve exact identifiers, and include the right validation direction.
 - Reuse existing repository skill conventions rather than inventing a parallel format.
 
 Constraints / Preferences / Non-goals
@@ -105,12 +113,12 @@ Acceptance Criteria / Expected Outcome
 - The renamed skill exists under the canonical repo-local skill path, with frontmatter, README/catalog references, examples, and eval prompts updated consistently.
 - Supporting references/examples/evals are present and consistent with repo conventions.
 - Runtime mirrors can be refreshed with the existing sync flow.
-- The skill output is clearly better than literal translation and is tailored to this repository.
+- The skill output is clearly better than literal translation or prompt polish alone and is tailored to this repository.
 
 Validation / Verification
 - Run `make skills-sync` and `make skills-check`.
 - Validate any structured eval file such as `evals/evals.json`.
-- Use realistic messy fixtures across more than one language style to review whether the produced prompt is repo-aware and actionable.
+- Use realistic messy fixtures across more than one language style to review whether the produced context handoff is repo-aware and actionable.
 
 Assumptions / Open Questions
 - [assumption] Updating the README skill library and the skills catalog is appropriate for discoverability.
@@ -121,11 +129,15 @@ Assumptions / Open Questions
 Raw fixture:
 - `evals/files/flaky-shutdown.md`
 
-Final prompt:
+Final handoff prompt:
 
 ```md
 Objective
 Investigate and fix a flaky shutdown/drain path where `context canceled` or worker shutdown handling may be incorrect. Do not paper over the issue by simply increasing timeouts.
+
+User Intent And Context
+- The user appears to be reporting a flaky lifecycle problem and wants root cause, not a superficial timeout bump.
+- The repeated shutdown/drain/race/integration signals make concurrency-aware verification part of the task context.
 
 Confirmed Signals And Exact Identifiers
 - `shutdown`

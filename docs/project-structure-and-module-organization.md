@@ -251,7 +251,7 @@ type Store interface {
 
 The port belongs beside the app feature that consumes it. The Postgres implementation belongs under `internal/infra/postgres`, and bootstrap wires the concrete adapter into the app service. Do not add a generic runtime port package just to prepare for future repositories.
 
-Redis and Mongo extension note: current Redis and Mongo config/probe keys are guard-only extension stubs unless a real feature owns adapter behavior. They validate planned dependency exposure and readiness policy; they are not full cache, store, or database adapters. Add `internal/infra/redis` or `internal/infra/mongo` only when an app feature needs real runtime behavior, and do not grow cache/store semantics in `internal/config` or bootstrap alone.
+Redis and Mongo extension note: current Redis and Mongo config/probe keys are guard-only extension stubs unless a real feature owns adapter behavior. The enabled flags, probe addresses, readiness flags, probe timeouts, and Redis store-mode admission guard are active bootstrap controls. Redis cache/store knobs and Mongo database/pool/server-selection knobs are reserved future adapter API: they may remain in the config contract for compatibility, but they are not full cache, store, or database runtime behavior in the baseline template. Add `internal/infra/redis` or `internal/infra/mongo` only when an app feature needs real runtime behavior, and do not grow cache/store semantics in `internal/config` or bootstrap alone.
 
 New integration (Redis, Kafka, S3, external API):
 1. Add adapter in `internal/infra/<integration>`.

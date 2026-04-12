@@ -1,7 +1,7 @@
 # Repo Profile
 
 Use this file as the always-on background layer for this skill.
-It captures only durable facts that materially improve downstream prompts.
+It captures only durable facts that materially improve downstream context and handoff prompts.
 
 ## What This Repository Is
 - This repo is an AI-native Go REST service template for coding-agent workflows.
@@ -66,7 +66,7 @@ It captures only durable facts that materially improve downstream prompts.
 - Migration rehearsal: `make migration-validate`
 - Skill mirrors: `make skills-sync`, `make skills-check`
 
-## Prompting Rules For This Skill
-- Inject only the repo facts that help the current task.
+## Context Rules For This Skill
+- Inject only the repo facts that help the current task context.
 - Prefer exact paths and source-of-truth files over broad directory descriptions.
 - Mention template/bootstrap caveats only when the task is actually about repo initialization or module path setup.

@@ -14,21 +14,26 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+type configStageDuration struct {
+	stage    string
+	duration time.Duration
+}
+
+func configLoadStageDurations(report config.LoadReport) []configStageDuration {
+	return []configStageDuration{
+		{stage: config.StageLoadDefaults, duration: report.LoadDefaultsDuration},
+		{stage: config.StageLoadFile, duration: report.LoadFileDuration},
+		{stage: config.StageLoadEnv, duration: report.LoadEnvDuration},
+		{stage: config.StageParse, duration: report.ParseDuration},
+		{stage: config.StageValidate, duration: report.ValidateDuration},
+	}
+}
+
 func recordConfigSuccessMetrics(metrics *telemetry.Metrics, report config.LoadReport) {
-	if report.LoadDefaultsDuration > 0 {
-		metrics.ObserveConfigLoadDuration(config.StageLoadDefaults, "success", report.LoadDefaultsDuration)
-	}
-	if report.LoadFileDuration > 0 {
-		metrics.ObserveConfigLoadDuration(config.StageLoadFile, "success", report.LoadFileDuration)
-	}
-	if report.LoadEnvDuration > 0 {
-		metrics.ObserveConfigLoadDuration(config.StageLoadEnv, "success", report.LoadEnvDuration)
-	}
-	if report.ParseDuration > 0 {
-		metrics.ObserveConfigLoadDuration(config.StageParse, "success", report.ParseDuration)
-	}
-	if report.ValidateDuration > 0 {
-		metrics.ObserveConfigLoadDuration(config.StageValidate, "success", report.ValidateDuration)
+	for _, stage := range configLoadStageDurations(report) {
+		if stage.duration > 0 {
+			metrics.ObserveConfigLoadDuration(stage.stage, "success", stage.duration)
+		}
 	}
 }
 

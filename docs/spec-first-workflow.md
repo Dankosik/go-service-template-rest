@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document is the detailed runtime companion to [AGENTS.md](/Users/daniil/Projects/Opensource/go-service-template-rest/AGENTS.md) for tasks that need more than a quick local fix:
+This document is the detailed runtime companion to [AGENTS.md](../AGENTS.md) for tasks that need more than a quick local fix:
 
 - non-trivial or agent-backed work,
 - preserved research,
@@ -11,13 +11,15 @@ This document is the detailed runtime companion to [AGENTS.md](/Users/daniil/Pro
 
 It explains artifact placement, timing, relationships, and resume order.
 
+`AGENTS.md` stays compact; this document carries the detailed mechanics.
+
 ### Authority
 
 `AGENTS.md` stays authoritative for role ownership, invariants, subagent protocol, and stage gates. If the two documents diverge, follow `AGENTS.md` and then repair this file.
 
 ### Repository Baseline
 
-When the task depends on stable repository boundaries or runtime flows, load [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) before writing task-local design.
+When the task depends on stable repository boundaries or runtime flows, load [docs/repo-architecture.md](./repo-architecture.md) before writing task-local design.
 
 ## 2. What This Workflow Does Not Change
 
@@ -86,7 +88,7 @@ specs/<feature-id>/
 
 ### Artifact Rules
 
-- **Repository baseline:** [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) is the stable repository baseline, not a task-local design file.
+- **Repository baseline:** [docs/repo-architecture.md](./repo-architecture.md) is the stable repository baseline, not a task-local design file.
 - **Workflow control:** `workflow-plan.md` stays live through research, synthesis, `technical design`, planning, implementation, and validation; `workflow-plans/<phase>.md` stays phase-local and must not turn into a second `design/` bundle, `plan.md`, or `tasks.md`.
 - **Pre-code phase plans:** Pre-code phases normally get `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`.
 - **Post-code phase-control files:** Post-code phase-control files are still pre-code artifacts: if the approved phase structure will use them, planning creates `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, and `workflow-plans/validation-phase-N.md` before implementation starts, and post-code sessions only update them.
@@ -160,7 +162,7 @@ The design bundle carries task-specific technical context that `spec.md` should 
 
 Load order for design work:
 
-1. Read [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) when stable repository boundaries or flows matter.
+1. Read [docs/repo-architecture.md](./repo-architecture.md) when stable repository boundaries or flows matter.
 2. Read the approved `spec.md`.
 3. Produce the task-local `design/` bundle.
 4. Plan from approved `spec.md + design/`.
@@ -271,6 +273,8 @@ For tiny local work, a brief explicit skip rationale in the main flow is enough 
 
 Research may stay local or fan out to read-only subagents, depending on the workflow plan.
 
+If a subagent result is required for synthesis, review fan-in, or a user-requested agent-backed answer, treat short timeouts as “still running” and keep polling up to 20 minutes per cycle unless the lane is clearly hung, superseded, or canceled.
+
 After research:
 
 - synthesize comparable claims,
@@ -300,7 +304,7 @@ Clarification gate mechanics:
 
 It:
 
-- uses [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) when repository baseline context matters,
+- uses [docs/repo-architecture.md](./repo-architecture.md) when repository baseline context matters,
 - produces the required core `design/` artifacts,
 - adds conditional design artifacts only when triggered,
 - records approval state in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
@@ -497,7 +501,7 @@ In a later session, read artifacts in this order:
 2. current `workflow-plans/<phase>.md`
 3. phase artifacts in the order the current phase needs them:
    - `spec.md`
-   - [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md) when the task depends on stable repository architecture context
+   - [docs/repo-architecture.md](./repo-architecture.md) when the task depends on stable repository architecture context
    - `design/overview.md`
    - remaining required design artifacts plus any triggered conditional design files
    - `plan.md`
@@ -562,6 +566,6 @@ Avoid:
 - **Pre-reading review skills:** Loading multiple subagent-internal review or domain skill bodies in the main flow because their descriptions match, instead of routing one skill name per read-only lane.
 - **Just-in-case artifacts:** Creating `test-plan.md`, `rollout.md`, or conditional design files "just in case".
 - **Missing skip rationale:** Forgetting to record the skip rationale when bypassing `design/`.
-- **Architecture re-derivation:** Re-deriving repository architecture every session instead of loading [docs/repo-architecture.md](/Users/daniil/Projects/Opensource/go-service-template-rest/docs/repo-architecture.md).
+- **Architecture re-derivation:** Re-deriving repository architecture every session instead of loading [docs/repo-architecture.md](./repo-architecture.md).
 - **Execution-order archaeology:** Forcing the coder to reconstruct execution order from technical prose when `plan.md` and expected `tasks.md` should exist.
 - **Stale artifact status:** Leaving artifact status stale so resume requires chat archaeology.

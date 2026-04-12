@@ -32,6 +32,20 @@ type TraceExporterConfig struct {
 	OTLPProtocol       string
 }
 
+// TraceExporterTarget describes the explicit application-configured OTLP trace exporter target.
+type TraceExporterTarget struct {
+	Configured bool
+	Target     string
+	Scheme     string
+}
+
+type traceOTLPEndpoint struct {
+	target   string
+	scheme   string
+	urlPath  string
+	insecure bool
+}
+
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
 	serviceName := strings.TrimSpace(cfg.ServiceName)
 	serviceVersion := strings.TrimSpace(cfg.ServiceVersion)
@@ -145,77 +159,126 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 	}
 
 	options := make([]otlptracehttp.Option, 0, 4)
-	configured := false
+	endpoint, configured, err := traceExporterOTLPEndpoint(cfg)
+	if err != nil {
+		return nil, false, err
+	}
+	if !configured {
+		return options, false, nil
+	}
 
-	endpoint := strings.TrimSpace(cfg.OTLPTracesEndpoint)
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(cfg.OTLPEndpoint)
-	}
-	if endpoint != "" {
-		parsedOptions, err := parseOTLPEndpointOptions(endpoint)
-		if err != nil {
-			return nil, false, err
-		}
-		options = append(options, parsedOptions...)
-		configured = true
-	}
+	options = append(options, endpoint.options()...)
 	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
 		parsedHeaders, err := parseOTLPHeaders(headers)
 		if err != nil {
 			return nil, false, err
 		}
 		options = append(options, otlptracehttp.WithHeaders(parsedHeaders))
-		configured = true
 	}
 
-	return options, configured, nil
+	return options, true, nil
+}
+
+// DescribeTraceExporterTarget returns the explicit OTLP trace exporter network target, if configured.
+func DescribeTraceExporterTarget(cfg TraceExporterConfig) (TraceExporterTarget, error) {
+	endpoint, configured, err := traceExporterOTLPEndpoint(cfg)
+	if err != nil {
+		return TraceExporterTarget{}, err
+	}
+	if !configured {
+		return TraceExporterTarget{}, nil
+	}
+
+	return TraceExporterTarget{
+		Configured: true,
+		Target:     endpoint.target,
+		Scheme:     endpoint.scheme,
+	}, nil
+}
+
+func traceExporterOTLPEndpoint(cfg TraceExporterConfig) (traceOTLPEndpoint, bool, error) {
+	raw := strings.TrimSpace(cfg.OTLPTracesEndpoint)
+	if raw == "" {
+		raw = strings.TrimSpace(cfg.OTLPEndpoint)
+	}
+	if raw == "" {
+		return traceOTLPEndpoint{}, false, nil
+	}
+
+	endpoint, err := parseTraceOTLPEndpoint(raw)
+	if err != nil {
+		return traceOTLPEndpoint{}, false, err
+	}
+	return endpoint, true, nil
 }
 
 func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
+	endpoint, err := parseTraceOTLPEndpoint(raw)
+	if err != nil {
+		return nil, err
+	}
+	return endpoint.options(), nil
+}
+
+func parseTraceOTLPEndpoint(raw string) (traceOTLPEndpoint, error) {
 	if !strings.Contains(raw, "://") {
 		parsedURL, err := url.Parse("//" + raw)
 		if err != nil {
-			return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
+			return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
 		}
-		return otlpEndpointOptions(raw, parsedURL, true)
+		return otlpEndpoint(raw, parsedURL, "http", true)
 	}
 
 	parsedURL, err := url.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
 	}
 
 	insecure := false
-	switch strings.ToLower(parsedURL.Scheme) {
+	scheme := strings.ToLower(parsedURL.Scheme)
+	switch scheme {
 	case "http":
 		insecure = true
 	case "https":
 	default:
-		return nil, fmt.Errorf("parse otlp endpoint %q: unsupported scheme %q", raw, parsedURL.Scheme)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: unsupported scheme %q", raw, parsedURL.Scheme)
 	}
 
-	return otlpEndpointOptions(raw, parsedURL, insecure)
+	return otlpEndpoint(raw, parsedURL, scheme, insecure)
 }
 
-func otlpEndpointOptions(raw string, parsedURL *url.URL, insecure bool) ([]otlptracehttp.Option, error) {
+func otlpEndpoint(raw string, parsedURL *url.URL, scheme string, insecure bool) (traceOTLPEndpoint, error) {
 	if parsedURL.Host == "" {
-		return nil, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
 	}
 	if parsedURL.RawQuery != "" {
-		return nil, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
 	}
 
-	options := make([]otlptracehttp.Option, 0, 3)
-	if insecure {
-		options = append(options, otlptracehttp.WithInsecure())
+	endpoint := traceOTLPEndpoint{
+		target:   parsedURL.Host,
+		scheme:   scheme,
+		insecure: insecure,
 	}
-	options = append(options, otlptracehttp.WithEndpoint(parsedURL.Host))
 	path := strings.TrimSpace(parsedURL.EscapedPath())
 	if path != "" && path != "/" {
-		options = append(options, otlptracehttp.WithURLPath(path))
+		endpoint.urlPath = path
 	}
 
-	return options, nil
+	return endpoint, nil
+}
+
+func (e traceOTLPEndpoint) options() []otlptracehttp.Option {
+	options := make([]otlptracehttp.Option, 0, 3)
+	if e.insecure {
+		options = append(options, otlptracehttp.WithInsecure())
+	}
+	options = append(options, otlptracehttp.WithEndpoint(e.target))
+	if e.urlPath != "" {
+		options = append(options, otlptracehttp.WithURLPath(e.urlPath))
+	}
+
+	return options
 }
 
 func parseOTLPHeaders(raw string) (map[string]string, error) {

@@ -59,6 +59,21 @@ func TestRunDependencyProbe(t *testing.T) {
 	})
 }
 
+func TestStartupDependencyProbeLabelsUseCanonicalProbeStage(t *testing.T) {
+	t.Parallel()
+
+	labels := newStartupDependencyProbeLabels("redis")
+	if labels.resolveStage != "startup.resolve.redis" {
+		t.Fatalf("resolveStage = %q, want %q", labels.resolveStage, "startup.resolve.redis")
+	}
+	if labels.probeStage != "startup.probe.redis" {
+		t.Fatalf("probeStage = %q, want %q", labels.probeStage, "startup.probe.redis")
+	}
+	if labels.operation != "redis_probe" {
+		t.Fatalf("operation = %q, want %q", labels.operation, "redis_probe")
+	}
+}
+
 func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	t.Parallel()
 
@@ -191,6 +206,81 @@ func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) 
 		t.Fatalf("probe.Name() = %q, want %q", probe.Name(), "redis")
 	}
 	if err := probe.Check(context.Background()); err != nil {
+		t.Fatalf("probe.Check() error = %v, want nil", err)
+	}
+}
+
+func TestPostgresRuntimeReadinessProbeCapsContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	const budget = 150 * time.Millisecond
+	var captured context.Context
+	probe := newPostgresReadinessProbe(testProbe{
+		name: "postgres",
+		check: func(ctx context.Context) error {
+			captured = ctx
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("probe context has no deadline, want healthcheck budget deadline")
+			}
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				t.Fatalf("probe context remaining deadline = %s, want positive", remaining)
+			}
+			if remaining > budget+25*time.Millisecond {
+				t.Fatalf("probe context remaining deadline = %s, want <= %s", remaining, budget)
+			}
+			if remaining < budget/2 {
+				t.Fatalf("probe context remaining deadline = %s, want near %s", remaining, budget)
+			}
+			return nil
+		},
+	}, budget)
+
+	parent, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	if got := probe.Name(); got != "postgres" {
+		t.Fatalf("probe.Name() = %q, want postgres", got)
+	}
+	if err := probe.Check(parent); err != nil {
+		t.Fatalf("probe.Check() error = %v, want nil", err)
+	}
+	select {
+	case <-captured.Done():
+	default:
+		t.Fatal("probe context was not canceled after Check returned")
+	}
+}
+
+func TestPostgresRuntimeReadinessProbeDoesNotExtendShorterParentDeadline(t *testing.T) {
+	t.Parallel()
+
+	parent, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	parentDeadline, ok := parent.Deadline()
+	if !ok {
+		t.Fatal("parent context has no deadline")
+	}
+
+	probe := newPostgresReadinessProbe(testProbe{
+		name: "postgres",
+		check: func(ctx context.Context) error {
+			childDeadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("probe context has no deadline, want parent deadline")
+			}
+			if childDeadline.After(parentDeadline.Add(time.Millisecond)) {
+				t.Fatalf("probe deadline = %s, want no later than parent deadline %s", childDeadline, parentDeadline)
+			}
+			if remaining := time.Until(childDeadline); remaining <= 0 {
+				t.Fatalf("probe context remaining deadline = %s, want positive", remaining)
+			}
+			return nil
+		},
+	}, time.Second)
+
+	if err := probe.Check(parent); err != nil {
 		t.Fatalf("probe.Check() error = %v, want nil", err)
 	}
 }
@@ -428,6 +518,9 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 		if !strings.Contains(err.Error(), "low remaining startup budget") {
 			t.Fatalf("initRedisDependency() error = %v, want low-budget context", err)
 		}
+		if !strings.Contains(err.Error(), "startup.probe.redis") {
+			t.Fatalf("initRedisDependency() error = %v, want canonical probe stage", err)
+		}
 	})
 
 	t.Run("mongo degraded", func(t *testing.T) {
@@ -450,5 +543,21 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 		if !strings.Contains(err.Error(), "low remaining startup budget") {
 			t.Fatalf("initMongoDependency() error = %v, want low-budget context", err)
 		}
+		if !strings.Contains(err.Error(), "startup.probe.mongo") {
+			t.Fatalf("initMongoDependency() error = %v, want canonical probe stage", err)
+		}
 	})
+}
+
+type testProbe struct {
+	name  string
+	check func(context.Context) error
+}
+
+func (p testProbe) Name() string {
+	return p.name
+}
+
+func (p testProbe) Check(ctx context.Context) error {
+	return p.check(ctx)
 }

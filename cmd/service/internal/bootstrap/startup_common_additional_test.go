@@ -49,6 +49,107 @@ func TestTelemetryInitFailureReason(t *testing.T) {
 	}
 }
 
+func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
+	restoreGlobalTelemetry(t)
+	t.Setenv(envNetworkEgressAllowedSchemes, "http")
+
+	metrics := telemetry.New()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	cleanup, err := bootstrapTelemetryStage(
+		context.Background(),
+		telemetryStageTestConfig("127.0.0.1:4318"),
+		metrics,
+		logger,
+	)
+	if err != nil {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want nil", err)
+	}
+	t.Cleanup(func() {
+		cleanup(context.Background())
+	})
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="optional_fail_open"} 1`) {
+		t.Fatalf("metrics output missing ready telemetry status:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `telemetry_init_failure_total{`) {
+		t.Fatalf("metrics output contains telemetry init failure:\n%s", metricsText)
+	}
+}
+
+func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
+	restoreGlobalTelemetry(t)
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+
+	cleanup, err := bootstrapTelemetryStage(
+		context.Background(),
+		telemetryStageTestConfig("public-otel.example.com:4318"),
+		metrics,
+		logger,
+	)
+	cleanup(context.Background())
+	if err == nil {
+		t.Fatal("bootstrapTelemetryStage() error = nil, want policy denial")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if !strings.Contains(err.Error(), "telemetry egress target denied") {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want telemetry egress context", err)
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `telemetry_init_failure_total{reason="setup_error"} 1`) {
+		t.Fatalf("metrics output missing telemetry init failure:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 0`) {
+		t.Fatalf("metrics output missing feature_off telemetry status:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `startup_rejections_total{`) {
+		t.Fatalf("metrics output contains startup rejection for optional telemetry denial:\n%s", metricsText)
+	}
+}
+
+func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *testing.T) {
+	restoreGlobalTelemetry(t)
+	t.Setenv(envNetworkEgressAllowedSchemes, "1bad")
+
+	metrics := telemetry.New()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	cleanup, err := bootstrapTelemetryStage(
+		context.Background(),
+		telemetryStageTestConfig("127.0.0.1:4318"),
+		metrics,
+		logger,
+	)
+	cleanup(context.Background())
+	if err == nil {
+		t.Fatal("bootstrapTelemetryStage() error = nil, want invalid network policy error")
+	}
+	if !strings.Contains(err.Error(), envNetworkEgressAllowedSchemes) {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want network policy context", err)
+	}
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "invalid-network-policy")
+	_, networkErr := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, config.Config{})
+	span.End()
+	if networkErr == nil {
+		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want invalid network policy rejection")
+	}
+	if !errors.Is(networkErr, errDependencyInit) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", networkErr, errDependencyInit)
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+}
+
 func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
 	spanRecorder := installTestTracerProvider(t)
 	ctx, span := otel.Tracer("test").Start(context.Background(), "startup-log-test")
@@ -79,31 +180,95 @@ func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
 	}
 }
 
+func restoreGlobalTelemetry(t *testing.T) {
+	t.Helper()
+
+	previousTracerProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+}
+
+func telemetryStageTestConfig(otlpEndpoint string) config.Config {
+	return config.Config{
+		App: config.AppConfig{
+			Env:     "local",
+			Version: "test",
+		},
+		Observability: config.ObservabilityConfig{
+			OTel: config.OTelConfig{
+				ServiceName:      "test-service",
+				TracesSampler:    "always_off",
+				TracesSamplerArg: 0,
+				Exporter: config.OTelExporterConfig{
+					OTLPEndpoint: otlpEndpoint,
+					OTLPProtocol: "http/protobuf",
+				},
+			},
+		},
+	}
+}
+
 func TestRecordConfigHelpers(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
-	recordConfigSuccessMetrics(metrics, config.LoadReport{
+	report := config.LoadReport{
 		LoadDefaultsDuration: 10 * time.Millisecond,
-		LoadFileDuration:     10 * time.Millisecond,
-		LoadEnvDuration:      10 * time.Millisecond,
-		ParseDuration:        10 * time.Millisecond,
-		ValidateDuration:     10 * time.Millisecond,
-	})
+		LoadFileDuration:     11 * time.Millisecond,
+		LoadEnvDuration:      12 * time.Millisecond,
+		ParseDuration:        13 * time.Millisecond,
+		ValidateDuration:     14 * time.Millisecond,
+	}
+	wantStages := []string{
+		config.StageLoadDefaults,
+		config.StageLoadFile,
+		config.StageLoadEnv,
+		config.StageParse,
+		config.StageValidate,
+	}
+	stageDurations := configLoadStageDurations(report)
+	if len(stageDurations) != len(wantStages) {
+		t.Fatalf("configLoadStageDurations() len = %d, want %d", len(stageDurations), len(wantStages))
+	}
+	for i, wantStage := range wantStages {
+		if stageDurations[i].stage != wantStage {
+			t.Fatalf("configLoadStageDurations()[%d].stage = %q, want %q", i, stageDurations[i].stage, wantStage)
+		}
+	}
+
+	metrics := telemetry.New()
+	recordConfigSuccessMetrics(metrics, report)
 	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_load_duration_seconds_count{result="success",stage="config.load.defaults"}`) {
-		t.Fatalf("metrics output missing stage count:\n%s", metricsText)
+	for _, stage := range wantStages {
+		pattern := `config_load_duration_seconds_count{result="success",stage="` + stage + `"}`
+		if !strings.Contains(metricsText, pattern) {
+			t.Fatalf("metrics output missing stage count %q:\n%s", stage, metricsText)
+		}
 	}
 
 	spanRecorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider()
 	provider.RegisterSpanProcessor(spanRecorder)
 	tracer := provider.Tracer("test")
-	recordConfigStageSpan(tracer, context.Background(), "cfg.stage", 15*time.Millisecond, "success", "")
+	for _, stage := range stageDurations {
+		recordConfigStageSpan(tracer, context.Background(), stage.stage, stage.duration, "success", "")
+	}
 	recordConfigStageSpan(tracer, context.Background(), "cfg.zero", 0, "success", "")
 	_ = provider.Shutdown(context.Background())
-	if len(spanRecorder.Ended()) == 0 {
-		t.Fatal("expected recorded config stage span")
+	spans := spanRecorder.Ended()
+	if len(spans) != len(wantStages) {
+		t.Fatalf("ended spans len = %d, want %d", len(spans), len(wantStages))
+	}
+	seenSpans := make(map[string]struct{}, len(spans))
+	for _, span := range spans {
+		seenSpans[span.Name()] = struct{}{}
+	}
+	for _, stage := range wantStages {
+		if _, ok := seenSpans[stage]; !ok {
+			t.Fatalf("missing config stage span %q; spans=%v", stage, seenSpans)
+		}
 	}
 }
 

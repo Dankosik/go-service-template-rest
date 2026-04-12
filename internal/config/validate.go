@@ -185,7 +185,7 @@ func validateRedis(cfg RedisConfig) error {
 		}
 	}
 
-	if cfg.StoreMode() {
+	if mode == RedisModeStore {
 		// ARCH-008: v1 only supports guard/reject behavior for store mode.
 		if !cfg.AllowStoreMode {
 			return fmt.Errorf("%w: redis.mode=store is blocked unless redis.allow_store_mode=true", ErrValidate)
@@ -456,7 +456,7 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		return net.JoinHostPort(bracketedHost, defaultMongoPort), nil
 	}
 
-	if strings.Count(trimmed, ":") > 1 && !strings.HasPrefix(trimmed, "[") && !strings.HasSuffix(trimmed, "]") {
+	if strings.Count(trimmed, ":") > 1 {
 		return net.JoinHostPort(trimmed, defaultMongoPort), nil
 	}
 

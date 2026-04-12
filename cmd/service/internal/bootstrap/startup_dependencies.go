@@ -61,6 +61,25 @@ func (p startupNamedProbe) Check(ctx context.Context) error {
 	return p.check(ctx)
 }
 
+type postgresReadinessProbe struct {
+	probe  health.Probe
+	budget time.Duration
+}
+
+func newPostgresReadinessProbe(probe health.Probe, budget time.Duration) postgresReadinessProbe {
+	return postgresReadinessProbe{probe: probe, budget: budget}
+}
+
+func (p postgresReadinessProbe) Name() string {
+	return p.probe.Name()
+}
+
+func (p postgresReadinessProbe) Check(ctx context.Context) error {
+	probeCtx, probeCancel := withStageBudget(ctx, p.budget)
+	defer probeCancel()
+	return p.probe.Check(probeCtx)
+}
+
 type dependencyProbeSpec struct {
 	stage        string
 	spanName     string
@@ -97,7 +116,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 		outcome.postgresPool = pg
 		cleanupStack.add(pg.Close)
 		if runtime.cfg.PostgresReadinessProbeRequired() {
-			outcome.probes = append(outcome.probes, pg)
+			outcome.probes = append(outcome.probes, newPostgresReadinessProbe(pg, runtime.cfg.Postgres.HealthcheckTimeout))
 		}
 	}
 
@@ -153,7 +172,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 
 	var pg *postgres.Pool
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        labels.probeName,
+		stage:        labels.probeStage,
 		spanName:     labels.probeStage,
 		dep:          labels.dependency,
 		budget:       postgresProbeBudget,
@@ -233,7 +252,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	}
 
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        labels.probeName,
+		stage:        labels.probeStage,
 		spanName:     labels.probeStage,
 		dep:          labels.dependency,
 		mode:         redisMode,
@@ -326,7 +345,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	}
 
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        labels.probeName,
+		stage:        labels.probeStage,
 		spanName:     labels.probeStage,
 		dep:          labels.dependency,
 		budget:       mongoProbeBudget,

@@ -221,6 +221,24 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("headers without endpoint do not configure sdk default exporter", func(t *testing.T) {
+		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector.example:4318")
+
+		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+			OTLPHeaders:  "authorization=Bearer token",
+			OTLPProtocol: "http/protobuf",
+		})
+		if err != nil {
+			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+		}
+		if configured {
+			t.Fatalf("configured = true, want false")
+		}
+		if len(options) != 0 {
+			t.Fatalf("options len = %d, want 0", len(options))
+		}
+	})
+
 	t.Run("configured endpoint and headers", func(t *testing.T) {
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
@@ -280,6 +298,89 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 			t.Fatalf("buildTraceExporterOptions() error = nil, want non-nil")
 		}
 	})
+}
+
+func TestDescribeTraceExporterTarget(t *testing.T) {
+	testCases := []struct {
+		name       string
+		cfg        TraceExporterConfig
+		wantConfig bool
+		wantTarget string
+		wantScheme string
+		wantErr    string
+	}{
+		{
+			name: "not configured",
+		},
+		{
+			name: "generic endpoint",
+			cfg: TraceExporterConfig{
+				OTLPEndpoint: "https://otel.example.com:4318",
+			},
+			wantConfig: true,
+			wantTarget: "otel.example.com:4318",
+			wantScheme: "https",
+		},
+		{
+			name: "traces endpoint takes precedence",
+			cfg: TraceExporterConfig{
+				OTLPEndpoint:       "https://generic.example.com:4318",
+				OTLPTracesEndpoint: "http://traces.example.com:4318/v1/traces",
+			},
+			wantConfig: true,
+			wantTarget: "traces.example.com:4318",
+			wantScheme: "http",
+		},
+		{
+			name: "scheme-less endpoint is http",
+			cfg: TraceExporterConfig{
+				OTLPEndpoint: "otel.internal:4318",
+			},
+			wantConfig: true,
+			wantTarget: "otel.internal:4318",
+			wantScheme: "http",
+		},
+		{
+			name: "headers without endpoint are not a target",
+			cfg: TraceExporterConfig{
+				OTLPHeaders: "authorization=Bearer token",
+			},
+		},
+		{
+			name: "invalid endpoint",
+			cfg: TraceExporterConfig{
+				OTLPEndpoint: "ftp://otel.example.com:4318",
+			},
+			wantErr: `unsupported scheme "ftp"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			target, err := DescribeTraceExporterTarget(tc.cfg)
+			if tc.wantErr != "" {
+				if err == nil {
+					t.Fatal("DescribeTraceExporterTarget() error = nil, want non-nil")
+				}
+				if !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("DescribeTraceExporterTarget() error = %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DescribeTraceExporterTarget() error = %v", err)
+			}
+			if target.Configured != tc.wantConfig {
+				t.Fatalf("Configured = %v, want %v", target.Configured, tc.wantConfig)
+			}
+			if target.Target != tc.wantTarget {
+				t.Fatalf("Target = %q, want %q", target.Target, tc.wantTarget)
+			}
+			if target.Scheme != tc.wantScheme {
+				t.Fatalf("Scheme = %q, want %q", target.Scheme, tc.wantScheme)
+			}
+		})
+	}
 }
 
 func TestParseOTLPEndpointOptions(t *testing.T) {

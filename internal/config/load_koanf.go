@@ -59,10 +59,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		return nil, metadata, err
 	}
 
-	filePolicy := configFilePolicyHardened
-	if isLocalEnvironmentHint(hasExplicitConfigFiles(opts)) {
-		filePolicy = configFilePolicyLocal
-	}
+	filePolicy := configFilePolicyForLoad(hasExplicitConfigFiles(opts))
 	filesStarted := time.Now()
 	if strings.TrimSpace(opts.ConfigPath) != "" {
 		if err := loadConfigFile(ctx, k, opts.ConfigPath, filePolicy); err != nil {
@@ -287,15 +284,18 @@ func namespaceEnvForConfigKey(key string) string {
 	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(trimmed, keyDelimiter, "__"))
 }
 
-func isLocalEnvironmentHint(hasConfigFiles bool) bool {
+func configFilePolicyForLoad(hasConfigFiles bool) configFilePolicy {
 	if value, ok := lookupNonEmptyEnv(namespaceEnvForConfigKey("app.env")); ok {
-		return strings.EqualFold(value, "local")
+		if strings.EqualFold(value, "local") {
+			return configFilePolicyLocal
+		}
+		return configFilePolicyHardened
 	}
 	if hasConfigFiles {
 		// Fail closed for file-based configuration if environment intent is unknown.
-		return false
+		return configFilePolicyHardened
 	}
-	return true
+	return configFilePolicyLocal
 }
 
 func hasExplicitConfigFiles(opts LoadOptions) bool {

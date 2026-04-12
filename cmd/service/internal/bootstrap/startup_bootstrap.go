@@ -146,6 +146,13 @@ func bootstrapTelemetryStage(
 	log *slog.Logger,
 ) (func(context.Context), error) {
 	metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
+	exporterCfg := traceExporterConfig(cfg)
+	if telemetryInitErr := admitTelemetryExporterTarget(exporterCfg); telemetryInitErr != nil {
+		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
+		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
+		return func(context.Context) {}, telemetryInitErr
+	}
+
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
 		ServiceName:      cfg.Observability.OTel.ServiceName,
@@ -153,12 +160,7 @@ func bootstrapTelemetryStage(
 		DeploymentEnv:    cfg.App.Env,
 		TracesSampler:    cfg.Observability.OTel.TracesSampler,
 		TracesSamplerArg: cfg.Observability.OTel.TracesSamplerArg,
-		Exporter: telemetry.TraceExporterConfig{
-			OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPEndpoint,
-			OTLPTracesEndpoint: cfg.Observability.OTel.Exporter.OTLPTracesEndpoint,
-			OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
-			OTLPProtocol:       cfg.Observability.OTel.Exporter.OTLPProtocol,
-		},
+		Exporter:         exporterCfg,
 	})
 	telemetryCancel()
 	if telemetryInitErr != nil {
@@ -206,6 +208,34 @@ func bootstrapTelemetryStage(
 	}, nil
 }
 
+func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
+	return telemetry.TraceExporterConfig{
+		OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPEndpoint,
+		OTLPTracesEndpoint: cfg.Observability.OTel.Exporter.OTLPTracesEndpoint,
+		OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
+		OTLPProtocol:       cfg.Observability.OTel.Exporter.OTLPProtocol,
+	}
+}
+
+func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig) error {
+	target, err := telemetry.DescribeTraceExporterTarget(cfg)
+	if err != nil {
+		return err
+	}
+	if !target.Configured {
+		return nil
+	}
+
+	netPolicy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		return fmt.Errorf("load network policy for telemetry egress: %w", err)
+	}
+	if err := netPolicy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {
+		return fmt.Errorf("telemetry egress target denied: %w", err)
+	}
+	return nil
+}
+
 func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Context, trace.Span) {
 	tracer := otel.Tracer("service.startup")
 	bootstrapCtx, bootstrapSpan := tracer.Start(startupCtx, "config.bootstrap")
@@ -221,11 +251,9 @@ func bootstrapReportStage(
 	configReport config.LoadReport,
 	telemetryInitErr error,
 ) {
-	recordConfigStageSpan(tracer, bootstrapCtx, config.StageLoadDefaults, configReport.LoadDefaultsDuration, "success", "")
-	recordConfigStageSpan(tracer, bootstrapCtx, config.StageLoadFile, configReport.LoadFileDuration, "success", "")
-	recordConfigStageSpan(tracer, bootstrapCtx, config.StageLoadEnv, configReport.LoadEnvDuration, "success", "")
-	recordConfigStageSpan(tracer, bootstrapCtx, config.StageParse, configReport.ParseDuration, "success", "")
-	recordConfigStageSpan(tracer, bootstrapCtx, config.StageValidate, configReport.ValidateDuration, "success", "")
+	for _, stage := range configLoadStageDurations(configReport) {
+		recordConfigStageSpan(tracer, bootstrapCtx, stage.stage, stage.duration, "success", "")
+	}
 
 	log.Info(
 		"config_validated",

@@ -5,7 +5,6 @@ type startupDependencyProbeLabels struct {
 	operation    string
 	resolveStage string
 	probeStage   string
-	probeName    string
 }
 
 func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLabels {
@@ -14,7 +13,6 @@ func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLa
 		operation:    dependency + "_probe",
 		resolveStage: "startup.resolve." + dependency,
 		probeStage:   "startup.probe." + dependency,
-		probeName:    dependency + "_startup_probe",
 	}
 }
 
