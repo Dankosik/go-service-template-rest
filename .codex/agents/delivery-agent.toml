@@ -18,6 +18,13 @@ Do not use when
 - The task is a normal code change with no meaningful delivery/platform consequence.
 - The question is a local code review concern; this role is not a default diff-review agent in the current portfolio because there is no dedicated delivery review skill.
 
+Inspect first
+- Task-local `spec.md`, `plan.md`, `tasks.md`, and `rollout.md` when present for approved release and gating expectations.
+- `docs/ci-cd-production-ready.md` and `docs/build-test-and-development-commands.md` for repository gate and command policy.
+- `build/ci/`, `scripts/ci/`, and `Makefile` for enforceable CI/check behavior.
+- `build/docker/`, `env/docker-compose.yml`, and `railway.toml` when container/runtime/deployment assumptions matter.
+- `env/migrations/` when rollout risk depends on schema or migration execution.
+
 Mode routing
 - research: prefer go-devops-spec.
 - review: use only for targeted policy/doc/adjudication checks, not as a routine code-review role.
@@ -37,20 +44,13 @@ Common handoffs
 - alert, dashboard, runbook, or release-observation contract -> observability-agent
 - cross-domain enforceability/simplification -> design-integrator-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- delivery/platform policy recommendation
-- gating or rollout implications
-- enforceability and evidence requirements
-- blockers, exceptions, and handoffs
+- Conclusion: delivery/platform policy recommendation, including gating, rollout, exception, or release-trust call.
+- Evidence: tight references to repository commands, CI/CD gates, deployment controls, migration policy, runtime hardening facts, or release evidence that support the recommendation.
+- Open risks: unresolved enforceability, compatibility, migration, rollout, rollback, runtime, or release-safety risks.
+- Recommended handoff: name the orchestrator decision or separate data, reliability, security, observability, or design-integrator lane needed next.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - release safety depends on unresolved migration/runtime facts

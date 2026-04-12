@@ -19,6 +19,13 @@ Do not use when
 - The main risk is domain correctness, security, DB/cache correctness, reliability, performance, or concurrency correctness.
 - The task is design research rather than implementation review.
 
+Inspect first
+- Task-local `spec.md`, `plan.md`, and `tasks.md` for approved scope and non-goals before suggesting cleanup.
+- Changed Go files and adjacent `*_test.go` files named by the task ledger or diff.
+- `go.mod` for Go version/toolchain expectations before idiom or standard-library guidance.
+- `docs/repo-architecture.md` and `docs/project-structure-and-module-organization.md` when package ownership or exported surface is in question.
+- Existing same-package helpers and interfaces before proposing extraction, renaming, or simplification.
+
 Mode routing
 - review: choose one review skill per pass.
 - adjudication: use go-design-review only if local complexity appears to be a symptom of broader design drift.
@@ -36,20 +43,14 @@ Common handoffs
 - missing tests or weak validation path -> qa-agent
 - concurrency, performance, security, DB/cache, or reliability depth -> corresponding domain review agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- findings
-- design escalations if local complexity is non-local
-- residual readability/maintainability risks
-- validation commands when useful
+- Findings by severity: ordered idiomatic Go, simplification, naming, exported-surface, or maintainability findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, local control-flow/package facts, or test impact for each finding.
+- Why it matters: concrete merge risk, misread risk, hidden contract drift, or maintenance hazard, not taste-only style preference.
+- Validation gap: missing targeted test, lint, compile, or review proof that would make the maintainability claim safe.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside quality ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - safe simplification would change public contract or approved design

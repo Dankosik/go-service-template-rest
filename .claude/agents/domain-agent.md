@@ -21,6 +21,13 @@ Do not use when
 - The question is only about route wiring, payload schema, SQL tuning, or CI policy.
 - The task is a purely local implementation cleanup with no behavior change.
 
+Inspect first
+- Task-local `spec.md` for approved business terms, decisions, assumptions, and non-goals.
+- `internal/app/` for use-case services, tests, acceptance paths, and state transitions.
+- `internal/domain/` for stable shared contracts after they have been promoted out of app-local ownership.
+- `api/openapi/service.yaml` when domain behavior is exposed through request/response or error semantics.
+- `internal/infra/postgres/` only after the invariant needs persistence, replay, or duplicate-handling evidence.
+
 Mode routing
 - research: prefer go-domain-invariant-spec.
 - review: prefer go-domain-invariant-review.
@@ -40,21 +47,14 @@ Common handoffs
 - authz/tenant correctness as business rule -> security-agent
 - test-obligation traceability -> qa-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- invariant register or narrowed invariant set
-- state/transition rules
-- acceptance and violation semantics
-- risky corner cases
-- open questions and handoffs
+- Findings by severity: ordered invariant, state-transition, acceptance, duplicate, or replay findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, state rules, acceptance paths, domain facts, or scenario proof for each finding.
+- Why it matters: concrete business-invariant, forbidden-transition, replay, or acceptance-semantics risk, not style preference.
+- Validation gap: missing invariant traceability, fail-path scenario coverage, transition proof, or targeted command evidence.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside domain ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - core terms are undefined

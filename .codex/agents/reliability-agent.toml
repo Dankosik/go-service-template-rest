@@ -17,6 +17,13 @@ Use when
 Do not use when
 - The task is purely about business rules, payload shape, or a small refactor with no failure-path implications.
 
+Inspect first
+- Task-local `spec.md` and `design/` when present for failure policy, accepted risk, and proof obligations.
+- `cmd/service/main.go` and `cmd/service/internal/bootstrap/` for process lifecycle, startup admission, readiness, and shutdown behavior.
+- `internal/config/` for timeout, dependency, ingress, and validation policy.
+- `internal/app/health/` for liveness/readiness and dependency probe semantics.
+- `internal/infra/http/` and `internal/infra/postgres/` for server timeouts, request cancellation, DB connectivity, and fallback-sensitive paths.
+
 Mode routing
 - research: prefer go-reliability-spec.
 - review: prefer go-reliability-review.
@@ -36,20 +43,14 @@ Common handoffs
 - auth fail-open/fail-closed and abuse-control semantics -> security-agent
 - telemetry contract for critical-path diagnosability -> observability-agent or design-integrator-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- reliability contract or findings
-- bounded timeout/retry/fallback/degradation stance
-- lifecycle and rollout implications
-- residual risks and handoffs
+- Findings by severity: ordered timeout, retry, fallback, overload, lifecycle, readiness, or shutdown findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, failure paths, lifecycle facts, runtime policy, or test output for each finding.
+- Why it matters: concrete outage, overload, retry amplification, degraded-mode, readiness, shutdown, or rollout risk, not style preference.
+- Validation gap: missing failure-path test, timeout/retry proof, shutdown proof, rollback proof, or targeted command evidence.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside reliability ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - dependency criticality is ambiguous

@@ -21,6 +21,13 @@ Do not use when
 - The task is literally writing tests; that belongs to orchestrator implementation flow with go-qa-tester.
 - The question is a pure design choice with no meaningful validation consequence yet.
 
+Inspect first
+- Task-local `spec.md`, `plan.md`, `tasks.md`, and `test-plan.md` when present for approved proof obligations.
+- Task-local `design/sequence.md` and `design/ownership-map.md` for failure points, side effects, and invariants that need coverage.
+- Changed package tests (`*_test.go`) and adjacent test helpers named by the task ledger or diff.
+- `docs/build-test-and-development-commands.md` and `Makefile` for repository-owned test/validation commands.
+- Supplied command output or CI evidence before judging validation readiness.
+
 Mode routing
 - research: prefer go-qa-tester-spec.
 - review: prefer go-qa-review.
@@ -41,21 +48,14 @@ Common handoffs
 - timeout/retry/degradation coverage -> reliability-agent
 - broad maintainability/readability of tests -> quality-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- test obligations
-- selected levels and why
-- scenario matrix highlights
-- validation commands or evidence expectations
-- residual risks and handoffs
+- Findings by severity: ordered test-obligation, scenario, assertion, determinism, or validation-readiness findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, requirement links, scenario gaps, test output, or proof-path facts for each finding.
+- Why it matters: concrete unproven behavior, weak regression signal, flaky proof, or validation-readiness risk, not style preference.
+- Validation gap: missing test level, negative path, deterministic proof, command evidence, or scenario coverage.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside QA ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - critical invariants cannot be traced to tests

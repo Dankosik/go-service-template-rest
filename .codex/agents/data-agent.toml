@@ -18,6 +18,13 @@ Use when
 Do not use when
 - The question is only about endpoint contract, auth policy, or a small code cleanup with no data-surface effect.
 
+Inspect first
+- Task-local `spec.md` and `design/` when present for ownership, migration, or cache decisions.
+- `env/migrations/` as the database schema migration source of truth.
+- `internal/infra/postgres/queries/`, `internal/infra/postgres/sqlc.yaml`, and `internal/infra/postgres/sqlcgen/` for generated query ownership.
+- `internal/infra/postgres/` for repository, transaction, pool, and data-mapping behavior.
+- `internal/app/` for app-facing data contracts and invariants that persistence must preserve.
+
 Mode routing
 - research: use go-data-architect-spec for ownership/schema/migration/rollback questions; use go-db-cache-spec for runtime query/cache/fallback questions.
 - review: prefer go-db-cache-review.
@@ -38,21 +45,14 @@ Common handoffs
 - hot-path or benchmark-led bottlenecks -> performance-agent
 - DB/cache signal contract, SLO, or telemetry cardinality -> observability-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- ownership/source-of-truth decision
-- schema or runtime DB/cache contract
-- migration/backfill/rollback implications when relevant
-- consistency/staleness/fallback implications
-- open questions and handoffs
+- Findings by severity: ordered data, schema, transaction, query, or cache findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, schema/query/cache paths, migration facts, or runtime proof for each finding.
+- Why it matters: concrete correctness, consistency, staleness, migration, rollback, or data-loss risk, not style preference.
+- Validation gap: missing migration rehearsal, query/cache regression proof, transaction proof, or targeted command evidence.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside data ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - ownership is ambiguous

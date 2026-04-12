@@ -21,6 +21,13 @@ Do not use when
 - The task is only about internal decomposition, SQL/migrations, or local code cleanup.
 - The question is purely about chi mechanics with no API-visible consequence; in that case use a separate transport-focused lane instead of making API contract the main answer.
 
+Inspect first
+- Task-local `spec.md` and `design/contracts/` when present for the approved client-visible contract.
+- `api/openapi/service.yaml` as the REST contract source of truth.
+- `internal/api/` for generated bindings derived from the OpenAPI contract.
+- `internal/infra/http/` for handler, middleware, route-label, fallback, and problem-response behavior.
+- `internal/app/` when API behavior depends on use-case results or domain errors.
+
 Mode routing
 - research: prefer api-contract-designer-spec.
 - review: use go-chi-review only when chi routing/middleware or HTTP fallback behavior is part of the changed surface. Otherwise act as a contract adjudicator rather than a default review agent.
@@ -39,20 +46,13 @@ Common handoffs
 - auth failure, rate limits, trust-boundary semantics -> security-agent
 - payload or contract drift test obligations -> qa-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- contract recommendation or drift judgment
-- why the contract is coherent
-- compatibility and client-impact notes
-- open contract risks or handoffs
+- Conclusion: contract recommendation or drift judgment, including the API-visible status/error/idempotency/compatibility call.
+- Evidence: tight references to the contract source, route or middleware fact, generated/manual handler boundary, or client-impact proof that supports the conclusion.
+- Open risks: unresolved compatibility, client behavior, transport fallback, async acknowledgement, or contract-drift risks.
+- Recommended handoff: name the orchestrator decision or separate domain, architecture, security, observability, reliability, distributed, or QA lane needed next.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - the answer depends primarily on unresolved domain rules

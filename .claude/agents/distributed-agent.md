@@ -20,6 +20,13 @@ Do not use when
 - The change stays inside one local transaction boundary.
 - The question is only about endpoint shape, SQL scripting, or local retry tuning.
 
+Inspect first
+- Task-local `spec.md`, `design/sequence.md`, and `design/ownership-map.md` when present for cross-service flow, invariant ownership, and recovery expectations.
+- `docs/repo-architecture.md`, especially background/async extension path and component boundary rules.
+- `internal/app/` for local state-transition or use-case boundaries that might become process invariants.
+- `internal/infra/postgres/`, `env/migrations/`, and any queue/external adapter surfaces named by the task when outbox, inbox, dedup, or reconciliation storage is proposed.
+- API or message contract sources such as `api/openapi/service.yaml` or `api/proto/` when async acknowledgement or external contract shape matters.
+
 Mode routing
 - research: prefer go-distributed-architect-spec.
 - review: do not act as a default code-review agent because there is no dedicated distributed review skill in the current portfolio. Use only for targeted adjudication or design recheck after fan-in.
@@ -40,21 +47,13 @@ Common handoffs
 - async authn/authz or authenticity/replay controls -> security-agent
 - API-visible async acknowledgement contract -> api-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- flow model and invariant ownership
-- orchestration/choreography choice
-- idempotency/replay/recovery stance
-- reconciliation and operator implications
-- open risks and handoffs
+- Conclusion: flow model, invariant ownership, orchestration/choreography choice, and idempotency/replay/recovery stance.
+- Evidence: tight references to workflow boundaries, message/outbox/inbox facts, state-transition facts, recovery paths, or reconciliation evidence that support the conclusion.
+- Open risks: unresolved distributed consistency, replay, compensation, redrive, reconciliation, operator, or ownership risks.
+- Recommended handoff: name the orchestrator decision or separate architecture, domain, reliability, data, security, API, or observability lane needed next.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - hard invariants span services without a defensible model

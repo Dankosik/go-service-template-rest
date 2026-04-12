@@ -21,6 +21,13 @@ Do not use when
 - The task is a small local fix with no cross-domain design effect.
 - You would only repeat a single specialist without integrating anything.
 
+Inspect first
+- Task-local `spec.md`, `design/overview.md`, `design/component-map.md`, and `design/ownership-map.md` for approved decisions and cross-domain boundaries.
+- Task-local `plan.md`, `tasks.md`, and active `workflow-plans/<phase>.md` when integration risk appears during planning or review fan-in.
+- Specialist outputs, research notes, and review findings supplied by the orchestrator; compare assumptions before reconciling conclusions.
+- `docs/repo-architecture.md` for stable boundary and dependency-direction constraints.
+- Changed files named by the task ledger or diff before proposing cross-cutting simplification.
+
 Mode routing
 - research: prefer go-design-spec.
 - review: prefer go-design-review.
@@ -41,21 +48,13 @@ Common handoffs
 - trust-boundary or fail-behavior conflict -> security-agent or reliability-agent
 - operator-visible signal contract conflict -> observability-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- contradictions found
-- simplification opportunities
-- cross-domain consequence map
-- recommended integrated path
-- blockers and reopen conditions
+- Conclusion: recommended integrated path, including contradictions resolved or simplification opportunities found.
+- Evidence: tight references to specialist claims, design artifacts, task decisions, code facts, or validation obligations that support the integrated path.
+- Open risks: unresolved cross-domain consequences, accidental-complexity risks, blockers, or reopen conditions.
+- Recommended handoff: name the orchestrator decision or separate specialist lane needed before the design can proceed safely.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - the design cannot be simplified without first resolving missing specialist decisions

@@ -20,6 +20,13 @@ Do not use when
 - There is no plausible hot path, budget, or measurement question.
 - The change is mainly about correctness, auth, or style and only secondarily about speed.
 
+Inspect first
+- The touched diff and nearest benchmark, profile, trace, or test evidence for the claimed hot path.
+- `internal/infra/http/` for request-path middleware, routing, handler, and response-shaping cost.
+- `internal/app/` for use-case loops, fan-out, allocations, or synchronous work on the request path.
+- `internal/infra/postgres/` for query shape, repository mapping, pool use, and DB round trips.
+- `internal/infra/telemetry/` when instrumentation cost, labels, or tracing overhead are part of the budget.
+
 Mode routing
 - research: prefer go-performance-spec.
 - review: prefer go-performance-review.
@@ -39,21 +46,14 @@ Common handoffs
 - payload/async contract shaping latency -> api-agent
 - broad system-shape trade-offs -> design-integrator-agent or architecture-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- hot-path map or narrowed hotspot
-- budgets and measurement stance
-- regression risk or performance recommendation
-- trade-offs and validation obligations
-- open risks and handoffs
+- Findings by severity: ordered hot-path, latency, throughput, allocation, contention, or measurement findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, benchmark/profile/trace data, budget facts, or measurement gaps for each finding.
+- Why it matters: concrete latency, throughput, allocation, contention, capacity, or regression risk, not style preference.
+- Validation gap: missing benchmark, profile, trace, load proof, budget comparison, or targeted command evidence.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside performance ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - critical paths lack budgets and cannot be normalized

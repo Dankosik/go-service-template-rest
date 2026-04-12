@@ -19,6 +19,13 @@ Use when
 Do not use when
 - The question is only about style, readability, or local refactoring without security-surface change.
 
+Inspect first
+- Task-local `spec.md` and `design/` when present for trust boundaries, identity, tenant, and abuse decisions.
+- `api/openapi/service.yaml` for declared security, request shape, error semantics, and public surface.
+- `internal/infra/http/` for middleware, body limits, security headers, problem responses, and generated/manual route boundaries.
+- `internal/config/` and `cmd/service/internal/bootstrap/` for secret/config handling, ingress policy, dependency admission, and fail-closed startup behavior.
+- `internal/infra/postgres/` and `internal/app/` when tenant isolation, sensitive data, or authorization semantics touch persistence or business rules.
+
 Mode routing
 - research: prefer go-security-spec.
 - review: prefer go-security-review.
@@ -38,21 +45,14 @@ Common handoffs
 - business rule ownership for permission semantics -> domain-agent
 - CI/release trust or runtime hardening policy -> delivery-agent
 
-Never use
-- planning-and-task-breakdown
-- go-coder
-- go-qa-tester
-- go-verification-before-completion
-- go-systematic-debugging
-- spec-first-brainstorming
-- idea-refine
 
 Return
-- security decision or finding set
-- threat/control mapping
-- fail behavior and abuse-resistance implications
-- verification expectations when relevant
-- open risks and handoffs
+- Findings by severity: ordered trust-boundary, authn/authz, tenant isolation, sensitive-data, abuse, or fail-closed findings, or say no findings when the pass is clean.
+- Evidence: tight file/line references, threat path, enforcement point, data-flow fact, or test output for each finding.
+- Why it matters: concrete exploitability, isolation breach, privilege, leakage, abuse, or fail-open risk, not style preference.
+- Validation gap: missing negative-path test, authorization proof, tenant-isolation proof, secret/logging proof, or targeted command evidence.
+- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside security ownership.
+- Confidence: high/medium/low with the key assumption or uncertainty.
 
 Escalate when
 - trust boundaries or identity model are ambiguous
