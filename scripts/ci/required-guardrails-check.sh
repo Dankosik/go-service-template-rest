@@ -93,7 +93,7 @@ require_regex '-f build/docker/Dockerfile' ".github/workflows/cd.yml" "cd workfl
 # Keep the runtime bridge from AGENTS.md to the detailed workflow reference.
 require_regex 'docs/spec-first-workflow\.md' "AGENTS.md" "AGENTS.md must point to docs/spec-first-workflow.md for non-trivial workflow execution"
 require_regex 'follow `AGENTS\.md`' "docs/spec-first-workflow.md" "spec-first-workflow doc must declare AGENTS.md as the controlling contract"
-require_regex '^max_threads = 8$' ".codex/config.toml" "Codex subagent fan-out ceiling must stay explicit and bounded"
+require_regex '^max_threads = 20$' ".codex/config.toml" "Codex subagent fan-out ceiling must stay explicit"
 require_regex '^max_depth = 1$' ".codex/config.toml" "Codex subagent nesting depth must stay at the documented default"
 require_regex 'agents\.<name>\.config_file' ".codex/config.toml" "Codex registry compatibility note must stay documented"
 require_regex 'make agents-check' ".github/workflows/ci.yml" "CI must check Codex/Claude agent mirror drift"

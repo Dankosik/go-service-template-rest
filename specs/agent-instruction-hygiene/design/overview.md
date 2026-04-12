@@ -8,7 +8,7 @@ Treat Codex agent files as the canonical authored agent surface, with Claude age
 
 - `docs/subagent-contract.md`: shared invariant and fan-in envelope for all read-only subagents.
 - `docs/subagent-brief-template.md`: reusable orchestrator lane brief template.
-- `.codex/config.toml`: explicit fan-out and model/reasoning policy.
+- `.codex/config.toml`: explicit fan-out and depth policy.
 - `.codex/agents/*.toml`: canonical per-agent scope/routing.
 - `.claude/agents/*.md`: generated mirrors from Codex agent files.
 - `.agents/skills/go-*-review/SKILL.md`: canonical review-skill sources.

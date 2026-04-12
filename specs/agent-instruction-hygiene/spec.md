@@ -31,7 +31,7 @@ Out of scope:
 
 - Add `docs/subagent-contract.md` as the shared per-agent invariant and fan-in envelope so individual agent files can point to one common surface instead of repeating every rule.
 - Add `docs/subagent-brief-template.md` as the reusable orchestrator prompt template for read-only specialist lanes.
-- Set `max_threads = 8` and keep `max_depth = 1`.
+- Keep `max_threads = 20` per repository preference and keep `max_depth = 1`.
 - Pin high-scrutiny roles to `gpt-5.4` with `high` reasoning: `challenger-agent`, `security-agent`, `reliability-agent`, and `quality-agent`.
 - Pin read-heavy specialist roles to `gpt-5.4-mini` with `medium` reasoning: architecture, API, data, delivery, design-integrator, distributed, domain, observability, performance, and QA.
 - Pin concurrency to `gpt-5.4` with `medium` reasoning because concurrent behavior review is small enough to justify stronger local reasoning.

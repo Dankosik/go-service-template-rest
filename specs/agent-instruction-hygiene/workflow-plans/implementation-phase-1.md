@@ -7,7 +7,7 @@ Close all audit findings for agent-instruction hygiene in one lightweight local 
 ## Work Items
 
 - Add a shared subagent contract and reusable brief template.
-- Update Codex config with explicit model/reasoning tiers, lower `max_threads`, and compatibility notes.
+- Update Codex config with explicit fan-out/depth policy and compatibility notes.
 - Add missing review skills for delivery, distributed systems, and observability.
 - Update affected agent routing from "no dedicated review skill" to the new skills.
 - Add agent mirror sync/check tooling and wire it into Makefile, Docker tooling, setup, and CI.

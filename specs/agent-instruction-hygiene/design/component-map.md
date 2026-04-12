@@ -2,7 +2,7 @@
 
 | Surface | Change |
 | --- | --- |
-| `.codex/config.toml` | Lower fan-out ceiling, retain depth, add registry compatibility comment, and pin model/reasoning tiers per agent. |
+| `.codex/config.toml` | Retain the repository fan-out ceiling, retain depth, and add registry compatibility comment. |
 | `.codex/agents/*.toml` | Add shared-contract reference and model/reasoning fields; update review routing for delivery/distributed/observability. |
 | `.claude/agents/*.md` | Regenerate from Codex agent files using the new sync script. |
 | `.agents/skills` | Add `go-devops-review`, `go-distributed-review`, and `go-observability-review`. |

@@ -21,7 +21,7 @@ Fix the audit findings by:
 - centralizing repeated subagent boilerplate in a shared contract and brief template,
 - adding agents mirror sync/check tooling,
 - closing delivery/distributed/observability review-skill coverage,
-- recording explicit Codex agent model/reasoning tiers and a lower fan-out ceiling,
+- recording explicit Codex fan-out policy,
 - unifying fan-in output expectations,
 - documenting registry-style `.codex/config.toml` compatibility,
 - updating README/build docs so the operational model matches the tooling.
