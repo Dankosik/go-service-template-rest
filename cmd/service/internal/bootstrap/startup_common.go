@@ -154,6 +154,7 @@ func recordDependencyProbeRejection(
 		"error",
 		"error.type", "dependency_init",
 		"dependency", dep,
+		"err", err,
 	)
 	if strings.TrimSpace(mode) != "" {
 		args = append(args, "mode", strings.TrimSpace(mode))

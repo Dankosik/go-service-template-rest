@@ -11,6 +11,7 @@ This repository is for people who code with Codex, Claude Code, Cursor, Gemini C
 - **Project-scoped agents**: Codex agents live in `.codex/agents/`, Claude Code agents live in `.claude/agents/`.
 - **Portable skills**: reusable workflow expertise lives in `.agents/skills` and is mirrored to compatibility/runtime directories.
 - **Artifact-driven for non-trivial work**: master `workflow-plan.md` plus `workflow-plans/<phase>.md` separate cross-phase control from phase-local orchestration, while `spec.md`, `design/`, `plan.md`, and `tasks.md` keep decisions, technical design, execution strategy, and executable task state distinct. Pre-code phases produce that bundle; implementation and validation consume it and do not create new workflow/process artifacts.
+- **First production feature path**: before adding business code, use the [first production feature checklist](docs/project-structure-and-module-organization.md#first-production-feature-checklist) to place app types and ports, HTTP mapping, Postgres adapters, bootstrap wiring, telemetry, and tests.
 - **Production stack underneath**: OpenAPI-first HTTP, PostgreSQL, `sqlc`, observability, tests, and CI gates are already wired.
 
 ## Why This Template Exists

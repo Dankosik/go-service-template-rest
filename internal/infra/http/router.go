@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/api"
@@ -203,8 +204,8 @@ func allowedMethodsForPath(root chi.Router, path string) []string {
 
 func setAllowHeader(w http.ResponseWriter, methods []string) {
 	w.Header().Del("Allow")
-	for _, method := range methods {
-		w.Header().Add("Allow", method)
+	if len(methods) > 0 {
+		w.Header().Set("Allow", strings.Join(methods, ", "))
 	}
 }
 

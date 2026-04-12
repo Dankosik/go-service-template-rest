@@ -148,13 +148,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if got := resp.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
 			t.Fatalf("content type = %q, want prefix %q", got, "application/problem+json")
 		}
-		allowMethods := resp.Header().Values("Allow")
-		if !containsString(allowMethods, http.MethodGet) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodGet)
-		}
-		if !containsString(allowMethods, http.MethodOptions) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodOptions)
-		}
+		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
 	t.Run("method not allowed allow header includes trace when route exists", func(t *testing.T) {
@@ -175,10 +169,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
 		}
-		allowMethods := resp.Header().Values("Allow")
-		if !containsString(allowMethods, http.MethodTrace) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodTrace)
-		}
+		assertAllowHeader(t, resp.Header(), "TRACE, OPTIONS")
 	})
 
 	t.Run("options for known path returns no content with allow", func(t *testing.T) {
@@ -193,13 +184,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if resp.Body.Len() != 0 {
 			t.Fatalf("body length = %d, want 0", resp.Body.Len())
 		}
-		allowMethods := resp.Header().Values("Allow")
-		if !containsString(allowMethods, http.MethodGet) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodGet)
-		}
-		if !containsString(allowMethods, http.MethodOptions) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodOptions)
-		}
+		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
 	t.Run("cors preflight is explicit and fail-closed", func(t *testing.T) {
@@ -222,13 +207,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "" {
 			t.Fatalf("Access-Control-Allow-Origin = %q, want empty for fail-closed CORS", got)
 		}
-		allowMethods := resp.Header().Values("Allow")
-		if !containsString(allowMethods, http.MethodGet) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodGet)
-		}
-		if !containsString(allowMethods, http.MethodOptions) {
-			t.Fatalf("allow header = %v, want to contain %q", allowMethods, http.MethodOptions)
-		}
+		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
 	t.Run("options for unknown path returns not found", func(t *testing.T) {
@@ -679,6 +658,55 @@ func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing
 	}
 }
 
+func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRoutes(t *testing.T) {
+	openAPIRoutes := openAPIOperationRoutes(t)
+
+	expectedCounts := make(map[manualRootRouteKey]int, len(openAPIRoutes)+len(documentedManualRootRouteExceptions))
+	for key := range openAPIRoutes {
+		expectedCounts[key]++
+	}
+	for key := range documentedManualRootRouteExceptions {
+		expectedCounts[key]++
+	}
+
+	apiSubrouter := chi.NewRouter()
+	for key := range openAPIRoutes {
+		apiSubrouter.Method(key.method, key.path, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+	}
+
+	rootRouter := newRootRouter(apiSubrouter, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	seenCounts := make(map[manualRootRouteKey]int, len(expectedCounts))
+	err := chi.Walk(rootRouter, func(method string, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		key := manualRootRouteKey{method: method, path: route}
+		seenCounts[key]++
+
+		if strings.HasPrefix(route, "/api/") {
+			if _, generated := openAPIRoutes[key]; !generated {
+				t.Fatalf("root route tree contains manual API route %s %s; add it through OpenAPI instead", method, route)
+			}
+		}
+		if _, expected := expectedCounts[key]; !expected {
+			t.Fatalf("root route tree contains undocumented manual route %s %s", method, route)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("chi.Walk() error = %v", err)
+	}
+
+	for key, want := range expectedCounts {
+		if got := seenCounts[key]; got != want {
+			t.Fatalf("root route tree route %s %s count = %d, want %d", key.method, key.path, got, want)
+		}
+	}
+}
+
 func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 	t.Helper()
 
@@ -761,11 +789,13 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	}
 }
 
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
+func assertAllowHeader(t *testing.T, header http.Header, want string) {
+	t.Helper()
+
+	if got := header.Get("Allow"); got != want {
+		t.Fatalf("Allow = %q, want %q", got, want)
 	}
-	return false
+	if got := header.Values("Allow"); len(got) != 1 || got[0] != want {
+		t.Fatalf("Allow header values = %v, want single value %q", got, want)
+	}
 }

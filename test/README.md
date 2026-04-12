@@ -24,8 +24,11 @@ Feature-author placement:
 | --- | --- |
 | Handler mapping, OpenAPI contract policy, Problem responses, generated-route ownership, and route labels | Beside `internal/infra/http`. |
 | App use-case behavior and app-owned ports | Beside `internal/app/<feature>`. |
+| Runtime config keys, defaults, snapshot construction, validation, and secret-source policy | Beside `internal/config`. |
 | Repository mapping and SQLC adapter behavior | Beside `internal/infra/postgres`; use `test/` only for container-backed behavior. |
+| Feature bootstrap wiring for a real adapter | Beside `cmd/service/internal/bootstrap`; prove disabled, ready, policy-denied, and partial-initialization cleanup paths before adding broad integration coverage. |
 | Telemetry instruments and lifecycle/bootstrap behavior | Beside `internal/infra/telemetry` or `cmd/service/internal/bootstrap`, matching the owner. |
+| Endpoint plus real persistence plus bootstrap composition | Target the owning packages first, then use `test/` with the `integration` tag when a real database-backed flow is required to prove the combined contract. |
 | Generated drift for OpenAPI, SQLC, mocks, and stringer | Use the owning make targets instead of integration tests. |
 
 Docker behavior:

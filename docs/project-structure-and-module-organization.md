@@ -72,7 +72,7 @@ HTTP route ownership: normal API endpoints are added through `api/openapi/servic
 
 Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/infra/postgres/queries/*.sql` owns query sources, and `internal/infra/postgres/sqlcgen` is generated output. Hand-written repositories under `internal/infra/postgres` translate generated rows into app-facing types instead of leaking `sqlcgen` into `internal/app`.
 
-`ping_history` is retained as a template SQLC sample because the current generator setup requires at least one query to prove drift checks. It is not production business state and must not be wired into `ping` as a side effect. New services should replace the sample with real feature-owned migrations, queries, repositories, and app ports.
+`ping_history` is retained as a replaceable SQLC fixture because the current generator setup requires at least one query to prove drift checks. It is not production business state and must not be wired into `ping` as a side effect. New services should replace the fixture with real feature-owned migrations, queries, repositories, and app ports.
 
 Feature telemetry placement: HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`, using shared instruments from `internal/infra/telemetry` where appropriate. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
 
@@ -144,7 +144,7 @@ Why: quality and security checks are codified, reviewable, and reproducible on e
 - call bootstrap runner with CLI flags/context;
 - return process exit status based on bootstrap result.
 
-`internal/app/*` should not import `internal/infra/http` or concrete database drivers.
+`internal/app/*` and `internal/domain/*` should not import `internal/infra/*`, `internal/infra/postgres/sqlcgen`, or concrete database drivers.
 
 `internal/infra/*` can import external libraries (`pgx`, Prometheus, and similar), because these packages are adapters.
 
@@ -176,10 +176,21 @@ Use these paths as starting points before choosing a narrower recipe below:
 | Postgres-backed endpoint | Keep app behavior and app-owned ports in `internal/app/<feature>`, evolve `env/migrations`, add sqlc queries under `internal/infra/postgres/queries`, regenerate `sqlcgen`, map rows in a hand-written Postgres repository, then inject the concrete adapter in bootstrap. | Repository tests under `internal/infra/postgres`, integration tests under `test/` when container-backed behavior matters, `make sqlc-check`, and migration rehearsal. |
 | Background job or worker | Keep business behavior in `internal/app/<feature>`, put queue/scheduler/database/external-system mechanics in `internal/infra/<integration>`, and create a `cmd/<binary>` composition root when lifecycle or scaling differs from the HTTP service. | App tests near the feature, adapter tests near the integration, bootstrap/lifecycle tests for the new binary, and shutdown/cancellation proof for worker loops. |
 
+### First Production Feature Checklist
+
+Before coding the first real business feature, write down the feature owner and keep this path intact:
+
+1. Start in `internal/app/<feature>` with use-case behavior, feature-local request/result/value types, and app-owned ports only when the app must invert a concrete adapter.
+2. For HTTP behavior, update `api/openapi/service.yaml`, regenerate `internal/api`, and map generated request/response and Problem shapes in `internal/infra/http`; never add manual `/api/...` routes.
+3. For Postgres behavior, replace the `ping_history` SQLC fixture with feature-owned migrations and queries, regenerate `sqlcgen`, map rows in `internal/infra/postgres`, and keep generated types out of `internal/app`.
+4. Wire concrete adapters in `cmd/service/internal/bootstrap` after config and dependency admission are defined; prove disabled, ready, and partial-initialization cleanup paths in bootstrap tests.
+5. Keep feature-specific telemetry beside the feature or adapter that owns the event; move an instrument into shared telemetry only after it is genuinely reused and low-cardinality.
+6. Put tests at the owning layer first: app tests beside `internal/app/<feature>`, HTTP mapping tests beside `internal/infra/http`, repository tests beside `internal/infra/postgres`, config tests beside `internal/config`, bootstrap wiring tests beside `cmd/service/internal/bootstrap`, and integration tests under `test/` only when a real dependency or cross-package scenario is part of the claim.
+
 Existing examples to inspect before adding new surfaces:
 - `internal/app/ping` for small app-owned behavior.
 - `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
-- `internal/infra/postgres/ping_history_repository.go` for the temporary SQLC sample shape to replace, not production business ownership.
+- `internal/infra/postgres/ping_history_repository.go` for the temporary replaceable SQLC fixture shape, not production business ownership.
 - `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
 
 Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
@@ -266,8 +277,11 @@ Test placement matrix:
 | App/domain use-case rules, feature-local types, and app-owned ports | Beside the package under `internal/app/<feature>` or `internal/domain` when a stable shared contract exists. |
 | HTTP mapping, generated-route ownership, manual route exceptions, CORS, Problem responses, route labels, metrics, and span naming | `internal/infra/http`. |
 | Bootstrap lifecycle, config wiring, dependency admission, disabled/ready/cleanup paths, and shutdown | `cmd/service/internal/bootstrap`. |
+| Runtime config key defaults, snapshot construction, validation, and secret-source policy | `internal/config`. |
+| Feature bootstrap wiring that introduces a real dependency adapter | `cmd/service/internal/bootstrap`, proving disabled, ready, policy-denied, and partial-initialization cleanup paths before adding broad integration coverage. |
 | Postgres pool and hand-written repository mapping | `internal/infra/postgres`. |
 | Migration-backed read/write behavior and container-backed database scenarios | `test/` with the `integration` build tag. |
+| Endpoint plus real persistence plus bootstrap composition in one scenario | Targeted owner tests first, then `test/` with the `integration` tag when a real database-backed flow is required to prove the combined contract. |
 | Broad cross-package or end-to-end scenarios | `test/` or a focused subdirectory below it, using an external package such as `integration_test` when possible. |
 
 See [test/README.md](../test/README.md) for integration-test ownership, build-tag rules, Docker behavior, and migration-backed helper guidance.

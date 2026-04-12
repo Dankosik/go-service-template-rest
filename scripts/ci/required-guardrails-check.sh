@@ -52,6 +52,23 @@ require_regex() {
   fi
 }
 
+require_no_forbidden_go_imports() {
+  local message="$1"
+  local pattern="$2"
+  shift 2
+
+  local imports
+  imports="$(go list -f '{{range .Imports}}{{printf "%s\t%s\n" $.ImportPath .}}{{end}}{{range .TestImports}}{{printf "%s\t%s\n" $.ImportPath .}}{{end}}{{range .XTestImports}}{{printf "%s\t%s\n" $.ImportPath .}}{{end}}' "$@")"
+
+  local forbidden
+  forbidden="$(printf '%s\n' "${imports}" | grep -E -- "${pattern}" || true)"
+  if [[ -n "${forbidden}" ]]; then
+    echo "guardrail check failed: ${message}"
+    printf '%s\n' "${forbidden}" | sed 's/^/  /'
+    exit 1
+  fi
+}
+
 # Keep Railway deployment policy deterministic and repo-reviewable.
 require_regex '^builder = "DOCKERFILE"$' "railway.toml" "railway build policy must use DOCKERFILE builder"
 require_regex '^dockerfilePath = "build/docker/Dockerfile"$' "railway.toml" "railway build policy must point to build/docker/Dockerfile"
@@ -91,5 +108,10 @@ for context in "${required_contexts[@]}"; do
   require_regex "\"context\": \"${context}\"" "scripts/dev/configure-branch-protection.sh" "branch protection must require '${context}' context"
   require_regex "^[[:space:]]{2}${context}:" ".github/workflows/ci.yml" "ci workflow must expose '${context}' job context"
 done
+
+require_no_forbidden_go_imports \
+  "internal/app and internal/domain must not import infra adapters, generated sqlc, or concrete DB drivers" \
+  'github\.com/example/go-service-template-rest/internal/infra(/|$)|github\.com/jackc/pgx(/|$)' \
+  ./internal/app/... ./internal/domain/...
 
 echo "required repository guardrails check passed"

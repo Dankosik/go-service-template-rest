@@ -41,6 +41,8 @@ If a key is documented as an extension point, absence of runtime behavior is int
 
 Redis and Mongo keys are guard-only extension stubs in the baseline template. They let bootstrap validate planned dependency exposure, timeout budgets, and readiness policy, but they do not provide cache, store, or database adapters. Add `internal/infra/redis` or `internal/infra/mongo` only when a real app feature needs runtime behavior; do not turn config or bootstrap checks into hidden cache/store semantics.
 
+`MongoProbeAddress` is part of that guard-only path: `internal/config` owns extracting a probe-ready address from the typed config snapshot so validation and bootstrap admission can stay deterministic. A future Mongo adapter should own runtime connection, database, retry, query, and store semantics under `internal/infra/mongo` instead of growing them around the config helper.
+
 ## Adding A Config Key
 
 When a feature needs a new runtime config key:

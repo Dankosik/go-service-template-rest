@@ -11,6 +11,8 @@ Current server mode: `chi-server: true` + `strict-server: true`.
 
 ## Adding A Strict-Server Endpoint
 
+Protected operations require a real security design before coding. Do not add placeholder auth, broad root middleware, or test-only identity plumbing as a shortcut; choose public-by-design, protected-by-real-policy, or blocked-pending-security-spec first.
+
 1. Change `api/openapi/service.yaml`; do not hand-edit generated Go.
 2. Put use-case behavior in `internal/app/<feature>` before adding transport mapping; handlers should call app behavior instead of owning business logic.
 3. Run `make openapi-generate` or `go generate ./internal/api`.
