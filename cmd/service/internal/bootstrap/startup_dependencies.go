@@ -175,7 +175,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 				"",
 				probeResult.err,
 			)
-			return nil, fmt.Errorf("%w: postgres init skipped: %w", config.ErrDependencyInit, probeResult.err)
+			return nil, fmt.Errorf("%w: postgres init skipped: %w", errDependencyInit, probeResult.err)
 		}
 
 		sanitizedErr := dependencyInitFailure(labels.dependency, probeResult.err)
@@ -277,17 +277,12 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			return nil, rejectErr
 		}
 
-		runtime.metrics.SetStartupDependencyStatus(labels.dependency, startupDependencyModeFeatureOff, true)
-		runtime.log.Warn(
-			"startup_dependency_degraded",
-			startupLogArgs(
-				bootstrapCtx,
-				startupLogComponentStartupProbes,
-				labels.operation,
-				"degraded",
-				"dependency", labels.dependency,
-				"mode", startupDependencyModeFeatureOff,
-			)...,
+		recordDegradedDependencyStartup(
+			bootstrapCtx,
+			runtime,
+			labels.dependency,
+			labels.operation,
+			startupDependencyModeFeatureOff,
 		)
 		return nil, nil
 	}
@@ -361,16 +356,12 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			)
 			return nil, dependencyInitAbortFailure(labels.dependency, probeResult)
 		}
-		runtime.log.Warn(
-			"startup_dependency_degraded",
-			startupLogArgs(
-				bootstrapCtx,
-				startupLogComponentStartupProbes,
-				labels.operation,
-				"degraded",
-				"dependency", labels.dependency,
-				"mode", startupDependencyModeDegradedReadOnlyOrStale,
-			)...,
+		recordDegradedDependencyStartup(
+			bootstrapCtx,
+			runtime,
+			labels.dependency,
+			labels.operation,
+			startupDependencyModeDegradedReadOnlyOrStale,
 		)
 		return nil, nil
 	}
@@ -420,19 +411,31 @@ func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {
 	return errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded)
 }
 
+func recordDegradedDependencyStartup(ctx context.Context, runtime dependencyProbeRuntime, dependency, operation, mode string) {
+	runtime.metrics.SetStartupDependencyStatus(dependency, mode, true)
+	runtime.log.Warn(
+		"startup_dependency_degraded",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			operation,
+			"degraded",
+			"dependency", dependency,
+			"mode", mode,
+		)...,
+	)
+}
+
 func dependencyInitFailure(dep string, err error) error {
 	if err == nil {
-		return fmt.Errorf("%w: %s init failed", config.ErrDependencyInit, dep)
+		return fmt.Errorf("%w: %s init failed", errDependencyInit, dep)
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("%w: %s init failed: %w", config.ErrDependencyInit, dep, err)
-	}
-	return fmt.Errorf("%w: %s init failed: %w", config.ErrDependencyInit, dep, err)
+	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, dep, err)
 }
 
 func dependencyInitAbortFailure(dep string, result probeExecutionResult) error {
 	if result.budgetBlocked {
-		return fmt.Errorf("%w: %s init skipped: %w", config.ErrDependencyInit, dep, result.err)
+		return fmt.Errorf("%w: %s init skipped: %w", errDependencyInit, dep, result.err)
 	}
 	return dependencyInitFailure(dep, result.err)
 }

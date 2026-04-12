@@ -223,7 +223,7 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header key", i+1)
 		}
 		if value == "" {
-			if !isSafeOTLPHeaderKey(key) {
+			if !canEchoOTLPHeaderKeyInError(key) {
 				return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header value", i+1)
 			}
 			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d for header %q: empty header value", i+1, key)
@@ -237,7 +237,7 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 	return headers, nil
 }
 
-func isSafeOTLPHeaderKey(key string) bool {
+func canEchoOTLPHeaderKeyInError(key string) bool {
 	if key == "" {
 		return false
 	}

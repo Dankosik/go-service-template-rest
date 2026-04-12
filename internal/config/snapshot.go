@@ -83,7 +83,7 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err := readBoolInto(k, "redis.enabled", &cfg.Redis.Enabled); err != nil {
 		return Config{}, err
 	}
-	cfg.Redis.Mode = strings.ToLower(readString(k, "redis.mode"))
+	cfg.Redis.Mode = normalizeRedisMode(readString(k, "redis.mode"))
 	if err := readBoolInto(k, "redis.allow_store_mode", &cfg.Redis.AllowStoreMode); err != nil {
 		return Config{}, err
 	}

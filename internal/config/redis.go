@@ -9,7 +9,11 @@ const (
 
 // ModeValue returns the normalized Redis mode for config policy decisions.
 func (cfg RedisConfig) ModeValue() string {
-	return strings.ToLower(strings.TrimSpace(cfg.Mode))
+	return normalizeRedisMode(cfg.Mode)
+}
+
+func normalizeRedisMode(mode string) string {
+	return strings.ToLower(strings.TrimSpace(mode))
 }
 
 // StoreMode reports whether Redis is configured for store-mode guard behavior.

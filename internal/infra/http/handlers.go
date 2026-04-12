@@ -3,8 +3,6 @@ package httpx
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/api"
@@ -77,14 +75,7 @@ func (h strictHandlers) HealthReady(ctx context.Context, _ api.HealthReadyReques
 	return api.HealthReady200TextResponse("ok"), nil
 }
 
-func (h strictHandlers) Metrics(ctx context.Context, _ api.MetricsRequestObject) (api.MetricsResponseObject, error) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil).WithContext(ctx)
-	resp := httptest.NewRecorder()
-	h.metrics.Handler().ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		return nil, fmt.Errorf("metrics handler returned status %d", resp.Code)
-	}
-
-	return api.Metrics200TextResponse(resp.Body.String()), nil
+func (h strictHandlers) Metrics(_ context.Context, _ api.MetricsRequestObject) (api.MetricsResponseObject, error) {
+	// /metrics is served by the documented root-router exception, not the generated strict path.
+	return nil, fmt.Errorf("metrics strict handler is not runtime-owned")
 }

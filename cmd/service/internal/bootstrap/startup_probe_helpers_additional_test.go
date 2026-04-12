@@ -128,8 +128,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 		if err == nil {
 			t.Fatal("probeTCPDependency() error = nil, want non-nil")
 		}
-		if !errors.Is(err, config.ErrDependencyInit) {
-			t.Fatalf("err = %v, want wrapped %v", err, config.ErrDependencyInit)
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 		}
 	})
 
@@ -183,8 +183,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 		if err == nil {
 			t.Fatal("probeMongoWithContext() error = nil, want non-nil")
 		}
-		if !errors.Is(err, config.ErrDependencyInit) {
-			t.Fatalf("err = %v, want wrapped %v", err, config.ErrDependencyInit)
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 		}
 	})
 

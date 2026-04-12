@@ -22,7 +22,10 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
+
+const testRouterMaxBodyBytes int64 = 1 << 20
 
 func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
 	t.Helper()
@@ -41,6 +44,9 @@ func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetr
 	}
 	if cfg.ReadinessTimeout <= 0 {
 		cfg.ReadinessTimeout = time.Second
+	}
+	if cfg.MaxBodyBytes <= 0 {
+		cfg.MaxBodyBytes = testRouterMaxBodyBytes
 	}
 
 	handler, err := NewRouter(log, h, metrics, cfg)
@@ -625,6 +631,22 @@ func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubro
 	})
 }
 
+func TestStrictMetricsHandlerIsNotRuntimeOwned(t *testing.T) {
+	t.Parallel()
+
+	strict := strictHandlers{metrics: telemetry.New()}
+	resp, err := strict.Metrics(context.Background(), api.MetricsRequestObject{})
+	if err == nil {
+		t.Fatal("strict Metrics() error = nil, want non-nil")
+	}
+	if resp != nil {
+		t.Fatalf("strict Metrics() response = %T, want nil", resp)
+	}
+	if !strings.Contains(err.Error(), "not runtime-owned") {
+		t.Fatalf("strict Metrics() error = %q, want runtime ownership detail", err.Error())
+	}
+}
+
 func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing.T) {
 	openAPIRoutes := openAPIOperationRoutes(t)
 	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
@@ -772,6 +794,10 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		"GET /api/v1/ping": false,
 		"GET /metrics":     false,
 	}
+	wantHTTPRoutes := map[string]string{
+		"GET /api/v1/ping": "/api/v1/ping",
+		"GET /metrics":     "/metrics",
+	}
 
 	spanNames := make([]string, 0, len(spans))
 	for _, span := range spans {
@@ -779,7 +805,13 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		spanNames = append(spanNames, name)
 		if _, ok := wantSpanNames[name]; ok {
 			wantSpanNames[name] = true
+			if gotRoute := spanHTTPRoute(span); gotRoute != wantHTTPRoutes[name] {
+				t.Fatalf("span %q http.route = %q, want %q", name, gotRoute, wantHTTPRoutes[name])
+			}
 		}
+	}
+	if got, want := len(spans), len(wantSpanNames); got != want {
+		t.Fatalf("ended spans len = %d, want %d without nested server spans; got names %v", got, want, spanNames)
 	}
 
 	for wantName, found := range wantSpanNames {
@@ -787,6 +819,15 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 			t.Fatalf("span name %q not found; got %v", wantName, spanNames)
 		}
 	}
+}
+
+func spanHTTPRoute(span sdktrace.ReadOnlySpan) string {
+	for _, attr := range span.Attributes() {
+		if attr.Key == semconv.HTTPRouteKey {
+			return attr.Value.AsString()
+		}
+	}
+	return ""
 }
 
 func assertAllowHeader(t *testing.T, header http.Header, want string) {

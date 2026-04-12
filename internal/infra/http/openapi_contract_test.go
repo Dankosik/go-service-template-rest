@@ -184,14 +184,14 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:     "missing logger",
 			handlers: Handlers{Health: health.New(), Ping: ping.New(), ReadinessGate: func(context.Context) error { return nil }},
 			metrics:  telemetry.New(),
-			cfg:      RouterConfig{ReadinessTimeout: time.Second},
+			cfg:      RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
 			wantErr:  "logger is required",
 		},
 		{
 			name:    "missing health",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
 			handlers: Handlers{
 				Ping:          ping.New(),
 				ReadinessGate: func(context.Context) error { return nil },
@@ -202,7 +202,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing ping",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
 			handlers: Handlers{
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
@@ -213,7 +213,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing readiness gate",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
 			handlers: Handlers{
 				Health: health.New(),
 				Ping:   ping.New(),
@@ -223,7 +223,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name: "missing metrics",
 			log:  log,
-			cfg:  RouterConfig{ReadinessTimeout: time.Second},
+			cfg:  RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
 			handlers: Handlers{
 				Health:        health.New(),
 				Ping:          ping.New(),
@@ -235,12 +235,25 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing readiness timeout",
 			log:     log,
 			metrics: telemetry.New(),
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
 				Health:        health.New(),
 				Ping:          ping.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
 			wantErr: "readiness timeout must be > 0",
+		},
+		{
+			name:    "missing max body bytes",
+			log:     log,
+			metrics: telemetry.New(),
+			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			handlers: Handlers{
+				Health:        health.New(),
+				Ping:          ping.New(),
+				ReadinessGate: func(context.Context) error { return nil },
+			},
+			wantErr: "max body bytes must be > 0",
 		},
 	}
 

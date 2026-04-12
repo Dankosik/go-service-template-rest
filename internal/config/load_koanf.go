@@ -102,10 +102,11 @@ func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, localEnvir
 		return err
 	}
 
-	cleanPath := filepath.Clean(strings.TrimSpace(path))
-	if cleanPath == "" {
+	trimmedPath := strings.TrimSpace(path)
+	if trimmedPath == "" {
 		return fmt.Errorf("%w: empty config path", ErrLoad)
 	}
+	cleanPath := filepath.Clean(trimmedPath)
 
 	resolvedPath, pathInfo, err := enforceConfigFilePolicy(cleanPath, localEnvironment)
 	if err != nil {
@@ -262,8 +263,16 @@ func namespaceEnvToKey(envKey string) string {
 	return strings.Join(segments, keyDelimiter)
 }
 
+func namespaceEnvForConfigKey(key string) string {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return ""
+	}
+	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(trimmed, keyDelimiter, "__"))
+}
+
 func isLocalEnvironmentHint(hasConfigFiles bool) bool {
-	if value, ok := lookupNonEmptyEnv("APP__APP__ENV"); ok {
+	if value, ok := lookupNonEmptyEnv(namespaceEnvForConfigKey("app.env")); ok {
 		return strings.EqualFold(value, "local")
 	}
 	if hasConfigFiles {

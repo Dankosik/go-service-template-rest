@@ -8,11 +8,12 @@ var (
 	ErrValidate         = errors.New("config validate")
 	ErrStrictUnknownKey = errors.New("config strict unknown key")
 	ErrSecretPolicy     = errors.New("config secret policy")
-	ErrDependencyInit   = errors.New("dependency init")
 )
 
 func ErrorType(err error) string {
 	switch {
+	case err == nil:
+		return ""
 	case errors.Is(err, ErrStrictUnknownKey):
 		return "strict_unknown_key"
 	case errors.Is(err, ErrSecretPolicy):
@@ -21,8 +22,6 @@ func ErrorType(err error) string {
 		return "validate"
 	case errors.Is(err, ErrParse):
 		return "parse"
-	case errors.Is(err, ErrDependencyInit):
-		return "dependency_init"
 	case errors.Is(err, ErrLoad):
 		return "load"
 	default:

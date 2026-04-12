@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeTelemetryFailureReason(t *testing.T) {
@@ -68,6 +69,26 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	for _, pattern := range removed {
 		if strings.Contains(metricsText, pattern) {
 			t.Fatalf("metrics output unexpectedly contains removed series %q\n%s", pattern, metricsText)
+		}
+	}
+}
+
+func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
+	for _, m := range []*Metrics{nil, &Metrics{}} {
+		m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
+		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)
+		m.ObserveConfigLoadDuration("load", "ok", time.Millisecond)
+		m.IncConfigValidationFailure("dependency_init")
+		m.AddConfigUnknownKeyWarnings(1)
+		m.IncTelemetryInitFailure("setup_error")
+		m.IncConfigStartupOutcome("ready")
+		m.SetStartupDependencyStatus("telemetry", "optional_fail_open", true)
+
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		resp := httptest.NewRecorder()
+		m.Handler().ServeHTTP(resp, req)
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("zero-value metrics handler status = %d, want %d", resp.Code, http.StatusNotFound)
 		}
 	}
 }

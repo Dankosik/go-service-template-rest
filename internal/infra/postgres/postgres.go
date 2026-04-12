@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -65,22 +65,12 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	poolConfig.ConnConfig.ConnectTimeout = opts.ConnectTimeout
 	poolConfig.MaxConns = int32(opts.MaxOpenConns) // #nosec G115 -- validated to be <= math.MaxInt32 above.
 	poolConfig.MaxConnLifetime = opts.ConnMaxLifetime
-	// Enforce max_idle_conns as an upper bound for retained idle connections.
-	// pgxpool does not expose a direct MaxIdleConns knob.
-	var poolRef atomic.Pointer[pgxpool.Pool]
-	poolConfig.AfterRelease = func(_ *pgx.Conn) bool {
-		pool := poolRef.Load()
-		if pool == nil {
-			return true
-		}
-		return shouldKeepReleasedConn(int32(opts.MaxIdleConns), pool.Stat().IdleConns()) // #nosec G115 -- validated to be <= math.MaxInt32 above.
-	}
+	installMaxIdleConnLimiter(poolConfig, int32(opts.MaxIdleConns)) // #nosec G115 -- validated to be <= math.MaxInt32 above.
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, fmt.Errorf("%w: create pgx pool: %w", ErrConnect, err)
 	}
-	poolRef.Store(pool)
 
 	pingCtx, cancel := context.WithTimeout(ctx, opts.HealthcheckTimeout)
 	defer cancel()
@@ -92,14 +82,77 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	return &Pool{pool: pool}, nil
 }
 
-func shouldKeepReleasedConn(maxIdleConns int32, idleConnsBeforeRelease int32) bool {
-	if maxIdleConns <= 0 {
+type maxIdleConnLimiter struct {
+	mu           sync.Mutex
+	maxIdleConns int32
+	retained     map[*pgx.Conn]struct{}
+}
+
+func newMaxIdleConnLimiter(maxIdleConns int32) *maxIdleConnLimiter {
+	return &maxIdleConnLimiter{
+		maxIdleConns: maxIdleConns,
+		retained:     make(map[*pgx.Conn]struct{}),
+	}
+}
+
+func installMaxIdleConnLimiter(poolConfig *pgxpool.Config, maxIdleConns int32) {
+	limiter := newMaxIdleConnLimiter(maxIdleConns)
+
+	beforeAcquire := poolConfig.BeforeAcquire
+	afterRelease := poolConfig.AfterRelease
+	beforeClose := poolConfig.BeforeClose
+
+	poolConfig.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
+		limiter.beforeAcquire(conn)
+		return beforeAcquire == nil || beforeAcquire(ctx, conn)
+	}
+	poolConfig.AfterRelease = func(conn *pgx.Conn) bool {
+		if afterRelease != nil && !afterRelease(conn) {
+			return false
+		}
+		return limiter.afterRelease(conn)
+	}
+	poolConfig.BeforeClose = func(conn *pgx.Conn) {
+		limiter.beforeClose(conn)
+		if beforeClose != nil {
+			beforeClose(conn)
+		}
+	}
+}
+
+func (l *maxIdleConnLimiter) afterRelease(conn *pgx.Conn) bool {
+	if l.maxIdleConns <= 0 {
 		return false
 	}
-	return idleConnsBeforeRelease < maxIdleConns
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, ok := l.retained[conn]; ok {
+		return true
+	}
+	if int32(len(l.retained)) >= l.maxIdleConns {
+		return false
+	}
+	l.retained[conn] = struct{}{}
+	return true
+}
+
+func (l *maxIdleConnLimiter) beforeAcquire(conn *pgx.Conn) {
+	l.beforeClose(conn)
+}
+
+func (l *maxIdleConnLimiter) beforeClose(conn *pgx.Conn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	delete(l.retained, conn)
 }
 
 func (p *Pool) DB() *pgxpool.Pool {
+	if p == nil {
+		return nil
+	}
 	return p.pool
 }
 

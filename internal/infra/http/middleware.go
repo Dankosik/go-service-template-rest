@@ -13,7 +13,9 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/propagation"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -194,41 +196,72 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 
 func captureRouteLabelMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer captureRouteMetadata(r)
 		next.ServeHTTP(w, r)
-
-		routeLabel := routeLabelForRequest(r)
-		if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() && routeLabel != "" {
-			span.SetName(routeLabel)
-		}
-
-		holder, _ := r.Context().Value(routeLabelContextKey{}).(*routeLabelHolder)
-		if holder == nil || holder.value != "" {
-			return
-		}
-		holder.value = routeLabel
 	})
 }
 
+func captureRouteMetadata(r *http.Request) {
+	if r == nil {
+		return
+	}
+
+	routePathTemplate := routePathTemplateForRequest(r)
+	routeLabel := joinMethodAndPattern(requestMethod(r), routePathTemplate)
+
+	if routePathTemplate != "" {
+		routeAttr := semconv.HTTPRoute(routePathTemplate)
+		if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() && routeLabel != "" {
+			span.SetName(routeLabel)
+			span.SetAttributes(routeAttr)
+		}
+		if labeler, ok := otelhttp.LabelerFromContext(r.Context()); ok {
+			labeler.Add(routeAttr)
+		}
+	}
+
+	holder, _ := r.Context().Value(routeLabelContextKey{}).(*routeLabelHolder)
+	if holder == nil || holder.value != "" {
+		return
+	}
+	holder.value = routeLabel
+}
+
 func routeLabelForRequest(r *http.Request) string {
+	return joinMethodAndPattern(requestMethod(r), routePathTemplateForRequest(r))
+}
+
+func routePathTemplateForRequest(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
 
 	if routeContext := chi.RouteContext(r.Context()); routeContext != nil {
-		if pattern := strings.TrimSpace(routeContext.RoutePattern()); pattern != "" {
-			return joinMethodAndPattern(r.Method, pattern)
+		if pattern := normalizeRoutePathTemplate(r.Method, routeContext.RoutePattern()); pattern != "" {
+			return pattern
 		}
 	}
 
-	pattern := strings.TrimSpace(r.Pattern)
-	if pattern == "" || pattern == "/" {
+	return normalizeRoutePathTemplate(r.Method, r.Pattern)
+}
+
+func normalizeRoutePathTemplate(method, pattern string) string {
+	pattern = strings.TrimSpace(pattern)
+	method = strings.TrimSpace(method)
+	if method != "" && strings.HasPrefix(pattern, method+" ") {
+		pattern = strings.TrimSpace(strings.TrimPrefix(pattern, method+" "))
+	}
+	if pattern == "/" {
 		return ""
 	}
+	return pattern
+}
 
-	if r.Method != "" && strings.HasPrefix(pattern, r.Method+" ") {
-		return pattern
+func requestMethod(r *http.Request) string {
+	if r == nil {
+		return ""
 	}
-	return joinMethodAndPattern(r.Method, pattern)
+	return r.Method
 }
 
 func joinMethodAndPattern(method, pattern string) string {

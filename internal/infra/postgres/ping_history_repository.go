@@ -9,6 +9,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ErrPingHistoryRepository classifies errors from the template ping_history sample repository.
@@ -46,14 +47,28 @@ type PingHistoryRepository struct {
 }
 
 // NewPingHistoryRepository builds the template sample repository backed by sqlc generated queries.
-func NewPingHistoryRepository(db pingHistoryDB) *PingHistoryRepository {
+func NewPingHistoryRepository(db *pgxpool.Pool) (*PingHistoryRepository, error) {
+	if db == nil {
+		return nil, fmt.Errorf("%w: postgres pool is required", ErrPingHistoryRepository)
+	}
+	return newPingHistoryRepository(db)
+}
+
+func newPingHistoryRepository(db pingHistoryDB) (*PingHistoryRepository, error) {
+	if db == nil {
+		return nil, fmt.Errorf("%w: database is required", ErrPingHistoryRepository)
+	}
 	return &PingHistoryRepository{
 		queries: sqlcgen.New(db),
 		db:      db,
-	}
+	}, nil
 }
 
 func (r *PingHistoryRepository) Create(ctx context.Context, payload string) (PingHistoryRecord, error) {
+	if err := r.requireQueries(); err != nil {
+		return PingHistoryRecord{}, err
+	}
+
 	row, err := r.queries.CreatePingHistory(ctx, payload)
 	if err != nil {
 		return PingHistoryRecord{}, fmt.Errorf("create ping history: %w", err)
@@ -68,6 +83,9 @@ func (r *PingHistoryRepository) Create(ctx context.Context, payload string) (Pin
 }
 
 func (r *PingHistoryRepository) ListRecent(ctx context.Context, limit int32) ([]PingHistoryRecord, error) {
+	if err := r.requireQueries(); err != nil {
+		return nil, err
+	}
 	if err := validatePingHistoryListLimit(limit); err != nil {
 		return nil, err
 	}
@@ -93,7 +111,7 @@ func (r *PingHistoryRepository) createAndListRecentInTx(ctx context.Context, pay
 	if err := validatePingHistoryListLimit(limit); err != nil {
 		return PingHistoryRecord{}, nil, err
 	}
-	if r.db == nil {
+	if r == nil || r.db == nil {
 		return PingHistoryRecord{}, nil, fmt.Errorf("%w: transaction starter is not configured", ErrPingHistoryRepository)
 	}
 
@@ -137,6 +155,13 @@ func (r *PingHistoryRepository) createAndListRecentInTx(ctx context.Context, pay
 	}
 
 	return created, recent, nil
+}
+
+func (r *PingHistoryRepository) requireQueries() error {
+	if r == nil || r.queries == nil {
+		return fmt.Errorf("%w: queries are not configured", ErrPingHistoryRepository)
+	}
+	return nil
 }
 
 func validatePingHistoryListLimit(limit int32) error {

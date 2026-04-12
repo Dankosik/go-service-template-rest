@@ -23,10 +23,16 @@ func newPingHistoryRepositoryWithQuerier(queries pingHistoryQuerier) *PingHistor
 }
 
 func (f fakePingHistoryQuerier) CreatePingHistory(ctx context.Context, payload string) (sqlcgen.PingHistory, error) {
+	if f.create == nil {
+		return sqlcgen.PingHistory{}, errors.New("unexpected CreatePingHistory call")
+	}
 	return f.create(ctx, payload)
 }
 
 func (f fakePingHistoryQuerier) ListRecentPingHistory(ctx context.Context, limit int32) ([]sqlcgen.PingHistory, error) {
+	if f.list == nil {
+		return nil, errors.New("unexpected ListRecentPingHistory call")
+	}
 	return f.list(ctx, limit)
 }
 
@@ -47,19 +53,101 @@ func (f fakePingHistoryDB) QueryRow(context.Context, string, ...interface{}) pgx
 }
 
 func (f fakePingHistoryDB) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
+	if f.beginTx == nil {
+		return nil, errors.New("unexpected BeginTx call")
+	}
 	return f.beginTx(ctx, txOptions)
 }
 
 type fakePingHistoryRow struct {
+	row sqlcgen.PingHistory
 	err error
 }
 
-func (r fakePingHistoryRow) Scan(...any) error {
+func (r fakePingHistoryRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	if len(dest) != 3 {
+		return errors.New("unexpected ping history scan destination count")
+	}
+	id, ok := dest[0].(*int64)
+	if !ok {
+		return errors.New("unexpected ping history id destination")
+	}
+	payload, ok := dest[1].(*string)
+	if !ok {
+		return errors.New("unexpected ping history payload destination")
+	}
+	createdAt, ok := dest[2].(*pgtype.Timestamptz)
+	if !ok {
+		return errors.New("unexpected ping history created_at destination")
+	}
+	*id = r.row.ID
+	*payload = r.row.Payload
+	*createdAt = r.row.CreatedAt
+	return nil
+}
+
+type fakePingHistoryRows struct {
+	rows   []sqlcgen.PingHistory
+	index  int
+	err    error
+	closed bool
+}
+
+func (r *fakePingHistoryRows) Close() {
+	r.closed = true
+}
+
+func (r *fakePingHistoryRows) Err() error {
 	return r.err
+}
+
+func (r *fakePingHistoryRows) CommandTag() pgconn.CommandTag {
+	return pgconn.CommandTag{}
+}
+
+func (r *fakePingHistoryRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+
+func (r *fakePingHistoryRows) Next() bool {
+	if r.index >= len(r.rows) {
+		r.Close()
+		return false
+	}
+	r.index++
+	return true
+}
+
+func (r *fakePingHistoryRows) Scan(dest ...any) error {
+	if r.index == 0 || r.index > len(r.rows) {
+		return errors.New("Scan called without a current ping history row")
+	}
+	return fakePingHistoryRow{row: r.rows[r.index-1]}.Scan(dest...)
+}
+
+func (r *fakePingHistoryRows) Values() ([]any, error) {
+	if r.index == 0 || r.index > len(r.rows) {
+		return nil, errors.New("Values called without a current ping history row")
+	}
+	row := r.rows[r.index-1]
+	return []any{row.ID, row.Payload, row.CreatedAt}, nil
+}
+
+func (r *fakePingHistoryRows) RawValues() [][]byte {
+	return nil
+}
+
+func (r *fakePingHistoryRows) Conn() *pgx.Conn {
+	return nil
 }
 
 type recordingPingHistoryTx struct {
 	queryRow func(context.Context, string, ...any) pgx.Row
+	query    func(context.Context, string, ...any) (pgx.Rows, error)
+	commit   func(context.Context) error
 	rollback func(context.Context) error
 }
 
@@ -69,7 +157,10 @@ func (tx *recordingPingHistoryTx) Begin(context.Context) (pgx.Tx, error) {
 	return nil, errors.New("nested transactions are not supported by fake tx")
 }
 
-func (tx *recordingPingHistoryTx) Commit(context.Context) error {
+func (tx *recordingPingHistoryTx) Commit(ctx context.Context) error {
+	if tx.commit != nil {
+		return tx.commit(ctx)
+	}
 	return nil
 }
 
@@ -100,7 +191,10 @@ func (tx *recordingPingHistoryTx) Exec(context.Context, string, ...any) (pgconn.
 	return pgconn.CommandTag{}, errors.New("exec is not supported by fake tx")
 }
 
-func (tx *recordingPingHistoryTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (tx *recordingPingHistoryTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	if tx.query != nil {
+		return tx.query(ctx, sql, args...)
+	}
 	return nil, errors.New("query is not supported by fake tx")
 }
 
@@ -113,6 +207,59 @@ func (tx *recordingPingHistoryTx) QueryRow(ctx context.Context, sql string, args
 
 func (tx *recordingPingHistoryTx) Conn() *pgx.Conn {
 	return nil
+}
+
+func TestNewPingHistoryRepositoryRejectsNilPool(t *testing.T) {
+	t.Parallel()
+
+	repo, err := NewPingHistoryRepository(nil)
+	if err == nil {
+		t.Fatal("NewPingHistoryRepository(nil) error = nil, want non-nil")
+	}
+	if repo != nil {
+		t.Fatalf("NewPingHistoryRepository(nil) repo = %#v, want nil", repo)
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("NewPingHistoryRepository(nil) error = %v, want ErrPingHistoryRepository", err)
+	}
+}
+
+func TestPingHistoryRepositoryRejectsNilAndZeroValueUse(t *testing.T) {
+	t.Parallel()
+
+	var nilRepo *PingHistoryRepository
+	if _, err := nilRepo.Create(context.Background(), "payload"); err == nil {
+		t.Fatal("(*PingHistoryRepository)(nil).Create() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("(*PingHistoryRepository)(nil).Create() error = %v, want ErrPingHistoryRepository", err)
+	}
+	if _, err := nilRepo.ListRecent(context.Background(), 1); err == nil {
+		t.Fatal("(*PingHistoryRepository)(nil).ListRecent() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("(*PingHistoryRepository)(nil).ListRecent() error = %v, want ErrPingHistoryRepository", err)
+	}
+	if _, _, err := nilRepo.createAndListRecentInTx(context.Background(), "payload", 1); err == nil {
+		t.Fatal("(*PingHistoryRepository)(nil).createAndListRecentInTx() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("(*PingHistoryRepository)(nil).createAndListRecentInTx() error = %v, want ErrPingHistoryRepository", err)
+	}
+
+	zeroRepo := &PingHistoryRepository{}
+	if _, err := zeroRepo.Create(context.Background(), "payload"); err == nil {
+		t.Fatal("zero-value Create() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("zero-value Create() error = %v, want ErrPingHistoryRepository", err)
+	}
+	if _, err := zeroRepo.ListRecent(context.Background(), 1); err == nil {
+		t.Fatal("zero-value ListRecent() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("zero-value ListRecent() error = %v, want ErrPingHistoryRepository", err)
+	}
+	if _, _, err := zeroRepo.createAndListRecentInTx(context.Background(), "payload", 1); err == nil {
+		t.Fatal("zero-value createAndListRecentInTx() error = nil, want non-nil")
+	} else if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("zero-value createAndListRecentInTx() error = %v, want ErrPingHistoryRepository", err)
+	}
 }
 
 func TestPingHistoryRepositoryCreate(t *testing.T) {
@@ -130,7 +277,6 @@ func TestPingHistoryRepositoryCreate(t *testing.T) {
 				},
 			}, nil
 		},
-		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) { return nil, nil },
 	})
 
 	got, err := repo.Create(context.Background(), "ok")
@@ -150,7 +296,6 @@ func TestPingHistoryRepositoryCreateWrapsQueryError(t *testing.T) {
 		create: func(context.Context, string) (sqlcgen.PingHistory, error) {
 			return sqlcgen.PingHistory{}, sentinel
 		},
-		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) { return nil, nil },
 	})
 
 	_, err := repo.Create(context.Background(), "boom")
@@ -172,7 +317,6 @@ func TestPingHistoryRepositoryCreateRejectsNullCreatedAt(t *testing.T) {
 		create: func(context.Context, string) (sqlcgen.PingHistory, error) {
 			return sqlcgen.PingHistory{ID: 9, Payload: "x"}, nil
 		},
-		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) { return nil, nil },
 	})
 
 	_, err := repo.Create(context.Background(), "x")
@@ -193,7 +337,6 @@ func TestPingHistoryRepositoryListRecent(t *testing.T) {
 	firstAt := time.Date(2026, time.February, 1, 10, 0, 0, 0, time.UTC)
 	secondAt := firstAt.Add(-time.Minute)
 	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
-		create: func(context.Context, string) (sqlcgen.PingHistory, error) { return sqlcgen.PingHistory{}, nil },
 		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
 			return []sqlcgen.PingHistory{
 				{
@@ -239,7 +382,6 @@ func TestPingHistoryRepositoryListRecentErrors(t *testing.T) {
 
 	sentinel := errors.New("read failed")
 	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
-		create: func(context.Context, string) (sqlcgen.PingHistory, error) { return sqlcgen.PingHistory{}, nil },
 		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
 			return nil, sentinel
 		},
@@ -270,7 +412,6 @@ func TestPingHistoryRepositoryListRecentRejectsOverSampleLimit(t *testing.T) {
 
 	var listCalled bool
 	repo := newPingHistoryRepositoryWithQuerier(fakePingHistoryQuerier{
-		create: func(context.Context, string) (sqlcgen.PingHistory, error) { return sqlcgen.PingHistory{}, nil },
 		list: func(context.Context, int32) ([]sqlcgen.PingHistory, error) {
 			listCalled = true
 			return nil, nil
@@ -338,6 +479,146 @@ func TestPingHistoryRepositoryCreateAndListRecentInTxBeginError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "begin ping history transaction") {
 		t.Fatalf("createAndListRecentInTx() error = %q, want begin context", err.Error())
+	}
+}
+
+func TestPingHistoryRepositoryCreateAndListRecentInTxSuccess(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, time.March, 3, 4, 5, 6, 0, time.UTC)
+	recentAt := createdAt.Add(-time.Minute)
+	var commitCalled bool
+	tx := &recordingPingHistoryTx{
+		queryRow: func(_ context.Context, sql string, args ...any) pgx.Row {
+			if !strings.Contains(sql, "INSERT INTO ping_history") {
+				return fakePingHistoryRow{err: errors.New("unexpected create sql")}
+			}
+			if len(args) != 1 || args[0] != "payload" {
+				return fakePingHistoryRow{err: errors.New("unexpected create args")}
+			}
+			return fakePingHistoryRow{row: sqlcgen.PingHistory{
+				ID:      12,
+				Payload: "payload",
+				CreatedAt: pgtype.Timestamptz{
+					Time:  createdAt,
+					Valid: true,
+				},
+			}}
+		},
+		query: func(_ context.Context, sql string, args ...any) (pgx.Rows, error) {
+			if !strings.Contains(sql, "SELECT id, payload, created_at") {
+				return nil, errors.New("unexpected list sql")
+			}
+			if len(args) != 1 || args[0] != int32(2) {
+				return nil, errors.New("unexpected list args")
+			}
+			return &fakePingHistoryRows{rows: []sqlcgen.PingHistory{
+				{
+					ID:      12,
+					Payload: "payload",
+					CreatedAt: pgtype.Timestamptz{
+						Time:  createdAt,
+						Valid: true,
+					},
+				},
+				{
+					ID:      11,
+					Payload: "previous",
+					CreatedAt: pgtype.Timestamptz{
+						Time:  recentAt,
+						Valid: true,
+					},
+				},
+			}}, nil
+		},
+		commit: func(context.Context) error {
+			commitCalled = true
+			return nil
+		},
+	}
+	repo := &PingHistoryRepository{
+		db: fakePingHistoryDB{
+			beginTx: func(context.Context, pgx.TxOptions) (pgx.Tx, error) {
+				return tx, nil
+			},
+		},
+	}
+
+	created, recent, err := repo.createAndListRecentInTx(context.Background(), "payload", 2)
+	if err != nil {
+		t.Fatalf("createAndListRecentInTx() error = %v, want nil", err)
+	}
+	if !commitCalled {
+		t.Fatal("Commit was not called")
+	}
+	if created.ID != 12 || created.Payload != "payload" || !created.CreatedAt.Equal(createdAt) {
+		t.Fatalf("created = %#v, want ID=12 Payload=payload CreatedAt=%v", created, createdAt)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("recent len = %d, want 2", len(recent))
+	}
+	if recent[0].ID != 12 || recent[1].ID != 11 {
+		t.Fatalf("recent IDs = [%d,%d], want [12,11]", recent[0].ID, recent[1].ID)
+	}
+}
+
+func TestPingHistoryRepositoryCreateAndListRecentInTxCommitError(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("commit failed")
+	createdAt := time.Date(2026, time.March, 4, 5, 6, 7, 0, time.UTC)
+	var rollbackCalled bool
+	tx := &recordingPingHistoryTx{
+		queryRow: func(context.Context, string, ...any) pgx.Row {
+			return fakePingHistoryRow{row: sqlcgen.PingHistory{
+				ID:      21,
+				Payload: "payload",
+				CreatedAt: pgtype.Timestamptz{
+					Time:  createdAt,
+					Valid: true,
+				},
+			}}
+		},
+		query: func(context.Context, string, ...any) (pgx.Rows, error) {
+			return &fakePingHistoryRows{rows: []sqlcgen.PingHistory{
+				{
+					ID:      21,
+					Payload: "payload",
+					CreatedAt: pgtype.Timestamptz{
+						Time:  createdAt,
+						Valid: true,
+					},
+				},
+			}}, nil
+		},
+		commit: func(context.Context) error {
+			return sentinel
+		},
+		rollback: func(context.Context) error {
+			rollbackCalled = true
+			return nil
+		},
+	}
+	repo := &PingHistoryRepository{
+		db: fakePingHistoryDB{
+			beginTx: func(context.Context, pgx.TxOptions) (pgx.Tx, error) {
+				return tx, nil
+			},
+		},
+	}
+
+	_, _, err := repo.createAndListRecentInTx(context.Background(), "payload", 1)
+	if err == nil {
+		t.Fatal("createAndListRecentInTx() error = nil, want non-nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("createAndListRecentInTx() error = %v, want wrapped %v", err, sentinel)
+	}
+	if !strings.Contains(err.Error(), "commit ping history transaction") {
+		t.Fatalf("createAndListRecentInTx() error = %q, want commit context", err.Error())
+	}
+	if !rollbackCalled {
+		t.Fatal("Rollback was not called after commit error")
 	}
 }
 

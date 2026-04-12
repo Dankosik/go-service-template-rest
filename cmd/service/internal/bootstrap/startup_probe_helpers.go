@@ -27,7 +27,7 @@ func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*pos
 	var lastErr error
 	for attempt := 1; attempt <= postgresStartupAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("%w: postgres init canceled: %w", config.ErrDependencyInit, err)
+			return nil, fmt.Errorf("%w: postgres init canceled: %w", errDependencyInit, err)
 		}
 
 		pg, err := postgres.New(ctx, options)
@@ -42,11 +42,11 @@ func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*pos
 
 		delay := fullJitterDelay(attempt)
 		if err := sleepWithContext(ctx, delay); err != nil {
-			return nil, fmt.Errorf("%w: postgres retry wait canceled: %w", config.ErrDependencyInit, err)
+			return nil, fmt.Errorf("%w: postgres retry wait canceled: %w", errDependencyInit, err)
 		}
 	}
 
-	return nil, fmt.Errorf("%w: postgres init failed after retries: %w", config.ErrDependencyInit, lastErr)
+	return nil, fmt.Errorf("%w: postgres init failed after retries: %w", errDependencyInit, lastErr)
 }
 
 func shouldRetryPostgresStartup(err error, attempt int) bool {
@@ -100,7 +100,7 @@ func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duratio
 	if remaining < minRemaining {
 		return fmt.Errorf(
 			"%w: %s aborted due to low remaining startup budget (%s < %s)",
-			config.ErrDependencyInit,
+			errDependencyInit,
 			stage,
 			remaining,
 			minRemaining,
@@ -126,7 +126,7 @@ func probeRedisWithRetry(ctx context.Context, cfg config.RedisConfig) error {
 func probeMongoWithContext(ctx context.Context, cfg config.MongoConfig) error {
 	addr, err := config.MongoProbeAddress(cfg.URI)
 	if err != nil {
-		return fmt.Errorf("%w: resolve mongo probe address: %w", config.ErrDependencyInit, err)
+		return fmt.Errorf("%w: resolve mongo probe address: %w", errDependencyInit, err)
 	}
 	timeout := cfg.ConnectTimeout
 	if timeout <= 0 {
@@ -180,7 +180,7 @@ func shouldRetryStartupProbe(err error, attempt int, maxAttempts int) bool {
 func probeTCPDependency(ctx context.Context, address string, timeout time.Duration) error {
 	trimmedAddress := strings.TrimSpace(address)
 	if trimmedAddress == "" {
-		return fmt.Errorf("%w: empty probe address", config.ErrDependencyInit)
+		return fmt.Errorf("%w: empty probe address", errDependencyInit)
 	}
 
 	dialCtx, dialCancel := withStageBudget(ctx, timeout)
@@ -189,7 +189,7 @@ func probeTCPDependency(ctx context.Context, address string, timeout time.Durati
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(dialCtx, "tcp", trimmedAddress)
 	if err != nil {
-		return fmt.Errorf("%w: dial %s: %w", config.ErrDependencyInit, trimmedAddress, err)
+		return fmt.Errorf("%w: dial %s: %w", errDependencyInit, trimmedAddress, err)
 	}
 	_ = conn.Close()
 	return nil

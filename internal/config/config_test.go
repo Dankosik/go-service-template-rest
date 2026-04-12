@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,14 @@ func TestFlatEnvKeysAreIgnored(t *testing.T) {
 
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("HTTP.Addr = %q, want default :8080", cfg.HTTP.Addr)
+	}
+}
+
+func TestNamespaceEnvForConfigKey(t *testing.T) {
+	t.Parallel()
+
+	if got := namespaceEnvForConfigKey("app.env"); got != "APP__APP__ENV" {
+		t.Fatalf("namespaceEnvForConfigKey(app.env) = %q, want APP__APP__ENV", got)
 	}
 }
 
@@ -367,7 +376,7 @@ func TestRedisStoreGuardRequiresZeroStaleWindow(t *testing.T) {
 
 	t.Setenv("APP__REDIS__ENABLED", "true")
 	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
-	t.Setenv("APP__REDIS__MODE", "store")
+	t.Setenv("APP__REDIS__MODE", " STORE ")
 	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
 	t.Setenv("APP__REDIS__STALE_WINDOW", "1s")
 
@@ -385,7 +394,7 @@ func TestRedisStoreGuardAllowsConfiguredModeForV1GuardPath(t *testing.T) {
 
 	t.Setenv("APP__REDIS__ENABLED", "true")
 	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
-	t.Setenv("APP__REDIS__MODE", "store")
+	t.Setenv("APP__REDIS__MODE", " STORE ")
 	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
 	t.Setenv("APP__REDIS__STALE_WINDOW", "0s")
 
@@ -531,6 +540,26 @@ func TestInvalidDurationParseError(t *testing.T) {
 	}
 }
 
+func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
+	for _, value := range []string{"NaN", "+Inf"} {
+		t.Run(value, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER_ARG", value)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatal("LoadDetailed() error = nil, want parse error")
+			}
+			if !errors.Is(err, ErrParse) {
+				t.Fatalf("error = %v, want ErrParse", err)
+			}
+			if got := ErrorType(err); got != "parse" {
+				t.Fatalf("ErrorType(error) = %q, want parse", got)
+			}
+		})
+	}
+}
+
 func TestTST005MalformedYAMLReturnsParseError(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -576,6 +605,21 @@ http:
 	}
 	if !errors.Is(err, ErrSecretPolicy) {
 		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestLoadConfigFileRejectsWhitespaceOnlyPath(t *testing.T) {
+	t.Parallel()
+
+	err := loadConfigFile(context.Background(), koanf.New(keyDelimiter), " \t\n ", true)
+	if err == nil {
+		t.Fatal("loadConfigFile() error = nil, want non-nil")
+	}
+	if !errors.Is(err, ErrLoad) {
+		t.Fatalf("error = %v, want ErrLoad", err)
+	}
+	if !strings.Contains(err.Error(), "empty config path") {
+		t.Fatalf("error = %v, want empty config path detail", err)
 	}
 }
 
@@ -842,6 +886,9 @@ func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 }
 
 func TestErrorTypeMapping(t *testing.T) {
+	if got := ErrorType(nil); got != "" {
+		t.Fatalf("ErrorType(nil) = %q, want empty", got)
+	}
 	if got := ErrorType(ErrStrictUnknownKey); got != "strict_unknown_key" {
 		t.Fatalf("ErrorType(strict) = %q", got)
 	}
@@ -853,9 +900,6 @@ func TestErrorTypeMapping(t *testing.T) {
 	}
 	if got := ErrorType(ErrParse); got != "parse" {
 		t.Fatalf("ErrorType(parse) = %q", got)
-	}
-	if got := ErrorType(ErrDependencyInit); got != "dependency_init" {
-		t.Fatalf("ErrorType(dependency_init) = %q", got)
 	}
 	if got := ErrorType(ErrLoad); got != "load" {
 		t.Fatalf("ErrorType(load) = %q", got)
@@ -1046,10 +1090,6 @@ func configEnvResetKeys() []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func namespaceEnvForConfigKey(key string) string {
-	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(key, keyDelimiter, "__"))
 }
 
 func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
@@ -1455,6 +1495,24 @@ func TestRedisEnabledRequiresHostPortAddress(t *testing.T) {
 	}
 }
 
+func TestRedisEnabledRequiresNumericTCPPort(t *testing.T) {
+	for _, addr := range []string{"127.0.0.1:notaport", "127.0.0.1:0", "127.0.0.1:65536"} {
+		t.Run(addr, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__REDIS__ENABLED", "true")
+			t.Setenv("APP__REDIS__ADDR", addr)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatal("LoadDetailed() error = nil, want validation error")
+			}
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+		})
+	}
+}
+
 func TestMongoURIMustBeParseable(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1468,6 +1526,29 @@ func TestMongoURIMustBeParseable(t *testing.T) {
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func TestMongoURIMustUseNumericTCPPort(t *testing.T) {
+	for _, uri := range []string{
+		"mongodb://localhost:notaport/app",
+		"mongodb://localhost:0/app",
+		"mongodb://localhost:65536/app",
+	} {
+		t.Run(uri, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__MONGO__ENABLED", "true")
+			t.Setenv("APP__MONGO__URI", uri)
+			t.Setenv("APP__MONGO__DATABASE", "app")
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatal("LoadDetailed() error = nil, want validation error")
+			}
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+		})
 	}
 }
 
@@ -1506,6 +1587,27 @@ func TestMongoProbeAddress(t *testing.T) {
 			t.Fatalf("MongoProbeAddress() = %q, want cluster.example.com:27017", address)
 		}
 	})
+
+	t.Run("bare host defaults port", func(t *testing.T) {
+		address, err := MongoProbeAddress("mongodb://cluster.example.com/app")
+		if err != nil {
+			t.Fatalf("MongoProbeAddress() error = %v", err)
+		}
+		if address != "cluster.example.com:27017" {
+			t.Fatalf("MongoProbeAddress() = %q, want cluster.example.com:27017", address)
+		}
+	})
+
+	t.Run("bare ipv6 host defaults port", func(t *testing.T) {
+		address, err := MongoProbeAddress("mongodb://2001:db8::1/app")
+		if err != nil {
+			t.Fatalf("MongoProbeAddress() error = %v", err)
+		}
+		if address != "[2001:db8::1]:27017" {
+			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27017", address)
+		}
+	})
+
 }
 
 func TestReadDurationParsesDefaultDurations(t *testing.T) {
@@ -1548,6 +1650,21 @@ func TestParseInt(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects non finite floats", func(t *testing.T) {
+		if _, err := parseInt(math.NaN()); err == nil {
+			t.Fatalf("parseInt() expected non-finite error for NaN")
+		}
+		if _, err := parseInt(math.Inf(1)); err == nil {
+			t.Fatalf("parseInt() expected non-finite error for +Inf")
+		}
+	})
+
+	t.Run("rejects conversion unsafe float upper bound", func(t *testing.T) {
+		if _, err := parseInt(math.Ldexp(1, strconv.IntSize-1)); err == nil {
+			t.Fatalf("parseInt() expected overflow error at first unsafe upper bound")
+		}
+	})
+
 	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
 		overflow := uint(math.MaxInt) + 1
 		if _, err := parseInt(overflow); err == nil {
@@ -1581,6 +1698,21 @@ func TestParseInt64(t *testing.T) {
 	t.Run("rejects non integer floats", func(t *testing.T) {
 		if _, err := parseInt64(float64(2.5)); err == nil {
 			t.Fatalf("parseInt64() expected non-integer error")
+		}
+	})
+
+	t.Run("rejects non finite floats", func(t *testing.T) {
+		if _, err := parseInt64(math.NaN()); err == nil {
+			t.Fatalf("parseInt64() expected non-finite error for NaN")
+		}
+		if _, err := parseInt64(math.Inf(-1)); err == nil {
+			t.Fatalf("parseInt64() expected non-finite error for -Inf")
+		}
+	})
+
+	t.Run("rejects conversion unsafe float upper bound", func(t *testing.T) {
+		if _, err := parseInt64(math.Ldexp(1, 63)); err == nil {
+			t.Fatalf("parseInt64() expected overflow error at first unsafe upper bound")
 		}
 	})
 

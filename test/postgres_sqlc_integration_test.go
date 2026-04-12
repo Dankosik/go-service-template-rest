@@ -22,7 +22,10 @@ const migrationGlobUp = "../env/migrations/*.up.sql"
 func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	pool := setupPostgresPoolWithMigrations(t)
 
-	repo := postgres.NewPingHistoryRepository(pool.DB())
+	repo, err := postgres.NewPingHistoryRepository(pool.DB())
+	if err != nil {
+		t.Fatalf("create ping history repository: %v", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

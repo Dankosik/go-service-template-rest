@@ -5,8 +5,6 @@ import (
 	"net"
 	"strings"
 	"time"
-
-	"github.com/example/go-service-template-rest/internal/config"
 )
 
 func (p networkPolicy) EnforceIngress() error {
@@ -24,16 +22,16 @@ func (p networkPolicy) withIngressExposure(env, addr string) networkPolicy {
 
 func (p networkPolicy) validatePublicIngress() error {
 	if p.ingressDeclarationRequired && !p.ingressPublicDeclared {
-		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", config.ErrDependencyInit, envNetworkPublicIngressEnabled)
+		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", errDependencyInit, envNetworkPublicIngressEnabled)
 	}
 	if !p.ingressPublicEnabled {
 		return nil
 	}
 	if !p.ingressException.Active {
-		return fmt.Errorf("%w: public ingress denied without approved exception", config.ErrDependencyInit)
+		return fmt.Errorf("%w: public ingress denied without approved exception", errDependencyInit)
 	}
 	if p.isExceptionExpired(p.ingressException) {
-		return fmt.Errorf("%w: ingress exception is expired", config.ErrDependencyInit)
+		return fmt.Errorf("%w: ingress exception is expired", errDependencyInit)
 	}
 	return nil
 }
@@ -68,7 +66,7 @@ func (p networkPolicy) EmitEgressExceptionState() error {
 		return nil
 	}
 	if p.isExceptionExpired(p.egressException) {
-		return fmt.Errorf("%w: egress exception is expired", config.ErrDependencyInit)
+		return fmt.Errorf("%w: egress exception is expired", errDependencyInit)
 	}
 
 	return nil
@@ -77,12 +75,12 @@ func (p networkPolicy) EmitEgressExceptionState() error {
 func (p networkPolicy) EnforceEgressTarget(target, scheme string) error {
 	normalizedScheme := strings.ToLower(strings.TrimSpace(scheme))
 	if !p.isSchemeAllowed(normalizedScheme) {
-		return fmt.Errorf("%w: egress scheme denied by policy", config.ErrDependencyInit)
+		return fmt.Errorf("%w: egress scheme denied by policy", errDependencyInit)
 	}
 
 	host, err := extractHost(target)
 	if err != nil {
-		return fmt.Errorf("%w: invalid egress target", config.ErrDependencyInit)
+		return fmt.Errorf("%w: invalid egress target", errDependencyInit)
 	}
 
 	if classifyHostExposure(host) != "public" {
@@ -97,10 +95,10 @@ func (p networkPolicy) EnforceEgressTarget(target, scheme string) error {
 	}
 
 	if p.egressException.Active && p.isExceptionExpired(p.egressException) {
-		return fmt.Errorf("%w: egress exception is expired", config.ErrDependencyInit)
+		return fmt.Errorf("%w: egress exception is expired", errDependencyInit)
 	}
 
-	return fmt.Errorf("%w: egress target denied by policy", config.ErrDependencyInit)
+	return fmt.Errorf("%w: egress target denied by policy", errDependencyInit)
 }
 
 func (p networkPolicy) isSchemeAllowed(scheme string) bool {

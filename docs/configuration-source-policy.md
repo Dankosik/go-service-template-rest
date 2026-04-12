@@ -14,6 +14,20 @@ Runtime config value precedence (last wins):
 3. `--config-overlay` files
 4. `APP__...` environment variables
 
+## Operational Network Policy Channel
+
+`NETWORK_*` variables are a separate operator policy channel owned by bootstrap, not ordinary app runtime config. Bootstrap reads them directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.
+
+There is no YAML overlay or `APP__...` precedence chain for `NETWORK_*`: the effective value is the process environment value visible to the service at startup. These variables are intended for deployment/network admission controls where explicit declaration matters. For example, missing `NETWORK_PUBLIC_INGRESS_ENABLED` is not the same as setting it to `false`; in non-local wildcard-bind deployments, missing public-ingress declaration fails closed.
+
+Example key families:
+
+- `NETWORK_PUBLIC_INGRESS_ENABLED` declares whether public ingress is expected.
+- `NETWORK_EGRESS_ALLOWLIST` and `NETWORK_EGRESS_ALLOWED_SCHEMES` constrain allowed outbound targets.
+- `NETWORK_INGRESS_EXCEPTION_*` and `NETWORK_EGRESS_EXCEPTION_*` carry temporary exception metadata such as owner, reason, scope, expiry, and rollback plan.
+
+Do not migrate new feature config into `NETWORK_*`. Use this channel only for bootstrap-owned network policy controls that must remain fail-closed and operator-controlled outside normal application config.
+
 ## Secret Rules
 
 - Do not place secrets in YAML.

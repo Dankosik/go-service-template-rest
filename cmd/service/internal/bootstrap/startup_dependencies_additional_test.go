@@ -67,8 +67,8 @@ func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	if err == nil {
 		t.Fatal("dependencyInitFailure() error = nil, want non-nil")
 	}
-	if !errors.Is(err, config.ErrDependencyInit) {
-		t.Fatalf("error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("error = %v, want wrapped %v", err, errDependencyInit)
 	}
 	if !errors.Is(err, rootCause) {
 		t.Fatalf("error = %v, want wrapped root cause", err)
@@ -98,8 +98,8 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 	if err == nil {
 		t.Fatal("initRedisDependency() error = nil, want non-nil")
 	}
-	if !errors.Is(err, config.ErrDependencyInit) {
-		t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, errDependencyInit)
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
@@ -135,8 +135,8 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 	if err == nil {
 		t.Fatal("initRedisDependency() error = nil, want non-nil")
 	}
-	if !errors.Is(err, config.ErrDependencyInit) {
-		t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, errDependencyInit)
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
@@ -232,6 +232,40 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	}
 	if !strings.Contains(metricsText, `startup_dependency_status{dep="mongo",mode="disabled"} 1`) {
 		t.Fatalf("missing mongo disabled status:\n%s", metricsText)
+	}
+}
+
+func TestInitMongoDependencyRecordsDegradedStatusMetric(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runtime := dependencyProbeRuntime{
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		cfg: config.Config{
+			Mongo: config.MongoConfig{
+				Enabled:        true,
+				URI:            "mongodb://127.0.0.1:1/app",
+				ConnectTimeout: 10 * time.Millisecond,
+			},
+		},
+	}
+
+	probe, err := initMongoDependency(context.Background(), runtime, context.Background())
+	if err != nil {
+		t.Fatalf("initMongoDependency() error = %v, want nil degraded startup", err)
+	}
+	if probe != nil {
+		t.Fatal("initMongoDependency() probe != nil, want nil without readiness flag")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="mongo",mode="degraded_read_only_or_stale"} 1`) {
+		t.Fatalf("missing mongo degraded status:\n%s", metricsText)
 	}
 }
 
@@ -392,8 +426,8 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 		if err == nil {
 			t.Fatal("initRedisDependency() error = nil, want non-nil")
 		}
-		if !errors.Is(err, config.ErrDependencyInit) {
-			t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("initRedisDependency() error = %v, want wrapped %v", err, errDependencyInit)
 		}
 		if !strings.Contains(err.Error(), "low remaining startup budget") {
 			t.Fatalf("initRedisDependency() error = %v, want low-budget context", err)
@@ -414,8 +448,8 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 		if err == nil {
 			t.Fatal("initMongoDependency() error = nil, want non-nil")
 		}
-		if !errors.Is(err, config.ErrDependencyInit) {
-			t.Fatalf("initMongoDependency() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("initMongoDependency() error = %v, want wrapped %v", err, errDependencyInit)
 		}
 		if !strings.Contains(err.Error(), "low remaining startup budget") {
 			t.Fatalf("initMongoDependency() error = %v, want low-budget context", err)

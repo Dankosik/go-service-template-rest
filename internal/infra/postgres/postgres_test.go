@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestNewRejectsEmptyDSN(t *testing.T) {
@@ -109,6 +113,9 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 	var nilPool *Pool
 	nilPool.Close()
 
+	if got := nilPool.DB(); got != nil {
+		t.Fatalf("(*Pool)(nil).DB() = %v, want nil", got)
+	}
 	if err := nilPool.Check(context.Background()); err == nil {
 		t.Fatal("(*Pool)(nil).Check() error = nil, want non-nil")
 	} else if !errors.Is(err, ErrHealthcheck) {
@@ -131,43 +138,118 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 	}
 }
 
-func TestShouldKeepReleasedConn(t *testing.T) {
+func TestMaxIdleConnLimiter(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name                  string
-		maxIdleConns          int32
-		idleConnsBeforeReturn int32
-		wantKeep              bool
-	}{
-		{
-			name:                  "zero max idle closes released conn",
-			maxIdleConns:          0,
-			idleConnsBeforeReturn: 0,
-			wantKeep:              false,
-		},
-		{
-			name:                  "keep when below max",
-			maxIdleConns:          2,
-			idleConnsBeforeReturn: 1,
-			wantKeep:              true,
-		},
-		{
-			name:                  "close when at max",
-			maxIdleConns:          2,
-			idleConnsBeforeReturn: 2,
-			wantKeep:              false,
-		},
+	limiter := newMaxIdleConnLimiter(2)
+	first := &pgx.Conn{}
+	second := &pgx.Conn{}
+	third := &pgx.Conn{}
+
+	if !limiter.afterRelease(first) {
+		t.Fatal("afterRelease(first) = false, want true")
+	}
+	if !limiter.afterRelease(second) {
+		t.Fatal("afterRelease(second) = false, want true")
+	}
+	if limiter.afterRelease(third) {
+		t.Fatal("afterRelease(third) = true, want false when max idle is full")
 	}
 
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := shouldKeepReleasedConn(tc.maxIdleConns, tc.idleConnsBeforeReturn)
-			if got != tc.wantKeep {
-				t.Fatalf("shouldKeepReleasedConn(%d, %d) = %v, want %v", tc.maxIdleConns, tc.idleConnsBeforeReturn, got, tc.wantKeep)
-			}
-		})
+	limiter.beforeAcquire(first)
+	if !limiter.afterRelease(third) {
+		t.Fatal("afterRelease(third) after first acquire = false, want true")
+	}
+
+	limiter.beforeClose(second)
+	if !limiter.afterRelease(first) {
+		t.Fatal("afterRelease(first) after second close = false, want true")
+	}
+
+	disabled := newMaxIdleConnLimiter(0)
+	if disabled.afterRelease(&pgx.Conn{}) {
+		t.Fatal("afterRelease() with max idle 0 = true, want false")
+	}
+}
+
+func TestMaxIdleConnLimiterConcurrentReleases(t *testing.T) {
+	t.Parallel()
+
+	limiter := newMaxIdleConnLimiter(2)
+	conns := make([]*pgx.Conn, 10)
+	for i := range conns {
+		conns[i] = &pgx.Conn{}
+	}
+
+	var wg sync.WaitGroup
+	kept := make(chan bool, len(conns))
+	for _, conn := range conns {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			kept <- limiter.afterRelease(conn)
+		}()
+	}
+	wg.Wait()
+	close(kept)
+
+	var keepCount int
+	for keep := range kept {
+		if keep {
+			keepCount++
+		}
+	}
+	if keepCount != 2 {
+		t.Fatalf("kept releases = %d, want 2", keepCount)
+	}
+}
+
+func TestInstallMaxIdleConnLimiterComposesPoolHooks(t *testing.T) {
+	t.Parallel()
+
+	var beforeAcquireCalled bool
+	var afterReleaseCalled bool
+	var beforeCloseCalled bool
+	poolConfig := &pgxpool.Config{
+		BeforeAcquire: func(context.Context, *pgx.Conn) bool {
+			beforeAcquireCalled = true
+			return true
+		},
+		AfterRelease: func(*pgx.Conn) bool {
+			afterReleaseCalled = true
+			return true
+		},
+		BeforeClose: func(*pgx.Conn) {
+			beforeCloseCalled = true
+		},
+	}
+	first := &pgx.Conn{}
+	second := &pgx.Conn{}
+
+	installMaxIdleConnLimiter(poolConfig, 1)
+
+	if !poolConfig.AfterRelease(first) {
+		t.Fatal("AfterRelease(first) = false, want true")
+	}
+	if !afterReleaseCalled {
+		t.Fatal("original AfterRelease was not called")
+	}
+	if poolConfig.AfterRelease(second) {
+		t.Fatal("AfterRelease(second) = true, want false when max idle is full")
+	}
+
+	if !poolConfig.BeforeAcquire(context.Background(), first) {
+		t.Fatal("BeforeAcquire(first) = false, want true")
+	}
+	if !beforeAcquireCalled {
+		t.Fatal("original BeforeAcquire was not called")
+	}
+	if !poolConfig.AfterRelease(second) {
+		t.Fatal("AfterRelease(second) after first acquire = false, want true")
+	}
+
+	poolConfig.BeforeClose(second)
+	if !beforeCloseCalled {
+		t.Fatal("original BeforeClose was not called")
 	}
 }

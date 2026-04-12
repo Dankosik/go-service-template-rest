@@ -16,8 +16,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 		if err == nil {
 			t.Fatal("postgresStartupProbeAddress() error = nil, want non-nil")
 		}
-		if !errors.Is(err, config.ErrDependencyInit) {
-			t.Fatalf("err = %v, want wrapped %v", err, config.ErrDependencyInit)
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 		}
 	})
 
@@ -53,8 +53,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 		if err == nil {
 			t.Fatal("mongoStartupProbeAddress() error = nil, want non-nil")
 		}
-		if !errors.Is(err, config.ErrDependencyInit) {
-			t.Fatalf("err = %v, want wrapped %v", err, config.ErrDependencyInit)
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 		}
 	})
 

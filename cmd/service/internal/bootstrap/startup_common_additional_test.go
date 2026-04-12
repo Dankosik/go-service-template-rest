@@ -126,8 +126,8 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	if err == nil {
 		t.Fatal("rejectStartupForPolicyViolation() error = nil, want non-nil")
 	}
-	if !errors.Is(err, config.ErrDependencyInit) {
-		t.Fatalf("err = %v, want wrapped %v", err, config.ErrDependencyInit)
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 	}
 
 	metricsText := collectServiceMetricsText(t, metrics)
@@ -221,11 +221,18 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	if err == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
 	}
-	if !errors.Is(err, config.ErrDependencyInit) {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
 	}
 	if !strings.Contains(err.Error(), "RFC3339") {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want original parse detail", err)
+	}
+	logLine := logBuffer.String()
+	if !strings.Contains(logLine, `"policy.class":"ingress"`) {
+		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want policy class", logLine)
+	}
+	if !strings.Contains(logLine, `"reason.class":"invalid_configuration"`) {
+		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want reason class", logLine)
 	}
 }
 
@@ -245,8 +252,8 @@ func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLoca
 	if err == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
 	}
-	if !errors.Is(err, config.ErrDependencyInit) {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, config.ErrDependencyInit)
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
 	}
 	if !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want missing ingress declaration detail", err)

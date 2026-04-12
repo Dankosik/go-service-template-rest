@@ -54,6 +54,7 @@ func rejectStartupForPolicyViolation(
 	log *slog.Logger,
 	dependency string,
 	err error,
+	extra ...any,
 ) error {
 	bootstrapSpan.RecordError(err)
 	bootstrapSpan.SetAttributes(
@@ -63,19 +64,18 @@ func rejectStartupForPolicyViolation(
 	)
 	metrics.IncConfigValidationFailure("policy_violation")
 	metrics.IncConfigStartupOutcome("rejected")
-	log.Error(
-		"startup_blocked",
-		startupLogArgs(
-			ctx,
-			startupLogComponentStartupProbes,
-			strings.ToLower(strings.TrimSpace(dependency))+"_policy",
-			"error",
-			"error.type", "policy_violation",
-			"dependency", strings.ToLower(strings.TrimSpace(dependency)),
-			"err", err,
-		)...,
+	args := startupLogArgs(
+		ctx,
+		startupLogComponentStartupProbes,
+		strings.ToLower(strings.TrimSpace(dependency))+"_policy",
+		"error",
+		"error.type", "policy_violation",
+		"dependency", strings.ToLower(strings.TrimSpace(dependency)),
+		"err", err,
 	)
-	return fmt.Errorf("%w: startup blocked by network policy: %w", config.ErrDependencyInit, err)
+	args = append(args, extra...)
+	log.Error("startup_blocked", args...)
+	return fmt.Errorf("%w: startup blocked by network policy: %w", errDependencyInit, err)
 }
 
 func rejectStartupForDependencyInit(

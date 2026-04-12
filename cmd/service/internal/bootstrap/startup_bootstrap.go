@@ -295,13 +295,16 @@ func bootstrapNetworkPolicyStage(
 ) (networkPolicy, error) {
 	netPolicy, netPolicyErr := loadNetworkPolicyFromEnv()
 	if netPolicyErr != nil {
+		policyClass, reasonClass := networkPolicyErrorLabels(netPolicyErr)
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
 			log,
 			startupDependencyNetworkPolicy,
-			fmt.Errorf("%w: invalid network policy configuration: %w", config.ErrDependencyInit, netPolicyErr),
+			fmt.Errorf("%w: invalid network policy configuration: %w", errDependencyInit, netPolicyErr),
+			"policy.class", policyClass,
+			"reason.class", reasonClass,
 		)
 	}
 	netPolicy = netPolicy.withIngressExposure(cfg.App.Env, cfg.HTTP.Addr)

@@ -96,10 +96,14 @@ func intFromUint64(v uint64) (int, error) {
 }
 
 func intFromFloat64(v float64) (int, error) {
+	if !isFiniteFloat64(v) {
+		return 0, fmt.Errorf("non-finite numeric value")
+	}
 	if math.Trunc(v) != v {
 		return 0, fmt.Errorf("non-integer numeric value")
 	}
-	if v < float64(math.MinInt) || v > float64(math.MaxInt) {
+	min, maxExclusive := signedIntFloatBounds(strconv.IntSize)
+	if v < min || v >= maxExclusive {
 		return 0, fmt.Errorf("integer out of range")
 	}
 	return int(v), nil
@@ -113,50 +117,68 @@ func int64FromUint64(v uint64) (int64, error) {
 }
 
 func int64FromFloat64(v float64) (int64, error) {
+	if !isFiniteFloat64(v) {
+		return 0, fmt.Errorf("non-finite numeric value")
+	}
 	if math.Trunc(v) != v {
 		return 0, fmt.Errorf("non-integer numeric value")
 	}
-	if v < float64(math.MinInt64) || v > float64(math.MaxInt64) {
+	min, maxExclusive := signedIntFloatBounds(64)
+	if v < min || v >= maxExclusive {
 		return 0, fmt.Errorf("integer out of range")
 	}
 	return int64(v), nil
 }
 
+func signedIntFloatBounds(bits int) (min float64, maxExclusive float64) {
+	maxExclusive = math.Ldexp(1, bits-1)
+	return -maxExclusive, maxExclusive
+}
+
 func parseFloat64(value any) (float64, error) {
+	var n float64
 	switch v := value.(type) {
 	case float64:
-		return v, nil
+		n = v
 	case float32:
-		return float64(v), nil
+		n = float64(v)
 	case int:
-		return float64(v), nil
+		n = float64(v)
 	case int8:
-		return float64(v), nil
+		n = float64(v)
 	case int16:
-		return float64(v), nil
+		n = float64(v)
 	case int32:
-		return float64(v), nil
+		n = float64(v)
 	case int64:
-		return float64(v), nil
+		n = float64(v)
 	case uint:
-		return float64(v), nil
+		n = float64(v)
 	case uint8:
-		return float64(v), nil
+		n = float64(v)
 	case uint16:
-		return float64(v), nil
+		n = float64(v)
 	case uint32:
-		return float64(v), nil
+		n = float64(v)
 	case uint64:
-		return float64(v), nil
+		n = float64(v)
 	case string:
-		n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		var err error
+		n, err = strconv.ParseFloat(strings.TrimSpace(v), 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid float format")
 		}
-		return n, nil
 	default:
 		return 0, fmt.Errorf("unsupported type %T", value)
 	}
+	if !isFiniteFloat64(n) {
+		return 0, fmt.Errorf("non-finite numeric value")
+	}
+	return n, nil
+}
+
+func isFiniteFloat64(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
 func parseBool(value any) (bool, error) {

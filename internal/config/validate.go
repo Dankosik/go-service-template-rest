@@ -3,8 +3,10 @@ package config
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -172,8 +174,8 @@ func validateRedis(cfg RedisConfig) error {
 		if strings.TrimSpace(cfg.Addr) == "" {
 			return fmt.Errorf("%w: redis.addr is required when redis.enabled=true", ErrValidate)
 		}
-		if _, _, err := net.SplitHostPort(strings.TrimSpace(cfg.Addr)); err != nil {
-			return fmt.Errorf("%w: redis.addr must be host:port", ErrValidate)
+		if err := validateHostPortWithNumericTCPPort("redis.addr", cfg.Addr); err != nil {
+			return err
 		}
 	}
 
@@ -317,6 +319,9 @@ func validateSampler(sampler string, samplerArg float64) error {
 		return fmt.Errorf("%w: observability.otel.traces_sampler is unsupported", ErrValidate)
 	}
 
+	if math.IsNaN(samplerArg) || math.IsInf(samplerArg, 0) {
+		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be finite", ErrValidate)
+	}
 	if samplerArg < 0 || samplerArg > 1 {
 		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be in range [0,1]", ErrValidate)
 	}
@@ -345,6 +350,25 @@ func validateDurationRange(name string, value time.Duration, min time.Duration, 
 func validateIntRange(name string, value int, min int, max int) error {
 	if value < min || value > max {
 		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, min, max)
+	}
+	return nil
+}
+
+func validateHostPortWithNumericTCPPort(name string, address string) error {
+	_, port, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err != nil {
+		return fmt.Errorf("%w: %s must be host:port", ErrValidate, name)
+	}
+	if err := validateNumericTCPPort(port); err != nil {
+		return fmt.Errorf("%w: %s must include numeric TCP port in range [1,65535]", ErrValidate, name)
+	}
+	return nil
+}
+
+func validateNumericTCPPort(port string) error {
+	value, err := strconv.ParseUint(port, 10, 32)
+	if err != nil || value == 0 || value > 65535 {
+		return fmt.Errorf("port must be numeric TCP port in range [1,65535]")
 	}
 	return nil
 }
@@ -401,7 +425,10 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		return "", fmt.Errorf("empty mongo host")
 	}
 
-	if _, _, err := net.SplitHostPort(trimmed); err == nil {
+	if _, port, err := net.SplitHostPort(trimmed); err == nil {
+		if err := validateNumericTCPPort(port); err != nil {
+			return "", err
+		}
 		return trimmed, nil
 	}
 	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, "?") {

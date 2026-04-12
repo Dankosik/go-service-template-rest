@@ -28,6 +28,9 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	if err != nil {
 		return nil, err
 	}
+	if cfg.MaxBodyBytes <= 0 {
+		return nil, fmt.Errorf("http router: max body bytes must be > 0")
+	}
 
 	server := api.NewStrictHandlerWithOptions(strict, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -52,23 +55,19 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		}),
 	)
 
-	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware, otelMiddleware))
+	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware))
 
 	// Serve /metrics directly on the root router to avoid full payload buffering in strict handler path.
-	metricsHandler := otelMiddleware(captureRouteLabelMiddleware(strict.metrics.Handler()))
+	metricsHandler := captureRouteLabelMiddleware(strict.metrics.Handler())
 	rootRouter := newRootRouter(apiSubrouter, metricsHandler)
-
-	maxBodyBytes := cfg.MaxBodyBytes
-	if maxBodyBytes <= 0 {
-		maxBodyBytes = 1 << 20
-	}
 
 	var handler http.Handler = rootRouter
 	handler = Recover(log, handler)
 	handler = RequestFramingGuard(handler)
-	handler = RequestBodyLimit(maxBodyBytes, handler)
+	handler = RequestBodyLimit(cfg.MaxBodyBytes, handler)
 	handler = AccessLog(log, strict.metrics, handler)
 	handler = SecurityHeaders(handler)
+	handler = otelMiddleware(handler)
 	handler = RequestCorrelation(handler)
 
 	return handler, nil

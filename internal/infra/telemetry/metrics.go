@@ -118,56 +118,56 @@ func New() *Metrics {
 }
 
 func (m *Metrics) ObserveHTTPRequest(method, route string, statusCode int) {
-	if m == nil {
+	if m == nil || m.requestsTotal == nil {
 		return
 	}
 	m.requestsTotal.WithLabelValues(method, route, strconv.Itoa(statusCode)).Inc()
 }
 
 func (m *Metrics) ObserveHTTPRequestDuration(method, route string, statusCode int, duration time.Duration) {
-	if m == nil {
+	if m == nil || m.requestDuration == nil {
 		return
 	}
 	m.requestDuration.WithLabelValues(method, route, strconv.Itoa(statusCode)).Observe(duration.Seconds())
 }
 
 func (m *Metrics) ObserveConfigLoadDuration(stage, result string, duration time.Duration) {
-	if m == nil {
+	if m == nil || m.configLoadDuration == nil {
 		return
 	}
 	m.configLoadDuration.WithLabelValues(stage, result).Observe(duration.Seconds())
 }
 
 func (m *Metrics) IncConfigValidationFailure(reason string) {
-	if m == nil {
+	if m == nil || m.configValidationFailures == nil {
 		return
 	}
 	m.configValidationFailures.WithLabelValues(reason).Inc()
 }
 
 func (m *Metrics) AddConfigUnknownKeyWarnings(count int) {
-	if m == nil || count <= 0 {
+	if m == nil || m.configUnknownKeyWarnings == nil || count <= 0 {
 		return
 	}
 	m.configUnknownKeyWarnings.Add(float64(count))
 }
 
 func (m *Metrics) IncTelemetryInitFailure(reason string) {
-	if m == nil {
+	if m == nil || m.telemetryInitFailures == nil {
 		return
 	}
 	m.telemetryInitFailures.WithLabelValues(normalizeTelemetryFailureReason(reason)).Inc()
 }
 
 func (m *Metrics) IncConfigStartupOutcome(outcome string) {
-	if m == nil {
+	if m == nil || m.configStartupOutcome == nil {
 		return
 	}
 	m.configStartupOutcome.WithLabelValues(outcome).Inc()
 }
 
 func (m *Metrics) SetStartupDependencyStatus(dep, mode string, ready bool) {
-	if m == nil {
+	if m == nil || m.startupDependencyStatus == nil {
 		return
 	}
 	value := 0.0
@@ -178,7 +178,7 @@ func (m *Metrics) SetStartupDependencyStatus(dep, mode string, ready bool) {
 }
 
 func (m *Metrics) Handler() http.Handler {
-	if m == nil {
+	if m == nil || m.registry == nil {
 		return http.NotFoundHandler()
 	}
 	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
