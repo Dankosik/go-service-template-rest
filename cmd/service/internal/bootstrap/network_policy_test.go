@@ -167,13 +167,10 @@ func TestNetworkPolicyEnforceIngressFailClosedWithoutException(t *testing.T) {
 func TestNetworkPolicyEnforceIngressAllowsActiveException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-1")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-load-test")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID":     "ex-ingress-1",
+		"REASON": "temporary-load-test",
+	})
 
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -186,16 +183,83 @@ func TestNetworkPolicyEnforceIngressAllowsActiveException(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicyValidateOperationalMetricsExposureRejectsPublicIngressException(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID":     "ex-ingress-metrics",
+		"REASON": "temporary-public-api",
+	})
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy.now = func() time.Time { return now }
+	policy = policy.withIngressExposure("prod", ":8080")
+
+	if err := policy.EnforceIngress(); err != nil {
+		t.Fatalf("EnforceIngress() error = %v, want nil before metrics exposure admission", err)
+	}
+	err = policy.ValidateOperationalMetricsExposure()
+	if err == nil {
+		t.Fatal("ValidateOperationalMetricsExposure() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "operational metrics") {
+		t.Fatalf("ValidateOperationalMetricsExposure() error = %v, want operational metrics detail", err)
+	}
+}
+
+func TestNetworkPolicyValidateOperationalMetricsExposureAllowsPrivateAndLocalIngress(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		env   string
+		addr  string
+	}{
+		{
+			name:  "private ingress assertion",
+			value: "false",
+			env:   "prod",
+			addr:  ":8080",
+		},
+		{
+			name: "local wildcard bind without declaration",
+			env:  "local",
+			addr: ":8080",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.value == "" {
+				unsetEnvForTest(t, envNetworkPublicIngressEnabled)
+			} else {
+				t.Setenv(envNetworkPublicIngressEnabled, tt.value)
+			}
+
+			policy, err := loadNetworkPolicyFromEnv()
+			if err != nil {
+				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+			}
+			policy = policy.withIngressExposure(tt.env, tt.addr)
+			if err := policy.EnforceIngress(); err != nil {
+				t.Fatalf("EnforceIngress() error = %v, want nil", err)
+			}
+			if err := policy.ValidateOperationalMetricsExposure(); err != nil {
+				t.Fatalf("ValidateOperationalMetricsExposure() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
 func TestNetworkPolicyIngressExceptionScopeIsMetadataOnly(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-metadata-scope")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", ".")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID":    "ex-ingress-metadata-scope",
+		"SCOPE": ".",
+	})
 
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -217,13 +281,10 @@ func TestNetworkPolicyIngressExceptionScopeIsMetadataOnly(t *testing.T) {
 func TestNetworkPolicyEnforceIngressRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-expired")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(-5*time.Minute).Format(time.RFC3339))
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID":     "ex-ingress-expired",
+		"EXPIRY": now.Add(-5 * time.Minute).Format(time.RFC3339),
+	})
 
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -348,13 +409,10 @@ func TestNetworkPolicyEnforceEgressTargetInvalidTargetPreservesLocalReason(t *te
 
 func TestNetworkPolicyEgressExceptionScopeMatchesPublicTarget(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-scope")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-upstream-debug")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", "api.exception.example")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
+	setValidEgressExceptionEnv(t, now, map[string]string{
+		"ID":    "ex-egress-scope",
+		"SCOPE": "api.exception.example",
+	})
 
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -375,13 +433,10 @@ func TestNetworkPolicyEgressExceptionScopeMatchesPublicTarget(t *testing.T) {
 
 func TestNetworkPolicyEgressExceptionRejectsInvalidScopeMatcher(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-invalid-scope")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-upstream-debug")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", ".")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
+	setValidEgressExceptionEnv(t, now, map[string]string{
+		"ID":    "ex-egress-invalid-scope",
+		"SCOPE": ".",
+	})
 
 	_, err := loadNetworkPolicyFromEnv()
 	if err == nil {
@@ -398,13 +453,11 @@ func TestNetworkPolicyEgressExceptionRejectsInvalidScopeMatcher(t *testing.T) {
 
 func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-expired")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-upstream-debug")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", "api.example.com")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", now.Add(-5*time.Minute).Format(time.RFC3339))
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
+	setValidEgressExceptionEnv(t, now, map[string]string{
+		"ID":     "ex-egress-expired",
+		"SCOPE":  "api.example.com",
+		"EXPIRY": now.Add(-5 * time.Minute).Format(time.RFC3339),
+	})
 
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -421,13 +474,10 @@ func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *tes
 func TestNetworkPolicyValidateIngressRuntimeRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-expired-runtime")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(-5*time.Minute).Format(time.RFC3339))
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID":     "ex-ingress-expired-runtime",
+		"EXPIRY": now.Add(-5 * time.Minute).Format(time.RFC3339),
+	})
 
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
@@ -471,6 +521,45 @@ func unsetEnvForTest(t *testing.T, name string) {
 			t.Errorf("restore env %q error = %v", name, err)
 		}
 	})
+}
+
+func setValidIngressExceptionEnv(t *testing.T, now time.Time, overrides map[string]string) {
+	t.Helper()
+
+	setValidNetworkExceptionEnv(t, "NETWORK_INGRESS_EXCEPTION", map[string]string{
+		"ACTIVE":        "true",
+		"ID":            "ex-ingress",
+		"OWNER":         "platform",
+		"REASON":        "temporary-diagnostic",
+		"SCOPE":         "example.internal",
+		"EXPIRY":        now.Add(2 * time.Hour).Format(time.RFC3339),
+		"ROLLBACK_PLAN": "disable-public-ingress",
+	}, overrides)
+}
+
+func setValidEgressExceptionEnv(t *testing.T, now time.Time, overrides map[string]string) {
+	t.Helper()
+
+	setValidNetworkExceptionEnv(t, "NETWORK_EGRESS_EXCEPTION", map[string]string{
+		"ACTIVE":        "true",
+		"ID":            "ex-egress",
+		"OWNER":         "platform",
+		"REASON":        "temporary-upstream-debug",
+		"SCOPE":         "api.example.com",
+		"EXPIRY":        now.Add(2 * time.Hour).Format(time.RFC3339),
+		"ROLLBACK_PLAN": "disable-egress-exception",
+	}, overrides)
+}
+
+func setValidNetworkExceptionEnv(t *testing.T, prefix string, values map[string]string, overrides map[string]string) {
+	t.Helper()
+
+	for key, value := range overrides {
+		values[key] = value
+	}
+	for key, value := range values {
+		t.Setenv(prefix+"_"+key, value)
+	}
 }
 
 func errorChainContainsExactMessage(err error, want string) bool {

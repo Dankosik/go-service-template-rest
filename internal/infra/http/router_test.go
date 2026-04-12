@@ -224,15 +224,18 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 }
 
-func TestStrictRequestErrorDetailsAreSanitized(t *testing.T) {
+func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	const attackerDetail = `invalid "token": secret-value`
 
-	// Current operations have no request parameters or bodies that trigger generated parse errors.
+	options := generatedStrictServerOptions(log)
+	if options.RequestErrorHandlerFunc == nil {
+		t.Fatalf("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
+	}
+
 	handler := RequestCorrelation(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logStrictRequestError(log, r, errors.New(attackerDetail))
-		writeMalformedRequestProblem(w, r)
+		options.RequestErrorHandlerFunc(w, r, errors.New(attackerDetail))
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -457,6 +460,84 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"request_id":"req-panic-123"`) {
 		t.Fatalf("panic log = %q, want request_id", out.String())
+	}
+}
+
+func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
+	tests := []struct {
+		name       string
+		handler    http.HandlerFunc
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name: "write header",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+				panic("after status")
+			},
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name: "write body",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte("partial response"))
+				panic("after body")
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "partial response",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := Recover(slog.New(slog.NewTextHandler(io.Discard, nil)), tt.handler)
+			req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+			resp := httptest.NewRecorder()
+
+			handler.ServeHTTP(resp, req)
+
+			if resp.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", resp.Code, tt.wantStatus)
+			}
+			if body := resp.Body.String(); body != tt.wantBody {
+				t.Fatalf("body = %q, want %q", body, tt.wantBody)
+			}
+			if strings.Contains(resp.Body.String(), "request failed") {
+				t.Fatalf("body contains appended problem payload: %q", resp.Body.String())
+			}
+		})
+	}
+}
+
+func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
+	var sawFlusher bool
+	handler := Recover(slog.New(slog.NewTextHandler(io.Discard, nil)), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		sawFlusher = true
+		flusher.Flush()
+		panic("after flush")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	if !sawFlusher {
+		t.Fatal("wrapped ResponseWriter does not implement http.Flusher")
+	}
+	if !resp.Flushed {
+		t.Fatal("ResponseRecorder.Flushed = false, want true")
+	}
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
+	}
+	if body := resp.Body.String(); body != "" {
+		t.Fatalf("body = %q, want empty after committed flush", body)
 	}
 }
 

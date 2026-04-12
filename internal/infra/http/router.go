@@ -32,15 +32,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		return nil, fmt.Errorf("http router: max body bytes must be > 0")
 	}
 
-	server := api.NewStrictHandlerWithOptions(strict, nil, api.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			logStrictRequestError(log, r, err)
-			writeMalformedRequestProblem(w, r)
-		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
-			writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
-		},
-	})
+	server := api.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
 
 	otelMiddleware := otelhttp.NewMiddleware(
 		"http.server",
@@ -73,14 +65,29 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	return handler, nil
 }
 
+func generatedStrictServerOptions(log *slog.Logger) api.StrictHTTPServerOptions {
+	return api.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			handleMalformedGeneratedRequest(log, w, r, err)
+		},
+		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+			writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
+		},
+	}
+}
+
 func generatedChiServerOptions(log *slog.Logger, middlewares ...api.MiddlewareFunc) api.ChiServerOptions {
 	return api.ChiServerOptions{
 		Middlewares: middlewares,
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			logStrictRequestError(log, r, err)
-			writeMalformedRequestProblem(w, r)
+			handleMalformedGeneratedRequest(log, w, r, err)
 		},
 	}
+}
+
+func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r *http.Request, err error) {
+	logStrictRequestError(log, r, err)
+	writeMalformedRequestProblem(w, r)
 }
 
 type manualRootRouteKey struct {

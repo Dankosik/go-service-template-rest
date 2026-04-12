@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -106,7 +107,7 @@ func bootstrapConfigStage(
 		errorType := config.ErrorType(err)
 		metrics.ObserveConfigLoadDuration(failedStage, "error", failedDuration)
 		metrics.IncConfigValidationFailure(errorType)
-		metrics.IncStartupRejection(errorType)
+		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
 		metrics.IncConfigStartupOutcome("rejected")
 		slog.Error(
 			"config_load_failed",
@@ -116,6 +117,31 @@ func bootstrapConfigStage(
 				"load",
 				"error",
 				"stage", failedStage,
+				"error.type", errorType,
+			)...,
+		)
+		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
+	}
+
+	compatibilityStarted := time.Now()
+	if err := validateStartupBudgetCompatibility(cfg); err != nil {
+		failedDuration := time.Since(compatibilityStarted)
+		if failedDuration <= 0 {
+			failedDuration = time.Millisecond
+		}
+		errorType := config.ErrorType(err)
+		metrics.ObserveConfigLoadDuration(config.StageValidate, "error", failedDuration)
+		metrics.IncConfigValidationFailure(errorType)
+		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
+		metrics.IncConfigStartupOutcome("rejected")
+		slog.Error(
+			"config_load_failed",
+			startupLogArgs(
+				startupCtx,
+				"config_loader",
+				"validate",
+				"error",
+				"stage", config.StageValidate,
 				"error.type", errorType,
 			)...,
 		)
@@ -353,6 +379,17 @@ func bootstrapNetworkPolicyStage(
 			log,
 			startupDependencyIngressPolicy,
 			ingressErr,
+		)
+	}
+
+	if metricsExposureErr := netPolicy.ValidateOperationalMetricsExposure(); metricsExposureErr != nil {
+		return networkPolicy{}, rejectStartupForPolicyViolation(
+			bootstrapCtx,
+			bootstrapSpan,
+			metrics,
+			log,
+			startupDependencyMetricsExposure,
+			metricsExposureErr,
 		)
 	}
 

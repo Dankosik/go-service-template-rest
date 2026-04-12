@@ -170,17 +170,32 @@ observability:
 func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	resetConfigEnv(t)
 
+	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
+	username := " redis user with surrounding whitespace "
 	password := " redis password with surrounding whitespace "
+	mongoURI := " mongodb://user:pass@localhost:27017/app "
 	headers := " authorization=Bearer token, x-trace= spaced value "
+	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
+	t.Setenv("APP__REDIS__USERNAME", username)
 	t.Setenv("APP__REDIS__PASSWORD", password)
+	t.Setenv("APP__MONGO__URI", mongoURI)
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", headers)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
+	if cfg.Postgres.DSN != postgresDSN {
+		t.Fatalf("Postgres.DSN = %q, want exact env value %q", cfg.Postgres.DSN, postgresDSN)
+	}
+	if cfg.Redis.Username != username {
+		t.Fatalf("Redis.Username = %q, want exact env value %q", cfg.Redis.Username, username)
+	}
 	if cfg.Redis.Password != password {
 		t.Fatalf("Redis.Password = %q, want exact env value %q", cfg.Redis.Password, password)
+	}
+	if cfg.Mongo.URI != mongoURI {
+		t.Fatalf("Mongo.URI = %q, want exact env value %q", cfg.Mongo.URI, mongoURI)
 	}
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
@@ -193,6 +208,8 @@ func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
 	t.Setenv("APP__REDIS__MODE", " STORE ")
 	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
 	t.Setenv("APP__REDIS__STALE_WINDOW", "0s")
+	t.Setenv("APP__REDIS__ADDR", " 127.0.0.1:6379 ")
+	t.Setenv("APP__MONGO__DATABASE", " app ")
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -200,6 +217,12 @@ func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
 	}
 	if cfg.Redis.Mode != "store" {
 		t.Fatalf("Redis.Mode = %q, want store", cfg.Redis.Mode)
+	}
+	if cfg.Redis.Addr != "127.0.0.1:6379" {
+		t.Fatalf("Redis.Addr = %q, want trimmed address", cfg.Redis.Addr)
+	}
+	if cfg.Mongo.Database != "app" {
+		t.Fatalf("Mongo.Database = %q, want trimmed database", cfg.Mongo.Database)
 	}
 }
 
@@ -1151,6 +1174,27 @@ unknown:
 			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
 		}
 	})
+
+	t.Run("validate_context_stage", func(t *testing.T) {
+		resetConfigEnv(t)
+
+		_, report, err := LoadDetailed(LoadOptions{ValidateBudget: time.Nanosecond})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected validate context deadline error")
+		}
+		if !errors.Is(err, ErrLoad) {
+			t.Fatalf("error = %v, want ErrLoad", err)
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("error = %v, want context.DeadlineExceeded", err)
+		}
+		if report.FailedStage != StageValidate {
+			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
+		}
+		if report.FailedStageDuration <= 0 {
+			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
+		}
+	})
 }
 
 func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
@@ -1683,57 +1727,19 @@ func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
 	}
 }
 
-func TestPostgresDSNMustBeParseable(t *testing.T) {
+func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://%zz")
 
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for unparseable postgres dsn")
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v, want nil because driver-specific parsing is adapter-owned", err)
 	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
+	if cfg.Postgres.DSN != "postgres://%zz" {
+		t.Fatalf("Postgres.DSN = %q, want raw invalid DSN preserved for adapter-owned parsing", cfg.Postgres.DSN)
 	}
-}
-
-func TestPostgresProbeAddress(t *testing.T) {
-	t.Run("valid dsn", func(t *testing.T) {
-		address, err := PostgresProbeAddress("postgres://user:pass@localhost:5432/app?sslmode=disable")
-		if err != nil {
-			t.Fatalf("PostgresProbeAddress() error = %v", err)
-		}
-		if address != "localhost:5432" {
-			t.Fatalf("PostgresProbeAddress() = %q, want localhost:5432", address)
-		}
-	})
-
-	t.Run("invalid dsn is redacted", func(t *testing.T) {
-		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
-		_, err := PostgresProbeAddress(rawDSN)
-		if err == nil {
-			t.Fatal("PostgresProbeAddress() error = nil, want non-nil")
-		}
-		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
-			t.Fatalf("PostgresProbeAddress() error = %v, want redacted parse context", err)
-		}
-		for _, leaked := range []string{rawDSN, "top-secret", "user"} {
-			if strings.Contains(err.Error(), leaked) {
-				t.Fatalf("PostgresProbeAddress() error = %v, leaked %q", err, leaked)
-			}
-		}
-	})
-
-	t.Run("invalid probe target shape", func(t *testing.T) {
-		_, err := PostgresProbeAddress("user=user password=pass host=/var/run/postgresql dbname=app")
-		if err == nil {
-			t.Fatal("PostgresProbeAddress() error = nil, want non-nil")
-		}
-		if !strings.Contains(err.Error(), "invalid postgres probe address") {
-			t.Fatalf("PostgresProbeAddress() error = %v, want invalid probe target context", err)
-		}
-	})
 }
 
 func TestRedisEnabledRequiresHostPortAddress(t *testing.T) {

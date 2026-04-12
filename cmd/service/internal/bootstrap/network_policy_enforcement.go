@@ -20,6 +20,13 @@ func (p networkPolicy) withIngressExposure(env, addr string) networkPolicy {
 	return p
 }
 
+func (p networkPolicy) ValidateOperationalMetricsExposure() error {
+	if !p.ingressPublicEnabled {
+		return nil
+	}
+	return fmt.Errorf("%w: operational metrics cannot be exposed on public ingress without a private or protected metrics path", errDependencyInit)
+}
+
 func (p networkPolicy) validatePublicIngress() error {
 	if p.ingressDeclarationRequired && !p.ingressPublicExplicitValue {
 		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", errDependencyInit, envNetworkPublicIngressEnabled)
@@ -83,7 +90,7 @@ func (p networkPolicy) EnforceEgressTarget(target, scheme string) error {
 		return fmt.Errorf("%w: invalid egress target: %w", errDependencyInit, err)
 	}
 
-	if classifyHostExposure(host) != "public" {
+	if !isPublicHost(host) {
 		return nil
 	}
 	if matchesHost(host, p.egressAllowlist) {
@@ -143,30 +150,30 @@ func normalizeHost(raw string) string {
 	return host
 }
 
-func classifyHostExposure(host string) string {
+func isPublicHost(host string) bool {
 	normalized := normalizeHost(host)
 	if normalized == "" {
-		return "public"
+		return true
 	}
 
 	if ip := net.ParseIP(normalized); ip != nil {
 		if isPrivateIP(ip) {
-			return "private"
+			return false
 		}
-		return "public"
+		return true
 	}
 
 	if normalized == "localhost" {
-		return "private"
+		return false
 	}
 	if strings.HasSuffix(normalized, ".internal") ||
 		strings.HasSuffix(normalized, ".local") ||
 		strings.HasSuffix(normalized, ".svc") ||
 		strings.HasSuffix(normalized, ".cluster.local") {
-		return "private"
+		return false
 	}
 
-	return "public"
+	return true
 }
 
 func isPrivateIP(ip net.IP) bool {

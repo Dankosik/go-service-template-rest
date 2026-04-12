@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -92,6 +93,33 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		committed := false
+		trackedWriter := httpsnoop.Wrap(w, httpsnoop.Hooks{
+			WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+				return func(code int) {
+					committed = true
+					next(code)
+				}
+			},
+			Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
+				return func(b []byte) (int, error) {
+					committed = true
+					return next(b)
+				}
+			},
+			Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc {
+				return func() {
+					committed = true
+					next()
+				}
+			},
+			ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+				return func(src io.Reader) (int64, error) {
+					committed = true
+					return next(src)
+				}
+			},
+		})
 		defer func(ctx context.Context, method, path string) {
 			if rec := recover(); rec != nil {
 				traceID, spanID := traceIDsFromContext(ctx)
@@ -105,10 +133,13 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 					"trace_id", traceID,
 					"span_id", spanID,
 				)
+				if committed {
+					return
+				}
 				writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
 			}
 		}(r.Context(), r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(trackedWriter, r)
 	})
 }
 

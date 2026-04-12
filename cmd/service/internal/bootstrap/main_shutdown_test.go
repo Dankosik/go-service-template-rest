@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +36,10 @@ func (f *fakeShutdownServer) Shutdown(ctx context.Context) error {
 	return f.err
 }
 
+func shutdownTestLogger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
+
 func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {
 	var events []string
 	drainer := &fakeDrainer{events: &events}
@@ -58,7 +64,7 @@ func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {
 		},
 	}
 
-	if err := drainAndShutdown(context.Background(), 0, 30*time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(context.Background(), shutdownTestLogger(), 0, 30*time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 
@@ -83,7 +89,7 @@ func TestDrainAndShutdownIgnoresParentCancellation(t *testing.T) {
 		},
 	}
 
-	if err := drainAndShutdown(ctx, 0, time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(ctx, shutdownTestLogger(), 0, time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }
@@ -98,7 +104,7 @@ func TestDrainAndShutdownPropagatesShutdownFailure(t *testing.T) {
 		err:    wantErr,
 	}
 
-	err := drainAndShutdown(context.Background(), 0, time.Second, drainer, srv)
+	err := drainAndShutdown(context.Background(), shutdownTestLogger(), 0, time.Second, drainer, srv)
 	if err == nil {
 		t.Fatal("drainAndShutdown() error = nil, want non-nil")
 	}
@@ -115,7 +121,7 @@ func TestDrainAndShutdownIgnoresContextCanceledError(t *testing.T) {
 		err:    context.Canceled,
 	}
 
-	if err := drainAndShutdown(context.Background(), 0, time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(context.Background(), shutdownTestLogger(), 0, time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }
@@ -135,7 +141,7 @@ func TestDrainAndShutdownWaitsForPropagationDelay(t *testing.T) {
 		},
 	}
 
-	if err := drainAndShutdown(context.Background(), 20*time.Millisecond, time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(context.Background(), shutdownTestLogger(), 20*time.Millisecond, time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }
@@ -163,7 +169,7 @@ func TestDrainAndShutdownCountsPropagationDelayAgainstShutdownTimeout(t *testing
 		},
 	}
 
-	if err := drainAndShutdown(context.Background(), 20*time.Millisecond, 40*time.Millisecond, drainer, srv); err != nil {
+	if err := drainAndShutdown(context.Background(), shutdownTestLogger(), 20*time.Millisecond, 40*time.Millisecond, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }
@@ -189,7 +195,7 @@ func TestDrainAndShutdownWaitsForPropagationDelayDespiteCanceledParent(t *testin
 		},
 	}
 
-	if err := drainAndShutdown(ctx, 20*time.Millisecond, time.Second, drainer, srv); err != nil {
+	if err := drainAndShutdown(ctx, shutdownTestLogger(), 20*time.Millisecond, time.Second, drainer, srv); err != nil {
 		t.Fatalf("drainAndShutdown() error = %v, want nil", err)
 	}
 }

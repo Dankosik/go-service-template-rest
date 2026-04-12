@@ -23,10 +23,11 @@ var (
 )
 
 const (
-	startupDependencyTelemetry     = "telemetry"
-	startupDependencyNetworkPolicy = "network_policy"
-	startupDependencyIngressPolicy = "ingress_policy"
-	startupDependencyEgressPolicy  = "egress_exception"
+	startupDependencyTelemetry       = "telemetry"
+	startupDependencyNetworkPolicy   = "network_policy"
+	startupDependencyIngressPolicy   = "ingress_policy"
+	startupDependencyMetricsExposure = "metrics_exposure"
+	startupDependencyEgressPolicy    = "egress_exception"
 )
 
 const (

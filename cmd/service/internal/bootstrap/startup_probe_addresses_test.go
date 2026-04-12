@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 )
 
 func TestStartupProbeAddresses(t *testing.T) {
@@ -19,6 +20,9 @@ func TestStartupProbeAddresses(t *testing.T) {
 		}
 		if !errors.Is(err, errDependencyInit) {
 			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
+		}
+		if !errors.Is(err, postgres.ErrConfig) {
+			t.Fatalf("err = %v, want wrapped postgres ErrConfig", err)
 		}
 		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
 			t.Fatalf("err = %v, want redacted parse context", err)
@@ -64,6 +68,9 @@ func TestStartupProbeAddresses(t *testing.T) {
 		}
 		if !errors.Is(err, errDependencyInit) {
 			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
+		}
+		if !strings.Contains(err.Error(), "unsupported mongo uri scheme") {
+			t.Fatalf("err = %v, want config root cause detail", err)
 		}
 	})
 

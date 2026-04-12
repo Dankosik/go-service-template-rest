@@ -37,6 +37,23 @@ func recordConfigSuccessMetrics(metrics *telemetry.Metrics, report config.LoadRe
 	}
 }
 
+func startupRejectionReasonForConfigErrorType(errorType string) string {
+	switch strings.TrimSpace(strings.ToLower(errorType)) {
+	case "load":
+		return telemetry.StartupRejectionReasonConfigLoad
+	case "parse":
+		return telemetry.StartupRejectionReasonConfigParse
+	case "validate":
+		return telemetry.StartupRejectionReasonConfigValidate
+	case "strict_unknown_key":
+		return telemetry.StartupRejectionReasonConfigStrictUnknownKey
+	case "secret_policy":
+		return telemetry.StartupRejectionReasonConfigSecretPolicy
+	default:
+		return telemetry.StartupRejectionReasonOther
+	}
+}
+
 func failedStageDetails(report config.LoadReport) (string, time.Duration) {
 	stage := strings.TrimSpace(report.FailedStage)
 	if stage == "" {

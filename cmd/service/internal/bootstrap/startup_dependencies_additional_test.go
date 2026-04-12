@@ -25,7 +25,6 @@ func TestRunDependencyProbe(t *testing.T) {
 		defer cancel()
 		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
 			stage:        "stage",
-			spanName:     "span",
 			dep:          "dep",
 			budget:       time.Second,
 			minRemaining: time.Hour,
@@ -36,15 +35,14 @@ func TestRunDependencyProbe(t *testing.T) {
 		if !res.budgetBlocked {
 			t.Fatal("budgetBlocked = false, want true")
 		}
-		if !res.failed {
-			t.Fatal("failed = false, want true")
+		if res.err == nil {
+			t.Fatal("err = nil, want budget error")
 		}
 	})
 
 	t.Run("probe success", func(t *testing.T) {
 		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
 			stage:        "stage",
-			spanName:     "span",
 			dep:          "dep",
 			mode:         "cache",
 			budget:       time.Second,
@@ -53,7 +51,7 @@ func TestRunDependencyProbe(t *testing.T) {
 				return nil
 			},
 		})
-		if res.budgetBlocked || res.failed || res.err != nil {
+		if res.budgetBlocked || res.err != nil {
 			t.Fatalf("unexpected result: %+v", res)
 		}
 	})
@@ -352,6 +350,113 @@ func TestInitMongoDependencyRecordsDegradedStatusMetric(t *testing.T) {
 	metricsText := collectServiceMetricsText(t, metrics)
 	if !strings.Contains(metricsText, `startup_dependency_status{dep="mongo",mode="degraded_read_only_or_stale"} 1`) {
 		t.Fatalf("missing mongo degraded status:\n%s", metricsText)
+	}
+}
+
+func TestInitRedisCacheDependencyRecordsFeatureOffWhenReadinessNotRequired(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runtime := dependencyProbeRuntime{
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		metrics:       metrics,
+		log:           logger,
+		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		cfg: config.Config{
+			Redis: config.RedisConfig{
+				Enabled:     true,
+				Mode:        config.RedisModeCache,
+				Addr:        "127.0.0.1:1",
+				DialTimeout: 10 * time.Millisecond,
+			},
+		},
+	}
+
+	probe, err := initRedisDependency(context.Background(), runtime, context.Background())
+	if err != nil {
+		t.Fatalf("initRedisDependency() error = %v, want nil degraded startup", err)
+	}
+	if probe != nil {
+		t.Fatal("initRedisDependency() probe != nil, want nil without readiness flag")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="redis",mode="feature_off"} 1`) {
+		t.Fatalf("missing redis feature-off degraded status:\n%s", metricsText)
+	}
+}
+
+func TestReadinessRequiredDegradedDependenciesRejectStartup(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  config.Config
+		run  func(dependencyProbeRuntime) error
+	}{
+		{
+			name: "redis cache readiness required",
+			cfg: config.Config{
+				Redis: config.RedisConfig{
+					Enabled:     true,
+					Mode:        config.RedisModeCache,
+					Addr:        "127.0.0.1:1",
+					DialTimeout: 10 * time.Millisecond,
+				},
+				FeatureFlags: config.FeatureFlagsConfig{
+					RedisReadinessProbe: true,
+				},
+			},
+			run: func(runtime dependencyProbeRuntime) error {
+				_, err := initRedisDependency(context.Background(), runtime, context.Background())
+				return err
+			},
+		},
+		{
+			name: "mongo readiness required",
+			cfg: config.Config{
+				Mongo: config.MongoConfig{
+					Enabled:        true,
+					URI:            "mongodb://127.0.0.1:1/app",
+					ConnectTimeout: 10 * time.Millisecond,
+				},
+				FeatureFlags: config.FeatureFlagsConfig{
+					MongoReadinessProbe: true,
+				},
+			},
+			run: func(runtime dependencyProbeRuntime) error {
+				_, err := initMongoDependency(context.Background(), runtime, context.Background())
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metrics := telemetry.New()
+			logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+			runtime := dependencyProbeRuntime{
+				tracer:        otel.Tracer("test"),
+				bootstrapSpan: trace.SpanFromContext(context.Background()),
+				metrics:       metrics,
+				log:           logger,
+				networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+				cfg:           tt.cfg,
+			}
+
+			err := tt.run(runtime)
+			if err == nil {
+				t.Fatal("dependency init error = nil, want readiness-required startup rejection")
+			}
+			if !errors.Is(err, errDependencyInit) {
+				t.Fatalf("dependency init error = %v, want wrapped %v", err, errDependencyInit)
+			}
+
+			metricsText := collectServiceMetricsText(t, metrics)
+			assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonDependencyInit)
+		})
 	}
 }
 

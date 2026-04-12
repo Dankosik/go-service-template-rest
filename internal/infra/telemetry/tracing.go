@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 	"go.opentelemetry.io/otel"
@@ -47,6 +48,8 @@ type traceOTLPEndpoint struct {
 }
 
 type traceOTLPEndpointSource int
+
+var tracingSetupMu sync.Mutex
 
 const (
 	traceOTLPEndpointSourceGeneric traceOTLPEndpointSource = iota
@@ -91,6 +94,9 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		}
 		options = append(options, sdktrace.WithBatcher(exporter))
 	}
+
+	tracingSetupMu.Lock()
+	defer tracingSetupMu.Unlock()
 
 	provider := newTracerProvider(options...)
 	otel.SetTracerProvider(provider)
@@ -219,14 +225,6 @@ func traceExporterOTLPEndpoint(cfg TraceExporterConfig) (traceOTLPEndpoint, bool
 		return traceOTLPEndpoint{}, false, err
 	}
 	return endpoint, true, nil
-}
-
-func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
-	endpoint, err := parseTraceOTLPEndpoint(raw, traceOTLPEndpointSourceGeneric)
-	if err != nil {
-		return nil, err
-	}
-	return endpoint.options(), nil
 }
 
 func parseTraceOTLPEndpoint(raw string, source traceOTLPEndpointSource) (traceOTLPEndpoint, error) {

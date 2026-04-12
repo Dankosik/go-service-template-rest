@@ -37,11 +37,15 @@ func TestNormalizeStartupRejectionReason(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "config load", input: "load", want: StartupRejectionReasonConfigLoad},
+		{name: "config load", input: StartupRejectionReasonConfigLoad, want: StartupRejectionReasonConfigLoad},
 		{name: "config parse", input: "CONFIG_PARSE", want: StartupRejectionReasonConfigParse},
-		{name: "config validate", input: "validate", want: StartupRejectionReasonConfigValidate},
-		{name: "strict unknown key", input: "strict_unknown_key", want: StartupRejectionReasonConfigStrictUnknownKey},
-		{name: "secret policy", input: "secret_policy", want: StartupRejectionReasonConfigSecretPolicy},
+		{name: "config validate", input: StartupRejectionReasonConfigValidate, want: StartupRejectionReasonConfigValidate},
+		{name: "strict unknown key", input: StartupRejectionReasonConfigStrictUnknownKey, want: StartupRejectionReasonConfigStrictUnknownKey},
+		{name: "secret policy", input: StartupRejectionReasonConfigSecretPolicy, want: StartupRejectionReasonConfigSecretPolicy},
+		{name: "config load taxonomy alias rejected", input: "load", want: StartupRejectionReasonOther},
+		{name: "config validate taxonomy alias rejected", input: "validate", want: StartupRejectionReasonOther},
+		{name: "strict unknown key taxonomy alias rejected", input: "strict_unknown_key", want: StartupRejectionReasonOther},
+		{name: "secret policy taxonomy alias rejected", input: "secret_policy", want: StartupRejectionReasonOther},
 		{name: "policy violation", input: StartupRejectionReasonPolicyViolation, want: StartupRejectionReasonPolicyViolation},
 		{name: "dependency init", input: StartupRejectionReasonDependencyInit, want: StartupRejectionReasonDependencyInit},
 		{name: "startup error", input: StartupRejectionReasonStartupError, want: StartupRejectionReasonStartupError},

@@ -67,15 +67,11 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		FailedStageDuration:  metadata.failedStageDuration,
 	}
 	if err != nil {
-		if strings.TrimSpace(report.FailedStage) == "" {
-			report.FailedStage = StageLoadDefaults
-		}
-		if report.FailedStageDuration <= 0 {
-			report.FailedStageDuration = report.LoadDuration
-		}
+		report.markFailedStage(report.FailedStage, report.FailedStageDuration)
 		return Config{}, report, err
 	}
 	if err := checkContext(loadCtx); err != nil {
+		report.markFailedStage(StageLoadEnv, report.LoadEnvDuration)
 		return Config{}, report, err
 	}
 
@@ -88,17 +84,19 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, report, err
 	}
 	if err := checkContext(loadCtx); err != nil {
-		return Config{}, report, err
-	}
-
-	validateCtx, validateCancel := withContextBudget(ctx, opts.ValidateBudget)
-	defer validateCancel()
-	if err := checkContext(validateCtx); err != nil {
-		report.FailedStage = StageValidate
+		report.markFailedStage(StageParse, report.ParseDuration)
 		return Config{}, report, err
 	}
 
 	validateStarted := time.Now()
+	validateCtx, validateCancel := withContextBudget(ctx, opts.ValidateBudget)
+	defer validateCancel()
+	if err := checkContext(validateCtx); err != nil {
+		report.ValidateDuration = time.Since(validateStarted)
+		report.markFailedStage(StageValidate, report.ValidateDuration)
+		return Config{}, report, err
+	}
+
 	validationResult, err := validateConfig(validateCtx, k, &cfg, ValidationOptions{
 		Strict: opts.Strict,
 	})
@@ -111,4 +109,39 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	}
 
 	return cfg, report, nil
+}
+
+func (report *LoadReport) markFailedStage(stage string, duration time.Duration) {
+	stage = strings.TrimSpace(stage)
+	if stage == "" {
+		stage = StageLoadDefaults
+	}
+	if duration <= 0 {
+		duration = report.durationForStage(stage)
+	}
+	if duration <= 0 {
+		duration = report.LoadDuration
+	}
+	if duration <= 0 {
+		duration = time.Millisecond
+	}
+	report.FailedStage = stage
+	report.FailedStageDuration = duration
+}
+
+func (report LoadReport) durationForStage(stage string) time.Duration {
+	switch stage {
+	case StageLoadDefaults:
+		return report.LoadDefaultsDuration
+	case StageLoadFile:
+		return report.LoadFileDuration
+	case StageLoadEnv:
+		return report.LoadEnvDuration
+	case StageParse:
+		return report.ParseDuration
+	case StageValidate:
+		return report.ValidateDuration
+	default:
+		return 0
+	}
 }

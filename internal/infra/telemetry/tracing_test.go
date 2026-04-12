@@ -2,10 +2,13 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -202,6 +205,64 @@ func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 		if got := attrs[key]; got == fallback {
 			t.Fatalf("resource attribute %q used fallback %q; attrs=%v", key, fallback, attrs)
 		}
+	}
+}
+
+func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
+	const (
+		resourceAttrs = "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true"
+		serviceName   = "env-service-name"
+		setupCount    = 16
+	)
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", resourceAttrs)
+	t.Setenv("OTEL_SERVICE_NAME", serviceName)
+
+	previousTracerProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+
+	shutdowns := make(chan func(context.Context) error, setupCount)
+	errs := make(chan error, setupCount)
+	var wg sync.WaitGroup
+	for i := range setupCount {
+		i := i
+		wg.Go(func() {
+			shutdown, err := SetupTracing(context.Background(), TracingConfig{
+				ServiceName:      fmt.Sprintf("config-service-%d", i),
+				ServiceVersion:   "config-version",
+				DeploymentEnv:    "config-env",
+				TracesSampler:    "always_off",
+				TracesSamplerArg: 0,
+			})
+			if err != nil {
+				errs <- err
+				return
+			}
+			shutdowns <- shutdown
+		})
+	}
+	wg.Wait()
+	close(errs)
+	close(shutdowns)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("SetupTracing() concurrent error = %v", err)
+		}
+	}
+	for shutdown := range shutdowns {
+		if err := shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown tracing: %v", err)
+		}
+	}
+	if got := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); got != resourceAttrs {
+		t.Fatalf("OTEL_RESOURCE_ATTRIBUTES = %q, want %q", got, resourceAttrs)
+	}
+	if got := os.Getenv("OTEL_SERVICE_NAME"); got != serviceName {
+		t.Fatalf("OTEL_SERVICE_NAME = %q, want %q", got, serviceName)
 	}
 }
 
@@ -429,18 +490,30 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 	}
 }
 
-func TestParseOTLPEndpointOptions(t *testing.T) {
-	options, err := parseOTLPEndpointOptions("http://localhost:4318/v1/traces")
+func TestBuildTraceExporterOptionsUsesRuntimeEndpointParser(t *testing.T) {
+	options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+		OTLPEndpoint: "http://localhost:4318/v1/traces",
+		OTLPProtocol: "http/protobuf",
+	})
 	if err != nil {
-		t.Fatalf("parseOTLPEndpointOptions() error = %v", err)
+		t.Fatalf("buildTraceExporterOptions() error = %v", err)
+	}
+	if !configured {
+		t.Fatalf("configured = false, want true")
 	}
 	if len(options) == 0 {
 		t.Fatalf("options len = 0, want > 0")
 	}
 
-	options, err = parseOTLPEndpointOptions("localhost:4318")
+	options, configured, err = buildTraceExporterOptions(TraceExporterConfig{
+		OTLPEndpoint: "localhost:4318",
+		OTLPProtocol: "http/protobuf",
+	})
 	if err != nil {
-		t.Fatalf("parseOTLPEndpointOptions() scheme-less error = %v", err)
+		t.Fatalf("buildTraceExporterOptions() scheme-less error = %v", err)
+	}
+	if !configured {
+		t.Fatalf("scheme-less configured = false, want true")
 	}
 	if len(options) == 0 {
 		t.Fatalf("scheme-less options len = 0, want > 0")
@@ -451,16 +524,25 @@ func TestParseOTLPEndpointOptions(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(server.Close)
-	schemeLessOptions, err := parseOTLPEndpointOptions(strings.TrimPrefix(server.URL, "http://"))
+	schemeLessOptions, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+		OTLPEndpoint: strings.TrimPrefix(server.URL, "http://"),
+		OTLPProtocol: "http/protobuf",
+	})
 	if err != nil {
-		t.Fatalf("parseOTLPEndpointOptions() scheme-less test server error = %v", err)
+		t.Fatalf("buildTraceExporterOptions() scheme-less test server error = %v", err)
+	}
+	if !configured {
+		t.Fatalf("scheme-less test server configured = false, want true")
 	}
 	exportOneTestSpan(t, schemeLessOptions)
 	assertCollectorPath(t, serverPaths, "/v1/traces")
 
-	_, err = parseOTLPEndpointOptions("://bad-endpoint")
+	_, _, err = buildTraceExporterOptions(TraceExporterConfig{
+		OTLPEndpoint: "://bad-endpoint",
+		OTLPProtocol: "http/protobuf",
+	})
 	if err == nil {
-		t.Fatalf("parseOTLPEndpointOptions() error = nil, want non-nil")
+		t.Fatalf("buildTraceExporterOptions() error = nil, want non-nil")
 	}
 }
 

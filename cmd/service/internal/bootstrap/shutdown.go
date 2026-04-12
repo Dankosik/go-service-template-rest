@@ -16,8 +16,8 @@ type shutdownServer interface {
 	Shutdown(context.Context) error
 }
 
-func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, srv shutdownServer) error {
-	slog.Info(
+func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, srv shutdownServer) error {
+	log.Info(
 		"shutdown_started",
 		startupLogArgs(
 			ctx,
@@ -26,7 +26,7 @@ func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeo
 			"started",
 		)...,
 	)
-	slog.Info(
+	log.Info(
 		"drain_started",
 		startupLogArgs(
 			ctx,
@@ -36,7 +36,7 @@ func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeo
 		)...,
 	)
 	drainer.StartDrain()
-	slog.Info(
+	log.Info(
 		"readiness_disabled",
 		startupLogArgs(
 			ctx,
@@ -63,7 +63,7 @@ func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeo
 
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
 		if errors.Is(err, context.DeadlineExceeded) {
-			slog.Error(
+			log.Error(
 				"shutdown_timeout",
 				startupLogArgs(
 					ctx,
@@ -77,7 +77,7 @@ func drainAndShutdown(ctx context.Context, propagationDelay time.Duration, timeo
 		return fmt.Errorf("graceful shutdown failed: %w", err)
 	}
 
-	slog.Info(
+	log.Info(
 		"drain_completed",
 		startupLogArgs(
 			ctx,

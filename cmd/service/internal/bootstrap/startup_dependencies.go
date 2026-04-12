@@ -82,7 +82,6 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 
 type dependencyProbeSpec struct {
 	stage        string
-	spanName     string
 	dep          string
 	mode         string
 	budget       time.Duration
@@ -92,7 +91,6 @@ type dependencyProbeSpec struct {
 
 type probeExecutionResult struct {
 	budgetBlocked bool
-	failed        bool
 	err           error
 }
 
@@ -173,7 +171,6 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	var pg *postgres.Pool
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
 		stage:        labels.probeStage,
-		spanName:     labels.probeStage,
 		dep:          labels.dependency,
 		budget:       postgresProbeBudget,
 		minRemaining: startupFailFastThreshold + startupReserveBudget,
@@ -183,7 +180,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 			return err
 		},
 	})
-	if probeResult.failed {
+	if probeResult.err != nil {
 		if probeResult.budgetBlocked {
 			recordDependencyProbeRejection(
 				bootstrapCtx,
@@ -253,7 +250,6 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
 		stage:        labels.probeStage,
-		spanName:     labels.probeStage,
 		dep:          labels.dependency,
 		mode:         redisMode,
 		budget:       redisProbeBudget,
@@ -265,7 +261,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			return probeRedisWithContext(probeCtx, runtime.cfg.Redis)
 		},
 	})
-	if probeResult.failed {
+	if probeResult.err != nil {
 		if shouldAbortDegradedDependencyStartup(probeResult) {
 			recordDependencyProbeRejection(
 				bootstrapCtx,
@@ -277,6 +273,17 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			return nil, dependencyInitAbortFailure(labels.dependency, probeResult)
 		}
 		if redisMode == config.RedisModeStore {
+			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
+			recordDependencyProbeRejection(
+				bootstrapCtx,
+				runtime,
+				labels,
+				redisMode,
+				rejectErr,
+			)
+			return nil, rejectErr
+		}
+		if runtime.cfg.RedisReadinessProbeRequired() {
 			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
 			recordDependencyProbeRejection(
 				bootstrapCtx,
@@ -346,7 +353,6 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
 		stage:        labels.probeStage,
-		spanName:     labels.probeStage,
 		dep:          labels.dependency,
 		budget:       mongoProbeBudget,
 		minRemaining: startupFailFastThreshold,
@@ -354,7 +360,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			return probeMongoWithRetry(probeCtx, runtime.cfg.Mongo)
 		},
 	})
-	if probeResult.failed {
+	if probeResult.err != nil {
 		if shouldAbortDegradedDependencyStartup(probeResult) {
 			recordDependencyProbeRejection(
 				bootstrapCtx,
@@ -364,6 +370,17 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 				probeResult.err,
 			)
 			return nil, dependencyInitAbortFailure(labels.dependency, probeResult)
+		}
+		if runtime.cfg.MongoReadinessProbeRequired() {
+			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
+			recordDependencyProbeRejection(
+				bootstrapCtx,
+				runtime,
+				labels,
+				startupDependencyModeDegradedReadOnlyOrStale,
+				rejectErr,
+			)
+			return nil, rejectErr
 		}
 		recordDegradedDependencyStartup(
 			bootstrapCtx,
@@ -389,11 +406,11 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 
 func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer, spec dependencyProbeSpec) probeExecutionResult {
 	if err := ensureRemainingStartupBudget(dependencyProbeCtx, spec.minRemaining, spec.stage); err != nil {
-		return probeExecutionResult{budgetBlocked: true, failed: true, err: err}
+		return probeExecutionResult{budgetBlocked: true, err: err}
 	}
 
 	probeCtx, probeCancel := withStageBudget(dependencyProbeCtx, spec.budget)
-	probeCtx, probeSpan := tracer.Start(probeCtx, spec.spanName)
+	probeCtx, probeSpan := tracer.Start(probeCtx, spec.stage)
 	err := spec.probe(probeCtx)
 	probeCancel()
 
@@ -410,7 +427,7 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeSpan.SetAttributes(attrs...)
 	probeSpan.End()
 
-	return probeExecutionResult{budgetBlocked: false, failed: err != nil, err: err}
+	return probeExecutionResult{budgetBlocked: false, err: err}
 }
 
 func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {

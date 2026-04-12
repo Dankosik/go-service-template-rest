@@ -146,7 +146,7 @@ waitForStop:
 	if !args.admission.Ready() {
 		effectiveShutdownDelay = 0
 	}
-	if err := drainAndShutdown(args.signalCtx, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv); err != nil {
+	if err := drainAndShutdown(args.signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv); err != nil {
 		recordPreReadyFailure("startup.shutdown", err)
 		if terminalErr != nil {
 			return errors.Join(terminalErr, err)

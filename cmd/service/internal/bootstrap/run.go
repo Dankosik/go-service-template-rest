@@ -34,6 +34,8 @@ const (
 	redisProbeBudget    = 3 * time.Second
 	mongoProbeBudget    = 5 * time.Second
 
+	startupReadinessHeadroom = startupFailFastThreshold
+
 	startupRetryBaseDelay   = 50 * time.Millisecond
 	startupRetryMaxDelay    = 250 * time.Millisecond
 	postgresStartupAttempts = 2

@@ -332,6 +332,72 @@ func TestBootstrapConfigStageRecordsConfigFailureAndStartupRejection(t *testing.
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonConfigLoad)
 }
 
+func TestStartupRejectionReasonForConfigErrorType(t *testing.T) {
+	testCases := []struct {
+		name      string
+		errorType string
+		want      string
+	}{
+		{name: "load", errorType: "load", want: telemetry.StartupRejectionReasonConfigLoad},
+		{name: "parse", errorType: "parse", want: telemetry.StartupRejectionReasonConfigParse},
+		{name: "validate", errorType: "validate", want: telemetry.StartupRejectionReasonConfigValidate},
+		{name: "strict unknown key", errorType: "strict_unknown_key", want: telemetry.StartupRejectionReasonConfigStrictUnknownKey},
+		{name: "secret policy", errorType: "secret_policy", want: telemetry.StartupRejectionReasonConfigSecretPolicy},
+		{name: "unknown", errorType: "new_config_reason", want: telemetry.StartupRejectionReasonOther},
+		{name: "empty", errorType: "", want: telemetry.StartupRejectionReasonOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := startupRejectionReasonForConfigErrorType(tc.errorType); got != tc.want {
+				t.Fatalf("startupRejectionReasonForConfigErrorType(%q) = %q, want %q", tc.errorType, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID":     "ex-ingress-metrics-bootstrap",
+		"REASON": "temporary-public-api",
+	})
+
+	netPolicyResult := loadNetworkPolicy()
+	if netPolicyResult.err != nil {
+		t.Fatalf("loadNetworkPolicy() error = %v", netPolicyResult.err)
+	}
+	netPolicyResult.policy.now = func() time.Time { return now }
+
+	metrics := telemetry.New()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "metrics-exposure-policy")
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, netPolicyResult, config.Config{
+		App:  config.AppConfig{Env: "prod"},
+		HTTP: config.HTTPConfig{Addr: ":8080"},
+	})
+	span.End()
+	if err == nil {
+		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want metrics exposure rejection")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if !strings.Contains(err.Error(), "operational metrics") {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want operational metrics detail", err)
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+	if !strings.Contains(logBuffer.String(), `"dependency":"metrics_exposure"`) {
+		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want metrics exposure dependency", logBuffer.String())
+	}
+}
+
 func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	t.Parallel()
 

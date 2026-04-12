@@ -107,6 +107,58 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 	}
 }
 
+func TestProbeAddress(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid dsn", func(t *testing.T) {
+		t.Parallel()
+
+		address, err := ProbeAddress("postgres://user:pass@localhost:5432/app?sslmode=disable")
+		if err != nil {
+			t.Fatalf("ProbeAddress() error = %v", err)
+		}
+		if address != "localhost:5432" {
+			t.Fatalf("ProbeAddress() = %q, want localhost:5432", address)
+		}
+	})
+
+	t.Run("invalid dsn is redacted", func(t *testing.T) {
+		t.Parallel()
+
+		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
+		_, err := ProbeAddress(rawDSN)
+		if err == nil {
+			t.Fatal("ProbeAddress() error = nil, want non-nil")
+		}
+		if !errors.Is(err, ErrConfig) {
+			t.Fatalf("ProbeAddress() error = %v, want ErrConfig", err)
+		}
+		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
+			t.Fatalf("ProbeAddress() error = %v, want redacted parse context", err)
+		}
+		for _, leaked := range []string{rawDSN, "top-secret", "user"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("ProbeAddress() error = %v, leaked %q", err, leaked)
+			}
+		}
+	})
+
+	t.Run("invalid probe target shape", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ProbeAddress("user=user password=pass host=/var/run/postgresql dbname=app")
+		if err == nil {
+			t.Fatal("ProbeAddress() error = nil, want non-nil")
+		}
+		if !errors.Is(err, ErrConfig) {
+			t.Fatalf("ProbeAddress() error = %v, want ErrConfig", err)
+		}
+		if !strings.Contains(err.Error(), "invalid postgres probe address") {
+			t.Fatalf("ProbeAddress() error = %v, want invalid probe target context", err)
+		}
+	})
+}
+
 func TestPoolHelpersWithoutConnection(t *testing.T) {
 	t.Parallel()
 

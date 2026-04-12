@@ -262,15 +262,15 @@ func normalizeTelemetryFailureReason(reason string) string {
 func normalizeStartupRejectionReason(reason string) string {
 	normalized := strings.TrimSpace(strings.ToLower(reason))
 	switch normalized {
-	case StartupRejectionReasonConfigLoad, "load":
+	case StartupRejectionReasonConfigLoad:
 		return StartupRejectionReasonConfigLoad
-	case StartupRejectionReasonConfigParse, "parse":
+	case StartupRejectionReasonConfigParse:
 		return StartupRejectionReasonConfigParse
-	case StartupRejectionReasonConfigValidate, "validate":
+	case StartupRejectionReasonConfigValidate:
 		return StartupRejectionReasonConfigValidate
-	case StartupRejectionReasonConfigStrictUnknownKey, "strict_unknown_key":
+	case StartupRejectionReasonConfigStrictUnknownKey:
 		return StartupRejectionReasonConfigStrictUnknownKey
-	case StartupRejectionReasonConfigSecretPolicy, "secret_policy":
+	case StartupRejectionReasonConfigSecretPolicy:
 		return StartupRejectionReasonConfigSecretPolicy
 	case StartupRejectionReasonPolicyViolation:
 		return StartupRejectionReasonPolicyViolation
