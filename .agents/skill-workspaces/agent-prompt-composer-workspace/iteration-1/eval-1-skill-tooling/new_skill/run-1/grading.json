@@ -1,0 +1,56 @@
+{
+  "expectations": [
+    {
+      "text": "The response makes the skill local to this repository and does not drift into a global solution.",
+      "passed": true,
+      "evidence": "Kept the skill local to the repository."
+    },
+    {
+      "text": "The response names `.agents/skills` and the existing mirror sync flow such as `scripts/dev/sync-skills.sh` or `make skills-sync`.",
+      "passed": true,
+      "evidence": "Named canonical skill and sync surfaces."
+    },
+    {
+      "text": "The response explicitly treats the task as intent and context reconstruction for arbitrary messy user input rather than literal translation or prompt polish.",
+      "passed": true,
+      "evidence": "Framed the task as reconstruction, not translation."
+    },
+    {
+      "text": "The response includes examples, evals, or validation expectations as part of the deliverable.",
+      "passed": true,
+      "evidence": "Included examples/evals/validation expectations."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 6196,
+    "transcript_chars": 131641
+  },
+  "timing": {
+    "total_tokens": 104013,
+    "input_tokens": 101265,
+    "cached_input_tokens": 62336,
+    "output_tokens": 2748,
+    "duration_ms": 27647,
+    "total_duration_seconds": 27.648
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "Custom deterministic checks for this benchmark run."
+  }
+}

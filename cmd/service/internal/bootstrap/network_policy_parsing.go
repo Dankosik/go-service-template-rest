@@ -29,11 +29,11 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 		return networkPolicy{}, err
 	}
 
-	ingressException, err := parseNetworkExceptionFromEnv("NETWORK_INGRESS_EXCEPTION", "ingress")
+	ingressException, err := parseIngressNetworkExceptionFromEnv("NETWORK_INGRESS_EXCEPTION")
 	if err != nil {
 		return networkPolicy{}, err
 	}
-	egressException, err := parseNetworkExceptionFromEnv("NETWORK_EGRESS_EXCEPTION", "egress")
+	egressException, err := parseEgressNetworkExceptionFromEnv("NETWORK_EGRESS_EXCEPTION")
 	if err != nil {
 		return networkPolicy{}, err
 	}
@@ -47,6 +47,14 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 		ingressException:           ingressException,
 		egressException:            egressException,
 	}, nil
+}
+
+func loadNetworkPolicy() networkPolicyLoadResult {
+	policy, err := loadNetworkPolicyFromEnv()
+	return networkPolicyLoadResult{
+		policy: policy,
+		err:    err,
+	}
 }
 
 func networkPolicyErrorLabels(err error) (string, string) {
@@ -124,7 +132,32 @@ func isSchemeToken(s string) bool {
 	return true
 }
 
-func parseNetworkExceptionFromEnv(prefix, policyClass string) (networkException, error) {
+func parseIngressNetworkExceptionFromEnv(prefix string) (networkException, error) {
+	return parseNetworkExceptionMetadataFromEnv(prefix, "ingress")
+}
+
+func parseEgressNetworkExceptionFromEnv(prefix string) (networkException, error) {
+	exception, err := parseNetworkExceptionMetadataFromEnv(prefix, "egress")
+	if err != nil || !exception.Active {
+		return exception, err
+	}
+
+	scopeMatchers, parseErr := parseHostMatchers(exception.Scope, "egress")
+	if parseErr != nil {
+		return networkException{}, parseErr
+	}
+	if len(scopeMatchers) == 0 {
+		return networkException{}, &networkPolicyConfigError{
+			policyClass: "egress",
+			reasonClass: "missing_metadata",
+			message:     fmt.Sprintf("%s_SCOPE cannot be empty", prefix),
+		}
+	}
+	exception.scopeMatcher = scopeMatchers
+	return exception, nil
+}
+
+func parseNetworkExceptionMetadataFromEnv(prefix, policyClass string) (networkException, error) {
 	active, err := parseOptionalBoolEnv(prefix+"_ACTIVE", false, policyClass)
 	if err != nil {
 		return networkException{}, err
@@ -179,18 +212,6 @@ func parseNetworkExceptionFromEnv(prefix, policyClass string) (networkException,
 		}
 	}
 
-	scopeMatchers, parseErr := parseHostMatchers(exception.Scope, policyClass)
-	if parseErr != nil {
-		return networkException{}, parseErr
-	}
-	if len(scopeMatchers) == 0 {
-		return networkException{}, &networkPolicyConfigError{
-			policyClass: policyClass,
-			reasonClass: "missing_metadata",
-			message:     fmt.Sprintf("%s_SCOPE cannot be empty", prefix),
-		}
-	}
-	exception.scopeMatcher = scopeMatchers
 	return exception, nil
 }
 

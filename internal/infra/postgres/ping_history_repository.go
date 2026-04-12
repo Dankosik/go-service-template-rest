@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ErrPingHistoryRepository classifies errors from the template ping_history sample repository.
@@ -36,11 +35,11 @@ type PingHistoryRepository struct {
 }
 
 // NewPingHistoryRepository builds the template sample repository backed by sqlc generated queries.
-func NewPingHistoryRepository(db *pgxpool.Pool) (*PingHistoryRepository, error) {
-	if db == nil {
+func NewPingHistoryRepository(pool *Pool) (*PingHistoryRepository, error) {
+	if pool == nil || pool.pool == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrPingHistoryRepository)
 	}
-	return newPingHistoryRepository(sqlcgen.New(db))
+	return newPingHistoryRepository(sqlcgen.New(pool.pool))
 }
 
 func newPingHistoryRepository(queries pingHistoryQuerier) (*PingHistoryRepository, error) {
@@ -59,7 +58,7 @@ func (r *PingHistoryRepository) Create(ctx context.Context, payload string) (Pin
 
 	row, err := r.queries.CreatePingHistory(ctx, payload)
 	if err != nil {
-		return PingHistoryRecord{}, fmt.Errorf("create ping history: %w", err)
+		return PingHistoryRecord{}, fmt.Errorf("%w: create ping history: %w", ErrPingHistoryRepository, err)
 	}
 
 	record, err := mapPingHistoryRecord(row)
@@ -80,7 +79,7 @@ func (r *PingHistoryRepository) ListRecent(ctx context.Context, limit int32) ([]
 
 	rows, err := r.queries.ListRecentPingHistory(ctx, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list recent ping history: %w", err)
+		return nil, fmt.Errorf("%w: list recent ping history: %w", ErrPingHistoryRepository, err)
 	}
 
 	records := make([]PingHistoryRecord, 0, len(rows))

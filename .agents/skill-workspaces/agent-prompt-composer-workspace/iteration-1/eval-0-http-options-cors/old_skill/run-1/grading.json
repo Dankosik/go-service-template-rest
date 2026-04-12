@@ -1,0 +1,56 @@
+{
+  "expectations": [
+    {
+      "text": "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
+      "passed": true,
+      "evidence": "Found the HTTP exact signals."
+    },
+    {
+      "text": "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
+      "passed": true,
+      "evidence": "Found focused HTTP package/router surfaces."
+    },
+    {
+      "text": "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
+      "passed": true,
+      "evidence": "OpenAPI is framed conditionally."
+    },
+    {
+      "text": "The response includes a realistic scoped verification path rather than only generic repository-wide checks.",
+      "passed": true,
+      "evidence": "Found a scoped verification path."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 2983,
+    "transcript_chars": 94297
+  },
+  "timing": {
+    "total_tokens": 53060,
+    "input_tokens": 51834,
+    "cached_input_tokens": 34432,
+    "output_tokens": 1226,
+    "duration_ms": 14648,
+    "total_duration_seconds": 14.649
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "Custom deterministic checks for this benchmark run."
+  }
+}

@@ -48,8 +48,8 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 			if route := routeLabelForRequest(r); route != "" {
 				return route
 			}
-			if r != nil && r.Method != "" {
-				return r.Method + " <unmatched>"
+			if r != nil {
+				return normalizeHTTPMethodLabel(r.Method) + " <unmatched>"
 			}
 			return operation
 		}),
@@ -129,6 +129,10 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 		if requestID := requestIDFromContext(r.Context()); requestID != "" {
 			attrs = append(attrs, slog.String("request_id", requestID))
 		}
+		traceID, spanID := traceIDsFromContext(r.Context())
+		if traceID != "" {
+			attrs = append(attrs, slog.String("trace_id", traceID), slog.String("span_id", spanID))
+		}
 	}
 	log.Warn("rejected malformed HTTP request", attrs...)
 }
@@ -177,20 +181,8 @@ func allowedMethodsForPath(root chi.Router, path string) []string {
 		path = "/"
 	}
 
-	candidates := []string{
-		http.MethodConnect,
-		http.MethodGet,
-		http.MethodHead,
-		http.MethodDelete,
-		http.MethodOptions,
-		http.MethodPatch,
-		http.MethodPost,
-		http.MethodPut,
-		http.MethodTrace,
-	}
-
-	allowMethods := make([]string, 0, len(candidates))
-	for _, method := range candidates {
+	allowMethods := make([]string, 0, len(knownHTTPMethodLabels))
+	for _, method := range knownHTTPMethodLabels {
 		routeContext := chi.NewRouteContext()
 		if root.Match(routeContext, method, path) {
 			allowMethods = append(allowMethods, method)

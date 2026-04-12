@@ -21,7 +21,6 @@ var (
 )
 
 type Config struct {
-	Addr              string
 	ReadHeaderTimeout time.Duration
 	ReadTimeout       time.Duration
 	WriteTimeout      time.Duration
@@ -36,7 +35,6 @@ func New(cfg Config, handler http.Handler) *Server {
 
 	return &Server{
 		srv: &http.Server{
-			Addr:              cfg.Addr,
 			Handler:           handler,
 			ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 			ReadTimeout:       cfg.ReadTimeout,
@@ -45,17 +43,6 @@ func New(cfg Config, handler http.Handler) *Server {
 			MaxHeaderBytes:    cfg.MaxHeaderBytes,
 		},
 	}
-}
-
-func (s *Server) Run() error {
-	if err := s.requireInitialized(); err != nil {
-		return err
-	}
-	listener, err := net.Listen("tcp", s.srv.Addr)
-	if err != nil {
-		return err
-	}
-	return s.Serve(listener)
 }
 
 func (s *Server) Serve(listener net.Listener) error {

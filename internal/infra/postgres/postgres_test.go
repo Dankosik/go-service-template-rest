@@ -113,9 +113,6 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 	var nilPool *Pool
 	nilPool.Close()
 
-	if got := nilPool.DB(); got != nil {
-		t.Fatalf("(*Pool)(nil).DB() = %v, want nil", got)
-	}
 	if err := nilPool.Check(context.Background()); err == nil {
 		t.Fatal("(*Pool)(nil).Check() error = nil, want non-nil")
 	} else if !errors.Is(err, ErrHealthcheck) {
@@ -125,9 +122,6 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 	pool := &Pool{}
 	if got := pool.Name(); got != "postgres" {
 		t.Fatalf("Name() = %q, want %q", got, "postgres")
-	}
-	if got := pool.DB(); got != nil {
-		t.Fatalf("DB() = %v, want nil", got)
 	}
 
 	pool.Close()

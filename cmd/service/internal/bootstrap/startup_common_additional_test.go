@@ -62,6 +62,7 @@ func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
 		telemetryStageTestConfig("127.0.0.1:4318"),
 		metrics,
 		logger,
+		loadNetworkPolicy(),
 	)
 	if err != nil {
 		t.Fatalf("bootstrapTelemetryStage() error = %v, want nil", err)
@@ -81,6 +82,7 @@ func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
 
 func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 	restoreGlobalTelemetry(t)
+	t.Setenv(envNetworkEgressAllowedSchemes, "http")
 
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
@@ -90,6 +92,7 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 		telemetryStageTestConfig("public-otel.example.com:4318"),
 		metrics,
 		logger,
+		loadNetworkPolicy(),
 	)
 	cleanup(context.Background())
 	if err == nil {
@@ -117,6 +120,10 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *testing.T) {
 	restoreGlobalTelemetry(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "1bad")
+	netPolicyResult := loadNetworkPolicy()
+	if netPolicyResult.err == nil {
+		t.Fatal("loadNetworkPolicy() error = nil, want invalid policy error")
+	}
 
 	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
@@ -127,17 +134,19 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 		telemetryStageTestConfig("127.0.0.1:4318"),
 		metrics,
 		logger,
+		netPolicyResult,
 	)
 	cleanup(context.Background())
-	if err == nil {
-		t.Fatal("bootstrapTelemetryStage() error = nil, want invalid network policy error")
+	if err != nil {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want nil for policy-stage ownership", err)
 	}
-	if !strings.Contains(err.Error(), envNetworkEgressAllowedSchemes) {
-		t.Fatalf("bootstrapTelemetryStage() error = %v, want network policy context", err)
+	metricsText := collectServiceMetricsText(t, metrics)
+	if strings.Contains(metricsText, `telemetry_init_failure_total{`) {
+		t.Fatalf("metrics output contains telemetry init failure for startup-critical policy error:\n%s", metricsText)
 	}
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "invalid-network-policy")
-	_, networkErr := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, config.Config{})
+	_, networkErr := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, netPolicyResult, config.Config{})
 	span.End()
 	if networkErr == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want invalid network policy rejection")
@@ -146,8 +155,41 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", networkErr, errDependencyInit)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
+	metricsText = collectServiceMetricsText(t, metrics)
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
+}
+
+func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
+	restoreGlobalTelemetry(t)
+	t.Setenv(envNetworkEgressAllowedSchemes, "http")
+	netPolicyResult := loadNetworkPolicy()
+	if netPolicyResult.err != nil {
+		t.Fatalf("loadNetworkPolicy() error = %v", netPolicyResult.err)
+	}
+	t.Setenv(envNetworkEgressAllowedSchemes, "1bad")
+
+	metrics := telemetry.New()
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	cleanup, err := bootstrapTelemetryStage(
+		context.Background(),
+		telemetryStageTestConfig("127.0.0.1:4318"),
+		metrics,
+		logger,
+		netPolicyResult,
+	)
+	if err != nil {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want nil from loaded policy", err)
+	}
+	cleanup(context.Background())
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "loaded-network-policy")
+	_, err = bootstrapNetworkPolicyStage(ctx, span, metrics, logger, netPolicyResult, config.Config{})
+	span.End()
+	if err != nil {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want nil from loaded policy", err)
+	}
 }
 
 func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
@@ -404,7 +446,7 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, config.Config{})
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, loadNetworkPolicy(), config.Config{})
 	span.End()
 	if err == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
@@ -432,7 +474,7 @@ func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLoca
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, config.Config{
+	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, loadNetworkPolicy(), config.Config{
 		App:  config.AppConfig{Env: "prod"},
 		HTTP: config.HTTPConfig{Addr: ":8080"},
 	})

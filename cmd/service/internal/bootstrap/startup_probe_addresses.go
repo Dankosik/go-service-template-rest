@@ -2,25 +2,17 @@ package bootstrap
 
 import (
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func postgresStartupProbeAddress(cfg config.PostgresConfig) (string, error) {
-	pgxCfg, err := pgxpool.ParseConfig(cfg.DSN)
+	address, err := config.PostgresProbeAddress(cfg.DSN)
 	if err != nil {
-		// pgx parse errors can echo the input DSN, including credentials.
-		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", errDependencyInit)
+		return "", fmt.Errorf("%w: resolve postgres probe address: %w", errDependencyInit, err)
 	}
-	host := strings.TrimSpace(pgxCfg.ConnConfig.Host)
-	if host == "" || pgxCfg.ConnConfig.Port == 0 {
-		return "", fmt.Errorf("%w: invalid postgres probe address", errDependencyInit)
-	}
-	return net.JoinHostPort(host, strconv.Itoa(int(pgxCfg.ConnConfig.Port))), nil
+	return address, nil
 }
 
 func redisStartupProbeAddress(cfg config.RedisConfig) (string, error) {

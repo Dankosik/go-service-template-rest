@@ -15,6 +15,11 @@ type networkPolicy struct {
 	egressException            networkException
 }
 
+type networkPolicyLoadResult struct {
+	policy networkPolicy
+	err    error
+}
+
 type networkException struct {
 	Active       bool
 	ID           string

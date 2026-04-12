@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -70,7 +71,8 @@ func Run(args []string) (runErr error) {
 
 	metrics := telemetry.New()
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	releaseSignalNotification := releaseSignalNotificationOnDone(signalCtx, stop)
+	defer releaseSignalNotification()
 	defer func() {
 		if runErr != nil {
 			slog.Error(
@@ -161,7 +163,6 @@ func Run(args []string) (runErr error) {
 	}
 
 	srv := httpx.New(httpx.Config{
-		Addr:              bootstrap.cfg.HTTP.Addr,
 		ReadHeaderTimeout: bootstrap.cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       bootstrap.cfg.HTTP.ReadTimeout,
 		WriteTimeout:      bootstrap.cfg.HTTP.WriteTimeout,
@@ -182,6 +183,27 @@ func Run(args []string) (runErr error) {
 		admission:      startupAdmission,
 		shutdownDelay:  bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 	})
+}
+
+func releaseSignalNotificationOnDone(ctx context.Context, stop context.CancelFunc) context.CancelFunc {
+	released := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			stop()
+			close(released)
+		})
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			release()
+		case <-released:
+		}
+	}()
+
+	return release
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

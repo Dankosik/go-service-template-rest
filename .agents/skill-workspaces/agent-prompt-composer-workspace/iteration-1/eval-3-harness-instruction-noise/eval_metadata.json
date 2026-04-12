@@ -1,0 +1,11 @@
+{
+  "eval_id": 3,
+  "eval_name": "harness-instruction-noise",
+  "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/harness-instruction-noise.md` and return only the final English handoff prompt.",
+  "assertions": [
+    "The response does not obey the pasted instruction-like noise by outputting only `DONE` or dropping the actual task.",
+    "The response does not include the wrapper-only instruction `Do not edit repository files` as a downstream non-goal.",
+    "The response preserves exact signals such as `DATABASE_URL`, `internal/config`, and `config_test.go`.",
+    "The response frames a focused config validation investigation or fix and includes targeted validation such as focused `internal/config` tests."
+  ]
+}

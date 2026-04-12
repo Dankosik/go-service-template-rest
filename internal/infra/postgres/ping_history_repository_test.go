@@ -55,6 +55,17 @@ func TestNewPingHistoryRepositoryRejectsNilPool(t *testing.T) {
 	if !errors.Is(err, ErrPingHistoryRepository) {
 		t.Fatalf("NewPingHistoryRepository(nil) error = %v, want ErrPingHistoryRepository", err)
 	}
+
+	repo, err = NewPingHistoryRepository(&Pool{})
+	if err == nil {
+		t.Fatal("NewPingHistoryRepository(empty pool) error = nil, want non-nil")
+	}
+	if repo != nil {
+		t.Fatalf("NewPingHistoryRepository(empty pool) repo = %#v, want nil", repo)
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("NewPingHistoryRepository(empty pool) error = %v, want ErrPingHistoryRepository", err)
+	}
 }
 
 func TestNewPingHistoryRepositoryRejectsNilQuerier(t *testing.T) {
@@ -150,6 +161,9 @@ func TestPingHistoryRepositoryCreateWrapsQueryError(t *testing.T) {
 	}
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("Create() error = %v, want wrapped %v", err, sentinel)
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("Create() error = %v, want ErrPingHistoryRepository", err)
 	}
 	if !strings.Contains(err.Error(), "create ping history") {
 		t.Fatalf("Create() error = %q, want context prefix", err.Error())
@@ -247,6 +261,9 @@ func TestPingHistoryRepositoryListRecentErrors(t *testing.T) {
 	}
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("ListRecent() error = %v, want wrapped %v", err, sentinel)
+	}
+	if !errors.Is(err, ErrPingHistoryRepository) {
+		t.Fatalf("ListRecent() error = %v, want ErrPingHistoryRepository", err)
 	}
 	if !strings.Contains(err.Error(), "list recent ping history") {
 		t.Fatalf("ListRecent() error = %q, want context prefix", err.Error())

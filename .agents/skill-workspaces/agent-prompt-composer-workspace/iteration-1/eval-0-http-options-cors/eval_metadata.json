@@ -1,0 +1,11 @@
+{
+  "eval_id": 0,
+  "eval_name": "http-options-cors",
+  "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/http-options-cors.md` and return only the final English handoff prompt.",
+  "assertions": [
+    "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
+    "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
+    "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
+    "The response includes a realistic scoped verification path rather than only generic repository-wide checks."
+  ]
+}

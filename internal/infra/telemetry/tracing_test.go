@@ -256,7 +256,30 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("traces endpoint overrides generic endpoint path", func(t *testing.T) {
+	t.Run("generic endpoint base path appends traces path", func(t *testing.T) {
+		paths := make(chan string, 1)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			paths <- r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(server.Close)
+
+		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+			OTLPEndpoint: server.URL + "/collector",
+			OTLPProtocol: "http/protobuf",
+		})
+		if err != nil {
+			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+		}
+		if !configured {
+			t.Fatalf("configured = false, want true")
+		}
+
+		exportOneTestSpan(t, options)
+		assertCollectorPath(t, paths, "/collector/v1/traces")
+	})
+
+	t.Run("traces endpoint overrides generic endpoint and uses path as configured", func(t *testing.T) {
 		genericPaths := make(chan string, 1)
 		genericServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			genericPaths <- r.URL.Path
@@ -273,7 +296,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint:       genericServer.URL + "/generic",
-			OTLPTracesEndpoint: tracesServer.URL,
+			OTLPTracesEndpoint: tracesServer.URL + "/custom/traces",
 			OTLPProtocol:       "http/protobuf",
 		})
 		if err != nil {
@@ -286,7 +309,30 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		exportOneTestSpan(t, options)
 
 		assertNoCollectorRequest(t, genericPaths, "generic endpoint")
-		assertCollectorPath(t, tracesPaths, "/v1/traces")
+		assertCollectorPath(t, tracesPaths, "/custom/traces")
+	})
+
+	t.Run("traces endpoint without path uses root path", func(t *testing.T) {
+		paths := make(chan string, 1)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			paths <- r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(server.Close)
+
+		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+			OTLPTracesEndpoint: server.URL,
+			OTLPProtocol:       "http/protobuf",
+		})
+		if err != nil {
+			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+		}
+		if !configured {
+			t.Fatalf("configured = false, want true")
+		}
+
+		exportOneTestSpan(t, options)
+		assertCollectorPath(t, paths, "/")
 	})
 
 	t.Run("invalid protocol", func(t *testing.T) {

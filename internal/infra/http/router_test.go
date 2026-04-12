@@ -237,6 +237,7 @@ func TestStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, "req-123")
+	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -265,6 +266,12 @@ func TestStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	if !strings.Contains(logLine, `"request_id":"req-123"`) {
 		t.Fatalf("log line = %q, want request_id", logLine)
 	}
+	if !strings.Contains(logLine, `"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"`) {
+		t.Fatalf("log line = %q, want trace_id", logLine)
+	}
+	if !strings.Contains(logLine, `"span_id":"00f067aa0ba902b7"`) {
+		t.Fatalf("log line = %q, want span_id", logLine)
+	}
 }
 
 func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
@@ -283,6 +290,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, "req-chi-123")
+	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -311,6 +319,12 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	}
 	if !strings.Contains(logLine, `"request_id":"req-chi-123"`) {
 		t.Fatalf("log line = %q, want request_id", logLine)
+	}
+	if !strings.Contains(logLine, `"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"`) {
+		t.Fatalf("log line = %q, want trace_id", logLine)
+	}
+	if !strings.Contains(logLine, `"span_id":"00f067aa0ba902b7"`) {
+		t.Fatalf("log line = %q, want span_id", logLine)
 	}
 }
 
@@ -581,6 +595,35 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	}
 }
 
+func TestHTTPMethodNormalizationBoundsNonStandardMetricsLabels(t *testing.T) {
+	metrics := telemetry.New()
+	handler := AccessLog(nil, metrics, captureRouteLabelMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Pattern = "BREW /coffee"
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest("BREW", "/coffee", nil)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
+	}
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsResp := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(metricsResp, metricsReq)
+	if metricsResp.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want %d", metricsResp.Code, http.StatusOK)
+	}
+	body := metricsResp.Body.String()
+	if strings.Contains(body, "BREW") {
+		t.Fatalf("metrics output contains raw method label BREW:\n%s", body)
+	}
+	if !strings.Contains(body, `method="OTHER",route="OTHER /coffee",status_code="204"`) {
+		t.Fatalf("metrics output does not contain bounded method labels:\n%s", body)
+	}
+}
+
 func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
 	apiSubrouter := chi.NewRouter()
 	apiSubrouter.Get("/metrics", func(w http.ResponseWriter, _ *http.Request) {
@@ -776,14 +819,22 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		t.Fatalf("metrics status = %d, want %d", metricsResp.Code, http.StatusOK)
 	}
 
+	customMethodReq := httptest.NewRequest("BREW", "/api/v1/ping", nil)
+	customMethodResp := httptest.NewRecorder()
+	h.ServeHTTP(customMethodResp, customMethodReq)
+	if customMethodResp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("custom method status = %d, want %d", customMethodResp.Code, http.StatusMethodNotAllowed)
+	}
+
 	spans := recorder.Ended()
 	if len(spans) == 0 {
 		t.Fatalf("expected ended spans")
 	}
 
 	wantSpanNames := map[string]bool{
-		"GET /api/v1/ping": false,
-		"GET /metrics":     false,
+		"GET /api/v1/ping":  false,
+		"GET /metrics":      false,
+		"OTHER <unmatched>": false,
 	}
 	wantHTTPRoutes := map[string]string{
 		"GET /api/v1/ping": "/api/v1/ping",
@@ -796,6 +847,9 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		spanNames = append(spanNames, name)
 		if _, ok := wantSpanNames[name]; ok {
 			wantSpanNames[name] = true
+			if wantHTTPRoutes[name] == "" {
+				continue
+			}
 			if gotRoute := spanHTTPRoute(span); gotRoute != wantHTTPRoutes[name] {
 				t.Fatalf("span %q http.route = %q, want %q", name, gotRoute, wantHTTPRoutes[name])
 			}

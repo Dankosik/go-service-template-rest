@@ -159,9 +159,10 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 			"span_id", spanID,
 		)
 
+		methodLabel := requestMethodLabel(r)
 		if metrics != nil {
-			metrics.ObserveHTTPRequest(r.Method, route, captured.Code)
-			metrics.ObserveHTTPRequestDuration(r.Method, route, captured.Code, captured.Duration)
+			metrics.ObserveHTTPRequest(methodLabel, route, captured.Code)
+			metrics.ObserveHTTPRequestDuration(methodLabel, route, captured.Code, captured.Duration)
 		}
 	})
 }
@@ -179,7 +180,7 @@ func captureRouteMetadata(r *http.Request) {
 	}
 
 	routePathTemplate := routePathTemplateForRequest(r)
-	routeLabel := joinMethodAndPattern(requestMethod(r), routePathTemplate)
+	routeLabel := joinMethodAndPattern(requestMethodLabel(r), routePathTemplate)
 
 	if routePathTemplate != "" {
 		routeAttr := semconv.HTTPRoute(routePathTemplate)
@@ -200,7 +201,7 @@ func captureRouteMetadata(r *http.Request) {
 }
 
 func routeLabelForRequest(r *http.Request) string {
-	return joinMethodAndPattern(requestMethod(r), routePathTemplateForRequest(r))
+	return joinMethodAndPattern(requestMethodLabel(r), routePathTemplateForRequest(r))
 }
 
 func routePathTemplateForRequest(r *http.Request) string {
@@ -229,11 +230,11 @@ func normalizeRoutePathTemplate(method, pattern string) string {
 	return pattern
 }
 
-func requestMethod(r *http.Request) string {
+func requestMethodLabel(r *http.Request) string {
 	if r == nil {
-		return ""
+		return otherHTTPMethodLabel
 	}
-	return r.Method
+	return normalizeHTTPMethodLabel(r.Method)
 }
 
 func joinMethodAndPattern(method, pattern string) string {

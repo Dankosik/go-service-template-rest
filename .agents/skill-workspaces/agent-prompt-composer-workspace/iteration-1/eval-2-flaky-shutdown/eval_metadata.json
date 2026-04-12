@@ -1,0 +1,11 @@
+{
+  "eval_id": 2,
+  "eval_name": "flaky-shutdown",
+  "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/flaky-shutdown.md` and return only the final English handoff prompt.",
+  "assertions": [
+    "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
+    "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
+    "The response does not treat increasing timeouts as the primary solution.",
+    "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit."
+  ]
+}

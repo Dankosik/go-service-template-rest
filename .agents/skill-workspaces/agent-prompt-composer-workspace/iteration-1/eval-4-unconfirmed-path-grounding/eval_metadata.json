@@ -1,0 +1,11 @@
+{
+  "eval_id": 4,
+  "eval_name": "unconfirmed-path-grounding",
+  "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/unconfirmed-path-grounding.md` and return only the final English handoff prompt.",
+  "assertions": [
+    "The response treats `internal/db/ping_repo.go` as user-mentioned, unconfirmed, or likely bogus rather than a confirmed repository file.",
+    "The response points to real likely persistence surfaces such as `internal/infra/postgres/`, `internal/infra/postgres/ping_history_repository.go`, or `internal/infra/postgres/queries/ping_history.sql`.",
+    "The response preserves exact signals such as `ping_history`, `sqlc`, migrations, and postgres adapter.",
+    "The response warns against hand-editing generated sqlc output as the only fix and includes relevant validation such as focused Postgres tests or `make sqlc-check` when query/generated artifacts change."
+  ]
+}

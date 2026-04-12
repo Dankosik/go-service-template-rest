@@ -244,7 +244,7 @@ func collectNamespaceValues(environ []string) map[string]any {
 			continue
 		}
 		envKey := parts[0]
-		envValue := strings.TrimSpace(parts[1])
+		envValue := parts[1]
 		if !strings.HasPrefix(envKey, namespacePrefix) {
 			continue
 		}

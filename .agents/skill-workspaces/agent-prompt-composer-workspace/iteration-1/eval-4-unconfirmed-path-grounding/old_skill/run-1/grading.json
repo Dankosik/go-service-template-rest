@@ -1,0 +1,56 @@
+{
+  "expectations": [
+    {
+      "text": "The response treats `internal/db/ping_repo.go` as user-mentioned, unconfirmed, or likely bogus rather than a confirmed repository file.",
+      "passed": true,
+      "evidence": "Marked the guessed path as unconfirmed or bogus."
+    },
+    {
+      "text": "The response points to real likely persistence surfaces such as `internal/infra/postgres/`, `internal/infra/postgres/ping_history_repository.go`, or `internal/infra/postgres/queries/ping_history.sql`.",
+      "passed": true,
+      "evidence": "Pointed to real Postgres/sqlc surfaces."
+    },
+    {
+      "text": "The response preserves exact signals such as `ping_history`, `sqlc`, migrations, and postgres adapter.",
+      "passed": true,
+      "evidence": "Preserved persistence exact signals."
+    },
+    {
+      "text": "The response warns against hand-editing generated sqlc output as the only fix and includes relevant validation such as focused Postgres tests or `make sqlc-check` when query/generated artifacts change.",
+      "passed": true,
+      "evidence": "Warned against generated-only edits and included validation."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 2933,
+    "transcript_chars": 108957
+  },
+  "timing": {
+    "total_tokens": 92516,
+    "input_tokens": 90788,
+    "cached_input_tokens": 82816,
+    "output_tokens": 1728,
+    "duration_ms": 26593,
+    "total_duration_seconds": 26.593
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "Custom deterministic checks for this benchmark run."
+  }
+}

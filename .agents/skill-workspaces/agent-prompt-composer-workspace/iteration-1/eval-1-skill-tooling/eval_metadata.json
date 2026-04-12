@@ -1,0 +1,11 @@
+{
+  "eval_id": 1,
+  "eval_name": "skill-tooling",
+  "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/skill-tooling.md` and return only the final English handoff prompt.",
+  "assertions": [
+    "The response makes the skill local to this repository and does not drift into a global solution.",
+    "The response names `.agents/skills` and the existing mirror sync flow such as `scripts/dev/sync-skills.sh` or `make skills-sync`.",
+    "The response explicitly treats the task as intent and context reconstruction for arbitrary messy user input rather than literal translation or prompt polish.",
+    "The response includes examples, evals, or validation expectations as part of the deliverable."
+  ]
+}

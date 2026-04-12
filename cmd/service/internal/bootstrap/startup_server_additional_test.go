@@ -79,6 +79,31 @@ func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 	}
 }
 
+func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulCheck(t *testing.T) {
+	metrics := telemetry.New()
+	admission := newTestStartupAdmissionController(metrics)
+	bootstrapCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resultCh := startStartupAdmission(bootstrapCtx, func(ctx context.Context) error {
+		cancel()
+		<-ctx.Done()
+		return nil
+	}, admission, time.Second)
+
+	select {
+	case err := <-resultCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("startStartupAdmission() error = %v, want wrapped %v", err, context.Canceled)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("startStartupAdmission() did not return after readiness context cancellation")
+	}
+	if admission.Ready() {
+		t.Fatal("startup admission marked ready after readiness context cancellation")
+	}
+}
+
 func TestServeHTTPRuntimeListenError(t *testing.T) {
 	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))

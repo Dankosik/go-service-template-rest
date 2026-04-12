@@ -1,0 +1,56 @@
+{
+  "expectations": [
+    {
+      "text": "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
+      "passed": true,
+      "evidence": "Preserved shutdown exact signals."
+    },
+    {
+      "text": "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
+      "passed": true,
+      "evidence": "Pointed to lifecycle/readiness surfaces."
+    },
+    {
+      "text": "The response does not treat increasing timeouts as the primary solution.",
+      "passed": true,
+      "evidence": "Did not make timeout inflation the primary solution."
+    },
+    {
+      "text": "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit.",
+      "passed": true,
+      "evidence": "Included race/integration verification and ambiguity."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 2877,
+    "transcript_chars": 94008
+  },
+  "timing": {
+    "total_tokens": 52572,
+    "input_tokens": 51427,
+    "cached_input_tokens": 45184,
+    "output_tokens": 1145,
+    "duration_ms": 15483,
+    "total_duration_seconds": 15.483
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "Custom deterministic checks for this benchmark run."
+  }
+}

@@ -136,21 +136,18 @@ func (l *maxIdleConnLimiter) afterRelease(conn *pgx.Conn) bool {
 }
 
 func (l *maxIdleConnLimiter) beforeAcquire(conn *pgx.Conn) {
-	l.beforeClose(conn)
+	l.removeRetainedConn(conn)
 }
 
 func (l *maxIdleConnLimiter) beforeClose(conn *pgx.Conn) {
+	l.removeRetainedConn(conn)
+}
+
+func (l *maxIdleConnLimiter) removeRetainedConn(conn *pgx.Conn) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	delete(l.retained, conn)
-}
-
-func (p *Pool) DB() *pgxpool.Pool {
-	if p == nil {
-		return nil
-	}
-	return p.pool
 }
 
 func (p *Pool) Close() {

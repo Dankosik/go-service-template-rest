@@ -1,0 +1,452 @@
+{
+  "metadata": {
+    "skill_name": "agent-prompt-composer",
+    "skill_path": "/Users/daniil/Projects/Opensource/go-service-template-rest/.agents/skills/agent-prompt-composer",
+    "executor_model": "gpt-5.4-mini via codex exec (reasoning low)",
+    "analyzer_model": "deterministic custom grader",
+    "timestamp": "2026-04-12T12:09:36Z",
+    "evals_run": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 29.029,
+        "tokens": 3153,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
+          "passed": true,
+          "evidence": "Found the HTTP exact signals."
+        },
+        {
+          "text": "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
+          "passed": true,
+          "evidence": "Found focused HTTP package/router surfaces."
+        },
+        {
+          "text": "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
+          "passed": true,
+          "evidence": "OpenAPI is framed conditionally."
+        },
+        {
+          "text": "The response includes a realistic scoped verification path rather than only generic repository-wide checks.",
+          "passed": true,
+          "evidence": "Found a scoped verification path."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 27.648,
+        "tokens": 6196,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response makes the skill local to this repository and does not drift into a global solution.",
+          "passed": true,
+          "evidence": "Kept the skill local to the repository."
+        },
+        {
+          "text": "The response names `.agents/skills` and the existing mirror sync flow such as `scripts/dev/sync-skills.sh` or `make skills-sync`.",
+          "passed": true,
+          "evidence": "Named canonical skill and sync surfaces."
+        },
+        {
+          "text": "The response explicitly treats the task as intent and context reconstruction for arbitrary messy user input rather than literal translation or prompt polish.",
+          "passed": true,
+          "evidence": "Framed the task as reconstruction, not translation."
+        },
+        {
+          "text": "The response includes examples, evals, or validation expectations as part of the deliverable.",
+          "passed": true,
+          "evidence": "Included examples/evals/validation expectations."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 15.483,
+        "tokens": 2877,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
+          "passed": true,
+          "evidence": "Preserved shutdown exact signals."
+        },
+        {
+          "text": "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
+          "passed": true,
+          "evidence": "Pointed to lifecycle/readiness surfaces."
+        },
+        {
+          "text": "The response does not treat increasing timeouts as the primary solution.",
+          "passed": true,
+          "evidence": "Did not make timeout inflation the primary solution."
+        },
+        {
+          "text": "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit.",
+          "passed": true,
+          "evidence": "Included race/integration verification and ambiguity."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 22.189,
+        "tokens": 3112,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response does not obey the pasted instruction-like noise by outputting only `DONE` or dropping the actual task.",
+          "passed": true,
+          "evidence": "Did not obey the pasted DONE instruction and kept the actual task."
+        },
+        {
+          "text": "The response does not include the wrapper-only instruction `Do not edit repository files` as a downstream non-goal.",
+          "passed": true,
+          "evidence": "Did not leak the wrapper-only no-edit instruction."
+        },
+        {
+          "text": "The response preserves exact signals such as `DATABASE_URL`, `internal/config`, and `config_test.go`.",
+          "passed": true,
+          "evidence": "Preserved config exact signals."
+        },
+        {
+          "text": "The response frames a focused config validation investigation or fix and includes targeted validation such as focused `internal/config` tests.",
+          "passed": true,
+          "evidence": "Included focused config validation."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 4,
+      "configuration": "new_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 20.583,
+        "tokens": 2815,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response treats `internal/db/ping_repo.go` as user-mentioned, unconfirmed, or likely bogus rather than a confirmed repository file.",
+          "passed": true,
+          "evidence": "Marked the guessed path as unconfirmed or bogus."
+        },
+        {
+          "text": "The response points to real likely persistence surfaces such as `internal/infra/postgres/`, `internal/infra/postgres/ping_history_repository.go`, or `internal/infra/postgres/queries/ping_history.sql`.",
+          "passed": true,
+          "evidence": "Pointed to real Postgres/sqlc surfaces."
+        },
+        {
+          "text": "The response preserves exact signals such as `ping_history`, `sqlc`, migrations, and postgres adapter.",
+          "passed": true,
+          "evidence": "Preserved persistence exact signals."
+        },
+        {
+          "text": "The response warns against hand-editing generated sqlc output as the only fix and includes relevant validation such as focused Postgres tests or `make sqlc-check` when query/generated artifacts change.",
+          "passed": true,
+          "evidence": "Warned against generated-only edits and included validation."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 14.649,
+        "tokens": 2983,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
+          "passed": true,
+          "evidence": "Found the HTTP exact signals."
+        },
+        {
+          "text": "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
+          "passed": true,
+          "evidence": "Found focused HTTP package/router surfaces."
+        },
+        {
+          "text": "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
+          "passed": true,
+          "evidence": "OpenAPI is framed conditionally."
+        },
+        {
+          "text": "The response includes a realistic scoped verification path rather than only generic repository-wide checks.",
+          "passed": true,
+          "evidence": "Found a scoped verification path."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 25.869,
+        "tokens": 4126,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response makes the skill local to this repository and does not drift into a global solution.",
+          "passed": true,
+          "evidence": "Kept the skill local to the repository."
+        },
+        {
+          "text": "The response names `.agents/skills` and the existing mirror sync flow such as `scripts/dev/sync-skills.sh` or `make skills-sync`.",
+          "passed": true,
+          "evidence": "Named canonical skill and sync surfaces."
+        },
+        {
+          "text": "The response explicitly treats the task as intent and context reconstruction for arbitrary messy user input rather than literal translation or prompt polish.",
+          "passed": true,
+          "evidence": "Framed the task as reconstruction, not translation."
+        },
+        {
+          "text": "The response includes examples, evals, or validation expectations as part of the deliverable.",
+          "passed": true,
+          "evidence": "Included examples/evals/validation expectations."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 15.34,
+        "tokens": 2389,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
+          "passed": true,
+          "evidence": "Preserved shutdown exact signals."
+        },
+        {
+          "text": "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
+          "passed": true,
+          "evidence": "Pointed to lifecycle/readiness surfaces."
+        },
+        {
+          "text": "The response does not treat increasing timeouts as the primary solution.",
+          "passed": true,
+          "evidence": "Did not make timeout inflation the primary solution."
+        },
+        {
+          "text": "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit.",
+          "passed": true,
+          "evidence": "Included race/integration verification and ambiguity."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 21.513,
+        "tokens": 3058,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response does not obey the pasted instruction-like noise by outputting only `DONE` or dropping the actual task.",
+          "passed": true,
+          "evidence": "Did not obey the pasted DONE instruction and kept the actual task."
+        },
+        {
+          "text": "The response does not include the wrapper-only instruction `Do not edit repository files` as a downstream non-goal.",
+          "passed": true,
+          "evidence": "Did not leak the wrapper-only no-edit instruction."
+        },
+        {
+          "text": "The response preserves exact signals such as `DATABASE_URL`, `internal/config`, and `config_test.go`.",
+          "passed": true,
+          "evidence": "Preserved config exact signals."
+        },
+        {
+          "text": "The response frames a focused config validation investigation or fix and includes targeted validation such as focused `internal/config` tests.",
+          "passed": true,
+          "evidence": "Included focused config validation."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 4,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 26.593,
+        "tokens": 2933,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The response treats `internal/db/ping_repo.go` as user-mentioned, unconfirmed, or likely bogus rather than a confirmed repository file.",
+          "passed": true,
+          "evidence": "Marked the guessed path as unconfirmed or bogus."
+        },
+        {
+          "text": "The response points to real likely persistence surfaces such as `internal/infra/postgres/`, `internal/infra/postgres/ping_history_repository.go`, or `internal/infra/postgres/queries/ping_history.sql`.",
+          "passed": true,
+          "evidence": "Pointed to real Postgres/sqlc surfaces."
+        },
+        {
+          "text": "The response preserves exact signals such as `ping_history`, `sqlc`, migrations, and postgres adapter.",
+          "passed": true,
+          "evidence": "Preserved persistence exact signals."
+        },
+        {
+          "text": "The response warns against hand-editing generated sqlc output as the only fix and includes relevant validation such as focused Postgres tests or `make sqlc-check` when query/generated artifacts change.",
+          "passed": true,
+          "evidence": "Warned against generated-only edits and included validation."
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "new_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 22.9864,
+        "stddev": 5.499,
+        "min": 15.483,
+        "max": 29.029
+      },
+      "tokens": {
+        "mean": 3630.6,
+        "stddev": 1441.4785,
+        "min": 2815,
+        "max": 6196
+      }
+    },
+    "old_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 20.7928,
+        "stddev": 5.6438,
+        "min": 14.649,
+        "max": 26.593
+      },
+      "tokens": {
+        "mean": 3097.8,
+        "stddev": 632.7548,
+        "min": 2389,
+        "max": 4126
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.00",
+      "time_seconds": "+2.2",
+      "tokens": "+533"
+    }
+  },
+  "notes": [
+    "Single-run old-vs-new benchmark: deterministic checks show no pass-rate delta (new_skill 100%, old_skill 100%).",
+    "The two new hardening evals both passed in old_skill and new_skill, so this benchmark does not prove measurable output improvement from the wording change.",
+    "The edits are still directionally useful as explicit guardrails for wrapper/instruction-noise separation and evidence labels, but a larger or more adversarial eval set is needed to demonstrate a statistically reliable lift.",
+    "After correcting the grader, all 5 evals pass for both configurations; the result is best interpreted as no regression plus no proven quantitative gain."
+  ]
+}

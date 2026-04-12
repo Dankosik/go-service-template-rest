@@ -14,6 +14,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 )
 
@@ -22,7 +23,7 @@ const migrationGlobUp = "../env/migrations/*.up.sql"
 func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	pool := setupPostgresPoolWithMigrations(t)
 
-	repo, err := postgres.NewPingHistoryRepository(pool.DB())
+	repo, err := postgres.NewPingHistoryRepository(pool)
 	if err != nil {
 		t.Fatalf("create ping history repository: %v", err)
 	}
@@ -94,6 +95,15 @@ func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
 		t.Fatalf("build postgres dsn: %v", err)
 	}
 
+	migrationPool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("create postgres migration pool: %v", err)
+	}
+	defer migrationPool.Close()
+	if err := applyMigrationFiles(ctx, migrationPool, migrationGlobUp); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
 	pool, err := postgres.New(ctx, postgres.Options{
 		DSN:                dsn,
 		ConnectTimeout:     3 * time.Second,
@@ -105,12 +115,7 @@ func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
 	if err != nil {
 		t.Fatalf("create postgres pool: %v", err)
 	}
-
 	t.Cleanup(pool.Close)
-
-	if err := applyMigrationFiles(ctx, pool.DB(), migrationGlobUp); err != nil {
-		t.Fatalf("apply migrations: %v", err)
-	}
 
 	return pool
 }

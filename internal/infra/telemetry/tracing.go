@@ -46,6 +46,13 @@ type traceOTLPEndpoint struct {
 	insecure bool
 }
 
+type traceOTLPEndpointSource int
+
+const (
+	traceOTLPEndpointSourceGeneric traceOTLPEndpointSource = iota
+	traceOTLPEndpointSourceTraceSpecific
+)
+
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
 	serviceName := strings.TrimSpace(cfg.ServiceName)
 	serviceVersion := strings.TrimSpace(cfg.ServiceVersion)
@@ -198,14 +205,16 @@ func DescribeTraceExporterTarget(cfg TraceExporterConfig) (TraceExporterTarget, 
 
 func traceExporterOTLPEndpoint(cfg TraceExporterConfig) (traceOTLPEndpoint, bool, error) {
 	raw := strings.TrimSpace(cfg.OTLPTracesEndpoint)
+	source := traceOTLPEndpointSourceTraceSpecific
 	if raw == "" {
 		raw = strings.TrimSpace(cfg.OTLPEndpoint)
+		source = traceOTLPEndpointSourceGeneric
 	}
 	if raw == "" {
 		return traceOTLPEndpoint{}, false, nil
 	}
 
-	endpoint, err := parseTraceOTLPEndpoint(raw)
+	endpoint, err := parseTraceOTLPEndpoint(raw, source)
 	if err != nil {
 		return traceOTLPEndpoint{}, false, err
 	}
@@ -213,20 +222,20 @@ func traceExporterOTLPEndpoint(cfg TraceExporterConfig) (traceOTLPEndpoint, bool
 }
 
 func parseOTLPEndpointOptions(raw string) ([]otlptracehttp.Option, error) {
-	endpoint, err := parseTraceOTLPEndpoint(raw)
+	endpoint, err := parseTraceOTLPEndpoint(raw, traceOTLPEndpointSourceGeneric)
 	if err != nil {
 		return nil, err
 	}
 	return endpoint.options(), nil
 }
 
-func parseTraceOTLPEndpoint(raw string) (traceOTLPEndpoint, error) {
+func parseTraceOTLPEndpoint(raw string, source traceOTLPEndpointSource) (traceOTLPEndpoint, error) {
 	if !strings.Contains(raw, "://") {
 		parsedURL, err := url.Parse("//" + raw)
 		if err != nil {
 			return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
 		}
-		return otlpEndpoint(raw, parsedURL, "http", true)
+		return otlpEndpoint(raw, parsedURL, "http", true, source)
 	}
 
 	parsedURL, err := url.Parse(raw)
@@ -244,10 +253,16 @@ func parseTraceOTLPEndpoint(raw string) (traceOTLPEndpoint, error) {
 		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: unsupported scheme %q", raw, parsedURL.Scheme)
 	}
 
-	return otlpEndpoint(raw, parsedURL, scheme, insecure)
+	return otlpEndpoint(raw, parsedURL, scheme, insecure, source)
 }
 
-func otlpEndpoint(raw string, parsedURL *url.URL, scheme string, insecure bool) (traceOTLPEndpoint, error) {
+func otlpEndpoint(
+	raw string,
+	parsedURL *url.URL,
+	scheme string,
+	insecure bool,
+	source traceOTLPEndpointSource,
+) (traceOTLPEndpoint, error) {
 	if parsedURL.Host == "" {
 		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
 	}
@@ -261,11 +276,25 @@ func otlpEndpoint(raw string, parsedURL *url.URL, scheme string, insecure bool) 
 		insecure: insecure,
 	}
 	path := strings.TrimSpace(parsedURL.EscapedPath())
-	if path != "" && path != "/" {
+	switch source {
+	case traceOTLPEndpointSourceTraceSpecific:
 		endpoint.urlPath = path
+		if endpoint.urlPath == "" {
+			endpoint.urlPath = "/"
+		}
+	default:
+		endpoint.urlPath = genericTraceEndpointPath(path)
 	}
 
 	return endpoint, nil
+}
+
+func genericTraceEndpointPath(basePath string) string {
+	basePath = strings.TrimSpace(basePath)
+	if basePath == "" || basePath == "/" {
+		return "/v1/traces"
+	}
+	return strings.TrimRight(basePath, "/") + "/v1/traces"
 }
 
 func (e traceOTLPEndpoint) options() []otlptracehttp.Option {
@@ -274,9 +303,7 @@ func (e traceOTLPEndpoint) options() []otlptracehttp.Option {
 		options = append(options, otlptracehttp.WithInsecure())
 	}
 	options = append(options, otlptracehttp.WithEndpoint(e.target))
-	if e.urlPath != "" {
-		options = append(options, otlptracehttp.WithURLPath(e.urlPath))
-	}
+	options = append(options, otlptracehttp.WithURLPath(e.urlPath))
 
 	return options
 }

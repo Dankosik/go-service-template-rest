@@ -167,6 +167,42 @@ observability:
 	}
 }
 
+func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
+	resetConfigEnv(t)
+
+	password := " redis password with surrounding whitespace "
+	headers := " authorization=Bearer token, x-trace= spaced value "
+	t.Setenv("APP__REDIS__PASSWORD", password)
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", headers)
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.Redis.Password != password {
+		t.Fatalf("Redis.Password = %q, want exact env value %q", cfg.Redis.Password, password)
+	}
+	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
+		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
+	}
+}
+
+func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__REDIS__MODE", " STORE ")
+	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
+	t.Setenv("APP__REDIS__STALE_WINDOW", "0s")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.Redis.Mode != "store" {
+		t.Fatalf("Redis.Mode = %q, want store", cfg.Redis.Mode)
+	}
+}
+
 func TestFlatEnvKeysAreIgnored(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1662,6 +1698,44 @@ func TestPostgresDSNMustBeParseable(t *testing.T) {
 	}
 }
 
+func TestPostgresProbeAddress(t *testing.T) {
+	t.Run("valid dsn", func(t *testing.T) {
+		address, err := PostgresProbeAddress("postgres://user:pass@localhost:5432/app?sslmode=disable")
+		if err != nil {
+			t.Fatalf("PostgresProbeAddress() error = %v", err)
+		}
+		if address != "localhost:5432" {
+			t.Fatalf("PostgresProbeAddress() = %q, want localhost:5432", address)
+		}
+	})
+
+	t.Run("invalid dsn is redacted", func(t *testing.T) {
+		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
+		_, err := PostgresProbeAddress(rawDSN)
+		if err == nil {
+			t.Fatal("PostgresProbeAddress() error = nil, want non-nil")
+		}
+		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
+			t.Fatalf("PostgresProbeAddress() error = %v, want redacted parse context", err)
+		}
+		for _, leaked := range []string{rawDSN, "top-secret", "user"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("PostgresProbeAddress() error = %v, leaked %q", err, leaked)
+			}
+		}
+	})
+
+	t.Run("invalid probe target shape", func(t *testing.T) {
+		_, err := PostgresProbeAddress("user=user password=pass host=/var/run/postgresql dbname=app")
+		if err == nil {
+			t.Fatal("PostgresProbeAddress() error = nil, want non-nil")
+		}
+		if !strings.Contains(err.Error(), "invalid postgres probe address") {
+			t.Fatalf("PostgresProbeAddress() error = %v, want invalid probe target context", err)
+		}
+	})
+}
+
 func TestRedisEnabledRequiresHostPortAddress(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1875,6 +1949,15 @@ func TestParseInt(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects float above exact integer range on wide int", func(t *testing.T) {
+		if strconv.IntSize <= 53 {
+			t.Skip("parseInt target range is already narrower than float64 exact integer range")
+		}
+		if _, err := parseInt(math.Ldexp(1, 53) + 2); err == nil {
+			t.Fatalf("parseInt() expected unsafe float integer error")
+		}
+	})
+
 	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
 		overflow := uint(math.MaxInt) + 1
 		if _, err := parseInt(overflow); err == nil {
@@ -1923,6 +2006,12 @@ func TestParseInt64(t *testing.T) {
 	t.Run("rejects conversion unsafe float upper bound", func(t *testing.T) {
 		if _, err := parseInt64(math.Ldexp(1, 63)); err == nil {
 			t.Fatalf("parseInt64() expected overflow error at first unsafe upper bound")
+		}
+	})
+
+	t.Run("rejects float above exact integer range", func(t *testing.T) {
+		if _, err := parseInt64(math.Ldexp(1, 53) + 2); err == nil {
+			t.Fatalf("parseInt64() expected unsafe float integer error")
 		}
 	})
 

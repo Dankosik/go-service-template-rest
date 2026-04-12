@@ -186,6 +186,34 @@ func TestNetworkPolicyEnforceIngressAllowsActiveException(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicyIngressExceptionScopeIsMetadataOnly(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ID", "ex-ingress-metadata-scope")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", ".")
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
+	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v, want nil for metadata-only ingress scope", err)
+	}
+	policy.now = func() time.Time { return now }
+
+	if got := policy.ingressException.Scope; got != "." {
+		t.Fatalf("ingress exception Scope = %q, want audit metadata", got)
+	}
+	if got := len(policy.ingressException.scopeMatcher); got != 0 {
+		t.Fatalf("ingress exception scopeMatcher len = %d, want 0", got)
+	}
+	if err := policy.EnforceIngress(); err != nil {
+		t.Fatalf("EnforceIngress() error = %v, want nil", err)
+	}
+}
+
 func TestNetworkPolicyEnforceIngressRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
@@ -315,6 +343,56 @@ func TestNetworkPolicyEnforceEgressTargetInvalidTargetPreservesLocalReason(t *te
 				t.Fatalf("EnforceEgressTarget() error chain = %v, want wrapped %q", err, tt.wantReason)
 			}
 		})
+	}
+}
+
+func TestNetworkPolicyEgressExceptionScopeMatchesPublicTarget(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-scope")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-upstream-debug")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", "api.exception.example")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	policy.now = func() time.Time { return now }
+
+	if got := len(policy.egressException.scopeMatcher); got == 0 {
+		t.Fatal("egress exception scopeMatcher len = 0, want host matcher")
+	}
+	if err := policy.EnforceEgressTarget("api.exception.example:443", "tcp"); err != nil {
+		t.Fatalf("EnforceEgressTarget(exception scope) error = %v, want nil", err)
+	}
+	if err := policy.EnforceEgressTarget("api.other.example:443", "tcp"); err == nil {
+		t.Fatal("EnforceEgressTarget(outside exception scope) error = nil, want non-nil")
+	}
+}
+
+func TestNetworkPolicyEgressExceptionRejectsInvalidScopeMatcher(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ID", "ex-egress-invalid-scope")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-upstream-debug")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", ".")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", now.Add(2*time.Hour).Format(time.RFC3339))
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
+
+	_, err := loadNetworkPolicyFromEnv()
+	if err == nil {
+		t.Fatal("loadNetworkPolicyFromEnv() error = nil, want invalid egress exception scope")
+	}
+	policyClass, reasonClass := networkPolicyErrorLabels(err)
+	if policyClass != "egress" {
+		t.Fatalf("policyClass = %q, want %q", policyClass, "egress")
+	}
+	if reasonClass != "invalid_configuration" {
+		t.Fatalf("reasonClass = %q, want %q", reasonClass, "invalid_configuration")
 	}
 }
 

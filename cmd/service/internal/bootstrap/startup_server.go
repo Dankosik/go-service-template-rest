@@ -186,6 +186,10 @@ func startStartupAdmission(
 				return
 			}
 		}
+		if err := readyCtx.Err(); err != nil {
+			resultCh <- err
+			return
+		}
 
 		admission.MarkReady(readyCtx)
 		resultCh <- nil

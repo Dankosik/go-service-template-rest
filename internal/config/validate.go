@@ -143,7 +143,7 @@ func validatePostgres(cfg PostgresConfig) error {
 		return fmt.Errorf("%w: postgres.dsn is required when postgres.enabled=true", ErrSecretPolicy)
 	}
 	if cfg.Enabled {
-		if _, err := pgxpool.ParseConfig(cfg.DSN); err != nil {
+		if _, err := PostgresProbeAddress(cfg.DSN); err != nil {
 			return fmt.Errorf("%w: postgres.dsn must be parseable", ErrValidate)
 		}
 	}
@@ -237,6 +237,9 @@ func validateMongo(cfg MongoConfig) error {
 		return fmt.Errorf("%w: mongo.uri is required when mongo.enabled=true", ErrSecretPolicy)
 	}
 	if cfg.Enabled {
+		if cfg.URI != strings.TrimSpace(cfg.URI) {
+			return fmt.Errorf("%w: mongo.uri must be parseable", ErrValidate)
+		}
 		if _, err := MongoProbeAddress(cfg.URI); err != nil {
 			return fmt.Errorf("%w: mongo.uri must be parseable", ErrValidate)
 		}
@@ -375,6 +378,20 @@ func validateNumericTCPPort(port string) error {
 		return fmt.Errorf("port must be numeric TCP port in range [1,65535]")
 	}
 	return nil
+}
+
+// PostgresProbeAddress extracts a probe-ready host:port from a PostgreSQL DSN.
+func PostgresProbeAddress(rawDSN string) (string, error) {
+	pgxCfg, err := pgxpool.ParseConfig(rawDSN)
+	if err != nil {
+		// pgx parse errors can echo the input DSN, including credentials.
+		return "", fmt.Errorf("parse postgres dsn: invalid value redacted")
+	}
+	host := strings.TrimSpace(pgxCfg.ConnConfig.Host)
+	if host == "" || pgxCfg.ConnConfig.Port == 0 || strings.ContainsAny(host, `/\`) {
+		return "", fmt.Errorf("invalid postgres probe address")
+	}
+	return net.JoinHostPort(host, strconv.Itoa(int(pgxCfg.ConnConfig.Port))), nil
 }
 
 const (

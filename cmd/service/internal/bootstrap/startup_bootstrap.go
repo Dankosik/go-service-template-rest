@@ -43,7 +43,8 @@ func bootstrapRuntime(
 	}
 
 	log := bootstrapLoggerStage(cfg)
-	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
+	netPolicyResult := loadNetworkPolicy()
+	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log, netPolicyResult)
 	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
 	spanOwnedByCaller := false
 	defer func() {
@@ -58,6 +59,7 @@ func bootstrapRuntime(
 		bootstrapSpan,
 		metrics,
 		log,
+		netPolicyResult,
 		cfg,
 	)
 	if err != nil {
@@ -144,13 +146,19 @@ func bootstrapTelemetryStage(
 	cfg config.Config,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
+	netPolicyResult networkPolicyLoadResult,
 ) (func(context.Context), error) {
 	metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
 	exporterCfg := traceExporterConfig(cfg)
-	if telemetryInitErr := admitTelemetryExporterTarget(exporterCfg); telemetryInitErr != nil {
+	targetAdmitted, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
+	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, telemetryInitErr
+	}
+	if !targetAdmitted {
+		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
+		return func(context.Context) {}, nil
 	}
 
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
@@ -217,23 +225,22 @@ func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
 	}
 }
 
-func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig) error {
+func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (bool, error) {
 	target, err := telemetry.DescribeTraceExporterTarget(cfg)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !target.Configured {
-		return nil
+		return true, nil
 	}
 
-	netPolicy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		return fmt.Errorf("load network policy for telemetry egress: %w", err)
+	if netPolicyResult.err != nil {
+		return false, nil
 	}
-	if err := netPolicy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {
-		return fmt.Errorf("telemetry egress target denied: %w", err)
+	if err := netPolicyResult.policy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {
+		return false, fmt.Errorf("telemetry egress target denied: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Context, trace.Span) {
@@ -320,23 +327,23 @@ func bootstrapNetworkPolicyStage(
 	bootstrapSpan trace.Span,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
+	netPolicyResult networkPolicyLoadResult,
 	cfg config.Config,
 ) (networkPolicy, error) {
-	netPolicy, netPolicyErr := loadNetworkPolicyFromEnv()
-	if netPolicyErr != nil {
-		policyClass, reasonClass := networkPolicyErrorLabels(netPolicyErr)
+	if netPolicyResult.err != nil {
+		policyClass, reasonClass := networkPolicyErrorLabels(netPolicyResult.err)
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			metrics,
 			log,
 			startupDependencyNetworkPolicy,
-			fmt.Errorf("%w: invalid network policy configuration: %w", errDependencyInit, netPolicyErr),
+			fmt.Errorf("%w: invalid network policy configuration: %w", errDependencyInit, netPolicyResult.err),
 			"policy.class", policyClass,
 			"reason.class", reasonClass,
 		)
 	}
-	netPolicy = netPolicy.withIngressExposure(cfg.App.Env, cfg.HTTP.Addr)
+	netPolicy := netPolicyResult.policy.withIngressExposure(cfg.App.Env, cfg.HTTP.Addr)
 
 	if ingressErr := netPolicy.EnforceIngress(); ingressErr != nil {
 		return networkPolicy{}, rejectStartupForPolicyViolation(
