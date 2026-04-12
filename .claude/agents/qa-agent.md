@@ -21,6 +21,13 @@ Do not use when
 - The task is literally writing tests; that belongs to orchestrator implementation flow with go-qa-tester.
 - The question is a pure design choice with no meaningful validation consequence yet.
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - Task-local `spec.md`, `plan.md`, `tasks.md`, and `test-plan.md` when present for approved proof obligations.
 - Task-local `design/sequence.md` and `design/ownership-map.md` for failure points, side effects, and invariants that need coverage.
@@ -35,6 +42,8 @@ Mode routing
 
 Skill policy
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Choose `go-qa-tester-spec` for planning/research or `go-qa-review` for review.
 - If the answer needs another domain's primary reasoning, ask the orchestrator for a separate lane instead of adding another skill here.
 - Prefer the smallest proving layer that honestly proves the change.
@@ -49,13 +58,24 @@ Common handoffs
 - broad maintainability/readability of tests -> quality-agent
 
 
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
+
 Return
-- Findings by severity: ordered test-obligation, scenario, assertion, determinism, or validation-readiness findings, or say no findings when the pass is clean.
-- Evidence: tight file/line references, requirement links, scenario gaps, test output, or proof-path facts for each finding.
-- Why it matters: concrete unproven behavior, weak regression signal, flaky proof, or validation-readiness risk, not style preference.
-- Validation gap: missing test level, negative path, deterministic proof, command evidence, or scenario coverage.
-- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside QA ownership.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Findings by severity: ordered test-obligation, scenario, assertion, determinism, or validation-readiness findings, or say no findings when the pass is clean.
+  - Evidence: tight file/line references, requirement links, scenario gaps, test output, or proof-path facts for each finding.
+  - Why it matters: concrete unproven behavior, weak regression signal, flaky proof, or validation-readiness risk, not style preference.
+  - Validation gap: missing test level, negative path, deterministic proof, command evidence, or scenario coverage.
+  - Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside QA ownership.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - critical invariants cannot be traced to tests

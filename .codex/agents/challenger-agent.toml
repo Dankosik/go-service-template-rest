@@ -22,6 +22,13 @@ Do not use when
 - the work is active code review, implementation, or debugging
 - the needed answer is a specialist domain decision rather than a challenge of an existing candidate artifact
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - For `workflow-plan-adequacy-challenge`, inspect the task frame, execution shape, `workflow-plan.md`, active `workflow-plans/<phase>.md`, and generated phase-control files that affect handoff.
 - For `pre-spec-challenge`, inspect research evidence, candidate decisions, assumptions, non-goals, rejected alternatives, and risk seams before `spec.md` hardens.
@@ -40,6 +47,8 @@ Skill policy
 - If no mode is named, choose exactly one skill from the challenged artifact: `workflow-plan-adequacy-challenge` for workflow-control artifacts, `pre-spec-challenge` for candidate synthesis, or `spec-clarification-challenge` for candidate `spec.md` approval.
 - Let the chosen skill own the questioning protocol, output shape, stop condition, and anti-patterns.
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Allowed primary skills: `workflow-plan-adequacy-challenge`, `pre-spec-challenge`, and `spec-clarification-challenge`.
 - If a challenged point needs specialist depth, ask the orchestrator to reopen that domain in a separate lane instead of adding another skill here.
 - If framing is still unstable, escalate back to the orchestrator instead of absorbing brainstorming.
@@ -57,12 +66,23 @@ Common handoffs
 - spec approval depends on missing product policy -> orchestrator to record a user decision blocker
 
 
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
+
 Return
-- Conclusion: mode used, skill used, and blocker versus non-blocker call for the challenged artifact.
-- Evidence: tight references to the workflow-control artifact, candidate synthesis, candidate spec, assumptions, or research links that support each challenge item.
-- Open risks: for `workflow-plan-adequacy-challenge`, handoff insufficiencies and what could fail if left as-is; for `pre-spec-challenge`, hidden assumptions, corner cases, ownership or failure-semantics gaps, and re-research needs; for `spec-clarification-challenge`, approval blockers, targeted research needs, and user-policy inputs.
-- Recommended handoff: exact orchestrator addition, clarification, specialist lane, targeted research pass, or user-decision blocker needed next.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Conclusion: mode used, skill used, and blocker versus non-blocker call for the challenged artifact.
+  - Evidence: tight references to the workflow-control artifact, candidate synthesis, candidate spec, assumptions, or research links that support each challenge item.
+  - Open risks: for `workflow-plan-adequacy-challenge`, handoff insufficiencies and what could fail if left as-is; for `pre-spec-challenge`, hidden assumptions, corner cases, ownership or failure-semantics gaps, and re-research needs; for `spec-clarification-challenge`, approval blockers, targeted research needs, and user-policy inputs.
+  - Recommended handoff: exact orchestrator addition, clarification, specialist lane, targeted research pass, or user-decision blocker needed next.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - the assigned mode and provided evidence bundle do not match

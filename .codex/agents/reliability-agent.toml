@@ -17,6 +17,13 @@ Use when
 Do not use when
 - The task is purely about business rules, payload shape, or a small refactor with no failure-path implications.
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - Task-local `spec.md` and `design/` when present for failure policy, accepted risk, and proof obligations.
 - `cmd/service/main.go` and `cmd/service/internal/bootstrap/` for process lifecycle, startup admission, readiness, and shutdown behavior.
@@ -31,6 +38,8 @@ Mode routing
 
 Skill policy
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Choose `go-reliability-spec` for research/adjudication or `go-reliability-review` for review.
 - If the real question is API, cache/data, distributed-flow, or observability ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Keep timeout, retry, and overload behavior explicit and bounded.
@@ -44,13 +53,24 @@ Common handoffs
 - telemetry contract for critical-path diagnosability -> observability-agent or design-integrator-agent
 
 
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
+
 Return
-- Findings by severity: ordered timeout, retry, fallback, overload, lifecycle, readiness, or shutdown findings, or say no findings when the pass is clean.
-- Evidence: tight file/line references, failure paths, lifecycle facts, runtime policy, or test output for each finding.
-- Why it matters: concrete outage, overload, retry amplification, degraded-mode, readiness, shutdown, or rollout risk, not style preference.
-- Validation gap: missing failure-path test, timeout/retry proof, shutdown proof, rollback proof, or targeted command evidence.
-- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside reliability ownership.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Findings by severity: ordered timeout, retry, fallback, overload, lifecycle, readiness, or shutdown findings, or say no findings when the pass is clean.
+  - Evidence: tight file/line references, failure paths, lifecycle facts, runtime policy, or test output for each finding.
+  - Why it matters: concrete outage, overload, retry amplification, degraded-mode, readiness, shutdown, or rollout risk, not style preference.
+  - Validation gap: missing failure-path test, timeout/retry proof, shutdown proof, rollback proof, or targeted command evidence.
+  - Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside reliability ownership.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - dependency criticality is ambiguous

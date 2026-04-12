@@ -20,6 +20,13 @@ Do not use when
 - The question is only about route wiring, payload schema, SQL tuning, or CI policy.
 - The task is a purely local implementation cleanup with no behavior change.
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - Task-local `spec.md` for approved business terms, decisions, assumptions, and non-goals.
 - `internal/app/` for use-case services, tests, acceptance paths, and state transitions.
@@ -34,6 +41,8 @@ Mode routing
 
 Skill policy
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Choose `go-domain-invariant-spec` for research/adjudication or `go-domain-invariant-review` for review.
 - If the answer also needs API, data, reliability, security, or QA ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Do not drift into transport, schema, or infra mechanics before the business rule is explicit.
@@ -47,13 +56,24 @@ Common handoffs
 - test-obligation traceability -> qa-agent
 
 
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
+
 Return
-- Findings by severity: ordered invariant, state-transition, acceptance, duplicate, or replay findings, or say no findings when the pass is clean.
-- Evidence: tight file/line references, state rules, acceptance paths, domain facts, or scenario proof for each finding.
-- Why it matters: concrete business-invariant, forbidden-transition, replay, or acceptance-semantics risk, not style preference.
-- Validation gap: missing invariant traceability, fail-path scenario coverage, transition proof, or targeted command evidence.
-- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside domain ownership.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Findings by severity: ordered invariant, state-transition, acceptance, duplicate, or replay findings, or say no findings when the pass is clean.
+  - Evidence: tight file/line references, state rules, acceptance paths, domain facts, or scenario proof for each finding.
+  - Why it matters: concrete business-invariant, forbidden-transition, replay, or acceptance-semantics risk, not style preference.
+  - Validation gap: missing invariant traceability, fail-path scenario coverage, transition proof, or targeted command evidence.
+  - Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside domain ownership.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - core terms are undefined

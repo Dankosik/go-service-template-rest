@@ -28,6 +28,7 @@ More artifacts do not change ownership:
 - **Orchestrator:** owns framing, routing, final decisions, implementation, validation, and artifact authority.
 - **Subagents:** stay read-only and advisory.
 - **Skills:** remain optional tools. For subagent-internal research or review skills, the orchestrator routes by skill name and the subagent loads the skill body inside its own pass.
+- **Agent instructions vs skills:** agent instructions own scope, mode routing, and handoff; when a chosen skill defines a procedure or output shape, the skill owns that procedure or output shape.
 - **`spec.md`:** remains the canonical decisions artifact.
 
 The added artifacts provide control and technical context around `spec.md`, not another authority chain.
@@ -253,6 +254,8 @@ The phase file owns only local orchestration:
 - parallelizable work.
 
 A lane's selected skill is a skill name or `no-skill` routing decision. It is not a requirement for the orchestrator to load the full `SKILL.md`; pass the selected name to the subagent and let that lane load the skill if it uses one.
+
+If the selected skill defines an exact deliverable shape, the subagent follows that shape. Otherwise it uses the agent file's fallback return block. Recommended handoffs should classify the next action as one of `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`, then name the target owner or artifact.
 
 Section 7 defines the minimum shape in more detail.
 

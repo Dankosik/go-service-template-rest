@@ -15,6 +15,7 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 - **Orchestrator** owns framing, scope boundaries, decomposition, final decisions, planning, implementation, review orchestration, reconciliation, validation, and artifact authority.
 - **Subagent** owns narrow research or review inside the assigned scope only; it stays advisory and read-only.
 - **Skill** provides optional support; it never owns workflow choreography, repository decisions, or final authority.
+- Agent instructions own scope, mode routing, and handoff; when a chosen skill defines a procedure or output shape, the skill owns that procedure or output shape.
 - `spec.md` is the canonical decisions artifact.
 
 ## 3. Load only what is relevant
@@ -101,7 +102,10 @@ Subagents must:
 
 - stay inside the assigned scope,
 - separate facts, inferences, assumptions, risks, and open points,
+- follow the chosen skill's exact deliverable shape when one exists,
 - return compact, synthesis-ready results.
+
+Recommended handoffs should classify the next action with one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
 
 Subagents must not:
 

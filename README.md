@@ -104,27 +104,30 @@ This repository distinguishes between two different things:
 - **Skills** are portable workflow playbooks loaded on demand by the orchestrator or a subagent.
 
 The repository ships with project-scoped, read-only subagents for focused reasoning and review.
-Click an agent name to open its project-scoped instruction file in `.claude/agents`.
+Codex agent instructions live in `.codex/agents/*.toml` and are loaded through `.codex/config.toml`. Claude Code mirrors live in `.claude/agents/`; keep the two surfaces semantically aligned when changing an agent.
+Click an agent name to open its Codex instruction file.
 
 | Agent | Owns | Use when | Returns |
 |---|---|---|---|
-| [`architecture-agent`](.claude/agents/architecture-agent.md) | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
-| [`api-agent`](.claude/agents/api-agent.md) | client-visible contract behavior and transport semantics | endpoints, statuses, errors, idempotency, or async acknowledgment change | contract recommendation, compatibility notes |
-| [`concurrency-agent`](.claude/agents/concurrency-agent.md) | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
-| [`challenger-agent`](.claude/agents/challenger-agent.md) | workflow-plan adequacy, pre-spec challenge, spec clarification challenge, hidden assumptions, corner cases, and planning-risk pressure tests | workflow control, candidate decisions, or non-trivial `spec.md` approval need an independent challenger | discriminating questions, blocker calls, next actions |
-| [`data-agent`](.claude/agents/data-agent.md) | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
-| [`delivery-agent`](.claude/agents/delivery-agent.md) | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
-| [`design-integrator-agent`](.claude/agents/design-integrator-agent.md) | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
-| [`distributed-agent`](.claude/agents/distributed-agent.md) | cross-service consistency, outbox/inbox, replay, reconciliation | the workflow crosses service boundaries or depends on eventual consistency | flow model, recovery stance |
-| [`domain-agent`](.claude/agents/domain-agent.md) | business invariants, state transitions, acceptance semantics | behavior changes touch lifecycle, rules, duplicates, or forbidden paths | invariant set, corner cases, handoffs |
-| [`observability-agent`](.claude/agents/observability-agent.md) | logs, metrics, traces, SLOs, alerts, telemetry cost | signal contracts, operator response, or telemetry privacy/cardinality rules change | signal contract, observability risks, handoffs |
-| [`performance-agent`](.claude/agents/performance-agent.md) | performance budgets, bottleneck hypotheses, proof strategy | the change is hot-path sensitive or justified mainly by speed | performance stance, proof obligations |
-| [`qa-agent`](.claude/agents/qa-agent.md) | test obligations, proving levels, validation readiness | a non-trivial behavior change needs a real regression plan | scenario matrix, validation strategy |
-| [`quality-agent`](.claude/agents/quality-agent.md) | idiomatic Go review and simplification | the diff feels noisy, over-abstracted, or hard to maintain | maintainability findings, cleanup guidance |
-| [`reliability-agent`](.claude/agents/reliability-agent.md) | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
-| [`security-agent`](.claude/agents/security-agent.md) | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
+| [`architecture-agent`](.codex/agents/architecture-agent.toml) | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
+| [`api-agent`](.codex/agents/api-agent.toml) | client-visible contract behavior and targeted transport semantics | endpoints, statuses, errors, idempotency, async acknowledgment, or chi HTTP semantics change | contract recommendation, compatibility notes |
+| [`concurrency-agent`](.codex/agents/concurrency-agent.toml) | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
+| [`challenger-agent`](.codex/agents/challenger-agent.toml) | workflow-plan adequacy, pre-spec challenge, spec clarification challenge, hidden assumptions, corner cases, and planning-risk pressure tests | workflow control, candidate decisions, or non-trivial `spec.md` approval need an independent challenger | discriminating questions, blocker calls, next actions |
+| [`data-agent`](.codex/agents/data-agent.toml) | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
+| [`delivery-agent`](.codex/agents/delivery-agent.toml) | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
+| [`design-integrator-agent`](.codex/agents/design-integrator-agent.toml) | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
+| [`distributed-agent`](.codex/agents/distributed-agent.toml) | cross-service consistency, outbox/inbox, replay, reconciliation | the workflow crosses service boundaries or depends on eventual consistency | flow model, recovery stance |
+| [`domain-agent`](.codex/agents/domain-agent.toml) | business invariants, state transitions, acceptance semantics | behavior changes touch lifecycle, rules, duplicates, or forbidden paths | invariant set, corner cases, handoffs |
+| [`observability-agent`](.codex/agents/observability-agent.toml) | logs, metrics, traces, SLOs, alerts, telemetry cost | signal contracts, operator response, or telemetry privacy/cardinality rules change | signal contract, observability risks, handoffs |
+| [`performance-agent`](.codex/agents/performance-agent.toml) | performance budgets, bottleneck hypotheses, proof strategy | the change is hot-path sensitive or justified mainly by speed | performance stance, proof obligations |
+| [`qa-agent`](.codex/agents/qa-agent.toml) | test obligations, proving levels, validation readiness | a non-trivial behavior change needs a real regression plan | scenario matrix, validation strategy |
+| [`quality-agent`](.codex/agents/quality-agent.toml) | idiomatic Go review and simplification | the diff feels noisy, over-abstracted, or hard to maintain | maintainability findings, cleanup guidance |
+| [`reliability-agent`](.codex/agents/reliability-agent.toml) | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
+| [`security-agent`](.codex/agents/security-agent.toml) | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
 
 All of these agents stay advisory and read-only. Write-capable delegates are not part of this subagent model. Final decisions always stay with the orchestrator in the main flow.
+Agent files own scope, mode routing, and handoff. If a lane uses a skill, the skill owns the procedure and exact output shape; the agent fallback return shape applies only when the chosen skill does not define one.
+`delivery-agent`, `distributed-agent`, and `observability-agent` currently have spec/design skills but no dedicated review skills, so use them for targeted research or adjudication rechecks rather than routine review fan-out.
 
 ### How They Are Called
 

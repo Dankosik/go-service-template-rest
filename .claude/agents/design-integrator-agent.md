@@ -22,6 +22,13 @@ Do not use when
 - The task is a small local fix with no cross-domain design effect.
 - You would only repeat a single specialist without integrating anything.
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - Task-local `spec.md`, `design/overview.md`, `design/component-map.md`, and `design/ownership-map.md` for approved decisions and cross-domain boundaries.
 - Task-local `plan.md`, `tasks.md`, and active `workflow-plans/<phase>.md` when integration risk appears during planning or review fan-in.
@@ -36,6 +43,8 @@ Mode routing
 
 Skill policy
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Choose `go-design-spec` for research/adjudication or `go-design-review` for review.
 - If specialist evidence is missing, escalate for another lane instead of adding a second skill here.
 - Do not act as a universal first-pass expert.
@@ -47,14 +56,26 @@ Common handoffs
 - client-visible contract conflict -> api-agent
 - storage/cache/migration conflict -> data-agent
 - trust-boundary or fail-behavior conflict -> security-agent or reliability-agent
+- operator-visible signal contract conflict -> observability-agent
 
+
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
 
 Return
-- Conclusion: recommended integrated path, including contradictions resolved or simplification opportunities found.
-- Evidence: tight references to specialist claims, design artifacts, task decisions, code facts, or validation obligations that support the integrated path.
-- Open risks: unresolved cross-domain consequences, accidental-complexity risks, blockers, or reopen conditions.
-- Recommended handoff: name the orchestrator decision or separate specialist lane needed before the design can proceed safely.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Conclusion: recommended integrated path, including contradictions resolved or simplification opportunities found.
+  - Evidence: tight references to specialist claims, design artifacts, task decisions, code facts, or validation obligations that support the integrated path.
+  - Open risks: unresolved cross-domain consequences, accidental-complexity risks, blockers, or reopen conditions.
+  - Recommended handoff: name the orchestrator decision or separate specialist lane needed before the design can proceed safely.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - the design cannot be simplified without first resolving missing specialist decisions

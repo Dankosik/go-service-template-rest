@@ -19,6 +19,13 @@ Do not use when
 - The main risk is domain correctness, security, DB/cache correctness, reliability, performance, or concurrency correctness.
 - The task is design research rather than implementation review.
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - Task-local `spec.md`, `plan.md`, and `tasks.md` for approved scope and non-goals before suggesting cleanup.
 - Changed Go files and adjacent `*_test.go` files named by the task ledger or diff.
@@ -33,6 +40,8 @@ Mode routing
 
 Skill policy
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Choose exactly one skill for the current question: `go-idiomatic-review`, `go-language-simplifier-review`, or `go-design-review`.
 - If both idiomatic and simplification passes add value, ask the orchestrator to run separate `quality-agent` lanes instead of combining them here.
 - Lead with merge-risk findings, not taste-only comments.
@@ -44,13 +53,24 @@ Common handoffs
 - concurrency, performance, security, DB/cache, or reliability depth -> corresponding domain review agent
 
 
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
+
 Return
-- Findings by severity: ordered idiomatic Go, simplification, naming, exported-surface, or maintainability findings, or say no findings when the pass is clean.
-- Evidence: tight file/line references, local control-flow/package facts, or test impact for each finding.
-- Why it matters: concrete merge risk, misread risk, hidden contract drift, or maintenance hazard, not taste-only style preference.
-- Validation gap: missing targeted test, lint, compile, or review proof that would make the maintainability claim safe.
-- Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside quality ownership.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Findings by severity: ordered idiomatic Go, simplification, naming, exported-surface, or maintainability findings, or say no findings when the pass is clean.
+  - Evidence: tight file/line references, local control-flow/package facts, or test impact for each finding.
+  - Why it matters: concrete merge risk, misread risk, hidden contract drift, or maintenance hazard, not taste-only style preference.
+  - Validation gap: missing targeted test, lint, compile, or review proof that would make the maintainability claim safe.
+  - Handoff: name the orchestrator decision or separate agent lane needed when the issue is outside quality ownership.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - safe simplification would change public contract or approved design

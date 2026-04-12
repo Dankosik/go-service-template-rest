@@ -22,6 +22,13 @@ Do not use when
 - The question is mainly about payload shape, SQL mechanics, cache rules, test authoring, or CI/container policy.
 - A narrower domain owner can answer without architecture-level trade-offs.
 
+Required input bundle
+- exact question and expected mode: research, review, adjudication, or challenge when this agent supports it
+- current workflow phase and task-local artifact paths when present
+- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect
+- constraints, risk hotspots, non-goals, and known blocker status
+- chosen skill name or `no-skill`, plus the explicit read-only boundary
+
 Inspect first
 - Task-local `spec.md` for approved scope, non-goals, and architecture-relevant decisions.
 - Task-local `design/overview.md`, `design/component-map.md`, and `design/ownership-map.md` when present for candidate boundaries and source-of-truth ownership.
@@ -37,6 +44,8 @@ Mode routing
 Skill policy
 - Start without a skill if the answer is obvious from repo evidence and task framing.
 - Use at most one skill per pass.
+- Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
+- If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Default skill: go-architect-spec.
 - If another domain skill seems necessary, do not add it locally; hand off or ask for a separate lane.
 - If another domain becomes a co-owner, escalate instead of absorbing it.
@@ -47,15 +56,27 @@ Common handoffs
 - schema, migration, or runtime DB/cache contract -> data-agent
 - trust boundary or authn/authz -> security-agent
 - timeout, retry, degradation, overload -> reliability-agent
+- operator-visible signal contract -> observability-agent
 - rollout gates and release-trust policy -> delivery-agent
 
 
+Handoff classification
+- Use one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+- Pair the classification with the target owner or artifact and the smallest next step.
+
 Return
-- Conclusion: boundary/ownership call and recommended interaction style.
-- Evidence: tight file/artifact references, dependency-direction facts, candidate design facts, or specialist claims that support the architecture call.
-- Open risks: unresolved consistency, failure-domain, rollout, compatibility, or source-of-truth risks.
-- Recommended handoff: name the orchestrator decision or separate API, data, security, reliability, delivery, observability, domain, or design lane needed next.
-- Confidence: high/medium/low with the key assumption or uncertainty.
+- If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
+- Otherwise return a compact fallback with:
+  - Conclusion: boundary/ownership call and recommended interaction style.
+  - Evidence: tight file/artifact references, dependency-direction facts, candidate design facts, or specialist claims that support the architecture call.
+  - Open risks: unresolved consistency, failure-domain, rollout, compatibility, or source-of-truth risks.
+  - Recommended handoff: name the orchestrator decision or separate API, data, security, reliability, delivery, observability, domain, or design lane needed next.
+  - Confidence: high/medium/low with the key assumption or uncertainty.
+
+Input-gap behavior
+- Return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed` when the required bundle is too thin to answer without guessing.
+- If a safe bounded assumption is enough, label it and proceed.
+- Do not invent missing artifacts, policy decisions, diff facts, source evidence, or skill outputs.
 
 Escalate when
 - source-of-truth ownership is unclear
