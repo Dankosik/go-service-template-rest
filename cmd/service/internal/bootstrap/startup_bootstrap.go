@@ -105,10 +105,10 @@ func bootstrapConfigStage(
 	if err != nil {
 		failedStage, failedDuration := failedStageDetails(configReport)
 		errorType := config.ErrorType(err)
-		metrics.ObserveConfigLoadDuration(failedStage, "error", failedDuration)
+		metrics.ObserveConfigLoadDuration(failedStage, telemetry.ConfigLoadResultError, failedDuration)
 		metrics.IncConfigValidationFailure(errorType)
 		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
-		metrics.IncConfigStartupOutcome("rejected")
+		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 		slog.Error(
 			"config_load_failed",
 			startupLogArgs(
@@ -130,10 +130,10 @@ func bootstrapConfigStage(
 			failedDuration = time.Millisecond
 		}
 		errorType := config.ErrorType(err)
-		metrics.ObserveConfigLoadDuration(config.StageValidate, "error", failedDuration)
+		metrics.ObserveConfigLoadDuration(config.StageValidate, telemetry.ConfigLoadResultError, failedDuration)
 		metrics.IncConfigValidationFailure(errorType)
 		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
-		metrics.IncConfigStartupOutcome("rejected")
+		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 		slog.Error(
 			"config_load_failed",
 			startupLogArgs(
@@ -176,13 +176,13 @@ func bootstrapTelemetryStage(
 ) (func(context.Context), error) {
 	metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
 	exporterCfg := traceExporterConfig(cfg)
-	targetAdmitted, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
+	targetAdmission, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, telemetryInitErr
 	}
-	if !targetAdmitted {
+	if targetAdmission == telemetryExporterTargetDeferredToNetworkPolicy {
 		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, nil
 	}
@@ -251,22 +251,30 @@ func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
 	}
 }
 
-func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (bool, error) {
+type telemetryExporterTargetAdmission int
+
+const (
+	telemetryExporterTargetUnconfigured telemetryExporterTargetAdmission = iota
+	telemetryExporterTargetAllowed
+	telemetryExporterTargetDeferredToNetworkPolicy
+)
+
+func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (telemetryExporterTargetAdmission, error) {
 	target, err := telemetry.DescribeTraceExporterTarget(cfg)
 	if err != nil {
-		return false, err
+		return telemetryExporterTargetUnconfigured, err
 	}
 	if !target.Configured {
-		return true, nil
+		return telemetryExporterTargetUnconfigured, nil
 	}
 
 	if netPolicyResult.err != nil {
-		return false, nil
+		return telemetryExporterTargetDeferredToNetworkPolicy, nil
 	}
 	if err := netPolicyResult.policy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {
-		return false, fmt.Errorf("telemetry egress target denied: %w", err)
+		return telemetryExporterTargetUnconfigured, fmt.Errorf("telemetry egress target denied: %w", err)
 	}
-	return true, nil
+	return telemetryExporterTargetAllowed, nil
 }
 
 func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Context, trace.Span) {

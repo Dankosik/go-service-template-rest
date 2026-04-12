@@ -25,6 +25,28 @@ type Metrics struct {
 }
 
 const (
+	// ConfigLoadResultSuccess is the bounded label for successful config load stages.
+	ConfigLoadResultSuccess = "success"
+
+	// ConfigLoadResultError is the bounded label for failed config load stages.
+	ConfigLoadResultError = "error"
+
+	// ConfigLoadResultOther is the bounded fallback label for unknown config load results.
+	ConfigLoadResultOther = "other"
+)
+
+const (
+	// ConfigStartupOutcomeReady is the bounded label for startup admission-ready outcomes.
+	ConfigStartupOutcomeReady = "ready"
+
+	// ConfigStartupOutcomeRejected is the bounded label for rejected startup outcomes.
+	ConfigStartupOutcomeRejected = "rejected"
+
+	// ConfigStartupOutcomeOther is the bounded fallback label for unknown startup outcomes.
+	ConfigStartupOutcomeOther = "other"
+)
+
+const (
 	// TelemetryFailureReasonSetupError is the bounded label for generic tracing setup failures.
 	TelemetryFailureReasonSetupError = "setup_error"
 
@@ -189,7 +211,7 @@ func (m *Metrics) ObserveConfigLoadDuration(stage, result string, duration time.
 	if m == nil || m.configLoadDuration == nil {
 		return
 	}
-	m.configLoadDuration.WithLabelValues(stage, result).Observe(duration.Seconds())
+	m.configLoadDuration.WithLabelValues(stage, normalizeConfigLoadResult(result)).Observe(duration.Seconds())
 }
 
 func (m *Metrics) IncConfigValidationFailure(reason string) {
@@ -224,7 +246,7 @@ func (m *Metrics) IncConfigStartupOutcome(outcome string) {
 	if m == nil || m.configStartupOutcome == nil {
 		return
 	}
-	m.configStartupOutcome.WithLabelValues(outcome).Inc()
+	m.configStartupOutcome.WithLabelValues(normalizeConfigStartupOutcome(outcome)).Inc()
 }
 
 func (m *Metrics) MarkStartupDependencyReady(dep, mode string) {
@@ -256,6 +278,30 @@ func normalizeTelemetryFailureReason(reason string) string {
 		return normalized
 	default:
 		return TelemetryFailureReasonOther
+	}
+}
+
+func normalizeConfigLoadResult(result string) string {
+	normalized := strings.TrimSpace(strings.ToLower(result))
+	switch normalized {
+	case ConfigLoadResultSuccess:
+		return ConfigLoadResultSuccess
+	case ConfigLoadResultError:
+		return ConfigLoadResultError
+	default:
+		return ConfigLoadResultOther
+	}
+}
+
+func normalizeConfigStartupOutcome(outcome string) string {
+	normalized := strings.TrimSpace(strings.ToLower(outcome))
+	switch normalized {
+	case ConfigStartupOutcomeReady:
+		return ConfigStartupOutcomeReady
+	case ConfigStartupOutcomeRejected:
+		return ConfigStartupOutcomeRejected
+	default:
+		return ConfigStartupOutcomeOther
 	}
 }
 

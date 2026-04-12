@@ -78,7 +78,7 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 	admissionCtx, cancelAdmission := context.WithCancel(args.bootstrapCtx)
 	defer cancelAdmission()
 
-	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.admission, args.cfg.HTTP.ReadinessTimeout)
+	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.cfg.HTTP.ReadinessTimeout)
 	var serverErr error
 	var terminalErr error
 	startupFailureRecorded := false
@@ -89,6 +89,20 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 		}
 		recordStartupRejection(args.bootstrapSpan, args.metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
 		startupFailureRecorded = true
+	}
+	handleServerStop := func(err error) {
+		serverErr = err
+		if !args.admission.Ready() {
+			if serverErr != nil {
+				terminalErr = fmt.Errorf("http server stopped before readiness: %w", serverErr)
+			} else {
+				terminalErr = errors.New("http server stopped before readiness")
+			}
+			recordPreReadyFailure("startup.http_serve", terminalErr)
+		}
+		if serverErr != nil {
+			args.log.Error("http server stopped with error", "err", serverErr)
+		}
 	}
 
 waitForStop:
@@ -108,6 +122,13 @@ waitForStop:
 				startupFailureRecorded = true
 				break waitForStop
 			}
+			select {
+			case err := <-runErrCh:
+				handleServerStop(err)
+				break waitForStop
+			default:
+			}
+			args.admission.MarkReady(args.bootstrapCtx)
 			startupWatchCh = nil
 		case <-args.signalCtx.Done():
 			args.log.Info("shutdown signal received")
@@ -124,18 +145,7 @@ waitForStop:
 			recordPreReadyFailure("startup.readiness", terminalErr)
 			break waitForStop
 		case err := <-runErrCh:
-			serverErr = err
-			if !args.admission.Ready() {
-				if serverErr != nil {
-					terminalErr = fmt.Errorf("http server stopped before readiness: %w", serverErr)
-				} else {
-					terminalErr = errors.New("http server stopped before readiness")
-				}
-				recordPreReadyFailure("startup.http_serve", terminalErr)
-			}
-			if serverErr != nil {
-				args.log.Error("http server stopped with error", "err", serverErr)
-			}
+			handleServerStop(err)
 			break waitForStop
 		}
 	}
@@ -167,7 +177,6 @@ waitForStop:
 func startStartupAdmission(
 	bootstrapCtx context.Context,
 	readinessCheck func(context.Context) error,
-	admission *startupAdmissionController,
 	readinessTimeout time.Duration,
 ) <-chan error {
 	resultCh := make(chan error, 1)
@@ -190,8 +199,6 @@ func startStartupAdmission(
 			resultCh <- err
 			return
 		}
-
-		admission.MarkReady(readyCtx)
 		resultCh <- nil
 	}()
 

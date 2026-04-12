@@ -140,6 +140,27 @@ func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.
 	}
 }
 
+func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *testing.T) {
+	resetBootstrapConfigEnv(t)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
+
+	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("config.LoadDetailed() error = %v", err)
+	}
+	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
+		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
+	}
+	if cfg.Postgres.HealthcheckTimeout != 3*time.Second {
+		t.Fatalf("Postgres.HealthcheckTimeout = %s, want 3s default", cfg.Postgres.HealthcheckTimeout)
+	}
+
+	if err := validateStartupBudgetCompatibility(cfg); err != nil {
+		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)
+	}
+}
+
 func TestBootstrapConfigStageRecordsStartupCompatibilityFailureAsConfigValidation(t *testing.T) {
 	resetBootstrapConfigEnv(t)
 	t.Setenv("APP__POSTGRES__ENABLED", "true")

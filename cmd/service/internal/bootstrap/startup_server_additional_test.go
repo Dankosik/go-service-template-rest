@@ -89,7 +89,7 @@ func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulChec
 		cancel()
 		<-ctx.Done()
 		return nil
-	}, admission, time.Second)
+	}, time.Second)
 
 	select {
 	case err := <-resultCh:
@@ -361,4 +361,58 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	}
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 	assertConfigValidationFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
+}
+
+func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	svc := health.New()
+	srv := newFakeRuntimeServer()
+	admission := newTestStartupAdmissionController(metrics)
+	serveReturned := make(chan struct{})
+	serveErr := errors.New("serve failed while admission succeeded")
+
+	srv.onServe = func(net.Listener) error {
+		defer close(serveReturned)
+		return serveErr
+	}
+
+	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
+		signalCtx:     context.Background(),
+		bootstrapCtx:  context.Background(),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		log:           logger,
+		metrics:       metrics,
+		healthSvc:     svc,
+		srv:           srv,
+		readinessCheck: func(ctx context.Context) error {
+			select {
+			case <-serveReturned:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+		admission: admission,
+	})
+
+	if err == nil {
+		t.Fatal("serveHTTPRuntime() error = nil, want pending serve failure")
+	}
+	if !errors.Is(err, serveErr) {
+		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, serveErr)
+	}
+	if admission.Ready() {
+		t.Fatal("startup admission marked ready while serve failure was already pending")
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if strings.Contains(metricsText, `config_startup_outcome_total{outcome="ready"} 1`) {
+		t.Fatalf("metrics unexpectedly contain ready startup outcome:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
+		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
+	}
+	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }

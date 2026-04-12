@@ -46,7 +46,7 @@ func validateStartupTimeoutBudget(name string, value time.Duration, budget time.
 }
 
 func validateStartupReadinessHeadroom(cfg config.Config) error {
-	probes := startupReadinessProbeBudgets(cfg)
+	probes := cfg.ReadinessProbeBudgets()
 	if len(probes) == 0 {
 		return nil
 	}
@@ -54,8 +54,8 @@ func validateStartupReadinessHeadroom(cfg config.Config) error {
 	var aggregate time.Duration
 	names := make([]string, 0, len(probes))
 	for _, probe := range probes {
-		aggregate += probe.budget
-		names = append(names, probe.name)
+		aggregate += probe.Budget
+		names = append(names, probe.ConfigKey)
 	}
 	required := aggregate + startupReadinessHeadroom
 	if cfg.HTTP.ReadinessTimeout >= required {
@@ -69,32 +69,4 @@ func validateStartupReadinessHeadroom(cfg config.Config) error {
 		required,
 		strings.Join(names, " + "),
 	)
-}
-
-func startupReadinessProbeBudgets(cfg config.Config) []startupReadinessProbeBudget {
-	budgets := make([]startupReadinessProbeBudget, 0, 3)
-	if cfg.PostgresReadinessProbeRequired() {
-		budgets = append(budgets, startupReadinessProbeBudget{
-			name:   "postgres.healthcheck_timeout",
-			budget: cfg.Postgres.HealthcheckTimeout,
-		})
-	}
-	if cfg.RedisReadinessProbeRequired() {
-		budgets = append(budgets, startupReadinessProbeBudget{
-			name:   "redis.dial_timeout",
-			budget: cfg.Redis.DialTimeout,
-		})
-	}
-	if cfg.MongoReadinessProbeRequired() {
-		budgets = append(budgets, startupReadinessProbeBudget{
-			name:   "mongo.connect_timeout",
-			budget: cfg.Mongo.ConnectTimeout,
-		})
-	}
-	return budgets
-}
-
-type startupReadinessProbeBudget struct {
-	name   string
-	budget time.Duration
 }

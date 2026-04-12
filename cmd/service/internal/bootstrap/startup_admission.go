@@ -36,7 +36,7 @@ func (c *startupAdmissionController) MarkReady(ctx context.Context) {
 	c.readyOnce.Do(func() {
 		c.ready.Store(true)
 		if c.metrics != nil {
-			c.metrics.IncConfigStartupOutcome("ready")
+			c.metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeReady)
 		}
 		if c.startupSpan != nil {
 			c.startupSpan.MarkReady()

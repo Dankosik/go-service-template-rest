@@ -5,16 +5,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ProbeAddress extracts a probe-ready host:port from a PostgreSQL DSN.
 func ProbeAddress(rawDSN string) (string, error) {
-	pgxCfg, err := pgxpool.ParseConfig(rawDSN)
+	pgxCfg, err := parsePoolConfig(rawDSN)
 	if err != nil {
-		// pgx parse errors can echo the input DSN, including credentials.
-		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
+		return "", err
 	}
 	host := strings.TrimSpace(pgxCfg.ConnConfig.Host)
 	if host == "" || pgxCfg.ConnConfig.Port == 0 || strings.ContainsAny(host, `/\`) {

@@ -231,14 +231,14 @@ func parseTraceOTLPEndpoint(raw string, source traceOTLPEndpointSource) (traceOT
 	if !strings.Contains(raw, "://") {
 		parsedURL, err := url.Parse("//" + raw)
 		if err != nil {
-			return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
+			return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: invalid endpoint")
 		}
-		return otlpEndpoint(raw, parsedURL, "http", true, source)
+		return otlpEndpoint(parsedURL, "http", true, source)
 	}
 
 	parsedURL, err := url.Parse(raw)
 	if err != nil {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: %w", raw, err)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: invalid endpoint")
 	}
 
 	insecure := false
@@ -248,24 +248,29 @@ func parseTraceOTLPEndpoint(raw string, source traceOTLPEndpointSource) (traceOT
 		insecure = true
 	case "https":
 	default:
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: unsupported scheme %q", raw, parsedURL.Scheme)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: unsupported scheme")
 	}
 
-	return otlpEndpoint(raw, parsedURL, scheme, insecure, source)
+	return otlpEndpoint(parsedURL, scheme, insecure, source)
 }
 
 func otlpEndpoint(
-	raw string,
 	parsedURL *url.URL,
 	scheme string,
 	insecure bool,
 	source traceOTLPEndpointSource,
 ) (traceOTLPEndpoint, error) {
+	if parsedURL.User != nil {
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: userinfo is not supported")
+	}
 	if parsedURL.Host == "" {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: empty host", raw)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: empty host")
 	}
 	if parsedURL.RawQuery != "" {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint %q: query is not supported", raw)
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: query is not supported")
+	}
+	if parsedURL.Fragment != "" {
+		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: fragment is not supported")
 	}
 
 	endpoint := traceOTLPEndpoint{

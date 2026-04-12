@@ -159,6 +159,50 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
+func TestBootstrapTelemetryStageAdmitTelemetryExporterTargetUsesNamedOutcomes(t *testing.T) {
+	t.Run("unconfigured", func(t *testing.T) {
+		got, err := admitTelemetryExporterTarget(telemetry.TraceExporterConfig{}, loadNetworkPolicy())
+		if err != nil {
+			t.Fatalf("admitTelemetryExporterTarget() error = %v, want nil", err)
+		}
+		if got != telemetryExporterTargetUnconfigured {
+			t.Fatalf("admitTelemetryExporterTarget() = %v, want %v", got, telemetryExporterTargetUnconfigured)
+		}
+	})
+
+	t.Run("allowed", func(t *testing.T) {
+		t.Setenv(envNetworkEgressAllowedSchemes, "http")
+		got, err := admitTelemetryExporterTarget(
+			traceExporterConfig(telemetryStageTestConfig("127.0.0.1:4318")),
+			loadNetworkPolicy(),
+		)
+		if err != nil {
+			t.Fatalf("admitTelemetryExporterTarget() error = %v, want nil", err)
+		}
+		if got != telemetryExporterTargetAllowed {
+			t.Fatalf("admitTelemetryExporterTarget() = %v, want %v", got, telemetryExporterTargetAllowed)
+		}
+	})
+
+	t.Run("deferred to network policy", func(t *testing.T) {
+		t.Setenv(envNetworkEgressAllowedSchemes, "1bad")
+		netPolicyResult := loadNetworkPolicy()
+		if netPolicyResult.err == nil {
+			t.Fatal("loadNetworkPolicy() error = nil, want invalid policy")
+		}
+		got, err := admitTelemetryExporterTarget(
+			traceExporterConfig(telemetryStageTestConfig("127.0.0.1:4318")),
+			netPolicyResult,
+		)
+		if err != nil {
+			t.Fatalf("admitTelemetryExporterTarget() error = %v, want nil", err)
+		}
+		if got != telemetryExporterTargetDeferredToNetworkPolicy {
+			t.Fatalf("admitTelemetryExporterTarget() = %v, want %v", got, telemetryExporterTargetDeferredToNetworkPolicy)
+		}
+	})
+}
+
 func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
 	restoreGlobalTelemetry(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "http")

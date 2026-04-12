@@ -182,14 +182,15 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	})
 	if probeResult.err != nil {
 		if probeResult.budgetBlocked {
+			rejectErr := dependencyInitAbortFailure(labels.dependency, probeResult)
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
 				labels,
 				"",
-				probeResult.err,
+				rejectErr,
 			)
-			return nil, fmt.Errorf("%w: postgres init skipped: %w", errDependencyInit, probeResult.err)
+			return nil, rejectErr
 		}
 
 		sanitizedErr := dependencyInitFailure(labels.dependency, probeResult.err)
@@ -263,14 +264,15 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	})
 	if probeResult.err != nil {
 		if shouldAbortDegradedDependencyStartup(probeResult) {
+			rejectErr := dependencyInitAbortFailure(labels.dependency, probeResult)
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
 				labels,
 				redisMode,
-				probeResult.err,
+				rejectErr,
 			)
-			return nil, dependencyInitAbortFailure(labels.dependency, probeResult)
+			return nil, rejectErr
 		}
 		if redisMode == config.RedisModeStore {
 			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
@@ -362,14 +364,15 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	})
 	if probeResult.err != nil {
 		if shouldAbortDegradedDependencyStartup(probeResult) {
+			rejectErr := dependencyInitAbortFailure(labels.dependency, probeResult)
 			recordDependencyProbeRejection(
 				bootstrapCtx,
 				runtime,
 				labels,
 				startupDependencyModeDegradedReadOnlyOrStale,
-				probeResult.err,
+				rejectErr,
 			)
-			return nil, dependencyInitAbortFailure(labels.dependency, probeResult)
+			return nil, rejectErr
 		}
 		if runtime.cfg.MongoReadinessProbeRequired() {
 			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
@@ -456,11 +459,17 @@ func dependencyInitFailure(dep string, err error) error {
 	if err == nil {
 		return fmt.Errorf("%w: %s init failed", errDependencyInit, dep)
 	}
+	if errors.Is(err, errDependencyInit) {
+		return fmt.Errorf("%s init failed: %w", dep, err)
+	}
 	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, dep, err)
 }
 
 func dependencyInitAbortFailure(dep string, result probeExecutionResult) error {
 	if result.budgetBlocked {
+		if errors.Is(result.err, errDependencyInit) {
+			return fmt.Errorf("%s init skipped: %w", dep, result.err)
+		}
 		return fmt.Errorf("%w: %s init skipped: %w", errDependencyInit, dep, result.err)
 	}
 	return dependencyInitFailure(dep, result.err)

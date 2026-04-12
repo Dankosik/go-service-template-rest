@@ -208,7 +208,10 @@ func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.F
 	if policy == configFilePolicyLocal {
 		return resolvedPath, resolvedInfo, nil
 	}
-	allowedRoots := resolveAllowedConfigRoots()
+	allowedRoots, err := resolveAllowedConfigRoots()
+	if err != nil {
+		return "", nil, err
+	}
 	if !isPathUnderAllowedRoots(resolvedPath, allowedRoots) {
 		return "", nil, fmt.Errorf("%w: config file %q is outside allowed roots", ErrSecretPolicy, path)
 	}
@@ -310,7 +313,7 @@ func hasExplicitConfigFiles(opts LoadOptions) bool {
 	return false
 }
 
-func resolveAllowedConfigRoots() []string {
+func resolveAllowedConfigRoots() ([]string, error) {
 	rootsValue, hasRoots := lookupNonEmptyEnv(allowedConfigRootsEnvVar)
 	if !hasRoots {
 		defaultRoots := []string{
@@ -327,7 +330,7 @@ func resolveAllowedConfigRoots() []string {
 	return normalizeRoots(parts)
 }
 
-func normalizeRoots(roots []string) []string {
+func normalizeRoots(roots []string) ([]string, error) {
 	normalized := make([]string, 0, len(roots))
 	seen := make(map[string]struct{}, len(roots))
 
@@ -338,11 +341,7 @@ func normalizeRoots(roots []string) []string {
 		}
 		cleanRoot := filepath.Clean(trimmed)
 		if !filepath.IsAbs(cleanRoot) {
-			absRoot, err := filepath.Abs(cleanRoot)
-			if err != nil {
-				continue
-			}
-			cleanRoot = filepath.Clean(absRoot)
+			return nil, fmt.Errorf("%w: %s entries must be absolute paths", ErrSecretPolicy, allowedConfigRootsEnvVar)
 		}
 		if _, exists := seen[cleanRoot]; exists {
 			continue
@@ -352,7 +351,7 @@ func normalizeRoots(roots []string) []string {
 	}
 
 	sort.Strings(normalized)
-	return normalized
+	return normalized, nil
 }
 
 func isPathUnderAllowedRoots(path string, roots []string) bool {

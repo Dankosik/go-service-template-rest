@@ -23,7 +23,7 @@ type ValidationResult struct {
 
 func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts ValidationOptions) (ValidationResult, error) {
 	result := ValidationResult{}
-	if err := checkContext(ctx); err != nil {
+	if err := checkValidateContext(ctx); err != nil {
 		return ValidationResult{}, err
 	}
 
@@ -34,7 +34,7 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 		}
 		result.UnknownKeyWarnings = unknownKeys
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkValidateContext(ctx); err != nil {
 		return ValidationResult{}, err
 	}
 
@@ -78,7 +78,7 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 	if cfg.HTTP.MaxBodyBytes <= 0 {
 		return ValidationResult{}, fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkValidateContext(ctx); err != nil {
 		return ValidationResult{}, err
 	}
 
@@ -94,7 +94,7 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts Valid
 	if err := validateReadinessProbeBudgets(*cfg); err != nil {
 		return ValidationResult{}, err
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkValidateContext(ctx); err != nil {
 		return ValidationResult{}, err
 	}
 
@@ -235,7 +235,7 @@ func validateMongo(cfg MongoConfig) error {
 			return fmt.Errorf("%w: mongo.uri must be parseable", ErrValidate)
 		}
 		if _, err := MongoProbeAddress(cfg.URI); err != nil {
-			return fmt.Errorf("%w: mongo.uri must be parseable", ErrValidate)
+			return fmt.Errorf("mongo.uri must be parseable: %w", err)
 		}
 		if strings.TrimSpace(cfg.Database) == "" {
 			return fmt.Errorf("%w: mongo.database is required when mongo.enabled=true", ErrValidate)
@@ -271,33 +271,12 @@ func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 }
 
 func validateReadinessProbeBudgets(cfg Config) error {
-	budgets := make([]readinessProbeBudget, 0, 3)
-	if cfg.PostgresReadinessProbeRequired() {
-		budgets = append(budgets, readinessProbeBudget{
-			name:   "postgres.healthcheck_timeout",
-			budget: cfg.Postgres.HealthcheckTimeout,
-		})
-	}
-
-	if cfg.RedisReadinessProbeRequired() {
-		budgets = append(budgets, readinessProbeBudget{
-			name:   "redis.dial_timeout",
-			budget: cfg.Redis.DialTimeout,
-		})
-	}
-
-	if cfg.MongoReadinessProbeRequired() {
-		budgets = append(budgets, readinessProbeBudget{
-			name:   "mongo.connect_timeout",
-			budget: cfg.Mongo.ConnectTimeout,
-		})
-	}
-
+	budgets := cfg.ReadinessProbeBudgets()
 	var aggregate time.Duration
 	names := make([]string, 0, len(budgets))
 	for _, probe := range budgets {
-		aggregate += probe.budget
-		names = append(names, probe.name)
+		aggregate += probe.Budget
+		names = append(names, probe.ConfigKey)
 	}
 	if cfg.HTTP.ReadinessTimeout < aggregate {
 		return fmt.Errorf(
@@ -308,11 +287,6 @@ func validateReadinessProbeBudgets(cfg Config) error {
 		)
 	}
 	return nil
-}
-
-type readinessProbeBudget struct {
-	name   string
-	budget time.Duration
 }
 
 func validateSampler(sampler string, samplerArg float64) error {
@@ -384,7 +358,7 @@ const (
 func MongoProbeAddress(rawURI string) (string, error) {
 	uri := strings.TrimSpace(rawURI)
 	if uri == "" {
-		return "", fmt.Errorf("empty mongo uri")
+		return "", mongoProbeAddressError("empty mongo uri")
 	}
 
 	lower := strings.ToLower(uri)
@@ -395,11 +369,11 @@ func MongoProbeAddress(rawURI string) (string, error) {
 	case strings.HasPrefix(lower, mongodbSRVScheme):
 		hostPart = uri[len(mongodbSRVScheme):]
 	default:
-		return "", fmt.Errorf("unsupported mongo uri scheme")
+		return "", mongoProbeAddressError("unsupported mongo uri scheme")
 	}
 
 	if hostPart == "" {
-		return "", fmt.Errorf("empty mongo host section")
+		return "", mongoProbeAddressError("empty mongo host section")
 	}
 	if slash := strings.Index(hostPart, "/"); slash >= 0 {
 		hostPart = hostPart[:slash]
@@ -408,13 +382,13 @@ func MongoProbeAddress(rawURI string) (string, error) {
 		hostPart = hostPart[at+1:]
 	}
 	if hostPart == "" {
-		return "", fmt.Errorf("empty mongo host section")
+		return "", mongoProbeAddressError("empty mongo host section")
 	}
 
 	hosts := strings.Split(hostPart, ",")
 	firstHost := strings.TrimSpace(hosts[0])
 	if firstHost == "" {
-		return "", fmt.Errorf("empty mongo host")
+		return "", mongoProbeAddressError("empty mongo host")
 	}
 
 	return normalizeMongoProbeAddress(firstHost)
@@ -423,32 +397,32 @@ func MongoProbeAddress(rawURI string) (string, error) {
 func normalizeMongoProbeAddress(host string) (string, error) {
 	trimmed := strings.TrimSpace(host)
 	if trimmed == "" {
-		return "", fmt.Errorf("empty mongo host")
+		return "", mongoProbeAddressError("empty mongo host")
 	}
 
 	if parsedHost, port, err := net.SplitHostPort(trimmed); err == nil {
 		if strings.TrimSpace(parsedHost) == "" {
-			return "", fmt.Errorf("empty mongo host")
+			return "", mongoProbeAddressError("empty mongo host")
 		}
 		if strings.ContainsAny(parsedHost, "[]") {
-			return "", fmt.Errorf("invalid mongo host %q", host)
+			return "", mongoProbeAddressError("invalid mongo host")
 		}
 		if err := validateNumericTCPPort(port); err != nil {
-			return "", err
+			return "", mongoProbeAddressError("invalid mongo TCP port")
 		}
 		return trimmed, nil
 	}
 	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, "?") {
-		return "", fmt.Errorf("invalid mongo host %q", host)
+		return "", mongoProbeAddressError("invalid mongo host")
 	}
 
 	if strings.ContainsAny(trimmed, "[]") {
 		if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
-			return "", fmt.Errorf("invalid mongo host %q", host)
+			return "", mongoProbeAddressError("invalid mongo host")
 		}
 		bracketedHost := strings.TrimSuffix(strings.TrimPrefix(trimmed, "["), "]")
 		if bracketedHost == "" || strings.ContainsAny(bracketedHost, "[]") {
-			return "", fmt.Errorf("invalid mongo host %q", host)
+			return "", mongoProbeAddressError("invalid mongo host")
 		}
 		return net.JoinHostPort(bracketedHost, defaultMongoPort), nil
 	}
@@ -458,8 +432,12 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 	}
 
 	if strings.Contains(trimmed, ":") {
-		return "", fmt.Errorf("invalid mongo host %q", host)
+		return "", mongoProbeAddressError("invalid mongo host")
 	}
 
 	return net.JoinHostPort(trimmed, defaultMongoPort), nil
+}
+
+func mongoProbeAddressError(detail string) error {
+	return fmt.Errorf("%w: %s", ErrValidate, detail)
 }

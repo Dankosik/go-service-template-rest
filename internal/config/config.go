@@ -91,7 +91,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	validateStarted := time.Now()
 	validateCtx, validateCancel := withContextBudget(ctx, opts.ValidateBudget)
 	defer validateCancel()
-	if err := checkContext(validateCtx); err != nil {
+	if err := checkValidateContext(validateCtx); err != nil {
 		report.ValidateDuration = time.Since(validateStarted)
 		report.markFailedStage(StageValidate, report.ValidateDuration)
 		return Config{}, report, err

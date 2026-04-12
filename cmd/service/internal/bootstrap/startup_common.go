@@ -32,7 +32,7 @@ func configLoadStageDurations(report config.LoadReport) []configStageDuration {
 func recordConfigSuccessMetrics(metrics *telemetry.Metrics, report config.LoadReport) {
 	for _, stage := range configLoadStageDurations(report) {
 		if stage.duration > 0 {
-			metrics.ObserveConfigLoadDuration(stage.stage, "success", stage.duration)
+			metrics.ObserveConfigLoadDuration(stage.stage, telemetry.ConfigLoadResultSuccess, stage.duration)
 		}
 	}
 }
@@ -79,7 +79,7 @@ func recordStartupRejection(bootstrapSpan trace.Span, metrics *telemetry.Metrics
 		attribute.String("failed.stage", failedStage),
 	)
 	metrics.IncStartupRejection(metricReason)
-	metrics.IncConfigStartupOutcome("rejected")
+	metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 }
 
 func rejectStartupForPolicyViolation(

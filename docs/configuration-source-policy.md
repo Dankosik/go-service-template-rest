@@ -42,7 +42,7 @@ Do not migrate new feature config into `NETWORK_*`. Use this channel only for bo
   - group/world-writable files are rejected
   - max config file size is 1 MiB
 
-Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`.
+Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local environments, every non-empty root entry must be an absolute path. An empty value keeps the default roots, while a delimiter-only value produces no allowed roots and rejects explicit config files.
 
 ## Runtime Budget Policy
 

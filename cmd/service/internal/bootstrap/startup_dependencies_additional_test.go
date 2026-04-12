@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -85,6 +86,50 @@ func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	}
 	if !errors.Is(err, rootCause) {
 		t.Fatalf("error = %v, want wrapped root cause", err)
+	}
+}
+
+func TestDependencyInitFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
+	t.Parallel()
+
+	cause := fmt.Errorf("%w: dial failed", errDependencyInit)
+	err := dependencyInitFailure("redis", cause)
+	if err == nil {
+		t.Fatal("dependencyInitFailure() error = nil, want non-nil")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("dependencyInitFailure() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("dependencyInitFailure() error = %v, want wrapped cause", err)
+	}
+	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
+		t.Fatalf("dependencyInitFailure() error = %v, dependency init count = %d, want 1", err, count)
+	}
+	if !strings.Contains(err.Error(), "redis init failed") {
+		t.Fatalf("dependencyInitFailure() error = %v, want dependency context", err)
+	}
+}
+
+func TestDependencyInitAbortFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
+	t.Parallel()
+
+	cause := fmt.Errorf("%w: startup.probe.redis aborted", errDependencyInit)
+	err := dependencyInitAbortFailure("redis", probeExecutionResult{budgetBlocked: true, err: cause})
+	if err == nil {
+		t.Fatal("dependencyInitAbortFailure() error = nil, want non-nil")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("dependencyInitAbortFailure() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("dependencyInitAbortFailure() error = %v, want wrapped cause", err)
+	}
+	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
+		t.Fatalf("dependencyInitAbortFailure() error = %v, dependency init count = %d, want 1", err, count)
+	}
+	if !strings.Contains(err.Error(), "redis init skipped") {
+		t.Fatalf("dependencyInitAbortFailure() error = %v, want skipped context", err)
 	}
 }
 

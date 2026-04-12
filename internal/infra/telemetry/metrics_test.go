@@ -63,6 +63,52 @@ func TestNormalizeStartupRejectionReason(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfigLoadResult(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "success", input: ConfigLoadResultSuccess, want: ConfigLoadResultSuccess},
+		{name: "error upper", input: "ERROR", want: ConfigLoadResultError},
+		{name: "success with whitespace", input: " success ", want: ConfigLoadResultSuccess},
+		{name: "unknown", input: "partial", want: ConfigLoadResultOther},
+		{name: "empty", input: "", want: ConfigLoadResultOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeConfigLoadResult(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeConfigLoadResult(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeConfigStartupOutcome(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "ready", input: ConfigStartupOutcomeReady, want: ConfigStartupOutcomeReady},
+		{name: "rejected upper", input: "REJECTED", want: ConfigStartupOutcomeRejected},
+		{name: "ready with whitespace", input: " ready ", want: ConfigStartupOutcomeReady},
+		{name: "unknown", input: "degraded", want: ConfigStartupOutcomeOther},
+		{name: "empty", input: "", want: ConfigStartupOutcomeOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeConfigStartupOutcome(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeConfigStartupOutcome(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	m := New()
 
@@ -71,7 +117,7 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 	m.IncStartupRejection("dns_failure")
 	m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
-	m.IncConfigStartupOutcome("ready")
+	m.IncConfigStartupOutcome(ConfigStartupOutcomeReady)
 	m.MarkStartupDependencyReady("telemetry", "optional_fail_open")
 
 	metricsText := collectMetricsText(t, m)
@@ -87,7 +133,7 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 		`config_validation_failures_total{reason="validate"} 1`,
 		`startup_rejections_total{reason="` + StartupRejectionReasonDependencyInit + `"} 1`,
 		`startup_rejections_total{reason="` + StartupRejectionReasonOther + `"} 1`,
-		`outcome="ready"`,
+		`outcome="` + ConfigStartupOutcomeReady + `"`,
 		`dep="telemetry"`,
 		`mode="optional_fail_open"`,
 	}
@@ -110,6 +156,30 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	}
 }
 
+func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
+	m := New()
+
+	m.ObserveConfigLoadDuration("load", "unexpected-result", time.Millisecond)
+	m.IncConfigStartupOutcome("degraded")
+
+	metricsText := collectMetricsText(t, m)
+	expected := []string{
+		`config_load_duration_seconds_count{result="` + ConfigLoadResultOther + `",stage="load"} 1`,
+		`config_startup_outcome_total{outcome="` + ConfigStartupOutcomeOther + `"} 1`,
+	}
+	for _, pattern := range expected {
+		if !strings.Contains(metricsText, pattern) {
+			t.Fatalf("metrics output does not contain %q\n%s", pattern, metricsText)
+		}
+	}
+
+	for _, rawLabel := range []string{`result="unexpected-result"`, `outcome="degraded"`} {
+		if strings.Contains(metricsText, rawLabel) {
+			t.Fatalf("metrics output contains unbounded label %q:\n%s", rawLabel, metricsText)
+		}
+	}
+}
+
 func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
 	for _, m := range []*Metrics{nil, &Metrics{}} {
 		m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
@@ -119,7 +189,7 @@ func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
 		m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 		m.AddConfigUnknownKeyWarnings(1)
 		m.IncTelemetryInitFailure(TelemetryFailureReasonSetupError)
-		m.IncConfigStartupOutcome("ready")
+		m.IncConfigStartupOutcome(ConfigStartupOutcomeReady)
 		m.MarkStartupDependencyReady("telemetry", "optional_fail_open")
 
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)

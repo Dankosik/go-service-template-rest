@@ -9,7 +9,7 @@ func defaultValues() map[string]any {
 
 		"http.addr":                        ":8080",
 		"http.shutdown_timeout":            "30s",
-		"http.readiness_timeout":           "3s",
+		"http.readiness_timeout":           "4s",
 		"http.readiness_propagation_delay": "15s",
 		"http.read_header_timeout":         "5s",
 		"http.read_timeout":                "5s",

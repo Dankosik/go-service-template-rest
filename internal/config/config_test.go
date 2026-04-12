@@ -39,8 +39,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
 		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s", cfg.HTTP.ShutdownTimeout)
 	}
-	if cfg.HTTP.ReadinessTimeout != 3*time.Second {
-		t.Fatalf("HTTP.ReadinessTimeout = %s, want 3s", cfg.HTTP.ReadinessTimeout)
+	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
+		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s", cfg.HTTP.ReadinessTimeout)
 	}
 	if cfg.HTTP.ReadinessPropagationDelay != 15*time.Second {
 		t.Fatalf("HTTP.ReadinessPropagationDelay = %s, want 15s", cfg.HTTP.ReadinessPropagationDelay)
@@ -629,6 +629,53 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 	}
 }
 
+func TestConfigReadinessProbeBudgetsUseRequiredRuntimeProbes(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		HTTP: HTTPConfig{
+			ReadinessTimeout: 10 * time.Second,
+		},
+		Postgres: PostgresConfig{
+			Enabled:            true,
+			HealthcheckTimeout: 2 * time.Second,
+		},
+		Redis: RedisConfig{
+			Enabled:     true,
+			Mode:        RedisModeStore,
+			DialTimeout: 3 * time.Second,
+		},
+		Mongo: MongoConfig{
+			Enabled:        true,
+			ConnectTimeout: 4 * time.Second,
+		},
+		FeatureFlags: FeatureFlagsConfig{
+			PostgresReadinessProbe: true,
+			MongoReadinessProbe:    true,
+		},
+	}
+
+	budgets := cfg.ReadinessProbeBudgets()
+	want := []ReadinessProbeBudget{
+		{ConfigKey: "postgres.healthcheck_timeout", Budget: 2 * time.Second},
+		{ConfigKey: "redis.dial_timeout", Budget: 3 * time.Second},
+		{ConfigKey: "mongo.connect_timeout", Budget: 4 * time.Second},
+	}
+	if len(budgets) != len(want) {
+		t.Fatalf("ReadinessProbeBudgets() len = %d, want %d", len(budgets), len(want))
+	}
+	for i := range want {
+		if budgets[i] != want[i] {
+			t.Fatalf("ReadinessProbeBudgets()[%d] = %+v, want %+v", i, budgets[i], want[i])
+		}
+	}
+
+	budgets[0].Budget = time.Nanosecond
+	if got := cfg.ReadinessProbeBudgets()[0].Budget; got != 2*time.Second {
+		t.Fatalf("ReadinessProbeBudgets() returned aliased slice; first budget = %s, want 2s", got)
+	}
+}
+
 func TestLocalAllowsSymlinkConfig(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation can require elevated privileges on Windows")
@@ -853,6 +900,54 @@ func TestNonLocalDefaultRootsDoNotAllowRepositoryConfigDir(t *testing.T) {
 	}
 	if !errors.Is(err, ErrSecretPolicy) {
 		t.Fatalf("error = %v, want ErrSecretPolicy", err)
+	}
+}
+
+func TestNonLocalAllowedRootsRejectsUnsafeInputs(t *testing.T) {
+	testCases := []struct {
+		name             string
+		allowedRoots     string
+		wantErrorMessage string
+	}{
+		{
+			name:             "relative root",
+			allowedRoots:     "relative-config-root",
+			wantErrorMessage: "APP_CONFIG_ALLOWED_ROOTS entries must be absolute paths",
+		},
+		{
+			name:             "empty value uses default roots",
+			allowedRoots:     "",
+			wantErrorMessage: "outside allowed roots",
+		},
+		{
+			name:             "delimiter only value produces no roots",
+			allowedRoots:     ",;;",
+			wantErrorMessage: "outside allowed roots",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__APP__ENV", "prod")
+			t.Setenv("APP_CONFIG_ALLOWED_ROOTS", tc.allowedRoots)
+
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(configPath, []byte("http:\n  addr: \":8080\"\n"), 0o600); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+			if err == nil {
+				t.Fatal("LoadDetailed() error = nil, want allowed-root policy rejection")
+			}
+			if !errors.Is(err, ErrSecretPolicy) {
+				t.Fatalf("error = %v, want ErrSecretPolicy", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantErrorMessage) {
+				t.Fatalf("error = %v, want %q", err, tc.wantErrorMessage)
+			}
+		})
 	}
 }
 
@@ -1182,11 +1277,14 @@ unknown:
 		if err == nil {
 			t.Fatalf("LoadDetailed() expected validate context deadline error")
 		}
-		if !errors.Is(err, ErrLoad) {
-			t.Fatalf("error = %v, want ErrLoad", err)
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
 		}
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("error = %v, want context.DeadlineExceeded", err)
+		}
+		if got := ErrorType(err); got != "validate" {
+			t.Fatalf("ErrorType(error) = %q, want validate", got)
 		}
 		if report.FailedStage != StageValidate {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
@@ -1893,11 +1991,29 @@ func TestMongoProbeAddress(t *testing.T) {
 			t.Run(uri, func(t *testing.T) {
 				if _, err := MongoProbeAddress(uri); err == nil {
 					t.Fatal("MongoProbeAddress() error = nil, want malformed host error")
+				} else if !errors.Is(err, ErrValidate) {
+					t.Fatalf("error = %v, want ErrValidate", err)
 				}
 			})
 		}
 	})
 
+	t.Run("redacts malformed credential uri", func(t *testing.T) {
+		rawURI := "mongodb://leaky-user:top-secret@local[host]/app"
+
+		_, err := MongoProbeAddress(rawURI)
+		if err == nil {
+			t.Fatal("MongoProbeAddress() error = nil, want malformed host error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		for _, leaked := range []string{rawURI, "leaky-user", "top-secret", "local[host]"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("error = %v, leaked %q", err, leaked)
+			}
+		}
+	})
 }
 
 func TestReadDurationParsesDefaultDurations(t *testing.T) {

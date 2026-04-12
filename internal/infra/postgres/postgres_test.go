@@ -107,6 +107,34 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 	}
 }
 
+func TestNewInvalidDSNIsRedacted(t *testing.T) {
+	t.Parallel()
+
+	rawDSN := "postgres://user:top-secret%@localhost:5432/app"
+	_, err := New(context.Background(), Options{
+		DSN:                rawDSN,
+		ConnectTimeout:     time.Second,
+		HealthcheckTimeout: time.Second,
+		MaxOpenConns:       10,
+		MaxIdleConns:       5,
+		ConnMaxLifetime:    time.Minute,
+	})
+	if err == nil {
+		t.Fatal("New() error = nil, want non-nil")
+	}
+	if !errors.Is(err, ErrConfig) {
+		t.Fatalf("New() error = %v, want ErrConfig", err)
+	}
+	if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
+		t.Fatalf("New() error = %v, want redacted parse context", err)
+	}
+	for _, leaked := range []string{rawDSN, "top-secret", "user"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("New() error = %v, leaked %q", err, leaked)
+		}
+	}
+}
+
 func TestProbeAddress(t *testing.T) {
 	t.Parallel()
 

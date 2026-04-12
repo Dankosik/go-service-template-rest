@@ -55,9 +55,9 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, fmt.Errorf("%w: conn max lifetime must be > 0", ErrConfig)
 	}
 
-	poolConfig, err := pgxpool.ParseConfig(opts.DSN)
+	poolConfig, err := parsePoolConfig(opts.DSN)
 	if err != nil {
-		return nil, fmt.Errorf("%w: parse postgres dsn: %w", ErrConfig, err)
+		return nil, err
 	}
 	poolConfig.ConnConfig.ConnectTimeout = opts.ConnectTimeout
 	poolConfig.MaxConns = int32(opts.MaxOpenConns) // #nosec G115 -- validated to be <= math.MaxInt32 above.

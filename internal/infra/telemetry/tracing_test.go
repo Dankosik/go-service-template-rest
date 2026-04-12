@@ -458,7 +458,7 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 			cfg: TraceExporterConfig{
 				OTLPEndpoint: "ftp://otel.example.com:4318",
 			},
-			wantErr: `unsupported scheme "ftp"`,
+			wantErr: "unsupported scheme",
 		},
 	}
 
@@ -485,6 +485,64 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 			}
 			if target.Scheme != tc.wantScheme {
 				t.Fatalf("Scheme = %q, want %q", target.Scheme, tc.wantScheme)
+			}
+		})
+	}
+}
+
+func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) {
+	testCases := []struct {
+		name    string
+		raw     string
+		wantErr string
+	}{
+		{
+			name:    "invalid url",
+			raw:     "https://%zz:4318/v1/traces",
+			wantErr: "invalid endpoint",
+		},
+		{
+			name:    "unsupported scheme",
+			raw:     "ftp://otel.example.com:4318/v1/traces",
+			wantErr: "unsupported scheme",
+		},
+		{
+			name:    "userinfo",
+			raw:     "https://user:secret-value@otel.example.com:4318/v1/traces",
+			wantErr: "userinfo is not supported",
+		},
+		{
+			name:    "query",
+			raw:     "https://otel.example.com:4318/v1/traces?authorization=Bearer+secret-value",
+			wantErr: "query is not supported",
+		},
+		{
+			name:    "fragment",
+			raw:     "https://otel.example.com:4318/v1/traces#secret-value",
+			wantErr: "fragment is not supported",
+		},
+		{
+			name:    "empty host",
+			raw:     "https:///v1/traces",
+			wantErr: "empty host",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DescribeTraceExporterTarget(TraceExporterConfig{
+				OTLPEndpoint: tc.raw,
+			})
+			if err == nil {
+				t.Fatal("DescribeTraceExporterTarget() error = nil, want non-nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("DescribeTraceExporterTarget() error = %v, want %q", err, tc.wantErr)
+			}
+			for _, leaked := range []string{tc.raw, "secret-value", "Bearer"} {
+				if strings.Contains(err.Error(), leaked) {
+					t.Fatalf("DescribeTraceExporterTarget() error = %v, leaked %q", err, leaked)
+				}
 			}
 		})
 	}

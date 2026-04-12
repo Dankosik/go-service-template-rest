@@ -69,8 +69,30 @@ func TestStartupProbeAddresses(t *testing.T) {
 		if !errors.Is(err, errDependencyInit) {
 			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 		}
+		if !errors.Is(err, config.ErrValidate) {
+			t.Fatalf("err = %v, want wrapped config ErrValidate", err)
+		}
 		if !strings.Contains(err.Error(), "unsupported mongo uri scheme") {
 			t.Fatalf("err = %v, want config root cause detail", err)
+		}
+	})
+
+	t.Run("mongo invalid redacts credential uri", func(t *testing.T) {
+		rawURI := "mongodb://leaky-user:top-secret@local[host]/app"
+		_, err := mongoStartupProbeAddress(config.MongoConfig{URI: rawURI})
+		if err == nil {
+			t.Fatal("mongoStartupProbeAddress() error = nil, want non-nil")
+		}
+		if !errors.Is(err, errDependencyInit) {
+			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
+		}
+		if !errors.Is(err, config.ErrValidate) {
+			t.Fatalf("err = %v, want wrapped config ErrValidate", err)
+		}
+		for _, leaked := range []string{rawURI, "leaky-user", "top-secret", "local[host]"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("err = %v, leaked %q", err, leaked)
+			}
 		}
 	})
 
