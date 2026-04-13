@@ -16,7 +16,7 @@ Load this when acceptance criteria, planned verification, manual checks, impleme
 ## Imitate
 ```markdown
 Acceptance Criteria:
-- every changed surface named in `design/component-map.md` is either updated or explicitly deferred in `plan.md`
+- every changed surface named in `design/component-map.md` is either covered by a task or explicitly deferred in `tasks.md`
 - `tasks.md` proof commands match the changed surfaces
 - readiness is `PASS` or `CONCERNS` with named accepted risks and proof obligations
 Planned Verification:

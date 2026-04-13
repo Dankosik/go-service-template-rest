@@ -109,7 +109,7 @@ Drop a question when it:
 - could not change approval
 - asks for a best practice without a candidate-decision seam
 - asks the human before checking repo evidence or expert research
-- writes the answer, design, tasks, or implementation plan
+- writes the answer, design, tasks, or implementation handoff
 - duplicates another question with different wording only
 - turns every uncertainty into a blocker
 

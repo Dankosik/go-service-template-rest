@@ -9,6 +9,7 @@ linters:
     - govet
     - staticcheck
     - errcheck
+    - errname
     - bidichk
     - bodyclose
     - copyloopvar
@@ -21,6 +22,7 @@ linters:
     - contextcheck
     - gocritic
     - loggercheck
+    - makezero
     - nilerr
     - nilnesserr
     - nilnil
@@ -29,10 +31,14 @@ linters:
     - nosprintfhostport
     - predeclared
     - promlinter
+    - reassign
+    - rowserrcheck
     - thelper
     - gomoddirectives
     - unconvert
+    - unqueryvet
     - unparam
+    - usestdlibvars
     - wastedassign
   settings:
     nolintlint:

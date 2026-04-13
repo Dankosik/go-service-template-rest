@@ -18,7 +18,7 @@ Load when closing a planning session or resolving whether the phase is complete,
 Planning phase complete.
 Session boundary reached: yes.
 Ready for next session: yes.
-Next session starts with: implementation-phase-1.
+Next session starts with: T001.
 Stop rule: do not perform code, test, migration, review, validation, rollout execution, or closeout work in this planning session.
 ```
 
@@ -38,7 +38,7 @@ Copy this shape: a blocked stop names the reopen target and the forbidden shortc
 Planning phase complete with CONCERNS.
 Session boundary reached: yes.
 Ready for next session: yes, with named proof obligations.
-Next session starts with: implementation-phase-1.
+Next session starts with: T001.
 Stop rule: the next session must satisfy the proof obligations before widening scope.
 ```
 
@@ -54,7 +54,7 @@ Failure: it crosses into implementation after the planning boundary.
 ```markdown
 Session boundary reached: yes.
 Implementation readiness: FAIL.
-Next session starts with: implementation-phase-1.
+Next session starts with: T001.
 ```
 
 Failure: FAIL routes to a reopen target, not implementation.

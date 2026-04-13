@@ -7,8 +7,8 @@ When loaded for a planning session with scope pressure, this file makes the mode
 Load immediately before writes when the requested action may cross from planning into implementation, review, validation, specification, or technical design.
 
 ## Decision Rubric
-- Allowed writes are `plan.md`, `tasks.md`, triggered `test-plan.md`, triggered `rollout.md`, `workflow-plan.md`, `workflow-plans/planning.md`, and later phase-control files already required by the approved phase structure.
-- A later `workflow-plans/<phase>.md` file is allowed only when the approved phase structure names that phase or planning explicitly creates it for a named future checkpoint.
+- Allowed writes are `tasks.md`, optional `plan.md` only when justified, triggered `test-plan.md`, triggered `rollout.md`, `workflow-plan.md`, `workflow-plans/planning.md`, and later phase-control files required by named multi-session routing.
+- A later `workflow-plans/<phase>.md` file is allowed only when named multi-session routing requires that phase or planning explicitly creates it for a named future checkpoint.
 - `spec.md` and `design/` are read-only in this session. Missing decisions route upstream.
 - Code, tests, migrations, generated output, runtime config, review execution, validation execution, rollout execution, and closeout are out of scope.
 - When scope is ambiguous, choose the narrower planning-only write and record a blocker or next-session handoff.
@@ -16,11 +16,9 @@ Load immediately before writes when the requested action may cross from planning
 ## Imitate
 ```markdown
 Allowed writes used:
-- `plan.md`
 - `tasks.md`
 - `workflow-plan.md`
 - `workflow-plans/planning.md`
-- `workflow-plans/implementation-phase-1.md` because `plan.md` names that phase
 
 Out of scope and untouched: `spec.md`, `design/`, code, tests, migrations, generated artifacts, runtime config.
 ```
@@ -29,7 +27,7 @@ Copy this shape: it records both the positive write set and the surfaces deliber
 
 ```markdown
 Planning is ready, but coding T001 is outside this session.
-Recorded handoff: `Next session starts with: implementation-phase-1`.
+Recorded handoff: `Next session starts with: T001`.
 Stop rule: implementation begins in a later session.
 ```
 
@@ -40,10 +38,10 @@ Copy this shape: it answers a bundled planning-and-coding request without starti
 I created `workflow-plans/review-phase-1.md` in case review is useful later.
 ```
 
-Failure: just-in-case phase files create control artifacts not called for by the approved phase structure.
+Failure: just-in-case phase files create control artifacts not called for by named multi-session routing.
 
 ```markdown
-I updated `design/sequence.md` with the missing migration order so the plan can be approved.
+I updated `design/sequence.md` with the missing migration order so the ledger can be approved.
 ```
 
 Failure: planning exposed a technical-design gap and must reopen that phase instead of editing design.

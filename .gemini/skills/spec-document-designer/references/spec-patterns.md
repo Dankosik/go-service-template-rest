@@ -12,7 +12,7 @@ Load this when the prompt mentions an external spec framework, the draft has tem
 - Translate user journeys into affected actors or acceptance semantics only when they change behavior.
 - Translate requirement lists into stable decisions plus validation hooks; do not preserve `FR-001` numbering unless it is already an external contract.
 - Translate NFRs into `Constraints` only when they shape design or validation. Omit irrelevant categories.
-- Translate architecture, roadmap, task, or rollout material into `design/`, `plan.md`, `tasks.md`, or `rollout.md`; keep only the stable decision or link in `spec.md`.
+- Translate architecture, roadmap, task, or rollout material into `design/`, `tasks.md`, optional `plan.md`, or `rollout.md`; keep only the stable decision or link in `spec.md`.
 - Preserve rejected alternatives only when planning is likely to revive the wrong path without them.
 
 ## Imitate

@@ -30,11 +30,11 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 1. Final decisions always belong to the orchestrator.
 2. Subagents are always read-only: no code writes, file edits, git-state mutation, or implementation-plan changes.
 3. Read-only is enforced by execution choice, not prompt wording alone. If a lane cannot reliably stay read-only, keep it in the main flow.
-4. Non-trivial or agent-backed implementation work is spec-first and plan-gated: use `workflow-plan.md`, `workflow-plans/<phase>.md`, and the chain `spec.md -> design/ -> plan.md -> tasks.md`.
-5. `workflow-plan.md` is the only cross-phase control artifact. `workflow-plans/<phase>.md` is phase-local only and must not replace `spec.md`, `design/`, `plan.md`, or `tasks.md`.
+4. Non-trivial or agent-backed implementation work is spec-first and task-ledger-gated: use `workflow-plan.md`, `workflow-plans/<phase>.md`, and the chain `spec.md -> design/ -> tasks.md`. `plan.md` is optional and only justified for unusually large or multi-checkpoint work when `tasks.md` would otherwise absorb strategy.
+5. `workflow-plan.md` is the only cross-phase control artifact. `workflow-plans/<phase>.md` is phase-local only and must not replace `spec.md`, `design/`, `tasks.md`, or an optional `plan.md` when one exists.
 6. Skills are on demand, not a ritual chain. A subagent pass uses at most one skill.
 7. Planning skills are for planning. Implementation skills are for implementation.
-8. Coding does not start until the implementation plan is explicit and implementation readiness allows handoff: `PASS`, `CONCERNS` with named risks and proof obligations, or an eligible `WAIVED`. `FAIL` blocks implementation.
+8. Coding does not start until the `tasks.md` handoff is explicit and implementation readiness allows handoff: `PASS`, `CONCERNS` with named risks and proof obligations, or an eligible `WAIVED`. `FAIL` blocks implementation.
 9. High-impact, ambiguous, or hard-to-reverse decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
 10. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge is reconciled or explicitly waived.
 11. Non-trivial `spec.md` approval requires the read-only `spec-clarification-challenge`. Planning-critical questions must be reconciled before approval.
@@ -67,7 +67,7 @@ Rules:
 - Keep subagent passes scoped to one question and zero or one skill.
 - Use a pre-spec challenge when risk or ambiguity justifies it.
 - Write stable decisions to `spec.md` before technical design.
-- Plan from approved `spec.md + design/`, not from `spec.md` alone, for non-trivial work.
+- Break down implementation tasks from approved `spec.md + design/`, not from `spec.md` alone, for non-trivial work.
 - If implementation or validation exposes a real design/planning gap or a required artifact is missing, reopen the correct earlier phase instead of inventing missing context midstream.
 
 ## 7. Artifact rules
@@ -77,13 +77,12 @@ Rules:
   - `workflow-plan.md` owns cross-phase control.
   - `workflow-plans/<phase>.md` owns phase-local orchestration.
   - `design/` holds task-local technical design context.
-  - `plan.md` holds execution strategy.
-  - `tasks.md` holds the executable task ledger.
+  - `tasks.md` holds the executable task ledger and final implementation handoff.
+  - `plan.md` is optional; create it only when large, multi-checkpoint, or cross-session work needs a supplementary strategy note that would not fit cleanly in `tasks.md`.
 - `design/` is required for non-trivial work unless a design-skip rationale is explicitly recorded.
-- `plan.md` is required when work is non-trivial, long-running, parallelized, or handed to an implementation skill.
-- `tasks.md` is expected by default for non-trivial work with `plan.md`; if it is required and missing, reopen planning instead of inventing it later.
+- `tasks.md` is expected by default for non-trivial implementation work; if it is required and missing, reopen planning instead of inventing it later.
 - `research/*.md`, `test-plan.md`, and `rollout.md` are conditional. Create them only when they materially help execution, validation, or rollout safety.
-- Planning creates any `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` that the approved phase structure will use.
+- Planning records whether optional `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` control files are needed; do not create them for already-small tasks when `tasks.md` is sufficient.
 - Tiny or `direct path` work may skip parts of the artifact bundle with explicit rationale, but that does not authorize creating new workflow/process artifacts mid-implementation or mid-validation.
 - Pre-code phases may create workflow/process artifacts. After implementation starts, post-code phases may create approved code/test/config/generated artifacts and update existing control or closeout surfaces only.
 - Do not duplicate decision authority across artifacts. Link instead.
@@ -111,7 +110,7 @@ Subagents must not:
 
 - change global scope or final goals,
 - make final product or architecture decisions,
-- write code, edit files, mutate git state, or alter the implementation plan,
+- write code, edit files, mutate git state, or alter the task ledger or implementation handoff,
 - dump long raw reasoning into the main flow unless explicitly asked.
 
 `workflow-status` is a read-only helper only. It can report current phase, blockers, allowed writes, next action, stop rule, and implementation-readiness status, but it does not create, edit, or approve artifacts.
@@ -137,7 +136,7 @@ Subagents must not:
 
 - write-capable subagents,
 - coding non-trivial work from `spec.md` alone,
-- using `workflow-plans/<phase>.md` or `tasks.md` as a second spec/design/plan,
+- using `workflow-plans/<phase>.md` or `tasks.md` as a second spec, design, or optional strategy note,
 - placeholder artifacts or fake completeness,
 - linear skill rituals instead of deliberate orchestration,
 - claiming readiness, coverage, or completion without current evidence.

@@ -16,9 +16,9 @@ Load this when task order, dependencies, `[P]` markers, generated artifacts, mig
 ## Imitate
 ```markdown
 - [ ] T010 [Phase 1] Update the source-of-truth artifact identified in `design/ownership-map.md`. Depends on: none. Proof: targeted diff read against `spec.md` decisions.
-- [ ] T011 [Phase 1] Refresh the first derived surface listed in `design/component-map.md` from the updated source artifact. Depends on: T010. Proof: repository command named in `plan.md` or `rtk git diff --check` when no generator applies.
+- [ ] T011 [Phase 1] Refresh the first derived surface listed in `design/component-map.md` from the updated source artifact. Depends on: T010. Proof: repository command named in `tasks.md` or `rtk git diff --check` when no generator applies.
 - [ ] T012 [Phase 1] [P] Update documentation cross-links that consume the same approved wording but do not feed later generated output. Depends on: T010. Proof: `rtk rg -n "<approved-term>" <doc-surface-from-design>`.
-- [ ] T013 [Checkpoint] Confirm no downstream task requires a missing ownership or compatibility decision. Depends on: T011, T012. Proof: manual read of `design/ownership-map.md` and `plan.md` blockers.
+- [ ] T013 [Checkpoint] Confirm no downstream task requires a missing ownership or compatibility decision. Depends on: T011, T012. Proof: manual read of `design/ownership-map.md` and `tasks.md` blockers.
 ```
 
 Copy the dependency chain and the cautious `[P]` placement after `T010`. Replace the placeholder surfaces with the task-local design surfaces.

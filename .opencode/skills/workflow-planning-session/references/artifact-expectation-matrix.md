@@ -13,7 +13,7 @@ Load this when artifact status is the active uncertainty. If the problem is how 
 - `conditional, trigger unknown` means research or later planning must decide; do not create it "just in case."
 - `not expected` means the repository contract does not call for that artifact for this task.
 - `waived` requires an eligible tiny/direct-path or explicit local waiver rationale; do not use it as a synonym for missing.
-- Post-code phase workflow files are created during planning only when the approved phase structure uses them, not during workflow planning and not mid-implementation.
+- Post-code phase workflow files are created during planning only when named multi-session routing uses them, not during workflow planning and not mid-implementation.
 
 ## Imitate
 
@@ -24,8 +24,8 @@ Direct-path artifact record:
 - `workflow-plans/workflow-planning.md`: not expected.
 - `spec.md`: waived for tiny direct-path work; rationale recorded inline.
 - `design/`: waived; no ownership, data, contract, runtime-sequence, or rollout ambiguity.
-- `plan.md`: waived; inline one-step plan is enough.
 - `tasks.md`: waived; no ledger needed.
+- `plan.md`: not expected; optional strategy note is unnecessary for one-step work.
 - `test-plan.md`: not expected.
 - `rollout.md`: not expected.
 ```
@@ -40,11 +40,11 @@ Full-orchestrated artifact record:
 - `research/*.md`: missing, expected later for reusable fan-out evidence.
 - `spec.md`: missing, expected after research and synthesis.
 - `design/`: missing, expected after approved `spec.md`.
-- `plan.md`: missing, expected after approved `spec.md + design/`.
-- `tasks.md`: missing, expected by default with `plan.md`.
+- `tasks.md`: missing, expected by default for non-trivial implementation work.
+- `plan.md`: conditional, only if large or multi-checkpoint strategy needs a separate note.
 - `test-plan.md`: conditional, trigger unknown.
 - `rollout.md`: conditional, trigger unknown.
-- Post-code phase workflow files: count unknown; planning must create any used files before implementation.
+- Post-code phase workflow files: count unknown; planning creates only named files needed for multi-session routing before implementation.
 ```
 
 What to copy: later artifacts are acknowledged without being created or approved.
@@ -61,7 +61,7 @@ Failure: loses the handoff contract; the next session cannot tell what is expect
 Artifacts: all approved or not applicable because workflow planning has enough detail.
 ```
 
-Failure: invents gate completion and bypasses research, specification, design, and implementation planning.
+Failure: invents gate completion and bypasses research, specification, design, and task breakdown.
 
 ```markdown
 Create `test-plan.md` and `rollout.md` now so the matrix is complete.

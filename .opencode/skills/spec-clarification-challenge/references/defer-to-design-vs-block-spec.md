@@ -96,7 +96,7 @@ Weak:
 
 > What table should audit logs use?
 
-Why weak: it asks for implementation planning.
+Why weak: it asks for task breakdown.
 
 ## Agent Traps
 - Do not use `defer_to_design` to avoid resolving a spec invariant.

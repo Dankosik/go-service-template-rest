@@ -101,6 +101,6 @@ Before handoff, each reconciled tension should name the selected option, rejecte
 - Hand off to planning only after the design records the selected option, rejected options, trade-offs, proof obligations, and reopen conditions.
 
 ## Repo Pointers
-- `docs/spec-first-workflow.md`: `spec.md` owns decisions, `design/` owns task-local technical context, and `plan.md` consumes approved `spec.md + design/`.
+- `docs/spec-first-workflow.md`: `spec.md` owns decisions, `design/` owns task-local technical context, and `tasks.md` consumes approved `spec.md + design/` for implementation handoff.
 - `docs/repo-architecture.md`: stable ownership and runtime path constraints to preserve during reconciliation.
 - Adjacent specialist skills such as `go-architect-spec`, `api-contract-designer-spec`, `go-data-architect-spec`, `go-security-spec`, `go-reliability-spec`, `go-observability-engineer-spec`, and `go-qa-tester-spec` for domain-owned decisions.

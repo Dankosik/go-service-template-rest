@@ -3,11 +3,11 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "The spec is approved for adding soft-delete to `internal/users`: nullable `deleted_at`, read paths exclude soft-deleted rows by default, admin restore is allowed, API remains backward-compatible, and audit events must still emit on delete/restore. Break this into phased execution work for `plan.md` and `tasks.md`. Sequence schema, repo/service/API wiring, tests/validation, and any real checkpoints.",
-      "expected_output": "A phased `plan.md` strategy plus a `tasks.md` checkbox ledger with dependency order, acceptance criteria, verification, explicit checkpoints, and a compact implementation-readiness summary.",
+      "prompt": "The spec is approved for adding soft-delete to `internal/users`: nullable `deleted_at`, read paths exclude soft-deleted rows by default, admin restore is allowed, API remains backward-compatible, and audit events must still emit on delete/restore. Break this into phased execution work for `tasks.md`. Sequence schema, repo/service/API wiring, tests/validation, and any real checkpoints.",
+      "expected_output": "A phased `tasks.md` checkbox ledger with dependency order, acceptance criteria, verification, explicit checkpoints, and a compact implementation-readiness summary.",
       "files": [],
       "expectations": [
-        "The output defaults to `plan.md` plus `tasks.md` instead of trying to keep full task breakdown inside `spec.md`.",
+        "The output defaults to `tasks.md` as the final implementation handoff instead of producing a redundant `plan.md`.",
         "Schema or migration work appears before downstream repository, service, or API work.",
         "Restore and audit obligations are included in the task breakdown.",
         "`tasks.md` uses stable task IDs such as `T001`, markdown checkboxes, dependency markers when nontrivial, and proof expectations.",
@@ -40,7 +40,7 @@
     },
     {
       "id": 3,
-      "prompt": "Approved `spec.md + design/ + plan.md` exist for splitting account-summary caching into two phases. Produce the `tasks.md` ledger only. Phase 1 updates `internal/summary/repository.go` and `internal/summary/cache.go`; Phase 2 updates `internal/summary/handler.go` and `internal/summary/handler_test.go`. Tests in Phase 2 may be parallelized only after Phase 1 lands.",
+      "prompt": "Approved `spec.md + design/` exist for splitting account-summary caching into two phases. Produce the `tasks.md` ledger only. Phase 1 updates `internal/summary/repository.go` and `internal/summary/cache.go`; Phase 2 updates `internal/summary/handler.go` and `internal/summary/handler_test.go`. Tests in Phase 2 may be parallelized only after Phase 1 lands.",
       "expected_output": "A `tasks.md`-style checkbox ledger with stable task IDs, phase labels, exact known file paths, dependency markers, safe `[P]` use, and proof expectations.",
       "files": [],
       "expectations": [

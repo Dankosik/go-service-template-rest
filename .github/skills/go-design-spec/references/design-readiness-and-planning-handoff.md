@@ -6,7 +6,7 @@ When loaded before planning handoff, this file makes the model choose an honest 
 ## When To Load
 Load this when the symptom is readiness uncertainty: `design/overview.md` claims readiness, workflow-control artifacts need a handoff summary, `planning-and-task-breakdown` is about to consume the bundle, blockers or accepted risks may affect planning, or `test-plan.md` and `rollout.md` expectations are unclear.
 
-Do not load this to write `plan.md` or `tasks.md`. This reference only checks whether the design handoff is honest.
+Do not load this to write `tasks.md` or optional `plan.md`. This reference only checks whether the design handoff is honest.
 
 ## Decision Rubric
 - Planning-ready means required core artifacts are present, consistent, and approved or explicitly waived by an eligible rationale.
@@ -35,7 +35,7 @@ Planning may start with:
 Not expected:
 - `design/contracts/`; public REST schema stays unchanged.
 - `design/dependency-graph.md`; dependency direction stays within existing package boundaries.
-- `test-plan.md`; validation obligations fit in `plan.md`.
+- `test-plan.md`; validation obligations fit in `tasks.md`.
 
 Accepted risks:
 - Backfill duration is unknown; planning must include a verification checkpoint before contract cleanup.
@@ -51,7 +51,7 @@ Workflow-control update summary:
 Technical design status: complete.
 Design artifacts: required core approved; data-model and rollout approved; contracts, dependency-graph, and test-plan not expected.
 Next session starts with: planning.
-Stop rule: do not begin `plan.md`, `tasks.md`, or implementation in this session.
+Stop rule: do not begin `tasks.md`, optional `plan.md`, or implementation in this session.
 ```
 
 ## Reject
@@ -83,10 +83,10 @@ Why it is bad: the next session needs artifact status, blockers, accepted risks,
 ## Agent Traps
 - `design/overview.md` says planning-ready while required core artifacts are missing, draft, or contradictory.
 - `workflow-plan.md` says current phase is planning, but `workflow-plans/technical-design.md` says design is blocked.
-- `plan.md` exists before design readiness when no direct/local waiver was recorded.
+- `tasks.md` exists before design readiness when no direct/local waiver was recorded.
 - `tasks.md` is expected but design handoff leaves package surfaces or ownership unresolved.
 - `rollout.md` is not expected while a migration, backfill, mixed-version window, or failback rule is planning-critical.
-- `test-plan.md` is not expected while validation obligations are too layered for `plan.md`.
+- `test-plan.md` is not expected while validation obligations are too layered for `tasks.md`.
 - A blocker is recorded only in chat, not in the design or workflow artifacts that the next session will read.
 
 ## Validation Shape
@@ -97,7 +97,7 @@ Before handoff, produce a compact readiness verdict: status, required artifacts,
 - Route to specification when the missing decision changes scope, external behavior, or accepted risk.
 - Route to a specialist when the missing detail is domain-owned and cannot be safely integrated from existing evidence.
 - Route to planning only when required design artifacts are approved or explicitly waived by an eligible direct/local rationale.
-- If planning starts and exposes a missing design decision, reopen technical design instead of inventing the decision in `plan.md` or `tasks.md`.
+- If planning starts and exposes a missing design decision, reopen technical design instead of inventing the decision in `tasks.md` or optional `plan.md`.
 
 ## Repo Pointers
 - `docs/spec-first-workflow.md`: planning-entry gate, planning gate, implementation-readiness gate, session-boundary gate, and design-bundle rules.

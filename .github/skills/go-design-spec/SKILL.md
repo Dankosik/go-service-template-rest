@@ -9,7 +9,7 @@ description: "Assemble and reconcile the integrated technical-design bundle for 
 Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave `design/` stable enough for planning without reopening the approved problem frame.
 
 ## Scope
-Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for implementation planning.
+Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for task breakdown.
 
 ## Boundaries
 Do not:
@@ -36,7 +36,7 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |
-| The design bundle shape is unclear, conditional artifacts are being created "for completeness", or `spec.md`, `design/`, `plan.md`, and `tasks.md` are starting to absorb each other's jobs. | [design-bundle-assembly.md](references/design-bundle-assembly.md) | Makes the model produce a minimal, indexed design bundle with real artifact triggers instead of filler artifacts or disguised spec/planning content. |
+| The design bundle shape is unclear, conditional artifacts are being created "for completeness", or `spec.md`, `design/`, `tasks.md`, and optional `plan.md` are starting to absorb each other's jobs. | [design-bundle-assembly.md](references/design-bundle-assembly.md) | Makes the model produce a minimal, indexed design bundle with real artifact triggers instead of filler artifacts or disguised spec/planning content. |
 | `design/component-map.md` or `design/ownership-map.md` needs package responsibility, source-of-truth, generated-code, or dependency-direction decisions. | [component-and-ownership-maps.md](references/component-and-ownership-maps.md) | Makes the model name concrete owners and stable boundaries instead of inventing shared helpers, treating generated files as authorities, or hiding ownership in "common" packages. |
 | `design/sequence.md` needs runtime order, failure points, side effects, retries, sync/async boundaries, or partial-failure policy. | [runtime-sequence-and-failure-points.md](references/runtime-sequence-and-failure-points.md) | Makes the model write scenario-level runtime flow with failure ownership instead of a happy-path arrow chain or ambiguous sync/async finality. |
 | Specialist outputs or design artifacts disagree across architecture, API, data, security, reliability, observability, delivery, or QA. | [cross-domain-reconciliation.md](references/cross-domain-reconciliation.md) | Makes the model reconcile by selected option, rejected options, and proof obligations instead of smoothing contradictions into a vague compromise. |
@@ -44,7 +44,7 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 | A proposed layer, interface, helper, adapter, shared package, or simplification may change ownership or widen impact radius. | [complexity-and-abstraction-tradeoffs.md](references/complexity-and-abstraction-tradeoffs.md) | Makes the model require present-day complexity reduction and contract preservation instead of future-proof indirection or simplification that weakens guarantees. |
 
 ## Specialist Stance
-- `spec.md` owns decisions, `design/` owns task-local technical context, and `plan.md` consumes approved `spec.md + design/`.
+- `spec.md` owns decisions, `design/` owns task-local technical context, and `tasks.md` consumes approved `spec.md + design/` for the implementation handoff.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.

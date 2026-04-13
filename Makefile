@@ -38,6 +38,7 @@ help:
 	@echo "  make check          # quick checks (fmt/lint/test)"
 	@echo "  make docker-check   # quick checks through pinned Docker tooling"
 	@echo "  make check-full     # full local baseline (prefers docker-ci)"
+	@echo "  make doctor         # diagnose local Go/Docker readiness"
 	@echo "  make run            # run service locally"
 	@echo ""
 	@echo "Template/admin commands:"
@@ -48,6 +49,8 @@ help:
 	@echo "Advanced validation commands:"
 	@echo "  make ci-local       # native CI-like checks"
 	@echo "  make docker-ci      # closest zero-setup CI parity"
+	@echo "  make doctor-native  # diagnose native toolchain readiness"
+	@echo "  make doctor-docker  # diagnose Docker tooling readiness"
 	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
@@ -126,6 +129,7 @@ check-full:
 	else \
 		echo "docker daemon unavailable: running native partial CI-like checks"; \
 		echo "Docker-only integration, migration, and container checks may be skipped; start Docker and run 'make docker-ci' for closest parity"; \
+		echo "Native ci-local also needs Node/npm for OpenAPI lint; run 'make doctor-native' for diagnostics"; \
 		$(MAKE) ci-local BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	fi
 
@@ -200,12 +204,14 @@ fmt-check:
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \
+		echo "run 'make fmt' to update Go formatting and imports"; \
 		exit 1; \
 	fi
 	@gofumpt_unformatted="$$(go tool gofumpt -l $(GOFUMPT_FILES))"; \
 	if [ -n "$$gofumpt_unformatted" ]; then \
 		echo "gofumpt required for:"; \
 		echo "$$gofumpt_unformatted"; \
+		echo "run 'make fmt' to update Go formatting"; \
 		exit 1; \
 	fi
 

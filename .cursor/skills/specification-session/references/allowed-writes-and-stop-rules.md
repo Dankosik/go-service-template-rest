@@ -1,7 +1,7 @@
 # Allowed Writes And Stop Rules
 
 ## Behavior Change Thesis
-When loaded for a specification session that is about to edit files or respond to a bundled downstream request, this file makes the model choose a specification-only boundary update instead of the likely mistake of creating `design/`, `plan.md`, `tasks.md`, tests, migrations, or implementation "just to keep momentum."
+When loaded for a specification session that is about to edit files or respond to a bundled downstream request, this file makes the model choose a specification-only boundary update instead of the likely mistake of creating `design/`, `tasks.md`, optional `plan.md`, tests, migrations, or implementation "just to keep momentum."
 
 ## When To Load
 Load this immediately before file edits when the prompt, artifact state, or user request pressures the session to touch anything beyond `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md`.
@@ -26,7 +26,7 @@ Allowed writes note for `workflow-plans/specification.md`:
 
 ```text
 Allowed writes confirmed: spec.md, workflow-plan.md, workflow-plans/specification.md.
-Out of scope: design/, plan.md, tasks.md, tests, migrations, implementation files.
+Out of scope: design/, tasks.md, optional plan.md, tests, migrations, implementation files.
 Stop rule: stop after specification artifacts agree on state and next session routing.
 ```
 

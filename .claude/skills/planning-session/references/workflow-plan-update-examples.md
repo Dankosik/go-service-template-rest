@@ -8,7 +8,7 @@ Load when repairing or writing the master `workflow-plan.md` planning status, ar
 
 ## Decision Rubric
 - Keep `workflow-plan.md` cross-phase: status, artifact inventory, blockers, readiness, challenge state, boundary, and next session.
-- Do not copy `plan.md`, `tasks.md`, `spec.md`, or design details into the master file.
+- Do not copy `tasks.md`, optional `plan.md`, `spec.md`, or design details into the master file.
 - Master and `workflow-plans/planning.md` must agree on whether planning is `complete`, `blocked`, `reopened`, or `in_progress`.
 - If readiness is `FAIL`, `Next session starts with` points to the reopen target, not an implementation phase.
 - Adequacy challenge status must say whether blocking findings were reconciled, waived under an eligible rationale, or still block handoff.
@@ -19,17 +19,17 @@ Current phase: planning
 Phase status: complete
 Session boundary reached: yes
 Ready for next session: yes
-Next session starts with: implementation-phase-1
+Next session starts with: T001
 
 Artifact status:
 - `spec.md`: approved
 - `design/`: approved
-- `plan.md`: approved
 - `tasks.md`: approved
+- `plan.md`: not expected
 - `test-plan.md`: not expected
 - `rollout.md`: not expected
 - `workflow-plans/planning.md`: complete
-- `workflow-plans/implementation-phase-1.md`: created
+- post-code phase-control files: not expected
 
 Implementation readiness: PASS
 Workflow plan adequacy challenge: completed; blocking findings reconciled
@@ -46,8 +46,8 @@ Ready for next session: no
 Next session starts with: technical-design
 
 Artifact status:
-- `plan.md`: draft
 - `tasks.md`: blocked
+- `plan.md`: not expected
 - `workflow-plans/planning.md`: blocked
 
 Implementation readiness: FAIL

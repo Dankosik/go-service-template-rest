@@ -13,7 +13,7 @@ Load this when a draft includes research notes, benchmark output, file topology,
 | final behavior, scope, accepted constraints, rejected alternatives | `spec.md` |
 | raw comparisons, source links, benchmark output, transcript evidence | `research/*.md` |
 | component map, runtime sequence, ownership, source-of-truth design | `design/` |
-| execution order, phase breakdown, task IDs, coder instructions | `plan.md` and `tasks.md` |
+| execution order, phase breakdown, task IDs, coder instructions | `tasks.md`, plus optional `plan.md` only when supplemental strategy is justified |
 | unresolved assumptions, blockers, or accepted risks | `spec.md` `Open Questions / Assumptions` |
 
 - Keep only the selected outcome in `Decisions`; link or summarize preserved evidence elsewhere.

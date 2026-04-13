@@ -31,7 +31,7 @@ Non-Goals
 - No Redis decision.
 - No middleware decision.
 - No storage design.
-- No handler implementation plan.
+- No handler task breakdown.
 
 Anti-Pattern Avoided
 Do not restate the request as "build Redis-backed dedupe middleware." That converts a behavior problem into an unapproved implementation.

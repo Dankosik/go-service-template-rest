@@ -10,7 +10,7 @@ Load when deciding whether to add `design/data-model.md`, `design/dependency-gra
 - Trigger `design/data-model.md` for persisted state, schema, migration shape, cache contract, projections, replay behavior, data retention, or correctness-sensitive backfill.
 - Trigger `design/dependency-graph.md` for package/module direction changes, generated-code dependency flow, new adapter boundaries, circular-coupling risk, or source-of-truth ambiguity across packages.
 - Trigger `design/contracts/` for changed REST resources, event payloads, generated contracts, or material internal interfaces that planning must preserve; runtime authorities remain canonical.
-- Trigger `test-plan.md` only when validation obligations are too large or multi-layered for the later `plan.md`, such as contract plus migration plus reliability fail-path plus e2e smoke proof.
+- Trigger `test-plan.md` only when validation obligations are too large or multi-layered for the later `tasks.md`, such as contract plus migration plus reliability fail-path plus e2e smoke proof.
 - Trigger `rollout.md` for mixed-version compatibility, expand/backfill/verify/contract sequencing, operational failback, or deploy ordering that affects correctness.
 - If no trigger is real, record the artifact as `not expected`; do not create a placeholder file.
 - If a triggered artifact needs a missing spec decision, block or reopen rather than drafting filler.
@@ -56,7 +56,7 @@ Failure: migration ordering affects correctness and planning.
 Create `test-plan.md` with unit, integration, and e2e headings for completeness.
 ```
 
-Failure: generic headings do not prove a validation obligation that cannot fit in `plan.md`.
+Failure: generic headings do not prove a validation obligation that cannot fit in `tasks.md`.
 
 ## Agent Traps
 - Treating any API change as needing a large contract design when a small canonical-source note is enough.

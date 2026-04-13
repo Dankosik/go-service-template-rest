@@ -10,11 +10,11 @@ Scope:
 - Agent: <agent-name>
 - Mode: <research | review | adjudication | challenge>
 - Skill: <skill-name | no-skill>
-- Read-only boundary: do not edit files, mutate git state, or change implementation plans.
+- Read-only boundary: do not edit files, mutate git state, or change task ledgers or implementation handoffs.
 
 Context:
 - Workflow phase: <phase or "none">
-- Task artifacts: <paths to workflow-plan.md/spec.md/design/plan/tasks when present>
+- Task artifacts: <paths to workflow-plan.md/spec.md/design/tasks and optional plan.md when present>
 - Source-of-truth inputs: <contracts, docs, diffs, files, commands, specialist outputs>
 - Constraints and non-goals: <short list>
 - Known blockers or assumptions: <short list>
@@ -42,7 +42,7 @@ Short variant:
 
 ```text
 Use <agent-name> in <mode> with <skill-name | no-skill>.
-Read-only: no edits, no git mutation, no implementation-plan changes.
+Read-only: no edits, no git mutation, no task-ledger or handoff changes.
 Question: <exact question>.
 Inspect first: <paths>.
 Evidence: cite concrete files/artifacts/commands; label assumptions.

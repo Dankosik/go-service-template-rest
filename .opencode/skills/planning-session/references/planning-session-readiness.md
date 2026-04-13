@@ -1,7 +1,7 @@
 # Planning Session Readiness
 
 ## Behavior Change Thesis
-When loaded for a planning pass with uncertain inputs, this file makes the model block or reopen upstream instead of planning from `spec.md` alone or inventing missing `design/` context inside `plan.md` or `tasks.md`.
+When loaded for a planning pass with uncertain inputs, this file makes the model block or reopen upstream instead of planning from `spec.md` alone or inventing missing `design/` context inside `tasks.md` or optional `plan.md`.
 
 ## When To Load
 Load when required planning inputs are missing, stale, contradictory, or not yet checked before artifact writes.
@@ -29,7 +29,7 @@ Planning inputs confirmed:
 - core `design/`: approved
 - conditional design artifacts: none triggered by sequencing or rollout
 - `workflow-plans/planning.md`: missing but repairable in this session
-Next action: repair `workflow-plans/planning.md`, then produce `plan.md` and expected `tasks.md`.
+Next action: repair `workflow-plans/planning.md`, then produce expected `tasks.md`.
 ```
 
 Copy this shape: it distinguishes a repairable planning-control gap from a blocking decision/design gap.

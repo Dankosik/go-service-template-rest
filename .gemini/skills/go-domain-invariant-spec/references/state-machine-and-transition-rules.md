@@ -19,7 +19,7 @@ Load this when lifecycle states, phase boundaries, workflow ownership, terminal 
 Lifecycle: non_trivial_task
 Owner: orchestrator workflow contract
 State: planning
-Trigger: `plan.md` and expected `tasks.md` are ready for implementation handoff
+Trigger: expected `tasks.md` is ready for implementation handoff
 Preconditions:
 - `spec.md` is approved or eligible for explicit direct-path waiver
 - required `design/` artifacts are approved or design-skip rationale exists

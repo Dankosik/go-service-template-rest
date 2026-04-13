@@ -48,7 +48,7 @@ The draft spec is detailed enough, so I will write the design and clean up the c
 Failure: it lets design become a substitute for specification approval.
 
 ```markdown
-The design direction is obvious, so I will produce `plan.md` after the design bundle.
+The design direction is obvious, so I will produce `tasks.md` after the design bundle.
 ```
 
 Failure: it crosses the technical-design session boundary.

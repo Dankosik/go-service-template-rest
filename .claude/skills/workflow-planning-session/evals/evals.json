@@ -9,7 +9,7 @@
       "expectations": [
         "The output limits itself to workflow control and does not draft `spec.md`, `design/`, `plan.md`, `tasks.md`, or code.",
         "The output chooses an execution shape and a research mode, with planned fan-out lanes or an explicit local-research choice when appropriate.",
-        "The output records whether later `tasks.md` is expected, missing, or not expected alongside later `plan.md` artifact expectations.",
+        "The output records whether later `tasks.md` is expected, missing, or not expected, and marks optional `plan.md` only when separately justified.",
         "The output includes next-session routing and the required master `workflow-plan.md` handoff fields such as `Session boundary reached`, `Ready for next session`, and `Next session starts with`."
       ]
     },

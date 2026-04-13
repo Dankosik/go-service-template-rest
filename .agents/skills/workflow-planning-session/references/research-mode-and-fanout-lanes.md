@@ -34,7 +34,7 @@ Fan-out lane table:
 | --- | --- | --- | --- | --- |
 | L1 | `api-agent` | What REST resources, status semantics, filtering, and error-contract questions must be answered before spec approval? | `api-contract-designer-spec` | API risks and decision options only; no OpenAPI edits. |
 | L2 | `data-agent` | What source-of-truth, migration, tenant-isolation, and retention questions must be answered before spec approval? | `go-data-architect-spec` | Data decision options and blockers only; no migration files. |
-| L3 | `security-agent` | What auth, trust-boundary, signed URL, and abuse-resistance seams affect scope or validation? | `go-security-spec` | Security questions and constraints only; no implementation plan. |
+| L3 | `security-agent` | What auth, trust-boundary, signed URL, and abuse-resistance seams affect scope or validation? | `go-security-spec` | Security questions and constraints only; no task breakdown. |
 ```
 
 What to copy: each lane returns evidence for synthesis; none owns the final decision.

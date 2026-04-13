@@ -619,6 +619,16 @@ Targeted parity checks:
 | Branch-protection required status context audit | `make gh-protect-check BRANCH=main` |
 | Nightly-only flake and fuzz smoke | `make test-flake-smoke` and `make test-fuzz-smoke FUZZ_TIME=60s` |
 
+### Common local failures
+
+- Formatting failure: run `make fmt`, then rerun `make fmt-check` or `make check`.
+- Lint failure: read the linter name in the output, fix that package, then rerun `make lint`. Use `make docker-lint` when local Go or linter behavior looks host-specific.
+- Native full-check OpenAPI lint failure with missing Node/npm: install Node/npm for native mode, or run `make docker-ci` with Docker for pinned Node tooling.
+- Docker unavailable: start Docker Desktop/Engine and rerun the Docker target. Use `make doctor-docker` when Docker commands fail before tests start.
+- Coverage tooling mismatch in native mode: use `make test-cover-local` for a warning-only local diagnosis, or use `make docker-test-report` for pinned coverage tooling.
+- Generated drift failure: run the matching generate target (`make openapi-generate`, `make sqlc-generate`, `make mocks-generate`, or `make stringer-generate`), review the diff, then rerun the matching drift check.
+- GitHub CLI auth or permission failure: run `gh auth status`, then `gh auth login` if needed. `make gh-protect-check` also needs repository permissions that can read branch-protection settings.
+
 ### Feature implementation (native)
 
 Choose the package and test location from [Project Structure & Module Organization](./project-structure-and-module-organization.md#4-where-to-put-new-code) before running this checklist. Green commands prove the surfaces they execute; they do not by themselves prove architecture, ownership, or rollout readiness.

@@ -7,17 +7,17 @@ When loaded for a handoff that feels almost ready, this file makes the model cho
 Load when assigning or auditing implementation-readiness status.
 
 ## Decision Rubric
-- `PASS`: all required spec, design, planning, task-ledger, triggered test or rollout artifacts, required phase-control files, blocker resolution, and proof path are in place.
+- `PASS`: all required spec, design, `tasks.md`, triggered test or rollout artifacts, any required named phase-control files, blocker resolution, and proof path are in place.
 - `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the next implementation phase can satisfy without re-planning.
 - `FAIL`: implementation must not start; name the earlier phase to reopen when a missing artifact, unresolved decision, or blocker could change correctness, ownership, rollout, sequencing, or validation.
 - `WAIVED`: use only for tiny, direct-path, or prototype-scoped work with explicit rationale and scope; never use it to bypass normal non-trivial planning.
-- Record the readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, compact summary in `plan.md`, and short reference in `tasks.md` when useful.
+- Record the readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, short reference in `tasks.md` when useful, and a compact summary in optional `plan.md` when present.
 
 ## Imitate
 ```markdown
 Implementation readiness: PASS.
-Gate result: implementation may start with `implementation-phase-1` in a later session.
-Proof path: task-level proof is listed in `tasks.md`; phase checkpoint proof is listed in `plan.md`.
+Gate result: implementation may start with T001 in a later session.
+Proof path: task-level proof is listed in `tasks.md`; optional phase checkpoint proof is listed in `plan.md` only when that artifact exists.
 ```
 
 Copy this shape: PASS is tied to named artifacts and a later-session entry point.

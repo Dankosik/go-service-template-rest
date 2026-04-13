@@ -8,7 +8,7 @@ description: "Review generated workflow-control artifacts for task-specific hand
 ## Purpose
 Surface the workflow-control gaps that would make phase handoff dishonest or brittle.
 
-This skill is a read-only challenge gate over `workflow-plan.md` and the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, `design/`, `plan.md`, or `tasks.md`.
+This skill is a read-only challenge gate over `workflow-plan.md` and the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, `design/`, `tasks.md`, or optional `plan.md`.
 
 ## Scope
 - inspect generated or substantially repaired workflow-control artifacts for the current task
@@ -20,9 +20,9 @@ This skill is a read-only challenge gate over `workflow-plan.md` and the active 
 
 ## Boundaries
 Do not:
-- edit files, create workflow artifacts, mutate git state, approve readiness, or change the implementation plan
+- edit files, create workflow artifacts, mutate git state, approve readiness, or change the task ledger or implementation handoff
 - make final product, architecture, API, data, security, reliability, rollout, planning, or validation decisions
-- turn `workflow-plans/<phase>.md` into a second `spec.md`, `design/`, `plan.md`, or `tasks.md`
+- turn `workflow-plans/<phase>.md` into a second `spec.md`, `design/`, `tasks.md`, or optional `plan.md`
 - demand generic checklist fields that do not change task execution quality
 - reopen settled scope unless the workflow-control artifact cannot route the current task honestly
 - treat this pass as a substitute for `spec-clarification-challenge`, pre-spec challenge, technical design, or task breakdown
@@ -34,7 +34,7 @@ Expect a compact bundle from the orchestrator:
 - current master `workflow-plan.md`
 - active `workflow-plans/<phase>.md`
 - any generated implementation, review, or validation phase-control files whose adequacy affects handoff
-- relevant artifact status for `spec.md`, `design/`, `plan.md`, `tasks.md`, `test-plan.md`, or `rollout.md`
+- relevant artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, `test-plan.md`, or `rollout.md`
 - implementation-readiness status and any recorded `CONCERNS`, `FAIL`, or `WAIVED` rationale when the current phase is planning
 - recorded direct/local waiver or skip rationale, if the orchestrator claims the challenge is not required
 
@@ -45,11 +45,11 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - master and phase files agree on current phase, phase status, blockers, session boundary, next action, and next-session start point
 - research mode is explicit when research is expected; fan-out lanes name role, owned question, and one skill or `no-skill`
 - phase-local file records order or parallelism, fan-in or challenge path when relevant, completion marker, stop rule, local blockers, and parallelizable work
-- artifact expectations are explicit and proportional: `spec.md`, `design/`, `plan.md`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned implementation/review/validation phase files are approved, draft, missing, blocked, waived, or not expected
+- artifact expectations are explicit and proportional: `spec.md`, `design/`, expected `tasks.md`, optional `plan.md`, triggered `test-plan.md`, `rollout.md`, and planned implementation/review/validation phase files are approved, draft, missing, blocked, waived, or not expected
 - when the current phase is planning, implementation readiness is recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
 - blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text
-- the plan contains enough task-specific routing for the next session to start without recreating workflow planning from chat
-- the phase-local plan stays routing-only and does not duplicate final decisions, technical design, execution strategy, or the executable `tasks.md` ledger
+- the workflow-control artifacts contain enough task-specific routing for the next session to start without recreating workflow planning from chat
+- the phase-local plan stays routing-only and does not duplicate final decisions, technical design, optional strategy notes, or the executable `tasks.md` ledger
 - tiny/direct-path or lightweight-local skips include a real rationale instead of silently bypassing control artifacts
 
 ## Reference Routing
@@ -63,7 +63,7 @@ References are compact rubrics and example banks, not exhaustive checklists. Loa
 | Completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak. | `references/stop-rule-and-completion-marker.md` | Makes the challenger protect the phase boundary with a concrete stop/handoff rule instead of letting the session drift into the next phase. |
 | Planning-phase implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing. | `references/planning-readiness-gap-examples.md` | Makes the challenger route readiness gaps to `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` repair instead of treating "ready to code" prose as enough. |
 | Finding severity is unclear, especially `blocks_phase_handoff` versus `blocks_specific_lane` versus `non_blocking_but_record`. | `references/non-blocking-vs-blocking-findings.md` | Makes the challenger classify by execution impact instead of making every imperfection block the phase or every gap a nit. |
-| Workflow-control files duplicate `spec.md`, `design/`, `plan.md`, or `tasks.md`, or a finding would ask them to do so. | `references/authority-boundary-and-duplication.md` | Makes the challenger recommend `trim_duplicate_authority` or a status-only repair instead of creating a second source of truth. |
+| Workflow-control files duplicate `spec.md`, `design/`, `tasks.md`, or optional `plan.md`, or a finding would ask them to do so. | `references/authority-boundary-and-duplication.md` | Makes the challenger recommend `trim_duplicate_authority` or a status-only repair instead of creating a second source of truth. |
 
 ## Classification
 Use exactly one per finding:
@@ -111,7 +111,7 @@ Stop when:
 ## Anti-Patterns
 - approving or rejecting the workflow plan as an authority
 - padding findings with generic "add more detail" advice
-- asking for `spec.md`, `plan.md`, or `tasks.md` content to be copied into a phase workflow plan
+- asking for `spec.md`, `tasks.md`, or optional `plan.md` content to be copied into a phase workflow plan
 - treating all tiny tasks as if they need the full non-trivial artifact bundle
 - ignoring a master/phase mismatch because the intended next step seems obvious from chat
-- using the challenge to perform domain research, specification clarification, technical design, or implementation planning
+- using the challenge to perform domain research, specification clarification, technical design, or task breakdown

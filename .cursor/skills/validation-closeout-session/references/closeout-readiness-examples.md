@@ -18,7 +18,7 @@ Load this when the session boundary is ambiguous: the user asks for closeout, bu
 Closeout readiness: proceed.
 Claim: task done for the approved Phase 1 scope.
 Routing: `workflow-plan.md` says current phase is `validation-phase-1`; the existing validation phase file is present.
-Inputs: `spec.md`, `plan.md`, existing `tasks.md`, and `workflow-plans/validation-phase-1.md` list the same proof obligations.
+Inputs: `spec.md`, existing `tasks.md`, and `workflow-plans/validation-phase-1.md` list the same proof obligations.
 Proof action: run fresh scoped package tests, API drift check, and migration validation now.
 Boundary: no code, test, migration, or workflow-file creation in this session.
 ```

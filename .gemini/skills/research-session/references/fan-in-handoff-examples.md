@@ -45,7 +45,7 @@ Next session starts with:
 - specification, with pre-spec challenge expected before approving `spec.md`.
 
 Stop rule:
-- Do not create `spec.md`, `workflow-plans/specification.md`, `design/`, `plan.md`, or `tasks.md` in this research session.
+- Do not create `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or optional `plan.md` in this research session.
 ```
 
 Copy the comparable-claims and readiness shape when fan-out produced multiple lane outputs.

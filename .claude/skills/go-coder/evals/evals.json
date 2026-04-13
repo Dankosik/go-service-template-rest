@@ -3,13 +3,13 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Work inside the provided workdir using the go-coder skill. The request text asks for an async upload flow, but you must reconcile that request against `specs/upload-delivery/spec.md` and `specs/upload-delivery/plan.md` before touching code. If the work is not implementation-ready, stop cleanly, avoid code edits, and save a concise handoff report to `outputs/response.md` describing the blocking decision. Do not claim completion without proof.",
+      "prompt": "Work inside the provided workdir using the go-coder skill. The request text asks for an async upload flow, but you must reconcile that request against `specs/upload-delivery/spec.md` and `specs/upload-delivery/tasks.md` before touching code. If the work is not implementation-ready, stop cleanly, avoid code edits, and save a concise handoff report to `outputs/response.md` describing the blocking decision. Do not claim completion without proof.",
       "expected_output": "A clean escalation that detects the sync-vs-async conflict, avoids speculative code edits, uses a blocker-oriented concise report instead of empty implementation sections, and reports the blocker without a false completion claim.",
       "files": [
         "../go-coder-workspace/iteration-4/eval-0-upload-conflict/inputs"
       ],
       "expectations": [
-        "The result explicitly identifies a conflict between the approved spec or plan and the async request note.",
+        "The result explicitly identifies a conflict between the approved spec or task ledger and the async request note.",
         "The result avoids Go source changes because the work is blocked on a design decision.",
         "The result does not claim the change is implemented, fixed, or ready.",
         "The blocker report stays blocker-oriented and does not expand into empty implementation sections."
@@ -77,7 +77,7 @@
     },
     {
       "id": 5,
-      "prompt": "Use the go-coder skill for a non-trivial implementation task whose approved `plan.md` says `tasks.md` is required, but the workdir only has `spec.md` and `plan.md`; no implementation-readiness status is recorded. Do not create planning artifacts during implementation. Return the correct blocked handoff behavior.",
+      "prompt": "Use the go-coder skill for a non-trivial implementation task whose approved workflow says `tasks.md` is required, but the workdir only has `spec.md`; no implementation-readiness status is recorded. Do not create planning artifacts during implementation. Return the correct blocked handoff behavior.",
       "expected_output": "A blocked implementation handoff that refuses to create a missing required `tasks.md` or readiness gate during coding, routes back to planning, and avoids success or implementation-complete language.",
       "files": [],
       "expectations": [

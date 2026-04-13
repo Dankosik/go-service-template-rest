@@ -19,7 +19,7 @@ This skill is a gate inside `specification`, not a workflow phase and not a seco
 ## Boundaries
 Do not:
 - make final product, architecture, API, data, security, reliability, rollout, or validation decisions
-- edit files, write `spec.md`, update workflow plans, mutate git state, or alter the implementation plan
+- edit files, write `spec.md`, update workflow plans, mutate git state, or alter the task ledger or implementation handoff
 - ask the human by default; return questions for the orchestrator to reconcile
 - produce a parallel design document, task breakdown, or research transcript
 - repeat generic checklist prompts such as "what about security?" unless tied to a concrete seam in the candidate decisions
@@ -120,4 +120,4 @@ Stop when:
 - treating `defer_to_design` as a way to hide missing spec decisions
 - using `requires_user_decision` to avoid targeted research
 - copying raw challenge output into `spec.md`
-- turning the pass into architecture authorship, implementation planning, or approval theater
+- turning the pass into architecture authorship, task breakdown, or approval theater

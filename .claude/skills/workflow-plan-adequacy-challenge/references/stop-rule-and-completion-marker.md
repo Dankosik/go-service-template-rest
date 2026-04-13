@@ -21,7 +21,7 @@ Why to copy: the session can drift from design into planning even though non-tri
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `clarify_stop_or_completion_rule`
-- `Exact Orchestrator Addition`: Add `Completion marker: required core design artifacts approved and master artifact status updated`; add `Stop rule: stop after technical-design handoff; do not create plan.md or tasks.md in this session`.
+- `Exact Orchestrator Addition`: Add `Completion marker: required core design artifacts approved and master artifact status updated`; add `Stop rule: stop after technical-design handoff; do not create tasks.md or optional plan.md in this session`.
 
 ### Research completion omits fan-in
 `Gap`: Completion marker says "research done" but fan-in and challenge status are absent.
@@ -44,7 +44,7 @@ Use:
 - `Exact Orchestrator Addition`: Add `Stop rule: do not hand off to implementation until implementation readiness is PASS, eligible CONCERNS, or eligible WAIVED`.
 
 ## Reject
-- "Add every future implementation step to the stop rule." Implementation steps belong in `plan.md` or `tasks.md`.
+- "Add every future implementation step to the stop rule." Implementation steps belong in `tasks.md` or optional `plan.md`.
 - "Approve the next phase once the stop rule is written." This skill does not approve handoff.
 - "Make completion marker 'all docs done'." It is not task-specific or verifiable.
 

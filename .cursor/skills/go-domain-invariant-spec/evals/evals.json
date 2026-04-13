@@ -7,7 +7,7 @@
       "expected_output": "Section-ready domain spec content for order cancellation with explicit invariants, state transitions, duplicate/replay handling, and targeted handoffs.",
       "files": [],
       "expectations": [
-        "The output uses section-ready domain spec headings rather than a generic architecture or implementation plan.",
+        "The output uses section-ready domain spec headings rather than a generic architecture or task breakdown.",
         "The output includes explicit invariants with ownership or enforcement points.",
         "The output makes duplicate, replay, or late webhook semantics explicit.",
         "The output distinguishes request acceptance from completed business effect or refund completion.",

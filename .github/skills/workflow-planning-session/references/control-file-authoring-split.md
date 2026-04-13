@@ -1,7 +1,7 @@
 # Control File Authoring Split
 
 ## Behavior Change Thesis
-When loaded for symptom "I am writing or repairing workflow-control files and content is bleeding between master and phase-local files," this file makes the model put cross-phase status in `workflow-plan.md` and session-local orchestration in `workflow-plans/workflow-planning.md` instead of duplicating details, drifting into `spec.md`/`design/`/`plan.md`, or creating conflicting control sources.
+When loaded for symptom "I am writing or repairing workflow-control files and content is bleeding between master and phase-local files," this file makes the model put cross-phase status in `workflow-plan.md` and session-local orchestration in `workflow-plans/workflow-planning.md` instead of duplicating details, drifting into `spec.md`/`design/`/`tasks.md`, or creating conflicting control sources.
 
 ## When To Load
 Load this when the active decision is where a workflow-control detail belongs. If the active uncertainty is execution shape, research lanes, artifact status, or adequacy challenge routing, load that narrower reference instead.
@@ -11,7 +11,7 @@ Load this when the active decision is where a workflow-control detail belongs. I
 - `workflow-plans/workflow-planning.md` owns only this workflow-planning session: order of work, lane table for the next research session, challenge path, parallelism, fan-in rule, completion marker, blockers local to routing, next action, and stop rule.
 - Master may summarize lanes by link or count; the phase file owns lane details.
 - Phase file may mention artifact expectations only to keep the local handoff consistent; the master owns the status table.
-- Neither file owns final domain decisions, research notes, `spec.md`, `design/`, `plan.md`, `tasks.md`, tests, migrations, or implementation status.
+- Neither file owns final domain decisions, research notes, `spec.md`, `design/`, `tasks.md`, optional `plan.md`, tests, migrations, or implementation status.
 - For tiny direct-path work, the best authoring split is often no files: record the inline waiver and stop.
 
 ## Imitate

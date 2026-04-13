@@ -31,7 +31,7 @@ Copy the shape: one falsifiable rule, one owner, one authority source, one pass/
 
 ```text
 INV-SUBAGENT-READONLY-001
-Statement: Subagents may produce advisory research or review output but must not edit repository files, mutate git state, or change the implementation plan.
+Statement: Subagents may produce advisory research or review output but must not edit repository files, mutate git state, or change the task ledger or implementation handoff.
 Type: local_hard_invariant
 Owner: orchestrator workflow contract
 Source of truth: AGENTS.md

@@ -3,11 +3,11 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `planning`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: implementation-phase-1`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, `plan.md`, and expected `tasks.md` are approved, and no blockers are recorded. Report the status only.",
+      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `planning`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: T001`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, and expected `tasks.md` are approved, optional `plan.md` is not expected, and no blockers are recorded. Report the status only.",
       "expected_output": "A compact read-only status report that identifies the task path, reports planning complete with the session boundary reached, summarizes approved artifacts and readiness `PASS`, and says implementation may start in the recorded next session.",
       "files": [],
       "expectations": [
-        "The output does not edit or propose editing artifacts, code, git state, or implementation plans.",
+        "The output does not edit or propose editing artifacts, code, git state, task ledgers, or implementation handoffs.",
         "The output lists allowed writes for the recorded implementation handoff while making clear the workflow-status helper itself writes nothing.",
         "The output says implementation may start only because the approved artifact chain, including expected `tasks.md`, readiness `PASS`, and next-session routing point to implementation."
       ]
@@ -48,7 +48,7 @@
     },
     {
       "id": 4,
-      "prompt": "Use workflow-status for `specs/account-summary-cache`. The master file says `plan.md` is approved and `tasks.md` is expected for this non-trivial task, but `tasks.md` is missing and no waiver is recorded. Tell me whether implementation can start.",
+      "prompt": "Use workflow-status for `specs/account-summary-cache`. The master file says `tasks.md` is expected for this non-trivial task, but `tasks.md` is missing and no waiver is recorded. Tell me whether implementation can start.",
       "expected_output": "A conservative read-only status report that treats missing expected `tasks.md` as a planning repair blocker and says implementation may not start.",
       "files": [],
       "expectations": [
@@ -59,18 +59,18 @@
     },
     {
       "id": 5,
-      "prompt": "Use workflow-status for `specs/admin-soft-delete`. The master file says planning is complete and implementation readiness is `FAIL` with reopen target `technical design` because rollout ownership can change validation. `plan.md` and `tasks.md` are present. Tell me whether implementation can start.",
+      "prompt": "Use workflow-status for `specs/admin-soft-delete`. The master file says planning is complete and implementation readiness is `FAIL` with reopen target `technical design` because rollout ownership can change validation. `tasks.md` is present. Tell me whether implementation can start.",
       "expected_output": "A conservative read-only status report that reports readiness `FAIL`, says implementation may not start, and routes next action to the recorded earlier phase.",
       "files": [],
       "expectations": [
-        "The output treats readiness `FAIL` as blocking even though `plan.md` and `tasks.md` are present.",
+        "The output treats readiness `FAIL` as blocking even though `tasks.md` is present.",
         "The output names `technical design` as the reopen target.",
         "The output does not repair artifacts or approve readiness from the status helper."
       ]
     },
     {
       "id": 6,
-      "prompt": "Use workflow-status for `specs/export-rollout`. The artifacts say planning is complete, `Session boundary reached: yes`, `Next session starts with: implementation-phase-1`, and `Implementation readiness: CONCERNS` with accepted risk `legacy clients may see old retry headers for one deploy` plus proof obligation `run contract tests and mixed-version smoke notes`. Report status only.",
+      "prompt": "Use workflow-status for `specs/export-rollout`. The artifacts say planning is complete, `Session boundary reached: yes`, `Next session starts with: T001`, and `Implementation readiness: CONCERNS` with accepted risk `legacy clients may see old retry headers for one deploy` plus proof obligation `run contract tests and mixed-version smoke notes`. Report status only.",
       "expected_output": "A compact read-only status report that says implementation may start only with recorded concerns and names the accepted risk and proof obligation.",
       "files": [],
       "expectations": [

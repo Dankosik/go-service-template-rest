@@ -11,7 +11,7 @@ Load this only when the active phase is `planning` or a planning-phase handoff c
 - `CONCERNS` must name accepted risks and proof obligations.
 - `FAIL` must name the earlier phase or planning repair target to reopen.
 - `WAIVED` is eligible only for tiny, direct-path, or prototype-scoped work and must state rationale and scope.
-- The master records readiness status; `workflow-plans/planning.md` records gate result plus stop or handoff rule; `plan.md` carries only a compact summary.
+- The master records readiness status; `workflow-plans/planning.md` records gate result plus stop or handoff rule; `tasks.md` carries only a short reference when useful, and optional `plan.md` carries only a compact summary when present.
 
 ## Imitate
 ### No readiness status
@@ -42,7 +42,7 @@ Why to copy: `WAIVED` can otherwise become a bypass around the non-trivial plann
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `record_skip_or_accepted_risk`
-- `Exact Orchestrator Addition`: Replace with `Implementation readiness: FAIL; reopen planning to approve plan.md and tasks.md`, or record an eligible waiver with scope and rationale if the work truly qualifies.
+- `Exact Orchestrator Addition`: Replace with `Implementation readiness: FAIL; reopen planning to approve tasks.md`, or record an eligible waiver with scope and rationale if the work truly qualifies.
 
 ## Reject
 - "Implementation readiness PASS after adding the missing field." This skill cannot approve readiness.

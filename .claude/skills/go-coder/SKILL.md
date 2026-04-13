@@ -1,6 +1,6 @@
 ---
 name: go-coder
-description: "Implement production-grade Go changes from approved requirements and task plans with review-clean defaults: explicit design, language-native and stdlib-first choices, seam-named same-package source-of-truth extraction when stable policy starts to spread, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
+description: "Implement production-grade Go changes from approved requirements and task ledgers with review-clean defaults: explicit design, language-native and stdlib-first choices, seam-named same-package source-of-truth extraction when stable policy starts to spread, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
 ---
 
 # Go Coder
@@ -10,7 +10,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 
 ## Use This Skill For
 - implementing approved Go features, fixes, refactors, integrations, regenerations, and targeted test updates
-- translating an approved requirement or explicit implementation plan into code without changing the decision that was already made
+- translating an approved requirement or executable task ledger into code without changing the decision that was already made
 - keeping code, tests, generated artifacts, and verification evidence aligned with the approved change
 
 ## Do Not Use This Skill For
@@ -19,7 +19,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - hand-editing generated artifacts instead of changing the owning source and regenerating
 
 ## Specialist Stance
-- Treat the approved requirement, spec, implementation plan, and existing task ledger as the source of truth for behavior and execution scope.
+- Treat the approved requirement, spec, and existing `tasks.md` task ledger as the source of truth for behavior and execution scope. Use optional `plan.md` only as supplemental strategy when it exists.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
 - Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
 - When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.
@@ -29,17 +29,17 @@ Implement approved Go changes as production-grade, review-clean code that preser
 
 ## Boundaries And Handoffs
 Keep workflow ownership outside this skill:
-- consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, read existing `tasks.md` alongside `plan.md` when present or expected
+- consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, an approved `tasks.md` is sufficient to start the next small implementation task when required decisions/context artifacts exist and readiness permits it
 - for non-trivial planned work, check the recorded implementation-readiness status in `workflow-plan.md` and the planning handoff when those artifacts exist
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
-- if the safe implementation depends on a missing decision, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or planning repair instead of inventing behavior
+- if the safe implementation depends on a missing decision, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or task-breakdown repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
 
 ## Implementation-Readiness Gate
 For non-trivial planned work, treat implementation readiness as mandatory before code edits:
-- `PASS`: proceed within the approved plan and task ledger.
+- `PASS`: proceed within the approved task ledger and optional plan context when present.
 - `CONCERNS`: proceed only when named accepted risks and proof obligations are explicitly recorded; keep verification aligned with those obligations.
 - `FAIL`: do not start implementation; route to the named earlier phase.
 - `WAIVED`: proceed only for tiny, direct-path, or prototype work with explicit rationale and scope.
@@ -228,7 +228,7 @@ Before handoff, ask:
 8. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
 ## Blocked Work
-If the approved spec, plan, or contract blocks implementation before code changes begin:
+If the approved spec, task ledger, optional plan, or contract blocks implementation before code changes begin:
 - stop cleanly and say the work is blocked by a decision conflict or missing approval
 - name the exact approved artifact that blocks the change
 - if expected `tasks.md` is missing, route back to planning instead of creating it during implementation

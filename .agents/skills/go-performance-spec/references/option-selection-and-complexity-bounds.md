@@ -33,7 +33,7 @@ Load as a challenge/smell-triage reference when the spec is comparing optimizati
 - Treating a powerful technique as an architecture decision by itself.
 - Adding a mechanism because it is locally familiar instead of because it is the cheapest way to satisfy the budget.
 - Comparing options only by latency while ignoring memory, complexity, correctness handoff, rollout, and operational failure modes.
-- Leaving the rejected option unstated, which makes the implementation plan drift back to the flashier choice.
+- Leaving the rejected option unstated, which lets implementation drift back to the flashier choice.
 
 ## Validation Shape
 The spec should show a compact option table:

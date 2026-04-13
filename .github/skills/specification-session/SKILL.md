@@ -1,13 +1,13 @@
 ---
 name: specification-session
-description: "Own a session dedicated only to specification for this repository. Use when the orchestrator already has framing plus enough researched or explicitly bounded input to finalize `spec.md`, must run or reconcile the non-trivial spec-clarification challenge before approval, and must update task-local `workflow-plan.md` plus `workflow-plans/specification.md` without drifting into `design/`, `plan.md`, `tasks.md`, or implementation. Skip tiny direct-path work and tasks that are still in workflow planning or research."
+description: "Own a session dedicated only to specification for this repository. Use when the orchestrator already has framing plus enough researched or explicitly bounded input to finalize `spec.md`, must run or reconcile the non-trivial spec-clarification challenge before approval, and must update task-local `workflow-plan.md` plus `workflow-plans/specification.md` without drifting into `design/`, `tasks.md`, optional `plan.md`, or implementation. Skip tiny direct-path work and tasks that are still in workflow planning or research."
 ---
 
 # Specification Session
 
 ## Purpose
 Run only the specification checkpoint for one task-local session.
-This wrapper makes spec-ready input, the autonomous clarification gate, allowed writes, handoff, and stop conditions explicit; it does not assemble `design/`, produce `plan.md`, produce `tasks.md`, or start implementation.
+This wrapper makes spec-ready input, the autonomous clarification gate, allowed writes, handoff, and stop conditions explicit; it does not assemble `design/`, produce `tasks.md`, produce optional `plan.md`, or start implementation.
 
 ## Use When
 - the task already has minimum viable framing and enough evidence or bounded assumptions to support an honest `spec.md`
@@ -20,7 +20,7 @@ This wrapper makes spec-ready input, the autonomous clarification gate, allowed 
 - the work is tiny enough that `AGENTS.md` allows an inline local path and a dedicated specification session would be ceremony
 - the task is still at workflow planning or research, or the current evidence is not yet spec-ready
 - the task has already moved into `technical design` or later and the current session should not reopen specification casually
-- the request tries to combine specification with `design/`, `plan.md`, `tasks.md`, or implementation output in one session
+- the request tries to combine specification with `design/`, `tasks.md`, optional `plan.md`, or implementation output in one session
 
 ## Required Inputs
 Need only the minimum phase-ready inputs from earlier work:
@@ -78,7 +78,7 @@ These references calibrate this wrapper; they do not override `AGENTS.md`, `docs
 | Symptom | Reference | Behavior Change |
 | --- | --- | --- |
 | Phase ownership is unclear, the input looks under-researched, or the caller asks to approve `spec.md` from partial decisions. | `references/specification-session-readiness.md` | Choose a spec-ready check, bounded assumption, or reopen/block decision instead of approving by momentum. |
-| The session is about to edit files, or the request pressures it toward `design/`, `plan.md`, `tasks.md`, tests, migrations, or implementation. | `references/allowed-writes-and-stop-rules.md` | Keep writes specification-only and record the boundary instead of creating downstream starter artifacts. |
+| The session is about to edit files, or the request pressures it toward `design/`, `tasks.md`, optional `plan.md`, tests, migrations, or implementation. | `references/allowed-writes-and-stop-rules.md` | Keep writes specification-only and record the boundary instead of creating downstream starter artifacts. |
 | Non-trivial `spec.md` approval depends on running, reconciling, blocking, or waiving the clarification gate. | `references/spec-clarification-gate-flow.md` | Reconcile `spec-clarification-challenge` outcomes into final decisions instead of treating the gate as optional, pasting transcripts, or deferring approval blockers to design. |
 | `workflow-plan.md` or `workflow-plans/specification.md` needs repair or handoff updates. | `references/workflow-plan-specification-updates.md` | Keep master routing separate from phase-local orchestration instead of duplicating `spec.md`, adding implementation order, or leaving state in chat. |
 | `spec.md` cannot honestly be approved because of under-framed input, contradictory evidence, unresolved challenge questions, product-only policy, or phase drift. | `references/blocked-specification-examples.md` | Leave `spec.md` draft or blocked with a precise reopen target instead of inventing decisions or punting approval-changing gaps to technical design. |
@@ -95,7 +95,7 @@ This session may write or update only:
 Do not:
 - write `research/*.md` except by handing the task back to a research checkpoint instead of continuing here
 - assemble or edit `design/`
-- write `plan.md`, `tasks.md`, `test-plan.md`, or `rollout.md`
+- write `tasks.md`, optional `plan.md`, `test-plan.md`, or `rollout.md`
 - start implementation, tests, migrations, review, or validation work
 - use planning or implementation skills as a backdoor into later phases
 - turn `workflow-plans/specification.md` into a second `spec.md`, a design bundle, or a task list
@@ -163,7 +163,7 @@ Do not:
   - next action
   - blockers
   - what can run in parallel
-- keep this file routing-only; do not turn it into `spec.md`, `design/`, `plan.md`, or `tasks.md`
+- keep this file routing-only; do not turn it into `spec.md`, `design/`, `tasks.md`, or optional `plan.md`
 
 ### 6. Write Or Repair `workflow-plan.md`
 - update master phase status, artifact status, blockers, and next-session routing
@@ -173,7 +173,7 @@ Do not:
 
 ### 7. Stop At The Boundary
 - once `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` agree on state and handoff, stop
-- do not start `design/`, `plan.md`, `tasks.md`, or implementation in the same session
+- do not start `design/`, `tasks.md`, optional `plan.md`, or implementation in the same session
 
 ## What To Hand Off To Technical Design
 When specification completes successfully, the handoff is:
@@ -195,7 +195,7 @@ Every completed or blocked pass must update the master file with:
 - `Ready for next session`
 - `Next session starts with`
 - blockers, accepted assumptions, and open points that still affect the handoff
-- artifact status for `design/`, `plan.md`, `tasks.md`, and any triggered `test-plan.md` or `rollout.md` as `approved`, `draft`, `missing`, or not expected
+- artifact status for `design/`, `tasks.md`, optional `plan.md`, and any triggered `test-plan.md` or `rollout.md` as `approved`, `draft`, `missing`, or not expected
 
 Do not leave spec approval or handoff state implicit in chat.
 
@@ -206,7 +206,7 @@ A finished specification session produces only specification-phase artifacts and
 - updated or newly created `workflow-plans/specification.md`
 - an honest `complete`, `blocked`, or `reopened` specification-phase state with the next session start point made explicit
 
-It does not produce `design/`, `plan.md`, `tasks.md`, or implementation output.
+It does not produce `design/`, `tasks.md`, optional `plan.md`, or implementation output.
 
 ## Stop Condition
 The session is complete when:
@@ -215,7 +215,7 @@ The session is complete when:
 - `spec.md` is approved or clearly left unapproved for a documented reason
 - master and phase-local workflow artifacts agree on phase status, blockers, and handoff
 - the next session start point is explicit, including whether it is `technical-design`, challenge, or more research
-- the session stops before `design/`, `plan.md`, `tasks.md`, or implementation begins
+- the session stops before `design/`, `tasks.md`, optional `plan.md`, or implementation begins
 
 ## Escalate When
 Escalate instead of forcing output when:

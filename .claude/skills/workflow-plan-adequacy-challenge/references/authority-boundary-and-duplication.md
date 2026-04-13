@@ -1,7 +1,7 @@
 # Authority Boundary And Duplication
 
 ## Behavior Change Thesis
-When loaded for symptom workflow-control files duplicate canonical artifact content, this file makes the model recommend status-only routing or `trim_duplicate_authority` instead of likely mistake creating a second `spec.md`, `design/`, `plan.md`, or `tasks.md`.
+When loaded for symptom workflow-control files duplicate canonical artifact content, this file makes the model recommend status-only routing or `trim_duplicate_authority` instead of likely mistake creating a second `spec.md`, `design/`, `tasks.md`, or optional `plan.md`.
 
 ## When To Load
 Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.md`, or a finding would copy or summarize too much from canonical artifacts. Do not load it as the default reference when a narrower status, lane, stop-rule, or readiness gap matches.
@@ -9,7 +9,7 @@ Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.
 ## Decision Rubric
 - `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, and implementation-readiness status.
 - `workflow-plans/<phase>.md` owns phase-local orchestration: lanes, order/parallelism, fan-in/challenge path, completion marker, stop rule, next action, blockers, and local adequacy challenge resolution.
-- `spec.md` owns final decisions; `design/` owns technical design; `plan.md` owns execution strategy; `tasks.md` owns executable task state.
+- `spec.md` owns final decisions; `design/` owns technical design; `tasks.md` owns executable task state and implementation handoff; optional `plan.md` owns only supplemental strategy when present.
 - If workflow control contains canonical artifact content, recommend trimming it to a status, link/path, blocker, or next action. Do not ask for a larger duplicate summary.
 
 ## Imitate
@@ -31,17 +31,17 @@ Why to copy: the master should support resume routing, not become executable tas
 Use:
 - `Classification`: `non_blocking_but_record` if `tasks.md` exists and routing is clear; `blocks_phase_handoff` if the duplicate checklist is the only task ledger for non-trivial work
 - `Recommended Action`: `trim_duplicate_authority`
-- `Exact Orchestrator Addition`: Replace the checklist with `tasks.md: approved at tasks.md; current implementation phase: phase 1; Next session starts with: implementation-phase-1 task <id>`.
+- `Exact Orchestrator Addition`: Replace the checklist with `tasks.md: approved at tasks.md; Next session starts with: T001`.
 
 ### Finding asks for copied artifact content
-`Gap`: Proposed finding says to copy all accepted risks and validation cases from `plan.md` into `workflow-plans/planning.md`.
+`Gap`: Proposed finding says to copy all accepted risks and validation cases from `tasks.md` into `workflow-plans/planning.md`.
 
 Why to copy: the safe repair is a compact pointer and gate result, not duplicated planning detail.
 
 Use:
 - `Classification`: classify the underlying missing handoff rule, not the temptation to duplicate content
 - `Recommended Action`: `trim_duplicate_authority`
-- `Exact Orchestrator Addition`: In `workflow-plans/planning.md`, record `Gate result: CONCERNS; proof obligation: see plan.md readiness summary; Stop or handoff rule: implementation may start with named concern only`.
+- `Exact Orchestrator Addition`: In `workflow-plans/planning.md`, record `Gate result: CONCERNS; proof obligation: see tasks.md readiness note; Stop or handoff rule: implementation may start with named concern only`.
 
 ## Reject
 - "Copy the whole spec decision table into `workflow-plan.md` so the next session has context." The spec is the decision record.

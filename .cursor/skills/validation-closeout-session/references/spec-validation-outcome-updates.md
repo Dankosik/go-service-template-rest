@@ -10,7 +10,7 @@ Load this after fresh proof was run or a proof gap was discovered, when the next
 - `Validation` records the claim, scope, commands actually run, observed result, conclusion, and next action.
 - `Outcome` says only what the fresh proof supports: complete, blocked, reopened, or partially verified with explicit limits.
 - Failed, skipped, stale, or too-narrow proof produces `not verified` plus a reopen target, not a softened success outcome.
-- Do not rewrite `Decisions`, `design/`, or `plan.md` during validation; record a reopen if closeout exposes a real upstream gap.
+- Do not rewrite `Decisions`, `design/`, or optional `plan.md` during validation; record a reopen if closeout exposes a real upstream gap.
 - Do not paste chat summaries or old output as if they were current command evidence.
 
 ## Imitate
@@ -19,7 +19,7 @@ Load this after fresh proof was run or a proof gap was discovered, when the next
 ## Validation
 
 Claim: Phase 1 is complete for tenant export job API and migration scope.
-Scope: approved Phase 1 surfaces in `plan.md` and T001-T004 in existing `tasks.md`.
+Scope: approved Phase 1 surfaces in existing `tasks.md`.
 Verification Commands:
 - `go test ./internal/httpapi/export ./internal/export -count=1`
 - `make openapi-check`
