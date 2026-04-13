@@ -22,7 +22,7 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap bootstrap-native bootstrap-docker check check-full \
+.PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
 	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
@@ -36,6 +36,7 @@ help:
 	@echo "Quick onboarding commands:"
 	@echo "  make bootstrap      # prepare local environment (.env + dependencies)"
 	@echo "  make check          # quick checks (fmt/lint/test)"
+	@echo "  make docker-check   # quick checks through pinned Docker tooling"
 	@echo "  make check-full     # full local baseline (prefers docker-ci)"
 	@echo "  make run            # run service locally"
 	@echo ""
@@ -50,7 +51,7 @@ help:
 	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
-	@echo "  make test-report             # race + coverage report and threshold"
+	@echo "  make test-report             # coverage report and threshold"
 	@echo "  make migration-validate      # migration rehearsal"
 	@echo "  make go-security             # govulncheck + gosec"
 	@echo "  make secret-scan             # gitleaks secret scan"
@@ -107,12 +108,15 @@ check:
 		exit 1; \
 	fi
 
+docker-check: docker-fmt-check docker-lint docker-test
+
 check-full:
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running zero-setup CI checks"; \
 		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	else \
-		echo "docker daemon unavailable: running native CI checks"; \
+		echo "docker daemon unavailable: running native partial CI-like checks"; \
+		echo "Docker-only integration, migration, and container checks may be skipped; start Docker and run 'make docker-ci' for closest parity"; \
 		$(MAKE) ci-local BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	fi
 
@@ -217,7 +221,7 @@ test-cover:
 
 test-report:
 	@mkdir -p $(TEST_REPORT_DIR)
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -race -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 

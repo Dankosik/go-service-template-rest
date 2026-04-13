@@ -163,7 +163,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	})
 
 	t.Run("tcp success", func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		var listenConfig net.ListenConfig
+		ln, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Listen() error = %v", err)
 		}
@@ -186,7 +187,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	})
 
 	t.Run("redis wrapper", func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		var listenConfig net.ListenConfig
+		ln, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Listen() error = %v", err)
 		}

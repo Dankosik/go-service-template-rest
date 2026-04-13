@@ -22,6 +22,9 @@ make check
 make check-full
 ```
 
+Use `make docker-check` when you want the quick fmt/lint/test loop through pinned Docker tooling instead of host Go.
+Use `make test-report` or CI `test-coverage` evidence when coverage changed or the PR risk is non-trivial.
+
 4. If this repository was cloned as a new service, run template rewiring before the first PR (module path/CODEOWNERS/skills mirrors):
 
 ```bash

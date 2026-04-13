@@ -449,6 +449,7 @@ For the full dependency graph, see [`go.mod`](go.mod) and [`go.sum`](go.sum).
 Local entry points:
 
 - `make check` - quick local checks
+- `make docker-check` - quick checks through pinned Docker tooling
 - `BASE_REF=origin/main HEAD_REF=HEAD make check-full` - full local pre-push baseline with docs-drift comparison
 - `make ci-local` - native CI-style flow
 - `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` - closest Docker-based CI parity flow with pinned tooling images

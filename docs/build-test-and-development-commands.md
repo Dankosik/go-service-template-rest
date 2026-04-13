@@ -64,11 +64,16 @@ Bootstrap shortcuts:
     - with local Go toolchain: runs `fmt-check`, `lint`, `test`;
     - without local Go but with Docker daemon: runs `docker-fmt-check`, `docker-lint`, `docker-test`.
 
+- `make docker-check`
+  - Purpose: quick pinned Docker validation for daily feature work.
+  - Runs: `docker-fmt-check`, `docker-lint`, `docker-test`.
+  - Use when host Go exists but you want the quick loop to use the pinned Docker Go tooling image.
+
 - `make check-full`
   - Purpose: full CI-like local validation.
   - Behavior:
     - with Docker daemon: runs `make docker-ci`;
-    - without Docker daemon: runs `make ci-local`.
+    - without Docker daemon: runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
 
 - `make template-init`
   - Alias of `make setup`.
@@ -247,7 +252,6 @@ Bootstrap shortcuts:
 
 - `make test-report [COVERAGE_MIN=65.0]`
   - Runs `gotestsum` over `go test` with:
-    - race detector enabled,
     - coverage profile output (`coverage.out`),
     - JUnit XML artifact (`.artifacts/test/junit.xml`),
     - raw `test2json` artifact (`.artifacts/test/test2json.json`).
@@ -366,7 +370,7 @@ Bootstrap shortcuts:
 - `make check-full`
   - Full CI-like local check:
     - runs `make docker-ci` when Docker daemon is reachable;
-    - otherwise runs `make ci-local`.
+    - otherwise runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
 
 - `make go-security`
   - Runs native `go tool govulncheck` and `go tool gosec -exclude-generated -exclude-dir=.cache`.
@@ -546,6 +550,7 @@ Use the smallest check that matches the decision you are about to make:
 | When | Run | Notes |
 | --- | --- | --- |
 | Everyday edit loop | `make check` | Quick confidence only: formatting, lint, and unit tests through native tools or Docker fallback. |
+| Everyday pinned Docker edit loop | `make docker-check` | Same quick confidence scope as `make check`, but always through Docker tooling. |
 | Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Full local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local`. Use `make docker-ci` directly when you need the least host-dependent parity path. Replace `origin/main` with the branch or SHA GitHub will compare against. |
 | Closest local CI parity | `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
 | Native fallback | `BASE_REF=origin/main HEAD_REF=HEAD make ci-local` | Requires host Go, GNU Make, Git, and Node/npx for OpenAPI lint. Docker-backed integration, migration, and container scan checks run only when Docker is reachable. |
@@ -565,7 +570,7 @@ Targeted parity checks:
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |
-| Nightly-only flake and fuzz smoke | `go test -count=5 ./...` and `make test-fuzz-smoke FUZZ_TIME=60s` |
+| Nightly-only flake and fuzz smoke | `go test -count=5 -shuffle=on ./...` and `make test-fuzz-smoke FUZZ_TIME=60s` |
 
 ### Feature implementation (native)
 
@@ -585,6 +590,7 @@ Choose the package and test location from [Project Structure & Module Organizati
 ### Feature implementation (zero-setup)
 
 Choose the package and test location from [Project Structure & Module Organization](./project-structure-and-module-organization.md#4-where-to-put-new-code) before running this checklist. A green Docker command is still scoped proof, not a substitute for placement and design review when the change is architectural.
+For the usual quick fmt/lint/test loop, run `make docker-check`; use the stepwise targets below when you need separate evidence.
 
 1. `make docker-fmt-check`
 2. `make docker-test`
@@ -614,13 +620,14 @@ Local commands map directly to CI jobs:
 - `make go-security` + `make secret-scan` + Trivy image scan -> `go-security`, `secret-scan`, `container-security`
 
 Zero-setup wrappers:
+- `make docker-check` runs quick fmt/lint/test validation through pinned Docker tooling.
 - `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
 - `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-secret-scan`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 - `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:
-  - `go test -count=5 ./...`
+  - `go test -count=5 -shuffle=on ./...`
   - `make test-fuzz-smoke FUZZ_TIME=60s`
   - `make test-race`
   - `make test-integration`

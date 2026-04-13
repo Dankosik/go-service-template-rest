@@ -53,7 +53,8 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 		)
 	}
 
-	listener, err := net.Listen("tcp", args.cfg.HTTP.Addr)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(args.bootstrapCtx, "tcp", args.cfg.HTTP.Addr)
 	if err != nil {
 		return rejectHTTPStartup(
 			args.bootstrapCtx,

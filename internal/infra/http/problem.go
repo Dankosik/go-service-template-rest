@@ -26,7 +26,10 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 
 	w.Header().Set("Content-Type", problemJSONContentType)
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(p)
+	if err := json.NewEncoder(w).Encode(p); err != nil {
+		// The status and headers are already committed; callers cannot recover here.
+		return
+	}
 }
 
 func writeMalformedRequestProblem(w http.ResponseWriter, r *http.Request) {

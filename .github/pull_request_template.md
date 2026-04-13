@@ -14,6 +14,8 @@
 - [ ] `make fmt-check`
 - [ ] `make lint`
 - [ ] `make test`
+- [ ] `make check-full` or CI evidence linked before merge
+- [ ] `make test-report` or CI `test-coverage` evidence when coverage changed or risk is non-trivial
 - [ ] `make openapi-check` (when API/runtime contract changed)
 - [ ] `make test-race` (when concurrency-sensitive code changed)
 - [ ] `make test-integration` (when integration behavior changed)

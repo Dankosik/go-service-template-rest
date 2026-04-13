@@ -51,7 +51,7 @@ jobs:
           args: --timeout=3m
 
       - name: Flake detection run
-        run: go test -count=5 ./...
+        run: go test -count=5 -shuffle=on ./...
 
       - name: Fuzz smoke run
         run: make test-fuzz-smoke FUZZ_TIME=${{ env.FUZZ_TIME }}

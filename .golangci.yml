@@ -9,15 +9,25 @@ linters:
     - govet
     - staticcheck
     - errcheck
+    - bidichk
     - bodyclose
+    - durationcheck
+    - errchkjson
     - sqlclosecheck
     - errorlint
+    - gocheckcompilerdirectives
     - contextcheck
     - gocritic
+    - loggercheck
     - nilerr
+    - nilnesserr
     - nilnil
+    - noctx
     - nolintlint
+    - nosprintfhostport
     - predeclared
+    - promlinter
     - thelper
+    - gomoddirectives
     - unconvert
     - wastedassign

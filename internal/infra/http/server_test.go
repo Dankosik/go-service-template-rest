@@ -69,7 +69,8 @@ func TestNewServerUsesNotFoundHandlerWhenHandlerNil(t *testing.T) {
 func TestServerServeAndShutdown(t *testing.T) {
 	t.Parallel()
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -85,7 +86,7 @@ func TestServerServeAndShutdown(t *testing.T) {
 	}()
 
 	client := http.Client{Timeout: time.Second}
-	req, err := http.NewRequest(http.MethodGet, "http://"+addr, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr, nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}

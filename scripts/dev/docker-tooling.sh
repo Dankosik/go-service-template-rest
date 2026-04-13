@@ -263,7 +263,7 @@ run_coverage_check() {
 }
 
 run_test_report() {
-	run_go "mkdir -p '${TEST_REPORT_DIR}' && GOCOVERDIR= go tool gotestsum --format=standard-verbose --junitfile='${TEST_JUNIT_FILE}' --jsonfile='${TEST_JSON_FILE}' -- -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
+	run_go "mkdir -p '${TEST_REPORT_DIR}' && GOCOVERDIR= go tool gotestsum --format=standard-verbose --junitfile='${TEST_JUNIT_FILE}' --jsonfile='${TEST_JSON_FILE}' -- -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
 	run_coverage_check
 }
 
@@ -489,7 +489,7 @@ secret-scan|secrets-scan)
 	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 ."
 	;;
 guardrails-check)
-	bash "${ROOT_DIR}/scripts/ci/required-guardrails-check.sh"
+	run_go "bash ./scripts/ci/required-guardrails-check.sh"
 	;;
 skills-check)
 	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --check
