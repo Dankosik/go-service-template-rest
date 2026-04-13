@@ -9,8 +9,10 @@ Load when writing or repairing `workflow-plans/planning.md`, or when planning mu
 ## Decision Rubric
 - `workflow-plans/planning.md` records phase-local orchestration: status, outputs, blockers, readiness, adequacy challenge, stop rule, next action.
 - Future phase-control files are allowed only when named multi-session routing requires them before implementation starts.
-- Future files are pending routing skeletons, not execution logs and not new decision records.
+- Future files start as pending routing skeletons; after the named phase starts, they remain compact routing and progress surfaces, not full execution logs or new decision records.
+- Implementation phase-control files should name consumed artifacts, entry condition, allowed writes, task/checkpoint range, proof update shape, blockers or reopen targets, next action, and stop rule.
 - Review phase-control files should name review scope, read-only lanes, finding status, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule.
+- Validation phase-control files should name closeout claim, proof inputs, command/proof scope, phase status, blockers or reopen target, completion marker, next action, and stop rule.
 - If a future phase-control file needs design facts that do not exist, block planning and reopen upstream instead of filling the gap.
 - Put executable tasks and the implementation handoff in `tasks.md`, optional supplemental strategy in `plan.md` only when justified, test depth in triggered `test-plan.md`, and rollout choreography in triggered `rollout.md`.
 
@@ -41,6 +43,19 @@ Next action: implement T001 through the checkpoint named in `tasks.md`.
 Copy this shape: a future phase skeleton gives routing constraints without pretending work already happened.
 
 ```markdown
+Phase: implementation-phase-1
+Phase status: in_progress
+Task/checkpoint attempted: T001-T003
+Changed surfaces touched: handler package and OpenAPI source named in `tasks.md`.
+Fresh proof: `go test ./internal/httpapi/export -count=1` passed; `make openapi-check` not run yet.
+Blockers or reopen target: none yet.
+Next action: finish T003 proof, update existing `tasks.md` progress, then stop for review-phase-1.
+Stop rule: do not create new workflow/process artifacts; reopen planning or technical design if required context is missing.
+```
+
+Copy this shape after implementation has started: checkpoint state is compact and routing-focused, not a full diff or hidden task ledger.
+
+```markdown
 Phase: review-phase-1
 Phase status: pending
 Consumes: implemented scope from `tasks.md`, approved artifact bundle, and the diff for the named checkpoint.
@@ -53,6 +68,19 @@ Next action: run the named read-only review lanes.
 ```
 
 Copy this shape: a review phase skeleton preserves what the next session must inspect and how findings become orchestrator-owned routing, without becoming a transcript or decision record.
+
+```markdown
+Phase: validation-phase-1
+Phase status: pending
+Consumes: approved artifact bundle, existing `tasks.md`, and implementation/review phase notes for the named checkpoint.
+Closeout claim: phase complete for T001-T006.
+Proof scope: commands and manual checks named in `tasks.md` plus triggered `test-plan.md` if present.
+Allowed future writes: `spec.md` Validation/Outcome, existing `tasks.md` progress, `workflow-plan.md`, and this existing validation phase file only.
+Stop rule: do not implement fixes or create missing process artifacts; reopen the narrowest earlier phase if proof fails or required artifacts are missing.
+Next action: run fresh validation for the named proof scope.
+```
+
+Copy this shape only when planning already justified a dedicated validation phase.
 
 ## Reject
 ```markdown

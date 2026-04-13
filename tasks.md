@@ -1,5 +1,7 @@
 # Linter Hardening Task Ledger
 
+Status note: this is a historical root-level ledger from an earlier linter-hardening rollout, not an active task-local spec-first handoff. New non-trivial work should use a task-local bundle under `specs/<feature-id>/` with `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, and `tasks.md` as required by `AGENTS.md` and `docs/spec-first-workflow.md`.
+
 ## Context
 
 This ledger captures the rollout plan for stricter `golangci-lint` coverage in this repository.
@@ -177,12 +179,11 @@ make check-full
 
 ## Implementation Readiness
 
-Status: CONCERNS.
+Status: closed for this historical ledger; not an active implementation-readiness gate.
 
-Reason: the rollout is ready to continue phase-by-phase, but remaining later phases still need explicit policy decisions before becoming CI-blocking. The accepted risks are:
+Reason: the ledger records Phase 1 through Phase 6 tasks as checked off above. Deferred items remain future policy candidates rather than the next implementation session for this ledger:
 
 - `gomodguard` remains deferred until tooling dependencies are separated or the repo adopts a stricter direct-dependency policy.
-- `tagliatelle` needs an explicit JSON, YAML, or koanf tag naming policy before it is useful as a quality gate.
-- `exhaustruct` needs a narrow boundary-struct scope before it is useful as a quality gate.
+- `err113`, `testpackage`, default `revive`, global `exhaustruct`, `perfsprint`, `intrange`, `prealloc`, `misspell`, `dupword`, `testifylint`, and `maintidx` remain deferred or avoid-for-now items unless a future task explicitly reopens that policy.
 
-Phase 1 through Phase 5 are now complete in this ledger. Next implementation session should start with Phase 6 (`T600` through `T603`) only after the struct/tag policy is intentionally designed rather than enabled from default linter behavior.
+Next action: none for this root ledger. If linter policy work resumes, start a new task-local spec-first bundle or explicitly reopen this historical ledger with a fresh workflow-control record instead of treating the checked-off tasks as the current handoff.

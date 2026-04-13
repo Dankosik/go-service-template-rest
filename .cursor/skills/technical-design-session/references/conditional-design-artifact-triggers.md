@@ -14,6 +14,8 @@ Load when deciding whether to add `design/data-model.md`, `design/dependency-gra
 - Trigger `rollout.md` for mixed-version compatibility, expand/backfill/verify/contract sequencing, operational failback, or deploy ordering that affects correctness.
 - If no trigger is real, record the artifact as `not expected`; do not create a placeholder file.
 - If a triggered artifact needs a missing spec decision, block or reopen rather than drafting filler.
+- A triggered `test-plan.md` should stay proof-focused: trigger/scope, proof obligations by changed surface or failure path, planned commands or manual proof shape, exit criteria, and reopen target for missing or failing proof.
+- A triggered `rollout.md` should stay choreography-focused: trigger/scope, rollout sequence, safety checks, operator-visible state, rollback or forward-recovery conditions, and links to task IDs for execution detail.
 
 ## Imitate
 ```markdown
@@ -38,6 +40,22 @@ Reason: package dependency direction remains unchanged, and the component map in
 ```
 
 Copy this shape: it documents a negative decision without creating filler.
+
+```markdown
+Triggered: `test-plan.md`.
+Reason: validation spans OpenAPI drift, migration compatibility, retry fail-path behavior, and an e2e smoke check; putting every proof branch in `tasks.md` would make the ledger noisy.
+Minimum content: scope, proof obligations by surface, planned commands, exit criteria, and reopen target for failing proof.
+```
+
+Copy this shape: it creates a proof artifact only because the validation surface is too layered for the ledger.
+
+```markdown
+Triggered: `rollout.md`.
+Reason: the migration needs expand/backfill/verify sequencing with mixed-version compatibility and explicit failback notes.
+Minimum content: rollout sequence, safety checks, rollback or forward-recovery conditions, and task-ID links.
+```
+
+Copy this shape: rollout context is choreography, not a second task ledger.
 
 ## Reject
 ```markdown

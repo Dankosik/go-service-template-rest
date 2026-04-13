@@ -114,6 +114,7 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics
 - `planning-and-task-breakdown` remains the deeper planning method for dependency ordering, task sizing, acceptance criteria, checkpoints, and verification detail
 - `tasks.md` owns the executable checkbox ledger and final implementation handoff derived from `spec.md + design/`; optional `plan.md` owns only supplemental strategy when justified
+- `tasks.md` must belong to the active task-local bundle. A repository-root or historical ledger is not the current handoff unless workflow control explicitly reopens it and records the resume route.
 - implementation readiness is the planning-phase exit gate; it uses `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` and is not a separate workflow phase
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - before non-trivial handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, optional `plan.md` status when present, and any named implementation/review/validation phase-control files
@@ -169,6 +170,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - create `test-plan.md` only when test obligations are too large or multi-layered for `tasks.md`
 - create `rollout.md` only when migration sequencing, backfill, compatibility, deploy order, or failback notes need a dedicated artifact
 - create any implementation, review, or validation phase workflow files only when named multi-session routing already requires them, so post-code sessions update existing control artifacts instead of inventing them mid-execution
+- when creating an implementation phase workflow file, keep its future checkpoint update surface compact: task IDs attempted, changed surfaces, proof run, blockers or reopen target, next action, and stop rule
 - keep blocked work separate from ready work
 - keep reopen conditions explicit when implementation must hand back to `specification` or `technical design`
 - if exact tasking requires a missing design decision, route back to `technical design` instead of inventing executable tasks

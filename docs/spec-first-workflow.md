@@ -98,7 +98,20 @@ specs/<feature-id>/
 - **Post-code phase-control files:** Post-code phase-control files are optional control artifacts. Create `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` only when a named multi-session phase truly needs phase-local routing beyond `workflow-plan.md` and `tasks.md`; do not create them for already-small implementation tasks by default.
 - **Artifact ownership:** `spec.md` stores decisions, `design/` stores task-specific technical context, and `tasks.md` stores executable task state and the implementation handoff. Optional `plan.md` stores only supplemental strategy when genuinely needed. Do not make any of them absorb another artifact's job.
 - **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, and handoff implication visible enough that later synthesis does not need chat memory.
+- **Research fan-in home:** Store the durable fan-in summary in one owning place, normally `workflow-plans/research.md` for routing plus selected `research/*.md` for reusable evidence. Other files should link or summarize status only; do not copy the full fan-in narrative into both master workflow control and research notes.
 - **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
+
+### Context-First Quality Bar
+
+Every phase artifact should preserve enough durable context for the next LLM session to continue from files, without chat memory or rediscovery:
+
+- name the current phase, owning artifact, next action, and stop rule;
+- distinguish facts, decisions, assumptions, blockers, evidence, accepted risks, and reopen targets;
+- link to the owning artifact instead of copying another artifact's content;
+- record why plausible optional artifacts are `not expected`, `conditional`, or `waived`;
+- keep proof obligations proportional to the claim and changed surface;
+- make the next-session route explicit enough that implementation, review, or validation does not need to reconstruct workflow intent from prose;
+- avoid placeholders, raw transcripts, generic "run tests" language, stale status, and completion claims without fresh evidence.
 
 ### Artifact-Producing Vs Artifact-Consuming Phases
 
@@ -186,6 +199,20 @@ Conditional artifacts and trigger rules:
 - `design/contracts/` — create when the task changes API contracts, event contracts, generated contracts, or material internal interfaces between subsystems. This folder is design-only context for the task, not an authoritative runtime contract source; canonical sources like `api/openapi/service.yaml`, generation inputs, and other repository-owned contract artifacts still win.
 - `test-plan.md` — create when validation obligations are too large or multi-layered to fit cleanly inside `tasks.md`.
 - `rollout.md` — create when the task needs migration sequencing, backfill and verify choreography, mixed-version compatibility, or explicit deploy and failback notes.
+
+Minimum `test-plan.md` content when triggered:
+
+- trigger and scope: why `tasks.md` cannot hold the validation obligations cleanly;
+- proof obligations grouped by changed surface, failure path, or phase;
+- planned commands or manual proof shape when known, with any environment limits;
+- exit criteria and reopen target when proof is missing, failing, or narrower than the claim.
+
+Minimum `rollout.md` content when triggered:
+
+- trigger and scope: migration, mixed-version, compatibility, delivery order, or recovery reason;
+- rollout sequence: expand, backfill, verify, switch, cleanup, or deploy/failback steps as applicable;
+- safety checks, operator-visible states, and rollback or forward-recovery conditions;
+- links back to `spec.md`, `design/`, and task IDs that own execution detail.
 
 Design-bundle rules:
 
@@ -415,6 +442,16 @@ Implementation rules:
 - Do not create new workflow/process/planning/design/temp artifacts or ad hoc progress markdown.
 - If coding exposes a real task-breakdown or design gap, or required `tasks.md` is missing, stop, record the reopen in existing control artifacts, and reopen the relevant earlier phase in a new session instead of silently drifting.
 
+When an implementation phase-control file exists, keep its checkpoint update routing-focused:
+
+- task IDs or named checkpoint attempted;
+- changed surfaces already touched;
+- fresh proof run and observed result, if any;
+- blockers, accepted limits, or upstream reopen target;
+- next action, next task ID, and stop rule.
+
+Do not copy the full diff, task ledger, or design bundle into implementation phase control.
+
 Review stays read-only and risk-driven. When planning created `workflow-plans/review-phase-N.md`, that file stays routing-focused: it records review scope, read-only lanes, finding status, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule. It must not become a second review transcript, task ledger, design bundle, or decision record.
 
 Reconciliation applies orchestrator-approved fixes or accepted-risk records from review inside the existing task ledger and control surfaces. If review exposes a missing spec, design, planning, or task-ledger decision, record the reopen target instead of letting review output become the new authority.
@@ -447,6 +484,17 @@ Read the master file first, then the current phase workflow plan.
 ### 7.1 Master `workflow-plan.md`
 
 `workflow-plan.md` owns runtime control across phases.
+
+Minimum context-first control record:
+
+- `Current phase`;
+- `Phase status`;
+- `Session boundary reached`;
+- `Ready for next session`;
+- `Next session starts with`;
+- artifact status table with trigger rationale for plausible optional artifacts;
+- blockers, accepted assumptions, accepted risks, and reopen targets that still affect routing;
+- adequacy or clarification gate status when the current handoff depends on it.
 
 At minimum, it answers:
 

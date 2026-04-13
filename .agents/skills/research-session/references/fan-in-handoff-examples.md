@@ -19,7 +19,7 @@ A research handoff should answer:
 Keep handoff verbs evidence-oriented: "found", "did not find", "conflicts with", "needs decision", "ready only if", "blocked by". Avoid "approved", "decided", "designed", "planned", or "implemented".
 
 ## Imitate
-Use this shape in `workflow-plans/research.md`, `workflow-plan.md`, or a preserved `research/*.md` note:
+Use this shape in one owning place: normally `workflow-plans/research.md` for the routing handoff, or a preserved `research/*.md` note when the evidence comparison itself must be reusable. Other artifacts should link or record a short status line only.
 
 ```markdown
 ## Fan-In Summary
