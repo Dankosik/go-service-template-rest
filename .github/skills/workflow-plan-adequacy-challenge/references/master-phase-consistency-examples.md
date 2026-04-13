@@ -10,7 +10,7 @@ Load this when `workflow-plan.md` and the active `workflow-plans/<phase>.md` dis
 - Classify as `blocks_phase_handoff` when the mismatch could start, resume, or close the wrong phase.
 - Classify as `blocks_specific_lane` when only one generated phase-control file or lane route is stale and the active phase can keep repairing around it.
 - Classify as `non_blocking_but_record` when wording differs but both files route to the same current phase, blocker, and next-session start.
-- Ask for the smallest routing repair in the owning file or both files. Do not ask to copy `spec.md`, `design/`, `tasks.md`, or optional `plan.md` content into workflow control.
+- Ask for the smallest routing repair in the owning file or both files. Do not ask to copy `spec.md`, `design/`, or `tasks.md` content into workflow control.
 
 ## Imitate
 ### Wrong active phase

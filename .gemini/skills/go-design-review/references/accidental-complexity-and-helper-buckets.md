@@ -41,7 +41,7 @@ Copy this shape when the review needs to correct interface placement without dem
 Issue: The wrapper layer introduces a manager and future-stage flag but does not remove current duplication or isolate a real seam.
 Impact: Readers must follow indirection to understand a simple sequence, and later stages can accumulate hidden policy in the wrapper.
 Suggested fix: Keep the direct call sequence local until a second real workflow or approved design seam exists.
-Reference: task `plan.md` if it calls for a direct implementation path.
+Reference: `tasks.md` if it calls for a direct implementation path.
 ```
 
 Copy this shape for speculative future-proofing with concrete comprehension or ownership cost.

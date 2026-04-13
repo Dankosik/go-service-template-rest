@@ -21,7 +21,7 @@ Do not load this as the default checklist for every research session.
 | `## Decisions` appears in research output | Research is approving `spec.md` content | Rename to evidence or handoff language and route final decisions to future `specification-session` |
 | Component diagrams or runtime sequences appear | Research is doing technical design | Keep only repository evidence that components may be involved; route mapping to future design |
 | Markdown checkboxes or task IDs appear | Research is doing planning | Replace with next-session routing and leave `tasks.md` missing by design |
-| Prototype or test edits are proposed | Research is implementing | Stop and reopen a later approved implementation phase if code is truly required |
+| Prototype or test edits are proposed | Research is implementing | Stop and route to implementation only after planning readiness allows coding from `tasks.md` |
 | Lanes are role labels only | Fan-out cannot be synthesized | Rewrite each lane around one owned question and evidence target |
 | `research/all-notes.md` grows with everything found | Note sprawl hides signal | Preserve only evidence that affects spec readiness, conflict resolution, challenge, or resume |
 | External docs are cited vaguely | Source-note rot | Record URL or source name plus one-sentence relevance and limitation, or drop it |
@@ -80,4 +80,4 @@ Reject because weak or absent evidence can expose a decision, but cannot make it
 - Using this broad file instead of a narrower reference that would give a positive shape.
 - "Repairing" drift by deleting uncertainty instead of routing it.
 - Treating the stop rule as optional once enough evidence has been gathered.
-- Creating a new artifact mid-session to hold what should be a future `spec.md`, `design/`, `tasks.md`, or optional `plan.md`.
+- Creating a new artifact mid-session to hold what should be a future `spec.md`, `design/`, or `tasks.md`.

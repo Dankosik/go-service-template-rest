@@ -11,7 +11,7 @@ Load this only when the active phase is `planning` or a planning-phase handoff c
 - `CONCERNS` must name accepted risks and proof obligations.
 - `FAIL` must name the earlier phase or planning repair target to reopen.
 - `WAIVED` is eligible only for tiny, direct-path, or prototype-scoped work and must state rationale and scope.
-- The master records readiness status; `workflow-plans/planning.md` records gate result plus stop or handoff rule; `tasks.md` carries only a short reference when useful, and optional `plan.md` carries only a compact summary when present.
+- The master records readiness status; `workflow-plans/planning.md` records gate result plus stop or handoff rule; `tasks.md` carries only a short reference when useful.
 
 ## Imitate
 ### No readiness status

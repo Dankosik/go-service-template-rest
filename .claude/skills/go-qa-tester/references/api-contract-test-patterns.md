@@ -13,7 +13,7 @@ Load this when tests touch HTTP methods, routes, generated OpenAPI handlers, str
 - Keep service/domain tests separate from transport mapping when exact status/header/body semantics are not approved.
 - Cover malformed input, unknown fields, trailing JSON, missing required fields, unsupported media type, request size limits, idempotency, retry categories, and request ID behavior when those are part of the changed surface.
 - For async start operations, prove `202`/operation-resource semantics and duplicate side-effect suppression only when the contract or current code owns those semantics.
-- Do not add manual routes or edit generated files to make a contract test pass unless the approved plan owns that change.
+- Do not add manual routes or edit generated files to make a contract test pass unless the approved task ledger owns that change.
 
 ## Imitate
 ```go

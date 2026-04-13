@@ -37,12 +37,12 @@ Escalate if:
 
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
-- For non-trivial work, the handoff path is `spec.md -> design/ -> tasks.md`; optional `plan.md` is supplemental strategy only when justified.
+- For non-trivial work, the handoff path is `spec.md -> design/ -> tasks.md`.
 - For non-trivial work, `spec.md` approval requires the autonomous `spec-clarification-challenge` gate before handoff to `technical design`.
 - For non-trivial work, this pass ends the current session at approved `spec.md`; `technical design` begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
-- Put stable decisions in `spec.md`, task-local technical context in `design/`, execution order and task detail in `tasks.md`, optional supplemental strategy in `plan.md` only when justified, and preserved evidence in `research/*.md`.
+- Put stable decisions in `spec.md`, task-local technical context in `design/`, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
 - Prefer short explicit bullets over template sludge.
 - Omit empty sections instead of padding the document for completeness theater.
 
@@ -59,7 +59,7 @@ Load by trigger:
 - non-trivial work: the matching `workflow-plan.md`
 - research-backed synthesis: the relevant `research/*.md`
 - non-trivial spec approval: `.agents/skills/spec-clarification-challenge/SKILL.md`
-- task-breakdown drift check: the matching `tasks.md`, plus optional `plan.md` only when it exists
+- task-breakdown drift check: the matching `tasks.md` when it exists
 - existing technical-design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author design in this pass
 
 Conflict resolution:
@@ -133,7 +133,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Evidence history, comparisons, and raw external research belong in `research/*.md`.
 - Research-backed decisions should link to the specific preserved research note or source surface when the provenance would help a later session trust or revisit the decision; keep the link short and do not copy the evidence narrative into `Decisions`.
 - Task-local technical design context belongs in `design/`.
-- Task sequencing and execution detail belong in `tasks.md`; optional `plan.md` carries only supplemental strategy when justified.
+- Task sequencing and execution detail belong in `tasks.md`.
 - Unresolved but visible gaps belong in `Open Questions / Assumptions`.
 - Label `Open Questions / Assumptions` by unblock path when the uncertainty affects later sessions: `[assumption]` for bounded proceed-and-revisit assumptions, `[accepted_risk]` for deliberate risk with limits or proof obligations, `[requires_user_decision]` for external product or policy choices, `[targeted_research]` for repository evidence still needed, `[defer_to_design]` only for design-owned details after behavior is decided, and `[reopen_spec_if_false]` for downstream discoveries that would invalidate a spec-level assumption.
 - Do not force `go-design-spec` or the planner to recover ownership, sequence, or execution order from `spec.md` when separate artifacts are warranted.
@@ -142,7 +142,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - A non-trivial spec must let `go-design-spec` derive the task-local `design/` bundle without silently reopening core problem framing.
 - Keep blockers, accepted risks, and reopen conditions explicit.
 - Preserve non-goals and scope cuts so technical design does not re-expand the change.
-- Keep only the task-breakdown or handoff link in `spec.md`; link optional `plan.md` only when it exists for large-work strategy.
+- Keep only the task-breakdown or handoff link in `spec.md`.
 
 ### Clarification-Gate Competency
 - Before approving non-trivial `spec.md`, ensure the orchestrator has run a read-only `spec-clarification-challenge` lane, preferably through `challenger-agent`, using exactly that one skill.

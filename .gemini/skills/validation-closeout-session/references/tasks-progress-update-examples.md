@@ -21,7 +21,7 @@ Load this only when a task-local `tasks.md` already exists and closeout must ali
 - [x] T002 Phase 1: Keep generated OpenAPI output current
   - Closeout proof: `make openapi-check` passed in this session.
 - [ ] T003 Phase 1: Validate migration compatibility
-  - Closeout status: blocked. `make migrate-check` failed; reopen `implementation-phase-1`.
+  - Closeout status: blocked. `make migrate-check` failed; reopen implementation at T003.
 ```
 
 Copy the item-by-item proof mapping: each checkbox follows a fresh command result.

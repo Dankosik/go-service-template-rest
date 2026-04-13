@@ -28,7 +28,7 @@ Need the minimum closeout-ready inputs:
 - the exact closeout claim or claims to prove, such as `ready for handoff`, `phase complete`, or `task done`
 - current workflow routing and active phase context
 - the implemented scope or planned phase that is being closed
-- the proof obligations from task-local artifacts such as `spec.md`, existing `tasks.md`, optional `plan.md`, `test-plan.md`, `rollout.md`, or the current implementation or review phase file when present
+- the proof obligations from task-local artifacts such as `spec.md`, existing `tasks.md`, `test-plan.md`, `rollout.md`, or the current review phase file when present
 - the current workspace state against which fresh commands can run
 - existing `Validation`, `Outcome`, and validation-phase notes when this is a continuation or repair
 
@@ -59,8 +59,7 @@ Then read current phase context in this order:
 3. the most recent implementation or review phase workflow file that led into closeout, when present
 4. task-local `spec.md`
 5. existing task-local `tasks.md` when present or expected by the workflow
-6. optional task-local `plan.md` when present
-7. optional `test-plan.md`, `rollout.md`, or other task-local artifact only when it adds real proof obligations
+6. optional `test-plan.md`, `rollout.md`, or other task-local artifact only when it adds real proof obligations
 8. only the smallest repository file set needed to bind proof commands to the claimed scope
 
 Rules:
@@ -101,13 +100,13 @@ Do not create a phase-local validation file or missing `tasks.md` in this sessio
 Do not:
 - implement new code, tests, migrations, or configuration changes as part of closeout
 - repair failing verification inline "just to finish"
-- rewrite `Decisions`, `design/`, or optional `plan.md` instead of recording a reopen
+- rewrite `Decisions` or `design/` instead of recording a reopen
 - claim `done`, `complete`, `ready`, or equivalent success language without fresh proof that matches scope
 - trust stale command output, delegated summaries, or yesterday's passing run as current proof
 - create missing `workflow-plan.md` or `workflow-plans/validation-phase-<n>.md` during closeout
 - create missing `tasks.md` or add new task entries during closeout
 - turn `workflow-plans/validation-phase-<n>.md` into a second `spec.md`, a new plan, or a hidden implementation checklist
-- silently continue into a new implementation phase when validation exposes a defect
+- silently continue into coding fixes when validation exposes a defect
 
 ## Core Defaults
 - this is an orchestrator-facing wrapper, not a replacement for `go-verification-before-completion`
@@ -143,7 +142,7 @@ Do not:
 - if the claim is broader than the available proof surface, narrow the wording or reopen earlier work
 
 ### 3. Gather Proof Inputs And Choose Commands
-- derive proof obligations from `spec.md`, existing `tasks.md`, optional `plan.md`, `test-plan.md`, `rollout.md`, and current phase artifacts
+- derive proof obligations from `spec.md`, existing `tasks.md`, `test-plan.md`, `rollout.md`, and current phase artifacts
 - choose the smallest command set that honestly proves the current claim, following `go-verification-before-completion`
 - keep the verification surface proportional: scoped claims may use scoped commands; repository-wide claims need repository-wide proof
 - if a required command is unclear, stop and escalate instead of improvising a weaker check
@@ -175,7 +174,7 @@ Do not:
 ### 7. Record Reopen Conditions Instead Of Re-Implementing
 - when proof fails, is missing, or reveals the wrong scope, record a reopen target instead of changing code
 - choose the narrowest honest reopen target:
-  - reopen `implementation-phase-<n>` when the behavior or tests are wrong
+  - reopen implementation when the behavior or tests are wrong
   - reopen `review-phase-<n>` when an unresolved review issue blocks honest closeout
   - reopen `planning`, `technical-design`, or `specification` when the proof gap exposes a real upstream contract or sequencing problem
 - make each reopen item explicit:
@@ -214,7 +213,7 @@ Do not:
 
 ### 10. Stop At The Boundary
 - once `spec.md`, `workflow-plan.md`, existing `tasks.md` when used, and any active validation phase file agree on the result, stop
-- do not begin code changes, new test authoring, or the next implementation phase in the same session
+- do not begin code changes, new test authoring, or the next implementation task in the same session
 
 ## What `Done` Means
 Closeout is done only when all of the following are true:
@@ -276,5 +275,5 @@ Escalate instead of forcing output when:
 - writing `Outcome` as a success summary when `Conclusion` is really `not verified`
 - creating `workflow-plans/validation-phase-<n>.md` for tasks that never adopted a dedicated validation phase
 - creating missing `tasks.md` or inventing new ledger items during closeout
-- using closeout to rewrite `Decisions`, `design/`, or optional `plan.md` instead of naming a reopen target
+- using closeout to rewrite `Decisions` or `design/` instead of naming a reopen target
 - letting "almost green" become "done"

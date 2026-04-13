@@ -45,7 +45,7 @@ Next session starts with:
 - specification, with pre-spec challenge expected before approving `spec.md`.
 
 Stop rule:
-- Do not create `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or optional `plan.md` in this research session.
+- Do not create `spec.md`, `workflow-plans/specification.md`, `design/`, or `tasks.md` in this research session.
 ```
 
 Copy the comparable-claims and readiness shape when fan-out produced multiple lane outputs.
@@ -69,7 +69,7 @@ Stop rule: do not proceed to specification until lifecycle ownership is answered
 ## Fan-In Summary
 
 Decision: use POST /exports, store jobs in Postgres, and issue signed S3 URLs.
-Next: create `spec.md`, `design/`, `plan.md`, and implementation tasks now.
+Next: create `spec.md`, `design/`, and implementation tasks now.
 ```
 
 Reject because final API, data, and storage decisions belong in `spec.md`, and design/planning artifacts are later-phase outputs.

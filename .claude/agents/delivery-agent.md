@@ -26,7 +26,7 @@ Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
 
 Inspect first
-- Task-local `spec.md`, `plan.md`, `tasks.md`, and `rollout.md` when present for approved release and gating expectations.
+- Task-local `spec.md`, `tasks.md`, and `rollout.md` when present for approved release and gating expectations.
 - `docs/ci-cd-production-ready.md` and `docs/build-test-and-development-commands.md` for repository gate and command policy.
 - `build/ci/`, `scripts/ci/`, and `Makefile` for enforceable CI/check behavior.
 - `build/docker/`, `env/docker-compose.yml`, and `railway.toml` when container/runtime/deployment assumptions matter.

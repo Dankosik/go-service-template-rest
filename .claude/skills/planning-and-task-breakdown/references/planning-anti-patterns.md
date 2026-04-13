@@ -4,13 +4,13 @@
 When loaded for draft review or smell triage, this file makes the model challenge invented decisions, duplicate authority, vague proof, and artifact-boundary drift instead of treating a plausible-looking plan as ready by checklist momentum.
 
 ## When To Load
-Load this when reviewing a draft `tasks.md` or optional `plan.md` for invented decisions, duplicate authority, phase-boundary drift, vague verification, false parallelism, or artifact misuse.
+Load this when reviewing a draft `tasks.md` for invented decisions, duplicate authority, phase-boundary drift, vague verification, false parallelism, or artifact misuse.
 
 Use this as a challenge catalog, not primary planning guidance. Prefer a narrower positive reference when the symptom is specifically phase strategy, dependency order, slicing, proof, or reopen conditions.
 
 ## Decision Rubric
 - Invented domain work: delete it or reopen the earlier phase; do not add security, data, reliability, rollout, or API phases "for completeness."
-- Duplicate authority: move executable detail to `tasks.md`; keep optional `plan.md` limited to supplemental strategy and keep `spec.md` decisions plus `design/` technical context as the sources of truth.
+- Duplicate authority: move executable detail to `tasks.md`; keep `spec.md` decisions plus `design/` technical context as the sources of truth.
 - Artifact misuse: `tasks.md` is a ledger, not a second spec, second design bundle, or raw research dump.
 - Vague proof: replace "check everything" with surface-specific commands or manual reads.
 - False readiness: use `FAIL` or `CONCERNS` when blockers remain; do not bury them under "implementation can start."

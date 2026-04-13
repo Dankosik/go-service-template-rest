@@ -30,7 +30,7 @@ Required input bundle
 
 Inspect first
 - Task-local `spec.md`, `design/overview.md`, `design/component-map.md`, and `design/ownership-map.md` for approved decisions and cross-domain boundaries.
-- Task-local `plan.md`, `tasks.md`, and active `workflow-plans/<phase>.md` when integration risk appears during planning or review fan-in.
+- Task-local `tasks.md` and active `workflow-plans/<phase>.md` when integration risk appears during planning or review fan-in.
 - Specialist outputs, research notes, and review findings supplied by the orchestrator; compare assumptions before reconciling conclusions.
 - `docs/repo-architecture.md` for stable boundary and dependency-direction constraints.
 - Changed files named by the task ledger or diff before proposing cross-cutting simplification.

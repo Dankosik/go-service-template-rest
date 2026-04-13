@@ -14,7 +14,7 @@ Scope:
 
 Context:
 - Workflow phase: <phase or "none">
-- Task artifacts: <paths to workflow-plan.md/spec.md/design/tasks and optional plan.md when present>
+- Task artifacts: <paths to workflow-plan.md/spec.md/design/tasks and any triggered test-plan.md or rollout.md when relevant>
 - Source-of-truth inputs: <contracts, docs, diffs, files, commands, specialist outputs>
 - Constraints and non-goals: <short list>
 - Known blockers or assumptions: <short list>

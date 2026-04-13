@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `planning`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: T001`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, and expected `tasks.md` are approved, optional `plan.md` is not expected, and no blockers are recorded. Report the status only.",
+      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `planning`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: T001`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, and expected `tasks.md` are approved, and no blockers are recorded. Report the status only.",
       "expected_output": "A compact read-only status report that identifies the task path, reports planning complete with the session boundary reached, summarizes approved artifacts and readiness `PASS`, and says implementation may start in the recorded next session.",
       "files": [],
       "expectations": [

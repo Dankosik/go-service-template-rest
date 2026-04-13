@@ -1,17 +1,16 @@
 ---
 name: planning-and-task-breakdown
-description: "Turn approved `spec.md + design/` into a dependency-ordered, verifiable `tasks.md` ledger for this repository, with optional `plan.md` only when large or multi-checkpoint work needs a separate strategy note. Use after `spec.md` is stable, required technical-design artifacts are approved or explicitly skipped, and pre-spec challenge is reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
+description: "Turn approved `spec.md + design/` into a dependency-ordered, verifiable `tasks.md` ledger for this repository. Use after `spec.md` is stable, required technical-design artifacts are approved or explicitly skipped, and pre-spec challenge is reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
 ---
 
 # Planning And Task Breakdown
 
 ## Purpose
-Turn stable decisions plus approved technical design into a `tasks.md` executable task ledger that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations. Create optional `plan.md` only when large or multi-checkpoint work needs a separate strategy note that would otherwise bloat the ledger.
+Turn stable decisions plus approved technical design into a `tasks.md` executable task ledger that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations.
 
 ## Scope
 - convert approved decisions from `spec.md` and task-local technical context from `design/` into dependency-ordered executable tasks
 - make `tasks.md` explicit by default for non-trivial implementation work
-- create optional `plan.md` only when a separate strategy note is justified by large, multi-checkpoint, or cross-session work
 - attach acceptance criteria, planned verification, checkpoints, and change-surface hints
 - expose blockers, assumptions, and reopen conditions before coding starts
 - preserve coder freedom on local code shape while removing ambiguity about execution order
@@ -36,17 +35,17 @@ Escalate if:
 - the change cannot be decomposed without inventing detail the spec does not actually approve
 
 ## Core Defaults
-- `spec.md` is for decisions, `design/` is for technical context, `tasks.md` is for the executable task ledger and final implementation handoff, and `plan.md` is an optional supplemental strategy note.
+- `spec.md` is for decisions, `design/` is for technical context, and `tasks.md` is for the executable task ledger and final implementation handoff.
 - For non-trivial work, plan from approved `spec.md + design/`, not from `spec.md` alone.
 - For non-trivial work, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
 - Keep `tasks.md` task-local to the active spec-first bundle. Do not use a repository-root or historical ledger as the current implementation handoff unless workflow control explicitly reopens it and records the resume route.
-- Planning is the last artifact-producing phase before code. If later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later.
+- Planning is the last artifact-producing phase before code. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
 - Planning must leave an implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
-- When the planning pass generates or materially changes workflow-control files, expect a read-only `workflow-plan-adequacy-challenge` before handoff; do not treat `tasks.md` detail or optional `plan.md` detail as a substitute for adequate `workflow-plan.md` and `workflow-plans/<phase>.md` routing.
+- When the planning pass generates or materially changes workflow-control files, expect a read-only `workflow-plan-adequacy-challenge` before handoff; do not treat `tasks.md` detail as a substitute for adequate `workflow-plan.md` and `workflow-plans/<phase>.md` routing.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
-- For non-trivial work, this pass ends the current session at approved `tasks.md` plus optional `plan.md` only when justified; implementation begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
+- For non-trivial work, this pass ends the current session at approved `tasks.md`; implementation begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
 - Do not let `tasks.md` absorb phase strategy, design decisions, or speculative tasking that should reopen design.
@@ -87,13 +86,12 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - If two tasks must land together to remain safe, explain the coupling.
 - Use the design bundle's ownership and sequence constraints to decide where slices can and cannot be separated.
 
-### 4. Write The Task Ledger And Optional Strategy Note
+### 4. Write The Task Ledger
 - Use `tasks.md` for executable task checkboxes and the final implementation handoff.
-- Create optional `plan.md` only when large or multi-checkpoint strategy would make `tasks.md` noisy.
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
 - Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface instead of vague subsystem labels.
 - Do not add a task if tasking it requires inventing a missing design decision; reopen `technical design` instead.
-- Add only a short readiness reference in `tasks.md` when useful; optional `plan.md` may carry a compact readiness summary when present.
+- Add only a short readiness reference in `tasks.md` when useful.
 
 ### 5. Add Checkpoints
 - Add review and validation checkpoints at natural risk boundaries.
@@ -111,39 +109,6 @@ Break a task down further when:
 - acceptance criteria cannot stay short and concrete
 - it touches multiple independent subsystems
 - the title needs `and` to stay accurate
-
-## Optional `plan.md` Shape
-Return `plan.md` text only when a separate strategy note is justified.
-
-Use this structure by default:
-- `Why This Exists`
-- `Execution Context`
-- `Phase Plan`
-- `Cross-Phase Validation Plan`
-- `Implementation Readiness`
-- `Blockers / Assumptions`
-- `Handoffs / Reopen Conditions` when relevant
-
-For each phase, include:
-- `Phase`
-- `Objective`
-- `Depends On` when nontrivial
-- `Task Ledger Link / IDs`
-- `Acceptance Criteria`
-- `Change Surface`
-- `Planned Verification`
-- `Review / Checkpoint`
-- `Exit Criteria`
-
-Keep executable checkbox detail in `tasks.md` instead of expanding `plan.md` into a task ledger. Link phase or checkpoint notes back to task IDs rather than creating a second handoff.
-
-For `Implementation Readiness`, keep it compact:
-- status: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
-- accepted risks and proof obligations when status is `CONCERNS`
-- earlier phase to reopen when status is `FAIL`
-- waiver rationale and scope when status is `WAIVED`
-
-Do not duplicate the full gate reasoning from `workflow-plan.md` or `workflow-plans/planning.md`.
 
 ## Preferred `tasks.md` Shape
 Return ledger text that can drop directly into `tasks.md` with minimal rewriting.
@@ -176,20 +141,19 @@ Reopen target: planning if required artifact context is missing.
 - [ ] T002 [Phase 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`.
 ```
 
-Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep the header short; if it starts carrying phase strategy or design rationale, move that content to optional `plan.md` or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.
+Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep the header short; if it starts carrying phase strategy or design rationale, trim it back or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.
 
 ## Planning Rules
-- For direct-path work, a short inline plan may still be enough; do not force `plan.md` or `tasks.md` for a tiny change just to satisfy ceremony.
-- For non-trivial work, default to `tasks.md` and consume approved `spec.md + design/`; add `plan.md` only when justified.
-- When later implementation, review, or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code phases should not need to invent new workflow/process artifacts.
-- The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, `tasks.md` status, optional `plan.md` status when present, artifact expectations, and any named post-code phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
-- If a named implementation phase file will be used, give it a compact checkpoint update shape: task IDs attempted, changed surfaces, proof run, blockers or reopen target, next action, and stop rule. Do not ask future implementation sessions to paste diffs or recreate task ledgers inside phase control.
+- For direct-path work, a short inline plan may still be enough; do not force `tasks.md` for a tiny change just to satisfy ceremony.
+- For non-trivial work, default to `tasks.md` and consume approved `spec.md + design/`.
+- When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
+- The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, `tasks.md` status, artifact expectations, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
 - The implementation-readiness handoff must be explicit: `PASS` may proceed, `CONCERNS` may proceed only with named risks and proof obligations, `FAIL` must route to the named earlier phase, and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
 - If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
 - Prefer sequential phases unless change surfaces are truly disjoint.
-- Make the handoff explicit: the planning session stops at approved `tasks.md` plus optional `plan.md` only when justified, and the first implementation task or named phase starts in a new session unless a recorded waiver says otherwise.
+- Make the handoff explicit: the planning session stops at approved `tasks.md`, and the first implementation task starts in a new session unless a recorded waiver says otherwise.
 - State what should trigger a reopen back into specification or technical design instead of letting coding discover it silently.
 
 ## Definition Of Done
@@ -202,7 +166,7 @@ The planning pass is complete when:
 - implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
-- the task ledger, plus optional `plan.md` when present, is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
+- the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
 
 ## Escalate Or Reject
 - task breakdown derived from an unstable spec

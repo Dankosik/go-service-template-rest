@@ -10,7 +10,7 @@ Load before starting or resuming technical design when `spec.md`, current phase,
 - Start only when `spec.md` is approved or explicitly planning-stable enough for design, and any required clarification gate status is recorded.
 - Confirm master `workflow-plan.md` and `workflow-plans/technical-design.md` agree that the current session owns `technical-design`, or that a reopen target intentionally points back here.
 - If workflow control says the next session starts with `planning` and approved design already exists, stop and hand off instead of reworking design by momentum.
-- If the user asks for `plan.md`, `tasks.md`, code, tests, migrations, generation, or review in the same request, keep this session to design writes and record the later phase as the next session.
+- If the user asks for `tasks.md`, code, tests, migrations, generation, or review in the same request, keep this session to design writes and record the later phase as the next session.
 - If `spec.md` contains a planning-critical contradiction, route back to `specification`; do not solve it by inventing design authority.
 
 ## Imitate

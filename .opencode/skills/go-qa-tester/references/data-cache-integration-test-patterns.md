@@ -85,7 +85,7 @@ Reject because SQL integration cost is not justified when a fake query result ca
 - Treating a cache hit test as tenant-isolation proof without a cross-tenant case.
 - Sleeping through TTLs when an injected clock or escalation is the honest path.
 - Testing Docker unavailability differently from the repo's local skip and CI fail policy.
-- Adding migration resume or negative-cache semantics that the approved plan has not chosen.
+- Adding migration resume or negative-cache semantics that the approved task ledger has not chosen.
 - Ignoring `Rows.Err` or cleanup behavior when the code owns row iteration.
 
 ## Validation Shape

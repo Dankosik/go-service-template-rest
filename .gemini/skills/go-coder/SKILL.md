@@ -19,7 +19,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - hand-editing generated artifacts instead of changing the owning source and regenerating
 
 ## Specialist Stance
-- Treat the approved requirement, spec, and existing `tasks.md` task ledger as the source of truth for behavior and execution scope. Use optional `plan.md` only as supplemental strategy when it exists.
+- Treat the approved requirement, spec, and existing `tasks.md` task ledger as the source of truth for behavior and execution scope.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
 - Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
 - When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.
@@ -40,7 +40,6 @@ Keep workflow ownership outside this skill:
 - for non-trivial planned work, check the recorded implementation-readiness status in `workflow-plan.md` and the planning handoff when those artifacts exist
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
-- when planning pre-created an active `workflow-plans/implementation-phase-N.md`, update only that existing phase-control file with compact routing/progress facts such as attempted task IDs, changed surfaces, fresh proof, blockers or reopen target, next action, and stop rule; never create a missing phase-control file during implementation
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
 - if the safe implementation depends on a missing decision, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or task-breakdown repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
@@ -236,7 +235,7 @@ Before handoff, ask:
 8. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
 ## Blocked Work
-If the approved spec, task ledger, optional plan, or contract blocks implementation before code changes begin:
+If the approved spec, task ledger, or contract blocks implementation before code changes begin:
 - stop cleanly and say the work is blocked by a decision conflict or missing approval
 - name the exact approved artifact that blocks the change
 - if expected `tasks.md` is missing, route back to planning instead of creating it during implementation
@@ -250,7 +249,7 @@ If the approved spec, task ledger, optional plan, or contract blocks implementat
 When reporting implementation work, keep it proportional to the change:
 - what changed and what behavior was preserved or intentionally changed
 - validation commands and observed results
-- existing `tasks.md` or implementation phase-control progress updated, when the approved workflow uses those artifacts
+- existing `tasks.md` progress updated, when the approved workflow uses that artifact
 - design escalations, if any
 - residual risks, if any
 

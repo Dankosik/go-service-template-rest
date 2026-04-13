@@ -4,7 +4,7 @@
 When loaded for symptom "the diff introduces behavior or structure not in the approved artifacts," this file makes the model treat code as design drift or a reopen trigger instead of letting implementation become the new decision record.
 
 ## When To Load
-Load this when a diff appears to introduce behavior, ownership, lifecycle, fallback, contract, async, rollout, or delivery decisions not present in approved `spec.md`, `design/`, `plan.md`, `tasks.md`, or repository baseline.
+Load this when a diff appears to introduce behavior, ownership, lifecycle, fallback, contract, async, rollout, or delivery decisions not present in approved `spec.md`, `design/`, `tasks.md`, or repository baseline.
 
 Use this only when approved intent exists or the repo baseline clearly owns the decision. Do not demand artifacts for eligible tiny/direct-path fixes.
 
@@ -13,7 +13,7 @@ Use this only when approved intent exists or the repo baseline clearly owns the 
 - Do not flag every local helper or refactor as "needs ADR"; conformance matters for decisions with real ownership, behavior, rollout, or proof impact.
 - If the code reveals a better design, make a design escalation instead of rewriting the plan inside the review.
 - If approved artifacts are absent because the task is legitimately tiny, review against local correctness and do not invent a documentation gate.
-- Cite the exact section when possible: `spec.md` Decisions, Scope / Non-goals, `design/sequence.md`, `plan.md`, or `tasks.md`.
+- Cite the exact section when possible: `spec.md` Decisions, Scope / Non-goals, `design/sequence.md`, or `tasks.md`.
 
 ## Imitate
 ```text

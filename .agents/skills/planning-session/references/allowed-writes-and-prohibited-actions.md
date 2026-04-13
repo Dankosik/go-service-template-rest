@@ -7,7 +7,7 @@ When loaded for a planning session with scope pressure, this file makes the mode
 Load immediately before writes when the requested action may cross from planning into implementation, review, validation, specification, or technical design.
 
 ## Decision Rubric
-- Allowed writes are `tasks.md`, optional `plan.md` only when justified, triggered `test-plan.md`, triggered `rollout.md`, `workflow-plan.md`, `workflow-plans/planning.md`, and later phase-control files required by named multi-session routing.
+- Allowed writes are `tasks.md`, triggered `test-plan.md`, triggered `rollout.md`, `workflow-plan.md`, `workflow-plans/planning.md`, and later review/validation phase-control files required by named multi-session routing.
 - A later `workflow-plans/<phase>.md` file is allowed only when named multi-session routing requires that phase or planning explicitly creates it for a named future checkpoint.
 - `spec.md` and `design/` are read-only in this session. Missing decisions route upstream.
 - Code, tests, migrations, generated output, runtime config, review execution, validation execution, rollout execution, and closeout are out of scope.

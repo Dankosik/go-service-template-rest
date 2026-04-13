@@ -9,7 +9,7 @@ Load this when choosing phase boundaries, session stops, review/validation check
 ## Decision Rubric
 - A phase owns a coherent risk boundary, not a folder, role, or wish list.
 - Prefer a reviewable increment with a named stop rule; split when later work depends on proof from the current slice.
-- Use `tasks.md` for the executable handoff; create optional `plan.md` only when phase strategy would otherwise make the ledger noisy.
+- Use `tasks.md` for the executable handoff; keep strategy inside small, executable task slices instead of creating a separate strategy artifact.
 - Add review, validation, rollout, or reconciliation checkpoints only when approved scope or risk triggers them.
 - If a phase needs an architecture, API, data, security, reliability, rollout, or ownership decision not already approved, reopen the earlier phase instead of planning through it.
 
@@ -26,7 +26,7 @@ Change Surface:
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
 Planned Verification:
-- `rtk rg -n "tasks.md|optional plan.md|Implementation Readiness" AGENTS.md docs/spec-first-workflow.md`
+- `rtk rg -n "tasks.md|Implementation Readiness" AGENTS.md docs/spec-first-workflow.md`
 - `rtk git diff --check`
 Review / Checkpoint:
 - stop after contract surfaces are aligned and compare them before planning downstream skill edits

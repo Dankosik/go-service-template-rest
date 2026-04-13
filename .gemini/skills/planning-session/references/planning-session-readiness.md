@@ -1,7 +1,7 @@
 # Planning Session Readiness
 
 ## Behavior Change Thesis
-When loaded for a planning pass with uncertain inputs, this file makes the model block or reopen upstream instead of planning from `spec.md` alone or inventing missing `design/` context inside `tasks.md` or optional `plan.md`.
+When loaded for a planning pass with uncertain inputs, this file makes the model block or reopen upstream instead of planning from `spec.md` alone or inventing missing `design/` context inside `tasks.md`.
 
 ## When To Load
 Load when required planning inputs are missing, stale, contradictory, or not yet checked before artifact writes.

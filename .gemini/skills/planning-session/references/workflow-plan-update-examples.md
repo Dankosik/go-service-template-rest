@@ -8,10 +8,10 @@ Load when repairing or writing the master `workflow-plan.md` planning status, ar
 
 ## Decision Rubric
 - Keep `workflow-plan.md` cross-phase: status, artifact inventory, blockers, readiness, challenge state, boundary, and next session.
-- Do not copy `tasks.md`, optional `plan.md`, `spec.md`, or design details into the master file.
+- Do not copy `tasks.md`, `spec.md`, or design details into the master file.
 - Master and `workflow-plans/planning.md` must agree on lifecycle `Phase status` such as `pending`, `in_progress`, `blocked`, or `complete`; use a separate routing state for reopened handoffs.
 - Record a `Next session context bundle` every time: either say default resume order is sufficient or list the task-specific file bundle for the next implementation or reopen session.
-- If readiness is `FAIL`, `Next session starts with` points to the reopen target, not an implementation phase.
+- If readiness is `FAIL`, `Next session starts with` points to the reopen target, not a coding task.
 - Adequacy challenge status must say whether blocking findings were reconciled, waived under an eligible rationale, or still block handoff.
 
 ## Imitate
@@ -21,17 +21,16 @@ Phase status: complete
 Session boundary reached: yes
 Ready for next session: yes
 Next session starts with: T001
-Next session context bundle: `spec.md` for decisions; `design/overview.md` and required design maps for technical constraints; `tasks.md` for T001 entry and proof; `workflow-plans/implementation-phase-1.md` only if named routing created it.
+Next session context bundle: `spec.md` for decisions; `design/overview.md` and required design maps for technical constraints; `tasks.md` for T001 entry and proof.
 
 Artifact status:
 - `spec.md`: approved
 - `design/`: approved
 - `tasks.md`: approved
-- `plan.md`: not expected; no separate multi-checkpoint strategy
 - `test-plan.md`: not expected; proof obligations fit in `tasks.md`
 - `rollout.md`: not expected; no migration or delivery choreography
 - `workflow-plans/planning.md`: complete
-- post-code phase-control files: not expected; `tasks.md` is sufficient for the next implementation session
+- review/validation phase-control files: not expected; `tasks.md` is sufficient for the next implementation session
 
 Implementation readiness: PASS
 Workflow plan adequacy challenge: completed; blocking findings reconciled
@@ -56,7 +55,6 @@ Next session context bundle: `spec.md`, current `design/overview.md`, and the bl
 
 Artifact status:
 - `tasks.md`: blocked
-- `plan.md`: not expected
 - `workflow-plans/planning.md`: blocked
 
 Implementation readiness: FAIL
@@ -69,12 +67,12 @@ Copy this shape: the blocked master update routes upstream instead of implying i
 
 ## Reject
 ```markdown
-Current phase: implementation-phase-1
+Current phase: planning
 Planning status: complete
 Implementation readiness: PASS
 ```
 
-Failure: the planning session has not stopped yet; the next session starts implementation later.
+Failure: the planning session has not stopped yet; the next session starts coding from `tasks.md` later.
 
 ```markdown
 Workflow plan adequacy challenge: done.

@@ -10,7 +10,7 @@ Load this after fresh proof was run or a proof gap was discovered, when the next
 - `Validation` records the claim, scope, commands actually run, observed result, conclusion, and next action.
 - `Outcome` says only what the fresh proof supports: complete, blocked, reopened, or partially verified with explicit limits.
 - Failed, skipped, stale, or too-narrow proof produces `not verified` plus a reopen target, not a softened success outcome.
-- Do not rewrite `Decisions`, `design/`, or optional `plan.md` during validation; record a reopen if closeout exposes a real upstream gap.
+- Do not rewrite `Decisions` or `design/` during validation; record a reopen if closeout exposes a real upstream gap.
 - Do not paste chat summaries or old output as if they were current command evidence.
 
 ## Imitate
@@ -45,11 +45,11 @@ Verification Commands:
 - `make openapi-check`
 Observed Result: `go test ./... -count=1` failed in `internal/export`.
 Conclusion: not verified.
-Next Action: reopen `implementation-phase-1` to address the failing export package test, then return to validation.
+Next Action: reopen implementation at T003 to address the failing export package test, then return to validation.
 
 ## Outcome
 
-Closeout blocked. Fresh proof failed, so the task is reopened to `implementation-phase-1`.
+Closeout blocked. Fresh proof failed, so the task is reopened to implementation at T003.
 ```
 
 Copy the failure shape when proof fails: the spec records the failed result and routes reopening without repair work.

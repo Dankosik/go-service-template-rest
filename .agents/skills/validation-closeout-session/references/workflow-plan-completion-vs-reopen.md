@@ -44,10 +44,10 @@ workflow-plans/validation-phase-1.md status: blocked
 Blockers: `make migrate-check` failed in this session
 Session boundary reached: yes
 Ready for next session: yes
-Next session starts with: implementation-phase-1
-Next session context bundle: `spec.md` for failed proof scope; `tasks.md` for unchecked T003; `workflow-plans/implementation-phase-1.md` for the reopen route
+Next session starts with: T003
+Next session context bundle: `spec.md` for failed proof scope; `tasks.md` for unchecked T003
 Task state: reopened
-Routing state: reopen implementation-phase-1
+Routing state: reopen implementation at T003
 ```
 
 Copy the reopen shape: failed proof, blocked phase status, separate reopen routing, and explicit next session target.

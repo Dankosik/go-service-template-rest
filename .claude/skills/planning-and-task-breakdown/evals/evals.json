@@ -7,7 +7,7 @@
       "expected_output": "A phased `tasks.md` checkbox ledger with dependency order, acceptance criteria, verification, explicit checkpoints, and a compact implementation-readiness summary.",
       "files": [],
       "expectations": [
-        "The output defaults to `tasks.md` as the final implementation handoff instead of producing a redundant `plan.md`.",
+        "The output defaults to `tasks.md` as the final implementation handoff instead of producing a separate strategy artifact.",
         "Schema or migration work appears before downstream repository, service, or API work.",
         "Restore and audit obligations are included in the task breakdown.",
         "`tasks.md` uses stable task IDs such as `T001`, markdown checkboxes, dependency markers when nontrivial, and proof expectations.",
@@ -16,14 +16,14 @@
     },
     {
       "id": 1,
-      "prompt": "Design is approved for adding request ID echo behavior on `/healthz` and `/readyz`: if incoming `X-Request-ID` exists, echo it back; otherwise preserve current behavior. This is tiny. Write only the planning output that is appropriate now, and avoid forcing a heavyweight `plan.md` if the change does not need it.",
+      "prompt": "Design is approved for adding request ID echo behavior on `/healthz` and `/readyz`: if incoming `X-Request-ID` exists, echo it back; otherwise preserve current behavior. This is tiny. Write only the planning output that is appropriate now, and avoid forcing heavyweight planning artifacts if the change does not need them.",
       "expected_output": "A compact direct-path planning answer that stays proportional and does not invent unnecessary phases.",
       "files": [],
       "expectations": [
         "The output explicitly keeps planning lightweight for this tiny change.",
         "The output still includes verification.",
         "If readiness is mentioned, `WAIVED` is tied to explicit tiny/direct-path scope instead of being a general shortcut.",
-        "The plan does not force a heavyweight multi-phase `plan.md` or separate `tasks.md` for a tiny header echo change."
+        "The plan does not force a heavyweight multi-phase strategy artifact or separate `tasks.md` for a tiny header echo change."
       ]
     },
     {

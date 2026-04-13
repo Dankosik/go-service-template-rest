@@ -45,7 +45,7 @@ Lanes:
 - L3 security-agent/no-skill: inspect existing auth and download-link trust boundaries.
 - L4 reliability-agent/no-skill: identify retry, timeout, and terminal failure evidence in current worker patterns.
 Fan-in: orchestrator compares lane claims, records conflicts, and routes either to pre-spec challenge or future `specification-session`.
-Stop rule: no `spec.md`, no `design/`, no `plan.md`, no implementation.
+Stop rule: no `spec.md`, no `design/`, no implementation.
 ```
 
 Copy this when the domains are genuinely separable and all lanes stay advisory.

@@ -4,7 +4,7 @@
 When loaded for a fuzzy or overgrown `design/` bundle, this file makes the model choose a minimal, indexed bundle with real artifact triggers instead of likely mistakes like filler artifacts, `spec.md` rewrites, or task sequencing inside design.
 
 ## When To Load
-Load this when the symptom is bundle-shape confusion: `design/overview.md` is missing or bloated, required artifacts are unclear, conditional artifacts are being created "for completeness", or `spec.md`, `design/`, `tasks.md`, and optional `plan.md` are starting to absorb each other's jobs.
+Load this when the symptom is bundle-shape confusion: `design/overview.md` is missing or bloated, required artifacts are unclear, conditional artifacts are being created "for completeness", or `spec.md`, `design/`, and `tasks.md` are starting to absorb each other's jobs.
 
 Do not load this when the question is only a domain-specific decision. Use the specialist skill for that domain and bring the result back into this integrator pass.
 
@@ -13,7 +13,7 @@ Do not load this when the question is only a domain-specific decision. Use the s
 - Conditional artifacts need behavior-changing triggers: persisted state, dependency shape, contracts, layered validation, migration choreography, or release safety.
 - `design/overview.md` is the entrypoint and artifact index. It should point to details, not repeat every artifact. When the bundle is planning-bound, each required artifact entry should show status, and each plausible conditional artifact should include trigger rationale for `expected`, `not expected`, `conditional`, or `waived`.
 - `spec.md` owns final behavior, scope, invariants, and accepted risk. Design consumes those decisions.
-- `tasks.md` owns sequencing, task IDs, checkpoints, and implementation ordering. Optional `plan.md` owns only supplemental strategy when present. Design may name planning constraints, not write the task ledger.
+- `tasks.md` owns sequencing, task IDs, checkpoints, and implementation ordering. Design may name planning constraints, not write the task ledger.
 - If an artifact would be empty or generic, mark it not expected and say why.
 
 ## Imitate

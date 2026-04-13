@@ -26,7 +26,7 @@ Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
 
 Inspect first
-- Task-local `spec.md`, `plan.md`, and `tasks.md` for approved scope and non-goals before suggesting cleanup.
+- Task-local `spec.md` and `tasks.md` for approved scope and non-goals before suggesting cleanup.
 - Changed Go files and adjacent `*_test.go` files named by the task ledger or diff.
 - `go.mod` for Go version/toolchain expectations before idiom or standard-library guidance.
 - `docs/repo-architecture.md` and `docs/project-structure-and-module-organization.md` when package ownership or exported surface is in question.

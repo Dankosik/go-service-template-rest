@@ -1,13 +1,13 @@
 ---
 name: research-session
-description: "Own a session dedicated only to research for this repository. Use when the orchestrator already has task framing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update task-local `workflow-plan.md` plus `workflow-plans/research.md` without drifting into `spec.md`, `design/`, `tasks.md`, optional `plan.md`, or implementation. Skip tiny direct-path work and tasks that have already moved into `specification` or later."
+description: "Own a session dedicated only to research for this repository. Use when the orchestrator already has task framing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update task-local `workflow-plan.md` plus `workflow-plans/research.md` without drifting into `spec.md`, `design/`, `tasks.md`, or implementation. Skip tiny direct-path work and tasks that have already moved into `specification` or later."
 ---
 
 # Research Session
 
 ## Purpose
 Run only the research checkpoint for one task-local session.
-This wrapper makes evidence gathering and handoff explicit; it does not finalize `spec.md`, start `technical design`, produce `tasks.md`, produce optional `plan.md`, or implement code.
+This wrapper makes evidence gathering and handoff explicit; it does not finalize `spec.md`, start `technical design`, produce `tasks.md`, or implement code.
 
 ## Use When
 - the task already has minimum viable framing and workflow routing, and now needs one research-only session
@@ -20,7 +20,7 @@ This wrapper makes evidence gathering and handoff explicit; it does not finalize
 - the work is tiny enough that inline local reasoning plus a short note is sufficient and a dedicated research session would be ceremony
 - the task is still at workflow planning; use `workflow-planning-session`
 - the task has already moved into `specification` or later, or `workflow-plans/specification.md` is already the active phase-control file
-- the request tries to combine research with final `spec.md`, `design/`, `tasks.md`, optional `plan.md`, or implementation output in one session
+- the request tries to combine research with final `spec.md`, `design/`, `tasks.md`, or implementation output in one session
 
 ## Required Inputs
 Need only the minimum phase-ready inputs:
@@ -64,7 +64,7 @@ Do not:
 - finalize or approve `spec.md`
 - create `workflow-plans/specification.md`
 - assemble `design/`
-- write `tasks.md`, optional `plan.md`, `test-plan.md`, or `rollout.md`
+- write `tasks.md`, `test-plan.md`, or `rollout.md`
 - start implementation, tests, migrations, review, or validation work
 - use planning or implementation skills as a backdoor into later phases
 - turn `research/*.md` into a second source of truth for decisions that belong in `spec.md`
@@ -155,7 +155,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
   - next action
   - blockers
   - what can run in parallel
-- keep this file routing-only; do not turn it into `spec.md`, `design/`, `tasks.md`, or optional `plan.md`
+- keep this file routing-only; do not turn it into `spec.md`, `design/`, or `tasks.md`
 
 ### 8. Write Or Repair `workflow-plan.md`
 - update master phase status, research mode, artifact status, blockers, and next-session routing
@@ -164,7 +164,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 
 ### 9. Stop At The Boundary
 - once research artifacts and routing are consistent, stop
-- do not start `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, optional `plan.md`, or implementation in the same session
+- do not start `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or implementation in the same session
 
 ## Research Lane Planning Rules
 When a dedicated research phase file is used, `workflow-plans/research.md` should make lane ownership obvious at a glance.
@@ -195,7 +195,7 @@ Every completed or blocked pass must update the master file with:
 - `Next session starts with`
 - `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - blockers, accepted assumptions, and open points that still affect spec readiness
-- artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
+- artifact status for `spec.md`, `design/`, `tasks.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 
 Do not leave spec readiness or handoff state implicit in chat.
 
@@ -206,7 +206,7 @@ A finished research session produces only research-phase artifacts and routing:
 - optional `research/*.md` for preserved evidence or comparisons
 - an honest research phase status such as `complete` or `blocked`, plus a separate reopen routing state when relevant, with the next session start point made explicit
 
-It does not produce approved `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, optional `plan.md`, or implementation output.
+It does not produce approved `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or implementation output.
 
 ## Stop Condition
 The session is complete when:

@@ -8,7 +8,7 @@
       "files": [],
       "expectations": [
         "The output reads or refers to current phase context first and keeps the work inside the specification checkpoint.",
-        "The output produces or updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into `design/`, `plan.md`, or implementation.",
+        "The output produces or updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into `design/` or implementation.",
         "The output records clarification challenge status, the read-only lane used or waiver rationale, and resolution status before marking `spec.md` approved.",
         "The output makes the handoff explicit in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with: technical-design` when the spec is approved."
       ]
@@ -21,18 +21,18 @@
       "expectations": [
         "The output identifies why the inputs are not spec-ready instead of pretending the open questions can live as harmless assumptions.",
         "The output updates specification-phase routing and handoff state in `workflow-plan.md` and `workflow-plans/specification.md` rather than approving a false spec.",
-        "The output reopens research or challenge as the next session instead of writing `design/`, `plan.md`, or code.",
+        "The output reopens research or challenge as the next session instead of writing `design/` or code.",
         "The output does not use the clarification challenge to paper over missing core product or domain decisions."
       ]
     },
     {
       "id": 2,
-      "prompt": "The task is spec-ready for a bounded webhook retry feature. While you are running the specification-session, go ahead and draft `design/overview.md`, create `plan.md`, and start the first implementation slice so we keep momentum. Use only this wrapper.",
+      "prompt": "The task is spec-ready for a bounded webhook retry feature. While you are running the specification-session, go ahead and draft `design/overview.md`, create `tasks.md`, and start the first implementation slice so we keep momentum. Use only this wrapper.",
       "expected_output": "A session-bounded response that completes or repairs the specification checkpoint only, refuses to cross into technical design, planning, or implementation, and keeps the next-session handoff explicit.",
       "files": [],
       "expectations": [
         "The output distinguishes the wrapper's job from `spec-document-designer`, `go-design-spec`, and planning work.",
-        "The output does not write or recommend writing `design/`, `plan.md`, or implementation output in the same session.",
+        "The output does not write or recommend writing `design/`, `tasks.md`, or implementation output in the same session.",
         "The output stops after specification artifacts and workflow updates, with clarification gate state recorded and the next session routed to `technical-design` or another honest reopen point."
       ]
     }

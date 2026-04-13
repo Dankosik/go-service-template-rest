@@ -9,7 +9,7 @@ Load this when writing review checkpoints, validation checkpoints, implementatio
 ## Decision Rubric
 - A checkpoint is useful only if it changes go/no-go state, review scope, validation scope, or the next-session handoff.
 - Reopen conditions should name the earlier phase and the trigger that proves planning is no longer safe.
-- Required named implementation, review, or validation phase-control files must be planned before implementation begins; if they are missing later, reopen planning. Do not create such files for already-small tasks when `tasks.md` is sufficient.
+- Required named review or validation phase-control files must be planned before implementation begins; if they are missing later, reopen planning. Do not create such files for already-small tasks when `tasks.md` is sufficient.
 - Readiness `FAIL` is honest when it prevents unsafe implementation; do not soften it into optimistic handoff text.
 - Conditional reopen rules are not blockers when they clearly describe "if discovered later" stop conditions.
 

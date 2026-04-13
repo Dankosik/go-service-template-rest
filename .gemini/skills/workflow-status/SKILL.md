@@ -8,7 +8,7 @@ description: "Read-only workflow status and next-action helper for this reposito
 ## Purpose
 Report the current status and next action for one task-local spec-first workflow without becoming a new workflow authority.
 
-This helper reads existing artifacts and summarizes what they already say. It does not repair the workflow, approve artifacts, create missing files, advance phases, or replace `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `tasks.md`, or optional `plan.md`.
+This helper reads existing artifacts and summarizes what they already say. It does not repair the workflow, approve artifacts, create missing files, advance phases, or replace `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, or `tasks.md`.
 
 ## Use When
 - the user asks "where are we?", "what is next?", "can implementation start?", or "what is blocked?"
@@ -27,7 +27,7 @@ This skill is read-only.
 
 Do not:
 - edit task artifacts, code, tests, generated files, configs, or docs
-- create missing `workflow-plan.md`, `workflow-plans/`, `spec.md`, `design/`, `tasks.md`, optional `plan.md`, `test-plan.md`, or `rollout.md`
+- create missing `workflow-plan.md`, `workflow-plans/`, `spec.md`, `design/`, `tasks.md`, `test-plan.md`, or `rollout.md`
 - change git state, stage files, commit, push, or run mutating generation commands
 - approve, reject, or rewrite the workflow plan
 - treat this status report as a new phase, gate, plan, source of truth, or implementation-readiness artifact
@@ -61,14 +61,14 @@ Read the smallest artifact set needed to answer the status question:
    - `design/sequence.md`
    - `design/ownership-map.md`
 5. task-local `tasks.md` when present or expected by workflow status
-6. optional task-local `plan.md`, plus optional `test-plan.md`, `rollout.md`, and selected `research/*.md` only when they are present and the status question depends on them
+6. optional task-local `test-plan.md`, `rollout.md`, and selected `research/*.md` only when they are present and the status question depends on them
 
 When `workflow-plan.md` is missing, infer only the minimum state from the artifact chain and mark workflow control as incomplete unless an explicit direct-path or lightweight-local waiver explains the missing file.
 
 ## Status Inference Rules
 - Prefer `workflow-plan.md` for current phase, phase status, session-boundary state, blockers, artifact status, and next-session routing.
 - Prefer the current `workflow-plans/<phase>.md` for phase-local next action, stop rule, completion marker, local blockers, and the planning-phase implementation-readiness gate result when the current or completed phase is `planning`.
-- Use `spec.md`, `design/`, `tasks.md`, and optional `plan.md` only to confirm artifact presence and approval signals, not to invent a different phase than the master file records.
+- Use `spec.md`, `design/`, and `tasks.md` only to confirm artifact presence and approval signals, not to invent a different phase than the master file records.
 - Treat absent required artifacts as incomplete unless an explicit waiver covers that exact artifact.
 - Treat present artifacts with unclear approval state as `present / status unclear`, not `approved`.
 - Treat a missing implementation-readiness status as incomplete for non-trivial planned work unless an explicit eligible direct-path, lightweight-local, or prototype waiver covers it.
@@ -80,10 +80,10 @@ When `workflow-plan.md` is missing, infer only the minimum state from the artifa
 ## Implementation Start Rule
 Answer `Implementation may start` conservatively:
 
-- `Yes` only when readiness is `PASS`, the required artifact chain is approved or explicitly waived, there are no blocking gates, and workflow routing points to implementation or the first implementation phase.
+- `Yes` only when readiness is `PASS`, the required artifact chain is approved or explicitly waived, there are no blocking gates, and workflow routing points to implementation or the first task in `tasks.md`.
 - `Yes, in the recorded next session` when readiness is `PASS`, planning is complete, `Session boundary reached: yes`, and `Next session starts with` points at implementation.
 - `Yes, with recorded concerns` only when readiness is `CONCERNS`, named accepted risks and proof obligations are explicit, and routing points to implementation.
-- `No` when readiness is `FAIL`, or when `spec.md`, required `design/`, expected `tasks.md`, phase control, readiness status, or a required post-code phase file is missing without an explicit waiver.
+- `No` when readiness is `FAIL`, or when `spec.md`, required `design/`, expected `tasks.md`, phase control, readiness status, or a required review/validation phase file is missing without an explicit waiver.
 - `No` when the current phase is workflow planning, research, specification, technical design, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
 - `No` when readiness is `CONCERNS` but accepted risks or proof obligations are unnamed.
 - `Unknown` only when the task path is identified but the artifacts are too contradictory to make a safe yes or no call; name the contradiction as the blocker.
@@ -97,8 +97,8 @@ Report the phase's allowed write surface using the repository contract, while ma
 - `research`: `research/*.md`, task-local `workflow-plan.md`, and the active research phase-control file when the session owns research
 - `specification`: `spec.md`, task-local `workflow-plan.md`, and `workflow-plans/specification.md`
 - `technical design`: task-local `design/` core and triggered conditional design files, task-local `workflow-plan.md`, and `workflow-plans/technical-design.md`
-- `planning`: `tasks.md` when expected, optional `plan.md` when justified, triggered `test-plan.md` or `rollout.md`, named post-code phase-control files when needed, task-local `workflow-plan.md`, and `workflow-plans/planning.md`
-- `implementation`: code, tests, migrations, configs, generation inputs, generated outputs required by the approved task ledger, plus existing control/checkpoint artifacts and existing `tasks.md` progress only
+- `planning`: `tasks.md` when expected, triggered `test-plan.md` or `rollout.md`, named review/validation phase-control files when needed, task-local `workflow-plan.md`, and `workflow-plans/planning.md`
+- `implementation`: code, tests, migrations, configs, generation inputs, generated outputs required by the approved task ledger, plus existing `workflow-plan.md` routing and existing `tasks.md` progress only
 - `review`: read-only review output only; no code or artifact mutation by review agents
 - `reconciliation`: approved code/test/runtime fixes required by the task ledger plus existing control/checkpoint artifacts only
 - `validation`: fresh verification plus existing closeout surfaces only, such as `spec.md` `Validation`/`Outcome`, existing `workflow-plan.md`, existing `tasks.md` progress when used, and an existing validation phase-control file when one was created before implementation

@@ -18,7 +18,7 @@ Protect approved design intent in code so boundaries, ownership, maintainability
 ## Evidence Order
 Use the strongest local evidence first:
 1. Changed diff and directly affected tests or generated outputs.
-2. Task-local `spec.md`, `design/`, `tasks.md`, and optional `plan.md` when present.
+2. Task-local `spec.md`, `design/`, and `tasks.md` when present.
 3. Repository baseline docs such as `docs/repo-architecture.md` plus canonical runtime sources like OpenAPI, config policy, migrations, and generation inputs.
 4. External references only to calibrate review patterns, never to override repository-approved intent.
 

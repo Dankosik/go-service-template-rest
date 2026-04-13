@@ -11,7 +11,7 @@ Load this as a challenge rubric when any required proof does not support the cur
 - Pick the narrowest reopen target: implementation for wrong behavior/tests, review for unresolved review blockers, planning or design/specification for missing acceptance criteria or phase artifacts.
 - Update closeout artifacts to `not verified`, `blocked`, or `reopened`; do not balance failure against other green checks.
 - Stop after routing the reopen. Do not implement fixes, author tests, create missing process files, or silently continue into the reopened phase.
-- If a command was skipped for cost or environment reasons, report that as unverified unless the approved plan allowed an alternate proof path.
+- If a command was skipped for cost or environment reasons, report that as unverified unless the approved task ledger allowed an alternate proof path.
 
 ## Imitate
 
@@ -25,7 +25,7 @@ Observed Result:
 - `go test ./... -count=1` failed in `internal/export`.
 - `make openapi-check` was not run because the first required proof already blocks closeout and the next session must reopen implementation.
 Conclusion: not verified.
-Next Action: reopen `implementation-phase-1` to fix the failing export package test, then rerun validation.
+Next Action: reopen implementation at T003 to fix the failing export package test, then rerun validation.
 Boundary: no code changes in this closeout session.
 ```
 
@@ -70,4 +70,4 @@ Fails because skipped required proof cannot support readiness.
 ## Agent Traps
 - Treating a failure as "unrelated-looking" without routing it through a recorded proof gap.
 - Choosing a weaker substitute command after a required command fails or is skipped, then claiming the original obligation passed.
-- Continuing into the reopened implementation phase in the same closeout session.
+- Continuing into coding fixes in the same closeout session.

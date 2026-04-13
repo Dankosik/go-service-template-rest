@@ -23,7 +23,7 @@ Session boundary reached: yes
 Ready for next session: yes
 Next session starts with: technical-design
 Phase workflow plans: specification complete
-Artifacts: spec.md approved; design/ missing; tasks.md missing; plan.md not expected unless later justified
+Artifacts: spec.md approved; design/ missing; tasks.md missing
 Clarification gate: complete and reconciled
 Blockers: none
 ```

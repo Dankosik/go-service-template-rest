@@ -83,7 +83,7 @@
       "expectations": [
         "The output identifies missing required `tasks.md` as a planning repair blocker.",
         "The output identifies missing implementation readiness as a planning repair blocker for non-trivial work.",
-        "The output does not create or propose creating `tasks.md` inside the implementation phase.",
+        "The output does not create or propose creating `tasks.md` during coding.",
         "The output avoids claiming the implementation is ready, fixed, or done."
       ]
     },

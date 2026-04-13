@@ -1,7 +1,7 @@
 # Authority Boundary And Duplication
 
 ## Behavior Change Thesis
-When loaded for symptom workflow-control files duplicate canonical artifact content, this file makes the model recommend status-only routing or `trim_duplicate_authority` instead of likely mistake creating a second `spec.md`, `design/`, `tasks.md`, or optional `plan.md`.
+When loaded for symptom workflow-control files duplicate canonical artifact content, this file makes the model recommend status-only routing or `trim_duplicate_authority` instead of likely mistake creating a second `spec.md`, `design/`, or `tasks.md`.
 
 ## When To Load
 Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.md`, or a finding would copy or summarize too much from canonical artifacts. Do not load it as the default reference when a narrower status, lane, stop-rule, or readiness gap matches.
@@ -9,7 +9,7 @@ Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.
 ## Decision Rubric
 - `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, and implementation-readiness status.
 - `workflow-plans/<phase>.md` owns phase-local orchestration: lanes, order/parallelism, fan-in/challenge path, completion marker, stop rule, next action, blockers, and local adequacy challenge resolution.
-- `spec.md` owns final decisions; `design/` owns technical design; `tasks.md` owns executable task state and implementation handoff; optional `plan.md` owns only supplemental strategy when present.
+- `spec.md` owns final decisions; `design/` owns technical design; `tasks.md` owns executable task state and implementation handoff.
 - If workflow control contains canonical artifact content, recommend trimming it to a status, link/path, blocker, or next action. Do not ask for a larger duplicate summary.
 
 ## Imitate

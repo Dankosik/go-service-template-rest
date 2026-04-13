@@ -8,16 +8,16 @@ Load when assigning or auditing implementation-readiness status.
 
 ## Decision Rubric
 - `PASS`: all required spec, design, `tasks.md`, triggered test or rollout artifacts, any required named phase-control files, blocker resolution, and proof path are in place.
-- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the next implementation phase can satisfy without re-planning.
+- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the next implementation task can satisfy without re-planning.
 - `FAIL`: implementation must not start; name the earlier phase to reopen when a missing artifact, unresolved decision, or blocker could change correctness, ownership, rollout, sequencing, or validation.
 - `WAIVED`: use only for tiny, direct-path, or prototype-scoped work with explicit rationale and scope; never use it to bypass normal non-trivial planning.
-- Record the readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, short reference in `tasks.md` when useful, and a compact summary in optional `plan.md` when present.
+- Record the readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, and short reference in `tasks.md` when useful.
 
 ## Imitate
 ```markdown
 Implementation readiness: PASS.
 Gate result: implementation may start with T001 in a later session.
-Proof path: task-level proof is listed in `tasks.md`; optional phase checkpoint proof is listed in `plan.md` only when that artifact exists.
+Proof path: task-level proof is listed in `tasks.md`.
 ```
 
 Copy this shape: PASS is tied to named artifacts and a later-session entry point.
@@ -25,7 +25,7 @@ Copy this shape: PASS is tied to named artifacts and a later-session entry point
 ```markdown
 Implementation readiness: CONCERNS.
 Accepted risk: cache invalidation proof depends on first-phase integration evidence.
-Proof obligation: `implementation-phase-1` must add and pass the named integration test before phase completion.
+Proof obligation: task T003 must add and pass the named integration test before validation.
 Gate result: implementation may start in the next session with this obligation visible.
 ```
 

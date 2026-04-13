@@ -9,7 +9,7 @@
       "expectations": [
         "The output reads the existing phase context first and keeps the session inside the research boundary.",
         "The output plans fan-out lanes with named questions, roles, and one chosen skill or explicit `no-skill` per lane, while keeping subagent work read-only.",
-        "The output updates the handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and whether the next session starts with `specification`, challenge, or more research, without drafting `spec.md`, `design/`, `plan.md`, or code."
+        "The output updates the handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and whether the next session starts with `specification`, challenge, or more research, without drafting `spec.md`, `design/`, or code."
       ]
     },
     {
@@ -30,7 +30,7 @@
       "files": [],
       "expectations": [
         "The output distinguishes research-session outputs from the future `specification-session` outputs.",
-        "The output does not write or recommend writing approved `spec.md`, `workflow-plans/specification.md`, `design/`, or `plan.md` in the same session.",
+        "The output does not write or recommend writing approved `spec.md`, `workflow-plans/specification.md`, or `design/` in the same session.",
         "The output records the correct next-session routing or escalation instead of silently continuing into specification."
       ]
     }

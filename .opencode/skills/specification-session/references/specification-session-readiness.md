@@ -54,6 +54,6 @@ This fails because the challenge is for candidate decision pressure-testing, not
 
 ## Agent Traps
 - Reading research first and never checking whether the master workflow plan still points at specification.
-- Treating `design/`, `plan.md`, tests, or implementation as in-scope while checking readiness.
+- Treating `design/`, tests, or implementation as in-scope while checking readiness.
 - Recording "no blockers" in chat while leaving stale blockers in workflow artifacts.
 - Approving a spec because every section has prose, even though the approval-changing decision is absent.

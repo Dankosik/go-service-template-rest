@@ -6,7 +6,7 @@ When loaded before planning handoff, this file makes the model choose an honest 
 ## When To Load
 Load this when the symptom is readiness uncertainty: `design/overview.md` claims readiness, workflow-control artifacts need a handoff summary, `planning-and-task-breakdown` is about to consume the bundle, blockers or accepted risks may affect planning, or `test-plan.md` and `rollout.md` expectations are unclear.
 
-Do not load this to write `tasks.md` or optional `plan.md`. This reference only checks whether the design handoff is honest.
+Do not load this to write `tasks.md`. This reference only checks whether the design handoff is honest.
 
 ## Decision Rubric
 - Planning-ready means required core artifacts are present, consistent, and approved or explicitly waived by an eligible rationale.
@@ -52,7 +52,7 @@ Workflow-control update summary:
 Technical design status: complete.
 Design artifacts: required core approved; data-model and rollout approved; contracts, dependency-graph, and test-plan not expected.
 Next session starts with: planning.
-Stop rule: do not begin `tasks.md`, optional `plan.md`, or implementation in this session.
+Stop rule: do not begin `tasks.md` or implementation in this session.
 ```
 
 ## Reject
@@ -98,7 +98,7 @@ Before handoff, produce a compact readiness verdict: status, required artifacts,
 - Route to specification when the missing decision changes scope, external behavior, or accepted risk.
 - Route to a specialist when the missing detail is domain-owned and cannot be safely integrated from existing evidence.
 - Route to planning only when required design artifacts are approved or explicitly waived by an eligible direct/local rationale.
-- If planning starts and exposes a missing design decision, reopen technical design instead of inventing the decision in `tasks.md` or optional `plan.md`.
+- If planning starts and exposes a missing design decision, reopen technical design instead of inventing the decision in `tasks.md`.
 
 ## Repo Pointers
 - `docs/spec-first-workflow.md`: planning-entry gate, planning gate, implementation-readiness gate, session-boundary gate, and design-bundle rules.

@@ -33,7 +33,7 @@ Inspect first
 - Task-local `design/overview.md`, `design/component-map.md`, and `design/ownership-map.md` when present for candidate boundaries and source-of-truth ownership.
 - `docs/repo-architecture.md` for stable repository boundaries, dependency direction, and extension seams.
 - `cmd/service/internal/bootstrap/`, `internal/app/`, and `internal/infra/` when runtime composition or package direction is part of the question.
-- Task-local `plan.md` or specialist outputs when the concern is hidden architecture drift during planning or fan-in.
+- Task-local `tasks.md` or specialist outputs when the concern is hidden architecture drift during planning or fan-in.
 
 Mode routing
 - research: prefer go-architect-spec.

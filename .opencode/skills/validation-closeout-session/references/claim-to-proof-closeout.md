@@ -28,7 +28,7 @@ Copy the scoped conclusion: it names what the commands prove and what they do no
 
 ```markdown
 Claim: `ready for handoff` for a task that changed API, SQL migrations, and cache invalidation.
-Scope: all changed surfaces in the approved plan.
+Scope: all changed surfaces in the approved task ledger.
 Verification commands:
 - scoped package tests for changed API and cache packages
 - repository-owned OpenAPI drift check
@@ -36,7 +36,7 @@ Verification commands:
 Conclusion: handoff-ready only if every required surface passes fresh verification.
 ```
 
-Copy the multi-surface proof shape only when the approved plan actually spans those surfaces.
+Copy the multi-surface proof shape only when the approved task ledger actually spans those surfaces.
 
 ## Reject
 

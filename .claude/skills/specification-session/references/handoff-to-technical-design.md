@@ -11,7 +11,7 @@ Load this after spec approval or when deciding whether the specification session
 - The handoff names accepted assumptions, blockers, and reopen conditions; it does not create design content.
 - Accepted risk can pass forward only when it does not change scope, ownership, acceptance semantics, or validation proof.
 - If a missing answer still changes a core decision, route to research or specification instead of technical design.
-- The session stops before creating `design/`, `tasks.md`, optional `plan.md`, tests, or implementation changes.
+- The session stops before creating `design/`, `tasks.md`, tests, or implementation changes.
 
 ## Imitate
 Ready handoff in `workflow-plan.md`:
@@ -22,7 +22,7 @@ Current phase status: complete
 Session boundary reached: yes
 Ready for next session: yes
 Next session starts with: technical-design
-Artifacts: spec.md approved; design/ missing; tasks.md missing; plan.md not expected unless later justified
+Artifacts: spec.md approved; design/ missing; tasks.md missing
 Clarification gate: complete and reconciled
 Blockers: none
 Reopen conditions: reopen specification if technical design finds a scope or acceptance contradiction.

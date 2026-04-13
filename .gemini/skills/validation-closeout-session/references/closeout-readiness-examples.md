@@ -27,8 +27,8 @@ Copy the explicit readiness verdict and the boundary statement before choosing c
 
 ```markdown
 Closeout readiness: not ready.
-Claim is broader than the available artifacts: the user asks for task-wide completion, but `workflow-plan.md` still says `implementation-phase-2` is in progress.
-Next action: stop validation and route the next session to `implementation-phase-2`; do not run closeout by momentum.
+Claim is broader than the available artifacts: the user asks for task-wide completion, but `workflow-plan.md` still says implementation task T006 is in progress.
+Next action: stop validation and route the next session to implementation task T006; do not run closeout by momentum.
 ```
 
 Copy the reopen-before-proof shape when the master workflow still points upstream.

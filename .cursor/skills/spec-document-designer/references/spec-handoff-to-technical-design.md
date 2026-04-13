@@ -9,7 +9,7 @@ Load this when a non-trivial spec is about to hand off to `technical design`, or
 ## Decision Rubric
 - `spec.md` decides behavior, scope, constraints, accepted risk, and proof consequences.
 - `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` decide task-local technical shape.
-- `tasks.md` decides execution order and implementation steps; optional `plan.md` carries only supplemental strategy when justified.
+- `tasks.md` decides execution order and implementation steps.
 - A handoff note should name what design must derive, not pre-answer design with package or call-order decisions.
 - Add `[reopen_spec_if_false]` when a downstream design discovery would invalidate a spec-level decision.
 - If the spec cannot hand off without reopening problem framing, keep it draft or blocked.
