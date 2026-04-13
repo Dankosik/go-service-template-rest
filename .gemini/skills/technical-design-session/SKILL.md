@@ -120,7 +120,7 @@ Do not:
 - `spec.md` owns final decisions, `design/` owns task-local technical context, and `tasks.md` comes later in a different session
 - use `go-design-spec` as the deeper design-integrity method when you need integration, contradiction cleanup, or simplification beyond simple artifact upkeep
 - for non-trivial work, this session ends at a planning-ready or explicitly blocked design bundle; planning begins in a new session unless an approved waiver already exists
-- required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, or not expected rather than guessed into existence
+- required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` rather than guessed into existence
 
 ## Boundary With `go-design-spec`
 `technical-design-session` and `go-design-spec` are complementary, not competing:
@@ -147,7 +147,7 @@ Create these only when their trigger is real:
 - `test-plan.md` when validation obligations are too large or multi-layered to fit cleanly inside `tasks.md`
 - `rollout.md` when the task needs migration sequencing, backfill/verify choreography, mixed-version compatibility, or deploy/failback notes
 
-If a trigger is not real, record the artifact as not expected instead of creating filler.
+If a trigger is not real, record the artifact as `not expected` with trigger rationale instead of creating filler.
 
 ## Workflow
 

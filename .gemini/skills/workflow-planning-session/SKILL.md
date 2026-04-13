@@ -114,7 +114,7 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 - Record the execution shape and why it fits.
 - Record research mode when later research is expected.
 - Record current phase, phase status, session-boundary state, next-session routing, blockers, and phase workflow plan links or status.
-- Record artifact status for `spec.md`, `design/`, `tasks.md`, and conditional later artifacts as `approved`, `draft`, `missing`, or explicit not-expected.
+- Record artifact status for `spec.md`, `design/`, `tasks.md`, and conditional later artifacts as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` instead of a bare label.
 - Record whether later review or validation phase workflow files are expected and must be created during planning because named multi-session routing needs them, rather than mid-implementation or mid-validation.
 
 ### 6. Write Or Repair `workflow-plans/workflow-planning.md`

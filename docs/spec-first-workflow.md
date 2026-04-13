@@ -97,7 +97,7 @@ specs/<feature-id>/
 - **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, source notes, and handoff implication visible enough that later synthesis does not need chat memory. Copy the evidence discipline, not the headings.
 - **Research fan-in home:** Store the durable fan-in summary in one owning place, normally `workflow-plans/research.md` for routing plus selected `research/*.md` for reusable evidence. Other files should link or summarize status only; do not copy the full fan-in narrative into both master workflow control and research notes.
 - **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
-- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local. If an older bundle mentions a task-specific supplemental note, do not treat that note as a new workflow artifact type unless this document or `AGENTS.md` names it.
+- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local. If an older bundle mentions a task-specific supplemental note, do not treat that note as a new workflow artifact type unless this document or `AGENTS.md` names it. For a compact current docs/skills precedent, study `specs/context-first-artifact-audit-followups/`: it shows an always-present next-session context bundle, separate task state, artifact-status rationale, and a short `tasks.md` handoff, but it is still task-local precedent rather than a template.
 
 ### Artifact Shape Matrix
 
@@ -128,6 +128,14 @@ Every phase artifact should preserve enough durable context for the next LLM ses
 - keep proof obligations proportional to the claim and changed surface;
 - make the next-session route explicit enough that implementation, review, or validation does not need to reconstruct workflow intent from prose;
 - avoid placeholders, raw transcripts, generic "run tests" language, stale status, and completion claims without fresh evidence.
+
+Before marking a phase handoff ready, treat these as semantic checks, not a parseable schema:
+
+- master `workflow-plan.md` must make the current phase, lifecycle phase status, session boundary, ready/not-ready state, next-session start point, next-session context bundle, artifact status with trigger rationale, blockers or reopen targets, and active gate or waiver state findable without chat memory;
+- the active `workflow-plans/<phase>.md` must make the phase name, phase status, local lanes or order, completion marker, stop rule, next action, local blockers, and phase-specific gate or handoff state findable without reading another artifact's body;
+- if a required field would be empty, omit filler but preserve the routing meaning somewhere explicit, such as `Blockers: none`, `Next action: specification`, or `Fan-in: no preserved research notes were needed`;
+- if the field is missing and the next session would need to infer it from chat, leave the phase `blocked` or repair the artifact before handoff;
+- do not apply this as a universal heading template to `research/*.md`; research notes stay flexible and pass the bar by preserving source hygiene, evidence limits, and handoff implication.
 
 ### Artifact-Producing Vs Artifact-Consuming Phases
 
