@@ -26,6 +26,8 @@ required_files=(
   "build/docker/tooling-images.Dockerfile"
   "docs/subagent-contract.md"
   "docs/subagent-brief-template.md"
+  "docs/spec-first-workflow.md"
+  "specs/README.md"
   "scripts/dev/sync-skills.sh"
   "scripts/dev/sync-agents.sh"
 )
@@ -130,6 +132,9 @@ require_regex '-f build/docker/Dockerfile' ".github/workflows/cd.yml" "cd workfl
 # Keep the runtime bridge from AGENTS.md to the detailed workflow reference.
 require_regex 'docs/spec-first-workflow\.md' "AGENTS.md" "AGENTS.md must point to docs/spec-first-workflow.md for non-trivial workflow execution"
 require_regex 'follow `AGENTS\.md`' "docs/spec-first-workflow.md" "spec-first-workflow doc must declare AGENTS.md as the controlling contract"
+require_regex 'Do not point agents at a specific task-local `specs/\.\.\.` bundle as required precedent unless that directory exists in the current checkout' "docs/spec-first-workflow.md" "spec-first-workflow doc must warn against non-existent task-local specs examples"
+require_absent_regex 'study `specs/[^`]+`' "docs/spec-first-workflow.md" "spec-first-workflow doc must not require studying a concrete specs bundle that may be absent"
+require_regex 'Do not create synthetic bundles as examples' "specs/README.md" "specs README must prevent fake example bundles"
 require_regex '^max_threads = 20$' ".codex/config.toml" "Codex subagent fan-out ceiling must stay explicit"
 require_regex '^max_depth = 1$' ".codex/config.toml" "Codex subagent nesting depth must stay at the documented default"
 require_regex 'agents\.<name>\.config_file' ".codex/config.toml" "Codex registry compatibility note must stay documented"

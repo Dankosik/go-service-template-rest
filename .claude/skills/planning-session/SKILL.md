@@ -163,12 +163,12 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 ### 4. Produce Or Repair Planning Artifacts
 - apply `planning-and-task-breakdown` as the deeper method when the task needs phased execution breakdown
 - write or update `tasks.md` as the executable task ledger by default for non-trivial work
-- create `test-plan.md` only when test obligations are too large or multi-layered for `tasks.md`
-- create `rollout.md` only when migration sequencing, backfill, compatibility, deploy order, or failback notes need a dedicated artifact
+- create `test-plan.md` only when test obligations are too large or multi-layered for `tasks.md` and the approved design already contains the needed validation context
+- create `rollout.md` only when migration sequencing, backfill, compatibility, deploy order, or failback notes need a dedicated artifact and the approved design already contains the needed rollout context
 - create review or validation phase workflow files only when named multi-session routing already requires them, so later sessions update existing control artifacts instead of inventing them mid-execution
 - keep blocked work separate from ready work
 - keep reopen conditions explicit when implementation must hand back to `specification` or `technical design`
-- if exact tasking requires a missing design decision, route back to `technical design` instead of inventing executable tasks
+- if exact tasking, `test-plan.md`, or `rollout.md` requires a missing design decision, route back to `technical design` instead of inventing executable tasks or companion-artifact context
 
 ### 5. Write Or Repair `workflow-plans/planning.md`
 - record only the phase-local orchestration for this planning session

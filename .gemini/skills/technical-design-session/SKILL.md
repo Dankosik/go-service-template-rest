@@ -136,6 +136,11 @@ For non-trivial work, the technical-design session should leave these artifacts 
 - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
 - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
 
+Minimum context-first answers:
+- `design/component-map.md`: affected packages, generated surfaces, adapters, responsibility changes, stable surfaces, and intentional non-touches
+- `design/sequence.md`: runtime order, sync or async boundaries, side effects, failure points, retry or recovery behavior, and parallel versus sequential behavior
+- `design/ownership-map.md`: source-of-truth owners, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners
+
 Do not move this technical context back into `spec.md`.
 
 ## Conditional Design Artifacts
@@ -148,6 +153,8 @@ Create these only when their trigger is real:
 - `rollout.md` when the task needs migration sequencing, backfill/verify choreography, mixed-version compatibility, or deploy/failback notes
 
 If a trigger is not real, record the artifact as `not expected` with trigger rationale instead of creating filler.
+
+Technical design owns the trigger decision for `test-plan.md` and `rollout.md` when validation or rollout shape affects planning readiness. Create them here only when the approved `spec.md` and current design context are enough to write the artifact honestly. If the trigger is plausible but planning must decide from execution detail, record it as `conditional` with the decision point instead of creating a placeholder.
 
 ## Workflow
 
@@ -176,6 +183,7 @@ If a trigger is not real, record the artifact as `not expected` with trigger rat
 - produce or tighten the required core artifacts
 - create only the conditional artifacts whose trigger is real
 - keep `design/overview.md` as the entrypoint and link surface for the bundle, with required artifact status and conditional trigger rationale visible when the bundle is planning-bound
+- for `test-plan.md` and `rollout.md`, write the artifact only when the validation or rollout shape is design-ready; otherwise record the conditional trigger and decision point for planning
 - keep technical design in `design/`, `test-plan.md`, or `rollout.md` where appropriate; do not absorb it into `spec.md` or phase-control files
 
 ### 6. Write Or Repair `workflow-plans/technical-design.md`

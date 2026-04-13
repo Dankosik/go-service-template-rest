@@ -97,7 +97,7 @@ specs/<feature-id>/
 - **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, source notes, and handoff implication visible enough that later synthesis does not need chat memory. Copy the evidence discipline, not the headings.
 - **Research fan-in home:** Store the durable fan-in summary in one owning place, normally `workflow-plans/research.md` for routing plus selected `research/*.md` for reusable evidence. Other files should link or summarize status only; do not copy the full fan-in narrative into both master workflow control and research notes.
 - **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
-- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local. If an older bundle mentions a task-specific supplemental note, do not treat that note as a new workflow artifact type unless this document or `AGENTS.md` names it. For a compact current docs/skills precedent, study `specs/context-first-artifact-audit-followups/`: it shows an always-present next-session context bundle, separate task state, artifact-status rationale, and a short `tasks.md` handoff, but it is still task-local precedent rather than a template.
+- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local. If an older bundle mentions a task-specific supplemental note, do not treat that note as a new workflow artifact type unless this document or `AGENTS.md` names it. Do not point agents at a specific task-local `specs/...` bundle as required precedent unless that directory exists in the current checkout; prefer the current inline shapes in this document and the session skills when no real task-local example is present.
 
 ### Artifact Shape Matrix
 
@@ -222,6 +222,12 @@ Required core design artifacts for non-trivial work:
 - `design/sequence.md` — call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior.
 - `design/ownership-map.md` — source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior.
 
+Minimum design questions to answer, using the task's natural headings:
+
+- `design/component-map.md`: Which packages, generated surfaces, adapters, and repository-owned artifacts are affected? What responsibility changes? What plausible surfaces are intentionally stable or out of scope?
+- `design/sequence.md`: What is the runtime order? Where are sync or async boundaries, side effects, failure points, retry/recovery behavior, and parallel versus sequential behavior?
+- `design/ownership-map.md`: Which artifact or package is the source of truth for each critical behavior? Which dependency direction is allowed? Which surfaces are explicit non-owners?
+
 Conditional artifacts and trigger rules:
 
 - `design/data-model.md` — create when the task changes persisted state, schema, cache contract, projections, replay behavior, or migration shape.
@@ -229,6 +235,8 @@ Conditional artifacts and trigger rules:
 - `design/contracts/` — create when the task changes API contracts, event contracts, generated contracts, or material internal interfaces between subsystems. This folder is design-only context for the task, not an authoritative runtime contract source; canonical sources like `api/openapi/service.yaml`, generation inputs, and other repository-owned contract artifacts still win.
 - `test-plan.md` — create when validation obligations are too large or multi-layered to fit cleanly inside `tasks.md`.
 - `rollout.md` — create when the task needs migration sequencing, backfill and verify choreography, mixed-version compatibility, or explicit deploy and failback notes.
+
+Ownership rule for `test-plan.md` and `rollout.md`: technical design owns the trigger decision when validation or rollout shape affects design or planning readiness. Planning may create or repair these files when the trigger becomes clear during executable task breakdown and the approved design already contains the needed context. If creating either file would require a missing design, compatibility, migration, or rollout decision, reopen `technical design` instead of inventing that context during planning.
 
 Minimum `test-plan.md` content when triggered:
 
@@ -408,6 +416,8 @@ Enter planning only when:
 
 For non-trivial work, `planning-and-task-breakdown` should consume approved `spec.md + design/` and produce `tasks.md` as the executable task ledger and final implementation handoff. For `direct path` work, the explicit plan may stay as 1-3 concise lines in the main flow.
 
+If planning discovers that `test-plan.md` or `rollout.md` is triggered, it may create or repair the file only when the approved design already contains the needed validation or rollout context. If the trigger exposes a missing design decision, planning routes back to `technical design`; it does not fill the gap inside `tasks.md`, `test-plan.md`, or `rollout.md`.
+
 Planning is the last artifact-producing phase before code:
 
 - the workflow/design/planning bundle must exist or be explicitly waived before the first implementation session starts,
@@ -529,6 +539,23 @@ Minimum context-first control record:
 - blockers, accepted assumptions, accepted risks, and reopen targets that still affect routing;
 - adequacy or clarification gate status when the current handoff depends on it.
 
+Use these field names where possible. They are a stable resume vocabulary, not a parseable schema:
+
+- `Current phase`
+- `Phase status`
+- `Task state` or `Routing state` when needed
+- `Session boundary reached`
+- `Ready for next session`
+- `Next session starts with`
+- `Next session context bundle`
+- `Artifact status`
+- `Blockers`
+- `Accepted assumptions`
+- `Accepted risks`
+- `Reopen targets`
+- `Gate status`
+- `Default resume order`
+
 At minimum, it answers:
 
 - current phase,
@@ -576,6 +603,8 @@ Recommended update cadence:
 ### 7.3 Phase Workflow Plan Minimums
 
 These are minimum routing shapes for `workflow-plans/<phase>.md`. They are examples, not templates to paste wholesale. Preserve the fields and ownership meaning, but adjust headings, grouping, and depth to the task; do not add empty lines for fields that do not carry routing value.
+
+Use the visible field names below when they fit the task. If a field would be empty, omit filler but preserve the routing meaning with a compact explicit value such as `Blockers: none`, `Next action: planning`, or `Fan-in: no preserved research notes were needed`.
 
 `workflow-planning`:
 

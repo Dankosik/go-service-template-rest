@@ -146,6 +146,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `tasks.md` for a tiny change just to satisfy ceremony.
 - For non-trivial work, default to `tasks.md` and consume approved `spec.md + design/`.
+- Create or repair `test-plan.md` or `rollout.md` during planning only when the approved design already contains the needed validation or rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen technical design instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, the next-session context bundle, `tasks.md` status, artifact expectations with trigger rationale, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
 - The implementation-readiness handoff must be explicit: `PASS` may proceed, `CONCERNS` may proceed only with named risks and proof obligations, `FAIL` must route to the named earlier phase, and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.

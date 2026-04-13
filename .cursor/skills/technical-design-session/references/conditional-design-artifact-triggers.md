@@ -12,6 +12,8 @@ Load when deciding whether to add `design/data-model.md`, `design/dependency-gra
 - Trigger `design/contracts/` for changed REST resources, event payloads, generated contracts, or material internal interfaces that planning must preserve; runtime authorities remain canonical.
 - Trigger `test-plan.md` only when validation obligations are too large or multi-layered for the later `tasks.md`, such as contract plus migration plus reliability fail-path plus e2e smoke proof.
 - Trigger `rollout.md` for mixed-version compatibility, expand/backfill/verify/contract sequencing, operational failback, or deploy ordering that affects correctness.
+- Create `test-plan.md` or `rollout.md` in technical design only when the approved spec and current design context are enough to write the artifact honestly. If planning must decide from executable sequencing, record the artifact as `conditional` with the decision point.
+- If planning later discovers the trigger but needs a missing compatibility, migration, validation, or rollout decision, reopen technical design instead of inventing the companion artifact from task breakdown.
 - If no trigger is real, record the artifact as `not expected`; do not create a placeholder file.
 - If a triggered artifact needs a missing spec decision, block or reopen rather than drafting filler.
 - A triggered `test-plan.md` should stay proof-focused: trigger/scope, proof obligations by changed surface or failure path, planned commands or manual proof shape, exit criteria, and reopen target for missing or failing proof.
