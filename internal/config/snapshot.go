@@ -12,10 +12,10 @@ import (
 func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	var cfg Config
 
-	cfg.App.Env = readSyntaxString(k, "app.env")
-	cfg.App.Version = readSyntaxString(k, "app.version")
+	cfg.App.Env = readTrimmedConfigString(k, "app.env")
+	cfg.App.Version = readTrimmedConfigString(k, "app.version")
 
-	cfg.HTTP.Addr = readSyntaxString(k, "http.addr")
+	cfg.HTTP.Addr = readTrimmedConfigString(k, "http.addr")
 	if err := readDurationInto(k, "http.shutdown_timeout", &cfg.HTTP.ShutdownTimeout); err != nil {
 		return Config{}, err
 	}
@@ -50,20 +50,20 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	}
 	cfg.Log.Level = level
 
-	cfg.Observability.OTel.ServiceName = readSyntaxString(k, "observability.otel.service_name")
-	cfg.Observability.OTel.TracesSampler = readSyntaxString(k, "observability.otel.traces_sampler")
+	cfg.Observability.OTel.ServiceName = readTrimmedConfigString(k, "observability.otel.service_name")
+	cfg.Observability.OTel.TracesSampler = readTrimmedConfigString(k, "observability.otel.traces_sampler")
 	if err := readFloat64Into(k, "observability.otel.traces_sampler_arg", &cfg.Observability.OTel.TracesSamplerArg); err != nil {
 		return Config{}, err
 	}
-	cfg.Observability.OTel.Exporter.OTLPEndpoint = readSyntaxString(k, "observability.otel.exporter.otlp_endpoint")
-	cfg.Observability.OTel.Exporter.OTLPTracesEndpoint = readSyntaxString(k, "observability.otel.exporter.otlp_traces_endpoint")
-	cfg.Observability.OTel.Exporter.OTLPHeaders = readValueString(k, "observability.otel.exporter.otlp_headers")
-	cfg.Observability.OTel.Exporter.OTLPProtocol = readSyntaxString(k, "observability.otel.exporter.otlp_protocol")
+	cfg.Observability.OTel.Exporter.OTLPEndpoint = readTrimmedConfigString(k, "observability.otel.exporter.otlp_endpoint")
+	cfg.Observability.OTel.Exporter.OTLPTracesEndpoint = readTrimmedConfigString(k, "observability.otel.exporter.otlp_traces_endpoint")
+	cfg.Observability.OTel.Exporter.OTLPHeaders = readRawConfigString(k, "observability.otel.exporter.otlp_headers")
+	cfg.Observability.OTel.Exporter.OTLPProtocol = readTrimmedConfigString(k, "observability.otel.exporter.otlp_protocol")
 
 	if err := readBoolInto(k, "postgres.enabled", &cfg.Postgres.Enabled); err != nil {
 		return Config{}, err
 	}
-	cfg.Postgres.DSN = readValueString(k, "postgres.dsn")
+	cfg.Postgres.DSN = readRawConfigString(k, "postgres.dsn")
 	if err := readDurationInto(k, "postgres.connect_timeout", &cfg.Postgres.ConnectTimeout); err != nil {
 		return Config{}, err
 	}
@@ -83,13 +83,13 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err := readBoolInto(k, "redis.enabled", &cfg.Redis.Enabled); err != nil {
 		return Config{}, err
 	}
-	cfg.Redis.Mode = normalizeRedisMode(readSyntaxString(k, "redis.mode"))
+	cfg.Redis.Mode = normalizeRedisMode(readTrimmedConfigString(k, "redis.mode"))
 	if err := readBoolInto(k, "redis.allow_store_mode", &cfg.Redis.AllowStoreMode); err != nil {
 		return Config{}, err
 	}
-	cfg.Redis.Addr = readSyntaxString(k, "redis.addr")
-	cfg.Redis.Username = readValueString(k, "redis.username")
-	cfg.Redis.Password = readValueString(k, "redis.password")
+	cfg.Redis.Addr = readTrimmedConfigString(k, "redis.addr")
+	cfg.Redis.Username = readRawConfigString(k, "redis.username")
+	cfg.Redis.Password = readRawConfigString(k, "redis.password")
 	if err := readIntInto(k, "redis.db", &cfg.Redis.DB); err != nil {
 		return Config{}, err
 	}
@@ -105,7 +105,7 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err := readIntInto(k, "redis.pool_size", &cfg.Redis.PoolSize); err != nil {
 		return Config{}, err
 	}
-	cfg.Redis.KeyPrefix = readSyntaxString(k, "redis.key_prefix")
+	cfg.Redis.KeyPrefix = readTrimmedConfigString(k, "redis.key_prefix")
 	if err := readDurationInto(k, "redis.fresh_ttl", &cfg.Redis.FreshTTL); err != nil {
 		return Config{}, err
 	}
@@ -128,8 +128,8 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err := readBoolInto(k, "mongo.enabled", &cfg.Mongo.Enabled); err != nil {
 		return Config{}, err
 	}
-	cfg.Mongo.URI = readValueString(k, "mongo.uri")
-	cfg.Mongo.Database = readSyntaxString(k, "mongo.database")
+	cfg.Mongo.URI = readRawConfigString(k, "mongo.uri")
+	cfg.Mongo.Database = readTrimmedConfigString(k, "mongo.database")
 	if err := readDurationInto(k, "mongo.connect_timeout", &cfg.Mongo.ConnectTimeout); err != nil {
 		return Config{}, err
 	}
@@ -153,31 +153,16 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	return cfg, nil
 }
 
-type stringReadPolicy uint8
-
-const (
-	stringReadSyntax stringReadPolicy = iota
-	stringReadValue
-)
-
-func readConfigString(k *koanf.Koanf, key string, policy stringReadPolicy) string {
-	raw := k.String(key)
-	if policy == stringReadValue {
-		return raw
-	}
-	return strings.TrimSpace(raw)
+func readRawConfigString(k *koanf.Koanf, key string) string {
+	return k.String(key)
 }
 
-func readValueString(k *koanf.Koanf, key string) string {
-	return readConfigString(k, key, stringReadValue)
-}
-
-func readSyntaxString(k *koanf.Koanf, key string) string {
-	return readConfigString(k, key, stringReadSyntax)
+func readTrimmedConfigString(k *koanf.Koanf, key string) string {
+	return strings.TrimSpace(k.String(key))
 }
 
 func readDurationInto(k *koanf.Koanf, key string, dst *time.Duration) error {
-	raw := readSyntaxString(k, key)
+	raw := readTrimmedConfigString(k, key)
 	if raw == "" {
 		return fmt.Errorf("%w: %s is empty", ErrParse, key)
 	}
@@ -226,7 +211,7 @@ func readBoolInto(k *koanf.Koanf, key string, dst *bool) error {
 }
 
 func readLogLevel(k *koanf.Koanf, key string) (slog.Level, error) {
-	raw := readSyntaxString(k, key)
+	raw := readTrimmedConfigString(k, key)
 	if raw == "" {
 		return slog.LevelInfo, fmt.Errorf("%w: %s is empty", ErrParse, key)
 	}

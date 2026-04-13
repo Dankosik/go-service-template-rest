@@ -99,7 +99,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 
 	validationResult, err := validateConfig(validateCtx, k, &cfg, validationOptions{
 		Strict:                opts.Strict,
-		AdditionalUnknownKeys: metadata.ignoredSectionScalarKeys,
+		AdditionalUnknownKeys: metadata.sectionScalarOverrideKeys,
 	})
 	report.ValidateDuration = time.Since(validateStarted)
 	report.UnknownKeyWarnings = validationResult.UnknownKeyWarnings

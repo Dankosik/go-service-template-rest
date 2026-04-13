@@ -77,7 +77,10 @@ func (p postgresReadinessProbe) Name() string {
 func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	probeCtx, probeCancel := withStageBudget(ctx, p.budget)
 	defer probeCancel()
-	return p.probe.Check(probeCtx)
+	if err := p.probe.Check(probeCtx); err != nil {
+		return err
+	}
+	return probeCtx.Err()
 }
 
 type dependencyProbeSpec struct {
@@ -170,6 +173,13 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	}
 
 	var pg *postgres.Pool
+	pgReturned := false
+	defer func() {
+		if !pgReturned && pg != nil {
+			pg.Close()
+		}
+	}()
+
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
 		stage:        labels.probeStage,
 		dep:          labels.dependency,
@@ -207,6 +217,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	}
 
 	runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeCriticalFailClosed)
+	pgReturned = true
 	return pg, nil
 }
 
@@ -264,36 +275,17 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		},
 	})
 	if probeResult.err != nil {
-		if shouldAbortDegradedDependencyStartup(probeResult) {
-			rejectErr := dependencyInitAbortFailure(labels.dependency, probeResult)
-			recordDependencyProbeRejection(
-				bootstrapCtx,
-				runtime,
-				labels,
-				redisMode,
-				rejectErr,
-			)
-			return nil, rejectErr
-		}
-		if runtime.cfg.RedisReadinessProbeRequired() {
-			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
-			recordDependencyProbeRejection(
-				bootstrapCtx,
-				runtime,
-				labels,
-				redisMode,
-				rejectErr,
-			)
-			return nil, rejectErr
-		}
-
-		recordDegradedDependencyStartup(
+		if err := handleDegradedDependencyProbeFailure(
 			bootstrapCtx,
 			runtime,
-			labels.dependency,
-			labels.operation,
+			labels,
+			probeResult,
+			runtime.cfg.RedisReadinessProbeRequired(),
+			redisMode,
 			startupDependencyModeFeatureOff,
-		)
+		); err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 
@@ -353,35 +345,17 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		},
 	})
 	if probeResult.err != nil {
-		if shouldAbortDegradedDependencyStartup(probeResult) {
-			rejectErr := dependencyInitAbortFailure(labels.dependency, probeResult)
-			recordDependencyProbeRejection(
-				bootstrapCtx,
-				runtime,
-				labels,
-				startupDependencyModeDegradedReadOnlyOrStale,
-				rejectErr,
-			)
-			return nil, rejectErr
-		}
-		if runtime.cfg.MongoReadinessProbeRequired() {
-			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
-			recordDependencyProbeRejection(
-				bootstrapCtx,
-				runtime,
-				labels,
-				startupDependencyModeDegradedReadOnlyOrStale,
-				rejectErr,
-			)
-			return nil, rejectErr
-		}
-		recordDegradedDependencyStartup(
+		if err := handleDegradedDependencyProbeFailure(
 			bootstrapCtx,
 			runtime,
-			labels.dependency,
-			labels.operation,
+			labels,
+			probeResult,
+			runtime.cfg.MongoReadinessProbeRequired(),
 			startupDependencyModeDegradedReadOnlyOrStale,
-		)
+			startupDependencyModeDegradedReadOnlyOrStale,
+		); err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 
@@ -406,8 +380,13 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeCtx, probeSpan := tracer.Start(probeCtx, spec.stage)
 	err := spec.probe(probeCtx)
 	parentErr := dependencyProbeCtx.Err()
-	if err == nil && parentErr != nil {
-		err = parentErr
+	stageErr := probeCtx.Err()
+	if err == nil {
+		if parentErr != nil {
+			err = parentErr
+		} else if stageErr != nil {
+			err = stageErr
+		}
 	}
 	probeCancel()
 
@@ -432,6 +411,30 @@ func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {
 		return true
 	}
 	return result.parentErr != nil
+}
+
+func handleDegradedDependencyProbeFailure(
+	ctx context.Context,
+	runtime dependencyProbeRuntime,
+	labels startupDependencyProbeLabels,
+	result probeExecutionResult,
+	readinessRequired bool,
+	rejectionMode string,
+	degradedMode string,
+) error {
+	if shouldAbortDegradedDependencyStartup(result) {
+		rejectErr := dependencyInitAbortFailure(labels.dependency, result)
+		recordDependencyProbeRejection(ctx, runtime, labels, rejectionMode, rejectErr)
+		return rejectErr
+	}
+	if readinessRequired {
+		rejectErr := dependencyInitFailure(labels.dependency, result.err)
+		recordDependencyProbeRejection(ctx, runtime, labels, rejectionMode, rejectErr)
+		return rejectErr
+	}
+
+	recordDegradedDependencyStartup(ctx, runtime, labels.dependency, labels.operation, degradedMode)
+	return nil
 }
 
 func recordDegradedDependencyStartup(ctx context.Context, runtime dependencyProbeRuntime, dependency, operation, mode string) {

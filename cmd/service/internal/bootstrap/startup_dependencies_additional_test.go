@@ -71,6 +71,31 @@ func TestRunDependencyProbe(t *testing.T) {
 		}
 	})
 
+	t.Run("expired child deadline after nil probe result fails probe", func(t *testing.T) {
+		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
+			stage:        "stage",
+			dep:          "dep",
+			budget:       time.Millisecond,
+			minRemaining: 0,
+			probe: func(probeCtx context.Context) error {
+				<-probeCtx.Done()
+				return nil
+			},
+		})
+		if res.budgetBlocked {
+			t.Fatal("budgetBlocked = true, want false")
+		}
+		if res.parentErr != nil {
+			t.Fatalf("parentErr = %v, want nil", res.parentErr)
+		}
+		if !errors.Is(res.err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want wrapped %v", res.err, context.DeadlineExceeded)
+		}
+		if shouldAbortDegradedDependencyStartup(res) {
+			t.Fatal("shouldAbortDegradedDependencyStartup() = true, want false for dependency-local timeout")
+		}
+	})
+
 	t.Run("parent cancellation during probe aborts degraded startup", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
@@ -382,6 +407,22 @@ func TestPostgresRuntimeReadinessProbeDoesNotExtendShorterParentDeadline(t *test
 
 	if err := probe.Check(parent); err != nil {
 		t.Fatalf("probe.Check() error = %v, want nil", err)
+	}
+}
+
+func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(t *testing.T) {
+	t.Parallel()
+
+	probe := newPostgresReadinessProbe(testProbe{
+		name: "postgres",
+		check: func(ctx context.Context) error {
+			<-ctx.Done()
+			return nil
+		},
+	}, time.Millisecond)
+
+	if err := probe.Check(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("probe.Check() error = %v, want wrapped %v", err, context.DeadlineExceeded)
 	}
 }
 

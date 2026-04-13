@@ -88,6 +88,34 @@ func TestNormalizeConfigLoadResult(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfigLoadStage(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "load defaults", input: configLoadStageLoadDefaults, want: configLoadStageLoadDefaults},
+		{name: "load file", input: configLoadStageLoadFile, want: configLoadStageLoadFile},
+		{name: "load env", input: configLoadStageLoadEnv, want: configLoadStageLoadEnv},
+		{name: "parse", input: configLoadStageParse, want: configLoadStageParse},
+		{name: "validate", input: configLoadStageValidate, want: configLoadStageValidate},
+		{name: "startup compatibility", input: configLoadStageStartupCompatibility, want: configLoadStageStartupCompatibility},
+		{name: "stage upper", input: "CONFIG.PARSE", want: configLoadStageParse},
+		{name: "stage with whitespace", input: " " + configLoadStageValidate + " ", want: configLoadStageValidate},
+		{name: "unknown", input: "config.remote.fetch", want: configLoadStageOther},
+		{name: "empty", input: "", want: configLoadStageOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeConfigLoadStage(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeConfigLoadStage(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeConfigFailureReason(t *testing.T) {
 	testCases := []struct {
 		name  string
@@ -131,6 +159,64 @@ func TestNormalizeConfigStartupOutcome(t *testing.T) {
 			got := normalizeConfigStartupOutcome(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeConfigStartupOutcome(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeStartupDependency(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "postgres", input: startupDependencyPostgres, want: startupDependencyPostgres},
+		{name: "redis", input: startupDependencyRedis, want: startupDependencyRedis},
+		{name: "mongo", input: startupDependencyMongo, want: startupDependencyMongo},
+		{name: "telemetry", input: startupDependencyTelemetry, want: startupDependencyTelemetry},
+		{name: "network policy", input: startupDependencyNetworkPolicy, want: startupDependencyNetworkPolicy},
+		{name: "ingress policy", input: startupDependencyIngressPolicy, want: startupDependencyIngressPolicy},
+		{name: "metrics exposure", input: startupDependencyMetricsExposure, want: startupDependencyMetricsExposure},
+		{name: "egress exception", input: startupDependencyEgressException, want: startupDependencyEgressException},
+		{name: "dependency upper", input: "TELEMETRY", want: startupDependencyTelemetry},
+		{name: "dependency with whitespace", input: " " + startupDependencyPostgres + " ", want: startupDependencyPostgres},
+		{name: "unknown", input: "search", want: startupDependencyOther},
+		{name: "empty", input: "", want: startupDependencyOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeStartupDependency(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeStartupDependency(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeStartupDependencyMode(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "disabled", input: startupDependencyModeDisabled, want: startupDependencyModeDisabled},
+		{name: "critical fail closed", input: startupDependencyModeCriticalFailClosed, want: startupDependencyModeCriticalFailClosed},
+		{name: "critical fail degraded", input: startupDependencyModeCriticalFailDegraded, want: startupDependencyModeCriticalFailDegraded},
+		{name: "optional fail open", input: startupDependencyModeOptionalFailOpen, want: startupDependencyModeOptionalFailOpen},
+		{name: "feature off", input: startupDependencyModeFeatureOff, want: startupDependencyModeFeatureOff},
+		{name: "degraded read only or stale", input: startupDependencyModeDegradedReadOnlyOrStale, want: startupDependencyModeDegradedReadOnlyOrStale},
+		{name: "mode upper", input: "FEATURE_OFF", want: startupDependencyModeFeatureOff},
+		{name: "mode with whitespace", input: " " + startupDependencyModeDisabled + " ", want: startupDependencyModeDisabled},
+		{name: "unknown", input: "read_only", want: startupDependencyModeOther},
+		{name: "empty", input: "", want: startupDependencyModeOther},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeStartupDependencyMode(tc.input)
+			if got != tc.want {
+				t.Fatalf("normalizeStartupDependencyMode(%q) = %q, want %q", tc.input, got, tc.want)
 			}
 		})
 	}
@@ -216,13 +302,15 @@ func TestConfigFailureMetricUsesBoundedReasons(t *testing.T) {
 func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 	m := New()
 
-	m.ObserveConfigLoadDuration("load", "unexpected-result", time.Millisecond)
+	m.ObserveConfigLoadDuration(configLoadStageLoadFile, "unexpected-result", time.Millisecond)
+	m.ObserveConfigLoadDuration("config.remote.fetch", ConfigLoadResultSuccess, time.Millisecond)
 	m.IncConfigFailure("startup_compatibility")
 	m.IncConfigStartupOutcome("degraded")
 
 	metricsText := collectMetricsText(t, m)
 	expected := []string{
-		`config_load_duration_seconds_count{result="` + ConfigLoadResultOther + `",stage="load"} 1`,
+		`config_load_duration_seconds_count{result="` + ConfigLoadResultOther + `",stage="` + configLoadStageLoadFile + `"} 1`,
+		`config_load_duration_seconds_count{result="` + ConfigLoadResultSuccess + `",stage="` + configLoadStageOther + `"} 1`,
 		`config_failures_total{reason="` + ConfigFailureReasonOther + `"} 1`,
 		`config_startup_outcome_total{outcome="` + ConfigStartupOutcomeOther + `"} 1`,
 	}
@@ -232,9 +320,33 @@ func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 		}
 	}
 
-	for _, rawLabel := range []string{`result="unexpected-result"`, `reason="startup_compatibility"`, `outcome="degraded"`} {
+	for _, rawLabel := range []string{`result="unexpected-result"`, `stage="config.remote.fetch"`, `reason="startup_compatibility"`, `outcome="degraded"`} {
 		if strings.Contains(metricsText, rawLabel) {
 			t.Fatalf("metrics output contains unbounded label %q:\n%s", rawLabel, metricsText)
+		}
+	}
+}
+
+func TestStartupDependencyStatusMetricUsesBoundedLabels(t *testing.T) {
+	m := New()
+
+	m.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
+	m.MarkStartupDependencyBlocked("search", "read_only")
+
+	metricsText := collectMetricsText(t, m)
+	expected := []string{
+		`startup_dependency_status{dep="` + startupDependencyTelemetry + `",mode="` + startupDependencyModeOptionalFailOpen + `"} 1`,
+		`startup_dependency_status{dep="` + startupDependencyOther + `",mode="` + startupDependencyModeOther + `"} 0`,
+	}
+	for _, pattern := range expected {
+		if !strings.Contains(metricsText, pattern) {
+			t.Fatalf("metrics output does not contain %q\n%s", pattern, metricsText)
+		}
+	}
+
+	for _, rawLabel := range []string{`dep="search"`, `mode="read_only"`} {
+		if strings.Contains(metricsText, rawLabel) {
+			t.Fatalf("metrics output contains unbounded startup dependency label %q:\n%s", rawLabel, metricsText)
 		}
 	}
 }

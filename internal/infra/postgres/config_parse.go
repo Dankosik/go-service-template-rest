@@ -42,16 +42,6 @@ var requiredPostgresDSNSettings = []string{
 	"sslmode",
 }
 
-var disallowedPostgresDSNKeys = map[string]string{
-	"service":     "postgres dsn uses unsupported service/passfile source",
-	"servicefile": "postgres dsn uses unsupported service/passfile source",
-	"passfile":    "postgres dsn uses unsupported service/passfile source",
-	"sslcert":     "postgres dsn uses unsupported TLS file source",
-	"sslkey":      "postgres dsn uses unsupported TLS file source",
-	"sslpassword": "postgres dsn uses unsupported TLS file source",
-	"sslrootcert": "postgres dsn uses unsupported TLS file source",
-}
-
 var allowedPostgresSSLModes = map[string]struct{}{
 	"disable":     {},
 	"require":     {},
@@ -59,17 +49,40 @@ var allowedPostgresSSLModes = map[string]struct{}{
 	"verify-full": {},
 }
 
-var pgxFileDefaultOverrideKeys = []string{
-	"passfile",
-	"sslcert",
-	"sslkey",
-	"sslrootcert",
-	"sslpassword",
+const (
+	postgresServicePassfileDSNSourceError = "postgres dsn uses unsupported service/passfile source"
+	postgresTLSFileDSNSourceError         = "postgres dsn uses unsupported TLS file source"
+)
+
+type postgresFileDefaultDSNKey struct {
+	name              string
+	validationMessage string
 }
+
+var postgresFileDefaultDSNKeys = []postgresFileDefaultDSNKey{
+	{name: "passfile", validationMessage: postgresServicePassfileDSNSourceError},
+	{name: "sslcert", validationMessage: postgresTLSFileDSNSourceError},
+	{name: "sslkey", validationMessage: postgresTLSFileDSNSourceError},
+	{name: "sslrootcert", validationMessage: postgresTLSFileDSNSourceError},
+	{name: "sslpassword", validationMessage: postgresTLSFileDSNSourceError},
+}
+
+var disallowedPostgresDSNKeys = postgresDisallowedDSNKeys()
 
 type postgresTarget struct {
 	host string
 	port uint16
+}
+
+func postgresDisallowedDSNKeys() map[string]string {
+	keys := map[string]string{
+		"service":     postgresServicePassfileDSNSourceError,
+		"servicefile": postgresServicePassfileDSNSourceError,
+	}
+	for _, key := range postgresFileDefaultDSNKeys {
+		keys[key.name] = key.validationMessage
+	}
+	return keys
 }
 
 func parsePoolConfig(rawDSN string) (*pgxpool.Config, error) {
@@ -144,7 +157,7 @@ func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
 		if host == "" {
 			continue
 		}
-		if postgresURLHostIsIPOnly(host) {
+		if postgresURLHostDoesNotNeedSplitHostPort(host) {
 			hosts = append(hosts, strings.Trim(host, "[]"))
 			continue
 		}
@@ -179,7 +192,7 @@ func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
 	return settings, nil
 }
 
-func postgresURLHostIsIPOnly(host string) bool {
+func postgresURLHostDoesNotNeedSplitHostPort(host string) bool {
 	return net.ParseIP(strings.Trim(host, "[]")) != nil || !strings.Contains(host, ":")
 }
 
@@ -286,8 +299,8 @@ func normalizePostgresURLDSN(dsn string) (string, error) {
 		return "", err
 	}
 	query := parsedURL.Query()
-	for _, key := range pgxFileDefaultOverrideKeys {
-		query.Set(key, "")
+	for _, key := range postgresFileDefaultDSNKeys {
+		query.Set(key.name, "")
 	}
 	parsedURL.RawQuery = query.Encode()
 	return parsedURL.String(), nil
@@ -295,11 +308,11 @@ func normalizePostgresURLDSN(dsn string) (string, error) {
 
 func normalizePostgresKeywordValueDSN(dsn string) string {
 	var normalized strings.Builder
-	normalized.Grow(len(dsn) + len(pgxFileDefaultOverrideKeys)*16)
+	normalized.Grow(len(dsn) + len(postgresFileDefaultDSNKeys)*16)
 	normalized.WriteString(dsn)
-	for _, key := range pgxFileDefaultOverrideKeys {
+	for _, key := range postgresFileDefaultDSNKeys {
 		normalized.WriteByte(' ')
-		normalized.WriteString(key)
+		normalized.WriteString(key.name)
 		normalized.WriteString("=''")
 	}
 	return normalized.String()

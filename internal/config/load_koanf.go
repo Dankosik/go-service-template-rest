@@ -31,12 +31,12 @@ const (
 )
 
 type loadMetadata struct {
-	loadDefaultsDuration     time.Duration
-	loadFileDuration         time.Duration
-	loadEnvDuration          time.Duration
-	failedStage              string
-	failedStageDuration      time.Duration
-	ignoredSectionScalarKeys []string
+	loadDefaultsDuration      time.Duration
+	loadFileDuration          time.Duration
+	loadEnvDuration           time.Duration
+	failedStage               string
+	failedStageDuration       time.Duration
+	sectionScalarOverrideKeys []string
 }
 
 func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadata, error) {
@@ -63,25 +63,25 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	filePolicy := configFilePolicyForLoad(hasExplicitConfigFiles(opts))
 	filesStarted := time.Now()
 	if strings.TrimSpace(opts.ConfigPath) != "" {
-		ignoredSectionKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath, filePolicy)
+		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath, filePolicy)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
 			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
 		}
-		metadata.ignoredSectionScalarKeys = append(metadata.ignoredSectionScalarKeys, ignoredSectionKeys...)
+		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
 	for _, overlayPath := range opts.ConfigOverlays {
 		if strings.TrimSpace(overlayPath) == "" {
 			continue
 		}
-		ignoredSectionKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath, filePolicy)
+		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath, filePolicy)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
 			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
 		}
-		metadata.ignoredSectionScalarKeys = append(metadata.ignoredSectionScalarKeys, ignoredSectionKeys...)
+		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
 	metadata.loadFileDuration = time.Since(filesStarted)
 	if err := checkContext(ctx); err != nil {
@@ -93,9 +93,8 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	envStarted := time.Now()
 	namespaceValues := collectNamespaceValues(os.Environ())
 	if len(namespaceValues) > 0 {
-		var ignoredSectionKeys []string
-		namespaceValues, ignoredSectionKeys = filterConfigSectionScalars(namespaceValues)
-		metadata.ignoredSectionScalarKeys = append(metadata.ignoredSectionScalarKeys, ignoredSectionKeys...)
+		sectionScalarOverrideKeys := removeSectionScalarOverridesInPlace(namespaceValues)
+		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
 	if len(namespaceValues) > 0 {
 		if err := k.Load(confmap.Provider(namespaceValues, keyDelimiter), nil); err != nil {
@@ -167,7 +166,8 @@ func loadConfigFileWithMetadata(ctx context.Context, k *koanf.Koanf, path string
 	if err := enforceSecretSourcePolicy(fileConfig, cleanPath); err != nil {
 		return nil, err
 	}
-	fileValues, ignoredSectionKeys := filterConfigSectionScalars(fileConfig.Raw())
+	fileValues := fileConfig.Raw()
+	sectionScalarOverrideKeys := removeSectionScalarOverridesInPlace(fileValues)
 	if len(fileValues) > 0 {
 		if err := k.Load(confmap.Provider(fileValues, keyDelimiter), nil); err != nil {
 			return nil, fmt.Errorf("%w: merge config file %q: %w", ErrLoad, cleanPath, err)
@@ -176,7 +176,7 @@ func loadConfigFileWithMetadata(ctx context.Context, k *koanf.Koanf, path string
 	if err := checkContext(ctx); err != nil {
 		return nil, err
 	}
-	return ignoredSectionKeys, nil
+	return sectionScalarOverrideKeys, nil
 }
 
 func enforceConfigFilePolicy(path string, policy configFilePolicy) (string, os.FileInfo, error) {
@@ -279,13 +279,12 @@ func collectNamespaceValues(environ []string) map[string]any {
 	return values
 }
 
-func filterConfigSectionScalars(values map[string]any) (map[string]any, []string) {
-	ignoredKeys := removeConfigSectionScalars(values, "", knownConfigSections())
-	return values, ignoredKeys
+func removeSectionScalarOverridesInPlace(values map[string]any) []string {
+	return removeSectionScalarOverridesRecursive(values, "", knownConfigSections())
 }
 
-func removeConfigSectionScalars(values map[string]any, prefix string, knownSections map[string]struct{}) []string {
-	ignoredKeys := make([]string, 0)
+func removeSectionScalarOverridesRecursive(values map[string]any, prefix string, knownSections map[string]struct{}) []string {
+	sectionScalarOverrideKeys := make([]string, 0)
 	for key, value := range values {
 		fullKey := key
 		if prefix != "" {
@@ -293,7 +292,7 @@ func removeConfigSectionScalars(values map[string]any, prefix string, knownSecti
 		}
 
 		if _, ok := knownSections[fullKey]; ok && !configSectionValueIsMap(value) {
-			ignoredKeys = append(ignoredKeys, fullKey)
+			sectionScalarOverrideKeys = append(sectionScalarOverrideKeys, fullKey)
 			delete(values, key)
 			continue
 		}
@@ -301,9 +300,9 @@ func removeConfigSectionScalars(values map[string]any, prefix string, knownSecti
 		if !ok {
 			continue
 		}
-		ignoredKeys = append(ignoredKeys, removeConfigSectionScalars(nested, fullKey, knownSections)...)
+		sectionScalarOverrideKeys = append(sectionScalarOverrideKeys, removeSectionScalarOverridesRecursive(nested, fullKey, knownSections)...)
 	}
-	return ignoredKeys
+	return sectionScalarOverrideKeys
 }
 
 func namespaceEnvToKey(envKey string) string {

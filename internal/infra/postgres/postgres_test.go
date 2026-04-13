@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -333,6 +334,65 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 				requireErrorDoesNotContain(t, err, forbidden)
 			}
 		})
+	}
+}
+
+func TestParsePoolConfigRejectsSharedFileDefaultDSNKeys(t *testing.T) {
+	for _, key := range postgresFileDefaultDSNKeys {
+		key := key
+		t.Run(key.name, func(t *testing.T) {
+			dsn := "postgres://user:pass@localhost:5432/app?sslmode=disable&" + key.name + "=file-secret"
+
+			_, err := parsePoolConfig(dsn)
+			requirePostgresConfigError(t, err, key.validationMessage)
+			requireErrorDoesNotContain(t, err, "file-secret")
+		})
+	}
+}
+
+func TestNormalizePostgresDSNSuppressesFileDefaultKeys(t *testing.T) {
+	normalizedURL, err := normalizePostgresURLDSN("postgres://user:pass@localhost:5432/app?sslmode=disable")
+	if err != nil {
+		t.Fatalf("normalizePostgresURLDSN() error = %v", err)
+	}
+	parsedURL, err := url.Parse(normalizedURL)
+	if err != nil {
+		t.Fatalf("url.Parse(normalizedURL) error = %v", err)
+	}
+	query := parsedURL.Query()
+	for _, key := range postgresFileDefaultDSNKeys {
+		values, present := query[key.name]
+		if !present {
+			t.Fatalf("normalized URL query missing %q in %q", key.name, normalizedURL)
+		}
+		if len(values) != 1 || values[0] != "" {
+			t.Fatalf("normalized URL query %q = %#v, want one empty value", key.name, values)
+		}
+	}
+	for _, key := range []string{"service", "servicefile"} {
+		if _, present := query[key]; present {
+			t.Fatalf("normalized URL query contains disallowed-only key %q in %q", key, normalizedURL)
+		}
+	}
+
+	normalizedKeywordValue := normalizePostgresKeywordValueDSN("user=user password=pass host=localhost port=5432 dbname=app sslmode=disable")
+	settings, err := parsePostgresKeywordValueDSNSettings(normalizedKeywordValue)
+	if err != nil {
+		t.Fatalf("parsePostgresKeywordValueDSNSettings() error = %v", err)
+	}
+	for _, key := range postgresFileDefaultDSNKeys {
+		value, present := settings[key.name]
+		if !present {
+			t.Fatalf("normalized keyword/value DSN missing %q in %q", key.name, normalizedKeywordValue)
+		}
+		if value != "" {
+			t.Fatalf("normalized keyword/value DSN %q = %q, want empty", key.name, value)
+		}
+	}
+	for _, key := range []string{"service", "servicefile"} {
+		if _, present := settings[key]; present {
+			t.Fatalf("normalized keyword/value DSN contains disallowed-only key %q in %q", key, normalizedKeywordValue)
+		}
 	}
 }
 

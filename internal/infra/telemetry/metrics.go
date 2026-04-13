@@ -36,6 +36,16 @@ const (
 )
 
 const (
+	configLoadStageLoadDefaults         = "config.load.defaults"
+	configLoadStageLoadFile             = "config.load.file"
+	configLoadStageLoadEnv              = "config.load.env"
+	configLoadStageParse                = "config.parse"
+	configLoadStageValidate             = "config.validate"
+	configLoadStageStartupCompatibility = "startup.config.compatibility"
+	configLoadStageOther                = "other"
+)
+
+const (
 	// ConfigFailureReasonLoad is the bounded label for config load failures.
 	ConfigFailureReasonLoad = "load"
 
@@ -110,6 +120,28 @@ const (
 
 	// StartupRejectionReasonOther is the bounded fallback startup rejection label.
 	StartupRejectionReasonOther = "other"
+)
+
+const (
+	startupDependencyPostgres        = "postgres"
+	startupDependencyRedis           = "redis"
+	startupDependencyMongo           = "mongo"
+	startupDependencyTelemetry       = "telemetry"
+	startupDependencyNetworkPolicy   = "network_policy"
+	startupDependencyIngressPolicy   = "ingress_policy"
+	startupDependencyMetricsExposure = "metrics_exposure"
+	startupDependencyEgressException = "egress_exception"
+	startupDependencyOther           = "other"
+)
+
+const (
+	startupDependencyModeDisabled                = "disabled"
+	startupDependencyModeCriticalFailClosed      = "critical_fail_closed"
+	startupDependencyModeCriticalFailDegraded    = "critical_fail_degraded"
+	startupDependencyModeOptionalFailOpen        = "optional_fail_open"
+	startupDependencyModeFeatureOff              = "feature_off"
+	startupDependencyModeDegradedReadOnlyOrStale = "degraded_read_only_or_stale"
+	startupDependencyModeOther                   = "other"
 )
 
 func New() *Metrics {
@@ -234,7 +266,7 @@ func (m *Metrics) ObserveConfigLoadDuration(stage, result string, duration time.
 	if m == nil || m.configLoadDuration == nil {
 		return
 	}
-	m.configLoadDuration.WithLabelValues(stage, normalizeConfigLoadResult(result)).Observe(duration.Seconds())
+	m.configLoadDuration.WithLabelValues(normalizeConfigLoadStage(stage), normalizeConfigLoadResult(result)).Observe(duration.Seconds())
 }
 
 func (m *Metrics) IncConfigFailure(reason string) {
@@ -284,7 +316,7 @@ func (m *Metrics) setStartupDependencyStatus(dep, mode string, value float64) {
 	if m == nil || m.startupDependencyStatus == nil {
 		return
 	}
-	m.startupDependencyStatus.WithLabelValues(dep, mode).Set(value)
+	m.startupDependencyStatus.WithLabelValues(normalizeStartupDependency(dep), normalizeStartupDependencyMode(mode)).Set(value)
 }
 
 func (m *Metrics) Handler() http.Handler {
@@ -313,6 +345,21 @@ func normalizeConfigLoadResult(result string) string {
 		return ConfigLoadResultError
 	default:
 		return ConfigLoadResultOther
+	}
+}
+
+func normalizeConfigLoadStage(stage string) string {
+	normalized := strings.TrimSpace(strings.ToLower(stage))
+	switch normalized {
+	case configLoadStageLoadDefaults,
+		configLoadStageLoadFile,
+		configLoadStageLoadEnv,
+		configLoadStageParse,
+		configLoadStageValidate,
+		configLoadStageStartupCompatibility:
+		return normalized
+	default:
+		return configLoadStageOther
 	}
 }
 
@@ -369,5 +416,37 @@ func normalizeStartupRejectionReason(reason string) string {
 		return StartupRejectionReasonStartupError
 	default:
 		return StartupRejectionReasonOther
+	}
+}
+
+func normalizeStartupDependency(dep string) string {
+	normalized := strings.TrimSpace(strings.ToLower(dep))
+	switch normalized {
+	case startupDependencyPostgres,
+		startupDependencyRedis,
+		startupDependencyMongo,
+		startupDependencyTelemetry,
+		startupDependencyNetworkPolicy,
+		startupDependencyIngressPolicy,
+		startupDependencyMetricsExposure,
+		startupDependencyEgressException:
+		return normalized
+	default:
+		return startupDependencyOther
+	}
+}
+
+func normalizeStartupDependencyMode(mode string) string {
+	normalized := strings.TrimSpace(strings.ToLower(mode))
+	switch normalized {
+	case startupDependencyModeDisabled,
+		startupDependencyModeCriticalFailClosed,
+		startupDependencyModeCriticalFailDegraded,
+		startupDependencyModeOptionalFailOpen,
+		startupDependencyModeFeatureOff,
+		startupDependencyModeDegradedReadOnlyOrStale:
+		return normalized
+	default:
+		return startupDependencyModeOther
 	}
 }
