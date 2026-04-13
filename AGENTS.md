@@ -128,6 +128,8 @@ Subagents must not:
 
 - Review is risk-driven, not ritual.
 - Validation uses fresh evidence against the approved artifact bundle.
+- Use repository-owned validation entrypoints instead of ad hoc substitutes. For code, generated artifacts, or CI/CD-sensitive changes, choose the smallest relevant proof, and use the local pre-push or Docker parity path from `docs/build-test-and-development-commands.md` when claiming CI readiness.
+- When a GitHub-only check cannot be reproduced locally, name the missing context and keep the claim narrower instead of treating partial local success as remote CI proof.
 - Closeout is not complete until artifacts reflect reality.
 - Resume from artifacts, not chat memory: read `workflow-plan.md` first, then the current `workflow-plans/<phase>.md`, then the phase-specific artifacts in the order defined by `docs/spec-first-workflow.md`.
 
