@@ -104,6 +104,7 @@ required_contexts=(
   "repo-integrity"
   "lint"
   "openapi-contract"
+  "openapi-breaking"
   "test"
   "test-race"
   "test-coverage"

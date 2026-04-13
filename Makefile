@@ -2,6 +2,8 @@ SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
 OPENAPI_GENERATED_FILES := internal/api/openapi.gen.go
+GO_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')
+GOFUMPT_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*' -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*' -not -name '*_mock_test.go' -not -name '*_string.go')
 REDOCLY_CLI_VERSION := 2.20.3
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
@@ -22,11 +24,11 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 
 .PHONY: help bootstrap bootstrap-native bootstrap-docker check check-full \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-vet docker-test-race docker-test-cover docker-test-report docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
+	docker-test docker-vet docker-test-race docker-test-cover docker-test-report docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
@@ -34,7 +36,7 @@ help:
 	@echo "Quick onboarding commands:"
 	@echo "  make bootstrap      # prepare local environment (.env + dependencies)"
 	@echo "  make check          # quick checks (fmt/lint/test)"
-	@echo "  make check-full     # full CI-like checks"
+	@echo "  make check-full     # full local baseline (prefers docker-ci)"
 	@echo "  make run            # run service locally"
 	@echo ""
 	@echo "Template/admin commands:"
@@ -44,12 +46,14 @@ help:
 	@echo ""
 	@echo "Advanced validation commands:"
 	@echo "  make ci-local       # native CI-like checks"
-	@echo "  make docker-ci      # Docker CI-like checks"
+	@echo "  make docker-ci      # closest zero-setup CI parity"
 	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
 	@echo "  make test-report             # race + coverage report and threshold"
 	@echo "  make migration-validate      # migration rehearsal"
+	@echo "  make go-security             # govulncheck + gosec"
+	@echo "  make secret-scan             # gitleaks secret scan"
 	@echo "  make mocks-drift-check       # mockgen drift checks"
 	@echo "  make stringer-drift-check    # stringer drift checks"
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
@@ -58,6 +62,9 @@ help:
 	@echo "  make docker-sqlc-check       # Docker SQLC validation"
 	@echo "  make docker-test-integration # Docker integration tests"
 	@echo "  make docker-migration-validate  # Docker migration rehearsal"
+	@echo "  make docker-go-security      # Docker govulncheck + gosec"
+	@echo "  make docker-secret-scan      # Docker gitleaks secret scan"
+	@echo "  make docker-container-security  # Docker image scan"
 	@echo "  make gh-protect BRANCH=main"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
@@ -164,7 +171,8 @@ tidy:
 	go mod tidy
 
 fmt:
-	go tool goimports -w $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')
+	go tool goimports -w $(GO_FILES)
+	go tool gofumpt -w $(GOFUMPT_FILES)
 
 mod-check:
 	GOFLAGS= go mod tidy -diff
@@ -175,10 +183,16 @@ docker-mod-check:
 	$(DOCKER_TOOLING_SCRIPT) mod-check
 
 fmt-check:
-	@unformatted="$$(go tool goimports -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*'))"; \
+	@unformatted="$$(go tool goimports -l $(GO_FILES))"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	@gofumpt_unformatted="$$(go tool gofumpt -l $(GOFUMPT_FILES))"; \
+	if [ -n "$$gofumpt_unformatted" ]; then \
+		echo "gofumpt required for:"; \
+		echo "$$gofumpt_unformatted"; \
 		exit 1; \
 	fi
 
@@ -284,11 +298,13 @@ go-security:
 	go tool govulncheck ./...
 	go tool gosec -exclude-generated -exclude-dir=.cache ./...
 
-secrets-scan:
+secret-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
+secrets-scan: secret-scan
+
 ci-local:
-	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secret-scan
 	@if [ -n "$(BASE_REF)" ] && [ -n "$(HEAD_REF)" ]; then \
 		$(MAKE) docs-drift-check BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	else \
@@ -416,8 +432,10 @@ agents-check:
 docker-go-security:
 	$(DOCKER_TOOLING_SCRIPT) go-security
 
-docker-secrets-scan:
-	$(DOCKER_TOOLING_SCRIPT) secrets-scan
+docker-secret-scan:
+	$(DOCKER_TOOLING_SCRIPT) secret-scan
+
+docker-secrets-scan: docker-secret-scan
 
 docker-guardrails-check:
 	$(DOCKER_TOOLING_SCRIPT) guardrails-check

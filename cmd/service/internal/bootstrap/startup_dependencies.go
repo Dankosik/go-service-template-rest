@@ -150,7 +150,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	labels := startupPostgresDependencyLabels
 	if !runtime.cfg.Postgres.Enabled {
 		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
-		return nil, nil
+		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no pool and no startup error.
 	}
 
 	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailClosed)
@@ -230,7 +230,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	labels := startupRedisDependencyLabels
 	if !runtime.cfg.Redis.Enabled {
 		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
-		return nil, nil
+		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no readiness probe and no startup error.
 	}
 
 	redisMode := runtime.cfg.Redis.ModeValue()
@@ -293,7 +293,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		); err != nil {
 			return nil, err
 		}
-		return nil, nil
+		return nil, nil //nolint:nilnil // Fail-open dependency degradation intentionally has no readiness probe and no startup error.
 	}
 
 	runtime.metrics.MarkStartupDependencyReady(labels.dependency, redisCriticality)
@@ -308,14 +308,14 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			},
 		}, nil
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // Healthy fail-open dependency may intentionally skip readiness probe registration.
 }
 
 func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (health.Probe, error) {
 	labels := startupMongoDependencyLabels
 	if !runtime.cfg.Mongo.Enabled {
 		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
-		return nil, nil
+		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no readiness probe and no startup error.
 	}
 
 	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailDegraded)
@@ -365,7 +365,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		); err != nil {
 			return nil, err
 		}
-		return nil, nil
+		return nil, nil //nolint:nilnil // Fail-open dependency degradation intentionally has no readiness probe and no startup error.
 	}
 
 	runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeCriticalFailDegraded)
@@ -377,7 +377,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			},
 		}, nil
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // Healthy fail-open dependency may intentionally skip readiness probe registration.
 }
 
 func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer, spec dependencyProbeSpec) probeExecutionResult {

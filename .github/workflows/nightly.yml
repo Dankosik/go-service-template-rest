@@ -15,8 +15,6 @@ permissions:
 env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
-  GOVULNCHECK_VERSION: v1.1.4
-  GOSEC_VERSION: v2.24.7
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
   FUZZ_TIME: 60s
 
@@ -72,15 +70,8 @@ jobs:
           make openapi-validate
           make openapi-lint
 
-      - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
-          "$(go env GOPATH)/bin/govulncheck" ./...
-
-      - name: Run gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-          "$(go env GOPATH)/bin/gosec" -exclude-generated ./...
+      - name: Run Go security checks
+        run: make go-security
 
       - name: Build container image
         run: docker build -f build/docker/Dockerfile -t service:nightly .

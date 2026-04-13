@@ -15,8 +15,6 @@ permissions:
 env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
-  GOVULNCHECK_VERSION: v1.1.4
-  GOSEC_VERSION: v2.24.7
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
   COVERAGE_MIN: "65.0"
 
@@ -52,6 +50,12 @@ jobs:
 
       - name: Verify sqlc generation drift
         run: make sqlc-check
+
+      - name: Verify mock generation drift
+        run: make mocks-drift-check
+
+      - name: Verify stringer generation drift
+        run: make stringer-drift-check
 
       - name: Verify docs drift policy
         run: |
@@ -353,15 +357,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
-          "$(go env GOPATH)/bin/govulncheck" ./...
-
-      - name: Run gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-          "$(go env GOPATH)/bin/gosec" -exclude-generated ./...
+      - name: Run Go security checks
+        run: make go-security
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -379,7 +376,7 @@ jobs:
           cache: true
 
       - name: Run gitleaks
-        run: make secrets-scan
+        run: make secret-scan
 
   container-security:
     runs-on: ubuntu-latest

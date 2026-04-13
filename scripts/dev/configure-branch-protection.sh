@@ -44,6 +44,7 @@ read -r -d '' payload <<JSON || true
       {"context": "repo-integrity"},
       {"context": "lint"},
       {"context": "openapi-contract"},
+      {"context": "openapi-breaking"},
       {"context": "test"},
       {"context": "test-race"},
       {"context": "test-coverage"},
@@ -79,4 +80,3 @@ gh api \
 	--input - <<<"${payload}" >/dev/null
 
 echo "Branch protection configured for ${branch}."
-echo "If your project requires API compatibility gate by default, add 'openapi-breaking' as required status check in GitHub settings."

@@ -14,6 +14,7 @@ Use this checklist when adopting the template in a real service repository.
 - `repo-integrity`
 - `lint`
 - `openapi-contract`
+- `openapi-breaking`
 - `test`
 - `test-race`
 - `test-coverage`

@@ -56,16 +56,13 @@ POSTGRES_IMAGE="${POSTGRES_IMAGE:-${POSTGRES_IMAGE_DEFAULT}}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-${MIGRATE_IMAGE_DEFAULT}}"
 TRIVY_IMAGE="${TRIVY_IMAGE:-${TRIVY_IMAGE_DEFAULT}}"
 REDOCLY_CLI_VERSION="${REDOCLY_CLI_VERSION:-2.20.3}"
-KIN_OPENAPI_VALIDATE_VERSION="${KIN_OPENAPI_VALIDATE_VERSION:-v0.133.0}"
-GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
-GOSEC_VERSION="${GOSEC_VERSION:-v2.24.7}"
-GOIMPORTS_VERSION="${GOIMPORTS_VERSION:-v0.42.0}"
-GITLEAKS_VERSION="${GITLEAKS_VERSION:-v8.30.0}"
 TEST_REPORT_DIR="${TEST_REPORT_DIR:-.artifacts/test}"
 TEST_JUNIT_FILE="${TEST_JUNIT_FILE:-${TEST_REPORT_DIR}/junit.xml}"
 TEST_JSON_FILE="${TEST_JSON_FILE:-${TEST_REPORT_DIR}/test2json.json}"
 COVERAGE_MIN="${COVERAGE_MIN:-65.0}"
 COVERAGE_EXCLUDE_REGEX="${COVERAGE_EXCLUDE_REGEX:-(^|/)internal/api/openapi\\.gen\\.go:|(^|/)cmd/service/main\\.go:}"
+GO_FILES_FIND="find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*'"
+GOFUMPT_FILES_FIND="${GO_FILES_FIND} -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*' -not -name '*_mock_test.go' -not -name '*_string.go'"
 
 host_uid="$(id -u 2>/dev/null || echo 0)"
 host_gid="$(id -g 2>/dev/null || echo 0)"
@@ -99,7 +96,7 @@ usage() {
 	echo "  openapi-validate"
 	echo "  openapi-check"
 	echo "  go-security"
-	echo "  secrets-scan"
+	echo "  secret-scan"
 	echo "  guardrails-check"
 	echo "  skills-check"
 	echo "  agents-check"
@@ -415,10 +412,10 @@ mod-check)
 	git -C "${ROOT_DIR}" diff --exit-code -- go.mod go.sum
 	;;
 fmt)
-	run_go "go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -w \$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')"
+	run_go "go tool goimports -w \$(${GO_FILES_FIND}) && go tool gofumpt -w \$(${GOFUMPT_FILES_FIND})"
 	;;
 fmt-check)
-	run_go "unformatted=\$(go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -l \$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')); if [[ -n \"\${unformatted}\" ]]; then echo 'goimports required for:'; echo \"\${unformatted}\"; exit 1; fi"
+	run_go "unformatted=\$(go tool goimports -l \$(${GO_FILES_FIND})); if [[ -n \"\${unformatted}\" ]]; then echo 'goimports required for:'; echo \"\${unformatted}\"; exit 1; fi; gofumpt_unformatted=\$(go tool gofumpt -l \$(${GOFUMPT_FILES_FIND})); if [[ -n \"\${gofumpt_unformatted}\" ]]; then echo 'gofumpt required for:'; echo \"\${gofumpt_unformatted}\"; exit 1; fi"
 	;;
 test)
 	run_go "go test ./..."
@@ -475,7 +472,7 @@ openapi-lint)
 	run_node "npx @redocly/cli@${REDOCLY_CLI_VERSION} lint --config .redocly.yaml api/openapi/service.yaml"
 	;;
 openapi-validate)
-	run_go "go run github.com/getkin/kin-openapi/cmd/validate@${KIN_OPENAPI_VALIDATE_VERSION} -- api/openapi/service.yaml"
+	run_go "go tool validate -- api/openapi/service.yaml"
 	;;
 openapi-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-generate
@@ -486,10 +483,10 @@ openapi-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-validate
 	;;
 go-security)
-	run_go "go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} && \"\$(go env GOPATH)/bin/govulncheck\" ./... && go install github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} && \"\$(go env GOPATH)/bin/gosec\" -exclude-generated -exclude-dir=.cache ./..."
+	run_go "go tool govulncheck ./... && go tool gosec -exclude-generated -exclude-dir=.cache ./..."
 	;;
-secrets-scan)
-	run_go "go run github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION} git --no-banner --redact --exit-code 1 ."
+secret-scan|secrets-scan)
+	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 ."
 	;;
 guardrails-check)
 	bash "${ROOT_DIR}/scripts/ci/required-guardrails-check.sh"
@@ -532,7 +529,7 @@ ci)
 	REQUIRE_DOCKER=1 bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" go-security
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" secrets-scan
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" secret-scan
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" migration-validate
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" container-security
 

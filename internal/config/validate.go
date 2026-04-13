@@ -333,16 +333,16 @@ func validateOTLPExporter(cfg OTelExporterConfig) error {
 	return nil
 }
 
-func validateDurationRange(name string, value time.Duration, min time.Duration, max time.Duration) error {
-	if value < min || value > max {
-		return fmt.Errorf("%w: %s must be in range [%s,%s]", ErrValidate, name, min, max)
+func validateDurationRange(name string, value time.Duration, lowerBound time.Duration, upperBound time.Duration) error {
+	if value < lowerBound || value > upperBound {
+		return fmt.Errorf("%w: %s must be in range [%s,%s]", ErrValidate, name, lowerBound, upperBound)
 	}
 	return nil
 }
 
-func validateIntRange(name string, value int, min int, max int) error {
-	if value < min || value > max {
-		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, min, max)
+func validateIntRange(name string, value int, lowerBound int, upperBound int) error {
+	if value < lowerBound || value > upperBound {
+		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, lowerBound, upperBound)
 	}
 	return nil
 }

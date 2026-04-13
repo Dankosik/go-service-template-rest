@@ -354,7 +354,7 @@ func TestStartupDependencyStatusMetricUsesBoundedLabels(t *testing.T) {
 }
 
 func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
-	for _, m := range []*Metrics{nil, &Metrics{}} {
+	for _, m := range []*Metrics{nil, {}} {
 		m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
 		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)
 		m.ObserveConfigLoadDuration("load", "ok", time.Millisecond)

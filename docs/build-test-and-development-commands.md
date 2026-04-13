@@ -196,16 +196,20 @@ Bootstrap shortcuts:
 ### Formatting and static quality
 
 - `make fmt`
-  - Runs `go tool goimports -w` on all Go files except `vendor/` and local tool caches under `.cache/`.
+  - Runs:
+    - `go tool goimports -w` on Go files outside `vendor/` and local tool caches under `.cache/`;
+    - `go tool gofumpt -w` on hand-written Go files, excluding known generated OpenAPI, sqlc, mockgen, and stringer outputs.
 
 - `make docker-fmt`
   - Docker equivalent of `make fmt`.
 
 - `make fmt-check`
-  - Fails only when `go tool goimports -l` reports unformatted Go files outside `vendor/` and local tool caches under `.cache/`.
+  - Fails when:
+    - `go tool goimports -l` reports unformatted Go files outside `vendor/` and local tool caches under `.cache/`;
+    - `go tool gofumpt -l` reports hand-written Go files that need stricter formatting.
 
 - `make docker-fmt-check`
-  - Docker equivalent of `make fmt-check` (same `goimports -l` behavior).
+  - Docker equivalent of `make fmt-check` (same `goimports` + `gofumpt` behavior).
 
 - `make lint`
   - Runs:
@@ -367,8 +371,9 @@ Bootstrap shortcuts:
 - `make go-security`
   - Runs native `go tool govulncheck` and `go tool gosec -exclude-generated -exclude-dir=.cache`.
 
-- `make secrets-scan`
+- `make secret-scan`
   - Runs native `go tool gitleaks` scan over repository git history.
+  - Compatibility alias: `make secrets-scan`.
 
 - `make ci-local`
   - Native composite check for CI-like local parity:
@@ -387,7 +392,7 @@ Bootstrap shortcuts:
     - `sqlc-check`
     - `openapi-check`
     - `go-security`
-    - `secrets-scan`
+    - `secret-scan`
   - If `BASE_REF` and `HEAD_REF` are provided, also runs docs drift check.
   - When Docker daemon is reachable, also runs:
     - `test-integration` (`REQUIRE_DOCKER=1`)
@@ -398,8 +403,9 @@ Bootstrap shortcuts:
 - `make docker-go-security`
   - Runs `govulncheck` and `gosec` through Docker tooling container.
 
-- `make docker-secrets-scan`
+- `make docker-secret-scan`
   - Runs `gitleaks` through Docker tooling wrapper.
+  - Compatibility alias: `make docker-secrets-scan`.
 
 - `make docker-guardrails-check`
   - Runs required repository guardrails check in Docker mode wrapper.
@@ -437,7 +443,7 @@ Bootstrap shortcuts:
     - `test-integration` (`REQUIRE_DOCKER=1`)
     - `openapi-check`
     - `go-security`
-    - `secrets-scan`
+    - `secret-scan`
     - `migration-validate`
     - `container-security`
   - If `BASE_REF` and `HEAD_REF` are provided, also runs docs drift check.
@@ -540,7 +546,7 @@ Use the smallest check that matches the decision you are about to make:
 | When | Run | Notes |
 | --- | --- | --- |
 | Everyday edit loop | `make check` | Quick confidence only: formatting, lint, and unit tests through native tools or Docker fallback. |
-| Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Full local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local`. Replace `origin/main` with the branch or SHA GitHub will compare against. |
+| Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Full local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local`. Use `make docker-ci` directly when you need the least host-dependent parity path. Replace `origin/main` with the branch or SHA GitHub will compare against. |
 | Closest local CI parity | `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
 | Native fallback | `BASE_REF=origin/main HEAD_REF=HEAD make ci-local` | Requires host Go, GNU Make, Git, and Node/npx for OpenAPI lint. Docker-backed integration, migration, and container scan checks run only when Docker is reachable. |
 
@@ -555,7 +561,7 @@ Targeted parity checks:
 | SQLC generation and stale query artifact drift | `make sqlc-check` or `make docker-sqlc-check` |
 | Migration rehearsal | `make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'` or `make docker-migration-validate` |
 | Integration tests | `REQUIRE_DOCKER=1 make test-integration` or `make docker-test-integration` |
-| Go security and secret scans | `make go-security`, `make secrets-scan`, `make docker-go-security`, or `make docker-secrets-scan` |
+| Go security and secret scans | `make go-security`, `make secret-scan`, `make docker-go-security`, or `make docker-secret-scan` |
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |
@@ -596,7 +602,7 @@ Choose the package and test location from [Project Structure & Module Organizati
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make mocks-drift-check` + `make stringer-drift-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
@@ -605,11 +611,11 @@ Local commands map directly to CI jobs:
 - `make test-report COVERAGE_MIN=<value>` -> `test-coverage`
 - `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
 - `make migration-validate` -> `migration-validate` (only when migrations changed)
-- `make go-security` + `make secrets-scan` + Trivy image scan -> `go-security`, `secret-scan`, `container-security`
+- `make go-security` + `make secret-scan` + Trivy image scan -> `go-security`, `secret-scan`, `container-security`
 
 Zero-setup wrappers:
 - `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-secret-scan`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 - `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`

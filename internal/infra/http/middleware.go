@@ -27,8 +27,10 @@ const (
 	maxRequestIDLength       = 128
 )
 
-type requestIDContextKey struct{}
-type routeLabelContextKey struct{}
+type (
+	requestIDContextKey  struct{}
+	routeLabelContextKey struct{}
+)
 
 type routeLabelHolder struct {
 	value string

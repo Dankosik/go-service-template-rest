@@ -516,4 +516,5 @@ tool (
 	golang.org/x/tools/cmd/stringer
 	golang.org/x/vuln/cmd/govulncheck
 	gotest.tools/gotestsum
+	mvdan.cc/gofumpt
 )

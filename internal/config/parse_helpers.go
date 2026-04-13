@@ -38,36 +38,36 @@ func parseInt64(value any) (int64, error) {
 }
 
 func parseSignedInteger(value any, bitSize int) (int64, error) {
-	min, max, err := signedIntegerBounds(bitSize)
+	lowerBound, upperBound, err := signedIntegerBounds(bitSize)
 	if err != nil {
 		return 0, err
 	}
 
 	switch v := value.(type) {
 	case int:
-		return signedIntegerFromInt64(int64(v), min, max)
+		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
 	case int8:
-		return signedIntegerFromInt64(int64(v), min, max)
+		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
 	case int16:
-		return signedIntegerFromInt64(int64(v), min, max)
+		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
 	case int32:
-		return signedIntegerFromInt64(int64(v), min, max)
+		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
 	case int64:
-		return signedIntegerFromInt64(v, min, max)
+		return signedIntegerFromInt64(v, lowerBound, upperBound)
 	case uint:
-		return signedIntegerFromUint64(uint64(v), max)
+		return signedIntegerFromUint64(uint64(v), upperBound)
 	case uint8:
-		return signedIntegerFromUint64(uint64(v), max)
+		return signedIntegerFromUint64(uint64(v), upperBound)
 	case uint16:
-		return signedIntegerFromUint64(uint64(v), max)
+		return signedIntegerFromUint64(uint64(v), upperBound)
 	case uint32:
-		return signedIntegerFromUint64(uint64(v), max)
+		return signedIntegerFromUint64(uint64(v), upperBound)
 	case uint64:
-		return signedIntegerFromUint64(v, max)
+		return signedIntegerFromUint64(v, upperBound)
 	case float32:
-		return signedIntegerFromFloat64(float64(v), min, max)
+		return signedIntegerFromFloat64(float64(v), lowerBound, upperBound)
 	case float64:
-		return signedIntegerFromFloat64(v, min, max)
+		return signedIntegerFromFloat64(v, lowerBound, upperBound)
 	case string:
 		n, err := strconv.ParseInt(strings.TrimSpace(v), 10, bitSize)
 		if err != nil {
@@ -86,31 +86,31 @@ func signedIntegerBounds(bitSize int) (int64, int64, error) {
 	case bitSize == 64:
 		return math.MinInt64, math.MaxInt64, nil
 	default:
-		max := int64(1)<<(bitSize-1) - 1
-		min := -(int64(1) << (bitSize - 1))
-		return min, max, nil
+		upperBound := int64(1)<<(bitSize-1) - 1
+		lowerBound := -(int64(1) << (bitSize - 1))
+		return lowerBound, upperBound, nil
 	}
 }
 
-func signedIntegerFromInt64(v int64, min int64, max int64) (int64, error) {
-	if v < min || v > max {
+func signedIntegerFromInt64(v int64, lowerBound int64, upperBound int64) (int64, error) {
+	if v < lowerBound || v > upperBound {
 		return 0, fmt.Errorf("integer out of range")
 	}
 	return v, nil
 }
 
-func signedIntegerFromUint64(v uint64, max int64) (int64, error) {
-	if max < 0 || v > uint64(math.MaxInt64) {
+func signedIntegerFromUint64(v uint64, upperBound int64) (int64, error) {
+	if upperBound < 0 || v > uint64(math.MaxInt64) {
 		return 0, fmt.Errorf("integer out of range")
 	}
 	n := int64(v)
-	if n > max {
+	if n > upperBound {
 		return 0, fmt.Errorf("integer out of range")
 	}
 	return n, nil
 }
 
-func signedIntegerFromFloat64(v float64, min int64, max int64) (int64, error) {
+func signedIntegerFromFloat64(v float64, lowerBound int64, upperBound int64) (int64, error) {
 	if !isFiniteFloat64(v) {
 		return 0, fmt.Errorf("non-finite numeric value")
 	}
@@ -120,7 +120,7 @@ func signedIntegerFromFloat64(v float64, min int64, max int64) (int64, error) {
 	if math.Abs(v) > maxExactIntegerFloat64 {
 		return 0, fmt.Errorf("integer out of range")
 	}
-	if v < float64(min) || v > float64(max) {
+	if v < float64(lowerBound) || v > float64(upperBound) {
 		return 0, fmt.Errorf("integer out of range")
 	}
 	return int64(v), nil

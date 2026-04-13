@@ -21,8 +21,6 @@ permissions:
 env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
-  GOVULNCHECK_VERSION: v1.1.4
-  GOSEC_VERSION: v2.24.7
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
 
 jobs:
@@ -169,15 +167,8 @@ jobs:
           make openapi-validate
           make openapi-lint
 
-      - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
-          "$(go env GOPATH)/bin/govulncheck" ./...
-
-      - name: Run gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
-          "$(go env GOPATH)/bin/gosec" -exclude-generated ./...
+      - name: Run Go security checks
+        run: make go-security
 
   publish-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
