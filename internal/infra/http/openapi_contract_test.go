@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +19,7 @@ import (
 )
 
 func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -83,7 +82,7 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
 		Ping:   ping.New(),
@@ -106,7 +105,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 	healthSvc := health.New()
 	healthSvc.StartDrain()
 
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: healthSvc,
 		Ping:   ping.New(),
@@ -126,7 +125,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -149,7 +148,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T)
 }
 
 func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -168,7 +167,7 @@ func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 
 	testCases := []struct {
 		name     string

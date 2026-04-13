@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -570,20 +571,12 @@ func unsetEnvForTest(t *testing.T, name string) {
 	t.Helper()
 
 	previous, hadPrevious := os.LookupEnv(name)
+	if hadPrevious {
+		t.Setenv(name, previous)
+	}
 	if err := os.Unsetenv(name); err != nil {
 		t.Fatalf("os.Unsetenv(%q) error = %v", name, err)
 	}
-	t.Cleanup(func() {
-		var err error
-		if hadPrevious {
-			err = os.Setenv(name, previous)
-		} else {
-			err = os.Unsetenv(name)
-		}
-		if err != nil {
-			t.Errorf("restore env %q error = %v", name, err)
-		}
-	})
 }
 
 func setValidIngressExceptionEnv(t *testing.T, now time.Time, overrides map[string]string) {
@@ -617,9 +610,7 @@ func setValidEgressExceptionEnv(t *testing.T, now time.Time, overrides map[strin
 func setValidNetworkExceptionEnv(t *testing.T, prefix string, values map[string]string, overrides map[string]string) {
 	t.Helper()
 
-	for key, value := range overrides {
-		values[key] = value
-	}
+	maps.Copy(values, overrides)
 	for key, value := range values {
 		t.Setenv(prefix+"_"+key, value)
 	}

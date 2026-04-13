@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"net"
 	"strings"
@@ -101,7 +100,7 @@ func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulChec
 
 func TestServeHTTPRuntimeListenError(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
 	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
@@ -127,7 +126,7 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 
 func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
 	signalCtx, cancel := context.WithCancel(context.Background())
@@ -163,7 +162,7 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 
 func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
 	admission := newTestStartupAdmissionController(metrics)
@@ -233,7 +232,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 
 func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
 	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -272,7 +271,7 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 
 func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
 	startedAt := time.Now()
@@ -317,7 +316,7 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 
 func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
 	srv.onServe = func(net.Listener) error {
@@ -361,7 +360,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
 	admission := newTestStartupAdmissionController(metrics)

@@ -93,6 +93,7 @@ usage() {
 	echo "  mocks-generate"
 	echo "  mocks-drift-check"
 	echo "  lint"
+	echo "  modernize-check"
 	echo "  openapi-generate"
 	echo "  openapi-drift-check"
 	echo "  openapi-runtime-contract-check"
@@ -477,6 +478,9 @@ mocks-drift-check)
 	;;
 lint)
 	run_lint "config verify && GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint run --timeout=3m"
+	;;
+modernize-check)
+	run_lint "run --enable-only=modernize --timeout=3m"
 	;;
 openapi-generate)
 	run_go "go generate ./internal/api"

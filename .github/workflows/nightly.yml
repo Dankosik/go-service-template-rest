@@ -50,6 +50,10 @@ jobs:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=3m
 
+      - name: Modernize suggestions (informational)
+        continue-on-error: true
+        run: make modernize-check
+
       - name: Flake detection run
         run: make test-flake-smoke
 

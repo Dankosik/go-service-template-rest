@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -339,7 +341,7 @@ unknown:
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
-	if !containsString(report.UnknownKeyWarnings, "unknown.field") {
+	if !slices.Contains(report.UnknownKeyWarnings, "unknown.field") {
 		t.Fatalf("UnknownKeyWarnings = %v, want unknown.field", report.UnknownKeyWarnings)
 	}
 }
@@ -363,7 +365,7 @@ unknown:
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
 	}
-	if !containsString(report.UnknownKeyWarnings, "unknown.field") {
+	if !slices.Contains(report.UnknownKeyWarnings, "unknown.field") {
 		t.Fatalf("UnknownKeyWarnings = %v, want unknown.field", report.UnknownKeyWarnings)
 	}
 }
@@ -409,7 +411,7 @@ http: oops
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
-	if !containsString(report.UnknownKeyWarnings, "http") {
+	if !slices.Contains(report.UnknownKeyWarnings, "http") {
 		t.Fatalf("UnknownKeyWarnings = %v, want http", report.UnknownKeyWarnings)
 	}
 	if cfg.HTTP.Addr != ":8080" {
@@ -1500,15 +1502,6 @@ func readEnvExample(t *testing.T, path string) map[string]string {
 	return values
 }
 
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
 func resetConfigEnv(t *testing.T) {
 	t.Helper()
 
@@ -1516,6 +1509,7 @@ func resetConfigEnv(t *testing.T) {
 	for _, key := range configEnvResetKeys() {
 		if value, ok := os.LookupEnv(key); ok {
 			previousValues[key] = value
+			t.Setenv(key, value)
 		}
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
@@ -1523,17 +1517,12 @@ func resetConfigEnv(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, key := range configEnvResetKeys() {
-			value, ok := previousValues[key]
-			if !ok {
+			if _, ok := previousValues[key]; !ok {
 				_ = os.Unsetenv(key)
-				continue
 			}
-			_ = os.Setenv(key, value)
 		}
 	})
-	if err := os.Setenv("APP__APP__ENV", "local"); err != nil {
-		t.Fatalf("os.Setenv(APP__APP__ENV) error = %v", err)
-	}
+	t.Setenv("APP__APP__ENV", "local")
 }
 
 func configEnvResetKeys() []string {
@@ -1596,7 +1585,7 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
 	knownKeys := sortedStringSetKeys(knownConfigKeys())
 
-	tagKeys := configLeafKeysFromType(t, reflect.TypeOf(Config{}), "")
+	tagKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
 	sort.Strings(tagKeys)
 	if !reflect.DeepEqual(knownKeys, tagKeys) {
 		t.Fatalf("knownConfigKeys() = %v, want Config koanf leaf keys %v", knownKeys, tagKeys)
@@ -1606,7 +1595,7 @@ func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
 func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
 	knownSections := sortedStringSetKeys(knownConfigSections())
 
-	tagSections := configSectionKeysFromType(t, reflect.TypeOf(Config{}), "")
+	tagSections := configSectionKeysFromType(t, reflect.TypeFor[Config](), "")
 	sort.Strings(tagSections)
 	if !reflect.DeepEqual(knownSections, tagSections) {
 		t.Fatalf("knownConfigSections() = %v, want Config koanf section keys %v", knownSections, tagSections)
@@ -1662,8 +1651,7 @@ func configLeafKeysFromType(t *testing.T, typ reflect.Type, prefix string) []str
 	}
 
 	keys := make([]string, 0)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		tag := strings.TrimSpace(field.Tag.Get("koanf"))
 		if tag == "" || tag == "-" {
 			t.Fatalf("%s.%s must declare a concrete koanf tag", typ.Name(), field.Name)
@@ -1691,8 +1679,7 @@ func configSectionKeysFromType(t *testing.T, typ reflect.Type, prefix string) []
 	}
 
 	keys := make([]string, 0)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		tag := strings.TrimSpace(field.Tag.Get("koanf"))
 		if tag == "" || tag == "-" {
 			t.Fatalf("%s.%s must declare a concrete koanf tag", typ.Name(), field.Name)
@@ -1719,8 +1706,8 @@ func hasKoanfTaggedFields(typ reflect.Type) bool {
 	if typ.Kind() != reflect.Struct {
 		return false
 	}
-	for i := 0; i < typ.NumField(); i++ {
-		if strings.TrimSpace(typ.Field(i).Tag.Get("koanf")) != "" {
+	for field := range typ.Fields() {
+		if strings.TrimSpace(field.Tag.Get("koanf")) != "" {
 			return true
 		}
 	}
@@ -1742,8 +1729,7 @@ func flattenConfigSnapshotValues(t *testing.T, value reflect.Value, prefix strin
 
 	typ := value.Type()
 	values := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		tag := strings.TrimSpace(field.Tag.Get("koanf"))
 		if tag == "" || tag == "-" {
 			t.Fatalf("%s.%s must declare a concrete koanf tag", typ.Name(), field.Name)
@@ -1754,11 +1740,9 @@ func flattenConfigSnapshotValues(t *testing.T, value reflect.Value, prefix strin
 			key = prefix + keyDelimiter + tag
 		}
 
-		fieldValue := value.Field(i)
+		fieldValue := value.FieldByIndex(field.Index)
 		if hasKoanfTaggedFields(field.Type) {
-			for nestedKey, nestedValue := range flattenConfigSnapshotValues(t, fieldValue, key) {
-				values[nestedKey] = nestedValue
-			}
+			maps.Copy(values, flattenConfigSnapshotValues(t, fieldValue, key))
 			continue
 		}
 		values[key] = fieldValue.Interface()

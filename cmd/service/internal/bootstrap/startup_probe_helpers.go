@@ -58,9 +58,7 @@ func shouldRetryPostgresStartup(err error, attempt int) bool {
 
 func fullJitterDelay(attempt int) time.Duration {
 	backoff := startupRetryBaseDelay << (attempt - 1)
-	if backoff > startupRetryMaxDelay {
-		backoff = startupRetryMaxDelay
-	}
+	backoff = min(backoff, startupRetryMaxDelay)
 	if backoff <= 0 {
 		return 0
 	}

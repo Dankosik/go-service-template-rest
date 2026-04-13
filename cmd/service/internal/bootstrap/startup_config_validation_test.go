@@ -201,8 +201,6 @@ func TestBootstrapConfigStageRecordsStartupCompatibilityFailureSeparately(t *tes
 func resetBootstrapConfigEnv(t *testing.T) {
 	t.Helper()
 
-	previousValues := make(map[string]string)
-	previousSet := make(map[string]bool)
 	for _, item := range os.Environ() {
 		key, value, ok := strings.Cut(item, "=")
 		if !ok {
@@ -211,19 +209,9 @@ func resetBootstrapConfigEnv(t *testing.T) {
 		if !strings.HasPrefix(key, "APP__") && key != "APP_CONFIG_ALLOWED_ROOTS" {
 			continue
 		}
-		previousValues[key] = value
-		previousSet[key] = true
+		t.Setenv(key, value)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
 		}
 	}
-	t.Cleanup(func() {
-		for key, value := range previousValues {
-			if previousSet[key] {
-				_ = os.Setenv(key, value)
-				continue
-			}
-			_ = os.Unsetenv(key)
-		}
-	})
 }

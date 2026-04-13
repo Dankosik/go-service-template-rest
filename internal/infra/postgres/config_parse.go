@@ -153,7 +153,7 @@ func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
 
 	var hosts []string
 	var ports []string
-	for _, host := range strings.Split(parsedURL.Host, ",") {
+	for host := range strings.SplitSeq(parsedURL.Host, ",") {
 		if host == "" {
 			continue
 		}

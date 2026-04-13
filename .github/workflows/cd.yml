@@ -22,6 +22,7 @@ env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+  COVERAGE_MIN: "65.0"
 
 jobs:
   publish-main:
@@ -137,8 +138,26 @@ jobs:
       - name: Verify module integrity
         run: make mod-check
 
+      - name: Verify required repository guardrails
+        run: make guardrails-check
+
+      - name: Verify agent mirror drift
+        run: make agents-check
+
+      - name: Verify skill mirror drift
+        run: make skills-check
+
       - name: Verify formatting drift
         run: make fmt-check
+
+      - name: Verify sqlc generation drift
+        run: make sqlc-check
+
+      - name: Verify mock generation drift
+        run: make mocks-drift-check
+
+      - name: Verify stringer generation drift
+        run: make stringer-drift-check
 
       - name: Lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
@@ -152,23 +171,26 @@ jobs:
       - name: Go vet
         run: make vet
 
+      - name: Coverage + JUnit + JSON
+        run: make test-report COVERAGE_MIN=${{ env.COVERAGE_MIN }}
+
       - name: Race detector
         run: make test-race
 
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
 
+      - name: Migration validation
+        run: make migration-validate
+
       - name: OpenAPI contract checks
-        run: |
-          make openapi-generate
-          make openapi-drift-check
-          go test ./internal/api
-          make openapi-runtime-contract-check
-          make openapi-validate
-          make openapi-lint
+        run: make openapi-check
 
       - name: Run Go security checks
         run: make go-security
+
+      - name: Secret scan
+        run: make secret-scan
 
   publish-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

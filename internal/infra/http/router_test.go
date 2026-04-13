@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -58,7 +57,7 @@ func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetr
 }
 
 func TestRouterEndpoints(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -113,7 +112,7 @@ func TestRouterEndpoints(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -136,7 +135,11 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		if got := problem["title"]; got != "not found" {
 			t.Fatalf("title = %v, want %q", got, "not found")
 		}
-		if got := int(problem["status"].(float64)); got != http.StatusNotFound {
+		status, ok := problem["status"].(float64)
+		if !ok {
+			t.Fatalf("problem status type = %T, want float64", problem["status"])
+		}
+		if got := int(status); got != http.StatusNotFound {
 			t.Fatalf("problem status = %d, want %d", got, http.StatusNotFound)
 		}
 	})
@@ -360,7 +363,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 }
 
 func TestRouterAddsRequestIDHeader(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -455,7 +458,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 }
 
 func TestRouterAddsSecurityHeaders(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -472,7 +475,7 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 }
 
 func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -501,7 +504,7 @@ func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 }
 
 func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -581,7 +584,7 @@ func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := Recover(slog.New(slog.NewTextHandler(io.Discard, nil)), tt.handler)
+			handler := Recover(slog.New(slog.DiscardHandler), tt.handler)
 			req := httptest.NewRequest(http.MethodGet, "/panic", nil)
 			resp := httptest.NewRecorder()
 
@@ -602,7 +605,7 @@ func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
 
 func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
 	var sawFlusher bool
-	handler := Recover(slog.New(slog.NewTextHandler(io.Discard, nil)), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			return
@@ -694,7 +697,11 @@ func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out.String())), &event); err != nil {
 		t.Fatalf("unmarshal access log: %v", err)
 	}
-	if got := int(event["status"].(float64)); got != http.StatusNoContent {
+	status, ok := event["status"].(float64)
+	if !ok {
+		t.Fatalf("logged status type = %T, want float64", event["status"])
+	}
+	if got := int(status); got != http.StatusNoContent {
 		t.Fatalf("logged status = %d, want %d", got, http.StatusNoContent)
 	}
 }
@@ -728,7 +735,7 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),
@@ -970,7 +977,7 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		_ = tp.Shutdown(context.Background())
 	})
 
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
 		Ping:   ping.New(),

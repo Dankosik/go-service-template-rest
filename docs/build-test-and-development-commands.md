@@ -234,6 +234,14 @@ Bootstrap shortcuts:
 - `make docker-lint`
   - Docker equivalent of `make lint`.
 
+- `make modernize-check`
+  - Runs: `go tool golangci-lint run --enable-only=modernize --timeout=3m`
+  - Purpose: informational modern Go cleanup suggestions for maintainers.
+  - Note: this is intentionally separate from PR-blocking `make lint`; nightly runs it with `continue-on-error`.
+
+- `make docker-modernize-check`
+  - Docker equivalent of `make modernize-check`.
+
 ### Unit and integration testing
 
 - `make test`
@@ -613,6 +621,7 @@ Targeted parity checks:
 | Migration rehearsal | `make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'` or `make docker-migration-validate` |
 | Integration tests | `REQUIRE_DOCKER=1 make test-integration` or `make docker-test-integration` |
 | Go security and secret scans | `make govulncheck`, `make gosec`, `make go-security`, `make secret-scan`, `make docker-govulncheck`, `make docker-gosec`, `make docker-go-security`, or `make docker-secret-scan` |
+| Modern Go cleanup suggestions | `make modernize-check` or `make docker-modernize-check` |
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |
@@ -682,7 +691,7 @@ Local commands map directly to CI jobs:
 Zero-setup wrappers:
 - `make docker-check` runs quick fmt/lint/test validation through pinned Docker tooling.
 - `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-modernize-check`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 - `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
@@ -692,11 +701,12 @@ Nightly workflow: `.github/workflows/nightly.yml`
   - `make test-race`
   - `make test-integration`
   - full OpenAPI/security/container checks
+  - `make modernize-check` as informational modern Go cleanup guidance
   - informational Trivy repository filesystem/config scan in `repository-security`, separate from required container image scanning
 
 CD workflow: `.github/workflows/cd.yml`
 - `publish-main`: after successful `ci` on `main`, builds/scans/signs/publishes image to GHCR with `main` and `sha-*` tags.
-- `release-preflight`: on tag `v*`, reruns quality and security gates before publish.
+- `release-preflight`: on tag `v*`, reruns PR-equivalent repository guardrails, generated drift checks, lint, unit/vet/race/integration tests, coverage threshold, migration validation, OpenAPI checks, Go security, and secret scan before publish.
 - `publish-release`: on tag `v*`, runs only after `release-preflight`, then builds/scans/signs/publishes `v*`, `latest`, and `sha-*` tags, uploads CycloneDX SBOM, and pushes provenance attestation.
 
 ### Local parity limits

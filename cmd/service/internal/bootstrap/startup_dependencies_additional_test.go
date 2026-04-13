@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"strings"
@@ -219,7 +218,7 @@ func TestInitRedisDependencyAddressErrorClassifiedAsDependencyInit(t *testing.T)
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -252,7 +251,7 @@ func TestInitRedisDependencyPolicyDenialRemainsPolicyViolation(t *testing.T) {
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -294,7 +293,7 @@ func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) 
 	})
 
 	go func() {
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			conn, acceptErr := ln.Accept()
 			if acceptErr != nil {
 				return
@@ -304,7 +303,7 @@ func TestInitRedisDependencyAddsRuntimeReadinessProbeForStoreMode(t *testing.T) 
 	}()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -436,7 +435,7 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{},
 		metrics:       metrics,
-		log:           slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		log:           slog.New(slog.DiscardHandler),
 		networkPolicy: networkPolicy{},
 	}
 
@@ -467,7 +466,7 @@ func TestInitMongoDependencyRecordsDegradedStatusMetric(t *testing.T) {
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -501,7 +500,7 @@ func TestInitRedisCacheDependencyRecordsFeatureOffWhenReadinessNotRequired(t *te
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -595,7 +594,7 @@ func TestReadinessRequiredDegradedDependenciesRejectStartup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			metrics := telemetry.New()
-			logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+			logger := slog.New(slog.DiscardHandler)
 			runtime := dependencyProbeRuntime{
 				tracer:        otel.Tracer("test"),
 				bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -642,7 +641,7 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -695,7 +694,7 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
@@ -745,7 +744,7 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 	t.Parallel()
 
 	metrics := telemetry.New()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),

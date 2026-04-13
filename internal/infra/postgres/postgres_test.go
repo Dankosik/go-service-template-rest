@@ -586,11 +586,9 @@ func TestMaxIdleConnLimiterConcurrentReleases(t *testing.T) {
 	var wg sync.WaitGroup
 	kept := make(chan bool, len(conns))
 	for _, conn := range conns {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kept <- limiter.afterRelease(conn)
-		}()
+		})
 	}
 	wg.Wait()
 	close(kept)

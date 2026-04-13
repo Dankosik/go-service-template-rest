@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"strings"
 	"testing"
@@ -37,7 +36,7 @@ func (f *fakeShutdownServer) Shutdown(ctx context.Context) error {
 }
 
 func shutdownTestLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {

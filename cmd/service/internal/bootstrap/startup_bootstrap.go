@@ -279,6 +279,10 @@ func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyRe
 	return telemetryExporterTargetAllowed, nil
 }
 
+// bootstrapTraceStage transfers bootstrapSpan ownership to bootstrapRuntime.
+// bootstrapRuntime ends it on setup failure; startupSpanController closes it after successful startup.
+//
+//nolint:spancheck // bootstrapSpan intentionally outlives this helper and is returned to its lifecycle owner.
 func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Context, trace.Span) {
 	tracer := otel.Tracer("service.startup")
 	bootstrapCtx, bootstrapSpan := tracer.Start(startupCtx, "config.bootstrap")

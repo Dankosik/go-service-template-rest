@@ -91,7 +91,7 @@ func parseOptionalBoolEnvWithExplicitValue(name string, defaultValue bool, polic
 
 func parseAllowedSchemes(raw string, policyClass string) (map[string]struct{}, error) {
 	result := map[string]struct{}{}
-	for _, token := range strings.Split(raw, ",") {
+	for token := range strings.SplitSeq(raw, ",") {
 		scheme := strings.ToLower(strings.TrimSpace(token))
 		if scheme == "" {
 			continue
@@ -217,7 +217,7 @@ func parseNetworkExceptionMetadataFromEnv(prefix, policyClass string) (networkEx
 
 func parseHostMatchers(raw string) ([]networkHostMatcher, error) {
 	matchers := make([]networkHostMatcher, 0)
-	for _, token := range strings.Split(raw, ",") {
+	for token := range strings.SplitSeq(raw, ",") {
 		trimmed := strings.TrimSpace(strings.ToLower(token))
 		if trimmed == "" {
 			continue
