@@ -7,7 +7,7 @@ When loaded for foreign-template pressure or coverage gaps, this file makes the 
 Load this when the prompt mentions an external spec framework, the draft has template-shaped section sprawl, or the spec feels under-covered but not because of a narrower artifact-placement, depth, clarification, or validation problem.
 
 ## Decision Rubric
-- Start from the repository shape: `Context`, `Scope / Non-goals`, `Constraints`, `Decisions`, `Open Questions / Assumptions`, `Plan Summary / Link`, `Validation`, `Outcome`.
+- Start from the repository shape: `Context`, `Scope / Non-goals`, `Constraints`, `Decisions`, `Open Questions / Assumptions`, `Task Breakdown / Handoff Link`, `Validation`, `Outcome`.
 - Borrow a concern only when it changes planning, design, acceptance semantics, or proof. Do not borrow a heading because a framework names it.
 - Translate user journeys into affected actors or acceptance semantics only when they change behavior.
 - Translate requirement lists into stable decisions plus validation hooks; do not preserve `FR-001` numbering unless it is already an external contract.

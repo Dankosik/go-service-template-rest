@@ -22,7 +22,7 @@ Load this when a non-trivial spec is about to hand off to `technical design`, or
 - The configuration source remains the source of truth.
 - Failed reloads keep the last known-good token set active and surface degraded operator state.
 
-## Plan Summary / Link
+## Task Breakdown / Handoff Link
 - Technical design must derive component ownership, reload sequence, and observability placement from these decisions before planning starts.
 ```
 

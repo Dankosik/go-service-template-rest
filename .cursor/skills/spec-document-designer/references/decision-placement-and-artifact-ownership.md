@@ -19,7 +19,7 @@ Load this when a draft includes research notes, benchmark output, file topology,
 - Keep only the selected outcome in `Decisions`; link or summarize preserved evidence elsewhere.
 - If a fact is useful but not final, do not promote it into `Decisions`.
 - If a design detail matters, route it to `design/` and leave the decision-level boundary in `spec.md`.
-- If a task list exists, keep only the planning summary or plan link in `spec.md`.
+- If a task list exists, keep only the task-breakdown or handoff link in `spec.md`; link optional `plan.md` only when it exists for large-work strategy.
 
 ## Imitate
 
