@@ -187,7 +187,6 @@ func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -221,7 +220,6 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 	validDSN := "postgres://user:pass@localhost:5432/app?sslmode=disable"
 
 	for _, envName := range recognizedPostgresEnvVars {
-		envName := envName
 		t.Run(envName, func(t *testing.T) {
 			t.Setenv(envName, "ambient-value")
 
@@ -323,7 +321,6 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -339,7 +336,6 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 
 func TestParsePoolConfigRejectsSharedFileDefaultDSNKeys(t *testing.T) {
 	for _, key := range postgresFileDefaultDSNKeys {
-		key := key
 		t.Run(key.name, func(t *testing.T) {
 			dsn := "postgres://user:pass@localhost:5432/app?sslmode=disable&" + key.name + "=file-secret"
 
@@ -430,7 +426,6 @@ func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

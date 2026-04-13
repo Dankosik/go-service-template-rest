@@ -24,11 +24,11 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 
 .PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-integration lint go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check agents-sync agents-check \
+	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-vet docker-test-race docker-test-cover docker-test-report docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
+	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
@@ -51,9 +51,13 @@ help:
 	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
+	@echo "  make test-summary            # concise unit test summary"
 	@echo "  make test-report             # coverage report and threshold"
+	@echo "  make test-flake-smoke        # shuffled repeat test smoke"
 	@echo "  make migration-validate      # migration rehearsal"
 	@echo "  make go-security             # govulncheck + gosec"
+	@echo "  make govulncheck             # Go vulnerability reachability scan"
+	@echo "  make gosec                   # Go security static scan"
 	@echo "  make secret-scan             # gitleaks secret scan"
 	@echo "  make mocks-drift-check       # mockgen drift checks"
 	@echo "  make stringer-drift-check    # stringer drift checks"
@@ -61,12 +65,17 @@ help:
 	@echo "  make skills-check            # skill mirror drift check"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-sqlc-check       # Docker SQLC validation"
+	@echo "  make docker-test-summary     # Docker concise unit test summary"
 	@echo "  make docker-test-integration # Docker integration tests"
+	@echo "  make docker-test-flake-smoke # Docker shuffled repeat test smoke"
 	@echo "  make docker-migration-validate  # Docker migration rehearsal"
 	@echo "  make docker-go-security      # Docker govulncheck + gosec"
+	@echo "  make docker-govulncheck      # Docker Go vulnerability scan"
+	@echo "  make docker-gosec            # Docker Go security static scan"
 	@echo "  make docker-secret-scan      # Docker gitleaks secret scan"
 	@echo "  make docker-container-security  # Docker image scan"
-	@echo "  make gh-protect BRANCH=main"
+	@echo "  make gh-protect BRANCH=main       # apply branch protection"
+	@echo "  make gh-protect-check BRANCH=main # audit required status contexts"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
@@ -209,6 +218,9 @@ docker-fmt-check:
 test:
 	go test ./...
 
+test-summary:
+	go tool gotestsum --format=pkgname-and-test-fails -- ./...
+
 vet:
 	go vet ./...
 
@@ -221,7 +233,7 @@ test-cover:
 
 test-report:
 	@mkdir -p $(TEST_REPORT_DIR)
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 
@@ -245,16 +257,21 @@ coverage-check:
 
 test-fuzz-smoke:
 	@found=0; \
-	for pkg in $$(go list ./...); do \
-		if go test "$$pkg" -list '^Fuzz' | grep -q '^Fuzz'; then \
+	pkgs="$$(go list ./...)" || exit $$?; \
+	for pkg in $$pkgs; do \
+		fuzz_targets="$$(go test "$$pkg" -list '^Fuzz' 2>&1)" || { status=$$?; printf '%s\n' "$$fuzz_targets"; exit $$status; }; \
+		if printf '%s\n' "$$fuzz_targets" | grep -q '^Fuzz'; then \
 			found=1; \
 			echo "running fuzz smoke for $$pkg"; \
-			go test "$$pkg" -run '^$$' -fuzz=Fuzz -fuzztime=$(FUZZ_TIME); \
+			go test "$$pkg" -run '^$$' -fuzz=Fuzz -fuzztime=$(FUZZ_TIME) || exit $$?; \
 		fi; \
 	done; \
 	if [ "$$found" -eq 0 ]; then \
 		echo "no fuzz targets found; skipping fuzz smoke run"; \
 	fi
+
+test-flake-smoke:
+	go test -count=5 -shuffle=on ./...
 
 test-cover-local:
 	@coverage_log="$$(mktemp)"; \
@@ -276,6 +293,9 @@ test-cover-local:
 docker-test:
 	$(DOCKER_TOOLING_SCRIPT) test
 
+docker-test-summary:
+	$(DOCKER_TOOLING_SCRIPT) test-summary
+
 docker-vet:
 	$(DOCKER_TOOLING_SCRIPT) vet
 
@@ -288,6 +308,12 @@ docker-test-cover:
 docker-test-report:
 	$(DOCKER_TOOLING_SCRIPT) test-report
 
+docker-test-fuzz-smoke:
+	FUZZ_TIME="$(FUZZ_TIME)" $(DOCKER_TOOLING_SCRIPT) test-fuzz-smoke
+
+docker-test-flake-smoke:
+	$(DOCKER_TOOLING_SCRIPT) test-flake-smoke
+
 test-integration:
 	go test -tags=integration ./test/...
 
@@ -298,9 +324,13 @@ lint:
 	go tool golangci-lint config verify
 	go tool golangci-lint run --timeout=3m
 
-go-security:
+govulncheck:
 	go tool govulncheck ./...
+
+gosec:
 	go tool gosec -exclude-generated -exclude-dir=.cache ./...
+
+go-security: govulncheck gosec
 
 secret-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
@@ -433,6 +463,12 @@ agents-sync:
 agents-check:
 	$(AGENTS_SYNC_SCRIPT) --check
 
+docker-govulncheck:
+	$(DOCKER_TOOLING_SCRIPT) govulncheck
+
+docker-gosec:
+	$(DOCKER_TOOLING_SCRIPT) gosec
+
 docker-go-security:
 	$(DOCKER_TOOLING_SCRIPT) go-security
 
@@ -479,6 +515,9 @@ migration-validate:
 
 gh-protect:
 	$(BRANCH_PROTECTION_SCRIPT) "$${BRANCH:-main}"
+
+gh-protect-check:
+	$(BRANCH_PROTECTION_SCRIPT) --check "$${BRANCH:-main}"
 
 run:
 	@set -a; \

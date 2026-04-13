@@ -24,7 +24,7 @@ Required:
 Optional:
 - Node/npm (`npx`) for OpenAPI lint and OpenAPI checks
 - Docker daemon (for integration tests, compose, container build/run)
-- GitHub CLI (`gh`) for `make gh-protect`
+- GitHub CLI (`gh`) for `make gh-protect` and `make gh-protect-check`
 
 ### Zero-setup docker mode
 
@@ -35,7 +35,7 @@ Required:
 Optional:
 - GNU Make (recommended)
 - local Go/Node toolchain (not required in this mode)
-- GitHub CLI (`gh`) for `make gh-protect`
+- GitHub CLI (`gh`) for `make gh-protect` and `make gh-protect-check`
 
 Bootstrap shortcuts:
 - `make bootstrap` (recommended onboarding shortcut; minimal local prep)
@@ -177,6 +177,14 @@ Bootstrap shortcuts:
     - requires `gh auth login`;
     - requires admin/maintainer permissions.
 
+- `make gh-protect-check BRANCH=<branch>`
+  - Runs: `bash ./scripts/dev/configure-branch-protection.sh --check <branch>`
+  - Purpose: read-only audit that compares live branch-protection required status contexts with the template context list.
+  - Notes:
+    - does not mutate branch protection;
+    - checks required status contexts only, not reviews, admins, CODEOWNERS, force-push policy, or conversation resolution;
+    - requires `gh auth login` and repository permissions that can read branch protection settings.
+
 - `make tidy`
   - Runs: `go mod tidy`
 
@@ -221,6 +229,7 @@ Bootstrap shortcuts:
     - `go tool golangci-lint config verify`
     - `go tool golangci-lint run --timeout=3m`
   - Note: local lint now matches CI behavior by validating `.golangci.yml` schema before running linters.
+  - Version rule: keep the `golangci-lint` tool version in `go.mod` aligned with workflow `GOLANGCI_LINT_VERSION` values; `make guardrails-check` enforces that alignment.
 
 - `make docker-lint`
   - Docker equivalent of `make lint`.
@@ -232,6 +241,13 @@ Bootstrap shortcuts:
 
 - `make docker-test`
   - Docker equivalent of `make test`.
+
+- `make test-summary`
+  - Runs: `go tool gotestsum --format=pkgname-and-test-fails -- ./...`
+  - Purpose: concise unit-test output for local troubleshooting while keeping `make test` as the stable raw `go test ./...` path.
+
+- `make docker-test-summary`
+  - Docker equivalent of `make test-summary`.
 
 - `make vet`
   - Runs: `go vet ./...`
@@ -257,6 +273,7 @@ Bootstrap shortcuts:
     - raw `test2json` artifact (`.artifacts/test/test2json.json`).
   - Then runs `make coverage-check`.
   - This is the closest local equivalent to the CI `test-coverage` job.
+  - Clears ambient `GOCOVERDIR` before coverage collection so local experiment settings do not contaminate the report.
 
 - `make coverage-check [COVERAGE_MIN=65.0]`
   - Fails if coverage from `coverage.out` is below the configured threshold.
@@ -266,7 +283,18 @@ Bootstrap shortcuts:
 
 - `make test-fuzz-smoke [FUZZ_TIME=45s]`
   - Runs a short fuzzing pass (`go test -fuzz`) when fuzz targets exist.
-  - Skips with success when no `Fuzz*` tests are present.
+  - Fails package discovery or listing errors.
+  - Skips with success only when no `Fuzz*` tests are present.
+
+- `make docker-test-fuzz-smoke [FUZZ_TIME=45s]`
+  - Docker equivalent of `make test-fuzz-smoke`.
+
+- `make test-flake-smoke`
+  - Runs: `go test -count=5 -shuffle=on ./...`
+  - Purpose: local mirror of the nightly shuffled repeat smoke check.
+
+- `make docker-test-flake-smoke`
+  - Docker equivalent of `make test-flake-smoke`.
 
 - `make test-cover-local`
   - Runs same coverage flow as `test-cover`, but degrades to warning only for known local Go coverage-toolchain mismatch (`does not match go tool version`).
@@ -373,7 +401,16 @@ Bootstrap shortcuts:
     - otherwise runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
 
 - `make go-security`
-  - Runs native `go tool govulncheck` and `go tool gosec -exclude-generated -exclude-dir=.cache`.
+  - Aggregate target that runs `make govulncheck` and `make gosec`.
+  - This remains the single Go security context used by CI and branch protection.
+
+- `make govulncheck`
+  - Runs: `go tool govulncheck ./...`
+  - Purpose: Go vulnerability reachability scan.
+
+- `make gosec`
+  - Runs: `go tool gosec -exclude-generated -exclude-dir=.cache ./...`
+  - Purpose: Go security static analysis.
 
 - `make secret-scan`
   - Runs native `go tool gitleaks` scan over repository git history.
@@ -406,6 +443,12 @@ Bootstrap shortcuts:
 
 - `make docker-go-security`
   - Runs `govulncheck` and `gosec` through Docker tooling container.
+
+- `make docker-govulncheck`
+  - Docker equivalent of `make govulncheck`.
+
+- `make docker-gosec`
+  - Docker equivalent of `make gosec`.
 
 - `make docker-secret-scan`
   - Runs `gitleaks` through Docker tooling wrapper.
@@ -457,6 +500,7 @@ Bootstrap shortcuts:
 
 - `make guardrails-check`
   - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
+  - Purpose: enforce required repository files, tool-version alignment, required branch-protection context alignment, and core architecture import boundaries.
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
@@ -542,6 +586,8 @@ Bootstrap shortcuts:
    `make template-init-strict` or `make template-init-native-strict`
 4. Optional repo-hardening step (admin):
    `make gh-protect BRANCH=main`
+5. Optional read-only branch-protection audit after setup:
+   `make gh-protect-check BRANCH=main`
 
 ### Everyday, pre-push, and PR parity
 
@@ -566,11 +612,12 @@ Targeted parity checks:
 | SQLC generation and stale query artifact drift | `make sqlc-check` or `make docker-sqlc-check` |
 | Migration rehearsal | `make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'` or `make docker-migration-validate` |
 | Integration tests | `REQUIRE_DOCKER=1 make test-integration` or `make docker-test-integration` |
-| Go security and secret scans | `make go-security`, `make secret-scan`, `make docker-go-security`, or `make docker-secret-scan` |
+| Go security and secret scans | `make govulncheck`, `make gosec`, `make go-security`, `make secret-scan`, `make docker-govulncheck`, `make docker-gosec`, `make docker-go-security`, or `make docker-secret-scan` |
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |
-| Nightly-only flake and fuzz smoke | `go test -count=5 -shuffle=on ./...` and `make test-fuzz-smoke FUZZ_TIME=60s` |
+| Branch-protection required status context audit | `make gh-protect-check BRANCH=main` |
+| Nightly-only flake and fuzz smoke | `make test-flake-smoke` and `make test-fuzz-smoke FUZZ_TIME=60s` |
 
 ### Feature implementation (native)
 
@@ -617,21 +664,25 @@ Local commands map directly to CI jobs:
 - `make test-report COVERAGE_MIN=<value>` -> `test-coverage`
 - `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
 - `make migration-validate` -> `migration-validate` (only when migrations changed)
-- `make go-security` + `make secret-scan` + Trivy image scan -> `go-security`, `secret-scan`, `container-security`
+- `make govulncheck` + `make gosec` through the aggregate `go-security` job -> `go-security`
+- `make secret-scan` -> `secret-scan`
+- Trivy image scan -> `container-security`
+- Dependency Review -> PR-only informational `dependency-review`, not branch-protection-required
 
 Zero-setup wrappers:
 - `make docker-check` runs quick fmt/lint/test validation through pinned Docker tooling.
 - `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-secret-scan`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 - `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:
-  - `go test -count=5 -shuffle=on ./...`
+  - `make test-flake-smoke`
   - `make test-fuzz-smoke FUZZ_TIME=60s`
   - `make test-race`
   - `make test-integration`
   - full OpenAPI/security/container checks
+  - informational Trivy repository filesystem/config scan in `repository-security`, separate from required container image scanning
 
 CD workflow: `.github/workflows/cd.yml`
 - `publish-main`: after successful `ci` on `main`, builds/scans/signs/publishes image to GHCR with `main` and `sha-*` tags.
@@ -647,6 +698,9 @@ Local checks intentionally get close to CI, but they do not replace GitHub event
 - `migration-validate` runs conditionally in CI only when `env/migrations/` changes. `make docker-ci` runs the rehearsal unconditionally, which is stricter and avoids local change-detection drift.
 - `make ci-local` uses host Go, Node, npm, and Docker. Prefer `make docker-ci` when host tooling differs from CI or when you want pinned tooling images.
 - Docker container scans require a reachable Docker daemon and Docker socket. If the socket is unavailable, `make docker-container-security` fails instead of silently claiming scan proof.
+- `make gh-protect-check` requires GitHub CLI authentication and permissions to read branch protection; without that GitHub-owned context, local validation can only prove script wiring and static context alignment.
+- Dependency Review is PR-only and informational on first introduction. It is not required by branch protection and is not part of local Go quality proof.
+- The nightly Trivy repository filesystem/config scan is informational on first introduction and separate from the required CI container image Trivy scan.
 - GitHub Actions runner image details, action versions, caches, uploaded artifacts, branch protection status reporting, concurrency cancellation, and PR/push event payloads are GitHub-owned context.
 - CD publish behavior is only partially reproducible locally. You can build and scan with `make docker-build` and `make docker-container-security`, and you can run release-preflight-style quality gates with `make docker-ci`, but GHCR login/push, `GITHUB_TOKEN`, OIDC keyless Cosign signing, provenance attestation, SBOM artifact upload, and `workflow_run`/tag trigger conditions remain GitHub-only release evidence.
 

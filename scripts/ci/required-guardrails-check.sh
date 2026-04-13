@@ -57,6 +57,25 @@ require_regex() {
   fi
 }
 
+require_absent_regex() {
+  local pattern="$1"
+  local file="$2"
+  local message="$3"
+  if grep -Eq -- "${pattern}" "${file}"; then
+    echo "guardrail check failed: ${message}"
+    echo "  file: ${file}"
+    echo "  forbidden pattern: ${pattern}"
+    exit 1
+  fi
+}
+
+require_golangci_lint_workflow_version() {
+  local file="$1"
+  local expected_version="$2"
+
+  require_regex "^[[:space:]]{2}GOLANGCI_LINT_VERSION: ${expected_version}$" "${file}" "golangci-lint workflow pin must match go.mod"
+}
+
 require_no_forbidden_go_imports() {
   local message="$1"
   local pattern="$2"
@@ -85,6 +104,24 @@ require_regex '^overlapSeconds = 45$' "railway.toml" "railway overlap window mus
 require_regex '^drainingSeconds = 30$' "railway.toml" "railway draining window must be 30 seconds"
 require_regex '^# - production replica baseline: >=2$' "railway.toml" "railway policy baseline comment must define replica floor"
 require_regex '^# - per-replica baseline: 2 vCPU / 2 GiB$' "railway.toml" "railway policy baseline comment must define per-replica CPU and memory"
+
+go_version="$(go list -m -f '{{.GoVersion}}')"
+golangci_lint_version="$(go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)"
+
+# Keep Go and golangci-lint toolchain pins aligned across local, Docker, and CI surfaces.
+require_regex "^FROM --platform=\\\$BUILDPLATFORM golang:${go_version}-bookworm@sha256:[[:xdigit:]]{64} AS build$" "build/docker/Dockerfile" "runtime Docker build Go image must match go.mod"
+require_regex "^FROM golang:${go_version}-bookworm@sha256:[[:xdigit:]]{64} AS go_toolchain$" "build/docker/tooling-images.Dockerfile" "Docker tooling Go image must match go.mod"
+require_golangci_lint_workflow_version ".github/workflows/ci.yml" "${golangci_lint_version}"
+require_golangci_lint_workflow_version ".github/workflows/nightly.yml" "${golangci_lint_version}"
+require_golangci_lint_workflow_version ".github/workflows/cd.yml" "${golangci_lint_version}"
+
+if grep -Eq '^[[:space:]]*FROM[[:space:]]+.*[[:space:]]+AS[[:space:]]+golangci_lint_tool$' "build/docker/tooling-images.Dockerfile"; then
+  require_regex "^FROM golangci/golangci-lint:${golangci_lint_version}@sha256:[[:xdigit:]]{64} AS golangci_lint_tool$" "build/docker/tooling-images.Dockerfile" "retained golangci-lint tooling image must match go.mod and remain digest pinned"
+elif grep -Eq 'golangci/golangci-lint:' "build/docker/tooling-images.Dockerfile"; then
+  echo "guardrail check failed: golangci-lint tooling image must use the checked golangci_lint_tool stage or be removed"
+  echo "  file: build/docker/tooling-images.Dockerfile"
+  exit 1
+fi
 
 # Keep canonical build path aligned with hardened repository Dockerfile.
 require_regex 'docker build' ".github/workflows/cd.yml" "cd workflow must build with docker build"
@@ -116,8 +153,12 @@ required_contexts=(
 )
 
 for context in "${required_contexts[@]}"; do
-  require_regex "\"context\": \"${context}\"" "scripts/dev/configure-branch-protection.sh" "branch protection must require '${context}' context"
+  require_regex "^[[:space:]]+\"${context}\"$" "scripts/dev/configure-branch-protection.sh" "branch protection must require '${context}' context"
   require_regex "^[[:space:]]{2}${context}:" ".github/workflows/ci.yml" "ci workflow must expose '${context}' job context"
+done
+
+for context in "dependency-review" "repository-security" "govulncheck" "gosec"; do
+  require_absent_regex "^[[:space:]]+\"${context}\"$|\"context\": \"${context}\"" "scripts/dev/configure-branch-protection.sh" "branch protection must not require optional/internal '${context}' context"
 done
 
 require_no_forbidden_go_imports \

@@ -51,7 +51,7 @@ jobs:
           args: --timeout=3m
 
       - name: Flake detection run
-        run: go test -count=5 -shuffle=on ./...
+        run: make test-flake-smoke
 
       - name: Fuzz smoke run
         run: make test-fuzz-smoke FUZZ_TIME=${{ env.FUZZ_TIME }}
@@ -82,5 +82,25 @@ jobs:
           image-ref: service:nightly
           format: table
           exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  repository-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Scan repository filesystem/config with Trivy (informational)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          format: table
+          exit-code: "0"
           ignore-unfixed: true
           severity: CRITICAL,HIGH

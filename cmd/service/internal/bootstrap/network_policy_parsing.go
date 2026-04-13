@@ -20,7 +20,7 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 		return networkPolicy{}, err
 	}
 
-	egressAllowlist, err := parseHostMatchers(os.Getenv(envNetworkEgressAllowlist), "egress")
+	egressAllowlist, err := parseHostMatchers(os.Getenv(envNetworkEgressAllowlist))
 	if err != nil {
 		return networkPolicy{}, err
 	}
@@ -142,7 +142,7 @@ func parseEgressNetworkExceptionFromEnv(prefix string) (networkException, error)
 		return exception, err
 	}
 
-	scopeMatchers, parseErr := parseHostMatchers(exception.Scope, "egress")
+	scopeMatchers, parseErr := parseHostMatchers(exception.Scope)
 	if parseErr != nil {
 		return networkException{}, parseErr
 	}
@@ -215,7 +215,7 @@ func parseNetworkExceptionMetadataFromEnv(prefix, policyClass string) (networkEx
 	return exception, nil
 }
 
-func parseHostMatchers(raw string, policyClass string) ([]networkHostMatcher, error) {
+func parseHostMatchers(raw string) ([]networkHostMatcher, error) {
 	matchers := make([]networkHostMatcher, 0)
 	for _, token := range strings.Split(raw, ",") {
 		trimmed := strings.TrimSpace(strings.ToLower(token))
@@ -229,7 +229,7 @@ func parseHostMatchers(raw string, policyClass string) ([]networkHostMatcher, er
 			normalized := normalizeHost(strings.TrimPrefix(trimmed, "*."))
 			if normalized == "" {
 				return nil, &networkPolicyConfigError{
-					policyClass: policyClass,
+					policyClass: "egress",
 					reasonClass: "invalid_configuration",
 					message:     "wildcard host matcher cannot be empty",
 				}
@@ -239,7 +239,7 @@ func parseHostMatchers(raw string, policyClass string) ([]networkHostMatcher, er
 			normalized := normalizeHost(strings.TrimPrefix(trimmed, "."))
 			if normalized == "" {
 				return nil, &networkPolicyConfigError{
-					policyClass: policyClass,
+					policyClass: "egress",
 					reasonClass: "invalid_configuration",
 					message:     "suffix host matcher cannot be empty",
 				}
@@ -250,7 +250,7 @@ func parseHostMatchers(raw string, policyClass string) ([]networkHostMatcher, er
 			normalized := normalizeHost(trimmed)
 			if normalized == "" {
 				return nil, &networkPolicyConfigError{
-					policyClass: policyClass,
+					policyClass: "egress",
 					reasonClass: "invalid_configuration",
 					message:     "host matcher contains empty token",
 				}

@@ -370,7 +370,7 @@ func TestParseHostMatchersRejectsEmptySuffixSyntax(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseHostMatchers(tt.raw, "egress")
+			_, err := parseHostMatchers(tt.raw)
 			if err == nil {
 				t.Fatal("parseHostMatchers() error = nil, want invalid matcher syntax")
 			}
@@ -389,7 +389,7 @@ func TestParseHostMatchersRejectsEmptySuffixSyntax(t *testing.T) {
 }
 
 func TestParseHostMatchersAllowsTrailingDotSuffixSyntax(t *testing.T) {
-	matchers, err := parseHostMatchers("*.Example.COM., .Example.ORG.", "egress")
+	matchers, err := parseHostMatchers("*.Example.COM., .Example.ORG.")
 	if err != nil {
 		t.Fatalf("parseHostMatchers() error = %v, want nil", err)
 	}

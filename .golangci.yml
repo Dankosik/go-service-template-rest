@@ -11,10 +11,12 @@ linters:
     - errcheck
     - bidichk
     - bodyclose
+    - copyloopvar
     - durationcheck
     - errchkjson
     - sqlclosecheck
     - errorlint
+    - exhaustive
     - gocheckcompilerdirectives
     - contextcheck
     - gocritic
@@ -30,4 +32,9 @@ linters:
     - thelper
     - gomoddirectives
     - unconvert
+    - unparam
     - wastedassign
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true

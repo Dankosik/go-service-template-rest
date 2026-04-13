@@ -228,7 +228,6 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 	errs := make(chan error, setupCount)
 	var wg sync.WaitGroup
 	for i := range setupCount {
-		i := i
 		wg.Go(func() {
 			shutdown, err := SetupTracing(context.Background(), TracingConfig{
 				ServiceName:      fmt.Sprintf("config-service-%d", i),

@@ -61,6 +61,7 @@ TEST_JUNIT_FILE="${TEST_JUNIT_FILE:-${TEST_REPORT_DIR}/junit.xml}"
 TEST_JSON_FILE="${TEST_JSON_FILE:-${TEST_REPORT_DIR}/test2json.json}"
 COVERAGE_MIN="${COVERAGE_MIN:-65.0}"
 COVERAGE_EXCLUDE_REGEX="${COVERAGE_EXCLUDE_REGEX:-(^|/)internal/api/openapi\\.gen\\.go:|(^|/)cmd/service/main\\.go:}"
+FUZZ_TIME="${FUZZ_TIME:-45s}"
 GO_FILES_FIND="find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*'"
 GOFUMPT_FILES_FIND="${GO_FILES_FIND} -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*' -not -name '*_mock_test.go' -not -name '*_string.go'"
 
@@ -77,10 +78,13 @@ usage() {
 	echo "  fmt"
 	echo "  fmt-check"
 	echo "  test"
+	echo "  test-summary"
 	echo "  vet"
 	echo "  test-race"
 	echo "  test-cover"
 	echo "  test-report"
+	echo "  test-fuzz-smoke"
+	echo "  test-flake-smoke"
 	echo "  test-integration"
 	echo "  stringer-generate"
 	echo "  stringer-drift-check"
@@ -95,6 +99,8 @@ usage() {
 	echo "  openapi-lint"
 	echo "  openapi-validate"
 	echo "  openapi-check"
+	echo "  govulncheck"
+	echo "  gosec"
 	echo "  go-security"
 	echo "  secret-scan"
 	echo "  guardrails-check"
@@ -267,6 +273,10 @@ run_test_report() {
 	run_coverage_check
 }
 
+run_test_fuzz_smoke() {
+	run_go "found=0; pkgs=\$(go list ./...) || exit \$?; for pkg in \${pkgs}; do fuzz_targets=\$(go test \"\${pkg}\" -list '^Fuzz' 2>&1) || { status=\$?; printf '%s\n' \"\${fuzz_targets}\"; exit \${status}; }; if printf '%s\n' \"\${fuzz_targets}\" | grep -q '^Fuzz'; then found=1; echo \"running fuzz smoke for \${pkg}\"; go test \"\${pkg}\" -run '^\$' -fuzz=Fuzz -fuzztime='${FUZZ_TIME}' || exit \$?; fi; done; if [[ \"\${found}\" -eq 0 ]]; then echo 'no fuzz targets found; skipping fuzz smoke run'; fi"
+}
+
 wait_for_postgres() {
 	local container_name="$1"
 	local attempts=60
@@ -420,6 +430,9 @@ fmt-check)
 test)
 	run_go "go test ./..."
 	;;
+test-summary)
+	run_go "go tool gotestsum --format=pkgname-and-test-fails -- ./..."
+	;;
 vet)
 	run_go "go vet ./..."
 	;;
@@ -431,6 +444,12 @@ test-cover)
 	;;
 test-report)
 	run_test_report
+	;;
+test-fuzz-smoke)
+	run_test_fuzz_smoke
+	;;
+test-flake-smoke)
+	run_go "go test -count=5 -shuffle=on ./..."
 	;;
 test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."
@@ -482,8 +501,15 @@ openapi-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-lint
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-validate
 	;;
+govulncheck)
+	run_go "go tool govulncheck ./..."
+	;;
+gosec)
+	run_go "go tool gosec -exclude-generated -exclude-dir=.cache ./..."
+	;;
 go-security)
-	run_go "go tool govulncheck ./... && go tool gosec -exclude-generated -exclude-dir=.cache ./..."
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" govulncheck
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" gosec
 	;;
 secret-scan|secrets-scan)
 	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 ."

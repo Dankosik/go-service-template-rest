@@ -245,6 +245,48 @@ jobs:
       - name: Coverage + JUnit + JSON
         run: make test-report COVERAGE_MIN=${{ env.COVERAGE_MIN }}
 
+      - name: Write test coverage summary
+        if: always()
+        run: |
+          {
+            echo "## Test coverage"
+            echo
+            if [ -f coverage.out ]; then
+              coverage_details="$(go tool cover -func=coverage.out 2>&1 || true)"
+              coverage_total="$(printf '%s\n' "${coverage_details}" | awk '/^total:/ {print $3}')"
+              echo "- Total coverage: ${coverage_total:-unavailable}"
+              echo "- Required minimum: ${COVERAGE_MIN}%"
+              echo
+              echo "<details><summary>Coverage details</summary>"
+              echo
+              echo '```text'
+              printf '%s\n' "${coverage_details}"
+              echo '```'
+              echo
+              echo "</details>"
+            else
+              echo "- coverage.out was not produced."
+            fi
+
+            echo
+            echo "## Test report"
+            echo
+            if [ -f .artifacts/test/test2json.json ]; then
+              awk '
+                /"Test":/ && /"Action":"pass"/ { passed++ }
+                /"Test":/ && /"Action":"fail"/ { failed++ }
+                /"Test":/ && /"Action":"skip"/ { skipped++ }
+                END {
+                  printf "- Test events: %d passed, %d failed, %d skipped\n", passed + 0, failed + 0, skipped + 0
+                }
+              ' .artifacts/test/test2json.json
+            else
+              echo "- test2json report was not produced."
+            fi
+            echo "- JUnit artifact: .artifacts/test/junit.xml"
+            echo "- test2json artifact: .artifacts/test/test2json.json"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Upload coverage report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -344,6 +386,23 @@ jobs:
         if: steps.migration_changes.outputs.should_run != 'true'
         run: echo "no migration files changed"
 
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: repo-integrity
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Dependency Review (informational)
+        continue-on-error: true
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          warn-only: true
+          comment-summary-in-pr: never
+
   go-security:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -357,8 +416,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run Go security checks
-        run: make go-security
+      - name: Run govulncheck
+        run: make govulncheck
+
+      - name: Run gosec
+        run: make gosec
 
   secret-scan:
     runs-on: ubuntu-latest

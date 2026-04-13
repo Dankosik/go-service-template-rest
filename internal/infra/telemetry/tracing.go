@@ -313,7 +313,7 @@ func otlpEndpoint(
 		if endpoint.urlPath == "" {
 			endpoint.urlPath = "/"
 		}
-	default:
+	case traceOTLPEndpointSourceGeneric:
 		endpoint.urlPath = genericTraceEndpointPath(path)
 	}
 
