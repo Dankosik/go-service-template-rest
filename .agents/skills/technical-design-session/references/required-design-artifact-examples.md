@@ -7,7 +7,7 @@ When loaded for shaping the core design bundle, this file makes the model split 
 Load when creating or repairing `design/overview.md`, `design/component-map.md`, `design/sequence.md`, or `design/ownership-map.md`.
 
 ## Decision Rubric
-- `design/overview.md` is the entrypoint: chosen approach, artifact index, unresolved seams, readiness summary, and links to triggered conditional artifacts.
+- `design/overview.md` is the entrypoint: chosen approach, artifact index, unresolved seams, readiness summary, and links to triggered conditional artifacts. When planning will consume the bundle, the artifact index should show required artifact status and trigger rationale for plausible conditional artifacts.
 - `design/component-map.md` owns affected packages, modules, generated surfaces, adapters, and stable areas; it is not an implementation task list.
 - `design/sequence.md` owns runtime order: request, async, startup, shutdown, recovery, failure points, side effects, and sync/async boundaries.
 - `design/ownership-map.md` owns source-of-truth, dependency direction, generated-code authority, adapter responsibility, and what must not own the behavior.
@@ -18,7 +18,7 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
 ```markdown
 `design/overview.md`
 - Approach: add the async export capability behind app-owned job orchestration and infra-owned HTTP/download adapters.
-- Bundle index: component map, sequence, ownership map, data model, contracts.
+- Bundle index: component map approved; sequence approved; ownership map approved; data model expected because persisted job state changes; contracts expected because the OpenAPI shape changes; rollout not expected because no mixed-version choreography is in scope.
 - Readiness: planning can start after `design/contracts/` is approved.
 ```
 

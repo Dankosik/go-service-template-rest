@@ -50,7 +50,7 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
 - Prefer one coherent design-bundle handoff over scattered partial notes that still force planning to rediscover technical context.
-- Keep `design/overview.md` as the bundle entrypoint instead of repeating the same story in every artifact.
+- Keep `design/overview.md` as the bundle entrypoint instead of repeating the same story in every artifact; when the bundle is planning-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
 
 ## Boundaries And Handoffs
 This is a technical-design integrator, not a workflow owner:
@@ -63,7 +63,7 @@ This is a technical-design integrator, not a workflow owner:
 
 ### Design Bundle Assembly
 - Produce or tighten the required core artifacts for non-trivial work:
-  - `design/overview.md` for chosen approach, artifact index, unresolved seams, and readiness summary
+  - `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
   - `design/component-map.md` for affected packages, modules, or components; responsibilities; and what changes versus what stays stable
   - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior
   - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, and responsibility boundaries

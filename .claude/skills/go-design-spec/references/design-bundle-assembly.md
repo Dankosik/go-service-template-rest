@@ -11,7 +11,7 @@ Do not load this when the question is only a domain-specific decision. Use the s
 ## Decision Rubric
 - Core artifacts are expected for non-trivial design: `overview.md`, `component-map.md`, `sequence.md`, and `ownership-map.md`.
 - Conditional artifacts need behavior-changing triggers: persisted state, dependency shape, contracts, layered validation, migration choreography, or release safety.
-- `design/overview.md` is the entrypoint and artifact index. It should point to details, not repeat every artifact.
+- `design/overview.md` is the entrypoint and artifact index. It should point to details, not repeat every artifact. When the bundle is planning-bound, each required artifact entry should show status, and each plausible conditional artifact should include trigger rationale for `expected`, `not expected`, `conditional`, or `waived`.
 - `spec.md` owns final behavior, scope, invariants, and accepted risk. Design consumes those decisions.
 - `tasks.md` owns sequencing, task IDs, checkpoints, and implementation ordering. Optional `plan.md` owns only supplemental strategy when present. Design may name planning constraints, not write the task ledger.
 - If an artifact would be empty or generic, mark it not expected and say why.
@@ -27,9 +27,9 @@ Entrypoint that records selected approach, artifact index, and readiness without
 The feature follows the existing HTTP request path: OpenAPI contract -> generated `internal/api` bindings -> `internal/infra/http` adapter -> `internal/app/orders` use case. The repository-wide dependency direction stays unchanged.
 
 ## Artifact Index
-- `design/component-map.md`: package responsibilities and stable surfaces.
-- `design/sequence.md`: create-order request flow, validation failure, dependency timeout, and persistence failure.
-- `design/ownership-map.md`: OpenAPI, app behavior, migration, and adapter ownership.
+- `design/component-map.md`: approved; package responsibilities and stable surfaces.
+- `design/sequence.md`: approved; create-order request flow, validation failure, dependency timeout, and persistence failure.
+- `design/ownership-map.md`: approved; OpenAPI, app behavior, migration, and adapter ownership.
 - `design/data-model.md`: expected because persisted order state changes.
 - `rollout.md`: expected because migration compatibility and backfill order affect release safety.
 - `test-plan.md`: not expected; validation fits in `tasks.md`.
@@ -84,7 +84,7 @@ Why it is bad: conditional artifacts need real triggers. Filler artifacts make p
 - `design/sequence.md` introduces async work, but `design/ownership-map.md` has no owner for durable retries, DLQ, or reconciliation.
 - `workflow-plan.md` says planning can start, but `design/overview.md` still lists planning-critical blockers.
 - `rollout.md` is marked not expected while the design requires `expand -> backfill/verify -> contract`.
-- `test-plan.md` is created even though validation obligations are small enough for `plan.md`.
+- `test-plan.md` is created even though validation obligations are small enough for `tasks.md`.
 
 ## Validation Shape
 Before handoff, prove the bundle by naming required artifacts, triggered conditional artifacts, non-triggered artifacts with reasons, unresolved blockers, and the next artifact owner. Do not claim readiness if the proof relies on chat-only context.

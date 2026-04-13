@@ -141,7 +141,7 @@ Every completed pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
-- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
+- `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - blockers and accepted assumptions that still affect routing
 - phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
 - workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale

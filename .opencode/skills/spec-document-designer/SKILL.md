@@ -135,6 +135,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Task-local technical design context belongs in `design/`.
 - Task sequencing and execution detail belong in `tasks.md`; optional `plan.md` carries only supplemental strategy when justified.
 - Unresolved but visible gaps belong in `Open Questions / Assumptions`.
+- Label `Open Questions / Assumptions` by unblock path when the uncertainty affects later sessions: `[assumption]` for bounded proceed-and-revisit assumptions, `[accepted_risk]` for deliberate risk with limits or proof obligations, `[requires_user_decision]` for external product or policy choices, `[targeted_research]` for repository evidence still needed, `[defer_to_design]` only for design-owned details after behavior is decided, and `[reopen_spec_if_false]` for downstream discoveries that would invalidate a spec-level assumption.
 - Do not force `go-design-spec` or the planner to recover ownership, sequence, or execution order from `spec.md` when separate artifacts are warranted.
 
 ### Technical-Design Handoff Competency
@@ -227,6 +228,7 @@ Rules:
 - Do not create empty sections.
 - Do not dump full task lists or execution steps into `spec.md`.
 - Do not use `spec.md` as a substitute for `design/`.
+- Do not copy a historical bundle under `specs/` as a template; use it only as task-local precedent and preserve the current task's own trigger rationale.
 - When blocked, say what upstream skill or research pass must reopen and why.
 
 ## Definition Of Done

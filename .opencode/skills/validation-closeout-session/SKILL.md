@@ -78,7 +78,7 @@ References are compact rubrics and example banks, not exhaustive checklists or r
 | `references/claim-to-proof-closeout.md` | closeout claim is explicit but proof scope is uncertain | narrow the command set and success wording to the claim instead of treating one green check as task-wide proof |
 | `references/spec-validation-outcome-updates.md` | updating `spec.md` `Validation` or `Outcome` | write a proof-shaped closeout record instead of vague "tests pass" or optimistic outcome prose |
 | `references/tasks-progress-update-examples.md` | existing `tasks.md` needs checkbox or progress alignment | update only ledger items proved by fresh evidence instead of bulk-checking or creating tasks during validation |
-| `references/workflow-plan-completion-vs-reopen.md` | existing workflow routing must record complete, blocked, or reopened state | make master and phase routing agree instead of leaving "mostly done" or `TBD` state |
+| `references/workflow-plan-completion-vs-reopen.md` | existing workflow routing must record phase status plus done or reopen routing state | make master and phase routing agree instead of leaving "mostly done" or `TBD` state |
 | `references/failed-proof-and-reopen-handling.md` | required proof fails, is missing, stale, skipped, or too narrow | record the narrowest reopen target and stop instead of fixing code or softening failure during closeout |
 
 Reference rules:
@@ -202,7 +202,7 @@ Do not:
 
 ### 9. Write Or Repair `workflow-plan.md`
 - update master phase status, blockers, and next-session routing
-- make it explicit whether closeout is complete, blocked, or reopened
+- make the closeout phase status explicit, and use a separate task or routing state when closeout reopens an earlier phase
 - if the task is honestly done, close the workflow instead of leaving ambiguous "mostly done" language:
   - `Session boundary reached: yes`
   - `Ready for next session: no`
@@ -237,7 +237,7 @@ Every completed, blocked, or reopened pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
-- `Next session context bundle` with exact artifact paths and one-line reasons when a reopen or follow-up session needs more than the default resume order
+- `Next session context bundle` as an always-present field: say default resume order is sufficient or there is no next session, or list exact artifact paths and one-line reasons for a reopen or follow-up session
 - blockers, failed proof, accepted limits, and reopen targets that still affect closure
 - whether the task is honestly done or has reopened an earlier phase
 
@@ -249,7 +249,7 @@ A finished validation-closeout session produces only closeout artifacts and rout
 - updated `workflow-plan.md`
 - updated `workflow-plans/validation-phase-<n>.md` only when a dedicated validation phase is actually in use and the file already exists
 - updated existing `tasks.md` checkbox/progress state only when the task already uses it
-- an honest `complete`, `blocked`, or `reopened` closeout state with the next session start point made explicit
+- an honest closeout phase status such as `complete` or `blocked`, plus a separate task or routing state when reopened, with the next session start point made explicit
 
 It does not produce implementation output, design changes, new plans, or silent fixes.
 

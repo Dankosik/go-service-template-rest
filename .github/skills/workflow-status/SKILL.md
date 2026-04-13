@@ -113,6 +113,7 @@ Workflow Status
 - Task path: <path or not identified>
 - Current phase: <phase or unknown>
 - Phase status: <status or unknown>
+- Routing/task state: <done / reopened / N/A / unknown, when distinct from phase status>
 - Session boundary: <reached / not reached / unknown, plus next-session signal if present>
 - Artifact status: <compact list>
 - Implementation readiness: <PASS / CONCERNS / FAIL / WAIVED / missing / unknown, with one reason>

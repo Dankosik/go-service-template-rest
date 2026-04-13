@@ -11,6 +11,7 @@ Do not load this to write `tasks.md` or optional `plan.md`. This reference only 
 ## Decision Rubric
 - Planning-ready means required core artifacts are present, consistent, and approved or explicitly waived by an eligible rationale.
 - Conditional artifacts must be either present with reasons or marked not expected with reasons.
+- `design/overview.md` should make that status scannable in its artifact index when planning is the next session, instead of forcing planning to rediscover conditional triggers from separate files.
 - Accepted risks must have proof obligations and reopen conditions.
 - A planning-critical blocker cannot live only in chat.
 - If planning would need to choose package surfaces, source-of-truth ownership, runtime ownership, rollout sequence, or validation strategy, design is not ready.

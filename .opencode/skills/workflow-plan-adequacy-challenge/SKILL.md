@@ -42,7 +42,7 @@ If the bundle is too thin to review, return a blocking input-gap finding instead
 
 ## What To Check
 Keep only gaps whose absence could change execution quality, handoff safety, or resume reliability:
-- master and phase files agree on current phase, phase status, blockers, session boundary, next action, and next-session start point
+- master and phase files agree on current phase, phase status, blockers, session boundary, next action, next-session start point, and the master file's always-present next-session context bundle
 - research mode is explicit when research is expected; fan-out lanes name role, owned question, and one skill or `no-skill`
 - phase-local file records order or parallelism, fan-in or challenge path when relevant, completion marker, stop rule, local blockers, and parallelizable work
 - artifact expectations are explicit and proportional: `spec.md`, `design/`, expected `tasks.md`, optional `plan.md`, triggered `test-plan.md`, `rollout.md`, and planned implementation/review/validation phase files are approved, draft, missing, blocked, waived, or not expected

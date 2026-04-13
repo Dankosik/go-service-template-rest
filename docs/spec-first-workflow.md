@@ -78,11 +78,11 @@ specs/<feature-id>/
 
 ### Artifact Purposes
 
-- **`workflow-plan.md`:** Master routing and control artifact. It tracks cross-phase status: execution shape, current phase, artifact status, blockers, next session, next-session context bundle, links to phase workflow plans, and resume order. Required for non-trivial or agent-backed work. The next-session context bundle should name the exact files the next session should read and why each one matters; it links to artifacts instead of copying their content.
+- **`workflow-plan.md`:** Master routing and control artifact. It tracks cross-phase status: execution shape, current phase, artifact status, blockers, next session, next-session context bundle, links to phase workflow plans, and resume order. Required for non-trivial or agent-backed work. The next-session context bundle is an always-present field for non-trivial workflow plans: it either says the default resume order is sufficient or names the exact task-specific files the next session should read and why each one matters. It links to artifacts instead of copying their content.
 - **`workflow-plans/<phase>.md`:** Phase-local workflow plan for one named phase only. It tracks that phase's local orchestration, order/parallelism, fan-in/challenge path when relevant, completion marker, stop rule, next action, and local blockers. Required for each named non-trivial phase that the task actually uses, including `workflow-planning` or `research` when those are dedicated sessions.
 - **`spec.md`:** Canonical decision record: approved framing, scope, constraints, decisions, and accepted open questions. Always.
 - **`design/`:** Task-local technical design bundle between `spec.md` and task breakdown. It explains how the approved change fits the repository architecture and what implementation must preserve. Required for non-trivial work unless explicitly skipped with rationale.
-- **`tasks.md`:** Executable task ledger and final implementation handoff derived from approved `spec.md + design/` and any optional planning context. It owns an optional compact implementation handoff header plus markdown checkboxes with stable task IDs, phase/checkpoint labels when useful, optional `[P]` markers only for safe parallel work, concrete action and file/package surfaces, dependency markers when nontrivial, and proof expectations. Expected by default for non-trivial implementation work; direct-path or tiny work may skip it only with an explicit waiver.
+- **`tasks.md`:** Executable task ledger and final implementation handoff derived from approved `spec.md + design/` and any optional planning context. It owns an optional compact implementation handoff header plus markdown checkboxes with stable task IDs, phase/checkpoint labels when useful, optional `[P]` markers only for safe parallel work, concrete action and file/package surfaces, dependency markers when nontrivial, and proof expectations. Task items may use short continuation lines for dependency, proof, accepted concern, or reopen detail when one-line bullets would become dense, but they must remain executable ledger items rather than design notes. Expected by default for non-trivial implementation work; direct-path or tiny work may skip it only with an explicit waiver.
 - **`plan.md`:** Optional supplementary strategy note for unusually large, multi-checkpoint, or cross-session work when forcing all strategy into `tasks.md` would make the ledger noisy. It is not required before implementation, not produced by default, and never replaces `tasks.md` as the handoff artifact.
 - **Implementation readiness:** Planning-phase exit gate recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. The status belongs in `workflow-plan.md`, the result and stop or handoff rule belong in `workflow-plans/planning.md`, and `tasks.md` may carry only a short reference when useful.
 - **`research/*.md`:** Preserved evidence, comparisons, and validated research context. These files support decisions but do not own them. Create only when the task is long, ambiguous, or benefits from reusable research memory.
@@ -100,6 +100,7 @@ specs/<feature-id>/
 - **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, and handoff implication visible enough that later synthesis does not need chat memory.
 - **Research fan-in home:** Store the durable fan-in summary in one owning place, normally `workflow-plans/research.md` for routing plus selected `research/*.md` for reusable evidence. Other files should link or summarize status only; do not copy the full fan-in narrative into both master workflow control and research notes.
 - **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
+- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local.
 
 ### Context-First Quality Bar
 
@@ -108,7 +109,7 @@ Every phase artifact should preserve enough durable context for the next LLM ses
 - name the current phase, owning artifact, next action, and stop rule;
 - distinguish facts, decisions, assumptions, blockers, evidence, accepted risks, and reopen targets;
 - link to the owning artifact instead of copying another artifact's content;
-- name the next-session context bundle when a generic resume order would force rediscovery;
+- name the next-session context bundle even when it only says the default resume order is enough;
 - record why plausible optional artifacts are `not expected`, `conditional`, or `waived`;
 - keep proof obligations proportional to the claim and changed surface;
 - make the next-session route explicit enough that implementation, review, or validation does not need to reconstruct workflow intent from prose;
@@ -164,6 +165,13 @@ Rules:
 - Keep final decisions in `Decisions`.
 - Keep research evidence in `research/*.md` when it is worth preserving.
 - Keep only a short task-breakdown or handoff link in `spec.md`; link an optional `plan.md` only when one exists for large-work strategy.
+- In `Open Questions / Assumptions`, label uncertainty by unblock path when it affects future sessions:
+  - `[assumption]` for a bounded assumption the workflow can proceed with and revisit if false;
+  - `[accepted_risk]` for a known risk deliberately carried forward with proof obligations or limits;
+  - `[requires_user_decision]` for product, business, or policy choices repository evidence cannot decide;
+  - `[targeted_research]` for missing evidence that research can answer;
+  - `[defer_to_design]` only when behavior is decided but component, sequence, or ownership detail belongs in `design/`;
+  - `[reopen_spec_if_false]` for downstream discoveries that would invalidate a spec-level assumption.
 - Before implementation, `Validation` records forward-looking proof obligations. `Outcome` is omitted, clearly pending, or evidence-backed only after fresh validation; do not write success language before proof exists.
 
 ## 5. The Design Bundle Between `spec.md` And Task Breakdown
@@ -188,7 +196,7 @@ Load order for design work:
 
 Required core design artifacts for non-trivial work:
 
-- `design/overview.md` — design entrypoint, chosen approach, artifact index, unresolved seams, and readiness summary.
+- `design/overview.md` — design entrypoint, chosen approach, artifact index, unresolved seams, and readiness summary. When the bundle is planning-bound, its artifact index should show required artifact status plus trigger rationale for conditional artifacts, including why plausible optional artifacts are `not expected`, `conditional`, or `waived`.
 - `design/component-map.md` — affected packages, modules, or components; what changes; what remains stable.
 - `design/sequence.md` — call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior.
 - `design/ownership-map.md` — source-of-truth ownership, allowed dependency direction, and responsibility boundaries.
@@ -217,7 +225,7 @@ Minimum `rollout.md` content when triggered:
 
 Design-bundle rules:
 
-- `design/overview.md` is the entrypoint and link surface for the bundle.
+- `design/overview.md` is the entrypoint and link surface for the bundle; it indexes the design artifacts without duplicating their contents, and it keeps conditional-artifact status and trigger rationale visible for planning.
 - Create conditional artifacts only when their trigger is real.
 - Keep technical design in `design/`; do not push it back into `spec.md`.
 - Record design artifact status in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
@@ -381,7 +389,7 @@ Minimum `tasks.md` content:
 - dependency marker when nontrivial,
 - proof or verification expectation.
 
-Prefer vertical, reviewable slices and avoid generic tasks such as "implement feature." If exact tasking requires a missing design decision, reopen `technical design` instead of inventing the task.
+Prefer vertical, reviewable slices and avoid generic tasks such as "implement feature." A task item may use concise continuation lines when dependency, proof, accepted concern, or reopen detail would otherwise make a single-line checkbox hard to scan; it must still remain one executable ledger item. If exact tasking requires a missing design decision, reopen `technical design` instead of inventing the task.
 
 Optional `plan.md` content, when justified:
 
@@ -499,7 +507,7 @@ Minimum context-first control record:
 - `Session boundary reached`;
 - `Ready for next session`;
 - `Next session starts with`;
-- `Next session context bundle` with exact artifact paths and one-line reasons when the next session needs more than the default resume order;
+- `Next session context bundle` as an always-present field: either `Default resume order is sufficient` with any narrow additions, or exact artifact paths and one-line reasons for task-specific resume context;
 - artifact status table with trigger rationale for plausible optional artifacts;
 - blockers, accepted assumptions, accepted risks, and reopen targets that still affect routing;
 - adequacy or clarification gate status when the current handoff depends on it.
@@ -507,16 +515,18 @@ Minimum context-first control record:
 At minimum, it answers:
 
 - current phase,
-- phase status (`in_progress`, `blocked`, or `complete`),
+- phase status (`pending`, `in_progress`, `blocked`, or `complete` as the phase lifecycle requires),
 - session-boundary state,
 - next-session readiness and starting phase,
-- next-session context bundle, when task-specific file selection matters,
+- next-session context bundle, including the explicit default-resume case when no task-specific bundle is needed,
 - artifact status (`approved`, `draft`, `missing`, `blocked`, `waived`, `not expected`, or `conditional` as applicable),
 - blockers,
 - phase workflow plan status,
 - implementation-readiness status,
 - workflow plan adequacy challenge status when required,
 - default resume order.
+
+Use `Phase status` for lifecycle state only, such as `pending`, `in_progress`, `blocked`, or `complete`. Use a separate `Task state` or `Routing state` line for outcomes such as `done`, `reopened`, or `reopened-to-specification`, so later sessions do not confuse a backward route with the phase's local completion state.
 
 ### 7.2 `workflow-plans/<phase>.md`
 
@@ -543,7 +553,7 @@ Recommended update cadence:
 - After `technical design` or planning: record approved design artifacts, expected `tasks.md` status, optional `plan.md` status when one exists, and implementation-readiness status in the master file and current phase file; during planning, also create or repair `tasks.md` and create only those implementation/review/validation phase workflow files whose named multi-session routing is genuinely needed.
 - After each implementation checkpoint: update only the existing current phase workflow plan plus the master file, and update existing `tasks.md` checkbox/progress state when the task ledger is in use. If a needed workflow/process artifact is missing, reopen the relevant earlier phase instead of creating it mid-implementation.
 - After review or reconciliation: update only existing control/checkpoint artifacts with review scope, findings status, orchestrator reconciliation, accepted risks, blockers, reopen targets, and validation implications. Do not paste raw review transcripts or invent new tasks in review control files.
-- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, `Next session starts with`, and the task-specific next-session context bundle in the master file, and close the current phase workflow plan.
+- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, `Next session starts with`, and the always-present next-session context bundle in the master file, and close the current phase workflow plan.
 - After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof; update existing `tasks.md` checkbox/progress state only when already in use. If an expected validation control file or required `tasks.md` is missing, reopen the relevant earlier phase instead of creating it during closeout.
 
 Minimal split example:
@@ -568,7 +578,7 @@ In a later session, read artifacts in this order:
 
 1. `workflow-plan.md`
 2. current `workflow-plans/<phase>.md`
-3. the `Next session context bundle` from `workflow-plan.md`, when present and current
+3. the `Next session context bundle` from `workflow-plan.md`; if it says the default resume order is sufficient, continue with the default phase artifact order below
 4. phase artifacts in the order the current phase needs them:
    - `spec.md`
    - [docs/repo-architecture.md](./repo-architecture.md) when the task depends on stable repository architecture context

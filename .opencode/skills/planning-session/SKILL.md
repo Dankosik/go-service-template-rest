@@ -136,8 +136,9 @@ For non-trivial work, `tasks.md` should use markdown checkboxes and include, per
 - exact file path when known, or a narrow package/artifact surface when exact file choice is genuinely design-time unknown
 - dependency marker when nontrivial, such as `Depends on: T001`
 - proof/verification expectation
+- concise continuation lines when dependency, proof, accepted concern, or reopen detail would make a one-line checkbox hard to scan
 
-Prefer vertical, reviewable slices. Avoid generic tasks such as "implement feature." If exact tasking requires a missing design decision, reopen `technical design` instead of inventing the task.
+Prefer vertical, reviewable slices. Avoid generic tasks such as "implement feature." Multi-line task items are allowed for readability, but they must remain executable ledger items instead of design notes or strategy memos. If exact tasking requires a missing design decision, reopen `technical design` instead of inventing the task.
 
 ## Boundary With Future `implementation-phase-session`
 - `planning-session` may write `tasks.md`, optional `plan.md`, optional `test-plan.md`, optional `rollout.md`, the later phase workflow files already required by named multi-session routing, `workflow-plan.md`, and `workflow-plans/planning.md`
@@ -183,7 +184,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 
 ### 6. Write Or Repair `workflow-plan.md`
 - update the master file with current planning-phase status, blockers, handoff state, and artifact status
-- make it explicit whether planning is complete, blocked, or reopened to an earlier phase
+- make the planning phase status explicit, and use a separate routing state when planning reopens an earlier phase
 - record the next session start point without beginning that session here
 
 ### 7. Handoff Into Implementation
@@ -224,7 +225,7 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
-- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
+- `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 
 Do not leave planning readiness or handoff state implicit in chat.
 
@@ -239,7 +240,7 @@ A finished planning session may produce only:
 - optional `workflow-plans/validation-phase-N.md`
 - updated or newly created `workflow-plan.md`
 - updated or newly created `workflow-plans/planning.md`
-- an honest `complete`, `blocked`, or `reopened` planning-phase state when the task cannot move cleanly into implementation yet
+- an honest planning phase status such as `complete` or `blocked`, plus a separate reopen routing state when the task cannot move cleanly into implementation yet
 
 It does not produce code, tests, migrations, generated artifacts, or implementation execution output.
 

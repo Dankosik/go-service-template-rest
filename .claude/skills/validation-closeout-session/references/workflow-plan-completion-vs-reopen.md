@@ -1,14 +1,14 @@
 # Workflow Plan Completion Vs Reopen
 
 ## Behavior Change Thesis
-When loaded for updating existing workflow routing after closeout proof, this file makes the model choose explicit `complete`, `blocked`, or `reopened` state across master and phase files instead of leaving ambiguous "mostly done", `TBD`, or contradictory artifact status.
+When loaded for updating existing workflow routing after closeout proof, this file makes the model choose explicit phase status plus task or routing state, such as `complete` with `Task state: done` or `blocked` with `Routing state: reopened`, instead of leaving ambiguous "mostly done", `TBD`, or contradictory artifact status.
 
 ## When To Load
 Load this when the proof result is known and the next task is to update existing `workflow-plan.md` or an existing `workflow-plans/validation-phase-<n>.md` with final closeout routing.
 
 ## Decision Rubric
 - Completion routing requires all positive closeout claims to have fresh passing proof and all closeout artifacts to agree.
-- Reopen routing requires the narrowest honest upstream target, the blocking proof gap, and an explicit next-session start point.
+- Reopen routing requires the narrowest honest upstream target, the blocking proof gap, an explicit next-session start point, and a separate `Routing state` or `Task state` line rather than overloading `Phase status`.
 - A validation phase file may be updated only if it already exists and the workflow uses it; otherwise record that it is not used or reopen planning if it was required and missing.
 - Master `workflow-plan.md` must not say complete while `spec.md`, `tasks.md`, or validation phase notes say proof failed or remains missing.
 - Avoid limbo states: no `mostly done`, `maybe`, `TBD`, or silent follow-up.
@@ -27,6 +27,7 @@ Blockers: none
 Session boundary reached: yes
 Ready for next session: no
 Next session starts with: N/A
+Next session context bundle: no next session; task is done
 Task state: done
 ```
 
@@ -44,10 +45,12 @@ Blockers: `make migrate-check` failed in this session
 Session boundary reached: yes
 Ready for next session: yes
 Next session starts with: implementation-phase-1
+Next session context bundle: `spec.md` for failed proof scope; `tasks.md` for unchecked T003; `workflow-plans/implementation-phase-1.md` for the reopen route
 Task state: reopened
+Routing state: reopen implementation-phase-1
 ```
 
-Copy the reopen shape: failed proof, blocked phase, explicit next session target.
+Copy the reopen shape: failed proof, blocked phase status, separate reopen routing, and explicit next session target.
 
 No dedicated validation phase:
 

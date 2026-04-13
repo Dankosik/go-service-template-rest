@@ -9,8 +9,8 @@ Load when repairing or writing the master `workflow-plan.md` planning status, ar
 ## Decision Rubric
 - Keep `workflow-plan.md` cross-phase: status, artifact inventory, blockers, readiness, challenge state, boundary, and next session.
 - Do not copy `tasks.md`, optional `plan.md`, `spec.md`, or design details into the master file.
-- Master and `workflow-plans/planning.md` must agree on whether planning is `complete`, `blocked`, `reopened`, or `in_progress`.
-- Record a `Next session context bundle` when the next implementation session needs a task-specific file list beyond the default resume order.
+- Master and `workflow-plans/planning.md` must agree on lifecycle `Phase status` such as `pending`, `in_progress`, `blocked`, or `complete`; use a separate routing state for reopened handoffs.
+- Record a `Next session context bundle` every time: either say default resume order is sufficient or list the task-specific file bundle for the next implementation or reopen session.
 - If readiness is `FAIL`, `Next session starts with` points to the reopen target, not an implementation phase.
 - Adequacy challenge status must say whether blocking findings were reconciled, waived under an eligible rationale, or still block handoff.
 
@@ -40,6 +40,12 @@ Blockers: none
 
 Copy this shape: it makes the cross-phase state scannable without duplicating the plan.
 
+If the default resume order is enough, still keep the field:
+
+```markdown
+Next session context bundle: default resume order is sufficient; no task-specific additions.
+```
+
 ```markdown
 Current phase: planning
 Phase status: blocked
@@ -56,6 +62,7 @@ Artifact status:
 Implementation readiness: FAIL
 Blocker: implementation order depends on a missing ownership decision in the design bundle.
 Reopen target: technical-design
+Routing state: reopen technical-design
 ```
 
 Copy this shape: the blocked master update routes upstream instead of implying implementation can start.
@@ -79,4 +86,4 @@ Failure: it hides whether blocking findings existed and whether they were reconc
 - Letting master and phase-local files contradict each other.
 - Recording `tasks.md: approved` while the task ledger is missing or still speculative.
 - Treating `workflow-plan.md` as a full planning document.
-- Omitting `Session boundary reached` or `Next session starts with`, forcing the next agent to infer state from chat.
+- Omitting `Session boundary reached`, `Next session starts with`, or the always-present `Next session context bundle`, forcing the next agent to infer state from chat.

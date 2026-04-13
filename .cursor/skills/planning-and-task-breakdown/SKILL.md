@@ -157,6 +157,7 @@ Use markdown checkboxes. Each task should include:
 - exact file path when known, or a narrow package/artifact surface when exact file choice is genuinely design-time unknown
 - dependency marker when nontrivial, such as `Depends on: T001`
 - proof/verification expectation
+- concise continuation lines when dependency, proof, accepted concern, or reopen detail would make a one-line checkbox hard to scan; continuation lines must support the same task item, not turn `tasks.md` into a design note or strategy memo
 
 Example:
 
@@ -175,7 +176,7 @@ Reopen target: planning if required artifact context is missing.
 - [ ] T002 [Phase 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`.
 ```
 
-Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep the header short; if it starts carrying phase strategy or design rationale, move that content to optional `plan.md` or reopen `design/`.
+Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep the header short; if it starts carrying phase strategy or design rationale, move that content to optional `plan.md` or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.
 
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `plan.md` or `tasks.md` for a tiny change just to satisfy ceremony.

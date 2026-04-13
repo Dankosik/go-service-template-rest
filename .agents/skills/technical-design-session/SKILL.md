@@ -132,7 +132,7 @@ Do not:
 
 ## Required Design Artifacts
 For non-trivial work, the technical-design session should leave these artifacts approved or explicitly blocked with reasons:
-- `design/overview.md` for chosen approach, artifact index, unresolved seams, and readiness summary
+- `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
 - `design/component-map.md` for affected packages, modules, or components; what changes; and what remains stable
 - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior
 - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, and responsibility boundaries
@@ -176,7 +176,7 @@ If a trigger is not real, record the artifact as not expected instead of creatin
 ### 5. Write Or Repair The Design Bundle
 - produce or tighten the required core artifacts
 - create only the conditional artifacts whose trigger is real
-- keep `design/overview.md` as the entrypoint and link surface for the bundle
+- keep `design/overview.md` as the entrypoint and link surface for the bundle, with required artifact status and conditional trigger rationale visible when the bundle is planning-bound
 - keep technical design in `design/`, `test-plan.md`, or `rollout.md` where appropriate; do not absorb it into `spec.md` or phase-control files
 
 ### 6. Write Or Repair `workflow-plans/technical-design.md`
@@ -210,7 +210,7 @@ Every completed or blocked pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
-- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
+- `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - updated artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered later artifacts
 
 Do not leave planning readiness or the reopen point implicit in chat.
@@ -221,7 +221,7 @@ A finished technical-design session produces only technical-design-phase artifac
 - updated or newly created conditional design artifacts when their trigger is real
 - updated or newly created `workflow-plan.md`
 - updated or newly created `workflow-plans/technical-design.md`
-- an honest `complete`, `blocked`, or `reopened-to-specification` technical-design state
+- an honest technical-design phase status such as `complete` or `blocked`, plus a separate routing state such as `reopen specification` when relevant
 
 It does not produce `tasks.md`, optional `plan.md`, implementation code, migration scripts, or review output.
 

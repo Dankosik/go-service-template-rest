@@ -135,6 +135,7 @@ Do not:
 ### 3. Reuse `spec-document-designer` For The Actual Spec Pass
 - once the boundary is confirmed, use `spec-document-designer` to draft or normalize `spec.md`
 - keep stable decisions in `Decisions`, visible unknowns in `Open Questions / Assumptions`, and validation hooks explicit
+- label material unknowns in `Open Questions / Assumptions` by unblock path, such as `[assumption]`, `[accepted_risk]`, `[requires_user_decision]`, `[targeted_research]`, `[defer_to_design]`, or `[reopen_spec_if_false]`
 - for non-obvious research-backed decisions, link to the preserved `research/*.md` note or source surface when provenance would help a later session trust or revisit the decision; do not copy the evidence narrative into `Decisions`
 - keep technical detail out of `spec.md` when it belongs in a later `design/` artifact
 - keep execution sequencing out of `spec.md`; that belongs to later planning
@@ -195,7 +196,7 @@ Every completed or blocked pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
-- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
+- `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - blockers, accepted assumptions, and open points that still affect the handoff
 - artifact status for `design/`, `tasks.md`, optional `plan.md`, and any triggered `test-plan.md` or `rollout.md` as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 
@@ -206,7 +207,7 @@ A finished specification session produces only specification-phase artifacts and
 - updated or newly created `spec.md`
 - updated or newly created `workflow-plan.md`
 - updated or newly created `workflow-plans/specification.md`
-- an honest `complete`, `blocked`, or `reopened` specification-phase state with the next session start point made explicit
+- an honest specification phase status such as `complete` or `blocked`, plus a separate reopen routing state when relevant, with the next session start point made explicit
 
 It does not produce `design/`, `tasks.md`, optional `plan.md`, or implementation output.
 

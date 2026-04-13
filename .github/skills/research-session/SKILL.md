@@ -159,7 +159,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 
 ### 8. Write Or Repair `workflow-plan.md`
 - update master phase status, research mode, artifact status, blockers, and next-session routing
-- make it explicit whether research is complete, blocked, or reopened
+- make the research phase status explicit, and use a separate routing state when research is reopened or routes backward
 - keep the handoff ready for the future `specification-session` without drafting it here
 
 ### 9. Stop At The Boundary
@@ -193,7 +193,7 @@ Every completed or blocked pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
-- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
+- `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - blockers, accepted assumptions, and open points that still affect spec readiness
 - artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 
@@ -204,7 +204,7 @@ A finished research session produces only research-phase artifacts and routing:
 - updated or newly created `workflow-plan.md`
 - updated or newly created `workflow-plans/research.md`
 - optional `research/*.md` for preserved evidence or comparisons
-- an honest `complete`, `blocked`, or `reopened` research-phase state with the next session start point made explicit
+- an honest research phase status such as `complete` or `blocked`, plus a separate reopen routing state when relevant, with the next session start point made explicit
 
 It does not produce approved `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, optional `plan.md`, or implementation output.
 
