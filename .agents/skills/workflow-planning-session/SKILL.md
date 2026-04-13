@@ -141,10 +141,11 @@ Every completed pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
+- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
 - blockers and accepted assumptions that still affect routing
 - phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
 - workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale
-- artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered `test-plan.md` or `rollout.md`
+- artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered `test-plan.md` or `rollout.md`, with trigger rationale for `not expected`, `conditional`, or `waived` statuses
 - phased-delivery policy, including whether later implementation, review, and validation phase files are expected or still unknown
 
 Do not leave those fields implicit in chat.

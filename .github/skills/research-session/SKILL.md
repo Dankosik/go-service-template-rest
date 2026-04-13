@@ -193,8 +193,9 @@ Every completed or blocked pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
+- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
 - blockers, accepted assumptions, and open points that still affect spec readiness
-- artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, or not expected
+- artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 
 Do not leave spec readiness or handoff state implicit in chat.
 

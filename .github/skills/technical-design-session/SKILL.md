@@ -210,6 +210,7 @@ Every completed or blocked pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
+- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
 - updated artifact status for `spec.md`, `design/`, `tasks.md`, optional `plan.md`, and any triggered later artifacts
 
 Do not leave planning readiness or the reopen point implicit in chat.

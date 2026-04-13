@@ -237,6 +237,7 @@ Every completed, blocked, or reopened pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
+- `Next session context bundle` with exact artifact paths and one-line reasons when a reopen or follow-up session needs more than the default resume order
 - blockers, failed proof, accepted limits, and reopen targets that still affect closure
 - whether the task is honestly done or has reopened an earlier phase
 

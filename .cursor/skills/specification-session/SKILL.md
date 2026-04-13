@@ -135,6 +135,7 @@ Do not:
 ### 3. Reuse `spec-document-designer` For The Actual Spec Pass
 - once the boundary is confirmed, use `spec-document-designer` to draft or normalize `spec.md`
 - keep stable decisions in `Decisions`, visible unknowns in `Open Questions / Assumptions`, and validation hooks explicit
+- for non-obvious research-backed decisions, link to the preserved `research/*.md` note or source surface when provenance would help a later session trust or revisit the decision; do not copy the evidence narrative into `Decisions`
 - keep technical detail out of `spec.md` when it belongs in a later `design/` artifact
 - keep execution sequencing out of `spec.md`; that belongs to later planning
 
@@ -194,8 +195,9 @@ Every completed or blocked pass must update the master file with:
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
+- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
 - blockers, accepted assumptions, and open points that still affect the handoff
-- artifact status for `design/`, `tasks.md`, optional `plan.md`, and any triggered `test-plan.md` or `rollout.md` as `approved`, `draft`, `missing`, or not expected
+- artifact status for `design/`, `tasks.md`, optional `plan.md`, and any triggered `test-plan.md` or `rollout.md` as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 
 Do not leave spec approval or handoff state implicit in chat.
 

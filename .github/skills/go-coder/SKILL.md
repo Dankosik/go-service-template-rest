@@ -40,6 +40,7 @@ Keep workflow ownership outside this skill:
 - for non-trivial planned work, check the recorded implementation-readiness status in `workflow-plan.md` and the planning handoff when those artifacts exist
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
+- when planning pre-created an active `workflow-plans/implementation-phase-N.md`, update only that existing phase-control file with compact routing/progress facts such as attempted task IDs, changed surfaces, fresh proof, blockers or reopen target, next action, and stop rule; never create a missing phase-control file during implementation
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
 - if the safe implementation depends on a missing decision, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or task-breakdown repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
@@ -249,6 +250,7 @@ If the approved spec, task ledger, optional plan, or contract blocks implementat
 When reporting implementation work, keep it proportional to the change:
 - what changed and what behavior was preserved or intentionally changed
 - validation commands and observed results
+- existing `tasks.md` or implementation phase-control progress updated, when the approved workflow uses those artifacts
 - design escalations, if any
 - residual risks, if any
 

@@ -212,8 +212,8 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - current phase set to this planning checkpoint and current phase status
 - link or status for `workflow-plans/planning.md`
 - status for `tasks.md` as `approved`, `draft`, `missing`, explicitly waived, or not expected only for an eligible tiny/direct-path exception
-- status for optional `plan.md` when present or justified, with a trigger rationale when it is explicitly not expected
-- status for `test-plan.md` and `rollout.md` as `approved`, `draft`, `missing`, or not expected, with a short trigger rationale for negative statuses
+- status for optional `plan.md` when present, justified, `conditional`, `waived`, or explicitly not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
+- status for `test-plan.md` and `rollout.md` as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 - whether later `workflow-plans/implementation-phase-N.md`, `workflow-plans/review-phase-N.md`, or `workflow-plans/validation-phase-N.md` were created now because named multi-session routing needs them, are explicitly not expected with rationale, or still remain blocked on a reopen
 - implementation-readiness status as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
 - named accepted risks and proof obligations when readiness is `CONCERNS`
@@ -224,6 +224,7 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
+- `Next session context bundle` with exact artifact paths and one-line reasons when default resume order is not enough
 
 Do not leave planning readiness or handoff state implicit in chat.
 
