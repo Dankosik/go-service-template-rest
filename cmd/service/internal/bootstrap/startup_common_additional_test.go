@@ -111,7 +111,7 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 	if !strings.Contains(metricsText, `telemetry_init_failure_total{reason="setup_error"} 1`) {
 		t.Fatalf("metrics output missing telemetry init failure:\n%s", metricsText)
 	}
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 0`) {
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 1`) {
 		t.Fatalf("metrics output missing feature_off telemetry status:\n%s", metricsText)
 	}
 	if strings.Contains(metricsText, `startup_rejections_total{`) {
@@ -151,7 +151,7 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) 
 	if !strings.Contains(metricsText, `telemetry_init_failure_total{reason="setup_error"} 1`) {
 		t.Fatalf("metrics output missing telemetry init failure:\n%s", metricsText)
 	}
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 0`) {
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 1`) {
 		t.Fatalf("metrics output missing feature_off telemetry status:\n%s", metricsText)
 	}
 	if strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="optional_fail_open"} 1`) {
@@ -185,6 +185,9 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 	metricsText := collectServiceMetricsText(t, metrics)
 	if strings.Contains(metricsText, `telemetry_init_failure_total{`) {
 		t.Fatalf("metrics output contains telemetry init failure for startup-critical policy error:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 1`) {
+		t.Fatalf("metrics output missing deferred feature_off telemetry status:\n%s", metricsText)
 	}
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "invalid-network-policy")
@@ -373,11 +376,11 @@ func TestRecordConfigHelpers(t *testing.T) {
 		ValidateDuration:     14 * time.Millisecond,
 	}
 	wantStages := []string{
-		config.StageLoadDefaults,
-		config.StageLoadFile,
-		config.StageLoadEnv,
-		config.StageParse,
-		config.StageValidate,
+		telemetry.ConfigLoadStageLoadDefaults,
+		telemetry.ConfigLoadStageLoadFile,
+		telemetry.ConfigLoadStageLoadEnv,
+		telemetry.ConfigLoadStageParse,
+		telemetry.ConfigLoadStageValidate,
 	}
 	stageDurations := configLoadStageDurations(report)
 	if len(stageDurations) != len(wantStages) {

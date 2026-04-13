@@ -105,7 +105,7 @@ func bootstrapConfigStage(
 	if err != nil {
 		failedStage, failedDuration := failedStageDetails(configReport)
 		errorType := config.ErrorType(err)
-		metrics.ObserveConfigLoadDuration(failedStage, telemetry.ConfigLoadResultError, failedDuration)
+		metrics.ObserveConfigLoadDuration(configLoadStageMetricLabel(failedStage), telemetry.ConfigLoadResultError, failedDuration)
 		metrics.IncConfigFailure(errorType)
 		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
 		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
@@ -179,11 +179,11 @@ func bootstrapTelemetryStage(
 	targetAdmission, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
+		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, telemetryInitErr
 	}
 	if targetAdmission == telemetryExporterTargetDeferredToNetworkPolicy {
-		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
+		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, nil
 	}
 
@@ -199,7 +199,7 @@ func bootstrapTelemetryStage(
 	telemetryCancel()
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeFeatureOff)
+		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, telemetryInitErr
 	}
 
@@ -209,8 +209,8 @@ func bootstrapTelemetryStage(
 			"telemetry_flush_started",
 			startupLogArgs(
 				shutdownBaseCtx,
-				"shutdown",
-				"telemetry_flush",
+				startupLogComponentShutdown,
+				startupOperationTelemetryFlush,
 				"started",
 			)...,
 		)
@@ -221,7 +221,7 @@ func bootstrapTelemetryStage(
 				"tracing shutdown failed",
 				startupLogArgs(
 					shutdownBaseCtx,
-					startupLogComponentStartupProbes,
+					startupLogComponentShutdown,
 					startupOperationTelemetryFlush,
 					"error",
 					"error.type", "dependency_init",
@@ -234,8 +234,8 @@ func bootstrapTelemetryStage(
 			"telemetry_flush_completed",
 			startupLogArgs(
 				shutdownBaseCtx,
-				"shutdown",
-				"telemetry_flush",
+				startupLogComponentShutdown,
+				startupOperationTelemetryFlush,
 				"success",
 			)...,
 		)
@@ -407,7 +407,7 @@ func bootstrapNetworkPolicyStage(
 			bootstrapSpan,
 			metrics,
 			log,
-			startupDependencyEgressPolicy,
+			startupDependencyEgressException,
 			egressErr,
 		)
 	}

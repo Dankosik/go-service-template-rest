@@ -110,11 +110,15 @@ func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duratio
 }
 
 func probeRedisWithContext(ctx context.Context, cfg config.RedisConfig) error {
-	timeout := cfg.DialTimeout
+	return probeRedisAddressWithContext(ctx, cfg.Addr, cfg.DialTimeout)
+}
+
+func probeRedisAddressWithContext(ctx context.Context, address string, dialTimeout time.Duration) error {
+	timeout := dialTimeout
 	if timeout <= 0 {
 		timeout = redisProbeBudget
 	}
-	return probeTCPDependency(ctx, cfg.Addr, timeout)
+	return probeTCPDependency(ctx, address, timeout)
 }
 
 func probeRedisWithRetry(ctx context.Context, cfg config.RedisConfig) error {
@@ -123,21 +127,37 @@ func probeRedisWithRetry(ctx context.Context, cfg config.RedisConfig) error {
 	})
 }
 
+func probeRedisAddressWithRetry(ctx context.Context, address string, dialTimeout time.Duration) error {
+	return probeWithRetry(ctx, redisStoreProbeAttempts, func(probeCtx context.Context) error {
+		return probeRedisAddressWithContext(probeCtx, address, dialTimeout)
+	})
+}
+
 func probeMongoWithContext(ctx context.Context, cfg config.MongoConfig) error {
 	addr, err := config.MongoProbeAddress(cfg.URI)
 	if err != nil {
 		return fmt.Errorf("%w: resolve mongo probe address: %w", errDependencyInit, err)
 	}
-	timeout := cfg.ConnectTimeout
+	return probeMongoAddressWithContext(ctx, addr, cfg.ConnectTimeout)
+}
+
+func probeMongoAddressWithContext(ctx context.Context, address string, connectTimeout time.Duration) error {
+	timeout := connectTimeout
 	if timeout <= 0 {
 		timeout = mongoProbeBudget
 	}
-	return probeTCPDependency(ctx, addr, timeout)
+	return probeTCPDependency(ctx, address, timeout)
 }
 
 func probeMongoWithRetry(ctx context.Context, cfg config.MongoConfig) error {
 	return probeWithRetry(ctx, mongoProbeAttempts, func(probeCtx context.Context) error {
 		return probeMongoWithContext(probeCtx, cfg)
+	})
+}
+
+func probeMongoAddressWithRetry(ctx context.Context, address string, connectTimeout time.Duration) error {
+	return probeWithRetry(ctx, mongoProbeAttempts, func(probeCtx context.Context) error {
+		return probeMongoAddressWithContext(probeCtx, address, connectTimeout)
 	})
 }
 

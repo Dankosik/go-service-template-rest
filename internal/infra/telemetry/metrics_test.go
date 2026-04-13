@@ -94,16 +94,16 @@ func TestNormalizeConfigLoadStage(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "load defaults", input: configLoadStageLoadDefaults, want: configLoadStageLoadDefaults},
-		{name: "load file", input: configLoadStageLoadFile, want: configLoadStageLoadFile},
-		{name: "load env", input: configLoadStageLoadEnv, want: configLoadStageLoadEnv},
-		{name: "parse", input: configLoadStageParse, want: configLoadStageParse},
-		{name: "validate", input: configLoadStageValidate, want: configLoadStageValidate},
-		{name: "startup compatibility", input: configLoadStageStartupCompatibility, want: configLoadStageStartupCompatibility},
-		{name: "stage upper", input: "CONFIG.PARSE", want: configLoadStageParse},
-		{name: "stage with whitespace", input: " " + configLoadStageValidate + " ", want: configLoadStageValidate},
-		{name: "unknown", input: "config.remote.fetch", want: configLoadStageOther},
-		{name: "empty", input: "", want: configLoadStageOther},
+		{name: "load defaults", input: ConfigLoadStageLoadDefaults, want: ConfigLoadStageLoadDefaults},
+		{name: "load file", input: ConfigLoadStageLoadFile, want: ConfigLoadStageLoadFile},
+		{name: "load env", input: ConfigLoadStageLoadEnv, want: ConfigLoadStageLoadEnv},
+		{name: "parse", input: ConfigLoadStageParse, want: ConfigLoadStageParse},
+		{name: "validate", input: ConfigLoadStageValidate, want: ConfigLoadStageValidate},
+		{name: "startup compatibility", input: ConfigLoadStageStartupCompatibility, want: ConfigLoadStageStartupCompatibility},
+		{name: "stage upper", input: "CONFIG.PARSE", want: ConfigLoadStageParse},
+		{name: "stage with whitespace", input: " " + ConfigLoadStageValidate + " ", want: ConfigLoadStageValidate},
+		{name: "unknown", input: "config.remote.fetch", want: ConfigLoadStageOther},
+		{name: "empty", input: "", want: ConfigLoadStageOther},
 	}
 
 	for _, tc := range testCases {
@@ -170,18 +170,19 @@ func TestNormalizeStartupDependency(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "postgres", input: startupDependencyPostgres, want: startupDependencyPostgres},
-		{name: "redis", input: startupDependencyRedis, want: startupDependencyRedis},
-		{name: "mongo", input: startupDependencyMongo, want: startupDependencyMongo},
-		{name: "telemetry", input: startupDependencyTelemetry, want: startupDependencyTelemetry},
-		{name: "network policy", input: startupDependencyNetworkPolicy, want: startupDependencyNetworkPolicy},
-		{name: "ingress policy", input: startupDependencyIngressPolicy, want: startupDependencyIngressPolicy},
-		{name: "metrics exposure", input: startupDependencyMetricsExposure, want: startupDependencyMetricsExposure},
-		{name: "egress exception", input: startupDependencyEgressException, want: startupDependencyEgressException},
-		{name: "dependency upper", input: "TELEMETRY", want: startupDependencyTelemetry},
-		{name: "dependency with whitespace", input: " " + startupDependencyPostgres + " ", want: startupDependencyPostgres},
-		{name: "unknown", input: "search", want: startupDependencyOther},
-		{name: "empty", input: "", want: startupDependencyOther},
+		{name: "postgres", input: StartupDependencyPostgres, want: StartupDependencyPostgres},
+		{name: "redis", input: StartupDependencyRedis, want: StartupDependencyRedis},
+		{name: "mongo", input: StartupDependencyMongo, want: StartupDependencyMongo},
+		{name: "telemetry", input: StartupDependencyTelemetry, want: StartupDependencyTelemetry},
+		{name: "network policy", input: StartupDependencyNetworkPolicy, want: StartupDependencyNetworkPolicy},
+		{name: "ingress policy", input: StartupDependencyIngressPolicy, want: StartupDependencyIngressPolicy},
+		{name: "metrics exposure", input: StartupDependencyMetricsExposure, want: StartupDependencyMetricsExposure},
+		{name: "egress exception", input: StartupDependencyEgressException, want: StartupDependencyEgressException},
+		{name: "other", input: StartupDependencyOther, want: StartupDependencyOther},
+		{name: "dependency upper", input: "TELEMETRY", want: StartupDependencyTelemetry},
+		{name: "dependency with whitespace", input: " " + StartupDependencyPostgres + " ", want: StartupDependencyPostgres},
+		{name: "unknown", input: "search", want: StartupDependencyOther},
+		{name: "empty", input: "", want: StartupDependencyOther},
 	}
 
 	for _, tc := range testCases {
@@ -200,16 +201,17 @@ func TestNormalizeStartupDependencyMode(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "disabled", input: startupDependencyModeDisabled, want: startupDependencyModeDisabled},
-		{name: "critical fail closed", input: startupDependencyModeCriticalFailClosed, want: startupDependencyModeCriticalFailClosed},
-		{name: "critical fail degraded", input: startupDependencyModeCriticalFailDegraded, want: startupDependencyModeCriticalFailDegraded},
-		{name: "optional fail open", input: startupDependencyModeOptionalFailOpen, want: startupDependencyModeOptionalFailOpen},
-		{name: "feature off", input: startupDependencyModeFeatureOff, want: startupDependencyModeFeatureOff},
-		{name: "degraded read only or stale", input: startupDependencyModeDegradedReadOnlyOrStale, want: startupDependencyModeDegradedReadOnlyOrStale},
-		{name: "mode upper", input: "FEATURE_OFF", want: startupDependencyModeFeatureOff},
-		{name: "mode with whitespace", input: " " + startupDependencyModeDisabled + " ", want: startupDependencyModeDisabled},
-		{name: "unknown", input: "read_only", want: startupDependencyModeOther},
-		{name: "empty", input: "", want: startupDependencyModeOther},
+		{name: "disabled", input: StartupDependencyModeDisabled, want: StartupDependencyModeDisabled},
+		{name: "critical fail closed", input: StartupDependencyModeCriticalFailClosed, want: StartupDependencyModeCriticalFailClosed},
+		{name: "critical fail degraded", input: StartupDependencyModeCriticalFailDegraded, want: StartupDependencyModeCriticalFailDegraded},
+		{name: "optional fail open", input: StartupDependencyModeOptionalFailOpen, want: StartupDependencyModeOptionalFailOpen},
+		{name: "feature off", input: StartupDependencyModeFeatureOff, want: StartupDependencyModeFeatureOff},
+		{name: "degraded read only or stale", input: StartupDependencyModeDegradedReadOnlyOrStale, want: StartupDependencyModeDegradedReadOnlyOrStale},
+		{name: "other", input: StartupDependencyModeOther, want: StartupDependencyModeOther},
+		{name: "mode upper", input: "FEATURE_OFF", want: StartupDependencyModeFeatureOff},
+		{name: "mode with whitespace", input: " " + StartupDependencyModeDisabled + " ", want: StartupDependencyModeDisabled},
+		{name: "unknown", input: "read_only", want: StartupDependencyModeOther},
+		{name: "empty", input: "", want: StartupDependencyModeOther},
 	}
 
 	for _, tc := range testCases {
@@ -302,15 +304,15 @@ func TestConfigFailureMetricUsesBoundedReasons(t *testing.T) {
 func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 	m := New()
 
-	m.ObserveConfigLoadDuration(configLoadStageLoadFile, "unexpected-result", time.Millisecond)
+	m.ObserveConfigLoadDuration(ConfigLoadStageLoadFile, "unexpected-result", time.Millisecond)
 	m.ObserveConfigLoadDuration("config.remote.fetch", ConfigLoadResultSuccess, time.Millisecond)
 	m.IncConfigFailure("startup_compatibility")
 	m.IncConfigStartupOutcome("degraded")
 
 	metricsText := collectMetricsText(t, m)
 	expected := []string{
-		`config_load_duration_seconds_count{result="` + ConfigLoadResultOther + `",stage="` + configLoadStageLoadFile + `"} 1`,
-		`config_load_duration_seconds_count{result="` + ConfigLoadResultSuccess + `",stage="` + configLoadStageOther + `"} 1`,
+		`config_load_duration_seconds_count{result="` + ConfigLoadResultOther + `",stage="` + ConfigLoadStageLoadFile + `"} 1`,
+		`config_load_duration_seconds_count{result="` + ConfigLoadResultSuccess + `",stage="` + ConfigLoadStageOther + `"} 1`,
 		`config_failures_total{reason="` + ConfigFailureReasonOther + `"} 1`,
 		`config_startup_outcome_total{outcome="` + ConfigStartupOutcomeOther + `"} 1`,
 	}
@@ -330,13 +332,13 @@ func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 func TestStartupDependencyStatusMetricUsesBoundedLabels(t *testing.T) {
 	m := New()
 
-	m.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
+	m.MarkStartupDependencyReady(StartupDependencyTelemetry, StartupDependencyModeOptionalFailOpen)
 	m.MarkStartupDependencyBlocked("search", "read_only")
 
 	metricsText := collectMetricsText(t, m)
 	expected := []string{
-		`startup_dependency_status{dep="` + startupDependencyTelemetry + `",mode="` + startupDependencyModeOptionalFailOpen + `"} 1`,
-		`startup_dependency_status{dep="` + startupDependencyOther + `",mode="` + startupDependencyModeOther + `"} 0`,
+		`startup_dependency_status{dep="` + StartupDependencyTelemetry + `",mode="` + StartupDependencyModeOptionalFailOpen + `"} 1`,
+		`startup_dependency_status{dep="` + StartupDependencyOther + `",mode="` + StartupDependencyModeOther + `"} 0`,
 	}
 	for _, pattern := range expected {
 		if !strings.Contains(metricsText, pattern) {

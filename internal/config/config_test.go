@@ -344,6 +344,30 @@ unknown:
 	}
 }
 
+func TestPermissiveUnknownKeyWarningsPreservedOnValidationError(t *testing.T) {
+	resetConfigEnv(t)
+
+	configPath := writeTempConfig(t, `
+unknown:
+  field: value
+`)
+	t.Setenv("APP__HTTP__ADDR", "")
+
+	_, report, err := LoadDetailed(LoadOptions{
+		ConfigPath: configPath,
+		Strict:     false,
+	})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !containsString(report.UnknownKeyWarnings, "unknown.field") {
+		t.Fatalf("UnknownKeyWarnings = %v, want unknown.field", report.UnknownKeyWarnings)
+	}
+}
+
 func TestStrictUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -1950,6 +1974,45 @@ func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 	}
 }
 
+func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
+	t.Run("greater readiness timeout rejects", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
+		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
+
+		_, _, err := LoadDetailed(LoadOptions{})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected validation error for readiness timeout beyond write timeout")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		if !strings.Contains(err.Error(), "http.readiness_timeout must be <= http.write_timeout") {
+			t.Fatalf("error = %v, want readiness/write timeout compatibility policy", err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name             string
+		readinessTimeout string
+		writeTimeout     string
+	}{
+		{name: "equal timeout allows", readinessTimeout: "5s", writeTimeout: "5s"},
+		{name: "lower readiness timeout allows", readinessTimeout: "4s", writeTimeout: "5s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__HTTP__READINESS_TIMEOUT", tc.readinessTimeout)
+			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -2011,6 +2074,24 @@ func TestRedisEnabledRequiresHostPortAddress(t *testing.T) {
 	}
 }
 
+func TestRedisEnabledRejectsEmptyHostAddress(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__REDIS__ENABLED", "true")
+	t.Setenv("APP__REDIS__ADDR", ":6379")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for redis addr with empty host")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "redis.addr must include non-empty host") {
+		t.Fatalf("error = %v, want empty redis host policy", err)
+	}
+}
+
 func TestRedisEnabledRequiresNumericTCPPort(t *testing.T) {
 	for _, addr := range []string{"127.0.0.1:notaport", "127.0.0.1:0", "127.0.0.1:65536"} {
 		t.Run(addr, func(t *testing.T) {
@@ -2045,6 +2126,31 @@ func TestMongoURIMustContainValidProbeTarget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mongo.uri must contain a valid probe target") {
 		t.Fatalf("error = %v, want mongo probe-target detail", err)
+	}
+}
+
+func TestMongoURIRejectsSeedlists(t *testing.T) {
+	resetConfigEnv(t)
+
+	rawURI := "mongodb://user:secret@mongo-a.example.com:27017,mongo-b.example.com:27017/app"
+	t.Setenv("APP__MONGO__ENABLED", "true")
+	t.Setenv("APP__MONGO__URI", rawURI)
+	t.Setenv("APP__MONGO__DATABASE", "app")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for mongo seedlist")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "mongo seedlists are not supported by guard-only probe path") {
+		t.Fatalf("error = %v, want seedlist policy", err)
+	}
+	for _, leaked := range []string{rawURI, "user", "secret", "mongo-a.example.com", "mongo-b.example.com"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("error = %v, leaked %q", err, leaked)
+		}
 	}
 }
 
@@ -2219,6 +2325,23 @@ func TestMongoProbeAddress(t *testing.T) {
 					t.Fatalf("error = %v, want ErrValidate", err)
 				}
 			})
+		}
+	})
+
+	t.Run("rejects seedlists without leaking uri parts", func(t *testing.T) {
+		rawURI := "mongodb://leaky-user:top-secret@mongo-a.example.com:27017,mongo-b.example.com:27017/app"
+
+		_, err := MongoProbeAddress(rawURI)
+		if err == nil {
+			t.Fatal("MongoProbeAddress() error = nil, want seedlist error")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		for _, leaked := range []string{rawURI, "leaky-user", "top-secret", "mongo-a.example.com", "mongo-b.example.com"} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Fatalf("error = %v, leaked %q", err, leaked)
+			}
 		}
 	})
 

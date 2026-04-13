@@ -36,13 +36,26 @@ const (
 )
 
 const (
-	configLoadStageLoadDefaults         = "config.load.defaults"
-	configLoadStageLoadFile             = "config.load.file"
-	configLoadStageLoadEnv              = "config.load.env"
-	configLoadStageParse                = "config.parse"
-	configLoadStageValidate             = "config.validate"
-	configLoadStageStartupCompatibility = "startup.config.compatibility"
-	configLoadStageOther                = "other"
+	// ConfigLoadStageLoadDefaults is the bounded label for config default loading.
+	ConfigLoadStageLoadDefaults = "config.load.defaults"
+
+	// ConfigLoadStageLoadFile is the bounded label for config file loading.
+	ConfigLoadStageLoadFile = "config.load.file"
+
+	// ConfigLoadStageLoadEnv is the bounded label for config environment loading.
+	ConfigLoadStageLoadEnv = "config.load.env"
+
+	// ConfigLoadStageParse is the bounded label for config parsing.
+	ConfigLoadStageParse = "config.parse"
+
+	// ConfigLoadStageValidate is the bounded label for config validation.
+	ConfigLoadStageValidate = "config.validate"
+
+	// ConfigLoadStageStartupCompatibility is the bounded label for startup compatibility validation.
+	ConfigLoadStageStartupCompatibility = "startup.config.compatibility"
+
+	// ConfigLoadStageOther is the bounded fallback label for unknown config load stages.
+	ConfigLoadStageOther = "other"
 )
 
 const (
@@ -123,25 +136,55 @@ const (
 )
 
 const (
-	startupDependencyPostgres        = "postgres"
-	startupDependencyRedis           = "redis"
-	startupDependencyMongo           = "mongo"
-	startupDependencyTelemetry       = "telemetry"
-	startupDependencyNetworkPolicy   = "network_policy"
-	startupDependencyIngressPolicy   = "ingress_policy"
-	startupDependencyMetricsExposure = "metrics_exposure"
-	startupDependencyEgressException = "egress_exception"
-	startupDependencyOther           = "other"
+	// StartupDependencyPostgres is the bounded dependency label for Postgres.
+	StartupDependencyPostgres = "postgres"
+
+	// StartupDependencyRedis is the bounded dependency label for Redis.
+	StartupDependencyRedis = "redis"
+
+	// StartupDependencyMongo is the bounded dependency label for MongoDB.
+	StartupDependencyMongo = "mongo"
+
+	// StartupDependencyTelemetry is the bounded dependency label for telemetry.
+	StartupDependencyTelemetry = "telemetry"
+
+	// StartupDependencyNetworkPolicy is the bounded dependency label for network policy.
+	StartupDependencyNetworkPolicy = "network_policy"
+
+	// StartupDependencyIngressPolicy is the bounded dependency label for ingress policy.
+	StartupDependencyIngressPolicy = "ingress_policy"
+
+	// StartupDependencyMetricsExposure is the bounded dependency label for metrics exposure policy.
+	StartupDependencyMetricsExposure = "metrics_exposure"
+
+	// StartupDependencyEgressException is the bounded dependency label for egress exception policy.
+	StartupDependencyEgressException = "egress_exception"
+
+	// StartupDependencyOther is the bounded fallback label for unknown startup dependencies.
+	StartupDependencyOther = "other"
 )
 
 const (
-	startupDependencyModeDisabled                = "disabled"
-	startupDependencyModeCriticalFailClosed      = "critical_fail_closed"
-	startupDependencyModeCriticalFailDegraded    = "critical_fail_degraded"
-	startupDependencyModeOptionalFailOpen        = "optional_fail_open"
-	startupDependencyModeFeatureOff              = "feature_off"
-	startupDependencyModeDegradedReadOnlyOrStale = "degraded_read_only_or_stale"
-	startupDependencyModeOther                   = "other"
+	// StartupDependencyModeDisabled is the bounded mode label for disabled dependencies.
+	StartupDependencyModeDisabled = "disabled"
+
+	// StartupDependencyModeCriticalFailClosed is the bounded mode label for critical fail-closed dependencies.
+	StartupDependencyModeCriticalFailClosed = "critical_fail_closed"
+
+	// StartupDependencyModeCriticalFailDegraded is the bounded mode label for critical degraded dependencies.
+	StartupDependencyModeCriticalFailDegraded = "critical_fail_degraded"
+
+	// StartupDependencyModeOptionalFailOpen is the bounded mode label for optional fail-open dependencies.
+	StartupDependencyModeOptionalFailOpen = "optional_fail_open"
+
+	// StartupDependencyModeFeatureOff is the bounded mode label for admitted feature-off dependencies.
+	StartupDependencyModeFeatureOff = "feature_off"
+
+	// StartupDependencyModeDegradedReadOnlyOrStale is the bounded mode label for degraded read-only or stale dependencies.
+	StartupDependencyModeDegradedReadOnlyOrStale = "degraded_read_only_or_stale"
+
+	// StartupDependencyModeOther is the bounded fallback label for unknown dependency modes.
+	StartupDependencyModeOther = "other"
 )
 
 func New() *Metrics {
@@ -351,15 +394,15 @@ func normalizeConfigLoadResult(result string) string {
 func normalizeConfigLoadStage(stage string) string {
 	normalized := strings.TrimSpace(strings.ToLower(stage))
 	switch normalized {
-	case configLoadStageLoadDefaults,
-		configLoadStageLoadFile,
-		configLoadStageLoadEnv,
-		configLoadStageParse,
-		configLoadStageValidate,
-		configLoadStageStartupCompatibility:
+	case ConfigLoadStageLoadDefaults,
+		ConfigLoadStageLoadFile,
+		ConfigLoadStageLoadEnv,
+		ConfigLoadStageParse,
+		ConfigLoadStageValidate,
+		ConfigLoadStageStartupCompatibility:
 		return normalized
 	default:
-		return configLoadStageOther
+		return ConfigLoadStageOther
 	}
 }
 
@@ -422,31 +465,31 @@ func normalizeStartupRejectionReason(reason string) string {
 func normalizeStartupDependency(dep string) string {
 	normalized := strings.TrimSpace(strings.ToLower(dep))
 	switch normalized {
-	case startupDependencyPostgres,
-		startupDependencyRedis,
-		startupDependencyMongo,
-		startupDependencyTelemetry,
-		startupDependencyNetworkPolicy,
-		startupDependencyIngressPolicy,
-		startupDependencyMetricsExposure,
-		startupDependencyEgressException:
+	case StartupDependencyPostgres,
+		StartupDependencyRedis,
+		StartupDependencyMongo,
+		StartupDependencyTelemetry,
+		StartupDependencyNetworkPolicy,
+		StartupDependencyIngressPolicy,
+		StartupDependencyMetricsExposure,
+		StartupDependencyEgressException:
 		return normalized
 	default:
-		return startupDependencyOther
+		return StartupDependencyOther
 	}
 }
 
 func normalizeStartupDependencyMode(mode string) string {
 	normalized := strings.TrimSpace(strings.ToLower(mode))
 	switch normalized {
-	case startupDependencyModeDisabled,
-		startupDependencyModeCriticalFailClosed,
-		startupDependencyModeCriticalFailDegraded,
-		startupDependencyModeOptionalFailOpen,
-		startupDependencyModeFeatureOff,
-		startupDependencyModeDegradedReadOnlyOrStale:
+	case StartupDependencyModeDisabled,
+		StartupDependencyModeCriticalFailClosed,
+		StartupDependencyModeCriticalFailDegraded,
+		StartupDependencyModeOptionalFailOpen,
+		StartupDependencyModeFeatureOff,
+		StartupDependencyModeDegradedReadOnlyOrStale:
 		return normalized
 	default:
-		return startupDependencyModeOther
+		return StartupDependencyModeOther
 	}
 }

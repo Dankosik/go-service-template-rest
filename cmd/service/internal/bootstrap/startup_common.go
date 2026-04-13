@@ -20,25 +20,44 @@ type configStageDuration struct {
 }
 
 const (
-	startupConfigCompatibilityStage  = "startup.config.compatibility"
+	startupConfigCompatibilityStage  = telemetry.ConfigLoadStageStartupCompatibility
 	startupConfigCompatibilityReason = "startup_compatibility"
 )
 
 func configLoadStageDurations(report config.LoadReport) []configStageDuration {
 	return []configStageDuration{
-		{stage: config.StageLoadDefaults, duration: report.LoadDefaultsDuration},
-		{stage: config.StageLoadFile, duration: report.LoadFileDuration},
-		{stage: config.StageLoadEnv, duration: report.LoadEnvDuration},
-		{stage: config.StageParse, duration: report.ParseDuration},
-		{stage: config.StageValidate, duration: report.ValidateDuration},
+		{stage: telemetry.ConfigLoadStageLoadDefaults, duration: report.LoadDefaultsDuration},
+		{stage: telemetry.ConfigLoadStageLoadFile, duration: report.LoadFileDuration},
+		{stage: telemetry.ConfigLoadStageLoadEnv, duration: report.LoadEnvDuration},
+		{stage: telemetry.ConfigLoadStageParse, duration: report.ParseDuration},
+		{stage: telemetry.ConfigLoadStageValidate, duration: report.ValidateDuration},
 	}
 }
 
 func recordConfigSuccessMetrics(metrics *telemetry.Metrics, report config.LoadReport) {
 	for _, stage := range configLoadStageDurations(report) {
 		if stage.duration > 0 {
-			metrics.ObserveConfigLoadDuration(stage.stage, telemetry.ConfigLoadResultSuccess, stage.duration)
+			metrics.ObserveConfigLoadDuration(configLoadStageMetricLabel(stage.stage), telemetry.ConfigLoadResultSuccess, stage.duration)
 		}
+	}
+}
+
+func configLoadStageMetricLabel(stage string) string {
+	switch strings.TrimSpace(stage) {
+	case config.StageLoadDefaults:
+		return telemetry.ConfigLoadStageLoadDefaults
+	case config.StageLoadFile:
+		return telemetry.ConfigLoadStageLoadFile
+	case config.StageLoadEnv:
+		return telemetry.ConfigLoadStageLoadEnv
+	case config.StageParse:
+		return telemetry.ConfigLoadStageParse
+	case config.StageValidate:
+		return telemetry.ConfigLoadStageValidate
+	case telemetry.ConfigLoadStageStartupCompatibility:
+		return telemetry.ConfigLoadStageStartupCompatibility
+	default:
+		return stage
 	}
 }
 

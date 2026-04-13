@@ -92,6 +92,11 @@ type dependencyProbeSpec struct {
 	probe        func(context.Context) error
 }
 
+type degradedDependencyProbeFailurePolicy struct {
+	rejectionMode string
+	degradedMode  string
+}
+
 type probeExecutionResult struct {
 	budgetBlocked bool
 	parentErr     error
@@ -269,9 +274,9 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		minRemaining: startupFailFastThreshold,
 		probe: func(probeCtx context.Context) error {
 			if redisMode == config.RedisModeStore {
-				return probeRedisWithRetry(probeCtx, runtime.cfg.Redis)
+				return probeRedisAddressWithRetry(probeCtx, redisProbeAddress, runtime.cfg.Redis.DialTimeout)
 			}
-			return probeRedisWithContext(probeCtx, runtime.cfg.Redis)
+			return probeRedisAddressWithContext(probeCtx, redisProbeAddress, runtime.cfg.Redis.DialTimeout)
 		},
 	})
 	if probeResult.err != nil {
@@ -281,8 +286,10 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			labels,
 			probeResult,
 			runtime.cfg.RedisReadinessProbeRequired(),
-			redisMode,
-			startupDependencyModeFeatureOff,
+			degradedDependencyProbeFailurePolicy{
+				rejectionMode: redisMode,
+				degradedMode:  startupDependencyModeFeatureOff,
+			},
 		); err != nil {
 			return nil, err
 		}
@@ -297,7 +304,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		return startupNamedProbe{
 			name: labels.dependency,
 			check: func(ctx context.Context) error {
-				return probeRedisWithContext(ctx, runtime.cfg.Redis)
+				return probeRedisAddressWithContext(ctx, redisProbeAddress, runtime.cfg.Redis.DialTimeout)
 			},
 		}, nil
 	}
@@ -341,7 +348,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		budget:       mongoProbeBudget,
 		minRemaining: startupFailFastThreshold,
 		probe: func(probeCtx context.Context) error {
-			return probeMongoWithRetry(probeCtx, runtime.cfg.Mongo)
+			return probeMongoAddressWithRetry(probeCtx, mongoProbeAddress, runtime.cfg.Mongo.ConnectTimeout)
 		},
 	})
 	if probeResult.err != nil {
@@ -351,8 +358,10 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			labels,
 			probeResult,
 			runtime.cfg.MongoReadinessProbeRequired(),
-			startupDependencyModeDegradedReadOnlyOrStale,
-			startupDependencyModeDegradedReadOnlyOrStale,
+			degradedDependencyProbeFailurePolicy{
+				rejectionMode: startupDependencyModeDegradedReadOnlyOrStale,
+				degradedMode:  startupDependencyModeDegradedReadOnlyOrStale,
+			},
 		); err != nil {
 			return nil, err
 		}
@@ -364,7 +373,7 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 		return startupNamedProbe{
 			name: labels.dependency,
 			check: func(ctx context.Context) error {
-				return probeMongoWithContext(ctx, runtime.cfg.Mongo)
+				return probeMongoAddressWithContext(ctx, mongoProbeAddress, runtime.cfg.Mongo.ConnectTimeout)
 			},
 		}, nil
 	}
@@ -419,21 +428,20 @@ func handleDegradedDependencyProbeFailure(
 	labels startupDependencyProbeLabels,
 	result probeExecutionResult,
 	readinessRequired bool,
-	rejectionMode string,
-	degradedMode string,
+	policy degradedDependencyProbeFailurePolicy,
 ) error {
 	if shouldAbortDegradedDependencyStartup(result) {
 		rejectErr := dependencyInitAbortFailure(labels.dependency, result)
-		recordDependencyProbeRejection(ctx, runtime, labels, rejectionMode, rejectErr)
+		recordDependencyProbeRejection(ctx, runtime, labels, policy.rejectionMode, rejectErr)
 		return rejectErr
 	}
 	if readinessRequired {
 		rejectErr := dependencyInitFailure(labels.dependency, result.err)
-		recordDependencyProbeRejection(ctx, runtime, labels, rejectionMode, rejectErr)
+		recordDependencyProbeRejection(ctx, runtime, labels, policy.rejectionMode, rejectErr)
 		return rejectErr
 	}
 
-	recordDegradedDependencyStartup(ctx, runtime, labels.dependency, labels.operation, degradedMode)
+	recordDegradedDependencyStartup(ctx, runtime, labels.dependency, labels.operation, policy.degradedMode)
 	return nil
 }
 

@@ -1,5 +1,7 @@
 package bootstrap
 
+import "github.com/example/go-service-template-rest/internal/infra/telemetry"
+
 type startupDependencyProbeLabels struct {
 	dependency   string
 	operation    string
@@ -17,31 +19,32 @@ func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLa
 }
 
 var (
-	startupPostgresDependencyLabels = newStartupDependencyProbeLabels("postgres")
-	startupRedisDependencyLabels    = newStartupDependencyProbeLabels("redis")
-	startupMongoDependencyLabels    = newStartupDependencyProbeLabels("mongo")
+	startupPostgresDependencyLabels = newStartupDependencyProbeLabels(telemetry.StartupDependencyPostgres)
+	startupRedisDependencyLabels    = newStartupDependencyProbeLabels(telemetry.StartupDependencyRedis)
+	startupMongoDependencyLabels    = newStartupDependencyProbeLabels(telemetry.StartupDependencyMongo)
 )
 
 const (
-	startupDependencyTelemetry       = "telemetry"
-	startupDependencyNetworkPolicy   = "network_policy"
-	startupDependencyIngressPolicy   = "ingress_policy"
-	startupDependencyMetricsExposure = "metrics_exposure"
-	startupDependencyEgressPolicy    = "egress_exception"
+	startupDependencyTelemetry       = telemetry.StartupDependencyTelemetry
+	startupDependencyNetworkPolicy   = telemetry.StartupDependencyNetworkPolicy
+	startupDependencyIngressPolicy   = telemetry.StartupDependencyIngressPolicy
+	startupDependencyMetricsExposure = telemetry.StartupDependencyMetricsExposure
+	startupDependencyEgressException = telemetry.StartupDependencyEgressException
 )
 
 const (
-	startupDependencyModeDisabled                = "disabled"
-	startupDependencyModeCriticalFailClosed      = "critical_fail_closed"
-	startupDependencyModeCriticalFailDegraded    = "critical_fail_degraded"
-	startupDependencyModeOptionalFailOpen        = "optional_fail_open"
-	startupDependencyModeFeatureOff              = "feature_off"
-	startupDependencyModeDegradedReadOnlyOrStale = "degraded_read_only_or_stale"
+	startupDependencyModeDisabled                = telemetry.StartupDependencyModeDisabled
+	startupDependencyModeCriticalFailClosed      = telemetry.StartupDependencyModeCriticalFailClosed
+	startupDependencyModeCriticalFailDegraded    = telemetry.StartupDependencyModeCriticalFailDegraded
+	startupDependencyModeOptionalFailOpen        = telemetry.StartupDependencyModeOptionalFailOpen
+	startupDependencyModeFeatureOff              = telemetry.StartupDependencyModeFeatureOff
+	startupDependencyModeDegradedReadOnlyOrStale = telemetry.StartupDependencyModeDegradedReadOnlyOrStale
 )
 
 const (
 	startupLogComponentStartupProbes = "startup_probes"
+	startupLogComponentShutdown      = "shutdown"
 
 	startupOperationTelemetryInit  = "telemetry_init"
-	startupOperationTelemetryFlush = "telemetry_shutdown"
+	startupOperationTelemetryFlush = "telemetry_flush"
 )
