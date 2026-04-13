@@ -237,7 +237,7 @@ func telemetryInitFailureReason(err error) string {
 	}
 }
 
-func recordConfigStageSpan(tracer trace.Tracer, ctx context.Context, name string, duration time.Duration, result string, errorType string) {
+func recordConfigStageSpan(ctx context.Context, tracer trace.Tracer, name string, duration time.Duration, result string, errorType string) {
 	if duration <= 0 {
 		return
 	}

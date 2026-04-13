@@ -78,9 +78,12 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	probeCtx, probeCancel := withStageBudget(ctx, p.budget)
 	defer probeCancel()
 	if err := p.probe.Check(probeCtx); err != nil {
-		return err
+		return fmt.Errorf("postgres readiness probe: %w", err)
 	}
-	return probeCtx.Err()
+	if err := probeCtx.Err(); err != nil {
+		return fmt.Errorf("postgres readiness probe context: %w", err)
+	}
+	return nil
 }
 
 type dependencyProbeSpec struct {
@@ -115,7 +118,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 		}
 	}()
 
-	pg, err := initPostgresDependency(bootstrapCtx, runtime, dependencyProbeCtx)
+	pg, err := initPostgresDependency(bootstrapCtx, dependencyProbeCtx, runtime)
 	if err != nil {
 		return outcome, err
 	}
@@ -127,7 +130,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 		}
 	}
 
-	redisProbe, err := initRedisDependency(bootstrapCtx, runtime, dependencyProbeCtx)
+	redisProbe, err := initRedisDependency(bootstrapCtx, dependencyProbeCtx, runtime)
 	if err != nil {
 		return outcome, err
 	}
@@ -135,7 +138,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 		outcome.probes = append(outcome.probes, redisProbe)
 	}
 
-	mongoProbe, err := initMongoDependency(bootstrapCtx, runtime, dependencyProbeCtx)
+	mongoProbe, err := initMongoDependency(bootstrapCtx, dependencyProbeCtx, runtime)
 	if err != nil {
 		return outcome, err
 	}
@@ -146,7 +149,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 	return outcome, nil
 }
 
-func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (*postgres.Pool, error) {
+func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (*postgres.Pool, error) {
 	labels := startupPostgresDependencyLabels
 	if !runtime.cfg.Postgres.Enabled {
 		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
@@ -226,7 +229,7 @@ func initPostgresDependency(bootstrapCtx context.Context, runtime dependencyProb
 	return pg, nil
 }
 
-func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (health.Probe, error) {
+func initRedisDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (health.Probe, error) {
 	labels := startupRedisDependencyLabels
 	if !runtime.cfg.Redis.Enabled {
 		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
@@ -311,7 +314,7 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 	return nil, nil //nolint:nilnil // Healthy fail-open dependency may intentionally skip readiness probe registration.
 }
 
-func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRuntime, dependencyProbeCtx context.Context) (health.Probe, error) {
+func initMongoDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (health.Probe, error) {
 	labels := startupMongoDependencyLabels
 	if !runtime.cfg.Mongo.Enabled {
 		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)

@@ -14,18 +14,29 @@ linters:
     - errname
     - bidichk
     - bodyclose
+    - canonicalheader
+    - containedctx
     - copyloopvar
+    - depguard
+    - dupl
     - durationcheck
     - errchkjson
     - sqlclosecheck
     - errorlint
     - exhaustive
+    - exhaustruct
+    - fatcontext
+    - forbidigo
     - forcetypeassert
     - gocheckcompilerdirectives
     - contextcheck
+    - cyclop
     - gocritic
+    - gocognit
     - loggercheck
     - makezero
+    - musttag
+    - nestif
     - nilerr
     - nilnesserr
     - nilnil
@@ -35,9 +46,12 @@ linters:
     - predeclared
     - promlinter
     - reassign
+    - recvcheck
+    - revive
     - rowserrcheck
     - sloglint
     - spancheck
+    - tagliatelle
     - thelper
     - gomoddirectives
     - unconvert
@@ -46,6 +60,7 @@ linters:
     - usetesting
     - usestdlibvars
     - wastedassign
+    - wrapcheck
   exclusions:
     generated: strict
     paths:
@@ -53,7 +68,116 @@ linters:
       - internal/infra/postgres/sqlcgen/.*
       - .*_mock_test\.go
       - .*_string\.go
+    rules:
+      # Complexity gates are production-focused for now; table-heavy tests stay review-visible
+      # without forcing artificial helper extraction.
+      - path: _test\.go
+        linters:
+          - cyclop
+          - forbidigo
+          - exhaustruct
+          - gocognit
+          - nestif
   settings:
+    depguard:
+      rules:
+        app_domain_no_adapters:
+          list-mode: lax
+          files:
+            - "**/internal/app/**/*.go"
+            - "**/internal/domain/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal/api
+              desc: app and domain packages must stay transport-contract agnostic; map generated API types in internal/infra/http.
+            - pkg: github.com/example/go-service-template-rest/internal/infra
+              desc: app and domain packages must not import concrete infra adapters; wire adapters in bootstrap.
+            - pkg: github.com/jackc/pgx/v5
+              desc: direct Postgres driver usage belongs in internal/infra/postgres.
+        postgres_driver_boundary:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!**/internal/infra/postgres/*.go"
+          deny:
+            - pkg: database/sql
+              desc: database driver access belongs in infra persistence adapters.
+            - pkg: github.com/jackc/pgx/v5
+              desc: direct pgx usage belongs in internal/infra/postgres.
+            - pkg: github.com/lib/pq
+              desc: use the approved pgx-based Postgres adapter in internal/infra/postgres.
+            - pkg: gorm.io/gorm
+              desc: persistence ORM usage is not part of the approved repository data-access model.
+        sqlc_boundary:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!**/internal/infra/postgres/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
+              desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.
+        approved_router_boundary:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!**/internal/api/*.go"
+            - "!**/internal/infra/http/*.go"
+          deny:
+            - pkg: github.com/go-chi/chi/v5
+              desc: chi router usage belongs in internal/infra/http and generated OpenAPI bindings only.
+        alternate_router_policy:
+          list-mode: lax
+          files:
+            - "$all"
+          deny:
+            - pkg: github.com/gin-gonic/gin
+              desc: use the approved chi and OpenAPI HTTP stack in internal/infra/http.
+            - pkg: github.com/gofiber/fiber
+              desc: use the approved net/http-compatible chi and OpenAPI HTTP stack.
+            - pkg: github.com/gorilla/mux
+              desc: use the approved chi and OpenAPI HTTP stack in internal/infra/http.
+            - pkg: github.com/julienschmidt/httprouter
+              desc: use the approved chi and OpenAPI HTTP stack in internal/infra/http.
+            - pkg: github.com/labstack/echo
+              desc: use the approved chi and OpenAPI HTTP stack in internal/infra/http.
+        alternate_logging_policy:
+          list-mode: lax
+          files:
+            - "$all"
+          deny:
+            - pkg: github.com/rs/zerolog
+              desc: use the standard log/slog logging surface configured by bootstrap.
+            - pkg: github.com/sirupsen/logrus
+              desc: use the standard log/slog logging surface configured by bootstrap.
+            - pkg: go.uber.org/zap
+              desc: use the standard log/slog logging surface configured by bootstrap.
+    cyclop:
+      max-complexity: 20
+    exhaustruct:
+      allow-empty-returns: true
+      include:
+        - '^github\.com/example/go-service-template-rest/internal/api\.Problem$'
+        - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig|RedisConfig|MongoConfig|FeatureFlagsConfig)$'
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^(fmt\.Print(f|ln)?|print|println)$'
+          msg: use structured logging or test assertions instead of process stdout debug output.
+        - pattern: '^log\.(Fatal(f|ln)?|Panic(f|ln)?|Print(f|ln)?)$'
+          msg: use log/slog through the configured logging surface, or return an error to the caller.
+    gocognit:
+      min-complexity: 30
+    nestif:
+      min-complexity: 5
     nolintlint:
       require-explanation: true
       require-specific: true
+    revive:
+      rules:
+        - name: context-as-argument
+        - name: unused-parameter
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          koanf: snake
+          yaml: snake

@@ -24,11 +24,11 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 
 .PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full pr-check \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
+	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
@@ -64,6 +64,7 @@ help:
 	@echo "  make gosec                   # Go security static scan"
 	@echo "  make secret-scan             # gitleaks secret scan"
 	@echo "  make modernize-check         # informational modern Go suggestions"
+	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
 	@echo "  make mocks-drift-check       # mockgen drift checks"
 	@echo "  make stringer-drift-check    # stringer drift checks"
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
@@ -354,6 +355,9 @@ lint:
 modernize-check:
 	go tool golangci-lint run --enable-only=modernize --timeout=3m
 
+test-parallelism-check:
+	go tool golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
+
 govulncheck:
 	go tool govulncheck ./...
 
@@ -389,6 +393,9 @@ docker-lint:
 
 docker-modernize-check:
 	$(DOCKER_TOOLING_SCRIPT) modernize-check
+
+docker-test-parallelism-check:
+	$(DOCKER_TOOLING_SCRIPT) test-parallelism-check
 
 stringer-generate:
 	go generate -run "stringer" ./...

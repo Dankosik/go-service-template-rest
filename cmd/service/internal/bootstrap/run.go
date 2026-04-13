@@ -172,9 +172,7 @@ func Run(args []string) (runErr error) {
 		MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
 	}, handler)
 
-	return serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:      signalCtx,
-		bootstrapCtx:   bootstrapCtx,
+	return serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
 		bootstrapSpan:  bootstrap.bootstrapSpan,
 		cfg:            bootstrap.cfg,
 		log:            bootstrap.log,

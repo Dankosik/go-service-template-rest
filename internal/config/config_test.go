@@ -691,6 +691,8 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tc.cfg.PostgresReadinessProbeRequired(); got != tc.wantPostgres {
 				t.Fatalf("PostgresReadinessProbeRequired() = %v, want %v", got, tc.wantPostgres)
 			}
@@ -1546,6 +1548,8 @@ func configEnvResetKeys() []string {
 }
 
 func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
+	t.Parallel()
+
 	sourceValues := sentinelConfigSourceValues()
 	knownKeys := sortedStringSetKeys(knownConfigKeys())
 	sourceKeys := sortedStringSetKeys(sourceValues)
@@ -1583,6 +1587,8 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 }
 
 func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
+	t.Parallel()
+
 	knownKeys := sortedStringSetKeys(knownConfigKeys())
 
 	tagKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
@@ -1593,6 +1599,8 @@ func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
 }
 
 func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
+	t.Parallel()
+
 	knownSections := sortedStringSetKeys(knownConfigSections())
 
 	tagSections := configSectionKeysFromType(t, reflect.TypeFor[Config](), "")
@@ -1603,6 +1611,8 @@ func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
 }
 
 func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
+	t.Parallel()
+
 	knownKeys := knownConfigKeys()
 	for key := range defaultValues() {
 		if _, ok := knownKeys[key]; !ok {
@@ -1612,6 +1622,8 @@ func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
 }
 
 func TestDefaultConfigYAMLMatchesCodeDefaults(t *testing.T) {
+	t.Parallel()
+
 	defaultKoanf := koanf.New(keyDelimiter)
 	if err := defaultKoanf.Load(confmap.Provider(defaultValues(), keyDelimiter), nil); err != nil {
 		t.Fatalf("load code defaults: %v", err)
@@ -2227,7 +2239,11 @@ func TestMongoDisabledAllowsInvalidURI(t *testing.T) {
 }
 
 func TestMongoProbeAddress(t *testing.T) {
+	t.Parallel()
+
 	t.Run("mongodb scheme", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := MongoProbeAddress("mongodb://user:pass@localhost:27017/app?replicaSet=rs0")
 		if err != nil {
 			t.Fatalf("MongoProbeAddress() error = %v", err)
@@ -2238,6 +2254,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("mongodb srv scheme defaults port", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := MongoProbeAddress("mongodb+srv://cluster.example.com/app")
 		if err != nil {
 			t.Fatalf("MongoProbeAddress() error = %v", err)
@@ -2248,6 +2266,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("bare host defaults port", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := MongoProbeAddress("mongodb://cluster.example.com/app")
 		if err != nil {
 			t.Fatalf("MongoProbeAddress() error = %v", err)
@@ -2258,6 +2278,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("bare ipv6 host defaults port", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := MongoProbeAddress("mongodb://2001:db8::1/app")
 		if err != nil {
 			t.Fatalf("MongoProbeAddress() error = %v", err)
@@ -2268,6 +2290,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("bracketed ipv6 host defaults port", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := MongoProbeAddress("mongodb://[2001:db8::1]/app")
 		if err != nil {
 			t.Fatalf("MongoProbeAddress() error = %v", err)
@@ -2278,6 +2302,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("bracketed ipv6 host keeps explicit port", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := MongoProbeAddress("mongodb://[2001:db8::1]:27018/app")
 		if err != nil {
 			t.Fatalf("MongoProbeAddress() error = %v", err)
@@ -2288,6 +2314,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("rejects empty and malformed bracket hosts", func(t *testing.T) {
+		t.Parallel()
+
 		for _, uri := range []string{
 			"mongodb://:27017/app",
 			"mongodb://[]/app",
@@ -2303,6 +2331,8 @@ func TestMongoProbeAddress(t *testing.T) {
 			"mongodb://[foo:bar:baz]:27017/app",
 		} {
 			t.Run(uri, func(t *testing.T) {
+				t.Parallel()
+
 				if _, err := MongoProbeAddress(uri); err == nil {
 					t.Fatal("MongoProbeAddress() error = nil, want malformed host error")
 				} else if !errors.Is(err, ErrValidate) {
@@ -2313,6 +2343,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("rejects seedlists without leaking uri parts", func(t *testing.T) {
+		t.Parallel()
+
 		rawURI := "mongodb://leaky-user:top-secret@mongo-a.example.com:27017,mongo-b.example.com:27017/app"
 
 		_, err := MongoProbeAddress(rawURI)
@@ -2330,6 +2362,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("rejects surrounding whitespace", func(t *testing.T) {
+		t.Parallel()
+
 		rawURI := " mongodb://user:top-secret@localhost:27017/app "
 
 		_, err := MongoProbeAddress(rawURI)
@@ -2347,6 +2381,8 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 
 	t.Run("redacts malformed credential uri", func(t *testing.T) {
+		t.Parallel()
+
 		rawURI := "mongodb://leaky-user:top-secret@local[host]/app"
 
 		_, err := MongoProbeAddress(rawURI)
@@ -2380,7 +2416,11 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 }
 
 func TestParseInt(t *testing.T) {
+	t.Parallel()
+
 	t.Run("supports mixed numeric inputs", func(t *testing.T) {
+		t.Parallel()
+
 		value, err := parseInt("42")
 		if err != nil {
 			t.Fatalf("parseInt(string) error = %v", err)
@@ -2399,12 +2439,16 @@ func TestParseInt(t *testing.T) {
 	})
 
 	t.Run("rejects non integer floats", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt(1.25); err == nil {
 			t.Fatalf("parseInt() expected non-integer error")
 		}
 	})
 
 	t.Run("rejects non finite floats", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt(math.NaN()); err == nil {
 			t.Fatalf("parseInt() expected non-finite error for NaN")
 		}
@@ -2414,12 +2458,16 @@ func TestParseInt(t *testing.T) {
 	})
 
 	t.Run("rejects conversion unsafe float upper bound", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt(math.Ldexp(1, strconv.IntSize-1)); err == nil {
 			t.Fatalf("parseInt() expected overflow error at first unsafe upper bound")
 		}
 	})
 
 	t.Run("rejects float above exact integer range on wide int", func(t *testing.T) {
+		t.Parallel()
+
 		if strconv.IntSize <= 53 {
 			t.Skip("parseInt target range is already narrower than float64 exact integer range")
 		}
@@ -2429,6 +2477,8 @@ func TestParseInt(t *testing.T) {
 	})
 
 	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
+		t.Parallel()
+
 		overflow := uint(math.MaxInt) + 1
 		if _, err := parseInt(overflow); err == nil {
 			t.Fatalf("parseInt() expected overflow error for uint value")
@@ -2440,7 +2490,11 @@ func TestParseInt(t *testing.T) {
 }
 
 func TestParseInt64(t *testing.T) {
+	t.Parallel()
+
 	t.Run("supports mixed numeric inputs", func(t *testing.T) {
+		t.Parallel()
+
 		value, err := parseInt64("922")
 		if err != nil {
 			t.Fatalf("parseInt64(string) error = %v", err)
@@ -2459,12 +2513,16 @@ func TestParseInt64(t *testing.T) {
 	})
 
 	t.Run("rejects non integer floats", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt64(float64(2.5)); err == nil {
 			t.Fatalf("parseInt64() expected non-integer error")
 		}
 	})
 
 	t.Run("rejects non finite floats", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt64(math.NaN()); err == nil {
 			t.Fatalf("parseInt64() expected non-finite error for NaN")
 		}
@@ -2474,18 +2532,24 @@ func TestParseInt64(t *testing.T) {
 	})
 
 	t.Run("rejects conversion unsafe float upper bound", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt64(math.Ldexp(1, 63)); err == nil {
 			t.Fatalf("parseInt64() expected overflow error at first unsafe upper bound")
 		}
 	})
 
 	t.Run("rejects float above exact integer range", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt64(math.Ldexp(1, 53) + 2); err == nil {
 			t.Fatalf("parseInt64() expected unsafe float integer error")
 		}
 	})
 
 	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err := parseInt64(uint64(math.MaxUint64)); err == nil {
 			t.Fatalf("parseInt64() expected overflow error")
 		}
@@ -2493,6 +2557,8 @@ func TestParseInt64(t *testing.T) {
 }
 
 func TestParseBool(t *testing.T) {
+	t.Parallel()
+
 	value, err := parseBool("true")
 	if err != nil {
 		t.Fatalf("parseBool(true) error = %v", err)
@@ -2507,7 +2573,11 @@ func TestParseBool(t *testing.T) {
 }
 
 func TestValidateRangeHelpers(t *testing.T) {
+	t.Parallel()
+
 	t.Run("int range is inclusive", func(t *testing.T) {
+		t.Parallel()
+
 		if err := validateIntRange("redis.pool_size", 1, 1, 100); err != nil {
 			t.Fatalf("validateIntRange(min) error = %v", err)
 		}
@@ -2517,6 +2587,8 @@ func TestValidateRangeHelpers(t *testing.T) {
 	})
 
 	t.Run("int range out of bounds returns ErrValidate", func(t *testing.T) {
+		t.Parallel()
+
 		err := validateIntRange("redis.pool_size", 101, 1, 100)
 		if err == nil {
 			t.Fatalf("validateIntRange() expected error")
@@ -2530,6 +2602,8 @@ func TestValidateRangeHelpers(t *testing.T) {
 	})
 
 	t.Run("duration range is inclusive", func(t *testing.T) {
+		t.Parallel()
+
 		if err := validateDurationRange("http.read_timeout", time.Second, time.Second, 10*time.Second); err != nil {
 			t.Fatalf("validateDurationRange(min) error = %v", err)
 		}
@@ -2539,6 +2613,8 @@ func TestValidateRangeHelpers(t *testing.T) {
 	})
 
 	t.Run("duration range out of bounds returns ErrValidate", func(t *testing.T) {
+		t.Parallel()
+
 		err := validateDurationRange("http.read_timeout", 11*time.Second, time.Second, 10*time.Second)
 		if err == nil {
 			t.Fatalf("validateDurationRange() expected error")

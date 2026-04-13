@@ -54,6 +54,10 @@ jobs:
         continue-on-error: true
         run: make modernize-check
 
+      - name: Test parallelism suggestions (informational)
+        continue-on-error: true
+        run: make test-parallelism-check
+
       - name: Flake detection run
         run: make test-flake-smoke
 

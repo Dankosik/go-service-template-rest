@@ -21,8 +21,6 @@ type runtimeServer interface {
 }
 
 type serveHTTPRuntimeArgs struct {
-	signalCtx      context.Context
-	bootstrapCtx   context.Context
 	bootstrapSpan  trace.Span
 	cfg            config.Config
 	log            *slog.Logger
@@ -41,10 +39,10 @@ type httpRuntimeWaitOutcome struct {
 	startupFailureRecorded bool
 }
 
-func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
-	if err := startupRuntimeContextErr(args.signalCtx, args.bootstrapCtx); err != nil {
+func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, args serveHTTPRuntimeArgs) error {
+	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
 		return rejectHTTPStartup(
-			args.bootstrapCtx,
+			bootstrapCtx,
 			args.bootstrapSpan,
 			args.metrics,
 			args.log,
@@ -54,10 +52,10 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 	}
 
 	var listenConfig net.ListenConfig
-	listener, err := listenConfig.Listen(args.bootstrapCtx, "tcp", args.cfg.HTTP.Addr)
+	listener, err := listenConfig.Listen(bootstrapCtx, "tcp", args.cfg.HTTP.Addr)
 	if err != nil {
 		return rejectHTTPStartup(
-			args.bootstrapCtx,
+			bootstrapCtx,
 			args.bootstrapSpan,
 			args.metrics,
 			args.log,
@@ -65,10 +63,10 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 			fmt.Errorf("listen http server: %w", err),
 		)
 	}
-	if err := startupRuntimeContextErr(args.signalCtx, args.bootstrapCtx); err != nil {
+	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
 		_ = listener.Close()
 		return rejectHTTPStartup(
-			args.bootstrapCtx,
+			bootstrapCtx,
 			args.bootstrapSpan,
 			args.metrics,
 			args.log,
@@ -83,13 +81,13 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 		runErrCh <- args.srv.Serve(listener)
 	}()
 
-	admissionCtx, cancelAdmission := context.WithCancel(args.bootstrapCtx)
+	admissionCtx, cancelAdmission := context.WithCancel(bootstrapCtx)
 	defer cancelAdmission()
 
 	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.cfg.HTTP.ReadinessTimeout)
-	outcome := waitForHTTPRuntimePreReady(args, admissionErrCh, runErrCh)
+	outcome := waitForHTTPRuntimePreReady(signalCtx, bootstrapCtx, args, admissionErrCh, runErrCh)
 	if outcome.ready {
-		outcome = waitForHTTPRuntimePostReady(args, runErrCh)
+		outcome = waitForHTTPRuntimePostReady(signalCtx, args, runErrCh)
 	}
 
 	cancelAdmission()
@@ -98,7 +96,7 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 	if !args.admission.Ready() {
 		effectiveShutdownDelay = 0
 	}
-	if err := drainAndShutdown(args.signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv); err != nil {
+	if err := drainAndShutdown(signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv); err != nil {
 		outcome.recordPreReadyFailure(args, "startup.shutdown", err)
 		if outcome.terminalErr != nil {
 			return errors.Join(outcome.terminalErr, err)
@@ -117,6 +115,8 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 }
 
 func waitForHTTPRuntimePreReady(
+	signalCtx context.Context,
+	bootstrapCtx context.Context,
 	args serveHTTPRuntimeArgs,
 	admissionErrCh <-chan error,
 	runErrCh <-chan error,
@@ -128,7 +128,7 @@ func waitForHTTPRuntimePreReady(
 		case err := <-admissionErrCh:
 			if err != nil {
 				outcome.terminalErr = rejectHTTPStartup(
-					args.bootstrapCtx,
+					bootstrapCtx,
 					args.bootstrapSpan,
 					args.metrics,
 					args.log,
@@ -144,20 +144,20 @@ func waitForHTTPRuntimePreReady(
 				return outcome
 			default:
 			}
-			args.admission.MarkReady(args.bootstrapCtx)
+			args.admission.MarkReady()
 			outcome.ready = true
 			return outcome
-		case <-args.signalCtx.Done():
+		case <-signalCtx.Done():
 			args.log.Info("shutdown signal received")
-			outcome.recordPreReadyFailure(args, "startup.readiness", args.signalCtx.Err())
+			outcome.recordPreReadyFailure(args, "startup.readiness", signalCtx.Err())
 			return outcome
-		case <-args.bootstrapCtx.Done():
-			if args.signalCtx.Err() != nil {
+		case <-bootstrapCtx.Done():
+			if signalCtx.Err() != nil {
 				args.log.Info("shutdown signal received")
-				outcome.recordPreReadyFailure(args, "startup.readiness", args.signalCtx.Err())
+				outcome.recordPreReadyFailure(args, "startup.readiness", signalCtx.Err())
 				return outcome
 			}
-			outcome.terminalErr = fmt.Errorf("startup budget exhausted before readiness: %w", args.bootstrapCtx.Err())
+			outcome.terminalErr = fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
 			args.log.Error("startup budget exhausted before readiness", "err", outcome.terminalErr)
 			outcome.recordPreReadyFailure(args, "startup.readiness", outcome.terminalErr)
 			return outcome
@@ -168,11 +168,11 @@ func waitForHTTPRuntimePreReady(
 	}
 }
 
-func waitForHTTPRuntimePostReady(args serveHTTPRuntimeArgs, runErrCh <-chan error) httpRuntimeWaitOutcome {
+func waitForHTTPRuntimePostReady(signalCtx context.Context, args serveHTTPRuntimeArgs, runErrCh <-chan error) httpRuntimeWaitOutcome {
 	var outcome httpRuntimeWaitOutcome
 
 	select {
-	case <-args.signalCtx.Done():
+	case <-signalCtx.Done():
 		args.log.Info("shutdown signal received")
 	case err := <-runErrCh:
 		outcome.handleServerStop(args, err)
@@ -216,7 +216,7 @@ func startStartupAdmission(
 		defer cancel()
 
 		if err := readyCtx.Err(); err != nil {
-			resultCh <- err
+			resultCh <- fmt.Errorf("startup admission context: %w", err)
 			return
 		}
 		if readinessCheck != nil {
@@ -226,7 +226,7 @@ func startStartupAdmission(
 			}
 		}
 		if err := readyCtx.Err(); err != nil {
-			resultCh <- err
+			resultCh <- fmt.Errorf("startup admission context: %w", err)
 			return
 		}
 		resultCh <- nil
@@ -237,10 +237,10 @@ func startStartupAdmission(
 
 func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Context) error {
 	if err := signalCtx.Err(); err != nil {
-		return err
+		return fmt.Errorf("startup signal context: %w", err)
 	}
 	if err := bootstrapCtx.Err(); err != nil {
-		return err
+		return fmt.Errorf("startup bootstrap context: %w", err)
 	}
 	return nil
 }

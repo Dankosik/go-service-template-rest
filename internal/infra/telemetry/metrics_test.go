@@ -9,6 +9,8 @@ import (
 )
 
 func TestNormalizeTelemetryFailureReason(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -23,6 +25,8 @@ func TestNormalizeTelemetryFailureReason(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeTelemetryFailureReason(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeTelemetryFailureReason(%q) = %q, want %q", tc.input, got, tc.want)
@@ -32,6 +36,8 @@ func TestNormalizeTelemetryFailureReason(t *testing.T) {
 }
 
 func TestNormalizeStartupRejectionReason(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -57,6 +63,8 @@ func TestNormalizeStartupRejectionReason(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeStartupRejectionReason(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeStartupRejectionReason(%q) = %q, want %q", tc.input, got, tc.want)
@@ -66,6 +74,8 @@ func TestNormalizeStartupRejectionReason(t *testing.T) {
 }
 
 func TestNormalizeConfigLoadResult(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -80,6 +90,8 @@ func TestNormalizeConfigLoadResult(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeConfigLoadResult(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeConfigLoadResult(%q) = %q, want %q", tc.input, got, tc.want)
@@ -89,6 +101,8 @@ func TestNormalizeConfigLoadResult(t *testing.T) {
 }
 
 func TestNormalizeConfigLoadStage(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -108,6 +122,8 @@ func TestNormalizeConfigLoadStage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeConfigLoadStage(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeConfigLoadStage(%q) = %q, want %q", tc.input, got, tc.want)
@@ -117,6 +133,8 @@ func TestNormalizeConfigLoadStage(t *testing.T) {
 }
 
 func TestNormalizeConfigFailureReason(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -133,6 +151,8 @@ func TestNormalizeConfigFailureReason(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeConfigFailureReason(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeConfigFailureReason(%q) = %q, want %q", tc.input, got, tc.want)
@@ -142,6 +162,8 @@ func TestNormalizeConfigFailureReason(t *testing.T) {
 }
 
 func TestNormalizeConfigStartupOutcome(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -156,6 +178,8 @@ func TestNormalizeConfigStartupOutcome(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeConfigStartupOutcome(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeConfigStartupOutcome(%q) = %q, want %q", tc.input, got, tc.want)
@@ -165,6 +189,8 @@ func TestNormalizeConfigStartupOutcome(t *testing.T) {
 }
 
 func TestNormalizeStartupDependency(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -187,6 +213,8 @@ func TestNormalizeStartupDependency(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeStartupDependency(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeStartupDependency(%q) = %q, want %q", tc.input, got, tc.want)
@@ -196,6 +224,8 @@ func TestNormalizeStartupDependency(t *testing.T) {
 }
 
 func TestNormalizeStartupDependencyMode(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name  string
 		input string
@@ -216,6 +246,8 @@ func TestNormalizeStartupDependencyMode(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := normalizeStartupDependencyMode(tc.input)
 			if got != tc.want {
 				t.Fatalf("normalizeStartupDependencyMode(%q) = %q, want %q", tc.input, got, tc.want)
@@ -225,6 +257,8 @@ func TestNormalizeStartupDependencyMode(t *testing.T) {
 }
 
 func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
+	t.Parallel()
+
 	m := New()
 
 	m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
@@ -273,6 +307,8 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 }
 
 func TestConfigFailureMetricUsesBoundedReasons(t *testing.T) {
+	t.Parallel()
+
 	m := New()
 
 	m.IncConfigFailure(ConfigFailureReasonLoad)
@@ -302,6 +338,8 @@ func TestConfigFailureMetricUsesBoundedReasons(t *testing.T) {
 }
 
 func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
+	t.Parallel()
+
 	m := New()
 
 	m.ObserveConfigLoadDuration(ConfigLoadStageLoadFile, "unexpected-result", time.Millisecond)
@@ -330,6 +368,8 @@ func TestConfigMetricTaxonomiesCollapseUnknownValues(t *testing.T) {
 }
 
 func TestStartupDependencyStatusMetricUsesBoundedLabels(t *testing.T) {
+	t.Parallel()
+
 	m := New()
 
 	m.MarkStartupDependencyReady(StartupDependencyTelemetry, StartupDependencyModeOptionalFailOpen)
@@ -354,6 +394,8 @@ func TestStartupDependencyStatusMetricUsesBoundedLabels(t *testing.T) {
 }
 
 func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
+	t.Parallel()
+
 	for _, m := range []*Metrics{nil, {}} {
 		m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
 		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)

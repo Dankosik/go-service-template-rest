@@ -180,7 +180,7 @@ func bootstrapTelemetryStage(
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
-		return func(context.Context) {}, telemetryInitErr
+		return func(context.Context) {}, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 	if targetAdmission == telemetryExporterTargetDeferredToNetworkPolicy {
 		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
@@ -200,7 +200,7 @@ func bootstrapTelemetryStage(
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
-		return func(context.Context) {}, telemetryInitErr
+		return func(context.Context) {}, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 
 	metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
@@ -262,7 +262,7 @@ const (
 func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (telemetryExporterTargetAdmission, error) {
 	target, err := telemetry.DescribeTraceExporterTarget(cfg)
 	if err != nil {
-		return telemetryExporterTargetUnconfigured, err
+		return telemetryExporterTargetUnconfigured, fmt.Errorf("describe trace exporter target: %w", err)
 	}
 	if !target.Configured {
 		return telemetryExporterTargetUnconfigured, nil
@@ -299,7 +299,7 @@ func bootstrapReportStage(
 	telemetryInitErr error,
 ) {
 	for _, stage := range configLoadStageDurations(configReport) {
-		recordConfigStageSpan(tracer, bootstrapCtx, stage.stage, stage.duration, "success", "")
+		recordConfigStageSpan(bootstrapCtx, tracer, stage.stage, stage.duration, "success", "")
 	}
 
 	log.Info(

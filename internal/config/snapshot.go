@@ -10,147 +10,298 @@ import (
 )
 
 func buildSnapshot(k *koanf.Koanf) (Config, error) {
-	var cfg Config
-
-	cfg.App.Env = readTrimmedConfigString(k, "app.env")
-	cfg.App.Version = readTrimmedConfigString(k, "app.version")
-
-	cfg.HTTP.Addr = readTrimmedConfigString(k, "http.addr")
-	if err := readDurationInto(k, "http.shutdown_timeout", &cfg.HTTP.ShutdownTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "http.readiness_timeout", &cfg.HTTP.ReadinessTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "http.readiness_propagation_delay", &cfg.HTTP.ReadinessPropagationDelay); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "http.read_header_timeout", &cfg.HTTP.ReadHeaderTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "http.read_timeout", &cfg.HTTP.ReadTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "http.write_timeout", &cfg.HTTP.WriteTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "http.idle_timeout", &cfg.HTTP.IdleTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readIntInto(k, "http.max_header_bytes", &cfg.HTTP.MaxHeaderBytes); err != nil {
-		return Config{}, err
-	}
-	if err := readInt64Into(k, "http.max_body_bytes", &cfg.HTTP.MaxBodyBytes); err != nil {
-		return Config{}, err
-	}
-
-	level, err := readLogLevel(k, "log.level")
+	httpCfg, err := readHTTPSnapshot(k)
 	if err != nil {
 		return Config{}, err
 	}
-	cfg.Log.Level = level
-
-	cfg.Observability.OTel.ServiceName = readTrimmedConfigString(k, "observability.otel.service_name")
-	cfg.Observability.OTel.TracesSampler = readTrimmedConfigString(k, "observability.otel.traces_sampler")
-	if err := readFloat64Into(k, "observability.otel.traces_sampler_arg", &cfg.Observability.OTel.TracesSamplerArg); err != nil {
+	logCfg, err := readLogSnapshot(k)
+	if err != nil {
 		return Config{}, err
 	}
-	cfg.Observability.OTel.Exporter.OTLPEndpoint = readTrimmedConfigString(k, "observability.otel.exporter.otlp_endpoint")
-	cfg.Observability.OTel.Exporter.OTLPTracesEndpoint = readTrimmedConfigString(k, "observability.otel.exporter.otlp_traces_endpoint")
-	cfg.Observability.OTel.Exporter.OTLPHeaders = readRawConfigString(k, "observability.otel.exporter.otlp_headers")
-	cfg.Observability.OTel.Exporter.OTLPProtocol = readTrimmedConfigString(k, "observability.otel.exporter.otlp_protocol")
-
-	if err := readBoolInto(k, "postgres.enabled", &cfg.Postgres.Enabled); err != nil {
+	observabilityCfg, err := readObservabilitySnapshot(k)
+	if err != nil {
 		return Config{}, err
 	}
-	cfg.Postgres.DSN = readRawConfigString(k, "postgres.dsn")
-	if err := readDurationInto(k, "postgres.connect_timeout", &cfg.Postgres.ConnectTimeout); err != nil {
+	postgresCfg, err := readPostgresSnapshot(k)
+	if err != nil {
 		return Config{}, err
 	}
-	if err := readDurationInto(k, "postgres.healthcheck_timeout", &cfg.Postgres.HealthcheckTimeout); err != nil {
+	redisCfg, err := readRedisSnapshot(k)
+	if err != nil {
 		return Config{}, err
 	}
-	if err := readIntInto(k, "postgres.max_open_conns", &cfg.Postgres.MaxOpenConns); err != nil {
+	mongoCfg, err := readMongoSnapshot(k)
+	if err != nil {
 		return Config{}, err
 	}
-	if err := readIntInto(k, "postgres.max_idle_conns", &cfg.Postgres.MaxIdleConns); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "postgres.conn_max_lifetime", &cfg.Postgres.ConnMaxLifetime); err != nil {
+	featureFlagsCfg, err := readFeatureFlagsSnapshot(k)
+	if err != nil {
 		return Config{}, err
 	}
 
-	if err := readBoolInto(k, "redis.enabled", &cfg.Redis.Enabled); err != nil {
-		return Config{}, err
-	}
-	cfg.Redis.Mode = normalizeRedisMode(readTrimmedConfigString(k, "redis.mode"))
-	if err := readBoolInto(k, "redis.allow_store_mode", &cfg.Redis.AllowStoreMode); err != nil {
-		return Config{}, err
-	}
-	cfg.Redis.Addr = readTrimmedConfigString(k, "redis.addr")
-	cfg.Redis.Username = readRawConfigString(k, "redis.username")
-	cfg.Redis.Password = readRawConfigString(k, "redis.password")
-	if err := readIntInto(k, "redis.db", &cfg.Redis.DB); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "redis.dial_timeout", &cfg.Redis.DialTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "redis.read_timeout", &cfg.Redis.ReadTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "redis.write_timeout", &cfg.Redis.WriteTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readIntInto(k, "redis.pool_size", &cfg.Redis.PoolSize); err != nil {
-		return Config{}, err
-	}
-	cfg.Redis.KeyPrefix = readTrimmedConfigString(k, "redis.key_prefix")
-	if err := readDurationInto(k, "redis.fresh_ttl", &cfg.Redis.FreshTTL); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "redis.stale_window", &cfg.Redis.StaleWindow); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "redis.negative_ttl", &cfg.Redis.NegativeTTL); err != nil {
-		return Config{}, err
-	}
-	if err := readIntInto(k, "redis.ttl_jitter_percent", &cfg.Redis.TTLJitterPercent); err != nil {
-		return Config{}, err
-	}
-	if err := readBoolInto(k, "redis.enable_singleflight", &cfg.Redis.EnableSingleflight); err != nil {
-		return Config{}, err
-	}
-	if err := readIntInto(k, "redis.max_fallback_concurrency", &cfg.Redis.MaxFallbackConcurrency); err != nil {
-		return Config{}, err
-	}
+	return Config{
+		App:           readAppSnapshot(k),
+		HTTP:          httpCfg,
+		Log:           logCfg,
+		Observability: observabilityCfg,
+		Postgres:      postgresCfg,
+		Redis:         redisCfg,
+		Mongo:         mongoCfg,
+		FeatureFlags:  featureFlagsCfg,
+	}, nil
+}
 
-	if err := readBoolInto(k, "mongo.enabled", &cfg.Mongo.Enabled); err != nil {
-		return Config{}, err
+func readAppSnapshot(k *koanf.Koanf) AppConfig {
+	return AppConfig{
+		Env:     readTrimmedConfigString(k, "app.env"),
+		Version: readTrimmedConfigString(k, "app.version"),
 	}
-	cfg.Mongo.URI = readRawConfigString(k, "mongo.uri")
-	cfg.Mongo.Database = readTrimmedConfigString(k, "mongo.database")
-	if err := readDurationInto(k, "mongo.connect_timeout", &cfg.Mongo.ConnectTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readDurationInto(k, "mongo.server_selection_timeout", &cfg.Mongo.ServerSelectionTimeout); err != nil {
-		return Config{}, err
-	}
-	if err := readIntInto(k, "mongo.max_pool_size", &cfg.Mongo.MaxPoolSize); err != nil {
-		return Config{}, err
-	}
+}
 
-	if err := readBoolInto(k, "feature_flags.postgres_readiness_probe", &cfg.FeatureFlags.PostgresReadinessProbe); err != nil {
-		return Config{}, err
+func readHTTPSnapshot(k *koanf.Koanf) (HTTPConfig, error) {
+	addr := readTrimmedConfigString(k, "http.addr")
+	var shutdownTimeout time.Duration
+	if err := readDurationInto(k, "http.shutdown_timeout", &shutdownTimeout); err != nil {
+		return HTTPConfig{}, err
 	}
-	if err := readBoolInto(k, "feature_flags.mongo_readiness_probe", &cfg.FeatureFlags.MongoReadinessProbe); err != nil {
-		return Config{}, err
+	var readinessTimeout time.Duration
+	if err := readDurationInto(k, "http.readiness_timeout", &readinessTimeout); err != nil {
+		return HTTPConfig{}, err
 	}
-	if err := readBoolInto(k, "feature_flags.redis_readiness_probe", &cfg.FeatureFlags.RedisReadinessProbe); err != nil {
-		return Config{}, err
+	var readinessPropagationDelay time.Duration
+	if err := readDurationInto(k, "http.readiness_propagation_delay", &readinessPropagationDelay); err != nil {
+		return HTTPConfig{}, err
 	}
+	var readHeaderTimeout time.Duration
+	if err := readDurationInto(k, "http.read_header_timeout", &readHeaderTimeout); err != nil {
+		return HTTPConfig{}, err
+	}
+	var readTimeout time.Duration
+	if err := readDurationInto(k, "http.read_timeout", &readTimeout); err != nil {
+		return HTTPConfig{}, err
+	}
+	var writeTimeout time.Duration
+	if err := readDurationInto(k, "http.write_timeout", &writeTimeout); err != nil {
+		return HTTPConfig{}, err
+	}
+	var idleTimeout time.Duration
+	if err := readDurationInto(k, "http.idle_timeout", &idleTimeout); err != nil {
+		return HTTPConfig{}, err
+	}
+	var maxHeaderBytes int
+	if err := readIntInto(k, "http.max_header_bytes", &maxHeaderBytes); err != nil {
+		return HTTPConfig{}, err
+	}
+	var maxBodyBytes int64
+	if err := readInt64Into(k, "http.max_body_bytes", &maxBodyBytes); err != nil {
+		return HTTPConfig{}, err
+	}
+	return HTTPConfig{
+		Addr:                      addr,
+		ShutdownTimeout:           shutdownTimeout,
+		ReadinessTimeout:          readinessTimeout,
+		ReadinessPropagationDelay: readinessPropagationDelay,
+		ReadHeaderTimeout:         readHeaderTimeout,
+		ReadTimeout:               readTimeout,
+		WriteTimeout:              writeTimeout,
+		IdleTimeout:               idleTimeout,
+		MaxHeaderBytes:            maxHeaderBytes,
+		MaxBodyBytes:              maxBodyBytes,
+	}, nil
+}
 
-	return cfg, nil
+func readLogSnapshot(k *koanf.Koanf) (LogConfig, error) {
+	level, err := readLogLevel(k, "log.level")
+	if err != nil {
+		return LogConfig{}, err
+	}
+	return LogConfig{Level: level}, nil
+}
+
+func readObservabilitySnapshot(k *koanf.Koanf) (ObservabilityConfig, error) {
+	var tracesSamplerArg float64
+	if err := readFloat64Into(k, "observability.otel.traces_sampler_arg", &tracesSamplerArg); err != nil {
+		return ObservabilityConfig{}, err
+	}
+	return ObservabilityConfig{
+		OTel: OTelConfig{
+			ServiceName:      readTrimmedConfigString(k, "observability.otel.service_name"),
+			TracesSampler:    readTrimmedConfigString(k, "observability.otel.traces_sampler"),
+			TracesSamplerArg: tracesSamplerArg,
+			Exporter: OTelExporterConfig{
+				OTLPEndpoint:       readTrimmedConfigString(k, "observability.otel.exporter.otlp_endpoint"),
+				OTLPTracesEndpoint: readTrimmedConfigString(k, "observability.otel.exporter.otlp_traces_endpoint"),
+				OTLPHeaders:        readRawConfigString(k, "observability.otel.exporter.otlp_headers"),
+				OTLPProtocol:       readTrimmedConfigString(k, "observability.otel.exporter.otlp_protocol"),
+			},
+		},
+	}, nil
+}
+
+func readPostgresSnapshot(k *koanf.Koanf) (PostgresConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "postgres.enabled", &enabled); err != nil {
+		return PostgresConfig{}, err
+	}
+	dsn := readRawConfigString(k, "postgres.dsn")
+	var connectTimeout time.Duration
+	if err := readDurationInto(k, "postgres.connect_timeout", &connectTimeout); err != nil {
+		return PostgresConfig{}, err
+	}
+	var healthcheckTimeout time.Duration
+	if err := readDurationInto(k, "postgres.healthcheck_timeout", &healthcheckTimeout); err != nil {
+		return PostgresConfig{}, err
+	}
+	var maxOpenConns int
+	if err := readIntInto(k, "postgres.max_open_conns", &maxOpenConns); err != nil {
+		return PostgresConfig{}, err
+	}
+	var maxIdleConns int
+	if err := readIntInto(k, "postgres.max_idle_conns", &maxIdleConns); err != nil {
+		return PostgresConfig{}, err
+	}
+	var connMaxLifetime time.Duration
+	if err := readDurationInto(k, "postgres.conn_max_lifetime", &connMaxLifetime); err != nil {
+		return PostgresConfig{}, err
+	}
+	return PostgresConfig{
+		Enabled:            enabled,
+		DSN:                dsn,
+		ConnectTimeout:     connectTimeout,
+		HealthcheckTimeout: healthcheckTimeout,
+		MaxOpenConns:       maxOpenConns,
+		MaxIdleConns:       maxIdleConns,
+		ConnMaxLifetime:    connMaxLifetime,
+	}, nil
+}
+
+func readRedisSnapshot(k *koanf.Koanf) (RedisConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "redis.enabled", &enabled); err != nil {
+		return RedisConfig{}, err
+	}
+	mode := normalizeRedisMode(readTrimmedConfigString(k, "redis.mode"))
+	var allowStoreMode bool
+	if err := readBoolInto(k, "redis.allow_store_mode", &allowStoreMode); err != nil {
+		return RedisConfig{}, err
+	}
+	addr := readTrimmedConfigString(k, "redis.addr")
+	username := readRawConfigString(k, "redis.username")
+	password := readRawConfigString(k, "redis.password")
+	var db int
+	if err := readIntInto(k, "redis.db", &db); err != nil {
+		return RedisConfig{}, err
+	}
+	var dialTimeout time.Duration
+	if err := readDurationInto(k, "redis.dial_timeout", &dialTimeout); err != nil {
+		return RedisConfig{}, err
+	}
+	var readTimeout time.Duration
+	if err := readDurationInto(k, "redis.read_timeout", &readTimeout); err != nil {
+		return RedisConfig{}, err
+	}
+	var writeTimeout time.Duration
+	if err := readDurationInto(k, "redis.write_timeout", &writeTimeout); err != nil {
+		return RedisConfig{}, err
+	}
+	var poolSize int
+	if err := readIntInto(k, "redis.pool_size", &poolSize); err != nil {
+		return RedisConfig{}, err
+	}
+	keyPrefix := readTrimmedConfigString(k, "redis.key_prefix")
+	var freshTTL time.Duration
+	if err := readDurationInto(k, "redis.fresh_ttl", &freshTTL); err != nil {
+		return RedisConfig{}, err
+	}
+	var staleWindow time.Duration
+	if err := readDurationInto(k, "redis.stale_window", &staleWindow); err != nil {
+		return RedisConfig{}, err
+	}
+	var negativeTTL time.Duration
+	if err := readDurationInto(k, "redis.negative_ttl", &negativeTTL); err != nil {
+		return RedisConfig{}, err
+	}
+	var ttlJitterPercent int
+	if err := readIntInto(k, "redis.ttl_jitter_percent", &ttlJitterPercent); err != nil {
+		return RedisConfig{}, err
+	}
+	var enableSingleflight bool
+	if err := readBoolInto(k, "redis.enable_singleflight", &enableSingleflight); err != nil {
+		return RedisConfig{}, err
+	}
+	var maxFallbackConcurrency int
+	if err := readIntInto(k, "redis.max_fallback_concurrency", &maxFallbackConcurrency); err != nil {
+		return RedisConfig{}, err
+	}
+	return RedisConfig{
+		Enabled:                enabled,
+		Mode:                   mode,
+		AllowStoreMode:         allowStoreMode,
+		Addr:                   addr,
+		Username:               username,
+		Password:               password,
+		DB:                     db,
+		DialTimeout:            dialTimeout,
+		ReadTimeout:            readTimeout,
+		WriteTimeout:           writeTimeout,
+		PoolSize:               poolSize,
+		KeyPrefix:              keyPrefix,
+		FreshTTL:               freshTTL,
+		StaleWindow:            staleWindow,
+		NegativeTTL:            negativeTTL,
+		TTLJitterPercent:       ttlJitterPercent,
+		EnableSingleflight:     enableSingleflight,
+		MaxFallbackConcurrency: maxFallbackConcurrency,
+	}, nil
+}
+
+func readMongoSnapshot(k *koanf.Koanf) (MongoConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "mongo.enabled", &enabled); err != nil {
+		return MongoConfig{}, err
+	}
+	uri := readRawConfigString(k, "mongo.uri")
+	database := readTrimmedConfigString(k, "mongo.database")
+	var connectTimeout time.Duration
+	if err := readDurationInto(k, "mongo.connect_timeout", &connectTimeout); err != nil {
+		return MongoConfig{}, err
+	}
+	var serverSelectionTimeout time.Duration
+	if err := readDurationInto(k, "mongo.server_selection_timeout", &serverSelectionTimeout); err != nil {
+		return MongoConfig{}, err
+	}
+	var maxPoolSize int
+	if err := readIntInto(k, "mongo.max_pool_size", &maxPoolSize); err != nil {
+		return MongoConfig{}, err
+	}
+	return MongoConfig{
+		Enabled:                enabled,
+		URI:                    uri,
+		Database:               database,
+		ConnectTimeout:         connectTimeout,
+		ServerSelectionTimeout: serverSelectionTimeout,
+		MaxPoolSize:            maxPoolSize,
+	}, nil
+}
+
+func readFeatureFlagsSnapshot(k *koanf.Koanf) (FeatureFlagsConfig, error) {
+	var postgresReadinessProbe bool
+	if err := readBoolInto(k, "feature_flags.postgres_readiness_probe", &postgresReadinessProbe); err != nil {
+		return FeatureFlagsConfig{}, err
+	}
+	var mongoReadinessProbe bool
+	if err := readBoolInto(k, "feature_flags.mongo_readiness_probe", &mongoReadinessProbe); err != nil {
+		return FeatureFlagsConfig{}, err
+	}
+	var redisReadinessProbe bool
+	if err := readBoolInto(k, "feature_flags.redis_readiness_probe", &redisReadinessProbe); err != nil {
+		return FeatureFlagsConfig{}, err
+	}
+	return FeatureFlagsConfig{
+		PostgresReadinessProbe: postgresReadinessProbe,
+		MongoReadinessProbe:    mongoReadinessProbe,
+		RedisReadinessProbe:    redisReadinessProbe,
+	}, nil
 }
 
 func readRawConfigString(k *koanf.Koanf, key string) string {

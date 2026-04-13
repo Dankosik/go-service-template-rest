@@ -19,6 +19,8 @@ import (
 )
 
 func TestBuildTraceSampler(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name        string
 		samplerName string
@@ -90,6 +92,8 @@ func TestBuildTraceSampler(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := buildTraceSampler(tc.samplerName, tc.samplerArg)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("buildTraceSampler() error = %v, wantErr %v", err, tc.wantErr)
@@ -158,6 +162,7 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Mutates the process-wide OpenTelemetry provider and propagator.
 func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 	previousTracerProvider := otel.GetTracerProvider()
 	previousPropagator := otel.GetTextMapPropagator()
@@ -429,8 +434,11 @@ func TestSetupTracingRejectsAmbientOTLPProxyEnv(t *testing.T) {
 	}
 }
 
+//nolint:tparallel // Top-level t.Parallel would make the t.Setenv subtest invalid.
 func TestBuildTraceExporterOptions(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
+		t.Parallel()
+
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPProtocol: "http/protobuf",
 		})
@@ -464,6 +472,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("configured endpoint and headers", func(t *testing.T) {
+		t.Parallel()
+
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
 			OTLPHeaders:  "authorization=Bearer token",
@@ -481,6 +491,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("generic endpoint base path appends traces path", func(t *testing.T) {
+		t.Parallel()
+
 		paths := make(chan string, 1)
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			paths <- r.URL.Path
@@ -504,6 +516,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("traces endpoint overrides generic endpoint and uses path as configured", func(t *testing.T) {
+		t.Parallel()
+
 		genericPaths := make(chan string, 1)
 		genericServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			genericPaths <- r.URL.Path
@@ -537,6 +551,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("traces endpoint without path uses root path", func(t *testing.T) {
+		t.Parallel()
+
 		paths := make(chan string, 1)
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			paths <- r.URL.Path
@@ -560,6 +576,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("invalid protocol", func(t *testing.T) {
+		t.Parallel()
+
 		_, _, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
 			OTLPProtocol: "grpc",
@@ -571,6 +589,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 }
 
 func TestDescribeTraceExporterTarget(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name       string
 		cfg        TraceExporterConfig
@@ -627,6 +647,8 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			target, err := DescribeTraceExporterTarget(tc.cfg)
 			if tc.wantErr != "" {
 				if err == nil {
@@ -654,6 +676,8 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 }
 
 func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name    string
 		raw     string
@@ -703,6 +727,8 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := DescribeTraceExporterTarget(TraceExporterConfig{
 				OTLPEndpoint: tc.raw,
 			})
@@ -722,6 +748,8 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 }
 
 func TestBuildTraceExporterOptionsUsesRuntimeEndpointParser(t *testing.T) {
+	t.Parallel()
+
 	options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
 		OTLPEndpoint: "http://localhost:4318/v1/traces",
 		OTLPProtocol: "http/protobuf",
@@ -778,6 +806,8 @@ func TestBuildTraceExporterOptionsUsesRuntimeEndpointParser(t *testing.T) {
 }
 
 func TestParseOTLPHeaders(t *testing.T) {
+	t.Parallel()
+
 	headers, err := parseOTLPHeaders("authorization=Bearer token,x-api-key=abc")
 	if err != nil {
 		t.Fatalf("parseOTLPHeaders() error = %v", err)
@@ -796,6 +826,8 @@ func TestParseOTLPHeaders(t *testing.T) {
 }
 
 func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		raw  string
@@ -820,6 +852,8 @@ func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := parseOTLPHeaders(tt.raw)
 			if err == nil {
 				t.Fatalf("parseOTLPHeaders() error = nil, want non-nil")
@@ -840,6 +874,8 @@ func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
 }
 
 func TestExporterOptionTypeCompatibility(t *testing.T) {
+	t.Parallel()
+
 	// Guard against accidental option-type drift when upgrading OTLP exporter package.
 	var _ []otlptracehttp.Option
 }

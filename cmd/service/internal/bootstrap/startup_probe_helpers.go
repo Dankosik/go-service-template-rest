@@ -88,7 +88,7 @@ func withStageBudget(parent context.Context, stageBudget time.Duration) (context
 
 func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duration, stage string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("%w: %s aborted before probe: %w", errDependencyInit, stage, err)
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
@@ -155,7 +155,7 @@ func probeWithRetry(ctx context.Context, maxAttempts int, probe func(context.Con
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("probe retry canceled: %w", err)
 		}
 
 		err := probe(ctx)
@@ -169,7 +169,7 @@ func probeWithRetry(ctx context.Context, maxAttempts int, probe func(context.Con
 
 		delay := fullJitterDelay(attempt)
 		if waitErr := sleepWithContext(ctx, delay); waitErr != nil {
-			return waitErr
+			return fmt.Errorf("probe retry wait: %w", waitErr)
 		}
 	}
 
@@ -210,7 +210,7 @@ func sleepWithContext(ctx context.Context, wait time.Duration) error {
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("sleep canceled: %w", ctx.Err())
 	case <-timer.C:
 		return nil
 	}

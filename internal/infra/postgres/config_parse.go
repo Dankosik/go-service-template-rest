@@ -140,9 +140,9 @@ func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
 	parsedURL, err := url.Parse(dsn)
 	if err != nil {
 		if urlErr := new(url.Error); errors.As(err, &urlErr) {
-			return nil, urlErr.Err
+			return nil, fmt.Errorf("parse postgres url settings: %w", urlErr.Err)
 		}
-		return nil, err
+		return nil, fmt.Errorf("parse postgres url settings: %w", err)
 	}
 	if parsedURL.User != nil {
 		settings["user"] = parsedURL.User.Username()
@@ -163,7 +163,7 @@ func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
 		}
 		h, p, err := net.SplitHostPort(host)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("parse postgres url host: %w", err)
 		}
 		if h != "" {
 			hosts = append(hosts, h)
@@ -296,7 +296,7 @@ func validatePostgresDSNSettings(settings map[string]string) error {
 func normalizePostgresURLDSN(dsn string) (string, error) {
 	parsedURL, err := url.Parse(dsn)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
 	}
 	query := parsedURL.Query()
 	for _, key := range postgresFileDefaultDSNKeys {

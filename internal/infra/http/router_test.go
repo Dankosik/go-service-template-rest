@@ -271,7 +271,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, "req-123")
-	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -324,7 +324,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, "req-chi-123")
-	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -649,7 +649,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, requestID)
-	req.Header.Set("traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
+	req.Header.Set("Traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
 	h.ServeHTTP(resp, req)
 

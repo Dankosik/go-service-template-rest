@@ -15,10 +15,11 @@ const (
 
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, detail string) {
 	p := api.Problem{
-		Type:   "about:blank",
-		Title:  title,
-		Status: problemHTTPStatus(status),
-		Detail: optionalProblemString(detail),
+		Detail:    optionalProblemString(detail),
+		RequestId: nil,
+		Status:    problemHTTPStatus(status),
+		Title:     title,
+		Type:      "about:blank",
 	}
 	if r != nil {
 		p.RequestId = optionalProblemString(requestIDFromContext(r.Context()))

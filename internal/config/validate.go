@@ -24,76 +24,29 @@ type validationResult struct {
 }
 
 func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts validationOptions) (validationResult, error) {
-	result := validationResult{}
 	if err := checkValidateContext(ctx); err != nil {
 		return validationResult{}, err
 	}
 
-	unknownKeys := findUnknownKeys(k, opts.AdditionalUnknownKeys)
-	if len(unknownKeys) > 0 {
-		if opts.Strict {
-			return validationResult{}, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeys, ", "))
-		}
-		result.UnknownKeyWarnings = unknownKeys
+	result, err := validateUnknownConfigKeys(k, opts)
+	if err != nil {
+		return validationResult{}, err
 	}
 	if err := checkValidateContext(ctx); err != nil {
 		return result, err
 	}
 
-	if strings.TrimSpace(cfg.App.Env) == "" {
-		return result, fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
-	}
-	if strings.TrimSpace(cfg.App.Version) == "" {
-		return result, fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
-	}
-	if strings.TrimSpace(cfg.HTTP.Addr) == "" {
-		return result, fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
-	}
-
-	if err := validateDurationRange("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, time.Second, 10*time.Minute); err != nil {
+	if err := validateAppConfig(cfg.App); err != nil {
 		return result, err
 	}
-	if err := validateDurationRange("http.readiness_timeout", cfg.HTTP.ReadinessTimeout, 100*time.Millisecond, 30*time.Second); err != nil {
+	if err := validateHTTPConfig(cfg.HTTP); err != nil {
 		return result, err
-	}
-	if err := validateDurationRange("http.readiness_propagation_delay", cfg.HTTP.ReadinessPropagationDelay, 0, cfg.HTTP.ShutdownTimeout); err != nil {
-		return result, err
-	}
-	if err := validateDurationRange("http.read_header_timeout", cfg.HTTP.ReadHeaderTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
-		return result, err
-	}
-	if err := validateDurationRange("http.read_timeout", cfg.HTTP.ReadTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
-		return result, err
-	}
-	if err := validateDurationRange("http.write_timeout", cfg.HTTP.WriteTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
-		return result, err
-	}
-	if err := validateDurationRange("http.idle_timeout", cfg.HTTP.IdleTimeout, 100*time.Millisecond, 24*time.Hour); err != nil {
-		return result, err
-	}
-	if err := validateHTTPReadinessWriteTimeout(cfg.HTTP); err != nil {
-		return result, err
-	}
-	if err := validateHTTPShutdownBudget(cfg.HTTP); err != nil {
-		return result, err
-	}
-	if cfg.HTTP.MaxHeaderBytes <= 0 {
-		return result, fmt.Errorf("%w: http.max_header_bytes must be > 0", ErrValidate)
-	}
-	if cfg.HTTP.MaxBodyBytes <= 0 {
-		return result, fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
 	}
 	if err := checkValidateContext(ctx); err != nil {
 		return result, err
 	}
 
-	if err := validatePostgres(cfg.Postgres); err != nil {
-		return result, err
-	}
-	if err := validateRedis(cfg.Redis); err != nil {
-		return result, err
-	}
-	if err := validateMongo(cfg.Mongo); err != nil {
+	if err := validateDatastoreConfig(*cfg); err != nil {
 		return result, err
 	}
 	if err := validateReadinessProbeBudgets(*cfg); err != nil {
@@ -103,17 +56,95 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts valid
 		return result, err
 	}
 
-	if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
-		return result, fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
-	}
-	if err := validateSampler(cfg.Observability.OTel.TracesSampler, cfg.Observability.OTel.TracesSamplerArg); err != nil {
-		return result, err
-	}
-	if err := validateOTLPExporter(cfg.Observability.OTel.Exporter); err != nil {
+	if err := validateObservabilityConfig(cfg.Observability); err != nil {
 		return result, err
 	}
 
 	return result, nil
+}
+
+func validateUnknownConfigKeys(k *koanf.Koanf, opts validationOptions) (validationResult, error) {
+	unknownKeys := findUnknownKeys(k, opts.AdditionalUnknownKeys)
+	if len(unknownKeys) == 0 {
+		return validationResult{}, nil
+	}
+	if opts.Strict {
+		return validationResult{}, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeys, ", "))
+	}
+	return validationResult{UnknownKeyWarnings: unknownKeys}, nil
+}
+
+func validateAppConfig(cfg AppConfig) error {
+	if strings.TrimSpace(cfg.Env) == "" {
+		return fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
+	}
+	if strings.TrimSpace(cfg.Version) == "" {
+		return fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
+	}
+	return nil
+}
+
+func validateHTTPConfig(cfg HTTPConfig) error {
+	if strings.TrimSpace(cfg.Addr) == "" {
+		return fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
+	}
+	if err := validateDurationRange("http.shutdown_timeout", cfg.ShutdownTimeout, time.Second, 10*time.Minute); err != nil {
+		return err
+	}
+	if err := validateDurationRange("http.readiness_timeout", cfg.ReadinessTimeout, 100*time.Millisecond, 30*time.Second); err != nil {
+		return err
+	}
+	if err := validateDurationRange("http.readiness_propagation_delay", cfg.ReadinessPropagationDelay, 0, cfg.ShutdownTimeout); err != nil {
+		return err
+	}
+	if err := validateDurationRange("http.read_header_timeout", cfg.ReadHeaderTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
+		return err
+	}
+	if err := validateDurationRange("http.read_timeout", cfg.ReadTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
+		return err
+	}
+	if err := validateDurationRange("http.write_timeout", cfg.WriteTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
+		return err
+	}
+	if err := validateDurationRange("http.idle_timeout", cfg.IdleTimeout, 100*time.Millisecond, 24*time.Hour); err != nil {
+		return err
+	}
+	if err := validateHTTPReadinessWriteTimeout(cfg); err != nil {
+		return err
+	}
+	if err := validateHTTPShutdownBudget(cfg); err != nil {
+		return err
+	}
+	if cfg.MaxHeaderBytes <= 0 {
+		return fmt.Errorf("%w: http.max_header_bytes must be > 0", ErrValidate)
+	}
+	if cfg.MaxBodyBytes <= 0 {
+		return fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
+	}
+	return nil
+}
+
+func validateDatastoreConfig(cfg Config) error {
+	if err := validatePostgres(cfg.Postgres); err != nil {
+		return err
+	}
+	if err := validateRedis(cfg.Redis); err != nil {
+		return err
+	}
+	if err := validateMongo(cfg.Mongo); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateObservabilityConfig(cfg ObservabilityConfig) error {
+	if strings.TrimSpace(cfg.OTel.ServiceName) == "" {
+		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
+	}
+	if err := validateSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg); err != nil {
+		return err
+	}
+	return validateOTLPExporter(cfg.OTel.Exporter)
 }
 
 func findUnknownKeys(k *koanf.Koanf, additionalUnknownKeys []string) []string {
@@ -176,33 +207,58 @@ func validatePostgres(cfg PostgresConfig) error {
 }
 
 func validateRedis(cfg RedisConfig) error {
+	mode, err := validateRedisMode(cfg)
+	if err != nil {
+		return err
+	}
+	if err := validateRedisEndpoint(cfg); err != nil {
+		return err
+	}
+	if err := validateRedisStoreMode(cfg, mode); err != nil {
+		return err
+	}
+	if err := validateRedisLimits(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRedisMode(cfg RedisConfig) (string, error) {
 	mode := cfg.ModeValue()
 	if mode == "" {
-		return fmt.Errorf("%w: redis.mode cannot be empty", ErrValidate)
+		return "", fmt.Errorf("%w: redis.mode cannot be empty", ErrValidate)
 	}
 	if mode != RedisModeCache && mode != RedisModeStore {
-		return fmt.Errorf("%w: redis.mode must be one of [cache,store]", ErrValidate)
+		return "", fmt.Errorf("%w: redis.mode must be one of [cache,store]", ErrValidate)
 	}
+	return mode, nil
+}
 
-	if cfg.Enabled {
-		if strings.TrimSpace(cfg.Addr) == "" {
-			return fmt.Errorf("%w: redis.addr is required when redis.enabled=true", ErrValidate)
-		}
-		if err := validateHostPortWithNumericTCPPort("redis.addr", cfg.Addr); err != nil {
-			return err
-		}
+func validateRedisEndpoint(cfg RedisConfig) error {
+	if !cfg.Enabled {
+		return nil
 	}
-
-	if mode == RedisModeStore {
-		// ARCH-008: v1 only supports guard/reject behavior for store mode.
-		if !cfg.AllowStoreMode {
-			return fmt.Errorf("%w: redis.mode=store is blocked unless redis.allow_store_mode=true", ErrValidate)
-		}
-		if cfg.StaleWindow != 0 {
-			return fmt.Errorf("%w: redis.stale_window must be 0 when redis.mode=store", ErrValidate)
-		}
+	if strings.TrimSpace(cfg.Addr) == "" {
+		return fmt.Errorf("%w: redis.addr is required when redis.enabled=true", ErrValidate)
 	}
+	return validateHostPortWithNumericTCPPort("redis.addr", cfg.Addr)
+}
 
+func validateRedisStoreMode(cfg RedisConfig, mode string) error {
+	if mode != RedisModeStore {
+		return nil
+	}
+	// ARCH-008: v1 only supports guard/reject behavior for store mode.
+	if !cfg.AllowStoreMode {
+		return fmt.Errorf("%w: redis.mode=store is blocked unless redis.allow_store_mode=true", ErrValidate)
+	}
+	if cfg.StaleWindow != 0 {
+		return fmt.Errorf("%w: redis.stale_window must be 0 when redis.mode=store", ErrValidate)
+	}
+	return nil
+}
+
+func validateRedisLimits(cfg RedisConfig) error {
 	if err := validateIntRange("redis.db", cfg.DB, 0, 15); err != nil {
 		return err
 	}
@@ -233,11 +289,7 @@ func validateRedis(cfg RedisConfig) error {
 	if err := validateIntRange("redis.ttl_jitter_percent", cfg.TTLJitterPercent, 0, 30); err != nil {
 		return err
 	}
-	if err := validateIntRange("redis.max_fallback_concurrency", cfg.MaxFallbackConcurrency, 1, 256); err != nil {
-		return err
-	}
-
-	return nil
+	return validateIntRange("redis.max_fallback_concurrency", cfg.MaxFallbackConcurrency, 1, 256)
 }
 
 func validateMongo(cfg MongoConfig) error {
@@ -426,52 +478,73 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		return "", mongoProbeAddressError("empty mongo host")
 	}
 
-	if parsedHost, port, err := net.SplitHostPort(trimmed); err == nil {
-		if strings.TrimSpace(parsedHost) == "" {
-			return "", mongoProbeAddressError("empty mongo host")
-		}
-		if strings.ContainsAny(parsedHost, "[]") {
-			return "", mongoProbeAddressError("invalid mongo host")
-		}
-		if strings.HasPrefix(trimmed, "[") || strings.Contains(parsedHost, ":") {
-			if err := validateMongoIPv6Literal(parsedHost); err != nil {
-				return "", err
-			}
-		}
-		if err := validateNumericTCPPort(port); err != nil {
-			return "", mongoProbeAddressError("invalid mongo TCP port")
-		}
-		return trimmed, nil
+	if address, ok, err := normalizeSplitMongoProbeAddress(trimmed); ok || err != nil {
+		return address, err
 	}
 	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, "?") {
 		return "", mongoProbeAddressError("invalid mongo host")
 	}
 
 	if strings.ContainsAny(trimmed, "[]") {
-		if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
-			return "", mongoProbeAddressError("invalid mongo host")
-		}
-		bracketedHost := strings.TrimSuffix(strings.TrimPrefix(trimmed, "["), "]")
-		if bracketedHost == "" || strings.ContainsAny(bracketedHost, "[]") {
-			return "", mongoProbeAddressError("invalid mongo host")
-		}
-		if err := validateMongoIPv6Literal(bracketedHost); err != nil {
-			return "", err
-		}
-		return net.JoinHostPort(bracketedHost, defaultMongoPort), nil
+		return normalizeBracketedMongoProbeAddress(trimmed)
 	}
 
 	if strings.Count(trimmed, ":") > 1 {
-		if err := validateMongoIPv6Literal(trimmed); err != nil {
-			return "", err
-		}
-		return net.JoinHostPort(trimmed, defaultMongoPort), nil
+		return normalizeBareMongoIPv6ProbeAddress(trimmed)
 	}
 
 	if strings.Contains(trimmed, ":") {
 		return "", mongoProbeAddressError("invalid mongo host")
 	}
 
+	return net.JoinHostPort(trimmed, defaultMongoPort), nil
+}
+
+func normalizeSplitMongoProbeAddress(trimmed string) (string, bool, error) {
+	parsedHost, port, ok := splitMongoHostPort(trimmed)
+	if !ok {
+		return "", false, nil
+	}
+	if strings.TrimSpace(parsedHost) == "" {
+		return "", true, mongoProbeAddressError("empty mongo host")
+	}
+	if strings.ContainsAny(parsedHost, "[]") {
+		return "", true, mongoProbeAddressError("invalid mongo host")
+	}
+	if strings.HasPrefix(trimmed, "[") || strings.Contains(parsedHost, ":") {
+		if err := validateMongoIPv6Literal(parsedHost); err != nil {
+			return "", true, err
+		}
+	}
+	if err := validateNumericTCPPort(port); err != nil {
+		return "", true, mongoProbeAddressError("invalid mongo TCP port")
+	}
+	return trimmed, true, nil
+}
+
+func splitMongoHostPort(trimmed string) (string, string, bool) {
+	host, port, err := net.SplitHostPort(trimmed)
+	return host, port, err == nil
+}
+
+func normalizeBracketedMongoProbeAddress(trimmed string) (string, error) {
+	if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
+		return "", mongoProbeAddressError("invalid mongo host")
+	}
+	bracketedHost := strings.TrimSuffix(strings.TrimPrefix(trimmed, "["), "]")
+	if bracketedHost == "" || strings.ContainsAny(bracketedHost, "[]") {
+		return "", mongoProbeAddressError("invalid mongo host")
+	}
+	if err := validateMongoIPv6Literal(bracketedHost); err != nil {
+		return "", err
+	}
+	return net.JoinHostPort(bracketedHost, defaultMongoPort), nil
+}
+
+func normalizeBareMongoIPv6ProbeAddress(trimmed string) (string, error) {
+	if err := validateMongoIPv6Literal(trimmed); err != nil {
+		return "", err
+	}
 	return net.JoinHostPort(trimmed, defaultMongoPort), nil
 }
 

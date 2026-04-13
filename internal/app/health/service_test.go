@@ -9,6 +9,8 @@ import (
 )
 
 func TestServiceReadySuccess(t *testing.T) {
+	t.Parallel()
+
 	ctrl := gomock.NewController(t)
 
 	db := NewMockProbe(ctrl)
@@ -25,6 +27,8 @@ func TestServiceReadySuccess(t *testing.T) {
 }
 
 func TestServiceReadyFail(t *testing.T) {
+	t.Parallel()
+
 	ctrl := gomock.NewController(t)
 	downErr := errors.New("down")
 
@@ -45,6 +49,8 @@ func TestServiceReadyFail(t *testing.T) {
 }
 
 func TestServiceReadyDraining(t *testing.T) {
+	t.Parallel()
+
 	ctrl := gomock.NewController(t)
 	probe := NewMockProbe(ctrl)
 

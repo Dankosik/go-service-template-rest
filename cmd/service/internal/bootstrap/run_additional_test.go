@@ -9,6 +9,8 @@ import (
 )
 
 func TestOverlayPathsFlagSetAndString(t *testing.T) {
+	t.Parallel()
+
 	var f overlayPathsFlag
 	if err := f.Set("  a.yaml  "); err != nil {
 		t.Fatalf("Set() error = %v, want nil", err)
@@ -28,6 +30,8 @@ func TestParseLoadOptions(t *testing.T) {
 	t.Parallel()
 
 	t.Run("parses flags", func(t *testing.T) {
+		t.Parallel()
+
 		opts, err := parseLoadOptions([]string{
 			"--config", "/tmp/base.yaml",
 			"--config-overlay", "/tmp/o1.yaml",
@@ -49,6 +53,8 @@ func TestParseLoadOptions(t *testing.T) {
 	})
 
 	t.Run("fails on unknown flag", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := parseLoadOptions([]string{"--unknown-flag"})
 		if err == nil {
 			t.Fatal("parseLoadOptions() error = nil, want non-nil")
@@ -59,6 +65,8 @@ func TestParseLoadOptions(t *testing.T) {
 	})
 
 	t.Run("fails on positional arguments", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := parseLoadOptions([]string{"--config", "/tmp/base.yaml", "serve"})
 		if err == nil {
 			t.Fatal("parseLoadOptions() error = nil, want non-nil")
@@ -73,6 +81,8 @@ func TestParseLoadOptions(t *testing.T) {
 }
 
 func TestRunReturnsParseErrorForInvalidFlags(t *testing.T) {
+	t.Parallel()
+
 	err := Run([]string{"--unknown-flag"})
 	if err == nil {
 		t.Fatal("Run() error = nil, want non-nil")

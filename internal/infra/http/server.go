@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -56,14 +57,17 @@ func (s *Server) Serve(listener net.Listener) error {
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
-	return err
+	return fmt.Errorf("serve http: %w", err)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	if err := s.requireInitialized(); err != nil {
 		return err
 	}
-	return s.srv.Shutdown(ctx)
+	if err := s.srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown http server: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) requireInitialized() error {

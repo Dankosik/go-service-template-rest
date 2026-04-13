@@ -72,7 +72,7 @@ func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 		t.Fatalf("CheckReady() error = %v, want %v", err, errStartupAdmissionPending)
 	}
 
-	admission.MarkReady(context.Background())
+	admission.MarkReady()
 	if err := admission.CheckReady(context.Background()); err != nil {
 		t.Fatalf("CheckReady() after MarkReady error = %v, want nil", err)
 	}
@@ -103,9 +103,7 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
-	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:      context.Background(),
-		bootstrapCtx:   context.Background(),
+	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
 		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:-1", ShutdownTimeout: time.Second}},
 		log:            logger,
@@ -132,9 +130,7 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	signalCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:      signalCtx,
-		bootstrapCtx:   context.Background(),
+	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
 		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:            logger,
@@ -175,10 +171,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func(signalCtx context.Context, bootstrapCtx context.Context, bootstrapSpan trace.Span) {
-		//nolint:contextcheck // serveHTTPRuntime carries signal and bootstrap contexts in args.
-		runErrCh <- serveHTTPRuntime(serveHTTPRuntimeArgs{
-			signalCtx:     signalCtx,
-			bootstrapCtx:  bootstrapCtx,
+		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
 			bootstrapSpan: bootstrapSpan,
 			cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			log:           logger,
@@ -238,9 +231,7 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:     context.Background(),
-		bootstrapCtx:  bootstrapCtx,
+	err := serveHTTPRuntime(context.Background(), bootstrapCtx, serveHTTPRuntimeArgs{
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,
@@ -283,9 +274,7 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		return nil
 	}
 
-	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:     context.Background(),
-		bootstrapCtx:  context.Background(),
+	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,
@@ -323,9 +312,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 		return errors.New("boom")
 	}
 
-	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:     context.Background(),
-		bootstrapCtx:  context.Background(),
+	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,
@@ -372,9 +359,7 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 		return serveErr
 	}
 
-	err := serveHTTPRuntime(serveHTTPRuntimeArgs{
-		signalCtx:     context.Background(),
-		bootstrapCtx:  context.Background(),
+	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,

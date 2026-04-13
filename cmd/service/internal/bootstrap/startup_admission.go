@@ -28,7 +28,7 @@ func newStartupAdmissionController(
 	}
 }
 
-func (c *startupAdmissionController) MarkReady(ctx context.Context) {
+func (c *startupAdmissionController) MarkReady() {
 	if c == nil {
 		return
 	}

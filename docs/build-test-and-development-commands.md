@@ -242,6 +242,7 @@ Bootstrap shortcuts:
     - `go tool golangci-lint config verify`
     - `go tool golangci-lint run --timeout=3m`
   - Note: local lint now matches CI behavior by validating `.golangci.yml` schema before running linters.
+  - Error boundary policy: `wrapcheck` is CI-blocking. Local cancellation probes may return `ctx.Err()` directly when cancellation is the signal being propagated; package, dependency, and HTTP startup boundaries that add operation context must wrap cancellation and deadline errors with `%w` so callers can still use `errors.Is` with `context.Canceled` and `context.DeadlineExceeded`.
   - Version rule: keep the `golangci-lint` tool version in `go.mod` aligned with workflow `GOLANGCI_LINT_VERSION` values; `make guardrails-check` enforces that alignment.
 
 - `make docker-lint`
@@ -254,6 +255,14 @@ Bootstrap shortcuts:
 
 - `make docker-modernize-check`
   - Docker equivalent of `make modernize-check`.
+
+- `make test-parallelism-check`
+  - Runs: `go tool golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0`
+  - Purpose: informational suggestions for tests that can safely call `t.Parallel()`.
+  - Note: this stays separate from PR-blocking `make lint` until serial tests have reviewable policy coverage and the baseline is stable.
+
+- `make docker-test-parallelism-check`
+  - Docker equivalent of `make test-parallelism-check`.
 
 ### Unit and integration testing
 
@@ -645,6 +654,7 @@ Targeted parity checks:
 | Integration tests | `REQUIRE_DOCKER=1 make test-integration` or `make docker-test-integration` |
 | Go security and secret scans | `make govulncheck`, `make gosec`, `make go-security`, `make secret-scan`, `make docker-govulncheck`, `make docker-gosec`, `make docker-go-security`, or `make docker-secret-scan` |
 | Modern Go cleanup suggestions | `make modernize-check` or `make docker-modernize-check` |
+| Test parallelism suggestions | `make test-parallelism-check` or `make docker-test-parallelism-check` |
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |

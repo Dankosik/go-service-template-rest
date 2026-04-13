@@ -130,7 +130,7 @@ func (report *LoadReport) markFailedStage(stage string, duration time.Duration) 
 	report.FailedStageDuration = duration
 }
 
-func (report LoadReport) durationForStage(stage string) time.Duration {
+func (report *LoadReport) durationForStage(stage string) time.Duration {
 	switch stage {
 	case StageLoadDefaults:
 		return report.LoadDefaultsDuration

@@ -130,6 +130,8 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := New(context.Background(), tc.opts)
 			if err == nil {
 				t.Fatal("New() error = nil, want non-nil")
@@ -239,6 +241,8 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 }
 
 func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name             string
 		dsn              string
@@ -335,8 +339,12 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 }
 
 func TestParsePoolConfigRejectsSharedFileDefaultDSNKeys(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range postgresFileDefaultDSNKeys {
 		t.Run(key.name, func(t *testing.T) {
+			t.Parallel()
+
 			dsn := "postgres://user:pass@localhost:5432/app?sslmode=disable&" + key.name + "=file-secret"
 
 			_, err := parsePoolConfig(dsn)
@@ -347,6 +355,8 @@ func TestParsePoolConfigRejectsSharedFileDefaultDSNKeys(t *testing.T) {
 }
 
 func TestNormalizePostgresDSNSuppressesFileDefaultKeys(t *testing.T) {
+	t.Parallel()
+
 	normalizedURL, err := normalizePostgresURLDSN("postgres://user:pass@localhost:5432/app?sslmode=disable")
 	if err != nil {
 		t.Fatalf("normalizePostgresURLDSN() error = %v", err)
@@ -393,6 +403,8 @@ func TestNormalizePostgresDSNSuppressesFileDefaultKeys(t *testing.T) {
 }
 
 func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		dsn  string

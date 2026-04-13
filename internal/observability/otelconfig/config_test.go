@@ -6,6 +6,8 @@ import (
 )
 
 func TestTraceSamplerVocabulary(t *testing.T) {
+	t.Parallel()
+
 	if got := TraceSamplerOrDefault("  "); got != DefaultTracesSampler {
 		t.Fatalf("TraceSamplerOrDefault(empty) = %q, want %q", got, DefaultTracesSampler)
 	}
@@ -21,6 +23,8 @@ func TestTraceSamplerVocabulary(t *testing.T) {
 }
 
 func TestTraceSamplerArgValidation(t *testing.T) {
+	t.Parallel()
+
 	for _, arg := range []float64{0, DefaultTracesSamplerArg, 1} {
 		if !TraceSamplerArgFinite(arg) {
 			t.Fatalf("TraceSamplerArgFinite(%v) = false, want true", arg)
@@ -50,6 +54,8 @@ func TestTraceSamplerArgValidation(t *testing.T) {
 }
 
 func TestOTLPProtocolVocabulary(t *testing.T) {
+	t.Parallel()
+
 	if got := OTLPProtocolOrDefault(" "); got != DefaultOTLPProtocol {
 		t.Fatalf("OTLPProtocolOrDefault(empty) = %q, want %q", got, DefaultOTLPProtocol)
 	}

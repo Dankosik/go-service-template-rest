@@ -407,9 +407,9 @@ func TestRecordConfigHelpers(t *testing.T) {
 	provider.RegisterSpanProcessor(spanRecorder)
 	tracer := provider.Tracer("test")
 	for _, stage := range stageDurations {
-		recordConfigStageSpan(tracer, context.Background(), stage.stage, stage.duration, "success", "")
+		recordConfigStageSpan(context.Background(), tracer, stage.stage, stage.duration, "success", "")
 	}
-	recordConfigStageSpan(tracer, context.Background(), "cfg.zero", 0, "success", "")
+	recordConfigStageSpan(context.Background(), tracer, "cfg.zero", 0, "success", "")
 	_ = provider.Shutdown(context.Background())
 	spans := spanRecorder.Ended()
 	if len(spans) != len(wantStages) {

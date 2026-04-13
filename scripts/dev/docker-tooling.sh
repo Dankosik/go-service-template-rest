@@ -94,6 +94,7 @@ usage() {
 	echo "  mocks-drift-check"
 	echo "  lint"
 	echo "  modernize-check"
+	echo "  test-parallelism-check"
 	echo "  openapi-generate"
 	echo "  openapi-drift-check"
 	echo "  openapi-runtime-contract-check"
@@ -482,6 +483,9 @@ lint)
 	;;
 modernize-check)
 	run_lint "run --enable-only=modernize --timeout=3m"
+	;;
+test-parallelism-check)
+	run_lint "run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0"
 	;;
 openapi-generate)
 	run_go "go generate ./internal/api"

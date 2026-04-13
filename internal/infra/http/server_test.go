@@ -151,6 +151,8 @@ func TestServerUninitializedUseReturnsInspectableError(t *testing.T) {
 		{name: "zero value", srv: &Server{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if err := tc.srv.Serve(nil); !errors.Is(err, ErrUninitializedServer) {
 				t.Fatalf("Serve(nil) error = %v, want ErrUninitializedServer", err)
 			}

@@ -3,6 +3,8 @@ package ping
 import "testing"
 
 func TestServicePong(t *testing.T) {
+	t.Parallel()
+
 	svc := New()
 	if svc == nil {
 		t.Fatal("New() returned nil")
