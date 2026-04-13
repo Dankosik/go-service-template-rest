@@ -18,11 +18,18 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
 ```markdown
 `design/overview.md`
 - Approach: add the async export capability behind app-owned job orchestration and infra-owned HTTP/download adapters.
-- Bundle index: component map approved; sequence approved; ownership map approved; data model expected because persisted job state changes; contracts expected because the OpenAPI shape changes; rollout not expected because no mixed-version choreography is in scope.
+- Bundle index:
+  - `design/component-map.md`: approved; package surfaces and stable areas are mapped.
+  - `design/sequence.md`: approved; async request flow, worker failure points, and retry boundaries are covered.
+  - `design/ownership-map.md`: approved; job state source-of-truth, generated-code authority, and adapter responsibilities are named.
+  - `design/data-model.md`: expected because persisted job state changes.
+  - `design/contracts/`: expected because the OpenAPI shape changes.
+  - `test-plan.md`: not expected; validation obligations fit in `tasks.md`.
+  - `rollout.md`: not expected; no mixed-version choreography is in scope.
 - Readiness: planning can start after `design/contracts/` is approved.
 ```
 
-Copy this shape: overview points to the bundle and keeps readiness honest.
+Copy this shape: overview points to the bundle, makes required artifact status scannable, gives trigger rationale for plausible conditional artifacts, and keeps readiness honest.
 
 ```markdown
 `design/sequence.md`

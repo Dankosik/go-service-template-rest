@@ -32,6 +32,8 @@ The feature follows the existing HTTP request path: OpenAPI contract -> generate
 - `design/sequence.md`: approved; create-order request flow, validation failure, dependency timeout, and persistence failure.
 - `design/ownership-map.md`: approved; OpenAPI, app behavior, migration, and adapter ownership.
 - `design/data-model.md`: expected because persisted order state changes.
+- `design/dependency-graph.md`: not expected; dependency direction stays inside existing app -> infra boundaries.
+- `design/contracts/`: not expected; the public REST shape is unchanged and `api/openapi/service.yaml` remains the runtime contract authority.
 - `rollout.md`: expected because migration compatibility and backfill order affect release safety.
 - `test-plan.md`: not expected; validation fits in `tasks.md`.
 

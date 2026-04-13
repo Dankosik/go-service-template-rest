@@ -136,7 +136,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 - gather repository or external evidence for the chosen questions
 - create `research/*.md` only when the evidence, comparisons, or source notes need to survive beyond this session
 - keep research artifacts evidence-oriented: question or scope, findings with sources or file references, evidence limits, assumptions, conflicts or open points, and why the note matters for the handoff
-- do not force a universal research template; the required quality is source-hygiene and resume value, not exact headings
+- do not force a universal research template; the required quality is source-hygiene and resume value, not exact headings. Copy the evidence discipline, not a rigid section list
 - do not treat `research/*.md` as the decision record
 
 ### 6. Capture Research Fan-In Without Writing `spec.md`

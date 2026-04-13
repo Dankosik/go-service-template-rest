@@ -94,7 +94,7 @@ specs/<feature-id>/
 - **Pre-code phase plans:** Dedicated workflow-planning and research sessions use `workflow-plans/workflow-planning.md` and `workflow-plans/research.md`. Later pre-code phases normally get `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, and `workflow-plans/planning.md`.
 - **Post-code phase-control files:** Coding/execution does not get a phase-control file. Create `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` only when a named multi-session review or validation checkpoint truly needs phase-local routing beyond `workflow-plan.md` and `tasks.md`.
 - **Artifact ownership:** `spec.md` stores decisions, `design/` stores task-specific technical context, and `tasks.md` stores executable task state and the implementation handoff. Do not make any of them absorb another artifact's job.
-- **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, and handoff implication visible enough that later synthesis does not need chat memory.
+- **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, source notes, and handoff implication visible enough that later synthesis does not need chat memory. Copy the evidence discipline, not the headings.
 - **Research fan-in home:** Store the durable fan-in summary in one owning place, normally `workflow-plans/research.md` for routing plus selected `research/*.md` for reusable evidence. Other files should link or summarize status only; do not copy the full fan-in narrative into both master workflow control and research notes.
 - **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
 - **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local. If an older bundle mentions a task-specific supplemental note, do not treat that note as a new workflow artifact type unless this document or `AGENTS.md` names it.
@@ -243,6 +243,24 @@ Design-bundle rules:
 - Keep technical design in `design/`; do not push it back into `spec.md`.
 - Record design artifact status in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
 - Tiny or `direct path` work may skip the design bundle only with an explicit design-skip rationale.
+
+Planning-bound `design/overview.md` artifact indexes should be scannable without opening every design file just to rediscover artifact status. A compact shape is enough:
+
+```markdown
+## Artifact Index
+
+- `design/component-map.md`: approved; package surfaces and stable areas are mapped.
+- `design/sequence.md`: approved; request flow, failure points, side effects, and retry boundaries are covered.
+- `design/ownership-map.md`: approved; source-of-truth, dependency direction, and generated-code authority are named.
+- `design/data-model.md`: not expected; no persisted state, cache contract, projection, replay, or migration shape changes.
+- `design/contracts/`: not expected; public and internal contract authorities are unchanged.
+- `test-plan.md`: not expected; proof obligations fit in `tasks.md`.
+- `rollout.md`: not expected; no migration, mixed-version window, compatibility choreography, or failback note is in scope.
+
+## Readiness Summary
+
+Planning may start from the approved `spec.md` plus the approved required design artifacts. Execution order and task IDs still belong in `tasks.md`.
+```
 
 ## 6. Execution Loop
 
@@ -549,7 +567,7 @@ Recommended update cadence:
 
 ### 7.3 Phase Workflow Plan Minimums
 
-These are minimum routing shapes for `workflow-plans/<phase>.md`. They are examples, not templates to paste wholesale.
+These are minimum routing shapes for `workflow-plans/<phase>.md`. They are examples, not templates to paste wholesale. Preserve the fields and ownership meaning, but adjust headings, grouping, and depth to the task; do not add empty lines for fields that do not carry routing value.
 
 `workflow-planning`:
 
@@ -575,6 +593,21 @@ Fan-in: where the durable summary lives and which `research/*.md` notes were pre
 Completion marker: must-answer-now questions handled or explicitly deferred
 Stop rule: do not write `spec.md`, `design/`, or `tasks.md`
 Next action: specification, challenge, targeted re-research, or blocked reopen
+```
+
+When research preserves reusable evidence, split routing from evidence memory instead of writing a research-shaped second spec:
+
+```markdown
+workflow-plans/research.md:
+Fan-in: RQ1 and RQ2 handled from route files, generated handler tests, repository methods, and migration history; `research/state-ownership.md` preserved because later specification needs the source trail and limits.
+Next action: specification with pre-spec challenge expected.
+Stop rule: do not write `spec.md`, `design/`, or `tasks.md` in this research session.
+
+research/state-ownership.md:
+Question: Which repository surfaces own persisted job state and terminal transitions?
+Findings: repository methods include tenant-scoped writes; no existing cancelled terminal state was found.
+Evidence limits: comparable code exists for one feature only, so product intent remains uncertain.
+Handoff implication: specification must decide whether cancellation is in scope; this note does not decide it.
 ```
 
 `specification`:

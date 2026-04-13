@@ -48,7 +48,21 @@ Stop rule:
 - Do not create `spec.md`, `workflow-plans/specification.md`, `design/`, or `tasks.md` in this research session.
 ```
 
-Copy the comparable-claims and readiness shape when fan-out produced multiple lane outputs.
+Copy the comparable-claims and readiness shape when fan-out produced multiple lane outputs. For a smaller local research pass, keep the same routing/evidence split without forcing every heading:
+
+```markdown
+workflow-plans/research.md:
+Research mode: local; one bounded evidence question.
+Fan-in: `research/cache-invalidation.md` preserved because later specification needs the negative search result and evidence limits.
+Next action: specification.
+Stop rule: do not write `spec.md`, `design/`, or `tasks.md` in this research session.
+
+research/cache-invalidation.md:
+Question: Which surface owns cache invalidation after invoice updates?
+Finding: no invalidation hook was found in the inspected repository and service packages.
+Evidence limits: transport tests were not inspected because they do not own cache invalidation.
+Handoff implication: later specification must either keep read-after-write freshness out of scope or require a targeted cache design pass.
+```
 
 For blocked research:
 

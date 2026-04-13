@@ -6,7 +6,7 @@ When loaded for deciding whether or how to preserve `research/*.md`, this file m
 ## When To Load
 Load when a preserved research note would materially help later synthesis, challenge, auditability, or multi-session resume, or when an existing note lacks source hygiene.
 
-Do not load to force a universal template. Research notes stay flexible and evidence-oriented.
+Do not load to force a universal template. Research notes stay flexible and evidence-oriented; copy the source-hygiene behavior, not the exact headings.
 
 ## Decision Rubric
 Create or update `research/*.md` only when at least one is true:
@@ -54,7 +54,14 @@ Out of scope: final schema decisions, migration design, implementation tasks.
 Future `specification-session` must decide whether cancellation is in scope. This note does not decide it.
 ```
 
-Copy the evidence/confidence/limitation/handoff structure, not the exact headings.
+Copy the evidence/confidence/limitation/handoff structure, not the exact headings. A shorter note is acceptable when it still preserves the question, evidence, limits, and handoff implication:
+
+```markdown
+Question: Which repository surface owns cache invalidation after invoice updates?
+Finding: invoice writes flow through `internal/.../repository.go`; no cache invalidation hook was found in the inspected package.
+Evidence limits: only repository and service packages were checked; transport tests were not relevant to this ownership question.
+Handoff implication: specification can record cache invalidation as out of scope only if the user-facing behavior does not depend on read-after-write freshness.
+```
 
 Good source notes:
 
