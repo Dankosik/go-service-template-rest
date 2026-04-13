@@ -6,6 +6,8 @@ run:
 linters:
   default: standard
   enable:
+    - asasalint
+    - asciicheck
     - govet
     - staticcheck
     - errcheck
@@ -44,6 +46,13 @@ linters:
     - usetesting
     - usestdlibvars
     - wastedassign
+  exclusions:
+    generated: strict
+    paths:
+      - internal/api/openapi\.gen\.go
+      - internal/infra/postgres/sqlcgen/.*
+      - .*_mock_test\.go
+      - .*_string\.go
   settings:
     nolintlint:
       require-explanation: true

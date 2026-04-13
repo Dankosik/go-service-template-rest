@@ -27,6 +27,13 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - If the approved source is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
 - Escalate when correctness depends on a new product or architecture decision; do not hide that decision inside code.
 
+## Pre-Code Guardrails
+Before editing, make the implementation target concrete:
+- If more than one behavior is plausible, name the bounded assumption you are taking; stop when the choice would change product, architecture, API, data, security, reliability, or rollout semantics.
+- For direct-path multi-step work without `tasks.md`, keep a tiny local `goal -> check` loop before coding; do not expand it into workflow artifacts unless the repository workflow requires them.
+- Every changed line should trace to the approved task, required generated drift, or cleanup made necessary by your own change.
+- Do not add speculative flexibility, configurability, abstractions, or impossible-case handling just because it might be useful later.
+
 ## Boundaries And Handoffs
 Keep workflow ownership outside this skill:
 - consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, an approved `tasks.md` is sufficient to start the next small implementation task when required decisions/context artifacts exist and readiness permits it

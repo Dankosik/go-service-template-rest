@@ -99,6 +99,7 @@ usage() {
 	echo "  openapi-runtime-contract-check"
 	echo "  openapi-lint"
 	echo "  openapi-validate"
+	echo "  openapi-breaking <base-openapi>"
 	echo "  openapi-check"
 	echo "  govulncheck"
 	echo "  gosec"
@@ -496,6 +497,26 @@ openapi-lint)
 	;;
 openapi-validate)
 	run_go "go tool validate -- api/openapi/service.yaml"
+	;;
+openapi-breaking)
+	base_openapi="${1:-${BASE_OPENAPI:-}}"
+	if [[ -z "${base_openapi}" ]]; then
+		echo "openapi-breaking requires <base-openapi> or BASE_OPENAPI"
+		exit 1
+	fi
+	if [[ -f "${ROOT_DIR}/${base_openapi}" ]]; then
+		workspace_base_openapi="${base_openapi}"
+	elif [[ -f "${base_openapi}" ]]; then
+		mkdir -p "${ROOT_DIR}/.cache"
+		temp_base_openapi="$(mktemp "${ROOT_DIR}/.cache/openapi-base.XXXXXX")"
+		cp "${base_openapi}" "${temp_base_openapi}"
+		trap 'rm -f "${temp_base_openapi}"' EXIT
+		workspace_base_openapi=".cache/$(basename "${temp_base_openapi}")"
+	else
+		echo "base OpenAPI spec not found: ${base_openapi}"
+		exit 1
+	fi
+	run_go "go tool oasdiff breaking --fail-on ERR '${workspace_base_openapi}' api/openapi/service.yaml"
 	;;
 openapi-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-generate

@@ -41,6 +41,7 @@ Bootstrap shortcuts:
 - `make bootstrap` (recommended onboarding shortcut; minimal local prep)
 - `make check` (recommended quick quality shortcut for everyday development)
 - `make check-full` (full CI-like local validation)
+- `make pr-check` (strict pre-PR parity; requires Docker and base/head refs)
 - `make template-init` (required once after cloning this template into a new service repo)
 
 ## Command Groups
@@ -74,6 +75,18 @@ Bootstrap shortcuts:
   - Behavior:
     - with Docker daemon: runs `make docker-ci`;
     - without Docker daemon: runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
+
+- `make pr-check BASE_REF=<base_ref> HEAD_REF=<head_ref>`
+  - Purpose: strict pre-PR parity for users who want local evidence closer to required PR checks than `make check-full`.
+  - Requires:
+    - Docker CLI + reachable Docker daemon,
+    - `BASE_REF` and `HEAD_REF`.
+  - Runs:
+    - `make docker-ci BASE_REF=<base_ref> HEAD_REF=<head_ref>`,
+    - `make docker-openapi-breaking` against `BASE_REF:api/openapi/service.yaml` when the base OpenAPI file exists.
+  - Notes:
+    - fails early when Docker or base/head refs are missing instead of silently falling back to partial native proof;
+    - if the base OpenAPI file does not exist, it prints that fact and runs the strict checks that can be proven from available PR inputs, matching the first-introduction case where no base contract exists.
 
 - `make template-init`
   - Alias of `make setup`.
@@ -383,6 +396,9 @@ Bootstrap shortcuts:
   - Runs `go tool oasdiff breaking` against `BASE_OPENAPI` and current spec.
   - Purpose: check OpenAPI breaking-change compatibility against an explicit base contract. This requires `BASE_OPENAPI=<base>` and is intentionally separate from `make openapi-check`.
 
+- `make docker-openapi-breaking BASE_OPENAPI=<base>`
+  - Docker equivalent of `make openapi-breaking`.
+
 - `make openapi-check`
   - Composite target:
     - `openapi-generate`
@@ -407,6 +423,12 @@ Bootstrap shortcuts:
   - Full CI-like local check:
     - runs `make docker-ci` when Docker daemon is reachable;
     - otherwise runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
+
+- `make pr-check BASE_REF=<base_ref> HEAD_REF=<head_ref>`
+  - Strict pre-PR check:
+    - requires Docker and base/head refs;
+    - runs the Docker CI bundle;
+    - additionally checks OpenAPI breaking-change compatibility against the base OpenAPI spec when that base file exists.
 
 - `make go-security`
   - Aggregate target that runs `make govulncheck` and `make gosec`.
@@ -605,7 +627,8 @@ Use the smallest check that matches the decision you are about to make:
 | --- | --- | --- |
 | Everyday edit loop | `make check` | Quick confidence only: formatting, lint, and unit tests through native tools or Docker fallback. |
 | Everyday pinned Docker edit loop | `make docker-check` | Same quick confidence scope as `make check`, but always through Docker tooling. |
-| Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Full local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local`. Use `make docker-ci` directly when you need the least host-dependent parity path. Replace `origin/main` with the branch or SHA GitHub will compare against. |
+| Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make pr-check` | Strict pre-PR parity. Requires Docker and base/head refs, runs the Docker CI bundle, and checks OpenAPI breaking compatibility when the base spec exists. Replace `origin/main` with the branch or SHA GitHub will compare against. |
+| Full local baseline with fallback | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Broad local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local` and may skip Docker-only checks. |
 | Closest local CI parity | `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
 | Native fallback | `BASE_REF=origin/main HEAD_REF=HEAD make ci-local` | Requires host Go, GNU Make, Git, and Node/npx for OpenAPI lint. Docker-backed integration, migration, and container scan checks run only when Docker is reachable. |
 
@@ -616,7 +639,7 @@ Targeted parity checks:
 | Surface | Command |
 | --- | --- |
 | OpenAPI generation, drift, runtime contract, lint, schema validation | `make openapi-check` or `make docker-openapi-check` |
-| OpenAPI breaking-change check against a PR base | `git show origin/main:api/openapi/service.yaml > /tmp/openapi-base.yaml`, then `BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking` |
+| OpenAPI breaking-change check against a PR base | `git show origin/main:api/openapi/service.yaml > /tmp/openapi-base.yaml`, then `BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking` or `BASE_OPENAPI=/tmp/openapi-base.yaml make docker-openapi-breaking` |
 | SQLC generation and stale query artifact drift | `make sqlc-check` or `make docker-sqlc-check` |
 | Migration rehearsal | `make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'` or `make docker-migration-validate` |
 | Integration tests | `REQUIRE_DOCKER=1 make test-integration` or `make docker-test-integration` |
@@ -678,6 +701,7 @@ Local commands map directly to CI jobs:
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
+- `BASE_REF=<base_sha> HEAD_REF=<head_sha> make pr-check` -> strict local pre-PR bundle, including `docker-ci` and base OpenAPI breaking compatibility when available
 - `make test` + `make vet` -> `test`
 - `make test-race` -> `test-race`
 - `make test-report COVERAGE_MIN=<value>` -> `test-coverage`
@@ -691,7 +715,7 @@ Local commands map directly to CI jobs:
 Zero-setup wrappers:
 - `make docker-check` runs quick fmt/lint/test validation through pinned Docker tooling.
 - `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-modernize-check`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+- `make docker-openapi-check`, `make docker-openapi-breaking`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-modernize-check`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
 - `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`

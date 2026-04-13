@@ -22,13 +22,13 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full \
+.PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full pr-check \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
 	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
+	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
@@ -38,6 +38,7 @@ help:
 	@echo "  make check          # quick checks (fmt/lint/test)"
 	@echo "  make docker-check   # quick checks through pinned Docker tooling"
 	@echo "  make check-full     # full local baseline (prefers docker-ci)"
+	@echo "  make pr-check       # strict pre-PR parity (requires Docker + BASE_REF/HEAD_REF)"
 	@echo "  make doctor         # diagnose local Go/Docker readiness"
 	@echo "  make run            # run service locally"
 	@echo ""
@@ -68,6 +69,7 @@ help:
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
 	@echo "  make skills-check            # skill mirror drift check"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
+	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"
 	@echo "  make docker-sqlc-check       # Docker SQLC validation"
 	@echo "  make docker-test-summary     # Docker concise unit test summary"
 	@echo "  make docker-test-integration # Docker integration tests"
@@ -133,6 +135,23 @@ check-full:
 		echo "Docker-only integration, migration, and container checks may be skipped; start Docker and run 'make docker-ci' for closest parity"; \
 		echo "Native ci-local also needs Node/npm for OpenAPI lint; run 'make doctor-native' for diagnostics"; \
 		$(MAKE) ci-local BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
+	fi
+
+pr-check:
+	@test -n "$(BASE_REF)" || (echo "BASE_REF is required, for example BASE_REF=origin/main"; exit 1)
+	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required, for example HEAD_REF=HEAD"; exit 1)
+	@command -v docker >/dev/null 2>&1 || (echo "Docker is required for strict pre-PR parity"; exit 1)
+	@docker info >/dev/null 2>&1 || (echo "Docker daemon is not reachable; start Docker and retry"; exit 1)
+	@mkdir -p .cache
+	@base_openapi="$$(mktemp .cache/openapi-base.XXXXXX)"; \
+	trap 'rm -f "$$base_openapi"' EXIT; \
+	if git show "$(BASE_REF):$(OPENAPI_FILE)" > "$$base_openapi" 2>/dev/null; then \
+		echo "base OpenAPI spec found at $(BASE_REF):$(OPENAPI_FILE)"; \
+		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" || exit $$?; \
+		$(MAKE) docker-openapi-breaking BASE_OPENAPI="$$base_openapi"; \
+	else \
+		echo "base OpenAPI spec not found at $(BASE_REF):$(OPENAPI_FILE); running strict checks that match available PR inputs"; \
+		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	fi
 
 template-init: setup
@@ -453,6 +472,10 @@ openapi-check: openapi-generate openapi-drift-check
 
 docker-openapi-check:
 	$(DOCKER_TOOLING_SCRIPT) openapi-check
+
+docker-openapi-breaking:
+	@test -n "$(BASE_OPENAPI)" || (echo "BASE_OPENAPI is required"; exit 1)
+	$(DOCKER_TOOLING_SCRIPT) openapi-breaking "$(BASE_OPENAPI)"
 
 docker-sqlc-check:
 	$(DOCKER_TOOLING_SCRIPT) sqlc-check

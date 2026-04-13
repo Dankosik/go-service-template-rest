@@ -14,11 +14,15 @@
 - [ ] `make fmt-check`
 - [ ] `make lint`
 - [ ] `make test`
-- [ ] `make check-full` or CI evidence linked before merge
+- [ ] `make pr-check`, `make check-full`, or CI evidence linked before merge
 - [ ] `make test-report` or CI `test-coverage` evidence when coverage changed or risk is non-trivial
 - [ ] `make openapi-check` (when API/runtime contract changed)
 - [ ] `make test-race` (when concurrency-sensitive code changed)
 - [ ] `make test-integration` (when integration behavior changed)
+- [ ] `make sqlc-check` (when SQL queries or migrations changed)
+- [ ] `make migration-validate` (when migrations changed)
+- [ ] `make mocks-drift-check` (when mockgen directives or interfaces changed)
+- [ ] `make stringer-drift-check` (when stringer directives or enum values changed)
 
 Commands/output summary:
 
