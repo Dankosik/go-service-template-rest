@@ -64,9 +64,9 @@ This is a technical-design integrator, not a workflow owner:
 ### Design Bundle Assembly
 - Produce or tighten the required core artifacts for non-trivial work:
   - `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
-  - `design/component-map.md` for affected packages, modules, or components; responsibilities; and what changes versus what stays stable
-  - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior
-  - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, and responsibility boundaries
+  - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; responsibilities; what changes versus what stays stable; and which plausible surfaces are intentionally not touched
+  - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
+  - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
 - Add conditional artifacts only when their trigger is real:
   - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
   - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit

@@ -8,8 +8,8 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
 
 ## Decision Rubric
 - `design/overview.md` is the entrypoint: chosen approach, artifact index, unresolved seams, readiness summary, and links to triggered conditional artifacts. When planning will consume the bundle, the artifact index should show required artifact status and trigger rationale for plausible conditional artifacts.
-- `design/component-map.md` owns affected packages, modules, generated surfaces, adapters, and stable areas; it is not an implementation task list.
-- `design/sequence.md` owns runtime order: request, async, startup, shutdown, recovery, failure points, side effects, and sync/async boundaries.
+- `design/component-map.md` owns affected packages, modules, generated surfaces, adapters, stable areas, and intentionally untouched plausible surfaces; it is not an implementation task list.
+- `design/sequence.md` owns runtime order: request, async, startup, shutdown, failure points, side effects, recovery or retry boundaries when relevant, and sync/async boundaries.
 - `design/ownership-map.md` owns source-of-truth, dependency direction, generated-code authority, adapter responsibility, and what must not own the behavior.
 - Keep final product decisions in `spec.md`; keep execution sequencing in the later `tasks.md`; keep workflow status in workflow-control files.
 - If a required artifact cannot be completed without a missing spec decision, block or reopen instead of writing "decide during implementation."

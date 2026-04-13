@@ -21,7 +21,7 @@ Next action: implement T001-T006 in `tasks.md`, then validate with T007.
 - `design/sequence.md`: approved.
 - `design/ownership-map.md`: approved.
 - `tasks.md`: approved.
-- `plan.md`: not expected; no separate strategy note is needed.
+- Supplemental strategy note: not expected; no separate strategy note is needed.
 - `test-plan.md`: not expected; validation obligations fit in task proofs.
 - `rollout.md`: not expected; no runtime rollout behavior.
 - Post-code phase-control files: not expected; no named multi-session implementation, review, or validation phase is needed.

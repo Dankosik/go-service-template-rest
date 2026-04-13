@@ -14,5 +14,5 @@
 
 - Do not make workflow-control files own final decisions.
 - Do not make review phase files own raw transcripts or new task ledgers.
-- Do not make `tasks.md` absorb `spec.md`, `design/`, or optional `plan.md`.
+- Do not make `tasks.md` absorb `spec.md`, `design/`, or optional supplemental strategy notes.
 - Do not introduce new post-code process artifacts outside planning.

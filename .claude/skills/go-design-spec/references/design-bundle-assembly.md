@@ -10,6 +10,7 @@ Do not load this when the question is only a domain-specific decision. Use the s
 
 ## Decision Rubric
 - Core artifacts are expected for non-trivial design: `overview.md`, `component-map.md`, `sequence.md`, and `ownership-map.md`.
+- Core artifacts must be context-first enough for planning: component maps name changed and stable or intentionally untouched surfaces; sequence notes include failure points, side effects, and recovery or retry boundaries when relevant; ownership maps name source-of-truth, dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior.
 - Conditional artifacts need behavior-changing triggers: persisted state, dependency shape, contracts, layered validation, migration choreography, or release safety.
 - `design/overview.md` is the entrypoint and artifact index. It should point to details, not repeat every artifact. When the bundle is planning-bound, each required artifact entry should show status, and each plausible conditional artifact should include trigger rationale for `expected`, `not expected`, `conditional`, or `waived`.
 - `spec.md` owns final behavior, scope, invariants, and accepted risk. Design consumes those decisions.

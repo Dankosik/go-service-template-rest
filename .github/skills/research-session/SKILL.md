@@ -79,6 +79,7 @@ Do not:
 - support both `local` research and read-only subagent `fan-out`
 - each subagent lane owns one question and at most one skill, or explicit `no-skill`
 - preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
+- preserved `research/*.md` notes stay flexible, but the minimum context-first bar is visible question or scope, findings with evidence and limits, conflicts or weak evidence, source notes, and handoff implication
 - a finished research session hands off evidence and routing; it does not convert that evidence into approved `Decisions`
 
 ## Lazy-Loaded References
@@ -134,7 +135,8 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 ### 5. Run Research And Preserve Only What Helps
 - gather repository or external evidence for the chosen questions
 - create `research/*.md` only when the evidence, comparisons, or source notes need to survive beyond this session
-- keep research artifacts evidence-oriented: question, findings, sources or file references, assumptions, open points, and why the note matters
+- keep research artifacts evidence-oriented: question or scope, findings with sources or file references, evidence limits, assumptions, conflicts or open points, and why the note matters for the handoff
+- do not force a universal research template; the required quality is source-hygiene and resume value, not exact headings
 - do not treat `research/*.md` as the decision record
 
 ### 6. Capture Research Fan-In Without Writing `spec.md`

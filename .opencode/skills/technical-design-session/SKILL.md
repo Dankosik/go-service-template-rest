@@ -132,9 +132,9 @@ Do not:
 ## Required Design Artifacts
 For non-trivial work, the technical-design session should leave these artifacts approved or explicitly blocked with reasons:
 - `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
-- `design/component-map.md` for affected packages, modules, or components; what changes; and what remains stable
-- `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior
-- `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, and responsibility boundaries
+- `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; what changes; what remains stable; and which plausible surfaces are intentionally not touched
+- `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
+- `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
 
 Do not move this technical context back into `spec.md`.
 

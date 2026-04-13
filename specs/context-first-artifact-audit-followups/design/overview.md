@@ -13,7 +13,7 @@ Patch the central workflow documentation first, then mirror the same behavior in
 
 Conditional artifacts:
 
-- `plan.md`: not expected; the work is one bounded docs/skills checkpoint.
+- Supplemental strategy note: not expected; the work is one bounded docs/skills checkpoint.
 - `test-plan.md`: not expected; validation obligations fit in `tasks.md`.
 - `rollout.md`: not expected; no runtime deployment, migration, compatibility, or operator rollout behavior changes.
 

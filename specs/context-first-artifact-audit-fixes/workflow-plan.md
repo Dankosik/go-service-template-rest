@@ -28,7 +28,7 @@ Next session starts with: N/A.
 - `spec.md`: approved.
 - `design/`: approved.
 - `tasks.md`: approved.
-- `plan.md`: not expected; the task is one docs/skills checkpoint and does not need supplemental strategy.
+- Supplemental strategy note: not expected; the task is one docs/skills checkpoint and does not need extra strategy outside the workflow bundle.
 - `test-plan.md`: not expected; validation obligations fit in `tasks.md`.
 - `rollout.md`: not expected; no deployment, migration, or mixed-version rollout behavior changes.
 - `research/*.md`: not expected; the audit findings are preserved in `spec.md` and this bundle, and no separate reusable research note is needed.

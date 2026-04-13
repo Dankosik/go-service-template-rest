@@ -45,6 +45,7 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - master and phase files agree on current phase, phase status, blockers, session boundary, next action, next-session start point, and the master file's always-present next-session context bundle
 - research mode is explicit when research is expected; fan-out lanes name role, owned question, and one skill or `no-skill`
 - phase-local file records order or parallelism, fan-in or challenge path when relevant, completion marker, stop rule, local blockers, and parallelizable work
+- phase-local file satisfies the documented minimum for its phase without becoming a second `spec.md`, `design/`, `tasks.md`, raw review transcript, or validation log
 - artifact expectations are explicit and proportional: `spec.md`, `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
 - when the current phase is planning, implementation readiness is recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
 - blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text

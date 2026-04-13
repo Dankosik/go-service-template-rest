@@ -97,7 +97,24 @@ specs/<feature-id>/
 - **Research shape:** `research/*.md` should be flexible and evidence-oriented; there is no mandatory universal template. When preserved, a research note should make the question or scope, findings with evidence and limits, conflicts or open points, and handoff implication visible enough that later synthesis does not need chat memory.
 - **Research fan-in home:** Store the durable fan-in summary in one owning place, normally `workflow-plans/research.md` for routing plus selected `research/*.md` for reusable evidence. Other files should link or summarize status only; do not copy the full fan-in narrative into both master workflow control and research notes.
 - **No duplicate authority:** Do not duplicate the same authority across artifacts. Link instead.
-- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local.
+- **Task-local examples:** Completed bundles under `specs/` can be useful examples of how a task used the workflow, but they are historical task-local records, not universal templates or alternate authority. Copy only the pattern that fits the current task and keep trigger decisions local. If an older bundle mentions a task-specific supplemental note, do not treat that note as a new workflow artifact type unless this document or `AGENTS.md` names it.
+
+### Artifact Shape Matrix
+
+Use this matrix as the context-first minimum. It is not a rigid template; omit empty sections and keep task-specific depth proportional to risk.
+
+| Artifact | Minimum context to preserve | Must not own | Resume role |
+| --- | --- | --- | --- |
+| `workflow-plan.md` | Current phase, phase status, session boundary, next session, always-present next-session context bundle, artifact status with trigger rationale, blockers, accepted risks, reopen targets, and active gate status. | Final decisions, technical design, executable tasks, raw research or review transcripts. | First file to read; tells the next session where to resume and which artifacts matter. |
+| `workflow-plans/<phase>.md` | Phase-local status, order or lanes, completion marker, stop rule, next action, local blockers, parallelizable work, and phase-specific gate or handoff state. | Cross-phase authority, `spec.md` decisions, design bundle content, task ledger entries, implementation logs. | Second file to read; tells the next session how the active phase is locally routed. |
+| `spec.md` | Context, scope and non-goals, constraints, decisions, labeled assumptions or open questions, handoff link, validation obligations, and evidence-backed outcome only after proof. | Raw research dumps, component maps, runtime sequence design, task lists, validation success claims before proof. | Canonical decision record for all later design, planning, implementation, review, and validation work. |
+| `design/overview.md` | Chosen approach, artifact index with required artifact status, conditional trigger rationale when planning-bound, unresolved seams, and readiness summary. | Final behavior decisions, task IDs, implementation sequence, raw research. | Design entrypoint for planning; links to the rest of the bundle without copying it. |
+| `design/component-map.md` | Affected packages, modules, generated surfaces, adapters, stable surfaces, and responsibility changes. | T001-style execution order or speculative package rewrites. | Shows planning which surfaces change and which must remain stable. |
+| `design/sequence.md` | Runtime order, sync or async boundaries, side effects, failure points, recovery or retry boundaries when relevant, and parallel versus sequential behavior. | Happy-path-only prose or implementation task sequencing. | Preserves flow context so planning does not rediscover ordering and failure semantics. |
+| `design/ownership-map.md` | Source-of-truth ownership, dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior. | "Decide during implementation" ownership gaps or new product decisions. | Preserves boundary context for planning and review. |
+| Conditional `design/*`, `test-plan.md`, `rollout.md` | Trigger and scope, artifact-specific obligations, exit criteria, and links back to the owner artifact or task IDs. | Just-in-case filler or duplicate runtime contract authority. | Loaded only when triggered or named in the next-session context bundle. |
+| `tasks.md` | Optional compact implementation handoff, markdown checkboxes, stable task IDs, checkpoint labels, safe `[P]` markers, concrete action and surface, dependencies when nontrivial, proof expectations, and reopen notes when needed. | New spec or design decisions, broad strategy memos, raw validation transcripts. | Final executable handoff before coding. |
+| `research/*.md` | Question or scope, findings with evidence and limits, conflicts or weak evidence, source notes, and handoff implication. | Final decisions, design sequences, task lists, raw command dumps, link dumps. | Optional evidence memory for synthesis and later audit; supports but does not approve decisions. |
 
 ### Context-First Quality Bar
 
@@ -193,9 +210,9 @@ Load order for design work:
 Required core design artifacts for non-trivial work:
 
 - `design/overview.md` — design entrypoint, chosen approach, artifact index, unresolved seams, and readiness summary. When the bundle is planning-bound, its artifact index should show required artifact status plus trigger rationale for conditional artifacts, including why plausible optional artifacts are `not expected`, `conditional`, or `waived`.
-- `design/component-map.md` — affected packages, modules, or components; what changes; what remains stable.
-- `design/sequence.md` — call order, sync or async boundaries, failure points, side effects, and parallel versus sequential behavior.
-- `design/ownership-map.md` — source-of-truth ownership, allowed dependency direction, and responsibility boundaries.
+- `design/component-map.md` — affected packages, modules, generated surfaces, adapters, and components; what changes; what remains stable; which surfaces are intentionally not touched.
+- `design/sequence.md` — call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior.
+- `design/ownership-map.md` — source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior.
 
 Conditional artifacts and trigger rules:
 
@@ -529,6 +546,103 @@ Recommended update cadence:
 - After review or reconciliation: update only existing control/checkpoint artifacts with review scope, findings status, orchestrator reconciliation, accepted risks, blockers, reopen targets, and validation implications. Do not paste raw review transcripts or invent new tasks in review control files.
 - After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, `Next session starts with`, and the always-present next-session context bundle in the master file, and close the current phase workflow plan.
 - After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof; update existing `tasks.md` checkbox/progress state only when already in use. If a required `tasks.md` is missing, reopen the relevant earlier phase instead of creating it during closeout.
+
+### 7.3 Phase Workflow Plan Minimums
+
+These are minimum routing shapes for `workflow-plans/<phase>.md`. They are examples, not templates to paste wholesale.
+
+`workflow-planning`:
+
+```text
+Phase: workflow-planning
+Phase status: complete | blocked
+Execution shape: direct path | lightweight local | full orchestrated
+Research mode: local | fan-out | not expected, with rationale
+Lane plan: one owned question, role, evidence target, and skill or no-skill per lane when fan-out is expected
+Completion marker: workflow routing and artifact expectations are explicit
+Stop rule: do not start research or later phases in this session unless an upfront waiver exists
+Next action: research, specification, or recorded direct-path execution
+```
+
+`research`:
+
+```text
+Phase: research
+Phase status: complete | blocked
+Research mode: local | fan-out, with why it fits
+Lanes or local tracks: owned question, source surface, status, and single skill or no-skill
+Fan-in: where the durable summary lives and which `research/*.md` notes were preserved, if any
+Completion marker: must-answer-now questions handled or explicitly deferred
+Stop rule: do not write `spec.md`, `design/`, or `tasks.md`
+Next action: specification, challenge, targeted re-research, or blocked reopen
+```
+
+`specification`:
+
+```text
+Phase: specification
+Phase status: complete | blocked
+Input sources: framing, research notes, direct evidence, and prior workflow artifacts used
+Spec readiness: why `spec.md` is approved, draft, or blocked
+Clarification gate: lane used, status, resolution, rerun status when needed, or eligible waiver
+Completion marker: `spec.md` is approved or the unblock path is explicit
+Stop rule: do not start `technical design` in this session unless an upfront waiver exists
+Next action: technical-design, targeted research, requires_user_decision, or blocked reopen
+```
+
+`technical-design`:
+
+```text
+Phase: technical-design
+Phase status: complete | blocked
+Design pass type: fresh, resumed, or repair
+Design artifacts: required and triggered conditional artifacts with status and trigger rationale
+Planning readiness: why planning can start or which spec/design blocker remains
+Completion marker: required design artifacts are approved or blocked with reopen target
+Stop rule: do not write `tasks.md` or begin implementation
+Next action: planning or named reopen target
+```
+
+`planning`:
+
+```text
+Phase: planning
+Phase status: complete | blocked
+Artifact outputs: `tasks.md`, triggered `test-plan.md` or `rollout.md`, and named review or validation phase files
+Implementation readiness: PASS | CONCERNS | FAIL | WAIVED with required rationale
+Adequacy challenge: status and resolution, or eligible direct/local skip rationale
+Completion marker: approved task ledger and readiness gate, or explicit reopen target
+Stop rule: do not begin implementation in this session unless an upfront waiver exists
+Next action: first task ID, implementation checkpoint, or named reopen target
+```
+
+`review-phase-N` when planning created it:
+
+```text
+Phase: review-phase-N
+Phase status: pending | in_progress | complete | blocked
+Review scope: approved checkpoint, diff, and artifact bundle being reviewed
+Read-only lanes: one question and one skill or no-skill per lane
+Finding status: compact orchestrator-owned disposition, not raw transcripts
+Reconciliation state: accepted, fixed in reconciliation, accepted risk, reopen, or no_action
+Validation implications: proof additions or limits created by reconciled findings
+Stop rule: do not edit files or create tasks from review output
+Next action: reconciliation, validation, or named reopen target
+```
+
+`validation-phase-N` when planning created it:
+
+```text
+Phase: validation-phase-N
+Phase status: pending | in_progress | complete | blocked
+Closeout claim: exact phase or task claim under proof
+Proof inputs: approved artifacts, task IDs, review notes, and optional `test-plan.md` or `rollout.md`
+Commands or manual proof scope: fresh evidence required for the claim
+Allowed future writes: existing closeout surfaces only
+Blockers or reopen target: failed, missing, stale, or too-narrow proof
+Stop rule: do not implement fixes or create missing process artifacts
+Next action: close task, narrow claim, or reopen the right earlier phase
+```
 
 Minimal split example:
 

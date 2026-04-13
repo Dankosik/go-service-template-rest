@@ -31,7 +31,7 @@ No next session is expected because the task is done. If reopened later, resume 
 - `spec.md`: approved.
 - `design/`: approved.
 - `tasks.md`: approved.
-- `plan.md`: not expected; this is one bounded docs/skills checkpoint.
+- Supplemental strategy note: not expected; this is one bounded docs/skills checkpoint.
 - `test-plan.md`: not expected; validation obligations fit in `tasks.md`.
 - `rollout.md`: not expected; no runtime delivery, migration, or compatibility choreography is in scope.
 - `research/*.md`: not expected; the audit findings are preserved in the approved spec and design bundle.
