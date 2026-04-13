@@ -57,6 +57,19 @@ func TestParseLoadOptions(t *testing.T) {
 			t.Fatalf("parseLoadOptions() err = %v, want parse flags context", err)
 		}
 	})
+
+	t.Run("fails on positional arguments", func(t *testing.T) {
+		_, err := parseLoadOptions([]string{"--config", "/tmp/base.yaml", "serve"})
+		if err == nil {
+			t.Fatal("parseLoadOptions() error = nil, want non-nil")
+		}
+		if !strings.Contains(err.Error(), "parse flags") {
+			t.Fatalf("parseLoadOptions() err = %v, want parse flags context", err)
+		}
+		if !strings.Contains(err.Error(), "serve") {
+			t.Fatalf("parseLoadOptions() err = %v, want unexpected positional argument detail", err)
+		}
+	})
 }
 
 func TestRunReturnsParseErrorForInvalidFlags(t *testing.T) {

@@ -109,6 +109,9 @@ func rejectStartupForPolicyViolation(
 	)
 	args = append(args, extra...)
 	log.Error("startup_blocked", args...)
+	if errors.Is(err, errDependencyInit) {
+		return fmt.Errorf("startup blocked by network policy: %w", err)
+	}
 	return fmt.Errorf("%w: startup blocked by network policy: %w", errDependencyInit, err)
 }
 

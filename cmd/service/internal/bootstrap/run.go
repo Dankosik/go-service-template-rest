@@ -221,6 +221,9 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	if err := flags.Parse(args); err != nil {
 		return config.LoadOptions{}, fmt.Errorf("parse flags: %w", err)
 	}
+	if positional := flags.Args(); len(positional) > 0 {
+		return config.LoadOptions{}, fmt.Errorf("parse flags: unexpected positional arguments: %v", positional)
+	}
 
 	return config.LoadOptions{
 		ConfigPath:     strings.TrimSpace(*configPath),

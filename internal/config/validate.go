@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -417,6 +418,11 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		if strings.ContainsAny(parsedHost, "[]") {
 			return "", mongoProbeAddressError("invalid mongo host")
 		}
+		if strings.HasPrefix(trimmed, "[") || strings.Contains(parsedHost, ":") {
+			if err := validateMongoIPv6Literal(parsedHost); err != nil {
+				return "", err
+			}
+		}
 		if err := validateNumericTCPPort(port); err != nil {
 			return "", mongoProbeAddressError("invalid mongo TCP port")
 		}
@@ -434,10 +440,16 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 		if bracketedHost == "" || strings.ContainsAny(bracketedHost, "[]") {
 			return "", mongoProbeAddressError("invalid mongo host")
 		}
+		if err := validateMongoIPv6Literal(bracketedHost); err != nil {
+			return "", err
+		}
 		return net.JoinHostPort(bracketedHost, defaultMongoPort), nil
 	}
 
 	if strings.Count(trimmed, ":") > 1 {
+		if err := validateMongoIPv6Literal(trimmed); err != nil {
+			return "", err
+		}
 		return net.JoinHostPort(trimmed, defaultMongoPort), nil
 	}
 
@@ -446,6 +458,14 @@ func normalizeMongoProbeAddress(host string) (string, error) {
 	}
 
 	return net.JoinHostPort(trimmed, defaultMongoPort), nil
+}
+
+func validateMongoIPv6Literal(host string) error {
+	addr, err := netip.ParseAddr(host)
+	if err != nil || !addr.Is6() {
+		return mongoProbeAddressError("invalid mongo host")
+	}
+	return nil
 }
 
 func mongoProbeAddressError(detail string) error {

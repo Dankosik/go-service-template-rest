@@ -56,6 +56,15 @@ const (
 	traceOTLPEndpointSourceTraceSpecific
 )
 
+var unsupportedOTLPProxyEnvVars = []string{
+	"HTTP_PROXY",
+	"HTTPS_PROXY",
+	"NO_PROXY",
+	"http_proxy",
+	"https_proxy",
+	"no_proxy",
+}
+
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
 	serviceName := strings.TrimSpace(cfg.ServiceName)
 	serviceVersion := strings.TrimSpace(cfg.ServiceVersion)
@@ -88,6 +97,9 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		return nil, err
 	}
 	if exporterConfigured {
+		if err := rejectUnsupportedAmbientTraceExporterEnv(); err != nil {
+			return nil, err
+		}
 		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
 		if err != nil {
 			return nil, fmt.Errorf("create otlp trace exporter: %w", err)
@@ -106,6 +118,22 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	))
 
 	return provider.Shutdown, nil
+}
+
+func rejectUnsupportedAmbientTraceExporterEnv() error {
+	for _, entry := range os.Environ() {
+		name, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") && strings.TrimSpace(value) != "" {
+			return fmt.Errorf("unsupported ambient otel exporter environment: OTEL_EXPORTER_OTLP*")
+		}
+	}
+
+	for _, name := range unsupportedOTLPProxyEnvVars {
+		if os.Getenv(name) != "" {
+			return fmt.Errorf("unsupported ambient otlp proxy environment: proxy variables are not supported for otlp exporter")
+		}
+	}
+	return nil
 }
 
 func newTracerProvider(options ...sdktrace.TracerProviderOption) *sdktrace.TracerProvider {

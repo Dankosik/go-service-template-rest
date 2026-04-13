@@ -266,6 +266,170 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 	}
 }
 
+func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
+	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(typedCollector.Close)
+
+	envCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(envCollector.Close)
+
+	tests := []struct {
+		name      string
+		envName   string
+		envValue  string
+		forbidden []string
+	}{
+		{
+			name:     "insecure downgrade",
+			envName:  "OTEL_EXPORTER_OTLP_INSECURE",
+			envValue: "true",
+		},
+		{
+			name:      "header injection",
+			envName:   "OTEL_EXPORTER_OTLP_HEADERS",
+			envValue:  "authorization=Bearer secret-value",
+			forbidden: []string{"Bearer", "secret-value"},
+		},
+		{
+			name:      "generic endpoint retarget",
+			envName:   "OTEL_EXPORTER_OTLP_ENDPOINT",
+			envValue:  envCollector.URL + "/env",
+			forbidden: []string{envCollector.URL, "/env"},
+		},
+		{
+			name:      "trace endpoint retarget",
+			envName:   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+			envValue:  envCollector.URL + "/trace-env",
+			forbidden: []string{envCollector.URL, "/trace-env"},
+		},
+		{
+			name:      "certificate path",
+			envName:   "OTEL_EXPORTER_OTLP_CERTIFICATE",
+			envValue:  "/tmp/secret-ca.pem",
+			forbidden: []string{"/tmp/secret-ca.pem", "secret-ca"},
+		},
+		{
+			name:     "timeout",
+			envName:  "OTEL_EXPORTER_OTLP_TIMEOUT",
+			envValue: "15000",
+		},
+		{
+			name:     "compression",
+			envName:  "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION",
+			envValue: "gzip",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restoreGlobalTelemetry(t)
+			t.Setenv(tt.envName, tt.envValue)
+
+			err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{
+				OTLPEndpoint: typedCollector.URL,
+				OTLPProtocol: "http/protobuf",
+			})
+			requireAmbientExporterEnvError(t, err, "unsupported ambient otel exporter environment")
+			requireErrorDoesNotContain(t, err, tt.envValue)
+			for _, forbidden := range tt.forbidden {
+				requireErrorDoesNotContain(t, err, forbidden)
+			}
+		})
+	}
+}
+
+func TestSetupTracingDoesNotEnableExporterFromAmbientOTLPEndpointEnv(t *testing.T) {
+	restoreGlobalTelemetry(t)
+
+	requests := make(chan string, 1)
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(collector.Close)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.URL)
+
+	shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(TraceExporterConfig{
+		OTLPProtocol: "http/protobuf",
+	}))
+	if err != nil {
+		t.Fatalf("SetupTracing() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown tracing: %v", err)
+		}
+	})
+
+	provider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider)
+	if !ok {
+		t.Fatalf("global tracer provider = %T, want *sdktrace.TracerProvider", otel.GetTracerProvider())
+	}
+	_, span := provider.Tracer("telemetry-test").Start(context.Background(), "ambient-env-disabled")
+	span.End()
+	if err := provider.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("force flush trace provider: %v", err)
+	}
+	assertNoCollectorRequest(t, requests, "ambient endpoint collector")
+}
+
+func TestSetupTracingRejectsAmbientOTLPProxyEnv(t *testing.T) {
+	tests := []struct {
+		name     string
+		envName  string
+		endpoint string
+	}{
+		{
+			name:     "http proxy",
+			envName:  "HTTP_PROXY",
+			endpoint: "http://127.0.0.1:4318",
+		},
+		{
+			name:     "https proxy",
+			envName:  "HTTPS_PROXY",
+			endpoint: "https://otel.example.com:4318",
+		},
+		{
+			name:     "no proxy",
+			envName:  "NO_PROXY",
+			endpoint: "http://127.0.0.1:4318",
+		},
+		{
+			name:     "lowercase http proxy",
+			envName:  "http_proxy",
+			endpoint: "http://127.0.0.1:4318",
+		},
+		{
+			name:     "lowercase https proxy",
+			envName:  "https_proxy",
+			endpoint: "https://otel.example.com:4318",
+		},
+		{
+			name:     "lowercase no proxy",
+			envName:  "no_proxy",
+			endpoint: "http://127.0.0.1:4318",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restoreGlobalTelemetry(t)
+			t.Setenv(tt.envName, "http://proxy.example.com:8080")
+
+			err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{
+				OTLPEndpoint: tt.endpoint,
+				OTLPProtocol: "http/protobuf",
+			})
+			requireAmbientExporterEnvError(t, err, "unsupported ambient otlp proxy environment")
+			requireErrorDoesNotContain(t, err, "proxy.example.com")
+		})
+	}
+}
+
 func TestBuildTraceExporterOptions(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
@@ -669,6 +833,85 @@ func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
 func TestExporterOptionTypeCompatibility(t *testing.T) {
 	// Guard against accidental option-type drift when upgrading OTLP exporter package.
 	var _ []otlptracehttp.Option
+}
+
+func restoreGlobalTelemetry(t *testing.T) {
+	t.Helper()
+
+	clearAmbientTraceExporterEnv(t)
+
+	previousTracerProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+}
+
+func clearAmbientTraceExporterEnv(t *testing.T) {
+	t.Helper()
+
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") {
+			t.Setenv(name, "")
+		}
+	}
+	for _, name := range []string{
+		"HTTP_PROXY",
+		"HTTPS_PROXY",
+		"NO_PROXY",
+		"http_proxy",
+		"https_proxy",
+		"no_proxy",
+	} {
+		t.Setenv(name, "")
+	}
+}
+
+func setupTracingForEnvPolicyTest(t *testing.T, exporter TraceExporterConfig) error {
+	t.Helper()
+
+	shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(exporter))
+	if err == nil {
+		if shutdownErr := shutdown(context.Background()); shutdownErr != nil {
+			t.Fatalf("shutdown tracing after unexpected setup success: %v", shutdownErr)
+		}
+	}
+	return err
+}
+
+func envPolicyTracingConfig(exporter TraceExporterConfig) TracingConfig {
+	return TracingConfig{
+		ServiceName:      "test-service",
+		ServiceVersion:   "test",
+		DeploymentEnv:    "local",
+		TracesSampler:    "always_off",
+		TracesSamplerArg: 0,
+		Exporter:         exporter,
+	}
+}
+
+func requireAmbientExporterEnvError(t *testing.T, err error, want string) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatal("SetupTracing() error = nil, want ambient exporter environment rejection")
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("SetupTracing() error = %v, want %q", err, want)
+	}
+}
+
+func requireErrorDoesNotContain(t *testing.T, err error, forbidden string) {
+	t.Helper()
+
+	if forbidden == "" {
+		return
+	}
+	if strings.Contains(err.Error(), forbidden) {
+		t.Fatalf("error %q leaked %q", err, forbidden)
+	}
 }
 
 func exportOneTestSpan(t *testing.T, options []otlptracehttp.Option) {

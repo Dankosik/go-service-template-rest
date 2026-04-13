@@ -2026,6 +2026,34 @@ func TestMongoURIMustUseNumericTCPPort(t *testing.T) {
 	}
 }
 
+func TestMongoURIRejectsColonRichNonIPHost(t *testing.T) {
+	resetConfigEnv(t)
+
+	rawURI := "mongodb://user:secret@foo:bar:baz/app"
+	t.Setenv("APP__MONGO__ENABLED", "true")
+	t.Setenv("APP__MONGO__URI", rawURI)
+	t.Setenv("APP__MONGO__DATABASE", "app")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for colon-rich non-IP mongo host")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "mongo.uri must be parseable") {
+		t.Fatalf("error = %v, want mongo uri parseability detail", err)
+	}
+	if !strings.Contains(err.Error(), "invalid mongo host") {
+		t.Fatalf("error = %v, want invalid mongo host detail", err)
+	}
+	for _, leaked := range []string{rawURI, "user", "secret", "foo:bar:baz"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("error = %v, leaked %q", err, leaked)
+		}
+	}
+}
+
 func TestMongoDisabledAllowsInvalidURI(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -2092,6 +2120,16 @@ func TestMongoProbeAddress(t *testing.T) {
 		}
 	})
 
+	t.Run("bracketed ipv6 host keeps explicit port", func(t *testing.T) {
+		address, err := MongoProbeAddress("mongodb://[2001:db8::1]:27018/app")
+		if err != nil {
+			t.Fatalf("MongoProbeAddress() error = %v", err)
+		}
+		if address != "[2001:db8::1]:27018" {
+			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27018", address)
+		}
+	})
+
 	t.Run("rejects empty and malformed bracket hosts", func(t *testing.T) {
 		for _, uri := range []string{
 			"mongodb://:27017/app",
@@ -2101,6 +2139,11 @@ func TestMongoProbeAddress(t *testing.T) {
 			"mongodb://2001:db8::1]/app",
 			"mongodb://[2001:db8::1]]/app",
 			"mongodb://local[host]/app",
+			"mongodb://foo:bar:baz/app",
+			"mongodb://[localhost]/app",
+			"mongodb://[127.0.0.1]/app",
+			"mongodb://[localhost]:27017/app",
+			"mongodb://[foo:bar:baz]:27017/app",
 		} {
 			t.Run(uri, func(t *testing.T) {
 				if _, err := MongoProbeAddress(uri); err == nil {

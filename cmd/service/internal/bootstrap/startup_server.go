@@ -34,6 +34,13 @@ type serveHTTPRuntimeArgs struct {
 	shutdownDelay  time.Duration
 }
 
+type httpRuntimeWaitOutcome struct {
+	ready                  bool
+	terminalErr            error
+	serverErr              error
+	startupFailureRecorded bool
+}
+
 func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 	if err := startupRuntimeContextErr(args.signalCtx, args.bootstrapCtx); err != nil {
 		return rejectHTTPStartup(
@@ -79,75 +86,9 @@ func serveHTTPRuntime(args serveHTTPRuntimeArgs) error {
 	defer cancelAdmission()
 
 	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.cfg.HTTP.ReadinessTimeout)
-	var serverErr error
-	var terminalErr error
-	startupFailureRecorded := false
-	startupWatchCh := args.bootstrapCtx.Done()
-	recordPreReadyFailure := func(stage string, err error) {
-		if startupFailureRecorded || args.admission.Ready() {
-			return
-		}
-		recordStartupRejection(args.bootstrapSpan, args.metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
-		startupFailureRecorded = true
-	}
-	handleServerStop := func(err error) {
-		serverErr = err
-		if !args.admission.Ready() {
-			if serverErr != nil {
-				terminalErr = fmt.Errorf("http server stopped before readiness: %w", serverErr)
-			} else {
-				terminalErr = errors.New("http server stopped before readiness")
-			}
-			recordPreReadyFailure("startup.http_serve", terminalErr)
-		}
-		if serverErr != nil {
-			args.log.Error("http server stopped with error", "err", serverErr)
-		}
-	}
-
-waitForStop:
-	for {
-		select {
-		case err := <-admissionErrCh:
-			admissionErrCh = nil
-			if err != nil {
-				terminalErr = rejectHTTPStartup(
-					args.bootstrapCtx,
-					args.bootstrapSpan,
-					args.metrics,
-					args.log,
-					"startup.readiness",
-					fmt.Errorf("startup readiness check failed: %w", err),
-				)
-				startupFailureRecorded = true
-				break waitForStop
-			}
-			select {
-			case err := <-runErrCh:
-				handleServerStop(err)
-				break waitForStop
-			default:
-			}
-			args.admission.MarkReady(args.bootstrapCtx)
-			startupWatchCh = nil
-		case <-args.signalCtx.Done():
-			args.log.Info("shutdown signal received")
-			recordPreReadyFailure("startup.readiness", args.signalCtx.Err())
-			break waitForStop
-		case <-startupWatchCh:
-			if args.signalCtx.Err() != nil {
-				args.log.Info("shutdown signal received")
-				recordPreReadyFailure("startup.readiness", args.signalCtx.Err())
-				break waitForStop
-			}
-			terminalErr = fmt.Errorf("startup budget exhausted before readiness: %w", args.bootstrapCtx.Err())
-			args.log.Error("startup budget exhausted before readiness", "err", terminalErr)
-			recordPreReadyFailure("startup.readiness", terminalErr)
-			break waitForStop
-		case err := <-runErrCh:
-			handleServerStop(err)
-			break waitForStop
-		}
+	outcome := waitForHTTPRuntimePreReady(args, admissionErrCh, runErrCh)
+	if outcome.ready {
+		outcome = waitForHTTPRuntimePostReady(args, runErrCh)
 	}
 
 	cancelAdmission()
@@ -157,21 +98,109 @@ waitForStop:
 		effectiveShutdownDelay = 0
 	}
 	if err := drainAndShutdown(args.signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv); err != nil {
-		recordPreReadyFailure("startup.shutdown", err)
-		if terminalErr != nil {
-			return errors.Join(terminalErr, err)
+		outcome.recordPreReadyFailure(args, "startup.shutdown", err)
+		if outcome.terminalErr != nil {
+			return errors.Join(outcome.terminalErr, err)
 		}
 		return err
 	}
-	if terminalErr != nil {
-		return terminalErr
+	if outcome.terminalErr != nil {
+		return outcome.terminalErr
 	}
-	if serverErr != nil {
-		return fmt.Errorf("http server stopped with error: %w", serverErr)
+	if outcome.serverErr != nil {
+		return fmt.Errorf("http server stopped with error: %w", outcome.serverErr)
 	}
 
 	args.log.Info("shutdown complete")
 	return nil
+}
+
+func waitForHTTPRuntimePreReady(
+	args serveHTTPRuntimeArgs,
+	admissionErrCh <-chan error,
+	runErrCh <-chan error,
+) httpRuntimeWaitOutcome {
+	var outcome httpRuntimeWaitOutcome
+
+	for {
+		select {
+		case err := <-admissionErrCh:
+			if err != nil {
+				outcome.terminalErr = rejectHTTPStartup(
+					args.bootstrapCtx,
+					args.bootstrapSpan,
+					args.metrics,
+					args.log,
+					"startup.readiness",
+					fmt.Errorf("startup readiness check failed: %w", err),
+				)
+				outcome.startupFailureRecorded = true
+				return outcome
+			}
+			select {
+			case err := <-runErrCh:
+				outcome.handleServerStop(args, err)
+				return outcome
+			default:
+			}
+			args.admission.MarkReady(args.bootstrapCtx)
+			outcome.ready = true
+			return outcome
+		case <-args.signalCtx.Done():
+			args.log.Info("shutdown signal received")
+			outcome.recordPreReadyFailure(args, "startup.readiness", args.signalCtx.Err())
+			return outcome
+		case <-args.bootstrapCtx.Done():
+			if args.signalCtx.Err() != nil {
+				args.log.Info("shutdown signal received")
+				outcome.recordPreReadyFailure(args, "startup.readiness", args.signalCtx.Err())
+				return outcome
+			}
+			outcome.terminalErr = fmt.Errorf("startup budget exhausted before readiness: %w", args.bootstrapCtx.Err())
+			args.log.Error("startup budget exhausted before readiness", "err", outcome.terminalErr)
+			outcome.recordPreReadyFailure(args, "startup.readiness", outcome.terminalErr)
+			return outcome
+		case err := <-runErrCh:
+			outcome.handleServerStop(args, err)
+			return outcome
+		}
+	}
+}
+
+func waitForHTTPRuntimePostReady(args serveHTTPRuntimeArgs, runErrCh <-chan error) httpRuntimeWaitOutcome {
+	var outcome httpRuntimeWaitOutcome
+
+	select {
+	case <-args.signalCtx.Done():
+		args.log.Info("shutdown signal received")
+	case err := <-runErrCh:
+		outcome.handleServerStop(args, err)
+	}
+
+	return outcome
+}
+
+func (o *httpRuntimeWaitOutcome) handleServerStop(args serveHTTPRuntimeArgs, err error) {
+	o.serverErr = err
+	if !args.admission.Ready() {
+		if o.serverErr != nil {
+			o.terminalErr = fmt.Errorf("http server stopped before readiness: %w", o.serverErr)
+		} else {
+			o.terminalErr = errors.New("http server stopped before readiness")
+		}
+		o.recordPreReadyFailure(args, "startup.http_serve", o.terminalErr)
+	}
+	if o.serverErr != nil {
+		args.log.Error("http server stopped with error", "err", o.serverErr)
+	}
+}
+
+func (o *httpRuntimeWaitOutcome) recordPreReadyFailure(args serveHTTPRuntimeArgs, stage string, err error) {
+	if o.startupFailureRecorded || args.admission.Ready() {
+		return
+	}
+	recordStartupRejection(args.bootstrapSpan, args.metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
+	o.startupFailureRecorded = true
 }
 
 func startStartupAdmission(

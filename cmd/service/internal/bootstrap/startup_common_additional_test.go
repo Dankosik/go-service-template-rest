@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,6 +116,46 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 	}
 	if strings.Contains(metricsText, `startup_rejections_total{`) {
 		t.Fatalf("metrics output contains startup rejection for optional telemetry denial:\n%s", metricsText)
+	}
+}
+
+func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) {
+	restoreGlobalTelemetry(t)
+	t.Setenv(envNetworkEgressAllowedSchemes, "http")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+
+	cleanup, err := bootstrapTelemetryStage(
+		context.Background(),
+		telemetryStageTestConfig("127.0.0.1:4318"),
+		metrics,
+		logger,
+		loadNetworkPolicy(),
+	)
+	cleanup(context.Background())
+	if err == nil {
+		t.Fatal("bootstrapTelemetryStage() error = nil, want ambient env rejection")
+	}
+	if !strings.Contains(err.Error(), "unsupported ambient otel exporter environment") {
+		t.Fatalf("bootstrapTelemetryStage() error = %v, want ambient env context", err)
+	}
+	for _, leaked := range []string{"Bearer", "secret-value"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("bootstrapTelemetryStage() error = %v, leaked %q", err, leaked)
+		}
+	}
+
+	metricsText := collectServiceMetricsText(t, metrics)
+	if !strings.Contains(metricsText, `telemetry_init_failure_total{reason="setup_error"} 1`) {
+		t.Fatalf("metrics output missing telemetry init failure:\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 0`) {
+		t.Fatalf("metrics output missing feature_off telemetry status:\n%s", metricsText)
+	}
+	if strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="optional_fail_open"} 1`) {
+		t.Fatalf("metrics output marked telemetry ready:\n%s", metricsText)
 	}
 }
 
@@ -269,12 +311,35 @@ func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
 func restoreGlobalTelemetry(t *testing.T) {
 	t.Helper()
 
+	clearAmbientTraceExporterEnv(t)
+
 	previousTracerProvider := otel.GetTracerProvider()
 	previousPropagator := otel.GetTextMapPropagator()
 	t.Cleanup(func() {
 		otel.SetTracerProvider(previousTracerProvider)
 		otel.SetTextMapPropagator(previousPropagator)
 	})
+}
+
+func clearAmbientTraceExporterEnv(t *testing.T) {
+	t.Helper()
+
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") {
+			t.Setenv(name, "")
+		}
+	}
+	for _, name := range []string{
+		"HTTP_PROXY",
+		"HTTPS_PROXY",
+		"NO_PROXY",
+		"http_proxy",
+		"https_proxy",
+		"no_proxy",
+	} {
+		t.Setenv(name, "")
+	}
 }
 
 func telemetryStageTestConfig(otlpEndpoint string) config.Config {
@@ -497,6 +562,37 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	}
 	if !strings.Contains(logBuffer.String(), "RFC3339") {
 		t.Fatalf("policy violation log does not contain root cause:\n%s", logBuffer.String())
+	}
+}
+
+func TestRejectStartupForPolicyViolationDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
+	t.Parallel()
+
+	metrics := telemetry.New()
+	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+	cause := fmt.Errorf("%w: invalid network policy configuration: %w", errDependencyInit, errors.New("RFC3339 parse failed"))
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "policy-idempotent")
+	err := rejectStartupForPolicyViolation(
+		ctx,
+		span,
+		metrics,
+		logger,
+		startupDependencyNetworkPolicy,
+		cause,
+	)
+	span.End()
+	if err == nil {
+		t.Fatal("rejectStartupForPolicyViolation() error = nil, want non-nil")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("rejectStartupForPolicyViolation() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
+		t.Fatalf("rejectStartupForPolicyViolation() error = %v, dependency init count = %d, want 1", err, count)
+	}
+	if !strings.Contains(err.Error(), "RFC3339 parse failed") {
+		t.Fatalf("rejectStartupForPolicyViolation() error = %v, want original config detail", err)
 	}
 }
 

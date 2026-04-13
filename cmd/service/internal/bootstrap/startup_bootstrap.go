@@ -372,7 +372,7 @@ func bootstrapNetworkPolicyStage(
 			metrics,
 			log,
 			startupDependencyNetworkPolicy,
-			fmt.Errorf("%w: invalid network policy configuration: %w", errDependencyInit, netPolicyResult.err),
+			fmt.Errorf("invalid network policy configuration: %w", netPolicyResult.err),
 			"policy.class", policyClass,
 			"reason.class", reasonClass,
 		)
