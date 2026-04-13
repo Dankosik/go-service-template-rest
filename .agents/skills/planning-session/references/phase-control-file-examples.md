@@ -11,7 +11,7 @@ Load when writing or repairing `workflow-plans/planning.md`, or when planning mu
 - Future phase-control files are allowed only when named multi-session routing requires them before implementation starts.
 - Future files start as pending routing skeletons; after the named phase starts, they remain compact routing and progress surfaces, not full execution logs or new decision records.
 - Implementation phase-control files should name consumed artifacts, entry condition, allowed writes, task/checkpoint range, proof update shape, blockers or reopen targets, next action, and stop rule.
-- Review phase-control files should name review scope, read-only lanes, finding status, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule.
+- Review phase-control files should name review scope, read-only lanes, finding status, compact finding disposition, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule.
 - Validation phase-control files should name closeout claim, proof inputs, command/proof scope, phase status, blockers or reopen target, completion marker, next action, and stop rule.
 - If a future phase-control file needs design facts that do not exist, block planning and reopen upstream instead of filling the gap.
 - Put executable tasks and the implementation handoff in `tasks.md`, optional supplemental strategy in `plan.md` only when justified, test depth in triggered `test-plan.md`, and rollout choreography in triggered `rollout.md`.
@@ -63,6 +63,7 @@ Entry condition: implementation checkpoint complete with fresh local proof recor
 Review scope: changed API, persistence, and reliability surfaces named in `tasks.md`.
 Read-only lanes: one focused review question per lane, one skill or `no-skill` per lane.
 Reconciliation rule: orchestrator records accepted findings, accepted risks, reopen targets, and validation implications; review agents do not edit files or approve decisions.
+Finding disposition shape: finding ID or short label, source lane, disposition (`accepted`, `fixed in reconciliation`, `accepted risk`, `reopen`, or `no_action`), target task or artifact when applicable, validation implication.
 Stop rule: do not create tasks, design notes, or implementation patches from review output; reopen the right phase if review exposes a missing decision.
 Next action: run the named read-only review lanes.
 ```

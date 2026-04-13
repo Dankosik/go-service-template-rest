@@ -78,11 +78,11 @@ specs/<feature-id>/
 
 ### Artifact Purposes
 
-- **`workflow-plan.md`:** Master routing and control artifact. It tracks cross-phase status: execution shape, current phase, artifact status, blockers, next session, links to phase workflow plans, and resume order. Required for non-trivial or agent-backed work.
+- **`workflow-plan.md`:** Master routing and control artifact. It tracks cross-phase status: execution shape, current phase, artifact status, blockers, next session, next-session context bundle, links to phase workflow plans, and resume order. Required for non-trivial or agent-backed work. The next-session context bundle should name the exact files the next session should read and why each one matters; it links to artifacts instead of copying their content.
 - **`workflow-plans/<phase>.md`:** Phase-local workflow plan for one named phase only. It tracks that phase's local orchestration, order/parallelism, fan-in/challenge path when relevant, completion marker, stop rule, next action, and local blockers. Required for each named non-trivial phase that the task actually uses, including `workflow-planning` or `research` when those are dedicated sessions.
 - **`spec.md`:** Canonical decision record: approved framing, scope, constraints, decisions, and accepted open questions. Always.
 - **`design/`:** Task-local technical design bundle between `spec.md` and task breakdown. It explains how the approved change fits the repository architecture and what implementation must preserve. Required for non-trivial work unless explicitly skipped with rationale.
-- **`tasks.md`:** Executable task ledger and final implementation handoff derived from approved `spec.md + design/` and any optional planning context. It owns markdown checkboxes with stable task IDs, phase/checkpoint labels when useful, optional `[P]` markers only for safe parallel work, concrete action and file/package surfaces, dependency markers when nontrivial, and proof expectations. Expected by default for non-trivial implementation work; direct-path or tiny work may skip it only with an explicit waiver.
+- **`tasks.md`:** Executable task ledger and final implementation handoff derived from approved `spec.md + design/` and any optional planning context. It owns an optional compact implementation handoff header plus markdown checkboxes with stable task IDs, phase/checkpoint labels when useful, optional `[P]` markers only for safe parallel work, concrete action and file/package surfaces, dependency markers when nontrivial, and proof expectations. Expected by default for non-trivial implementation work; direct-path or tiny work may skip it only with an explicit waiver.
 - **`plan.md`:** Optional supplementary strategy note for unusually large, multi-checkpoint, or cross-session work when forcing all strategy into `tasks.md` would make the ledger noisy. It is not required before implementation, not produced by default, and never replaces `tasks.md` as the handoff artifact.
 - **Implementation readiness:** Planning-phase exit gate recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. The status belongs in `workflow-plan.md`, the result and stop or handoff rule belong in `workflow-plans/planning.md`, and `tasks.md` may carry only a short reference when useful.
 - **`research/*.md`:** Preserved evidence, comparisons, and validated research context. These files support decisions but do not own them. Create only when the task is long, ambiguous, or benefits from reusable research memory.
@@ -108,6 +108,7 @@ Every phase artifact should preserve enough durable context for the next LLM ses
 - name the current phase, owning artifact, next action, and stop rule;
 - distinguish facts, decisions, assumptions, blockers, evidence, accepted risks, and reopen targets;
 - link to the owning artifact instead of copying another artifact's content;
+- name the next-session context bundle when a generic resume order would force rediscovery;
 - record why plausible optional artifacts are `not expected`, `conditional`, or `waived`;
 - keep proof obligations proportional to the claim and changed surface;
 - make the next-session route explicit enough that implementation, review, or validation does not need to reconstruct workflow intent from prose;
@@ -370,6 +371,7 @@ Planning is the last artifact-producing phase before code:
 
 Minimum `tasks.md` content:
 
+- optional compact handoff header when it helps the next implementation session: consumed artifacts, readiness status, first task or checkpoint, named `CONCERNS` proof obligations, and reopen target;
 - markdown checkboxes,
 - stable task IDs such as `T001`,
 - phase or checkpoint label,
@@ -444,6 +446,9 @@ Implementation rules:
 
 When an implementation phase-control file exists, keep its checkpoint update routing-focused:
 
+- consumed artifacts and implementation entry condition;
+- allowed future writes for the phase;
+- task IDs or named checkpoint in scope;
 - task IDs or named checkpoint attempted;
 - changed surfaces already touched;
 - fresh proof run and observed result, if any;
@@ -452,7 +457,7 @@ When an implementation phase-control file exists, keep its checkpoint update rou
 
 Do not copy the full diff, task ledger, or design bundle into implementation phase control.
 
-Review stays read-only and risk-driven. When planning created `workflow-plans/review-phase-N.md`, that file stays routing-focused: it records review scope, read-only lanes, finding status, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule. It must not become a second review transcript, task ledger, design bundle, or decision record.
+Review stays read-only and risk-driven. When planning created `workflow-plans/review-phase-N.md`, that file stays routing-focused: it records review scope, read-only lanes, finding status, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule. Finding disposition should be compact and orchestrator-owned: finding ID or short label, source lane, disposition (`accepted`, `fixed in reconciliation`, `accepted risk`, `reopen`, or `no_action`), target artifact or task when applicable, and validation implication. It must not become a second review transcript, task ledger, design bundle, or decision record.
 
 Reconciliation applies orchestrator-approved fixes or accepted-risk records from review inside the existing task ledger and control surfaces. If review exposes a missing spec, design, planning, or task-ledger decision, record the reopen target instead of letting review output become the new authority.
 
@@ -462,6 +467,8 @@ Validation is also artifact-consuming:
 - update only existing closeout surfaces such as `workflow-plan.md`, the active `workflow-plans/validation-phase-N.md` when one was created before implementation, progress state in existing `tasks.md` when needed, optional `plan.md` notes when one exists, and `spec.md` `Validation` or `Outcome`,
 - do not create new workflow/process/planning/design/temp artifacts,
 - if proof exposes an upstream gap or expected control artifact is missing, reopen the right earlier phase instead of inventing a closeout artifact.
+
+When a validation phase-control file exists, keep it closeout-focused: closeout claim, proof inputs, command or manual proof scope, allowed future writes, phase status, blockers or reopen target, completion marker, next action, and stop rule. The authoritative proof record still belongs in `spec.md` `Validation` and `Outcome`; the phase file only routes the validation checkpoint.
 
 Closeout is not complete until the artifacts reflect reality:
 
@@ -492,6 +499,7 @@ Minimum context-first control record:
 - `Session boundary reached`;
 - `Ready for next session`;
 - `Next session starts with`;
+- `Next session context bundle` with exact artifact paths and one-line reasons when the next session needs more than the default resume order;
 - artifact status table with trigger rationale for plausible optional artifacts;
 - blockers, accepted assumptions, accepted risks, and reopen targets that still affect routing;
 - adequacy or clarification gate status when the current handoff depends on it.
@@ -502,6 +510,7 @@ At minimum, it answers:
 - phase status (`in_progress`, `blocked`, or `complete`),
 - session-boundary state,
 - next-session readiness and starting phase,
+- next-session context bundle, when task-specific file selection matters,
 - artifact status (`approved`, `draft`, `missing`, `blocked`, `waived`, `not expected`, or `conditional` as applicable),
 - blockers,
 - phase workflow plan status,
@@ -534,7 +543,7 @@ Recommended update cadence:
 - After `technical design` or planning: record approved design artifacts, expected `tasks.md` status, optional `plan.md` status when one exists, and implementation-readiness status in the master file and current phase file; during planning, also create or repair `tasks.md` and create only those implementation/review/validation phase workflow files whose named multi-session routing is genuinely needed.
 - After each implementation checkpoint: update only the existing current phase workflow plan plus the master file, and update existing `tasks.md` checkbox/progress state when the task ledger is in use. If a needed workflow/process artifact is missing, reopen the relevant earlier phase instead of creating it mid-implementation.
 - After review or reconciliation: update only existing control/checkpoint artifacts with review scope, findings status, orchestrator reconciliation, accepted risks, blockers, reopen targets, and validation implications. Do not paste raw review transcripts or invent new tasks in review control files.
-- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, and `Next session starts with` in the master file, and close the current phase workflow plan.
+- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, `Next session starts with`, and the task-specific next-session context bundle in the master file, and close the current phase workflow plan.
 - After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof; update existing `tasks.md` checkbox/progress state only when already in use. If an expected validation control file or required `tasks.md` is missing, reopen the relevant earlier phase instead of creating it during closeout.
 
 Minimal split example:
@@ -543,6 +552,7 @@ Minimal split example:
 workflow-plan.md:
 Current phase: technical-design; Session boundary reached: no; Ready for next session: no
 Next session starts with: planning; Phase workflow plans: specification complete; technical-design active; planning pending
+Next session context bundle: spec.md for approved decisions; design/overview.md and required design maps for planning constraints
 Artifacts: spec.md approved; design/ draft; tasks.md missing
 
 workflow-plans/technical-design.md:
@@ -558,7 +568,8 @@ In a later session, read artifacts in this order:
 
 1. `workflow-plan.md`
 2. current `workflow-plans/<phase>.md`
-3. phase artifacts in the order the current phase needs them:
+3. the `Next session context bundle` from `workflow-plan.md`, when present and current
+4. phase artifacts in the order the current phase needs them:
    - `spec.md`
    - [docs/repo-architecture.md](./repo-architecture.md) when the task depends on stable repository architecture context
    - `design/overview.md`

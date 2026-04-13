@@ -131,6 +131,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 ### Artifact Ownership Competency
 - Stable decisions belong in `Decisions`.
 - Evidence history, comparisons, and raw external research belong in `research/*.md`.
+- Research-backed decisions should link to the specific preserved research note or source surface when the provenance would help a later session trust or revisit the decision; keep the link short and do not copy the evidence narrative into `Decisions`.
 - Task-local technical design context belongs in `design/`.
 - Task sequencing and execution detail belong in `tasks.md`; optional `plan.md` carries only supplemental strategy when justified.
 - Unresolved but visible gaps belong in `Open Questions / Assumptions`.
@@ -195,7 +196,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 ### 5. Write Or Repair `spec.md`
 - Place each fact into the correct artifact.
 - Keep `Decisions` authoritative and compact.
-- Link out instead of duplicating detail when preserved evidence already exists elsewhere.
+- Link out instead of duplicating detail when preserved evidence already exists elsewhere, especially for non-obvious research-backed decisions that a later session may need to audit.
 
 ### 6. Run Or Enforce The Clarification Gate
 - For non-trivial work, confirm the `spec-clarification-challenge` gate ran after candidate decisions existed and before approval.

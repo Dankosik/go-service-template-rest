@@ -149,6 +149,7 @@ Do not duplicate the full gate reasoning from `workflow-plan.md` or `workflow-pl
 Return ledger text that can drop directly into `tasks.md` with minimal rewriting.
 
 Use markdown checkboxes. Each task should include:
+- an optional compact `Implementation Handoff` header when it helps the next implementation session, limited to consumed artifacts, readiness status, first task or checkpoint, named `CONCERNS` proof obligations, and reopen target;
 - stable task ID such as `T001`
 - phase/checkpoint label
 - optional `[P]` marker only when safe to parallelize
@@ -160,11 +161,21 @@ Use markdown checkboxes. Each task should include:
 Example:
 
 ```markdown
+## Implementation Handoff
+
+Consumes: approved `spec.md`, `design/`, and this task ledger.
+Implementation readiness: PASS.
+First task: T001.
+Accepted concerns: none.
+Reopen target: planning if required artifact context is missing.
+
+## Tasks
+
 - [ ] T001 [Phase 1] Update `internal/http/handler.go` to preserve request ID echo behavior. Depends on: none. Proof: `go test ./internal/http`.
 - [ ] T002 [Phase 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`.
 ```
 
-Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`.
+Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep the header short; if it starts carrying phase strategy or design rationale, move that content to optional `plan.md` or reopen `design/`.
 
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `plan.md` or `tasks.md` for a tiny change just to satisfy ceremony.

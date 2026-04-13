@@ -9,6 +9,7 @@ Load after writing or repairing design artifacts, or whenever technical design i
 ## Decision Rubric
 - Update `workflow-plan.md` with current phase, phase status, design artifact statuses, conditional artifact statuses, blockers, reopen conditions, `Session boundary reached`, `Ready for next session`, and `Next session starts with`.
 - Update `workflow-plans/technical-design.md` with pass type, local status, completion marker, artifact statuses, local stop rule, blockers, parallelizable follow-up if any, and planning handoff state.
+- Negative artifact statuses such as `not expected`, `conditional`, or `waived` need a short trigger rationale; a bare label is not enough for resume.
 - Keep workflow files routing-only; link to design artifacts rather than copying component maps, sequence detail, or ownership tables into them.
 - If master and phase-local workflow files disagree, repair or block before claiming the session is complete.
 - If a triggered conditional artifact is draft, missing, or stale, mark technical design `blocked` or `in_progress`; do not call the handoff planning-ready.
@@ -21,6 +22,7 @@ Current phase: technical-design
 Phase status: complete
 Required design artifacts: approved
 Conditional artifacts: `design/data-model.md` approved; `design/contracts/` approved; `rollout.md` not expected
+Negative status rationale: `rollout.md` not expected because no migration, mixed-version, deploy-order, or failback choreography is in scope.
 Blockers: none
 Session boundary reached: yes
 Ready for next session: yes

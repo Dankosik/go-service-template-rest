@@ -205,7 +205,7 @@ Every completed or blocked pass must update the master file with:
 - current phase set to `technical-design` and current phase status
 - link or status for `workflow-plans/technical-design.md`
 - status for each required design artifact
-- status for each triggered conditional artifact, including `test-plan.md` or `rollout.md` when applicable
+- status for each triggered conditional artifact, including `test-plan.md` or `rollout.md` when applicable; include a short trigger rationale for `not expected`, `conditional`, or `waived` statuses rather than a bare label
 - blockers, accepted assumptions, reopen conditions, and any reason the next session cannot start with planning
 - `Session boundary reached`
 - `Ready for next session`
