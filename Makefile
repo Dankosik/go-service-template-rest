@@ -26,7 +26,7 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-vet docker-test-race docker-test-cover docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
+	docker-test docker-vet docker-test-race docker-test-cover docker-test-report docker-test-integration docker-lint docker-openapi-check docker-sqlc-check docker-go-security docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
 
@@ -48,6 +48,7 @@ help:
 	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
+	@echo "  make test-report             # race + coverage report and threshold"
 	@echo "  make migration-validate      # migration rehearsal"
 	@echo "  make mocks-drift-check       # mockgen drift checks"
 	@echo "  make stringer-drift-check    # stringer drift checks"
@@ -102,10 +103,10 @@ check:
 check-full:
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running zero-setup CI checks"; \
-		$(MAKE) docker-ci; \
+		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	else \
 		echo "docker daemon unavailable: running native CI checks"; \
-		$(MAKE) ci-local; \
+		$(MAKE) ci-local BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	fi
 
 template-init: setup
@@ -266,6 +267,9 @@ docker-test-race:
 docker-test-cover:
 	$(DOCKER_TOOLING_SCRIPT) test-cover
 
+docker-test-report:
+	$(DOCKER_TOOLING_SCRIPT) test-report
+
 test-integration:
 	go test -tags=integration ./test/...
 
@@ -278,13 +282,18 @@ lint:
 
 go-security:
 	go tool govulncheck ./...
-	go tool gosec -exclude-generated ./...
+	go tool gosec -exclude-generated -exclude-dir=.cache ./...
 
 secrets-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 .
 
 ci-local:
-	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-cover-local mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
+	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secrets-scan
+	@if [ -n "$(BASE_REF)" ] && [ -n "$(HEAD_REF)" ]; then \
+		$(MAKE) docs-drift-check BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
+	else \
+		echo "BASE_REF/HEAD_REF are not set, skipping docs drift check in ci-local"; \
+	fi
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
@@ -431,7 +440,7 @@ docker-container-security:
 	$(DOCKER_TOOLING_SCRIPT) container-security
 
 docker-ci:
-	$(DOCKER_TOOLING_SCRIPT) ci
+	BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" $(DOCKER_TOOLING_SCRIPT) ci
 
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \

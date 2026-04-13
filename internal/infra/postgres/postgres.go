@@ -128,7 +128,7 @@ func (l *maxIdleConnLimiter) afterRelease(conn *pgx.Conn) bool {
 	if _, ok := l.retained[conn]; ok {
 		return true
 	}
-	if int32(len(l.retained)) >= l.maxIdleConns {
+	if len(l.retained) >= int(l.maxIdleConns) {
 		return false
 	}
 	l.retained[conn] = struct{}{}

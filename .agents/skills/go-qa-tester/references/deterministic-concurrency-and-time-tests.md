@@ -15,7 +15,7 @@ Load this when tests touch goroutines, channels, worker pools, shutdown, backpre
 - Call `synctest.Wait` only inside the bubble and not concurrently from multiple goroutines in the same bubble.
 - Use a real timeout only as a diagnostic guard around a deterministic condition.
 - Use `go test -race` or the repository race target for concurrency-sensitive changes when the platform/toolchain supports it.
-- Verify `testing/synctest` in the active Go toolchain before relying on it. Go docs mark it as Go 1.25+, and this repo currently targets Go 1.26.1.
+- Verify `testing/synctest` in the active Go toolchain before relying on it. Go docs mark it as Go 1.25+, and this repo currently targets Go 1.26.2.
 
 ## Imitate
 ```go

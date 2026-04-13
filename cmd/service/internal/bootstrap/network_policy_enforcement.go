@@ -157,10 +157,7 @@ func isPublicHost(host string) bool {
 	}
 
 	if ip := net.ParseIP(normalized); ip != nil {
-		if isPrivateIP(ip) {
-			return false
-		}
-		return true
+		return !isPrivateIP(ip)
 	}
 
 	if normalized == "localhost" {

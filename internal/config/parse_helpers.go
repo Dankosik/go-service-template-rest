@@ -100,10 +100,14 @@ func signedIntegerFromInt64(v int64, min int64, max int64) (int64, error) {
 }
 
 func signedIntegerFromUint64(v uint64, max int64) (int64, error) {
-	if v > uint64(max) {
+	if max < 0 || v > uint64(math.MaxInt64) {
 		return 0, fmt.Errorf("integer out of range")
 	}
-	return int64(v), nil
+	n := int64(v)
+	if n > max {
+		return 0, fmt.Errorf("integer out of range")
+	}
+	return n, nil
 }
 
 func signedIntegerFromFloat64(v float64, min int64, max int64) (int64, error) {

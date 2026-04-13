@@ -9,7 +9,7 @@ It captures only durable facts that materially improve downstream context and ha
 - The sample service is intentionally thin; do not overfit prompts to `ping` or `ping_history` unless the request actually points there.
 
 ## Core Stack
-- Go `1.26.1`
+- Go `1.26.2`
 - `chi` for HTTP routing
 - OpenAPI-first contract in `api/openapi/service.yaml`
 - generated strict server bindings in `internal/api`

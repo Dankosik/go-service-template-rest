@@ -175,7 +175,8 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	bootstrapSpan := trace.SpanFromContext(bootstrapCtx)
 
 	runErrCh := make(chan error, 1)
-	go func() {
+	go func(signalCtx context.Context, bootstrapCtx context.Context, bootstrapSpan trace.Span) {
+		//nolint:contextcheck // serveHTTPRuntime carries signal and bootstrap contexts in args.
 		runErrCh <- serveHTTPRuntime(serveHTTPRuntimeArgs{
 			signalCtx:     signalCtx,
 			bootstrapCtx:  bootstrapCtx,
@@ -194,7 +195,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 			},
 			admission: admission,
 		})
-	}()
+	}(signalCtx, bootstrapCtx, bootstrapSpan)
 
 	select {
 	case <-readinessChecked:

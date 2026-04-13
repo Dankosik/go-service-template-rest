@@ -449,9 +449,9 @@ For the full dependency graph, see [`go.mod`](go.mod) and [`go.sum`](go.sum).
 Local entry points:
 
 - `make check` - quick local checks
-- `make check-full` - CI-like verification
+- `BASE_REF=origin/main HEAD_REF=HEAD make check-full` - full local pre-push baseline with docs-drift comparison
 - `make ci-local` - native CI-style flow
-- `make docker-ci` - Docker-based CI-style flow
+- `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` - closest Docker-based CI parity flow with pinned tooling images
 - `make openapi-check` - OpenAPI generation, drift, runtime contract, lint, and schema validation checks
 - `BASE_OPENAPI=<base> make openapi-breaking` - OpenAPI breaking-change compatibility check
 - `make sqlc-check` - generated SQL artifact drift checks
@@ -460,6 +460,7 @@ Local entry points:
 - `make gh-protect BRANCH=main` - branch protection setup helper
 
 Migration rehearsal targets may skip when no `MIGRATION_DSN` is provided and Docker is unavailable; skip output is not migration proof.
+For the full local-vs-GitHub parity matrix and CD caveats, see [Build, Test, and Development Commands](docs/build-test-and-development-commands.md#everyday-pre-push-and-pr-parity).
 
 Repository and CI guardrails include:
 

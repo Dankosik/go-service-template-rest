@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 
 	"github.com/example/go-service-template-rest/internal/api"
@@ -14,7 +15,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	p := api.Problem{
 		Type:   "about:blank",
 		Title:  title,
-		Status: int32(status),
+		Status: problemHTTPStatus(status),
 		Detail: optionalProblemString(detail),
 	}
 	if r != nil {
@@ -35,4 +36,11 @@ func optionalProblemString(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+func problemHTTPStatus(status int) int32 {
+	if status < 0 || status > math.MaxInt32 {
+		return int32(http.StatusInternalServerError)
+	}
+	return int32(status)
 }

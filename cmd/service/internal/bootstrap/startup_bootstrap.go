@@ -268,7 +268,9 @@ func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyRe
 		return telemetryExporterTargetUnconfigured, nil
 	}
 
-	if netPolicyResult.err != nil {
+	policyErr := netPolicyResult.err
+	if policyErr != nil {
+		//nolint:nilerr // Invalid network policy defers optional telemetry exporter admission fail-open.
 		return telemetryExporterTargetDeferredToNetworkPolicy, nil
 	}
 	if err := netPolicyResult.policy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {

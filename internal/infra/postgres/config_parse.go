@@ -50,7 +50,7 @@ var allowedPostgresSSLModes = map[string]struct{}{
 }
 
 const (
-	postgresServicePassfileDSNSourceError = "postgres dsn uses unsupported service/passfile source"
+	postgresServicePassfileDSNSourceError = "postgres dsn uses unsupported service/passfile source" // #nosec G101 -- diagnostic text, not a credential.
 	postgresTLSFileDSNSourceError         = "postgres dsn uses unsupported TLS file source"
 )
 

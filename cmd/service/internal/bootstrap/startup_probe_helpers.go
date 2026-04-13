@@ -121,12 +121,6 @@ func probeRedisAddressWithContext(ctx context.Context, address string, dialTimeo
 	return probeTCPDependency(ctx, address, timeout)
 }
 
-func probeRedisWithRetry(ctx context.Context, cfg config.RedisConfig) error {
-	return probeWithRetry(ctx, redisStoreProbeAttempts, func(probeCtx context.Context) error {
-		return probeRedisWithContext(probeCtx, cfg)
-	})
-}
-
 func probeRedisAddressWithRetry(ctx context.Context, address string, dialTimeout time.Duration) error {
 	return probeWithRetry(ctx, redisStoreProbeAttempts, func(probeCtx context.Context) error {
 		return probeRedisAddressWithContext(probeCtx, address, dialTimeout)
@@ -147,12 +141,6 @@ func probeMongoAddressWithContext(ctx context.Context, address string, connectTi
 		timeout = mongoProbeBudget
 	}
 	return probeTCPDependency(ctx, address, timeout)
-}
-
-func probeMongoWithRetry(ctx context.Context, cfg config.MongoConfig) error {
-	return probeWithRetry(ctx, mongoProbeAttempts, func(probeCtx context.Context) error {
-		return probeMongoWithContext(probeCtx, cfg)
-	})
 }
 
 func probeMongoAddressWithRetry(ctx context.Context, address string, connectTimeout time.Duration) error {

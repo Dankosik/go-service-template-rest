@@ -61,6 +61,11 @@ GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
 GOSEC_VERSION="${GOSEC_VERSION:-v2.24.7}"
 GOIMPORTS_VERSION="${GOIMPORTS_VERSION:-v0.42.0}"
 GITLEAKS_VERSION="${GITLEAKS_VERSION:-v8.30.0}"
+TEST_REPORT_DIR="${TEST_REPORT_DIR:-.artifacts/test}"
+TEST_JUNIT_FILE="${TEST_JUNIT_FILE:-${TEST_REPORT_DIR}/junit.xml}"
+TEST_JSON_FILE="${TEST_JSON_FILE:-${TEST_REPORT_DIR}/test2json.json}"
+COVERAGE_MIN="${COVERAGE_MIN:-65.0}"
+COVERAGE_EXCLUDE_REGEX="${COVERAGE_EXCLUDE_REGEX:-(^|/)internal/api/openapi\\.gen\\.go:|(^|/)cmd/service/main\\.go:}"
 
 host_uid="$(id -u 2>/dev/null || echo 0)"
 host_gid="$(id -g 2>/dev/null || echo 0)"
@@ -78,6 +83,7 @@ usage() {
 	echo "  vet"
 	echo "  test-race"
 	echo "  test-cover"
+	echo "  test-report"
 	echo "  test-integration"
 	echo "  stringer-generate"
 	echo "  stringer-drift-check"
@@ -134,7 +140,7 @@ run_go_with_docker_socket() {
 
 	socket_args=()
 	if [[ -S /var/run/docker.sock ]]; then
-		socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
+		socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock --group-add 0)
 	fi
 
 	docker run \
@@ -163,18 +169,8 @@ run_node() {
 }
 
 run_lint() {
-	ensure_docker
 	mkdir -p "${ROOT_DIR}/.cache/golangci-lint"
-	docker run \
-		--rm \
-		-u "${host_uid}:${host_gid}" \
-		-v "${ROOT_DIR}:/workspace" \
-		-w /workspace \
-		-v "${ROOT_DIR}/.cache/golangci-lint:/tmp/golangci-lint-cache" \
-		-e GOLANGCI_LINT_CACHE=/tmp/golangci-lint-cache \
-		--entrypoint /usr/bin/golangci-lint \
-		"${GOLANGCI_LINT_IMAGE}" \
-		"$@"
+	run_go "GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint $*"
 }
 
 openapi_drift_check() {
@@ -263,6 +259,15 @@ sqlc_drift_check() {
 		echo "remove stale generated files and run 'make sqlc-generate'"
 		exit 1
 	fi
+}
+
+run_coverage_check() {
+	run_go "test -f coverage.out || (echo \"coverage.out not found; run 'test-cover' or 'test-report' first\"; exit 1); filtered_cov=\$(mktemp); grep -Ev '${COVERAGE_EXCLUDE_REGEX}' coverage.out > \"\${filtered_cov}\"; total=\$(go tool cover -func=\"\${filtered_cov}\" | awk '/^total:/ {gsub(/%/, \"\", \$3); print \$3}'); rm -f \"\${filtered_cov}\"; if [[ -z \"\${total}\" ]]; then echo \"failed to parse total coverage from coverage.out\"; exit 1; fi; awk -v total=\"\${total}\" -v minimum='${COVERAGE_MIN}' 'BEGIN { if ((total + 0) < (minimum + 0)) { printf \"coverage %.2f%% is below threshold %.2f%%\\n\", total, minimum; exit 1 } printf \"coverage %.2f%% meets threshold %.2f%%\\n\", total, minimum }'"
+}
+
+run_test_report() {
+	run_go "mkdir -p '${TEST_REPORT_DIR}' && GOCOVERDIR= go tool gotestsum --format=standard-verbose --junitfile='${TEST_JUNIT_FILE}' --jsonfile='${TEST_JSON_FILE}' -- -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
+	run_coverage_check
 }
 
 wait_for_postgres() {
@@ -427,6 +432,9 @@ test-race)
 test-cover)
 	run_go "GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
 	;;
+test-report)
+	run_test_report
+	;;
 test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."
 	;;
@@ -452,7 +460,7 @@ mocks-drift-check)
 	mocks_drift_check
 	;;
 lint)
-	run_lint run --timeout=3m
+	run_lint "config verify && GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint run --timeout=3m"
 	;;
 openapi-generate)
 	run_go "go generate ./internal/api"
@@ -478,7 +486,7 @@ openapi-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-validate
 	;;
 go-security)
-	run_go "go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} && \"\$(go env GOPATH)/bin/govulncheck\" ./... && go install github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} && \"\$(go env GOPATH)/bin/gosec\" -exclude-generated ./..."
+	run_go "go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} && \"\$(go env GOPATH)/bin/govulncheck\" ./... && go install github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} && \"\$(go env GOPATH)/bin/gosec\" -exclude-generated -exclude-dir=.cache ./..."
 	;;
 secrets-scan)
 	run_go "go run github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION} git --no-banner --redact --exit-code 1 ."
@@ -517,7 +525,7 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" vet
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-cover
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-report
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-drift-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-drift-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" sqlc-check

@@ -1,0 +1,12 @@
+title = "go-service-template-rest gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "HTTP Idempotency-Key documentation examples in skill references"
+condition = "AND"
+regexTarget = "line"
+regexes = ['''Idempotency-Key:\s*"?[A-Za-z0-9_-]+''']
+paths = ['''^\.(agents|claude|cursor|gemini|github|opencode)/skills/api-contract-designer-spec/references/(async-operations-and-webhooks|idempotency-preconditions-retries)\.md$''']
