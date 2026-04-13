@@ -181,9 +181,9 @@ func readDurationInto(k *koanf.Koanf, key string, dst *time.Duration) error {
 	if raw == "" {
 		return fmt.Errorf("%w: %s is empty", ErrParse, key)
 	}
-	d, err := time.ParseDuration(raw)
+	d, err := parseDuration(raw)
 	if err != nil {
-		return fmt.Errorf("%w: %s has invalid duration", ErrParse, key)
+		return fmt.Errorf("%w: %s has invalid duration: %w", ErrParse, key, err)
 	}
 	*dst = d
 	return nil
@@ -192,7 +192,7 @@ func readDurationInto(k *koanf.Koanf, key string, dst *time.Duration) error {
 func readIntInto(k *koanf.Koanf, key string, dst *int) error {
 	value, err := parseInt(k.Get(key))
 	if err != nil {
-		return fmt.Errorf("%w: %s has invalid int value", ErrParse, key)
+		return fmt.Errorf("%w: %s has invalid int value: %w", ErrParse, key, err)
 	}
 	*dst = value
 	return nil
@@ -201,7 +201,7 @@ func readIntInto(k *koanf.Koanf, key string, dst *int) error {
 func readInt64Into(k *koanf.Koanf, key string, dst *int64) error {
 	value, err := parseInt64(k.Get(key))
 	if err != nil {
-		return fmt.Errorf("%w: %s has invalid int64 value", ErrParse, key)
+		return fmt.Errorf("%w: %s has invalid int64 value: %w", ErrParse, key, err)
 	}
 	*dst = value
 	return nil
@@ -210,7 +210,7 @@ func readInt64Into(k *koanf.Koanf, key string, dst *int64) error {
 func readFloat64Into(k *koanf.Koanf, key string, dst *float64) error {
 	value, err := parseFloat64(k.Get(key))
 	if err != nil {
-		return fmt.Errorf("%w: %s has invalid float value", ErrParse, key)
+		return fmt.Errorf("%w: %s has invalid float value: %w", ErrParse, key, err)
 	}
 	*dst = value
 	return nil
@@ -219,7 +219,7 @@ func readFloat64Into(k *koanf.Koanf, key string, dst *float64) error {
 func readBoolInto(k *koanf.Koanf, key string, dst *bool) error {
 	value, err := parseBool(k.Get(key))
 	if err != nil {
-		return fmt.Errorf("%w: %s has invalid bool value", ErrParse, key)
+		return fmt.Errorf("%w: %s has invalid bool value: %w", ErrParse, key, err)
 	}
 	*dst = value
 	return nil

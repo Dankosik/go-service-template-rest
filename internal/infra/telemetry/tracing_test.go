@@ -690,6 +690,16 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 			raw:     "https:///v1/traces",
 			wantErr: "empty host",
 		},
+		{
+			name:    "port-only url authority",
+			raw:     "http://:4318/v1/traces",
+			wantErr: "empty host",
+		},
+		{
+			name:    "port-only scheme-less authority",
+			raw:     ":4318",
+			wantErr: "empty host",
+		},
 	}
 
 	for _, tc := range testCases {

@@ -820,6 +820,64 @@ func TestInvalidDurationParseError(t *testing.T) {
 	if !errors.Is(err, ErrParse) {
 		t.Fatalf("error = %v, want ErrParse", err)
 	}
+	if !strings.Contains(err.Error(), "invalid duration syntax") {
+		t.Fatalf("error = %v, want sanitized duration parse detail", err)
+	}
+}
+
+func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
+	tests := []struct {
+		name       string
+		envKey     string
+		envValue   string
+		wantDetail string
+	}{
+		{
+			name:       "duration missing unit",
+			envKey:     "APP__HTTP__READ_TIMEOUT",
+			envValue:   "150",
+			wantDetail: "missing duration unit",
+		},
+		{
+			name:       "int format",
+			envKey:     "APP__HTTP__MAX_HEADER_BYTES",
+			envValue:   "many",
+			wantDetail: "invalid integer format",
+		},
+		{
+			name:       "float finite check",
+			envKey:     "APP__OBSERVABILITY__OTEL__TRACES_SAMPLER_ARG",
+			envValue:   "NaN",
+			wantDetail: "non-finite numeric value",
+		},
+		{
+			name:       "bool format",
+			envKey:     "APP__FEATURE_FLAGS__REDIS_READINESS_PROBE",
+			envValue:   "maybe",
+			wantDetail: "invalid boolean format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv(tt.envKey, tt.envValue)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatal("LoadDetailed() error = nil, want parse error")
+			}
+			if !errors.Is(err, ErrParse) {
+				t.Fatalf("error = %v, want ErrParse", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantDetail) {
+				t.Fatalf("error = %v, want sanitized detail %q", err, tt.wantDetail)
+			}
+			if strings.Contains(err.Error(), tt.envValue) {
+				t.Fatalf("error = %v, leaked raw value %q", err, tt.envValue)
+			}
+		})
+	}
 }
 
 func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
@@ -1196,6 +1254,9 @@ func TestParseErrorDoesNotLeakRawValue(t *testing.T) {
 	if strings.Contains(err.Error(), secretLikeValue) {
 		t.Fatalf("error unexpectedly contains raw secret-like value: %v", err)
 	}
+	if strings.Contains(err.Error(), "time: invalid duration") {
+		t.Fatalf("error unexpectedly wraps raw time.ParseDuration detail: %v", err)
+	}
 }
 
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {
@@ -1233,6 +1294,9 @@ func TestErrorTypeMapping(t *testing.T) {
 	}
 	if got := ErrorType(ErrLoad); got != "load" {
 		t.Fatalf("ErrorType(load) = %q", got)
+	}
+	if got := ErrorType(errors.New("new config error class")); got != "unknown" {
+		t.Fatalf("ErrorType(unknown) = %q, want unknown", got)
 	}
 }
 
@@ -1965,7 +2029,7 @@ func TestRedisEnabledRequiresNumericTCPPort(t *testing.T) {
 	}
 }
 
-func TestMongoURIMustBeParseable(t *testing.T) {
+func TestMongoURIMustContainValidProbeTarget(t *testing.T) {
 	resetConfigEnv(t)
 
 	t.Setenv("APP__MONGO__ENABLED", "true")
@@ -1974,10 +2038,13 @@ func TestMongoURIMustBeParseable(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for unparseable mongo uri")
+		t.Fatalf("LoadDetailed() expected validation error for mongo uri without a valid probe target")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "mongo.uri must contain a valid probe target") {
+		t.Fatalf("error = %v, want mongo probe-target detail", err)
 	}
 }
 
@@ -2041,8 +2108,8 @@ func TestMongoURIRejectsColonRichNonIPHost(t *testing.T) {
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
 	}
-	if !strings.Contains(err.Error(), "mongo.uri must be parseable") {
-		t.Fatalf("error = %v, want mongo uri parseability detail", err)
+	if !strings.Contains(err.Error(), "mongo.uri must contain a valid probe target") {
+		t.Fatalf("error = %v, want mongo probe-target detail", err)
 	}
 	if !strings.Contains(err.Error(), "invalid mongo host") {
 		t.Fatalf("error = %v, want invalid mongo host detail", err)

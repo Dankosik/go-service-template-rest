@@ -97,7 +97,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, report, err
 	}
 
-	validationResult, err := validateConfig(validateCtx, k, &cfg, ValidationOptions{
+	validationResult, err := validateConfig(validateCtx, k, &cfg, validationOptions{
 		Strict:                opts.Strict,
 		AdditionalUnknownKeys: metadata.ignoredSectionScalarKeys,
 	})

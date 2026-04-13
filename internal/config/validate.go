@@ -14,100 +14,100 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-type ValidationOptions struct {
+type validationOptions struct {
 	Strict                bool
 	AdditionalUnknownKeys []string
 }
 
-type ValidationResult struct {
+type validationResult struct {
 	UnknownKeyWarnings []string
 }
 
-func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts ValidationOptions) (ValidationResult, error) {
-	result := ValidationResult{}
+func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts validationOptions) (validationResult, error) {
+	result := validationResult{}
 	if err := checkValidateContext(ctx); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 
 	unknownKeys := findUnknownKeys(k, opts.AdditionalUnknownKeys)
 	if len(unknownKeys) > 0 {
 		if opts.Strict {
-			return ValidationResult{}, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeys, ", "))
+			return validationResult{}, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeys, ", "))
 		}
 		result.UnknownKeyWarnings = unknownKeys
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 
 	if strings.TrimSpace(cfg.App.Env) == "" {
-		return ValidationResult{}, fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
+		return validationResult{}, fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
 	}
 	if strings.TrimSpace(cfg.App.Version) == "" {
-		return ValidationResult{}, fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
+		return validationResult{}, fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
 	}
 	if strings.TrimSpace(cfg.HTTP.Addr) == "" {
-		return ValidationResult{}, fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
+		return validationResult{}, fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
 	}
 
 	if err := validateDurationRange("http.shutdown_timeout", cfg.HTTP.ShutdownTimeout, time.Second, 10*time.Minute); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateDurationRange("http.readiness_timeout", cfg.HTTP.ReadinessTimeout, 100*time.Millisecond, 30*time.Second); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateDurationRange("http.readiness_propagation_delay", cfg.HTTP.ReadinessPropagationDelay, 0, cfg.HTTP.ShutdownTimeout); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateDurationRange("http.read_header_timeout", cfg.HTTP.ReadHeaderTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateDurationRange("http.read_timeout", cfg.HTTP.ReadTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateDurationRange("http.write_timeout", cfg.HTTP.WriteTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateDurationRange("http.idle_timeout", cfg.HTTP.IdleTimeout, 100*time.Millisecond, 24*time.Hour); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateHTTPShutdownBudget(cfg.HTTP); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if cfg.HTTP.MaxHeaderBytes <= 0 {
-		return ValidationResult{}, fmt.Errorf("%w: http.max_header_bytes must be > 0", ErrValidate)
+		return validationResult{}, fmt.Errorf("%w: http.max_header_bytes must be > 0", ErrValidate)
 	}
 	if cfg.HTTP.MaxBodyBytes <= 0 {
-		return ValidationResult{}, fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
+		return validationResult{}, fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 
 	if err := validatePostgres(cfg.Postgres); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateRedis(cfg.Redis); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateMongo(cfg.Mongo); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateReadinessProbeBudgets(*cfg); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 
 	if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
-		return ValidationResult{}, fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
+		return validationResult{}, fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
 	if err := validateSampler(cfg.Observability.OTel.TracesSampler, cfg.Observability.OTel.TracesSamplerArg); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 	if err := validateOTLPExporter(cfg.Observability.OTel.Exporter); err != nil {
-		return ValidationResult{}, err
+		return validationResult{}, err
 	}
 
 	return result, nil
@@ -243,7 +243,7 @@ func validateMongo(cfg MongoConfig) error {
 	}
 	if cfg.Enabled {
 		if _, err := MongoProbeAddress(cfg.URI); err != nil {
-			return fmt.Errorf("mongo.uri must be parseable: %w", err)
+			return fmt.Errorf("mongo.uri must contain a valid probe target: %w", err)
 		}
 		if strings.TrimSpace(cfg.Database) == "" {
 			return fmt.Errorf("%w: mongo.database is required when mongo.enabled=true", ErrValidate)

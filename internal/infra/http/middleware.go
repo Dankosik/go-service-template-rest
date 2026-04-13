@@ -21,8 +21,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const requestIDHeader = "X-Request-ID"
-const contentTypeOptionsHeader = "X-Content-Type-Options"
+const (
+	requestIDHeader          = "X-Request-ID"
+	contentTypeOptionsHeader = "X-Content-Type-Options"
+	maxRequestIDLength       = 128
+)
 
 type requestIDContextKey struct{}
 type routeLabelContextKey struct{}
@@ -33,7 +36,7 @@ type routeLabelHolder struct {
 
 func RequestCorrelation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := strings.TrimSpace(r.Header.Get(requestIDHeader))
+		requestID := requestIDFromHeader(r.Header.Get(requestIDHeader))
 		if requestID == "" {
 			requestID = newRequestID()
 		}
@@ -286,6 +289,33 @@ func requestIDFromContext(ctx context.Context) string {
 		return requestID
 	}
 	return ""
+}
+
+func requestIDFromHeader(value string) string {
+	requestID := strings.TrimSpace(value)
+	if !validRequestID(requestID) {
+		return ""
+	}
+	return requestID
+}
+
+func validRequestID(value string) bool {
+	if len(value) == 0 || len(value) > maxRequestIDLength {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		b := value[i]
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') {
+			continue
+		}
+		switch b {
+		case '.', '_', '~', '-':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func traceIDsFromContext(ctx context.Context) (string, string) {

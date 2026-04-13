@@ -25,6 +25,6 @@ func ErrorType(err error) string {
 	case errors.Is(err, ErrLoad):
 		return "load"
 	default:
-		return "load"
+		return "unknown"
 	}
 }

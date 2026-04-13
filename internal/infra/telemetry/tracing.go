@@ -291,7 +291,7 @@ func otlpEndpoint(
 	if parsedURL.User != nil {
 		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: userinfo is not supported")
 	}
-	if parsedURL.Host == "" {
+	if strings.TrimSpace(parsedURL.Hostname()) == "" {
 		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: empty host")
 	}
 	if parsedURL.RawQuery != "" {

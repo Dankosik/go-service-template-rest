@@ -222,38 +222,39 @@ func parseHostMatchers(raw string, policyClass string) ([]networkHostMatcher, er
 		if trimmed == "" {
 			continue
 		}
-		normalized := normalizeHost(trimmed)
-		if normalized == "" {
-			return nil, &networkPolicyConfigError{
-				policyClass: policyClass,
-				reasonClass: "invalid_configuration",
-				message:     "host matcher contains empty token",
-			}
-		}
 
 		matcher := networkHostMatcher{}
 		switch {
-		case strings.HasPrefix(normalized, "*."):
-			suffix := "." + strings.TrimPrefix(normalized, "*.")
-			if suffix == "." {
+		case strings.HasPrefix(trimmed, "*."):
+			normalized := normalizeHost(strings.TrimPrefix(trimmed, "*."))
+			if normalized == "" {
 				return nil, &networkPolicyConfigError{
 					policyClass: policyClass,
 					reasonClass: "invalid_configuration",
 					message:     "wildcard host matcher cannot be empty",
 				}
 			}
-			matcher.suffix = suffix
-		case strings.HasPrefix(normalized, "."):
-			if normalized == "." {
+			matcher.suffix = "." + normalized
+		case strings.HasPrefix(trimmed, "."):
+			normalized := normalizeHost(strings.TrimPrefix(trimmed, "."))
+			if normalized == "" {
 				return nil, &networkPolicyConfigError{
 					policyClass: policyClass,
 					reasonClass: "invalid_configuration",
 					message:     "suffix host matcher cannot be empty",
 				}
 			}
-			matcher.suffix = normalized
+			matcher.suffix = "." + normalized
 			matcher.includeApex = true
 		default:
+			normalized := normalizeHost(trimmed)
+			if normalized == "" {
+				return nil, &networkPolicyConfigError{
+					policyClass: policyClass,
+					reasonClass: "invalid_configuration",
+					message:     "host matcher contains empty token",
+				}
+			}
 			matcher.exact = normalized
 		}
 		matchers = append(matchers, matcher)

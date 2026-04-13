@@ -91,6 +91,7 @@ type dependencyProbeSpec struct {
 
 type probeExecutionResult struct {
 	budgetBlocked bool
+	parentErr     error
 	err           error
 }
 
@@ -274,17 +275,6 @@ func initRedisDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 			)
 			return nil, rejectErr
 		}
-		if redisMode == config.RedisModeStore {
-			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
-			recordDependencyProbeRejection(
-				bootstrapCtx,
-				runtime,
-				labels,
-				redisMode,
-				rejectErr,
-			)
-			return nil, rejectErr
-		}
 		if runtime.cfg.RedisReadinessProbeRequired() {
 			rejectErr := dependencyInitFailure(labels.dependency, probeResult.err)
 			recordDependencyProbeRejection(
@@ -409,12 +399,16 @@ func initMongoDependency(bootstrapCtx context.Context, runtime dependencyProbeRu
 
 func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer, spec dependencyProbeSpec) probeExecutionResult {
 	if err := ensureRemainingStartupBudget(dependencyProbeCtx, spec.minRemaining, spec.stage); err != nil {
-		return probeExecutionResult{budgetBlocked: true, err: err}
+		return probeExecutionResult{budgetBlocked: true, parentErr: dependencyProbeCtx.Err(), err: err}
 	}
 
 	probeCtx, probeCancel := withStageBudget(dependencyProbeCtx, spec.budget)
 	probeCtx, probeSpan := tracer.Start(probeCtx, spec.stage)
 	err := spec.probe(probeCtx)
+	parentErr := dependencyProbeCtx.Err()
+	if err == nil && parentErr != nil {
+		err = parentErr
+	}
 	probeCancel()
 
 	attrs := []attribute.KeyValue{attribute.String("dep", spec.dep)}
@@ -430,14 +424,14 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeSpan.SetAttributes(attrs...)
 	probeSpan.End()
 
-	return probeExecutionResult{budgetBlocked: false, err: err}
+	return probeExecutionResult{budgetBlocked: false, parentErr: parentErr, err: err}
 }
 
 func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {
 	if result.budgetBlocked {
 		return true
 	}
-	return errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded)
+	return result.parentErr != nil
 }
 
 func recordDegradedDependencyStartup(ctx context.Context, runtime dependencyProbeRuntime, dependency, operation, mode string) {

@@ -80,8 +80,6 @@ func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 }
 
 func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulCheck(t *testing.T) {
-	metrics := telemetry.New()
-	admission := newTestStartupAdmissionController(metrics)
 	bootstrapCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -98,9 +96,6 @@ func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulChec
 		}
 	case <-time.After(time.Second):
 		t.Fatal("startStartupAdmission() did not return after readiness context cancellation")
-	}
-	if admission.Ready() {
-		t.Fatal("startup admission marked ready after readiness context cancellation")
 	}
 }
 

@@ -5,9 +5,25 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const maxExactIntegerFloat64 = 1 << 53
+
+func parseDuration(raw string) (time.Duration, error) {
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s", sanitizedDurationParseDetail(raw))
+	}
+	return d, nil
+}
+
+func sanitizedDurationParseDetail(raw string) string {
+	if !strings.ContainsAny(raw, "hmsuµμn") {
+		return "missing duration unit"
+	}
+	return "invalid duration syntax"
+}
 
 func parseInt(value any) (int, error) {
 	n, err := parseSignedInteger(value, strconv.IntSize)

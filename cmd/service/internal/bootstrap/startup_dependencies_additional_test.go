@@ -22,7 +22,7 @@ func TestRunDependencyProbe(t *testing.T) {
 	tracer := otel.Tracer("test")
 
 	t.Run("budget blocked", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
 			stage:        "stage",
@@ -38,6 +38,63 @@ func TestRunDependencyProbe(t *testing.T) {
 		}
 		if res.err == nil {
 			t.Fatal("err = nil, want budget error")
+		}
+		if res.parentErr != nil {
+			t.Fatalf("parentErr = %v, want nil for low remaining startup budget", res.parentErr)
+		}
+		if !shouldAbortDegradedDependencyStartup(res) {
+			t.Fatal("shouldAbortDegradedDependencyStartup() = false, want true")
+		}
+	})
+
+	t.Run("dependency local timeout keeps parent valid", func(t *testing.T) {
+		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
+			stage:        "stage",
+			dep:          "dep",
+			budget:       time.Second,
+			minRemaining: 0,
+			probe: func(context.Context) error {
+				return fmt.Errorf("dependency-local timeout: %w", context.DeadlineExceeded)
+			},
+		})
+		if res.budgetBlocked {
+			t.Fatal("budgetBlocked = true, want false")
+		}
+		if res.parentErr != nil {
+			t.Fatalf("parentErr = %v, want nil", res.parentErr)
+		}
+		if !errors.Is(res.err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want wrapped %v", res.err, context.DeadlineExceeded)
+		}
+		if shouldAbortDegradedDependencyStartup(res) {
+			t.Fatal("shouldAbortDegradedDependencyStartup() = true, want false for dependency-local timeout")
+		}
+	})
+
+	t.Run("parent cancellation during probe aborts degraded startup", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
+			stage:        "stage",
+			dep:          "dep",
+			budget:       time.Second,
+			minRemaining: 0,
+			probe: func(probeCtx context.Context) error {
+				cancel()
+				<-probeCtx.Done()
+				return fmt.Errorf("parent canceled: %w", probeCtx.Err())
+			},
+		})
+		if res.budgetBlocked {
+			t.Fatal("budgetBlocked = true, want false")
+		}
+		if !errors.Is(res.parentErr, context.Canceled) {
+			t.Fatalf("parentErr = %v, want wrapped %v", res.parentErr, context.Canceled)
+		}
+		if !errors.Is(res.err, context.Canceled) {
+			t.Fatalf("err = %v, want wrapped %v", res.err, context.Canceled)
+		}
+		if !shouldAbortDegradedDependencyStartup(res) {
+			t.Fatal("shouldAbortDegradedDependencyStartup() = false, want true")
 		}
 	})
 
@@ -452,6 +509,21 @@ func TestReadinessRequiredDegradedDependenciesRejectStartup(t *testing.T) {
 				},
 				FeatureFlags: config.FeatureFlagsConfig{
 					RedisReadinessProbe: true,
+				},
+			},
+			run: func(runtime dependencyProbeRuntime) error {
+				_, err := initRedisDependency(context.Background(), runtime, context.Background())
+				return err
+			},
+		},
+		{
+			name: "redis store mode readiness required",
+			cfg: config.Config{
+				Redis: config.RedisConfig{
+					Enabled:     true,
+					Mode:        config.RedisModeStore,
+					Addr:        "127.0.0.1:1",
+					DialTimeout: 10 * time.Millisecond,
 				},
 			},
 			run: func(runtime dependencyProbeRuntime) error {
