@@ -53,13 +53,13 @@ Decisions: [full product and API decision record]
 
 This fails because `spec.md` is the canonical decision artifact.
 
-Chat-only handoff:
+Chat-only handoff instead of artifact-backed handoff:
 
 ```text
 I'll mention in the final response that technical design is next.
 ```
 
-This fails because future sessions resume from workflow artifacts, not chat memory.
+This fails when it replaces the workflow updates, because future sessions resume from workflow artifacts, not chat memory. A final response may still render a recommended next-session prompt, but only after `workflow-plan.md` and `workflow-plans/specification.md` already record the handoff.
 
 ## Agent Traps
 - Marking `Ready for next session: yes` while `spec.md` is draft or the clarification gate is blocked.

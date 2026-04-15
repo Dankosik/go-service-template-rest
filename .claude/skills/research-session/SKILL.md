@@ -210,6 +210,22 @@ A finished research session produces only research-phase artifacts and routing:
 
 It does not produce approved `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or implementation output.
 
+## Required Final Chat Handoff
+When this session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a `Recommended next-session prompt` section with one copy-pastable fenced text block.
+
+Derive that prompt from the recorded workflow handoff state, not memory:
+- `Next session starts with`
+- `Next session context bundle`
+- this phase's stop rule
+- blockers, accepted assumptions, accepted risks, or reopen conditions that still matter
+- the expected artifact or output for the next session
+
+Rules:
+- keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
+- target the recorded next phase or reopen route exactly, including targeted re-research when that is the next step
+- tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- if there is no next session or `Ready for next session: no`, do not invent a prompt
+
 ## Stop Condition
 The session is complete when:
 - the current research questions and evidence sources were handled or explicitly deferred

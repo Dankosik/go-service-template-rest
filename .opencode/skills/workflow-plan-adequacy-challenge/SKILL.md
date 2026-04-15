@@ -6,7 +6,7 @@ description: "Review generated workflow-control artifacts for task-specific hand
 # Workflow Plan Adequacy Challenge
 
 ## Purpose
-Surface the workflow-control gaps that would make phase handoff dishonest or brittle.
+Surface the workflow-control gaps that would make phase handoff or the required chat-rendered next-session prompt dishonest or brittle.
 
 This skill is a read-only challenge gate over `workflow-plan.md` and the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, `design/`, or `tasks.md`.
 
@@ -49,7 +49,7 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - artifact expectations are explicit and proportional: `spec.md`, `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
 - when the current phase is planning, implementation readiness is recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
 - blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text
-- the workflow-control artifacts contain enough task-specific routing for the next session to start without recreating workflow planning from chat
+- the workflow-control artifacts contain enough task-specific routing for the next session to start, and for the orchestrator to render the required chat-only next-session prompt, without recreating workflow planning from chat
 - the phase-local plan stays routing-only and does not duplicate final decisions, technical design, optional strategy notes, or the executable `tasks.md` ledger
 - tiny/direct-path or lightweight-local skips include a real rationale instead of silently bypassing control artifacts
 

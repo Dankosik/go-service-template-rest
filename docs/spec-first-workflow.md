@@ -477,6 +477,7 @@ At completion:
 - mark `Session boundary reached: yes`,
 - set `Ready for next session` appropriately,
 - record `Next session starts with`,
+- when a next session or reopen target exists, render a chat-only `Recommended next-session prompt` in the final response from the recorded handoff state,
 - stop.
 
 If unfinished, leave the phase `in_progress` or `blocked`. `Direct path` work and any upfront `lightweight local` waiver may collapse boundaries only when recorded before the boundary is crossed.
@@ -597,8 +598,54 @@ Recommended update cadence:
 - After `technical design` or planning: record approved design artifacts, expected `tasks.md` status, and implementation-readiness status in the master file and current phase file; during planning, also create or repair `tasks.md` and create only those review or validation phase workflow files whose named multi-session routing is genuinely needed.
 - After each coding/execution checkpoint: update the master file and existing `tasks.md` checkbox/progress state when the task ledger is in use. If a needed workflow/process artifact is missing, reopen the relevant earlier phase instead of creating it mid-implementation.
 - After review or reconciliation: update only existing control/checkpoint artifacts with review scope, findings status, orchestrator reconciliation, accepted risks, blockers, reopen targets, and validation implications. Do not paste raw review transcripts or invent new tasks in review control files.
-- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, `Next session starts with`, and the always-present next-session context bundle in the master file, and close the current phase workflow plan.
+- After any phase-complete handoff: reconcile blocking workflow plan adequacy challenge findings, mark `Session boundary reached`, `Ready for next session`, `Next session starts with`, and the always-present next-session context bundle in the master file, close the current phase workflow plan, and then render the chat-only recommended next-session prompt from that recorded state.
 - After validation: record completion or remaining blockers in the master file and the active validation phase workflow plan when one already exists; update `spec.md` `Validation` and `Outcome` to match the actual proof; update existing `tasks.md` checkbox/progress state only when already in use. If a required `tasks.md` is missing, reopen the relevant earlier phase instead of creating it during closeout.
+
+### 7.2.1 Final Chat Handoff Prompt
+
+The workflow artifacts stay authoritative. The final chat response is the human-facing handoff surface layered on top of those artifacts, not a competing control record.
+
+When a session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a section titled `Recommended next-session prompt` with one copy-pastable fenced text block.
+
+Derive that prompt from the recorded workflow state, not from memory:
+
+- `Next session starts with` for the next phase, first task, or reopen target
+- `Next session context bundle` for the exact files to read first and why they matter
+- current phase stop rule, so the next session does not silently continue past its boundary
+- blockers, accepted assumptions, accepted risks, or reopen conditions that still constrain the next session
+- the expected artifact or output surface for the next session
+
+The prompt should tell the next agent:
+
+- which phase or reopen target it is entering
+- which files to read first, starting with `workflow-plan.md`, then the relevant `workflow-plans/<phase>.md`, then any task-specific context bundle artifacts
+- the immediate objective for that phase
+- the important constraints or stop rule that still apply
+- what artifact or output should be produced or updated in that next session
+
+Formatting and authority rules:
+
+- keep the prompt chat-only; do not write it into `workflow-plan.md`, `workflow-plans/<phase>.md`, `spec.md`, `design/`, `tasks.md`, or any new artifact
+- keep workflow artifacts as the source of truth; the chat prompt is a convenience render from recorded state, not new authority
+- use the user's current chat language when it is clear, while keeping literal file paths, artifact names, phase names, and status keywords unchanged
+- default to English when the chat language is mixed or unclear
+
+Route-specific rules:
+
+- if the next route is a reopen, target that reopen explicitly instead of pretending the workflow is moving forward
+- if the next session resumes the same phase, say so directly
+- if the workflow is honestly closed, use no prompt block and state that there is no next-session prompt
+- if `Ready for next session: no`, do not invent a next-session prompt; explain that the current phase is not yet ready for handoff
+
+Example shape:
+
+```text
+Resume the `technical-design` phase for `specs/<feature-id>`.
+Read first: `workflow-plan.md`, `workflow-plans/technical-design.md`, `spec.md`, then the files named in the next-session context bundle.
+Immediate objective: finish the planning-ready design bundle.
+Important constraints: keep `spec.md` authoritative, do not write `tasks.md`, and stop at the technical-design boundary.
+Expected outputs: updated `design/` artifacts, `workflow-plan.md`, and `workflow-plans/technical-design.md`.
+```
 
 ### 7.3 Phase Workflow Plan Minimums
 

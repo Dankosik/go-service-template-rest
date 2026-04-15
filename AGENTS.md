@@ -129,6 +129,8 @@ Subagents must not:
 - Use repository-owned validation entrypoints instead of ad hoc substitutes. For code, generated artifacts, or CI/CD-sensitive changes, choose the smallest relevant proof, and use the local pre-push or Docker parity path from `docs/build-test-and-development-commands.md` when claiming CI readiness.
 - When a GitHub-only check cannot be reproduced locally, name the missing context and keep the claim narrower instead of treating partial local success as remote CI proof.
 - Closeout is not complete until artifacts reflect reality.
+- When a session reaches a phase boundary and a next session or reopen target exists, the final chat response must include a recommended copy-pastable prompt for that next session. It must be derived from the recorded workflow handoff state, remain chat-only, and never become a workflow artifact or second source of truth.
+- If the workflow is honestly done and there is no next session, say so directly instead of inventing a meaningless prompt.
 - Resume from artifacts, not chat memory: read `workflow-plan.md` first, then the current `workflow-plans/<phase>.md`, then the phase-specific artifacts in the order defined by `docs/spec-first-workflow.md`.
 
 ## 11. Anti-patterns

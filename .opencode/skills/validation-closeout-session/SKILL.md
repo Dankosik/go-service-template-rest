@@ -252,6 +252,22 @@ A finished validation-closeout session produces only closeout artifacts and rout
 
 It does not produce implementation output, design changes, new plans, or silent fixes.
 
+## Required Final Chat Handoff
+When this session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a `Recommended next-session prompt` section with one copy-pastable fenced text block.
+
+Derive that prompt from the recorded workflow handoff state, not memory:
+- `Next session starts with`
+- `Next session context bundle`
+- this phase's stop rule
+- blockers, failed proof, accepted limits, or reopen conditions that still matter
+- the expected artifact or output for the next session
+
+Rules:
+- keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
+- target the recorded reopen or follow-up route exactly
+- tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- if there is no next session or `Ready for next session: no`, do not invent a prompt; say there is no next-session prompt because the workflow is closed
+
 ## Stop Condition
 The session is complete when:
 - the closeout claim is explicit and bound to the right scope
