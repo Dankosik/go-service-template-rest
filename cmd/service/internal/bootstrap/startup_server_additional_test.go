@@ -64,6 +64,8 @@ func newTestStartupAdmissionController(metrics *telemetry.Metrics) *startupAdmis
 }
 
 func TestStartupAdmissionControllerCheckReady(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	admission := newTestStartupAdmissionController(metrics)
 
@@ -79,6 +81,8 @@ func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 }
 
 func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulCheck(t *testing.T) {
+	t.Parallel()
+
 	bootstrapCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -99,6 +103,8 @@ func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulChec
 }
 
 func TestServeHTTPRuntimeListenError(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
@@ -123,6 +129,8 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 }
 
 func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
@@ -157,6 +165,8 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 }
 
 func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
@@ -224,6 +234,8 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 }
 
 func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
@@ -261,6 +273,8 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 }
 
 func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
@@ -304,6 +318,8 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 }
 
 func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
@@ -346,6 +362,8 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 }
 
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()

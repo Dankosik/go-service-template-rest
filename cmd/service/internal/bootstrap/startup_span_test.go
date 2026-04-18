@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+//nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestStartupSpanControllerMarkReadyEndsSpanBeforeCleanup(t *testing.T) {
 	spanRecorder := installTestTracerProvider(t)
 	_, span := otel.Tracer("test").Start(context.Background(), "config.bootstrap")
@@ -43,6 +44,7 @@ func TestStartupSpanControllerMarkReadyEndsSpanBeforeCleanup(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestStartupSpanControllerCloseEndsSpanBeforeCleanup(t *testing.T) {
 	spanRecorder := installTestTracerProvider(t)
 	_, span := otel.Tracer("test").Start(context.Background(), "config.bootstrap")

@@ -13,6 +13,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	t.Parallel()
 
 	t.Run("postgres invalid dsn", func(t *testing.T) {
+		t.Parallel()
+
 		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
 		_, err := postgresStartupProbeAddress(config.PostgresConfig{DSN: rawDSN})
 		if err == nil {
@@ -35,6 +37,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("postgres valid dsn", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := postgresStartupProbeAddress(config.PostgresConfig{DSN: "postgres://user:pass@localhost:5432/app?sslmode=disable"})
 		if err != nil {
 			t.Fatalf("postgresStartupProbeAddress() error = %v, want nil", err)
@@ -45,6 +49,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("postgres fallback dsn fails before admission", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := postgresStartupProbeAddress(config.PostgresConfig{
 			DSN: "postgres://user:pass@localhost:5432,api.example.com:5432/app?sslmode=disable",
 		})
@@ -63,6 +69,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("redis empty", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := redisStartupProbeAddress(config.RedisConfig{Addr: "   "})
 		if err == nil {
 			t.Fatal("redisStartupProbeAddress() error = nil, want non-nil")
@@ -70,6 +78,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("redis trimmed", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := redisStartupProbeAddress(config.RedisConfig{Addr: " 127.0.0.1:6379 "})
 		if err != nil {
 			t.Fatalf("redisStartupProbeAddress() error = %v, want nil", err)
@@ -80,6 +90,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("mongo invalid", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := mongoStartupProbeAddress(config.MongoConfig{URI: "::bad-uri"})
 		if err == nil {
 			t.Fatal("mongoStartupProbeAddress() error = nil, want non-nil")
@@ -96,6 +108,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("mongo invalid redacts credential uri", func(t *testing.T) {
+		t.Parallel()
+
 		rawURI := "mongodb://leaky-user:top-secret@local[host]/app"
 		_, err := mongoStartupProbeAddress(config.MongoConfig{URI: rawURI})
 		if err == nil {
@@ -115,6 +129,8 @@ func TestStartupProbeAddresses(t *testing.T) {
 	})
 
 	t.Run("mongo valid", func(t *testing.T) {
+		t.Parallel()
+
 		address, err := mongoStartupProbeAddress(config.MongoConfig{URI: "mongodb://localhost:27017/app"})
 		if err != nil {
 			t.Fatalf("mongoStartupProbeAddress() error = %v, want nil", err)

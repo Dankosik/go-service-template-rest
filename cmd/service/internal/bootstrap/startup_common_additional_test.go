@@ -205,6 +205,7 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 }
 
 func TestBootstrapTelemetryStageAdmitTelemetryExporterTargetUsesNamedOutcomes(t *testing.T) {
+	//nolint:paralleltest // Sibling subtests mutate process-wide network policy env and must stay serialized.
 	t.Run("unconfigured", func(t *testing.T) {
 		got, err := admitTelemetryExporterTarget(telemetry.TraceExporterConfig{}, loadNetworkPolicy())
 		if err != nil {
@@ -281,6 +282,7 @@ func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
 	spanRecorder := installTestTracerProvider(t)
 	ctx, span := otel.Tracer("test").Start(context.Background(), "startup-log-test")
@@ -445,6 +447,8 @@ func TestBootstrapConfigStageRecordsConfigFailureAndStartupRejection(t *testing.
 }
 
 func TestStartupRejectionReasonForConfigErrorType(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name      string
 		errorType string
@@ -461,6 +465,8 @@ func TestStartupRejectionReasonForConfigErrorType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := startupRejectionReasonForConfigErrorType(tc.errorType); got != tc.want {
 				t.Fatalf("startupRejectionReasonForConfigErrorType(%q) = %q, want %q", tc.errorType, got, tc.want)
 			}

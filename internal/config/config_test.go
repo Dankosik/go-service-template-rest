@@ -21,6 +21,7 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadDefaults(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -251,6 +252,7 @@ func TestNamespaceEnvForConfigKey(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
 func TestEnvExampleLoadsThroughConfigLoader(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -303,6 +305,7 @@ http:
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestStrictUnknownKeyRejects(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -326,6 +329,7 @@ unknown:
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestPermissiveUnknownKeyAllows(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -400,6 +404,7 @@ func TestStrictUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestPermissiveUnknownKeyWarnsAndIgnoresScalarSectionKey(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -419,6 +424,7 @@ http: oops
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestRemovedObservabilityKeysRejectInStrictMode(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -521,6 +527,7 @@ mongo:
 		}
 	})
 
+	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	t.Run("mongo_disabled_without_uri_allowed", func(t *testing.T) {
 		resetConfigEnv(t)
 
@@ -536,6 +543,7 @@ mongo:
 		}
 	})
 
+	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	t.Run("redis_enabled_with_empty_addr_rejected", func(t *testing.T) {
 		resetConfigEnv(t)
 		configPath := writeTempConfig(t, `
@@ -753,6 +761,7 @@ func TestConfigReadinessProbeBudgetsUseRequiredRuntimeProbes(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLocalAllowsSymlinkConfig(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation can require elevated privileges on Windows")
@@ -928,6 +937,7 @@ func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestMalformedYAMLReturnsParseError(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1146,6 +1156,7 @@ postgres:
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1164,6 +1175,7 @@ postgres:
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestConfigFileAllowsEmptySecretLikePlaceholders(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1185,6 +1197,7 @@ observability:
 	}
 }
 
+//nolint:paralleltest // Subtests reset process-wide configuration environment.
 func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1232,6 +1245,7 @@ token: "secret"
 		},
 	}
 
+	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resetConfigEnv(t)
@@ -1252,6 +1266,8 @@ token: "secret"
 }
 
 func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
+	t.Parallel()
+
 	keys := []string{
 		"http.addr",
 		"redis.key_prefix",
@@ -1305,6 +1321,8 @@ func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 }
 
 func TestErrorTypeMapping(t *testing.T) {
+	t.Parallel()
+
 	if got := ErrorType(nil); got != "" {
 		t.Fatalf("ErrorType(nil) = %q, want empty", got)
 	}
@@ -1328,6 +1346,7 @@ func TestErrorTypeMapping(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadDetailedWithContextCanceled(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -1366,6 +1385,7 @@ func TestLoadDetailedFailedStageReporting(t *testing.T) {
 		}
 	})
 
+	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	t.Run("validate_stage", func(t *testing.T) {
 		resetConfigEnv(t)
 		configPath := writeTempConfig(t, `
@@ -1411,6 +1431,7 @@ unknown:
 		}
 	})
 
+	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	t.Run("validate_context_stage", func(t *testing.T) {
 		resetConfigEnv(t)
 
@@ -2400,6 +2421,7 @@ func TestMongoProbeAddress(t *testing.T) {
 	})
 }
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	resetConfigEnv(t)
 

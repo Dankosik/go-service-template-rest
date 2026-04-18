@@ -98,6 +98,7 @@ require_no_forbidden_go_imports() {
 # Keep Railway deployment policy deterministic and repo-reviewable.
 require_regex '^builder = "DOCKERFILE"$' "railway.toml" "railway build policy must use DOCKERFILE builder"
 require_regex '^dockerfilePath = "build/docker/Dockerfile"$' "railway.toml" "railway build policy must point to build/docker/Dockerfile"
+require_regex '^preDeployCommand = \["/migrate"\]$' "railway.toml" "railway pre-deploy command must run the dedicated migration binary"
 require_regex '^healthcheckPath = "/health/ready"$' "railway.toml" "railway deploy healthcheck path must be /health/ready"
 require_regex '^healthcheckTimeout = 180$' "railway.toml" "railway deploy healthcheck timeout must be 180 seconds"
 require_regex '^restartPolicyType = "ON_FAILURE"$' "railway.toml" "railway restart policy type must be ON_FAILURE"
@@ -112,6 +113,10 @@ golangci_lint_version="$(go list -m -f '{{.Version}}' github.com/golangci/golang
 
 # Keep Go and golangci-lint toolchain pins aligned across local, Docker, and CI surfaces.
 require_regex "^FROM --platform=\\\$BUILDPLATFORM golang:${go_version}-bookworm@sha256:[[:xdigit:]]{64} AS build$" "build/docker/Dockerfile" "runtime Docker build Go image must match go.mod"
+require_regex '^COPY --from=build /out/migrate /migrate$' "build/docker/Dockerfile" "runtime image must ship the dedicated migration binary"
+require_regex '^COPY --from=build /src/env/migrations /env/migrations$' "build/docker/Dockerfile" "runtime image must ship migration files for Railway pre-deploy"
+require_regex '^!env/migrations$' ".dockerignore" "docker build context must re-include env/migrations"
+require_regex '^!env/migrations/\*\*$' ".dockerignore" "docker build context must include migration files under env/migrations"
 require_regex "^FROM golang:${go_version}-bookworm@sha256:[[:xdigit:]]{64} AS go_toolchain$" "build/docker/tooling-images.Dockerfile" "Docker tooling Go image must match go.mod"
 require_golangci_lint_workflow_version ".github/workflows/ci.yml" "${golangci_lint_version}"
 require_golangci_lint_workflow_version ".github/workflows/nightly.yml" "${golangci_lint_version}"

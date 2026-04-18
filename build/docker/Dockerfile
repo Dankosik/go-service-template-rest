@@ -20,11 +20,21 @@ RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
       -ldflags="-s -w -buildid=" \
       -tags=timetzdata \
       -o /out/service ./cmd/service
+RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build \
+      -trimpath \
+      -mod=readonly \
+      -buildvcs=false \
+      -ldflags="-s -w -buildid=" \
+      -tags=timetzdata \
+      -o /out/migrate ./cmd/migrate
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:a9329520abc449e3b14d5bc3a6ffae065bdde0f02667fa10880c49b35c109fd1
 
 WORKDIR /
 COPY --from=build /out/service /service
+COPY --from=build /out/migrate /migrate
+COPY --from=build /src/env/migrations /env/migrations
 
 EXPOSE 8080
 STOPSIGNAL SIGTERM

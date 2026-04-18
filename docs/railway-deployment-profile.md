@@ -24,6 +24,7 @@ This document defines the repository-managed Railway deployment policy baseline 
 
 `railway.toml` tracks the current hard baseline:
 
+- `preDeployCommand = ["/migrate"]`
 - `healthcheckPath = "/health/ready"`
 - `healthcheckTimeout = 180`
 - `restartPolicyType = "ON_FAILURE"`
@@ -31,10 +32,26 @@ This document defines the repository-managed Railway deployment policy baseline 
 - `overlapSeconds = 45`
 - `drainingSeconds = 30`
 
+Migration baseline:
+
+- Railway runs one pre-deploy migrator before promoting a new release.
+- The runtime image must ship `/migrate` and `/env/migrations/`.
+- Normal app startup must not own migrations.
+- Same-deploy schema changes must remain mixed-version compatible while Railway overlap is enabled.
+
 Release evidence baseline (tracked in comments and rollout evidence):
 
 - production replica floor: `>=2`
 - per-replica baseline: `2 vCPU / 2 GiB`
+
+## GitHub Autodeploy Prerequisites
+
+The template can encode the migration hook in `railway.toml`, but GitHub-triggered deploy wiring still has one operator-managed step in Railway:
+
+- connect the service to the intended GitHub repository and branch;
+- enable Railway `Wait for CI` when deploys should wait for push-triggered GitHub workflows.
+
+The repository already provides the required push-triggered CI workflow in `.github/workflows/ci.yml`, so `Wait for CI` can be enabled without adding a second deploy pipeline.
 
 ## Governance And Drift Policy
 
@@ -42,6 +59,7 @@ Release evidence baseline (tracked in comments and rollout evidence):
 - `make guardrails-check` is fail-closed and blocks drift in:
   - required repository guardrail files,
   - `railway.toml` policy fields,
+  - pre-deploy migration ownership (`/migrate` plus runtime image contents),
   - canonical CD Dockerfile build path,
   - CI job contexts vs branch-protection required checks.
 - UI-only Railway policy edits are non-compliant until reconciled back into `railway.toml` via PR.

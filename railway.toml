@@ -12,6 +12,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "build/docker/Dockerfile"
 
 [deploy]
+preDeployCommand = ["/migrate"]
 healthcheckPath = "/health/ready"
 healthcheckTimeout = 180
 restartPolicyType = "ON_FAILURE"

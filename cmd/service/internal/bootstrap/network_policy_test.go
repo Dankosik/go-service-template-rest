@@ -300,6 +300,8 @@ func TestNetworkPolicyEnforceIngressRejectsExpiredException(t *testing.T) {
 }
 
 func TestNetworkPolicyEnforceEgressTargetDeniesPublicHost(t *testing.T) {
+	t.Parallel()
+
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
@@ -352,6 +354,8 @@ func TestNetworkPolicyEnforceEgressTargetLeadingDotMatchesApexAndSubdomain(t *te
 }
 
 func TestParseHostMatchersRejectsEmptySuffixSyntax(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		raw  string
@@ -371,6 +375,8 @@ func TestParseHostMatchersRejectsEmptySuffixSyntax(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := parseHostMatchers(tt.raw)
 			if err == nil {
 				t.Fatal("parseHostMatchers() error = nil, want invalid matcher syntax")
@@ -390,6 +396,8 @@ func TestParseHostMatchersRejectsEmptySuffixSyntax(t *testing.T) {
 }
 
 func TestParseHostMatchersAllowsTrailingDotSuffixSyntax(t *testing.T) {
+	t.Parallel()
+
 	matchers, err := parseHostMatchers("*.Example.COM., .Example.ORG.")
 	if err != nil {
 		t.Fatalf("parseHostMatchers() error = %v, want nil", err)
@@ -415,6 +423,8 @@ func TestParseHostMatchersAllowsTrailingDotSuffixSyntax(t *testing.T) {
 }
 
 func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing.T) {
+	t.Parallel()
+
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
@@ -455,6 +465,7 @@ func TestNetworkPolicyEnforceEgressTargetInvalidTargetPreservesLocalReason(t *te
 		},
 	}
 
+	//nolint:paralleltest // Parent test configures process-wide network policy env once for the shared policy instance.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := policy.EnforceEgressTarget(tt.target, "tcp")
@@ -471,6 +482,7 @@ func TestNetworkPolicyEnforceEgressTargetInvalidTargetPreservesLocalReason(t *te
 	}
 }
 
+//nolint:paralleltest // Loads egress exception state from process-wide environment.
 func TestNetworkPolicyEgressExceptionScopeMatchesPublicTarget(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	setValidEgressExceptionEnv(t, now, map[string]string{
@@ -495,6 +507,7 @@ func TestNetworkPolicyEgressExceptionScopeMatchesPublicTarget(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Loads egress exception state from process-wide environment.
 func TestNetworkPolicyEgressExceptionRejectsInvalidScopeMatcher(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	setValidEgressExceptionEnv(t, now, map[string]string{
@@ -515,6 +528,7 @@ func TestNetworkPolicyEgressExceptionRejectsInvalidScopeMatcher(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Loads egress exception state from process-wide environment.
 func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	setValidEgressExceptionEnv(t, now, map[string]string{
@@ -556,6 +570,8 @@ func TestNetworkPolicyValidateIngressRuntimeRejectsExpiredException(t *testing.T
 }
 
 func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testing.T) {
+	t.Parallel()
+
 	policy, err := loadNetworkPolicyFromEnv()
 	if err != nil {
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)

@@ -4,6 +4,8 @@
 bin
 .env*
 env
+!env/migrations
+!env/migrations/**
 docs
 scripts
 test

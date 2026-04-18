@@ -57,6 +57,8 @@ func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetr
 }
 
 func TestRouterEndpoints(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -64,6 +66,8 @@ func TestRouterEndpoints(t *testing.T) {
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("ping", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 		resp := httptest.NewRecorder()
 
@@ -78,6 +82,8 @@ func TestRouterEndpoints(t *testing.T) {
 	})
 
 	t.Run("live", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 		resp := httptest.NewRecorder()
 
@@ -89,6 +95,8 @@ func TestRouterEndpoints(t *testing.T) {
 	})
 
 	t.Run("ready", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 		resp := httptest.NewRecorder()
 
@@ -100,6 +108,8 @@ func TestRouterEndpoints(t *testing.T) {
 	})
 
 	t.Run("metrics", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		resp := httptest.NewRecorder()
 
@@ -112,6 +122,8 @@ func TestRouterEndpoints(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -119,6 +131,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("not found uses problem envelope", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
 		resp := httptest.NewRecorder()
 
@@ -145,6 +159,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("unknown method on missing path returns not found", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest("BREW", "/does-not-exist", nil)
 		resp := httptest.NewRecorder()
 
@@ -160,6 +176,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("method not allowed uses problem envelope and allow header", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/ping", nil)
 		resp := httptest.NewRecorder()
 
@@ -173,6 +191,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("unknown method on existing path returns method not allowed", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest("BREW", "/api/v1/ping", nil)
 		resp := httptest.NewRecorder()
 
@@ -186,6 +206,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("method not allowed allow header includes trace when route exists", func(t *testing.T) {
+		t.Parallel()
+
 		apiSubrouter := chi.NewRouter()
 		apiSubrouter.Trace("/trace-only", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
@@ -207,6 +229,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("options for known path returns no content with allow", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodOptions, "/api/v1/ping", nil)
 		resp := httptest.NewRecorder()
 
@@ -222,6 +246,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("cors preflight is explicit and fail-closed", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodOptions, "/api/v1/ping", nil)
 		req.Header.Set("Origin", "https://example.com")
 		req.Header.Set("Access-Control-Request-Method", http.MethodGet)
@@ -243,6 +269,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	})
 
 	t.Run("options for unknown path returns not found", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodOptions, "/unknown", nil)
 		resp := httptest.NewRecorder()
 
@@ -256,6 +284,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 }
 
 func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	const attackerDetail = `invalid "token": secret-value`
@@ -309,6 +339,8 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 }
 
 func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	const attackerDetail = `invalid "token": secret-value`
@@ -363,6 +395,8 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 }
 
 func TestRouterAddsRequestIDHeader(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -370,6 +404,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("generates request id when header is absent", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 		resp := httptest.NewRecorder()
 
@@ -381,6 +417,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	})
 
 	t.Run("echoes inbound request id", func(t *testing.T) {
+		t.Parallel()
+
 		const wantRequestID = "demo-123"
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -395,6 +433,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	})
 
 	t.Run("replaces invalid request id before echoing problem or logging", func(t *testing.T) {
+		t.Parallel()
+
 		var out bytes.Buffer
 		log := slog.New(slog.NewJSONHandler(&out, nil))
 		h := mustNewRouter(t, log, Handlers{
@@ -439,6 +479,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	})
 
 	t.Run("replaces too long request id", func(t *testing.T) {
+		t.Parallel()
+
 		tooLongRequestID := strings.Repeat("a", maxRequestIDLength+1)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -458,6 +500,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 }
 
 func TestRouterAddsSecurityHeaders(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -475,6 +519,8 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 }
 
 func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -504,6 +550,8 @@ func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 }
 
 func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -526,6 +574,8 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 }
 
 func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	const secretValue = "secret-value"
@@ -557,6 +607,8 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 }
 
 func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		handler    http.HandlerFunc
@@ -584,6 +636,8 @@ func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			handler := Recover(slog.New(slog.DiscardHandler), tt.handler)
 			req := httptest.NewRequest(http.MethodGet, "/panic", nil)
 			resp := httptest.NewRecorder()
@@ -604,6 +658,8 @@ func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
 }
 
 func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
+	t.Parallel()
+
 	var sawFlusher bool
 	handler := Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		flusher, ok := w.(http.Flusher)
@@ -635,6 +691,8 @@ func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	h := mustNewRouter(t, log, Handlers{
@@ -678,6 +736,8 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 }
 
 func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	handler := AccessLog(log, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -707,6 +767,8 @@ func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 }
 
 func TestAccessLogPreservesFlusherInterface(t *testing.T) {
+	t.Parallel()
+
 	var directFlusher bool
 	var flushErr error
 	handler := AccessLog(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -735,6 +797,8 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -774,6 +838,8 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 }
 
 func TestHTTPMethodNormalizationBoundsNonStandardMetricsLabels(t *testing.T) {
+	t.Parallel()
+
 	metrics := telemetry.New()
 	handler := AccessLog(nil, metrics, captureRouteLabelMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Pattern = "BREW /coffee"
@@ -803,6 +869,8 @@ func TestHTTPMethodNormalizationBoundsNonStandardMetricsLabels(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
+	t.Parallel()
+
 	apiSubrouter := chi.NewRouter()
 	apiSubrouter.Get("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
@@ -821,6 +889,8 @@ func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubro
 	rootRouter := newRootRouter(apiSubrouter, metricsHandler)
 
 	t.Run("metrics uses root handler", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		resp := httptest.NewRecorder()
 
@@ -835,6 +905,8 @@ func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubro
 	})
 
 	t.Run("non-conflicting routes still served by mounted subrouter", func(t *testing.T) {
+		t.Parallel()
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 		resp := httptest.NewRecorder()
 
@@ -866,6 +938,8 @@ func TestStrictMetricsHandlerIsNotRuntimeOwned(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing.T) {
+	t.Parallel()
+
 	openAPIRoutes := openAPIOperationRoutes(t)
 	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	manualRouteReasons := make(map[manualRootRouteKey]string, len(manualRoutes))
@@ -892,6 +966,8 @@ func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing
 }
 
 func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRoutes(t *testing.T) {
+	t.Parallel()
+
 	openAPIRoutes := openAPIOperationRoutes(t)
 	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
@@ -961,6 +1037,7 @@ func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 	return routes
 }
 
+//nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(

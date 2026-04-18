@@ -93,6 +93,8 @@ func TestRunReturnsParseErrorForInvalidFlags(t *testing.T) {
 }
 
 func TestReleaseSignalNotificationOnDoneReleasesOnceAfterCancellation(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	var stopCalls atomic.Int32
 	stopCalled := make(chan struct{})

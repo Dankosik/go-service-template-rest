@@ -21,6 +21,8 @@ func TestRunDependencyProbe(t *testing.T) {
 	tracer := otel.Tracer("test")
 
 	t.Run("budget blocked", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
@@ -47,6 +49,8 @@ func TestRunDependencyProbe(t *testing.T) {
 	})
 
 	t.Run("dependency local timeout keeps parent valid", func(t *testing.T) {
+		t.Parallel()
+
 		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
 			stage:        "stage",
 			dep:          "dep",
@@ -71,6 +75,8 @@ func TestRunDependencyProbe(t *testing.T) {
 	})
 
 	t.Run("expired child deadline after nil probe result fails probe", func(t *testing.T) {
+		t.Parallel()
+
 		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
 			stage:        "stage",
 			dep:          "dep",
@@ -96,6 +102,8 @@ func TestRunDependencyProbe(t *testing.T) {
 	})
 
 	t.Run("parent cancellation during probe aborts degraded startup", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithCancel(context.Background())
 		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
 			stage:        "stage",
@@ -123,6 +131,8 @@ func TestRunDependencyProbe(t *testing.T) {
 	})
 
 	t.Run("probe success", func(t *testing.T) {
+		t.Parallel()
+
 		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
 			stage:        "stage",
 			dep:          "dep",
@@ -593,6 +603,8 @@ func TestReadinessRequiredDegradedDependenciesRejectStartup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			metrics := telemetry.New()
 			logger := slog.New(slog.DiscardHandler)
 			runtime := dependencyProbeRuntime{
@@ -640,20 +652,25 @@ func TestDependencyCleanupStackRunsInReverseOrder(t *testing.T) {
 func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
-	logger := slog.New(slog.DiscardHandler)
-	runtime := dependencyProbeRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		metrics:       metrics,
-		log:           logger,
-		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+	newRuntime := func() dependencyProbeRuntime {
+		metrics := telemetry.New()
+		logger := slog.New(slog.DiscardHandler)
+		return dependencyProbeRuntime{
+			tracer:        otel.Tracer("test"),
+			bootstrapSpan: trace.SpanFromContext(context.Background()),
+			metrics:       metrics,
+			log:           logger,
+			networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		}
 	}
 
 	t.Run("redis cache", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
+		runtime := newRuntime()
 		runtime.cfg = config.Config{
 			Redis: config.RedisConfig{
 				Enabled: true,
@@ -671,9 +688,12 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 	})
 
 	t.Run("mongo degraded", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
+		runtime := newRuntime()
 		runtime.cfg = config.Config{
 			Mongo: config.MongoConfig{
 				Enabled: true,
@@ -693,20 +713,25 @@ func TestDegradedDependenciesAbortOnCanceledStartup(t *testing.T) {
 func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
-	logger := slog.New(slog.DiscardHandler)
-	runtime := dependencyProbeRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		metrics:       metrics,
-		log:           logger,
-		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+	newRuntime := func() dependencyProbeRuntime {
+		metrics := telemetry.New()
+		logger := slog.New(slog.DiscardHandler)
+		return dependencyProbeRuntime{
+			tracer:        otel.Tracer("test"),
+			bootstrapSpan: trace.SpanFromContext(context.Background()),
+			metrics:       metrics,
+			log:           logger,
+			networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		}
 	}
 
 	expiredCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
-	defer cancel()
+	t.Cleanup(cancel)
 
 	t.Run("redis cache", func(t *testing.T) {
+		t.Parallel()
+
+		runtime := newRuntime()
 		runtime.cfg = config.Config{
 			Redis: config.RedisConfig{
 				Enabled: true,
@@ -724,6 +749,9 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 	})
 
 	t.Run("mongo degraded", func(t *testing.T) {
+		t.Parallel()
+
+		runtime := newRuntime()
 		runtime.cfg = config.Config{
 			Mongo: config.MongoConfig{
 				Enabled: true,
@@ -743,14 +771,16 @@ func TestDegradedDependenciesAbortOnExpiredStartupDeadline(t *testing.T) {
 func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
-	logger := slog.New(slog.DiscardHandler)
-	runtime := dependencyProbeRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		metrics:       metrics,
-		log:           logger,
-		networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+	newRuntime := func() dependencyProbeRuntime {
+		metrics := telemetry.New()
+		logger := slog.New(slog.DiscardHandler)
+		return dependencyProbeRuntime{
+			tracer:        otel.Tracer("test"),
+			bootstrapSpan: trace.SpanFromContext(context.Background()),
+			metrics:       metrics,
+			log:           logger,
+			networkPolicy: networkPolicy{egressAllowedSchemes: map[string]struct{}{"tcp": {}}},
+		}
 	}
 
 	newLowBudgetCtx := func(t *testing.T) (context.Context, context.CancelFunc) {
@@ -761,9 +791,12 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 	}
 
 	t.Run("redis cache", func(t *testing.T) {
+		t.Parallel()
+
 		lowBudgetCtx, cancel := newLowBudgetCtx(t)
 		defer cancel()
 
+		runtime := newRuntime()
 		runtime.cfg = config.Config{
 			Redis: config.RedisConfig{
 				Enabled: true,
@@ -787,9 +820,12 @@ func TestDegradedDependenciesAbortOnLowRemainingStartupBudget(t *testing.T) {
 	})
 
 	t.Run("mongo degraded", func(t *testing.T) {
+		t.Parallel()
+
 		lowBudgetCtx, cancel := newLowBudgetCtx(t)
 		defer cancel()
 
+		runtime := newRuntime()
 		runtime.cfg = config.Config{
 			Mongo: config.MongoConfig{
 				Enabled: true,

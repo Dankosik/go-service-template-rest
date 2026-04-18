@@ -19,6 +19,8 @@ import (
 )
 
 func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -63,6 +65,8 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			resp := httptest.NewRecorder()
 
@@ -82,6 +86,8 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
@@ -102,6 +108,8 @@ func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
+	t.Parallel()
+
 	healthSvc := health.New()
 	healthSvc.StartDrain()
 
@@ -125,6 +133,8 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -148,6 +158,8 @@ func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T)
 }
 
 func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
@@ -167,6 +179,8 @@ func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
+	t.Parallel()
+
 	log := slog.New(slog.DiscardHandler)
 
 	testCases := []struct {
@@ -256,6 +270,8 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			handler, err := NewRouter(tc.log, tc.handlers, tc.metrics, tc.cfg)
 			if err == nil {
 				t.Fatalf("NewRouter() error = nil, want %q", tc.wantErr)
@@ -271,6 +287,8 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) {
+	t.Parallel()
+
 	swagger := mustOpenAPISwagger(t)
 
 	for path, item := range swagger.Paths.Map() {
@@ -279,6 +297,8 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 		}
 		for method, operation := range item.Operations() {
 			t.Run(method+" "+path, func(t *testing.T) {
+				t.Parallel()
+
 				decision, err := operationSecurityDecision(operation)
 				if err != nil {
 					t.Fatalf("security decision: %v", err)

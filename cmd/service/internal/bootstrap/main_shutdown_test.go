@@ -40,6 +40,8 @@ func shutdownTestLogger() *slog.Logger {
 }
 
 func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {
+	t.Parallel()
+
 	var events []string
 	drainer := &fakeDrainer{events: &events}
 
@@ -73,6 +75,8 @@ func TestDrainAndShutdownOrdersDrainBeforeShutdown(t *testing.T) {
 }
 
 func TestDrainAndShutdownIgnoresParentCancellation(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -94,6 +98,8 @@ func TestDrainAndShutdownIgnoresParentCancellation(t *testing.T) {
 }
 
 func TestDrainAndShutdownPropagatesShutdownFailure(t *testing.T) {
+	t.Parallel()
+
 	wantErr := errors.New("boom")
 
 	var events []string
@@ -113,6 +119,8 @@ func TestDrainAndShutdownPropagatesShutdownFailure(t *testing.T) {
 }
 
 func TestDrainAndShutdownIgnoresContextCanceledError(t *testing.T) {
+	t.Parallel()
+
 	var events []string
 	drainer := &fakeDrainer{events: &events}
 	srv := &fakeShutdownServer{
@@ -126,6 +134,8 @@ func TestDrainAndShutdownIgnoresContextCanceledError(t *testing.T) {
 }
 
 func TestDrainAndShutdownWaitsForPropagationDelay(t *testing.T) {
+	t.Parallel()
+
 	var events []string
 	drainer := &fakeDrainer{events: &events}
 	startedAt := time.Now()
@@ -146,6 +156,8 @@ func TestDrainAndShutdownWaitsForPropagationDelay(t *testing.T) {
 }
 
 func TestDrainAndShutdownCountsPropagationDelayAgainstShutdownTimeout(t *testing.T) {
+	t.Parallel()
+
 	var events []string
 	drainer := &fakeDrainer{events: &events}
 
@@ -174,6 +186,8 @@ func TestDrainAndShutdownCountsPropagationDelayAgainstShutdownTimeout(t *testing
 }
 
 func TestDrainAndShutdownWaitsForPropagationDelayDespiteCanceledParent(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 

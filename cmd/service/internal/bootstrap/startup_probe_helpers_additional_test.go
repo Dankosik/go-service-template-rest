@@ -15,6 +15,8 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 	t.Parallel()
 
 	t.Run("shouldRetryPostgresStartup", func(t *testing.T) {
+		t.Parallel()
+
 		if shouldRetryPostgresStartup(postgres.ErrConnect, postgresStartupAttempts) {
 			t.Fatal("shouldRetryPostgresStartup() = true at last attempt, want false")
 		}
@@ -27,6 +29,8 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 	})
 
 	t.Run("fullJitterDelay bounded", func(t *testing.T) {
+		t.Parallel()
+
 		d := fullJitterDelay(1)
 		if d < 0 || d > startupRetryBaseDelay {
 			t.Fatalf("fullJitterDelay(1) = %s, want in [0,%s]", d, startupRetryBaseDelay)
@@ -38,6 +42,8 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 	})
 
 	t.Run("withStageBudget clamps to parent deadline", func(t *testing.T) {
+		t.Parallel()
+
 		parent, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 		defer cancel()
 		child, childCancel := withStageBudget(parent, time.Second)
@@ -48,6 +54,8 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 	})
 
 	t.Run("ensureRemainingStartupBudget", func(t *testing.T) {
+		t.Parallel()
+
 		if err := ensureRemainingStartupBudget(context.Background(), time.Second, "stage"); err != nil {
 			t.Fatalf("ensureRemainingStartupBudget(no deadline) error = %v, want nil", err)
 		}
@@ -64,6 +72,8 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 	})
 
 	t.Run("shouldRetryStartupProbe", func(t *testing.T) {
+		t.Parallel()
+
 		if shouldRetryStartupProbe(nil, 3, 3) {
 			t.Fatal("shouldRetryStartupProbe() = true at max attempts, want false")
 		}
@@ -80,6 +90,8 @@ func TestProbeWithRetry(t *testing.T) {
 	t.Parallel()
 
 	t.Run("single attempt", func(t *testing.T) {
+		t.Parallel()
+
 		calls := 0
 		err := probeWithRetry(context.Background(), 1, func(context.Context) error {
 			calls++
@@ -94,6 +106,8 @@ func TestProbeWithRetry(t *testing.T) {
 	})
 
 	t.Run("retry then success", func(t *testing.T) {
+		t.Parallel()
+
 		calls := 0
 		err := probeWithRetry(context.Background(), 3, func(context.Context) error {
 			calls++
@@ -111,6 +125,8 @@ func TestProbeWithRetry(t *testing.T) {
 	})
 
 	t.Run("ctx canceled", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		err := probeWithRetry(ctx, 3, func(context.Context) error { return nil })
@@ -120,6 +136,8 @@ func TestProbeWithRetry(t *testing.T) {
 	})
 
 	t.Run("canceled before single attempt", func(t *testing.T) {
+		t.Parallel()
+
 		tests := []struct {
 			name        string
 			maxAttempts int
@@ -130,6 +148,8 @@ func TestProbeWithRetry(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
 
@@ -153,6 +173,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty address", func(t *testing.T) {
+		t.Parallel()
+
 		err := probeTCPDependency(context.Background(), "  ", 10*time.Millisecond)
 		if err == nil {
 			t.Fatal("probeTCPDependency() error = nil, want non-nil")
@@ -163,6 +185,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	})
 
 	t.Run("tcp success", func(t *testing.T) {
+		t.Parallel()
+
 		var listenConfig net.ListenConfig
 		ln, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
@@ -187,6 +211,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	})
 
 	t.Run("redis wrapper", func(t *testing.T) {
+		t.Parallel()
+
 		var listenConfig net.ListenConfig
 		ln, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
@@ -210,6 +236,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	})
 
 	t.Run("mongo invalid uri", func(t *testing.T) {
+		t.Parallel()
+
 		err := probeMongoWithContext(context.Background(), config.MongoConfig{URI: "::bad-uri"})
 		if err == nil {
 			t.Fatal("probeMongoWithContext() error = nil, want non-nil")
@@ -220,6 +248,8 @@ func TestProbeTCPAndDependencyWrappers(t *testing.T) {
 	})
 
 	t.Run("sleepWithContext", func(t *testing.T) {
+		t.Parallel()
+
 		if err := sleepWithContext(context.Background(), 0); err != nil {
 			t.Fatalf("sleepWithContext(0) err = %v, want nil", err)
 		}
