@@ -8,6 +8,8 @@ Shared contract for repository read-only subagents. `AGENTS.md` remains authorit
 - Final decisions, synthesis, implementation, reconciliation, and validation belong to the orchestrator.
 - Each pass uses at most one skill. If a selected skill defines a procedure or output shape, the skill owns it.
 - Agent files own domain scope, use/do-not-use rules, inspect-first surfaces, skill routing, and unique escalation rules.
+- Deep design and corner-case coverage stay in scope, but downstream effect alone does not create a new required domain decision.
+- Open another lane only when another domain must make a new decision before the current artifact can be high quality; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
 - Do not invent missing artifacts, source facts, policy decisions, diffs, validation output, or skill results.
 - If input is insufficient, return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed`.
 - If a bounded assumption is safe enough, label it and proceed.
@@ -34,6 +36,13 @@ When the chosen skill does not define a stricter shape, return:
 - `Recommended handoff`: one smallest next action with target owner or artifact.
 - `Confidence`: high, medium, or low with the key uncertainty.
 
+When a downstream domain is touched, strongly prefer classifying each major point with one of:
+
+- `must_decide_now`: another domain must make a new decision before the current artifact can be high quality.
+- `constraint_only`: the current decision stands, but later work must preserve a concrete constraint in that domain.
+- `proof_only`: no new decision is required now, but implementation, review, or validation must prove something in that domain.
+- `follow_up_only`: the effect is real but not planning-critical for the current artifact; revisit only if later work reaches that seam.
+
 Recommended handoff classifications:
 
 - `spawn_agent`
@@ -49,13 +58,15 @@ Pair the classification with the target owner or artifact and the smallest next 
 
 Escalate instead of stretching the lane when:
 
-- the decisive fact belongs to a different domain owner,
+- the decisive fact or required new decision belongs to a different domain owner,
 - the answer would require another skill in the same pass,
 - the approved artifact bundle is missing or contradictory,
 - a local review exposes a spec/design/planning gap,
 - a user or product policy decision is required,
 - the requested work would require edits or git mutation.
 
+Do not escalate only because another domain is affected. If that domain does not need to decide now, keep the answer local and return the consequence classification instead.
+
 ## Brief Quality Bar
 
-Good subagent briefs are narrow, evidence-oriented, and explicit about output. Start from `docs/subagent-brief-template.md` when the lane is not trivial.
+Good subagent briefs are narrow, evidence-oriented, explicit about output, and centered on one owned question instead of a parallel cross-domain design package. Start from `docs/subagent-brief-template.md` when the lane is not trivial.

@@ -54,18 +54,18 @@ Pick the narrowest matching reference by symptom:
 ## Design Method
 - Start from the affected route surfaces and list the routing decisions that are still implicit.
 - Load the narrowest relevant reference only when it changes a routing decision; do not load references for general chi knowledge.
-- Make selected and rejected options explicit for nontrivial routing choices.
+- Make selected and rejected options explicit only when a real `live fork` exists for a nontrivial routing choice.
 - Treat framework-sensitive behavior as testable policy. Require repository proof or installed-version verification instead of relying on memory.
 - Keep the output focused on chi routing and transport composition. Hand off payload schema, persistence, security architecture, broad reliability policy, and SLI/SLO ownership unless routing behavior directly depends on them.
 
 ## Decision Quality Bar
 Major routing recommendations should make the following explicit:
 - the routing or middleware problem being solved
-- selected and rejected options when the decision is nontrivial
+- selected and rejected options only when a real `live fork` exists
 - behavior-sensitive chi or `net/http` implications
 - generated vs manual route ownership when OpenAPI is involved
 - acceptance boundaries that can be tested
-- adjacent handoffs and reopen conditions
+- only adjacent handoffs or proof obligations that routing forces now; otherwise use `no new decision required in <domain>`
 
 ## Reject Conditions
 Reject designs that:

@@ -38,6 +38,7 @@ If the bundle is too thin to challenge, say what is missing and classify the res
 
 ## Question Selection
 Prefer 5-10 high-signal questions for complex work. Fewer is fine when fewer questions materially affect approval.
+A clean gate may return only a handful of questions, or none. Stop once approval risk is well bounded; do not expand the pass into a completeness sweep across every plausible domain seam.
 
 Keep a question only if all are true:
 - it names a specific hidden assumption, corner case, or seam
@@ -121,3 +122,4 @@ Stop when:
 - using `requires_user_decision` to avoid targeted research
 - copying raw challenge output into `spec.md`
 - turning the pass into architecture authorship, task breakdown, or approval theater
+- treating every visible adjacent-domain effect as a mandatory approval question

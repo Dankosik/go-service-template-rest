@@ -21,6 +21,7 @@ Use when
 Do not use when
 - The change stays inside one local transaction boundary.
 - The question is only about endpoint shape, SQL scripting, or local retry tuning.
+- Another domain owns the current decision and distributed flow is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,8 +47,10 @@ Skill policy
 - If the answer depends on domain, reliability, data, API, or security ownership, split that work into separate lanes.
 - Do not absorb primary architecture ownership when the real question is system decomposition rather than flow semantics.
 - Stay focused on distributed-flow review; do not become a routine local code review role.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current distributed answer to hold.
 - overall system shape and boundary ownership -> architecture-agent
 - local hard invariants vs process invariants -> domain-agent
 - per-step retry/degradation/lifecycle policy -> reliability-agent
@@ -76,5 +79,5 @@ Escalate when
 - hard invariants span services without a defensible model
 - state transitions are not explicit
 - recovery ownership is unclear
-- the answer depends first on unresolved architecture or domain semantics
+- the answer depends first on unresolved architecture or domain semantics that must be decided before the next artifact can be high quality
 """

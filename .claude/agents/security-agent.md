@@ -21,6 +21,7 @@ Use when
 
 Do not use when
 - The question is only about style, readability, or local refactoring without security-surface change.
+- Another domain owns the current decision and security is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -45,8 +46,10 @@ Skill policy
 - If the answer depends on API, data, reliability, or domain ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Keep authentication, authorization, tenant isolation, and sensitive-data handling as separate decision blocks.
 - If the answer depends mostly on system shape or workflow orchestration, escalate.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current security answer to hold.
 - API-visible 401/403/429/problem details -> api-agent
 - tenant-safe keys, DB role split, storage/caching of sensitive data -> data-agent
 - overload/fallback/degradation policy -> reliability-agent
@@ -75,4 +78,4 @@ Escalate when
 - trust boundaries or identity model are ambiguous
 - object-level authorization or tenant isolation lacks an explicit enforcement point
 - async authenticity/replay rules are missing
-- the safe answer depends on unresolved architecture, API, or reliability policy
+- the safe answer depends on unresolved architecture, API, or reliability policy that must change now

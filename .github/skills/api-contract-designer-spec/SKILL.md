@@ -68,7 +68,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 - Distinguish actor identity, tenant scope, and business resource references. Auth-derived tenancy does not by itself remove legitimate business identifiers from the contract.
 - Choose between CRUD resource, sub-resource, and operation/job resource based on client semantics, not internal handler shape.
 - Do not introduce extra accepted media types, terminal statuses, or companion endpoints just for “completeness”; every addition needs a prompt-backed or repo-default-backed reason.
-- For nontrivial contract questions, compare at least two viable options before selecting one.
+- For nontrivial contract questions, compare multiple options only when a real `live fork` exists before selecting one.
 
 ### Resource Modeling And URI Semantics
 - Model business resources, not RPC verbs.
@@ -189,6 +189,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 - When used inside a repository workflow, hand final API decisions back to the orchestrator's chosen decision artifact; this skill does not own artifact propagation.
 - Recommend OpenAPI or generated-surface updates only when they follow from the contract decision, and do not claim they were updated without tool evidence.
 - Hand off when routing, domain invariants, security, data/cache ownership, or distributed completion semantics become primary. Adjacent skills inform the contract; they do not replace ownership of client-visible API semantics.
+- When another domain is only affected, record the contract consequence, proof obligation, or explicit `no new decision required` note instead of widening the API decision set.
 
 ### Compatibility And Evolution
 - Preserve compatibility by default.
@@ -206,8 +207,8 @@ If several symptoms apply, read the smallest set of references that covers the c
 ## Decision Quality Bar
 For every major API recommendation, include:
 - the client-facing problem and affected audience
-- at least two viable options when the decision is nontrivial
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
 - endpoint, method, status, and error semantics
 - representation shape, lifecycle states, and any authoritative-versus-projection read split
 - retry, idempotency, and precondition behavior

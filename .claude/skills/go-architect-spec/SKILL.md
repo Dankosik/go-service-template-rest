@@ -153,10 +153,11 @@ Before recommending topology, make these facts explicit:
 - Require graceful startup and shutdown semantics for stateful workers, consumers, and long-running jobs.
 - Make rollback authority and rollback limits explicit whenever a change is not trivially reversible.
 
-### Cross-Domain Impact
-- API: make consistency disclosure, idempotency, long-running-operation behavior, and compatibility windows explicit.
-- Data: keep data ownership boundaries clear, justify datastore choices by access patterns, and frame cache or projection use by correctness and staleness contract.
-- Security: define trust boundaries, identity propagation model, tenant isolation, and fail-closed authorization expectations.
+### Cross-Domain Consequences
+- Record downstream effects only when they force a new decision, handoff, or proof obligation before the current architecture recommendation is usable.
+- API: make consistency disclosure, idempotency, long-running-operation behavior, and compatibility windows explicit when architecture changes external behavior; otherwise record `no new decision required in API`.
+- Data: keep data ownership boundaries clear, justify datastore choices by access patterns, and frame cache or projection use by correctness and staleness contract only when those choices are architecture-critical now.
+- Security: define trust boundaries, identity propagation model, tenant isolation, and fail-closed authorization expectations when architecture changes who enforces them.
 - Operability: require the minimum logging, metrics, traces, and debuggability needed to operate the design safely.
 - Delivery: ensure the architecture can actually be enforced by CI, release gates, migration controls, and runtime assumptions.
 
@@ -164,8 +165,9 @@ Before recommending topology, make these facts explicit:
 For every major architecture recommendation, include:
 - the problem and constraints
 - the dominant workload and invariant drivers
-- at least two viable options
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
+- when no `live fork` exists, the chosen repo-consistent approach and why it is the only decision that needs current architecture treatment
 - who owns write truth and which views are derived only
 - when external providers matter, how their semantics are normalized and prevented from becoming lifecycle truth
 - trade-offs, risks, and control mechanisms
@@ -188,8 +190,8 @@ When writing the architecture spec or review, cover:
 - consistency model, invariants, and state-machine expectations
 - anti-corruption or provider-boundary rules when external systems affect domain behavior
 - failure, degradation, and rollout strategy
-- cross-domain impact on API, data, security, and operability
-- required downstream follow-up work without filling low-level specialist detail
+- only the downstream API, data, security, operability, or delivery effects that force a new decision, handoff, or proof obligation
+- explicit `no new decision required in <domain>` notes when an adjacent domain is affected but not decision-critical now
 
 ## Escalate Or Reject
 - a new service boundary without ownership, transaction-boundary, and runtime-isolation proof

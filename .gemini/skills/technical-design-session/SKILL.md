@@ -121,6 +121,8 @@ Do not:
 - use `go-design-spec` as the deeper design-integrity method when you need integration, contradiction cleanup, or simplification beyond simple artifact upkeep
 - for non-trivial work, this session ends at a planning-ready or explicitly blocked design bundle; planning begins in a new session unless an approved waiver already exists
 - required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` rather than guessed into existence
+- planning-ready means the current decision frontier is closed for the next safe slice, not that every visible downstream concern was expanded into its own design task
+- required design artifacts are required questions, not equal-length documents; concise approved artifacts are valid when they make stable boundaries and current changes explicit enough for planning
 
 ## Boundary With `go-design-spec`
 `technical-design-session` and `go-design-spec` are complementary, not competing:
@@ -135,6 +137,8 @@ For non-trivial work, the technical-design session should leave these artifacts 
 - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; what changes; what remains stable; and which plausible surfaces are intentionally not touched
 - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
 - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
+
+These are required as durable answers to design questions, not as matched prose quotas. If a narrow change leaves one seam largely stable, the corresponding artifact may stay short and explicitly say so.
 
 Minimum context-first answers:
 - `design/component-map.md`: affected packages, generated surfaces, adapters, responsibility changes, stable surfaces, and intentional non-touches
@@ -176,7 +180,7 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 
 ### 4. Run The Integrated Design Pass
 - use `go-design-spec` when cross-domain design integrity, simplification, or contradiction cleanup is the hard part
-- keep the work inside technical design: reconcile architecture, API, data, reliability, security, observability, testing, and rollout implications only as far as they shape the design bundle
+- keep the work inside technical design: reconcile architecture, API, data, reliability, security, observability, testing, and rollout implications only as far as they shape the design bundle or force a new current decision
 - if the design exposes a planning-critical spec gap, stop treating the session as planning-ready and route back to `specification`
 
 ### 5. Write Or Repair The Design Bundle
@@ -254,6 +258,7 @@ The session is complete when one of these is true:
   - required design artifacts are approved
   - triggered conditional artifacts are approved or explicitly not expected
   - planning-critical contradictions are resolved or made explicit
+  - remaining downstream effects are classified as `forces new decision`, `forces handoff`, `forces proof obligation`, or `no new decision required`
   - master and phase-local workflow artifacts agree that the next session starts with `planning`
 - blocked or loop-back handoff:
   - the missing decision or contradiction is explicit

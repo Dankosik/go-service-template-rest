@@ -13,12 +13,13 @@ Design reliability contracts for Go services before coding. The output should ma
 - Prefer smaller, testable failure contracts over broad claims like "retry with backoff" or "degrade gracefully."
 - Keep API-visible, caller-visible, and operator-visible behavior aligned: if the system rejects, times out, degrades, drains, or recovers, the spec says how that is observed.
 - Escalate service decomposition, API resource modeling, data/cache mechanics, and security policy when reliability is only a dependent concern.
+- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Core Workflow
 1. Identify the protected user flow, invariant, or operational objective.
 2. Classify each dependency and queue by criticality, owner, safe fallback, and blast radius.
 3. Assign explicit budgets: end-to-end deadline, per-hop timeout, retry budget, queue bound, concurrency bound, drain/recovery window, and rollout checkpoint.
-4. Compare at least two options for any nontrivial control: fail fast, retry, throttle, bulkhead, circuit break, degrade, queue, async defer, or rollback.
+4. Compare multiple options only when a real `live fork` exists for the control: fail fast, retry, throttle, bulkhead, circuit break, degrade, queue, async defer, or rollback.
 5. State the selected contract as observable behavior, not implementation mechanics.
 6. Attach verification obligations that can fail the plan before coding starts.
 
@@ -43,8 +44,9 @@ Major reliability recommendations should make these concrete:
 - dependency or flow criticality
 - caller-visible behavior and status semantics where applicable
 - timeout, retry, queue, bulkhead, fallback, lifecycle, and recovery budgets
-- rejected alternatives and why they do not fit
+- when a `live fork` exists, the viable options, the selected option, and why the rejected alternative does not fit
 - validation signal, fault-injection case, load condition, or rollout checkpoint that proves the contract
+- downstream decision/proof consequences only when another domain must act before the current artifact is usable
 - assumptions and reopen conditions
 
 Do not invent numeric defaults when the workload does not justify them. Use placeholders or assumptions such as `<end-to-end budget>` and mark planning-critical missing values as blockers.
@@ -56,6 +58,7 @@ Return reliability work in this compact shape:
 - `Degradation And Lifecycle Behavior`
 - `Recovery And Rollout Expectations`
 - `Verification Obligations`
+- `Downstream Decision Or Proof Consequences`
 - `Assumptions And Residual Risks`
 
 ## Escalate When

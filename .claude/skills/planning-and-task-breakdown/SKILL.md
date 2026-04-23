@@ -45,6 +45,7 @@ Escalate if:
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
+- Planning closes the first safe slice, not every visible later-phase implication; if a downstream issue does not change the next slice, record it as a concern, proof obligation, or follow-up instead of widening the plan.
 - For non-trivial work, this pass ends the current session at approved `tasks.md`; implementation begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
@@ -149,7 +150,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - Create or repair `test-plan.md` or `rollout.md` during planning only when the approved design already contains the needed validation or rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen technical design instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, the next-session context bundle, `tasks.md` status, artifact expectations with trigger rationale, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
-- The implementation-readiness handoff must be explicit: `PASS` may proceed, `CONCERNS` may proceed only with named risks and proof obligations, `FAIL` must route to the named earlier phase, and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
+- The implementation-readiness handoff must be explicit: `PASS` may proceed only when the first safe slice needs no hidden architecture, ownership, contract, sequencing, or rollout decisions; `CONCERNS` may proceed only with named risks and proof obligations the next slice can satisfy without replanning; `FAIL` must route to the named earlier phase; and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
 - If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
@@ -167,6 +168,7 @@ The planning pass is complete when:
 - implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
+- later-phase implications that do not change the first safe slice are visible as proof obligations or follow-ups rather than hidden blockers or premature design work
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
 
 ## Escalate Or Reject

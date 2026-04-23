@@ -42,9 +42,10 @@ Turn ambiguous cross-service behavior into explicit flow, consistency, and failu
    - Prefer repair commands or events over direct cross-service table writes.
    - Make reconciliation idempotent, resumable, watermark-based, and tied to an owner.
 7. Surface cross-domain consequences.
-   - If API-visible, specify async status, idempotency, retry, and operation-resource semantics.
-   - If event-visible, specify compatibility windows, versioning, dedup retention, replay expectations, and mixed-version behavior.
-   - Require correlation across producer, consumer, retries, DLQ, and reconciliation with bounded-cardinality telemetry.
+   - Record only the downstream effects that force a new decision, handoff, or proof obligation before the current flow can be considered usable.
+   - If API-visible, specify async status, idempotency, retry, and operation-resource semantics only when the flow decision changes client behavior now.
+   - If event-visible, specify compatibility windows, versioning, dedup retention, replay expectations, and mixed-version behavior only when the event contract is part of the current decision frontier.
+   - Require correlation across producer, consumer, retries, DLQ, and reconciliation with bounded-cardinality telemetry when the flow depends on it.
 
 ## Lazy Reference Selection
 References are compact rubrics and example banks, not exhaustive checklists or domain primers. Load at most one reference by default; load multiple only when the task clearly spans independent decision pressures, such as both pivot recovery and event-version rollout.
@@ -70,12 +71,13 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 ## Decision Quality Bar
 For every major distributed recommendation, include:
 - the flow, invariant, or consistency problem
-- at least two viable options and a reasoned rejection for the non-selected option
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable options and a reasoned rejection for the non-selected option
 - the selected flow shape and owner
 - failure-path behavior: retry, compensate, forward-recover, reconcile, or manual intervention
 - idempotency, dedup, commit-ordering, replay, and ordering implications
 - freshness and reconciliation implications
-- cross-domain impact on API, data, reliability, observability, security, and rollout
+- only the downstream API, data, reliability, observability, security, and rollout effects that force a new decision, handoff, or proof obligation now
 - assumptions, blockers, accepted risks, and reopen conditions
 
 ## Deliverable Shape
@@ -87,4 +89,4 @@ When writing the distributed spec, cover:
 - outbox, inbox, dedup, idempotency, ACK, and offset-commit policy
 - pivot, compensation, and forward-recovery rules
 - replay, ordering, freshness, and reconciliation expectations
-- observability, migration, compatibility, and operator handoff
+- observability, migration, compatibility, and operator handoff only when those domains must act now; otherwise use `no new decision required in <domain>`

@@ -14,7 +14,7 @@ Mission
 - Stay advisory. Final decisions belong to the orchestrator.
 
 Use when
-- Behavior changes in a non-trivial way.
+- Behavior changes in a non-trivial way and the proving strategy is not obvious from existing obligations.
 - A bugfix needs explicit regression-proof obligations.
 - A design looks hard to test and you need to expose that before coding or before merge.
 - Review confidence depends on whether changed behavior is realistically provable.
@@ -22,6 +22,7 @@ Use when
 Do not use when
 - The task is literally writing tests; that belongs to orchestrator implementation flow with go-qa-tester.
 - The question is a pure design choice with no meaningful validation consequence yet.
+- Another domain still owns the current decision and QA would only repeat that unresolved semantic debate.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,8 +47,10 @@ Skill policy
 - If the answer needs another domain's primary reasoning, ask the orchestrator for a separate lane instead of adding another skill here.
 - Prefer the smallest proving layer that honestly proves the change.
 - Treat untestable requirements as design defects and escalate.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current proof strategy to hold.
 - missing invariant clarity -> domain-agent
 - API contract obligations -> api-agent
 - data/cache-sensitive coverage -> data-agent

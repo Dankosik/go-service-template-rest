@@ -17,6 +17,7 @@ This skill is a read-only challenge gate over `workflow-plan.md` and the active 
 - when the active phase is planning, check that implementation-readiness status and the planning handoff rule are explicit enough for the next session
 - identify missing or unclear control details that could cause bad execution, premature handoff, or later chat archaeology
 - keep findings actionable enough for the orchestrator to update the workflow-control artifacts directly
+- prefer concise, task-specific routing over generic completeness prose; short but explicit control artifacts are acceptable
 
 ## Boundaries
 Do not:
@@ -26,6 +27,7 @@ Do not:
 - demand generic checklist fields that do not change task execution quality
 - reopen settled scope unless the workflow-control artifact cannot route the current task honestly
 - treat this pass as a substitute for `spec-clarification-challenge`, pre-spec challenge, technical design, or task breakdown
+- treat concise but explicit routing as inadequate just because it is brief
 
 ## Required Input Bundle
 Expect a compact bundle from the orchestrator:
@@ -116,3 +118,4 @@ Stop when:
 - treating all tiny tasks as if they need the full non-trivial artifact bundle
 - ignoring a master/phase mismatch because the intended next step seems obvious from chat
 - using the challenge to perform domain research, specification clarification, technical design, or task breakdown
+- treating compact, explicit workflow control as a problem solely because it is shorter than a previous task's artifact

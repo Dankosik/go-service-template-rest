@@ -206,18 +206,20 @@ If these facts are missing, mark them as assumptions or blockers instead of inve
 - Make staleness, fallback, and cache correctness assumptions explicit whenever cache affects observable behavior.
 - Reject cache designs that introduce tenant leakage or make correctness depend on cache behavior by default.
 
-### Cross-Domain Impact
-- API: make consistency, freshness, async materialization, idempotency, and concurrency semantics explicit when data decisions change external behavior.
-- Distributed flows: require invariant ownership, step contracts, idempotency, retry semantics, and forward recovery for cross-service updates.
-- Security: require parameterization, tenant propagation, fail-closed object access, and no secret or PII leakage in telemetry.
+### Cross-Domain Consequences
+- Record downstream effects only when they force a new decision, handoff, or proof obligation before the current data recommendation can stand.
+- API: make consistency, freshness, async materialization, idempotency, and concurrency semantics explicit when data decisions change external behavior; otherwise record `no new decision required in API`.
+- Distributed flows: require invariant ownership, step contracts, idempotency, retry semantics, and forward recovery only when cross-service updates are part of the current data decision.
+- Security: require parameterization, tenant propagation, fail-closed object access, and no secret or PII leakage in telemetry when the data choice changes the enforcement surface.
 - Operability: require DB latency and error metrics, replication and pool-health visibility where relevant, and migration, backfill, or reconciliation progress signals with bounded-cardinality telemetry.
 
 ## Decision Quality Bar
 For every major data recommendation, include:
 - the data problem and constraints
 - the hard invariants and truth surfaces involved
-- at least two viable options
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
+- when no `live fork` exists, the chosen repo-consistent approach and why no alternative needs current decision treatment
 - comparison on the axes that matter here: invariant locality, contention profile, tenant isolation, lifecycle or deletion semantics, mixed-version rollout risk, and recovery class
 - compatibility class, rollout sequence, and rollback limitations
 - consistency and transaction semantics
@@ -234,6 +236,7 @@ When writing the data spec or review:
 - schema evolution, migration, and backfill plan
 - retention, deletion, archival, and recovery expectations
 - data vs cache responsibility boundary
+- downstream decision/proof consequences only when another domain must act now; otherwise use `no new decision required in <domain>`
 
 Do not reward checklist completeness over strong calls. If a critical fact is missing, name the blocker or assumption instead of papering over it.
 

@@ -20,6 +20,7 @@ Use when
 
 Do not use when
 - The task is purely about business rules, payload shape, or a small refactor with no failure-path implications.
+- Another domain owns the current decision and reliability is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -44,8 +45,10 @@ Skill policy
 - If the real question is API, cache/data, distributed-flow, or observability ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Keep timeout, retry, and overload behavior explicit and bounded.
 - Do not replace architecture or distributed-flow ownership with local reliability guesses.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current reliability answer to hold.
 - API-visible 429/503/Retry-After/async ack semantics -> api-agent
 - outbox/inbox, reconciliation, compensation, or saga shape -> distributed-agent
 - cache outage behavior or DB fallback correctness -> data-agent
@@ -72,4 +75,4 @@ Input-gap behavior
 Escalate when
 - dependency criticality is ambiguous
 - safe correction needs a new async workflow or reconciliation model
-- API-visible semantics or cache/data ownership must change to make the reliability answer valid
+- API-visible semantics or cache/data ownership must change now to make the reliability answer valid

@@ -17,12 +17,13 @@ Use when
 - Sync vs async choice is unclear.
 - New queues, events, outbox, saga, or service extraction is being considered.
 - Specialist outputs conflict because the system shape is unclear.
-- A local change may hide a bigger ownership or seam problem.
+- A local change has concrete evidence of changing ownership, consistency model, failure-domain shape, or runtime split.
 
 Do not use when
 - The task is a local bug fix.
 - The question is mainly about payload shape, SQL mechanics, cache rules, test authoring, or CI/container policy.
 - A narrower domain owner can answer without architecture-level trade-offs.
+- Another domain owns the current decision and architecture is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,9 +47,11 @@ Skill policy
 - If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Default skill: go-architect-spec.
 - If another domain skill seems necessary, do not add it locally; hand off or ask for a separate lane.
-- If another domain becomes a co-owner, escalate instead of absorbing it.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
+- Escalate only when another domain must make a new decision before the architecture call is valid.
 
 Common handoffs
+Use these only when the named domain must decide now for the current architecture answer to hold.
 - domain semantics -> domain-agent
 - API-visible contract -> api-agent
 - schema, migration, or runtime DB/cache contract -> data-agent
@@ -76,5 +79,5 @@ Input-gap behavior
 Escalate when
 - source-of-truth ownership is unclear
 - a hard invariant spans services without an explicit consistency model
-- the answer now depends primarily on API, data, security, reliability, or delivery decisions
+- the answer now depends on API, data, security, reliability, or delivery making a new decision before the architecture call is valid
 """

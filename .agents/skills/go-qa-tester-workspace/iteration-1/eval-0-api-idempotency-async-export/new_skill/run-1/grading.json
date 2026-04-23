@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "The response covers missing idempotency key behavior, same-key same-payload equivalence, and same-key different-payload conflict handling.",
+      "passed": true,
+      "evidence": "Scenario Coverage includes `TestStartExportRequiresIdempotencyKey`, `TestStartExportSameKeySamePayloadReturnsExistingOperation`, and `TestStartExportSameKeyDifferentPayloadConflicts`."
+    },
+    {
+      "text": "The response covers async API semantics including `202 Accepted` and operation-resource lifecycle, plus `429` retry guidance when rate limiting is described.",
+      "passed": true,
+      "evidence": "Scenario Coverage includes `TestOpenAPIRuntimeContractPayoutExportAccepted`, lifecycle tests for `pending -> running -> succeeded|failed`, and `TestOpenAPIRuntimeContractPayoutExportQuotaExceeded` with `Retry-After`."
+    },
+    {
+      "text": "The response includes strict boundary parsing cases such as unknown fields, trailing JSON, or request size/status-split behavior, and it names concrete validation commands.",
+      "passed": true,
+      "evidence": "Scenario Coverage includes unknown-field, trailing-JSON, and oversized-body `413` tests; Validation Commands names `go test`, `go test -race`, `make openapi-check`, and `make test-integration`."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  }
+}

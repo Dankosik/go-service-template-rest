@@ -13,6 +13,7 @@ Turn changed behavior into explicit, risk-based test obligations before coding s
 - Choose the smallest level that can honestly prove each invariant, contract, failure mode, or regression risk.
 - Make scenarios executable, deterministic, and traceable to approved behavior.
 - Hand off domain, API, data, reliability, security, or performance decisions when test obligations depend on unresolved semantics.
+- If another domain is only affected, record the consequence as `proof_only`, `follow_up_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Scope
 Use this skill to define or review risk-based test strategy: level selection, scenario matrix, invariant traceability, fail-path obligations, contract coverage, and executable quality checks.
@@ -56,7 +57,7 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 ## Expertise
 
 ### Test-Level Selection
-- Compare at least two candidate levels for each major risk when the right level is not obvious.
+- Compare multiple candidate levels for a major risk only when a real `live fork` exists and the right proving level is not obvious.
 - Use level-selection rules:
   - unit for deterministic logic and local invariants
   - integration for DB/cache/network/process-boundary behavior
@@ -104,8 +105,8 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 ## Decision Quality Bar
 For every major testing recommendation, include:
 - the risk, invariant, or contract under test
-- at least two viable levels or approaches when the choice is nontrivial
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable levels or approaches, the selected option, and at least one explicit rejection reason
 - scenario classes and pass/fail observables
 - preconditions, data, and environment assumptions
 - traceability to invariants, contracts, reliability behavior, and other affected domains
@@ -121,6 +122,7 @@ When writing the test strategy or review, cover:
 - API/contract coverage
 - data, cache, security, and distributed-consistency coverage where relevant
 - quality checks and execution expectations
+- downstream decision blockers only when another domain must still decide before the strategy is honest; otherwise use `no new decision required in <domain>`
 - residual risks and reopen criteria
 
 ## Escalate Or Reject

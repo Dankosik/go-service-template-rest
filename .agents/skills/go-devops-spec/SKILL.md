@@ -13,6 +13,7 @@ Turn delivery, release, and runtime-hardening expectations into explicit, enforc
 - Prefer reproducible local and CI paths over release instructions that depend on memory or operator heroics.
 - Keep platform hardening tied to concrete runtime risk, not generic infrastructure wish lists.
 - Hand off API, data, security, and distributed design when delivery policy depends on unresolved product or technical decisions.
+- If another domain is only affected, record the delivery consequence or proof obligation and use `no new decision required` unless that domain must make a new decision now.
 
 ## Scope
 Use this skill to define or review delivery and platform requirements: CI/CD quality gates, release blocking policy, compatibility and drift controls, container/runtime baseline, deployment safety, and release-trust expectations.
@@ -77,6 +78,7 @@ When writing the delivery/platform spec or review, cover:
 - deployment-platform health, restart, rollout, and capacity evidence when platform policy is in scope
 - release trust evidence requirements
 - exception and risk-acceptance policy
+- downstream decision/proof consequences only when another domain must act now; otherwise use `no new decision required in <domain>`
 
 ## Escalate Or Reject
 - destructive-first schema changes on active production paths

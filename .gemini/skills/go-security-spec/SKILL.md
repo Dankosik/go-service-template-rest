@@ -13,6 +13,7 @@ Define security requirements before coding so trust boundaries, identity rules, 
 - Separate authentication, authorization, tenant isolation, sensitive-data handling, privacy, and resource-exhaustion defenses.
 - Prefer fail-closed, least-privilege, standard-library-friendly controls with concrete negative-path proof.
 - Hand off architecture, API, physical schema, reliability, observability, or delivery policy when they stop being security-owned decisions.
+- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Scope
 - define trust boundaries, attacker paths, security assumptions, and threat exposure for affected flows
@@ -63,11 +64,13 @@ Before loading a reference, name the symptom and the behavior change you need. I
 ## Decision Quality Bar
 Major security recommendations should make the following explicit:
 - trust boundary and attacker path
-- selected control and at least one rejected alternative when nontrivial
+- whether a real `live fork` exists
+- when a `live fork` exists, the selected control and at least one rejected alternative
 - enforcement point and owner
 - fail-closed behavior and degraded-dependency behavior
 - sensitive-data and privacy impact
 - negative-path and abuse-path verification
+- downstream decision/proof consequences only when another domain must act before the current artifact is usable
 - residual risk and reopen conditions
 
 Security claims without enforcement and verification are incomplete.
@@ -80,6 +83,7 @@ Return security work in a compact, reviewable form:
 - `Sensitive Data, Privacy, And Redaction Rules`
 - `Abuse Resistance And Fail Behavior`
 - `Verification Obligations`
+- `Downstream Decision Or Proof Consequences`
 - `Assumptions And Residual Risks`
 
 ## Escalate When

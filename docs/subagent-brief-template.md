@@ -34,6 +34,7 @@ Expected output:
 - If the chosen skill defines an output shape, follow that shape.
 - Otherwise use the shared envelope from docs/subagent-contract.md:
   Decision or findings / Evidence / Open risks or gaps / Recommended handoff / Confidence.
+- When adjacent domains are touched, prefer classifying each major point as `must_decide_now`, `constraint_only`, `proof_only`, or `follow_up_only`.
 - Recommended handoff must use one classification:
   spawn_agent, reopen_phase, needs_user_decision, accept_risk, record_only, or no_action.
 ```
@@ -47,4 +48,5 @@ Question: <exact question>.
 Inspect first: <paths>.
 Evidence: cite concrete files/artifacts/commands; label assumptions.
 Return: skill output shape, or docs/subagent-contract.md envelope with one handoff classification.
+Prefer `must_decide_now` / `constraint_only` / `proof_only` / `follow_up_only` for adjacent-domain effects when relevant.
 ```

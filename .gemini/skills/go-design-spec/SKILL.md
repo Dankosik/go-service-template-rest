@@ -6,10 +6,10 @@ description: "Assemble and reconcile the integrated technical-design bundle for 
 # Go Design Spec
 
 ## Purpose
-Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave `design/` stable enough for planning without reopening the approved problem frame.
+Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave `design/` stable enough for planning by closing the current decision frontier without reopening the approved problem frame.
 
 ## Scope
-Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for task breakdown.
+Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for task breakdown without expanding every visible downstream effect into new design work.
 
 ## Boundaries
 Do not:
@@ -51,6 +51,11 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
 - Prefer one coherent design-bundle handoff over scattered partial notes that still force planning to rediscover technical context.
 - Keep `design/overview.md` as the bundle entrypoint instead of repeating the same story in every artifact; when the bundle is planning-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
+- Keep deep design and corner-case coverage, but distinguish `must decide now` from `dependent consequence only`.
+- Open another domain or artifact only when the unresolved point materially changes ownership, correctness model, public contract, safe sequencing, or rollout shape for the current bundle.
+- When another domain is affected but unchanged, record `constraint_only`, `proof_only`, `follow_up_only`, or explicit `no new decision required in <domain>` rather than growing the bundle into a parallel specialist package.
+- Treat the required design artifacts as required questions, not equal-length documents. Uneven depth is normal: the hard seam may live in one artifact while another stays short because the boundary is stable.
+- Prefer the smallest coherent bundle that lets planning proceed honestly. Do not inflate unaffected surfaces just to make the bundle look balanced.
 
 ## Boundaries And Handoffs
 This is a technical-design integrator, not a workflow owner:
@@ -67,6 +72,7 @@ This is a technical-design integrator, not a workflow owner:
   - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; responsibilities; what changes versus what stays stable; and which plausible surfaces are intentionally not touched
   - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
   - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
+- Keep each required artifact only as detailed as its current seam demands. A narrow change can justify very short component, sequence, or ownership notes as long as they explicitly preserve unchanged seams and planning does not need to infer what stayed stable.
 - Add conditional artifacts only when their trigger is real:
   - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
   - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit
@@ -115,13 +121,15 @@ This is a technical-design integrator, not a workflow owner:
 - Reject designs that depend on heroic manual operations or undocumented release choreography.
 
 ## Design Readiness Bar
-For each planning-critical design recommendation that chooses between real trade-offs, make clear:
+For each planning-critical design recommendation, make clear:
 - the complexity symptom or integration risk
-- at least two viable options
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists, meaning two plausible approaches would materially change ownership, interfaces, persistence shape, async model, operability, or rollout
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
+- when no `live fork` exists, the chosen repo-consistent approach and why no competing option needs current design treatment
 - trade-offs across simplicity, flexibility, cost, risk, and change impact
-- cross-domain impact on architecture, API, data, security, observability, reliability, and testing
-- assumptions, blockers, and reopen conditions
+- only the downstream effects that force a new decision, handoff, or proof obligation in architecture, API, data, security, observability, reliability, or testing
+- assumptions, blockers, and reopen conditions only when they affect the current bundle or the first safe implementation slice
+- avoid widening the bundle just to produce symmetrical coverage across artifacts or domains
 
 ## Deliverable Shape
 When writing or reviewing the integrated technical-design bundle, cover:
@@ -131,7 +139,12 @@ When writing or reviewing the integrated technical-design bundle, cover:
 - abstractions or layers that should be removed, merged, or made explicit
 - what changes versus what remains stable
 - runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
-- downstream consequences for API, data, reliability, security, observability, and testing
+- downstream consequences as:
+  - `forces new decision`
+  - `forces handoff`
+  - `forces proof obligation`
+  - `no new decision required`
+- concise stable or unchanged notes where a required artifact has little to say beyond preserved boundaries
 - what must loop back into `spec.md` before planning can safely begin
 - whether `design/` is stable enough for `planning-and-task-breakdown`
 - the planning handoff boundary and any reason the next session must reopen `spec.md` instead of moving forward
@@ -139,7 +152,7 @@ When writing or reviewing the integrated technical-design bundle, cover:
 
 ## Escalate Or Reject
 - missing or unstable `spec.md`
-- any hidden “decide later in coding” system-level gap
+- any hidden “decide later in coding” gap that would change ownership, correctness, contract, sequencing, or rollout
 - contradictory assumptions left unresolved across domain specs
 - a new abstraction or layer with no measurable simplification outcome
 - simplification that weakens API, data, reliability, or security contracts

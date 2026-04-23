@@ -13,6 +13,7 @@ Turn product behavior into explicit, falsifiable domain rules so that invariants
 - Name invariants, actors, states, transitions, side effects, and rejection rules explicitly.
 - Prefer crisp acceptance semantics and forbidden-state handling over broad “business logic” prose.
 - Hand off API encoding, data modeling, reliability, and test strategy when they become implementation of the domain decision rather than the decision itself.
+- When another domain is only affected, record the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Scope
 Use this skill to define or review business invariants, state-transition rules, acceptance criteria, corner cases, and the traceability of those rules into API, data, reliability, and testing decisions.
@@ -130,10 +131,10 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 For every major domain recommendation, include:
 - the business rule or lifecycle problem
 - the invariant statement in falsifiable form
-- at least two viable options when the design is nontrivial
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
 - transition rules, violation behavior, and duplicate/replay semantics where relevant
-- cross-domain impact on API, data, distributed design, reliability, security, and testing
+- only the downstream API, data, distributed, reliability, security, or testing effects that force a new decision, handoff, or proof obligation now
 - rollout compatibility, rollback limits, assumptions, blockers, and reopen conditions
 
 ## Deliverable Shape
@@ -144,7 +145,7 @@ When writing the domain behavior spec or review, cover:
 - acceptance criteria
 - corner cases and edge conditions
 - invariant-violation semantics
-- traceability into API, data, distributed, reliability, and testing concerns
+- traceability into API, data, distributed, reliability, and testing concerns only when they force current decisions or proof; otherwise use `no new decision required in <domain>`
 
 ## Escalate Or Reject
 - a critical invariant without owner, enforcement point, or falsifiable pass/fail condition

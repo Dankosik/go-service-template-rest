@@ -18,11 +18,12 @@ Use when
 - A feature changes lifecycle, approval flow, status machine, or business rules.
 - Idempotency, duplicate handling, replay, or concurrency may affect business correctness.
 - A bugfix touches domain semantics rather than only transport or storage mechanics.
-- You need a clean invariant register before API/data/reliability planning.
+- You need a clean invariant register because downstream design still depends on unresolved domain semantics.
 
 Do not use when
 - The question is only about route wiring, payload schema, SQL tuning, or CI policy.
 - The task is a purely local implementation cleanup with no behavior change.
+- Another domain owns the current decision and domain semantics are only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,9 +47,11 @@ Skill policy
 - Choose `go-domain-invariant-spec` for research/adjudication or `go-domain-invariant-review` for review.
 - If the answer also needs API, data, reliability, security, or QA ownership, ask the orchestrator for a separate lane instead of adding another skill here.
 - Do not drift into transport, schema, or infra mechanics before the business rule is explicit.
-- If enforcement depends on another domain’s primary decision, escalate.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
+- Escalate only when enforcement depends on another domain making a new decision now.
 
 Common handoffs
+Use these only when the named domain must decide now for the invariant answer to stand.
 - API semantics and error model -> api-agent
 - DB constraints, transaction boundaries, cache correctness -> data-agent
 - retries, timeouts, reconciliation, async process guarantees -> reliability-agent or distributed-agent
@@ -76,4 +79,4 @@ Escalate when
 - core terms are undefined
 - invariants conflict across actors or states
 - acceptance cannot be made observable
-- downstream design depends on unresolved domain semantics
+- downstream design depends on unresolved domain semantics that must be decided before the next artifact can be high quality

@@ -22,6 +22,7 @@ Use when
 Do not use when
 - There is no plausible hot path, budget, or measurement question.
 - The change is mainly about correctness, auth, or style and only secondarily about speed.
+- Another domain owns the current decision and performance is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,8 +47,10 @@ Skill policy
 - If the answer also needs DB/cache, reliability, concurrency, or API ownership, ask the orchestrator for separate lanes instead of adding another skill here.
 - Measure first. Do not optimize by intuition.
 - If correctness or reliability ownership becomes primary, escalate instead of absorbing.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current performance answer to hold.
 - query/cache correctness vs speed trade-off -> data-agent
 - overload/retry/backpressure policy -> reliability-agent
 - goroutine lifecycle and synchronization correctness -> concurrency-agent
@@ -75,4 +78,4 @@ Input-gap behavior
 Escalate when
 - critical paths lack budgets and cannot be normalized
 - measurement cannot be reproduced
-- the fix requires new cache/query/reliability/API design decisions
+- the fix requires new cache/query/reliability/API design decisions that must be made now

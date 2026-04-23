@@ -20,6 +20,7 @@ Use when
 
 Do not use when
 - The question is only about endpoint contract, auth policy, or a small code cleanup with no data-surface effect.
+- Another domain owns the current decision and data is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -43,9 +44,11 @@ Skill policy
 - Choose exactly one skill for the current question: `go-data-architect-spec`, `go-db-cache-spec`, or `go-db-cache-review`.
 - If a task needs both ownership/schema and runtime DB/cache answers, split it into separate `data-agent` lanes instead of blending both skills into one pass.
 - Do not turn cache into a source of truth without an explicit correctness contract.
-- If API-visible consistency or async convergence becomes primary, escalate.
+- If API-visible consistency or async convergence becomes primary, escalate only when that domain must make a new decision before the data answer is valid.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required`.
 
 Common handoffs
+Use these only when the named domain must decide now for the current data answer to hold.
 - business invariant ownership -> domain-agent
 - API-visible freshness or conflict behavior -> api-agent
 - timeout/retry/fallback/degraded-mode policy -> reliability-agent
@@ -73,5 +76,5 @@ Input-gap behavior
 Escalate when
 - ownership is ambiguous
 - invariants cross service boundaries without a clear consistency model
-- cacheability depends on unresolved domain or API semantics
+- cacheability depends on unresolved domain or API semantics that must change now
 - destructive migration risk lacks a safe rollout and verification path

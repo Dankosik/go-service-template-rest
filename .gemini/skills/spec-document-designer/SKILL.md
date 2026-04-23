@@ -14,6 +14,7 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 - choose the right section depth for the task while staying inside the repository's artifact model
 - translate useful coverage prompts from external spec workflows into repo-native sections
 - keep blockers, assumptions, clarification outcomes, validation hooks, and plan-summary links visible before handoff to `technical design`
+- keep the handoff focused on the current decision frontier: record downstream consequences that matter, but do not promote every visible consequence into a new design decision inside `spec.md`
 
 ## Boundaries
 Do not:
@@ -45,6 +46,7 @@ Escalate if:
 - Put stable decisions in `spec.md`, task-local technical context in `design/`, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
 - Prefer short explicit bullets over template sludge.
 - Omit empty sections instead of padding the document for completeness theater.
+- Deep coverage is good, but `spec.md` should close only the decisions needed before technical design. Later-domain consequences that do not require a new decision now should stay as constraints, proof obligations, or explicit `no new decision required` notes.
 
 ## Context Intake (Dynamic Loading)
 
@@ -143,6 +145,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Keep blockers, accepted risks, and reopen conditions explicit.
 - Preserve non-goals and scope cuts so technical design does not re-expand the change.
 - Keep only the task-breakdown or handoff link in `spec.md`.
+- When another domain is only a dependent consequence, record the consequence and its owner instead of expanding `spec.md` into a parallel design bundle.
 
 ### Clarification-Gate Competency
 - Before approving non-trivial `spec.md`, ensure the orchestrator has run a read-only `spec-clarification-challenge` lane, preferably through `challenger-agent`, using exactly that one skill.

@@ -42,6 +42,7 @@ Treat the session as spec-ready only when all of the following are true:
 - prior research or direct analysis already answered the must-answer-now questions, or the workflow plan explicitly records why more research is not required
 - for non-trivial work, the `spec-clarification-challenge` gate can be run and reconciled before `spec.md` is marked approved
 - the task can hand off to `technical design` without reopening core framing by default
+- the session distinguishes what technical design must decide next from what can remain an explicit constraint, proof obligation, or follow-up note
 
 If those conditions are not met, do not force an approval. Reopen the right upstream phase instead.
 
@@ -139,6 +140,7 @@ Do not:
 - for non-obvious research-backed decisions, link to the preserved `research/*.md` note or source surface when provenance would help a later session trust or revisit the decision; do not copy the evidence narrative into `Decisions`
 - keep technical detail out of `spec.md` when it belongs in a later `design/` artifact
 - keep execution sequencing out of `spec.md`; that belongs to later planning
+- record downstream domain effects only to the level needed for the technical-design handoff; do not turn visible consequences into premature design tasks when no new decision is required yet
 
 ### 4. Run The Autonomous Clarification Gate
 - for non-trivial work, prepare a compact input bundle: problem frame, scope and non-goals, candidate decisions, constraints, validation expectations, known assumptions or open questions, and relevant research links

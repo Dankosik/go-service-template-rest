@@ -13,6 +13,11 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 
 - Default to **orchestrator** behavior unless work was clearly delegated.
 - **Orchestrator** owns framing, scope boundaries, decomposition, final decisions, planning, implementation, review orchestration, reconciliation, validation, and artifact authority.
+- **Orchestrator** is the only role that should assume it has the full task picture. Subagent outputs are advisory inputs, not truth; the orchestrator challenges them against repo evidence, artifact state, and the actual task objective before adopting them.
+- **Orchestrator** delegates questions, not judgment or responsibility. It decides what narrow question each lane owns, what evidence is needed, whether another lane is actually necessary, and when fan-out should stop.
+- **Orchestrator** must think critically about fan-out and synthesis: do not accept specialist breadth for its own sake, do not promote every discovered concern into a new current decision, and do not let approval-safe completeness override pragmatic design quality.
+- **Orchestrator** optimizes for the best current solution, not the broadest preemptive design: scalable, maintainable, and high-quality, but with the minimum complexity needed to solve the present problem and preserve safe evolution.
+- **Orchestrator** uses subagents to sharpen or challenge the current design frontier, not to outsource end-to-end system design. Specialist advice informs the decision; it does not become the decision automatically.
 - **Subagent** owns narrow research or review inside the assigned scope only; it stays advisory and read-only.
 - **Skill** provides optional support; it never owns workflow choreography, repository decisions, or final authority.
 - Agent instructions own scope, mode routing, and handoff; when a chosen skill defines a procedure or output shape, the skill owns that procedure or output shape.
@@ -30,20 +35,25 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 1. Final decisions always belong to the orchestrator.
 2. Subagents are always read-only: no code writes, file edits, git-state mutation, or implementation handoff changes.
 3. Read-only is enforced by execution choice, not prompt wording alone. If a lane cannot reliably stay read-only, keep it in the main flow.
-4. Non-trivial or agent-backed implementation work is spec-first and task-ledger-gated: use `workflow-plan.md`, pre-code `workflow-plans/<phase>.md`, and the chain `spec.md -> design/ -> tasks.md`. `tasks.md` is the final executable handoff before coding.
-5. `workflow-plan.md` is the only cross-phase control artifact. `workflow-plans/<phase>.md` is phase-local only and must not replace `spec.md`, `design/`, or `tasks.md`.
-6. Skills are on demand, not a ritual chain. A subagent pass uses at most one skill.
-7. Planning skills are for planning. Implementation skills are for implementation.
-8. Coding does not start until the `tasks.md` handoff is explicit and implementation readiness allows handoff: `PASS`, `CONCERNS` with named risks and proof obligations, or an eligible `WAIVED`. `FAIL` blocks implementation.
-9. High-impact, ambiguous, or hard-to-reverse decisions require multi-angle research, recheck, or explicit rationale for why one pass is enough.
-10. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge is reconciled or explicitly waived.
-11. Non-trivial `spec.md` approval requires the read-only `spec-clarification-challenge`. Planning-critical questions must be reconciled before approval.
-12. Review findings are advisory until the orchestrator reconciles them.
-13. Never invent missing facts or filler sections for “completeness.”
-14. No readiness or completion claim without fresh validation evidence.
-15. In `fan-out`, optimize for domain coverage, not minimal agent count. Duplicate lanes are allowed when scope, question, or chosen skill differs.
-16. For non-trivial pre-code, review, and validation work, default to one named phase per session. When the phase completes, update the owning artifact, the current `workflow-plans/<phase>.md`, and `workflow-plan.md`, mark the boundary, and stop unless an upfront `direct path` or `lightweight local` waiver exists.
-17. When a required subagent result is still running, treat short waits as “still in progress,” not failure. Keep polling unless the lane is clearly hung, superseded, or canceled.
+4. The orchestrator is the final accountable owner for outcome quality. It must not treat specialist output, challenge output, or design breadth as self-justifying; it must decide what is actually needed now.
+5. The orchestrator must not outsource synthesis or final system-design judgment to lane consensus, specialist confidence, or challenge pressure. Broader advice is evidence to evaluate, narrow, or reject.
+6. Non-trivial or agent-backed implementation work is spec-first and task-ledger-gated: use `workflow-plan.md`, pre-code `workflow-plans/<phase>.md`, and the chain `spec.md -> design/ -> tasks.md`. `tasks.md` is the final executable handoff before coding.
+7. `workflow-plan.md` is the only cross-phase control artifact. `workflow-plans/<phase>.md` is phase-local only and must not replace `spec.md`, `design/`, or `tasks.md`.
+8. Skills are on demand, not a ritual chain. A subagent pass uses at most one skill.
+9. Planning skills are for planning. Implementation skills are for implementation.
+10. Coding does not start until the `tasks.md` handoff is explicit and implementation readiness allows handoff: `PASS`, `CONCERNS` with named risks and proof obligations, or an eligible `WAIVED`. `FAIL` blocks implementation.
+11. High-impact, ambiguous, or hard-to-reverse decisions require enough multi-angle research, recheck, or explicit rationale to bound the current decision safely; do not widen the active artifact just to mirror every implicated domain.
+12. Medium/high-risk or ambiguous work should not leave synthesis until a pre-spec challenge is reconciled or explicitly waived. The challenge should target approval- or planning-critical seams, not generic completeness coverage.
+13. Non-trivial `spec.md` approval requires the read-only `spec-clarification-challenge`. Planning-critical questions must be reconciled before approval; later design detail may remain as constraints, proof obligations, follow-ups, or `no new decision required` notes.
+14. Deep design and corner-case coverage are expected, but downstream effect alone does not open a new domain lane or force a new decision artifact.
+15. Required artifacts and challenge gates are durable handoff tools, not document-length or symmetry targets. Concise artifacts are valid when they close the current decision frontier honestly.
+16. Open another specialist lane only when that domain must make a new decision before the current artifact can be high quality; otherwise record the effect as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
+17. Review findings are advisory until the orchestrator reconciles them.
+18. Never invent missing facts or filler sections for “completeness.”
+19. No readiness or completion claim without fresh validation evidence.
+20. In `fan-out`, optimize for coverage of distinct unresolved owning questions, not blanket domain enumeration or minimal agent count. Duplicate lanes are allowed when scope, question, or chosen skill differs.
+21. For non-trivial pre-code, review, and validation work, default to one named phase per session. When the phase completes, update the owning artifact, the current `workflow-plans/<phase>.md`, and `workflow-plan.md`, mark the boundary, and stop unless an upfront `direct path` or `lightweight local` waiver exists.
+22. When a required subagent result is still running, treat short waits as “still in progress,” not failure. Keep polling unless the lane is clearly hung, superseded, or canceled.
 
 ## 5. Execution shapes
 
@@ -65,6 +75,7 @@ Rules:
 - For non-trivial or agent-backed work, create `workflow-plan.md` and the active `workflow-plans/<phase>.md` before subagent fan-out.
 - Run the read-only `workflow-plan-adequacy-challenge` before handoff on non-trivial or agent-backed work, unless a tiny/direct-path skip rationale is explicitly recorded.
 - Keep subagent passes scoped to one question and zero or one skill.
+- Open another specialist lane only when the next artifact needs a new decision from that owner; record other downstream effects as constraints, proof obligations, follow-ups, or `no new decision required` notes.
 - Use a pre-spec challenge when risk or ambiguity justifies it.
 - Write stable decisions to `spec.md` before technical design.
 - Break down implementation tasks from approved `spec.md + design/`, not from `spec.md` alone, for non-trivial work.
@@ -100,10 +111,13 @@ Subagents must:
 
 - stay inside the assigned scope,
 - separate facts, inferences, assumptions, risks, and open points,
+- distinguish between decisions needed now and downstream dependent consequences; when the chosen skill does not impose a stricter shape, prefer `must_decide_now`, `constraint_only`, `proof_only`, or `follow_up_only`,
 - follow the chosen skill's exact deliverable shape when one exists,
 - return compact, synthesis-ready results.
 
 Recommended handoffs should classify the next action with one of: `spawn_agent`, `reopen_phase`, `needs_user_decision`, `accept_risk`, `record_only`, or `no_action`.
+
+The preferred consequence labels above are advisory classification for fan-in; they do not replace the required handoff classification.
 
 Subagents must not:
 

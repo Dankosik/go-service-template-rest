@@ -46,8 +46,10 @@ Skill policy
 - If API, data/cache, reliability, security, delivery, or performance owns the deciding fact, ask the orchestrator for a separate lane instead of adding another skill here.
 - Prefer the cheapest sufficient signal tied to an operator question.
 - Reject high-cardinality metric labels, alerting with no operator action, raw sensitive identifiers in telemetry, and public debug surfaces without an explicit safety contract.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the signal contract to be valid.
 - API-visible status, error, or async acknowledgement semantics -> api-agent
 - DB/cache fallback or source-of-truth correctness -> data-agent
 - timeout, retry, degraded-mode, shutdown, or recovery policy -> reliability-agent
@@ -76,4 +78,4 @@ Escalate when
 - metric labels would require raw request, user, tenant, trace, path, query, or error-string values
 - paging alerts lack an owner, runbook/dashboard path, event floor, or operator action
 - telemetry privacy or debug-surface access policy is unresolved
-- the answer depends first on unresolved API, data, reliability, security, delivery, or performance decisions
+- the answer depends first on unresolved API, data, reliability, security, delivery, or performance decisions that must be made now

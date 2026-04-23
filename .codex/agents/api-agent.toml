@@ -23,6 +23,7 @@ Use when
 Do not use when
 - The task is only about internal decomposition, SQL/migrations, or local code cleanup.
 - The question is purely about chi mechanics with no API-visible consequence and the orchestrator did not explicitly choose `go-chi-spec` or `go-chi-review`; ask for a targeted transport-only `api-agent` lane instead of answering as API contract.
+- Another domain owns the current decision and API behavior is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,8 +47,10 @@ Skill policy
 - Choose exactly one skill for the current question: `api-contract-designer-spec`, `go-chi-spec`, or `go-chi-review`.
 - If both contract and transport need independent answers, ask the orchestrator to split them into separate `api-agent` lanes with explicit skill choices; do not refer to a non-existent transport agent.
 - Do not absorb domain ownership, storage design, or architecture decomposition.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current contract answer to hold.
 - business rules and forbidden transitions -> domain-agent
 - router topology and middleware-order-only questions -> targeted `api-agent` transport lane with `go-chi-review` or `go-chi-spec`, or architecture-agent when ownership boundaries matter
 - route telemetry, SLO, alert, or signal-cardinality contract -> observability-agent
@@ -74,5 +77,6 @@ Input-gap behavior
 Escalate when
 - the answer depends primarily on unresolved domain rules
 - contract behavior cannot be decided without architecture or consistency decisions
+- another domain must make a new decision before the client-visible contract can be considered stable
 - the repository has no stable approved contract to compare against
 """

@@ -13,6 +13,7 @@ Turn performance intent into measurable, reproducible pre-coding contracts for l
 - Decide what must be fast, at what percentile or throughput, under what input shape, and with what proof.
 - Prefer bounded, observable performance risks over speculative micro-optimization or tool-led rewrites.
 - Hand off API, data, reliability, and concurrency design when performance depends on those primary decisions.
+- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Scope
 Use this skill to define or review latency, throughput, allocation, contention, and capacity behavior, including hot-path budgets, measurement protocol, acceptance thresholds, and production validation signals.
@@ -20,7 +21,7 @@ Use this skill to define or review latency, throughput, allocation, contention, 
 ## Operating Loop
 1. Frame the affected operation class, workload, hot path, and user-visible or system-visible performance objective.
 2. Load at most one reference by default from the selector below. Load more only when the task clearly spans independent decision pressures, such as memory budgets plus overload semantics.
-3. Compare viable options before selecting a performance contract. Keep unproven numeric targets marked as assumptions.
+3. Compare viable options only when a real `live fork` exists before selecting a performance contract. Keep unproven numeric targets marked as assumptions.
 4. Write section-ready spec content with budgets, workload shape, selected and rejected options, measurement protocol, thresholds, runtime telemetry, and rollout checkpoints.
 5. Stop at the pre-coding boundary. Do not drift into low-level optimization, implementation review, or benchmark result interpretation without a specification decision to support.
 
@@ -125,11 +126,11 @@ Escalate if critical paths lack budgets, workload assumptions are missing, measu
 For every major performance recommendation, include:
 - the target operation and workload
 - bottleneck hypothesis and baseline assumptions
-- at least two viable options
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
 - measurement protocol and thresholds
 - latency/throughput/allocation/complexity/cost trade-offs
-- cross-domain impact on architecture, API, data/cache, reliability, observability, and delivery
+- only the downstream architecture, API, data/cache, reliability, observability, or delivery effects that force a new decision, handoff, or proof obligation now
 - assumptions, blockers, and reopen conditions
 
 ## Deliverable Shape
@@ -140,6 +141,7 @@ When writing the performance spec or review, cover:
 - benchmark/profile/trace plan
 - acceptance thresholds and pass/fail rules
 - performance-sensitive rollout and rollback checkpoints
+- downstream decision/proof consequences only when another domain must act now; otherwise use `no new decision required in <domain>`
 
 ## Escalate Or Reject
 - affected critical paths without explicit budgets

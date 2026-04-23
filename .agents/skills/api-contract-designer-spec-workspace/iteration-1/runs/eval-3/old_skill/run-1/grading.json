@@ -1,0 +1,64 @@
+{
+  "expectations": [
+    {
+      "text": "The output avoids a huge direct upload as the default and recommends an upload-session, presigned, or equivalent large-file flow.",
+      "passed": true,
+      "evidence": "Matched signed upload with rejection of direct upload."
+    },
+    {
+      "text": "The output defines an async import job or operation resource and a signed webhook or callback contract.",
+      "passed": true,
+      "evidence": "Matched async job semantics and webhook contract snippets: Job resource / webhook."
+    },
+    {
+      "text": "The output covers partial failure representation for imported items instead of hiding it behind a single success flag.",
+      "passed": true,
+      "evidence": "Matched Partial with explicit partial-failure wording."
+    },
+    {
+      "text": "The output includes size/media or rate-limit error semantics such as `413`, `415`, `422`, or `429`.",
+      "passed": true,
+      "evidence": "Matched error-status snippet 415."
+    },
+    {
+      "text": "The output discloses eventual consistency or freshness behavior for the cache-backed job-status view.",
+      "passed": true,
+      "evidence": "Matched freshness snippet cache-backed."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 0,
+    "errors_encountered": 0,
+    "output_chars": 17377,
+    "transcript_chars": 0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [
+      "# Assumptions And Uncertainties",
+      "Assumed v1 uses one async job resource plus a returned upload URL, rather than a separate upload-session resource.",
+      "Assumed webhook delivery references a pre-registered `webhook_endpoint_id`; if partners need per-job arbitrary callback URLs, the contract should change.",
+      "Assumed the `50 MiB` limit applies to the raw uploaded CSV and that only `text/csv` is accepted in v1.",
+      "Assumed malware scan, CSV parsing, and item processing failures surface as terminal job state, not as late synchronous API errors.",
+      "Assumed the cache-backed read model can document a `10s` freshness target, but the exact lag SLO still needs confirmation."
+    ],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "These assertions check baseline contract coverage well, but they do not fully discriminate richer option analysis, artifact-handoff quality, or semantic precision. Use the blind comparison to judge those qualities."
+      }
+    ],
+    "overall": "Assertions are intentionally minimum-coverage checks; qualitative comparison is still needed for richer output quality."
+  }
+}

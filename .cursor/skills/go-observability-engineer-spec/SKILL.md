@@ -13,6 +13,7 @@ Make diagnosability, alertability, and telemetry cost explicit before coding so 
 - Prefer bounded, stable, privacy-safe telemetry over "log more", raw identifiers, trace IDs as metric labels, or dashboard sprawl.
 - Separate logical outcomes from attempts, retries, fallbacks, and transport details so SLOs and alerts reflect user or workflow impact.
 - Hand off API, data, security, reliability, and delivery design when observability is only a dependent concern.
+- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Scope
 Use this skill to specify or review:
@@ -40,7 +41,7 @@ Do not:
    - logs for high-cardinality forensic detail that should not become a metric label
    - correlation fields only when they preserve a debugging path without leaking sensitive data
 4. Specify the signal contract: names, units, attributes, cardinality limits, event boundaries, sampling, retention, owner, runbook/dashboard links, and validation evidence.
-5. Record selected and rejected options. Reject "log more", raw IDs in metrics, generic dashboards, public debug endpoints, and paging alerts with no operator action.
+5. Record selected and rejected options only when a real `live fork` exists. Reject "log more", raw IDs in metrics, generic dashboards, public debug endpoints, and paging alerts with no operator action.
 6. Call out assumptions, blockers, and reopen conditions when signal quality, convention stability, privacy, or cost tradeoffs are not yet proven.
 
 ## Reference Selection
@@ -65,10 +66,11 @@ When extending standards-sensitive examples, research primary sources first. Pre
 For every material recommendation, include:
 - operator question and decision
 - selected signal and why it is the cheapest sufficient option
-- at least one rejected option and why it is unsafe, noisy, costly, or misleading
+- when a `live fork` exists, at least one rejected option and why it is unsafe, noisy, costly, or misleading
 - log, metric, trace, and correlation deltas where applicable
 - cardinality, privacy, sampling, retention, and cost controls
 - SLI/SLO, alerting, dashboard, runbook, or verification impact
+- downstream decision/proof consequences only when another domain must act before the current signal contract is usable
 - assumptions, blockers, and reopen conditions
 
 ## Deliverable Shape
@@ -79,6 +81,7 @@ When writing an observability spec, cover:
 - debug endpoint, health probe, shutdown, and runtime diagnostics contract
 - telemetry cost, cardinality, sampling, retention, and privacy controls
 - async correlation, retry, DLQ, lag, redrive, and reconciliation observability when relevant
+- downstream decision/proof consequences only when another domain must act now; otherwise use `no new decision required in <domain>`
 
 ## Escalate Or Reject
 Escalate or reject the plan if it includes:

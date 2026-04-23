@@ -21,6 +21,7 @@ Use when
 Do not use when
 - The task is a normal code change with no meaningful delivery/platform consequence.
 - The question is a local code review concern outside CI/CD, rollout, migration, runtime, deployment, or release-trust surfaces.
+- Another domain owns the current decision and delivery is only a dependent consequence.
 
 Required input bundle
 - Use the shared input bundle in `docs/subagent-contract.md`; add domain-specific evidence from the inspect-first list below.
@@ -46,8 +47,10 @@ Skill policy
 - If the answer needs reliability, data, security, or design ownership, ask the orchestrator for separate lanes instead of adding another skill here.
 - Keep gates enforceable by real repository commands and deployment controls.
 - If the real question is architecture, data, or security ownership, escalate.
+- If another domain is only affected, keep it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` instead of escalating.
 
 Common handoffs
+Use these only when the named domain must decide now for the current delivery answer to hold.
 - migration/backfill/restore posture -> data-agent
 - rollout/fallback/shutdown/degraded-mode behavior -> reliability-agent
 - runtime hardening and release-significant trust boundaries -> security-agent
@@ -74,3 +77,4 @@ Escalate when
 - release safety depends on unresolved migration/runtime facts
 - compatibility policy is unclear
 - the proposed controls cannot be enforced by the actual repository/deployment setup
+- another domain must make a new decision before the release policy can be considered valid

@@ -13,6 +13,7 @@ Turn runtime DB and cache behavior into explicit, measurable contracts before co
 - Decide query shape, transaction ownership, timeout budget, cache role, staleness, invalidation, fallback, and observability together.
 - Keep caches as accelerators unless the approved behavior deliberately makes them part of observable semantics.
 - Hand off primary schema architecture, API contract shape, delivery rollout, and local code review when the work leaves this seam.
+- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
 
 ## Scope
 Use this skill to specify SQL access discipline, query-shape controls, transaction boundaries, retry and idempotency constraints, cache necessity, cache topology, staleness contracts, invalidation rules, fallback behavior, and DB/cache telemetry expectations.
@@ -22,8 +23,8 @@ Do not use this skill to own primary data modeling, schema migration strategy, e
 ## Operating Loop
 1. Frame the runtime path: operation class, read/write ownership, consistency requirement, hot-path evidence, and failure mode.
 2. Load at most one reference by default from the selector below. Load more only when the task clearly spans independent decision pressures, such as transaction retry plus cache invalidation plus outage behavior.
-3. Compare viable options, including the no-cache option, and reject options that cannot meet correctness, staleness, failure, or proof obligations.
-4. Write section-ready spec content with selected and rejected choices, explicit assumptions, acceptance checks, and downstream handoffs.
+3. Compare viable options only when a real `live fork` exists, including the no-cache option when cache is on the table, and reject options that cannot meet correctness, staleness, failure, or proof obligations.
+4. Write section-ready spec content with selected and rejected choices when needed, explicit assumptions, acceptance checks, and only the downstream handoffs or proof obligations that the current seam forces.
 5. Stop at the specification boundary. Do not drift into implementation code or schema-architecture ownership.
 
 ## Reference Files
@@ -54,8 +55,8 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 ## Decision Quality Bar
 For every major DB/cache recommendation, include:
 - the runtime problem and evidence
-- at least two viable options, including no-cache when cache is on the table
-- the selected option and at least one explicit rejection reason
+- whether a real `live fork` exists, including no-cache when cache is on the table
+- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
 - consistency and staleness semantics
 - timeout, fallback, and origin-protection behavior
 - observability and test obligations
@@ -72,7 +73,7 @@ When writing the DB/cache spec, cover:
 - invalidation, TTL, jitter, and stampede controls
 - failure and degradation policy
 - observability and verification obligations
-- downstream handoffs caused by API-visible freshness, schema ownership, async invalidation, or rollout risk
+- downstream handoffs or proof obligations caused by API-visible freshness, schema ownership, async invalidation, or rollout risk only when another domain must act now; otherwise use `no new decision required in <domain>`
 
 ## Escalate Or Reject
 - cache introduced without measured bottleneck evidence

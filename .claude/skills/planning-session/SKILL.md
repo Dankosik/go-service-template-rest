@@ -152,6 +152,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 ### 2. Confirm Planning Readiness
 - verify that `spec.md` is stable enough for task breakdown
 - verify that the required core design artifacts exist unless an explicit design-skip rationale already covers the task
+- accept concise approved design artifacts when they answer the current planning-critical questions explicitly; do not reopen design just because one required artifact is short or asymmetrical
 - verify that any triggered conditional design artifacts exist when they affect sequencing, validation, or rollout
 - if planning exposes a missing spec or design input, route back explicitly; do not invent the missing context inside `tasks.md`
 
@@ -159,6 +160,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - use the design bundle to identify dependency-establishing work, safe sequencing, coupling, validation obligations, and rollout risks
 - read existing `tasks.md`, `test-plan.md`, or `rollout.md` only when repairing or extending an existing planning pass
 - keep the context narrow and planning-specific; this session does not need broad repository rediscovery when the approved design already carries the task-local technical context
+- keep the handoff focused on the first safe implementation slice; later-phase implications that do not change that slice should stay as explicit concerns, proof obligations, or follow-up notes instead of being expanded into new pre-code design work
 
 ### 4. Produce Or Repair Planning Artifacts
 - apply `planning-and-task-breakdown` as the deeper method when the task needs phased execution breakdown
@@ -186,8 +188,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - record whether later review or validation phase files are expected
 - record whether `tasks.md` is approved, draft, missing, or explicitly waived for a tiny/direct-path exception
 - run the implementation-readiness gate after expected `tasks.md` is ready
-- set readiness to `PASS` only when required decisions, design, `tasks.md`, triggered `test-plan.md` or `rollout.md`, any required review or validation phase workflow files, blockers, proof path, and high-impact open questions are all resolved for implementation
-- set readiness to `CONCERNS` only when implementation may start with named accepted risks and explicit proof obligations
+- set readiness to `PASS` only when the next implementation slice can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions; required artifacts and proof path must already support that slice
+- set readiness to `CONCERNS` only when implementation may start with named accepted risks and explicit proof obligations that the next slice can satisfy without replanning
 - set readiness to `FAIL` when implementation must not start, and name the earlier phase to reopen
 - set readiness to `WAIVED` only for tiny, direct-path, or prototype work with explicit rationale and scope
 - record readiness status in `workflow-plan.md`, the gate result and stop or handoff rule in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful
@@ -262,6 +264,7 @@ Planning is complete when:
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
 - required workflow plan adequacy challenge findings are reconciled, or an eligible skip rationale is explicit
 - the next session can begin the first task or explicit implementation checkpoint without silently reopening spec or design
+- visible later-phase implications that do not change the first safe slice are recorded explicitly instead of being forced into new planning blockers
 
 ## Stop Condition
 The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.

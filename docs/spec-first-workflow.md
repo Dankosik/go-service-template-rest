@@ -208,6 +208,8 @@ The design bundle carries task-specific technical context that `spec.md` should 
 - stable areas,
 - correctness or rollout risks.
 
+Technical design is not required to close every visible system question before planning. Its job is to close the decision frontier for the next safe implementation slice: open a new cross-domain design decision only when it materially changes ownership, correctness model, public contract, safe sequencing, or rollout shape. Other downstream effects should stay explicit as constraints, proof obligations, follow-up notes, or `no new decision required` notes inside the design handoff.
+
 Load order for design work:
 
 1. Read [docs/repo-architecture.md](./repo-architecture.md) when stable repository boundaries or flows matter.
@@ -222,11 +224,15 @@ Required core design artifacts for non-trivial work:
 - `design/sequence.md` — call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior.
 - `design/ownership-map.md` — source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior.
 
+These artifacts are required as durable answers to core design questions, not as equal-length documents or symmetry targets. For narrow or asymmetric changes, one file may contain most of the real detail while another is brief and simply records stable boundaries, unchanged ownership, or a focused constraint. Short is acceptable when planning can start without rediscovering context.
+
 Minimum design questions to answer, using the task's natural headings:
 
 - `design/component-map.md`: Which packages, generated surfaces, adapters, and repository-owned artifacts are affected? What responsibility changes? What plausible surfaces are intentionally stable or out of scope?
 - `design/sequence.md`: What is the runtime order? Where are sync or async boundaries, side effects, failure points, retry/recovery behavior, and parallel versus sequential behavior?
 - `design/ownership-map.md`: Which artifact or package is the source of truth for each critical behavior? Which dependency direction is allowed? Which surfaces are explicit non-owners?
+
+If one of these questions has no material change, answer it explicitly with a short stable or unchanged note instead of expanding filler prose.
 
 Conditional artifacts and trigger rules:
 
@@ -257,8 +263,10 @@ Design-bundle rules:
 - `design/overview.md` is the entrypoint and link surface for the bundle; it indexes the design artifacts without duplicating their contents, and it keeps conditional-artifact status and trigger rationale visible for planning.
 - Create conditional artifacts only when their trigger is real.
 - Keep technical design in `design/`; do not push it back into `spec.md`.
+- When adjacent domains are affected, record only what the current design bundle must force next: `forces new decision`, `forces handoff`, `forces proof obligation`, or `no new decision required`.
 - Record design artifact status in `workflow-plans/technical-design.md` and master `workflow-plan.md`.
 - Tiny or `direct path` work may skip the design bundle only with an explicit design-skip rationale.
+- Do not treat file count, matched section depth, or artifact symmetry as a quality signal. The quality bar is whether planning can consume the current decision frontier without rediscovering ownership, sequence, or stability assumptions.
 
 Planning-bound `design/overview.md` artifact indexes should be scannable without opening every design file just to rediscover artifact status. A compact shape is enough:
 
@@ -444,8 +452,8 @@ Implementation readiness is the planning exit check, not a separate workflow pha
 
 Status values:
 
-- `PASS`: implementation may start.
-- `CONCERNS`: implementation may start only with named accepted risks and proof obligations.
+- `PASS`: implementation may start because the next safe slice can proceed without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions.
+- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the next slice can satisfy without replanning.
 - `FAIL`: implementation must not start; route to the named earlier phase.
 - `WAIVED`: allowed only for tiny, direct-path, or prototype work with explicit rationale and scope.
 
@@ -458,7 +466,8 @@ Gate checks:
 - Optional review or validation phase workflow files were created during planning only when named multi-session routing requires them.
 - Material blockers are resolved, or explicitly accepted under `CONCERNS`.
 - The validation and proof path is explicit.
-- No unresolved high-impact open question remains that could change correctness, ownership, rollout, or validation.
+- No unresolved architecture, ownership, contract, sequencing, or rollout question remains that the next implementation slice would otherwise need to decide on its own.
+- Later-phase implications that do not change the first safe slice are recorded as explicit concerns, proof obligations, follow-ups, or `no new decision required` notes rather than treated as hidden blockers.
 
 Artifact placement:
 
