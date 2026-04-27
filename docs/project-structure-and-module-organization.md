@@ -73,6 +73,8 @@ HTTP route ownership: normal API endpoints are added through `api/openapi/servic
 
 Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/infra/postgres/queries/*.sql` owns query sources, and `internal/infra/postgres/sqlcgen` is generated output. Hand-written repositories under `internal/infra/postgres` translate generated rows into app-facing types instead of leaking `sqlcgen` into `internal/app`.
 
+Postgres pool lifecycle behavior, including `pgxpool` hook composition for connection preparation, release, and close paths, belongs in `internal/infra/postgres`. Keep adapter-specific connection guards there and cover hook changes with repository-local tests before broad integration checks.
+
 `ping_history` is retained as a replaceable SQLC fixture because the current generator setup requires at least one query to prove drift checks. It is not production business state and must not be wired into `ping` as a side effect. New services should replace the fixture with real feature-owned migrations, queries, repositories, and app ports.
 
 Feature telemetry placement: HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`, using shared instruments from `internal/infra/telemetry` where appropriate. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
