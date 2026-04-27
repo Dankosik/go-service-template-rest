@@ -8,6 +8,15 @@ description: "Design reliability requirements for Go services: timeouts, deadlin
 ## Purpose
 Design reliability contracts for Go services before coding. The output should make failure behavior explicit, bounded, operator-visible, and testable without turning the task into low-level middleware, worker, or shutdown-hook implementation.
 
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+
 ## Specialist Stance
 - Treat reliability as a pre-coding contract: dependency criticality, deadline budgets, retry eligibility, overload containment, degradation modes, lifecycle behavior, recovery, and proof obligations.
 - Prefer smaller, testable failure contracts over broad claims like "retry with backoff" or "degrade gracefully."

@@ -1,6 +1,6 @@
 ---
 name: workflow-plan-adequacy-challenge
-description: "Review generated workflow-control artifacts for task-specific handoff adequacy. Use inside a read-only challenger subagent after `workflow-plan.md` and the active `workflow-plans/<phase>.md` are generated or substantially repaired, before the orchestrator treats the phase plan as sufficient for non-trivial or agent-backed work."
+description: "Review generated workflow-control artifacts for task-specific handoff adequacy. Use inside a read-only challenger subagent after `workflow-plan.md` and the active phase-local `workflow-plans/*.md` file are generated or substantially repaired, before the orchestrator treats the phase plan as sufficient for non-trivial or agent-backed work."
 ---
 
 # Workflow Plan Adequacy Challenge
@@ -9,6 +9,15 @@ description: "Review generated workflow-control artifacts for task-specific hand
 Surface the workflow-control gaps that would make phase handoff or the required chat-rendered next-session prompt dishonest or brittle.
 
 This skill is a read-only challenge gate over `workflow-plan.md` and the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, `design/`, or `tasks.md`.
+
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Scope
 - inspect generated or substantially repaired workflow-control artifacts for the current task

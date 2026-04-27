@@ -619,13 +619,13 @@ func TestMaxIdleConnLimiterConcurrentReleases(t *testing.T) {
 func TestInstallMaxIdleConnLimiterComposesPoolHooks(t *testing.T) {
 	t.Parallel()
 
-	var beforeAcquireCalled bool
+	var prepareConnCalled bool
 	var afterReleaseCalled bool
 	var beforeCloseCalled bool
 	poolConfig := &pgxpool.Config{
-		BeforeAcquire: func(context.Context, *pgx.Conn) bool {
-			beforeAcquireCalled = true
-			return true
+		PrepareConn: func(context.Context, *pgx.Conn) (bool, error) {
+			prepareConnCalled = true
+			return true, nil
 		},
 		AfterRelease: func(*pgx.Conn) bool {
 			afterReleaseCalled = true
@@ -650,11 +650,15 @@ func TestInstallMaxIdleConnLimiterComposesPoolHooks(t *testing.T) {
 		t.Fatal("AfterRelease(second) = true, want false when max idle is full")
 	}
 
-	if !poolConfig.BeforeAcquire(context.Background(), first) {
-		t.Fatal("BeforeAcquire(first) = false, want true")
+	ok, err := poolConfig.PrepareConn(context.Background(), first)
+	if err != nil {
+		t.Fatalf("PrepareConn(first) error = %v, want nil", err)
 	}
-	if !beforeAcquireCalled {
-		t.Fatal("original BeforeAcquire was not called")
+	if !ok {
+		t.Fatal("PrepareConn(first) = false, want true")
+	}
+	if !prepareConnCalled {
+		t.Fatal("original PrepareConn was not called")
 	}
 	if !poolConfig.AfterRelease(second) {
 		t.Fatal("AfterRelease(second) after first acquire = false, want true")

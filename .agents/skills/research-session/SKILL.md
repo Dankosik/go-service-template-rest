@@ -9,6 +9,15 @@ description: "Own a session dedicated only to research for this repository. Use 
 Run only the research checkpoint for one task-local session.
 This wrapper makes evidence gathering and handoff explicit; it does not finalize `spec.md`, start `technical design`, produce `tasks.md`, or implement code.
 
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+
 ## Use When
 - the task already has minimum viable framing and workflow routing, and now needs one research-only session
 - the orchestrator must choose between `local` research and read-only subagent `fan-out` for this session
@@ -183,6 +192,13 @@ Good defaults:
 - reuse the same role in multiple lanes when the questions differ
 - use `primary + challenger` or second-opinion coverage when impact is high or assumptions are fragile
 - avoid asking one lane to handle both evidence gathering and final decision writing
+
+## Research Budget And Stop Rules
+- Start with the smallest evidence plan that can answer the current research questions.
+- Run another repository search, external search, or lane only when the current evidence leaves a required fact, owner, date, ID, source, comparison point, or approval-changing claim unsupported.
+- Do not expand research to improve wording, add generic examples, or cover domains that cannot change the next artifact.
+- Stop when the current question can be answered with citable evidence and visible limits, then record remaining uncertainty as an assumption, blocker, follow-up, or reopen target.
+- Treat "absence of evidence" as an evidence limit, not as proof that the thing does not exist unless the searched source is authoritative for that claim.
 
 ## Required Master `workflow-plan.md` Updates
 Every completed or blocked pass must update the master file with:

@@ -8,6 +8,15 @@ description: "Design performance-first specifications for Go services. Use when 
 ## Purpose
 Turn performance intent into measurable, reproducible pre-coding contracts for latency, throughput, allocation, contention, and capacity.
 
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+
 ## Specialist Stance
 - Treat performance as budgets, bottleneck hypotheses, and measurement plans, not generic speed advice.
 - Decide what must be fast, at what percentile or throughput, under what input shape, and with what proof.

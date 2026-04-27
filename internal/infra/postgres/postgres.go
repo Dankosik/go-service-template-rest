@@ -95,13 +95,16 @@ func newMaxIdleConnLimiter(maxIdleConns int32) *maxIdleConnLimiter {
 func installMaxIdleConnLimiter(poolConfig *pgxpool.Config, maxIdleConns int32) {
 	limiter := newMaxIdleConnLimiter(maxIdleConns)
 
-	beforeAcquire := poolConfig.BeforeAcquire
+	prepareConn := poolConfig.PrepareConn
 	afterRelease := poolConfig.AfterRelease
 	beforeClose := poolConfig.BeforeClose
 
-	poolConfig.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
+	poolConfig.PrepareConn = func(ctx context.Context, conn *pgx.Conn) (bool, error) {
 		limiter.beforeAcquire(conn)
-		return beforeAcquire == nil || beforeAcquire(ctx, conn)
+		if prepareConn == nil {
+			return true, nil
+		}
+		return prepareConn(ctx, conn)
 	}
 	poolConfig.AfterRelease = func(conn *pgx.Conn) bool {
 		if afterRelease != nil && !afterRelease(conn) {

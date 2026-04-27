@@ -8,6 +8,15 @@ description: "Debug Go service bugs, flaky tests, build failures, hangs, deadloc
 ## Purpose
 Find and verify the real root cause of Go defects before finalizing a fix, using the smallest diagnostic surface that can prove or disprove the suspected failure mode.
 
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+
 ## Scope
 - debug failing tests, flaky CI, build failures, runtime panics, hangs, deadlocks, goroutine leaks, timeout incidents, pool saturation, and integration regressions in Go services
 - establish deterministic reproduction or characterize the exact intermittency pattern when deterministic repro is not available yet

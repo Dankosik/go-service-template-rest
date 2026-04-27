@@ -15,6 +15,15 @@ Do not use it as a generic translator or copy editor.
 
 When this skill is invoked through a wrapper prompt that says where to read input, which skill to use, or how to format the answer, treat that wrapper as instructions for this composer run. Do not carry wrapper-only constraints into the downstream handoff unless they are part of the user's actual engineering task.
 
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+
 ## Specialist Stance
 - Optimize for correct understanding before elegant wording. A plain prompt with the right context beats a polished prompt that smooths away uncertainty or user intent.
 - Recover the user's actual engineering ask from messy wording, partial context, repeated phrases, dictation artifacts, multilingual notes, and nonlinear fragments.
@@ -208,6 +217,15 @@ If the input contains conflicting asks, keep the conflict visible unless a safe 
 
 ## Output Expectations
 Return only the final English handoff prompt.
+
+Prefer an outcome-first handoff when the task is non-trivial:
+- state the user-visible goal before process details
+- state success criteria that define what "done" means
+- state constraints, non-goals, evidence boundaries, and allowed side effects
+- state expected output or artifact shape
+- state stop, ask, fallback, or reopen rules when ambiguity remains
+
+Do not over-prescribe the downstream agent's exact step sequence unless the repository contract, tool boundary, or user request makes that sequence an invariant. The handoff should define the destination and safety rails; let the downstream agent choose the efficient path inside those rails.
 
 Use these sections in this order when they are relevant:
 - `Objective`

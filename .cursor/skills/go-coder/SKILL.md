@@ -8,6 +8,15 @@ description: "Implement production-grade Go changes from approved requirements a
 ## Purpose
 Implement approved Go changes as production-grade, review-clean code that preserves intended behavior, fits the repository's boundaries, and stays easy to read, modify, and verify later.
 
+## Outcome-First Operating Rules
+- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
+- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
+- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
+- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
+- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
+- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
+- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+
 ## Use This Skill For
 - implementing approved Go features, fixes, refactors, integrations, regenerations, and targeted test updates
 - translating an approved requirement or executable task ledger into code without changing the decision that was already made
@@ -33,6 +42,8 @@ Before editing, make the implementation target concrete:
 - For direct-path multi-step work without `tasks.md`, keep a tiny local `goal -> check` loop before coding; do not expand it into workflow artifacts unless the repository workflow requires them.
 - Every changed line should trace to the approved task, required generated drift, or cleanup made necessary by your own change.
 - Do not add speculative flexibility, configurability, abstractions, or impossible-case handling just because it might be useful later.
+- Prefer outcome-first implementation: identify the required behavior and proof, then choose the smallest code path that satisfies both. Do not follow a longer process just because an older prompt pattern would have enumerated more steps.
+- Use additional file reads, reference loads, generation, or test loops only while they can change correctness, generated drift, or proof strength; stop once the approved task's quality bar is met.
 
 ## Boundaries And Handoffs
 Keep workflow ownership outside this skill:
