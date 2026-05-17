@@ -448,11 +448,11 @@ Bootstrap shortcuts:
   - Purpose: Go vulnerability reachability scan.
 
 - `make gosec`
-  - Runs: `go tool gosec -exclude-generated -exclude-dir=.cache ./...`
+  - Runs `go tool gosec -exclude-generated -exclude-dir=.cache ./...` with an isolated Go build cache for the scan.
   - Purpose: Go security static analysis.
 
 - `make secret-scan`
-  - Runs native `go tool gitleaks` scan over repository git history.
+  - Runs native `go tool gitleaks` scan over repository git history with `.gitleaks.baseline.json` for the known redacted historical finding.
   - Compatibility alias: `make secrets-scan`.
 
 - `make ci-local`
@@ -487,10 +487,10 @@ Bootstrap shortcuts:
   - Docker equivalent of `make govulncheck`.
 
 - `make docker-gosec`
-  - Docker equivalent of `make gosec`.
+  - Docker equivalent of `make gosec`, also using an isolated Go build cache inside the tooling container.
 
 - `make docker-secret-scan`
-  - Runs `gitleaks` through Docker tooling wrapper.
+  - Runs `gitleaks` through Docker tooling wrapper with the same `.gitleaks.baseline.json` as native mode.
   - Compatibility alias: `make docker-secrets-scan`.
 
 - `make docker-guardrails-check`

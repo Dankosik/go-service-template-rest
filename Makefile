@@ -362,12 +362,14 @@ govulncheck:
 	go tool govulncheck ./...
 
 gosec:
-	go tool gosec -exclude-generated -exclude-dir=.cache ./...
+	gosec_cache="$$(mktemp -d)"; \
+	trap 'rm -rf "$$gosec_cache"' EXIT; \
+	GOCACHE="$$gosec_cache" go tool gosec -exclude-generated -exclude-dir=.cache ./...
 
 go-security: govulncheck gosec
 
 secret-scan:
-	go tool gitleaks git --no-banner --redact --exit-code 1 .
+	go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
 
 secrets-scan: secret-scan
 

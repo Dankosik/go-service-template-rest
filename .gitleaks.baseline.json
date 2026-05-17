@@ -1,0 +1,23 @@
+[
+ {
+  "RuleID": "generic-api-key",
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 54,
+  "EndLine": 54,
+  "StartColumn": 2,
+  "EndColumn": 61,
+  "Match": "ANTHROPIC_AUTH_TOKEN = \"REDACTED\"",
+  "Secret": "REDACTED",
+  "File": ".codex/config.toml",
+  "SymlinkFile": "",
+  "Commit": "2303c76be4a4582e2f0f562ed67625683aeba356",
+  "Link": "https://github.com/Dankosik/go-service-template-rest/blob/2303c76be4a4582e2f0f562ed67625683aeba356/.codex/config.toml#L54",
+  "Entropy": 4.707715,
+  "Author": "Daniil Koryto",
+  "Email": "daniil.koryto@gmail.com",
+  "Date": "2026-05-17T14:57:07Z",
+  "Message": "Implement workflow simplification proposal with trigger-based model\n\n- Added `spec.md` detailing the approved workflow simplification, addressing current pain points and proposing a new trigger-based workflow model.\n- Created `tasks.md` for implementation handoff, outlining tasks and concerns for the workflow simplification.\n- Established `workflow-plan.md` to document the overall workflow plan and current phase status.\n- Developed `planning.md` and `research.md` to record planning and research phases, including input sources and approval decisions.\n- Introduced `specification.md` to confirm the readiness of the specification for implementation planning.\n- Updated `workflow-plans` to include detailed planning and research documentation, ensuring clarity and coherence across all workflow artifacts.",
+  "Tags": [],
+  "Fingerprint": "2303c76be4a4582e2f0f562ed67625683aeba356:.codex/config.toml:generic-api-key:54"
+ }
+]

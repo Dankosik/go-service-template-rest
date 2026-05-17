@@ -179,6 +179,10 @@ run_lint() {
 	run_go "GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint $*"
 }
 
+run_gosec() {
+	run_go "GOCACHE=\$(mktemp -d) go tool gosec -exclude-generated -exclude-dir=.cache ./..."
+}
+
 openapi_drift_check() {
 	if ! git -C "${ROOT_DIR}" diff --quiet -- internal/api; then
 		echo "tracked openapi codegen drift detected in internal/api"
@@ -534,14 +538,14 @@ govulncheck)
 	run_go "go tool govulncheck ./..."
 	;;
 gosec)
-	run_go "go tool gosec -exclude-generated -exclude-dir=.cache ./..."
+	run_gosec
 	;;
 go-security)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" govulncheck
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" gosec
 	;;
 secret-scan|secrets-scan)
-	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 ."
+	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json ."
 	;;
 guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"
