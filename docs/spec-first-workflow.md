@@ -4,7 +4,7 @@ Detailed runtime companion to [AGENTS.md](../AGENTS.md) for trigger-based spec-f
 
 ## 1. Authority And Purpose
 
-`AGENTS.md` is authoritative for roles, invariants, execution-shape triggers, and hard boundaries. This document explains how to apply those rules in task-local artifacts without forcing the full bundle onto every bounded change.
+`AGENTS.md` is authoritative for roles, invariants, execution-shape triggers, and hard boundaries. When the two documents diverge, follow `AGENTS.md` first and repair this companion. This document explains how to apply those rules in task-local artifacts without forcing the full bundle onto every bounded change.
 
 The workflow keeps the same quality concerns:
 
@@ -113,6 +113,7 @@ specs/<feature-id>/
   rollout.md                    # conditional
 ```
 
+Do not point agents at a specific task-local `specs/...` bundle as required precedent unless that directory exists in the current checkout.
 Historical task bundles that already use this full shape remain valid. Do not rewrite them during unrelated work.
 
 ## 4. Lean `spec.md`
