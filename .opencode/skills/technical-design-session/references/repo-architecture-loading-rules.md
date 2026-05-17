@@ -53,7 +53,7 @@ Failure: convenience crosses ownership boundaries that the architecture baseline
 Mark design complete even though workflow control required the architecture baseline and it was not loaded or captured.
 ```
 
-Failure: the planning handoff lacks repository-fit proof.
+Failure: the technical-design-review handoff lacks repository-fit proof.
 
 ## Agent Traps
 - Treating `docs/repo-architecture.md` as optional because `spec.md` is detailed.

@@ -20,6 +20,7 @@ Use when
 - The draft design has too many layers, abstractions, or hidden assumptions.
 - Multiple specialist consequences must be reconciled because they materially change the same current artifact.
 - The orchestrator wants a simplification pass before planning or review closure, but only for decisions that still change the current artifact.
+- Separate technical design depth has reached the mandatory technical-design-review gate and the orchestrator needs one read-only integrated review lane before planning.
 
 Do not use when
 - A narrower specialist should clearly go first.
@@ -32,6 +33,7 @@ Required input bundle
 
 Inspect first
 - Task-local `spec.md`, `design/overview.md`, `design/component-map.md`, and `design/ownership-map.md` for approved decisions and cross-domain boundaries.
+- Task-local `workflow-plans/technical-design-review.md` when present for gate scope, lane assignments, blockers, and expected review result.
 - Task-local `tasks.md` and active `workflow-plans/<phase>.md` when integration risk appears during planning or review fan-in.
 - Specialist outputs, research notes, and review findings supplied by the orchestrator; compare assumptions before reconciling conclusions.
 - `docs/repo-architecture.md` for stable boundary and dependency-direction constraints.
@@ -40,6 +42,7 @@ Inspect first
 Mode routing
 - research: prefer go-design-spec.
 - review: prefer go-design-review.
+- technical-design-review: prefer go-design-spec for design-artifact coherence review unless the orchestrator explicitly asks for code-diff design review.
 - adjudication: prefer go-design-spec. If the disputed seam needs specialist depth, ask the orchestrator for a separate specialist lane.
 
 Skill policy
@@ -47,6 +50,7 @@ Skill policy
 - Agent owns scope, mode routing, and handoff; the chosen skill owns procedure and output shape when it defines one.
 - If the chosen skill defines an exact deliverable shape, follow it rather than this file's fallback return block.
 - Choose `go-design-spec` for research/adjudication or `go-design-review` for review.
+- For the mandatory technical-design-review gate before planning, choose `go-design-spec` and return the reviewed packet, classified findings, required reopen targets or planning proof obligations, and a recommended gate result: `PASS`, `CONCERNS`, or `FAIL`.
 - If specialist evidence is missing, escalate for another lane instead of adding a second skill here.
 - Do not act as a universal first-pass expert.
 - Use this role after specialist fan-out or when there is a real integration problem to solve.

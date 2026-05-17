@@ -41,7 +41,7 @@ Why to copy: resume should not require chat archaeology.
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `add_missing_routing`
-- `Exact Orchestrator Addition`: Add `Next session starts with: planning, beginning with tasks.md breakdown from approved spec.md plus required design context`.
+- `Exact Orchestrator Addition`: Add the exact next phase, such as `Next session starts with: technical design review` when separate design depth needs review, or `Next session starts with: planning, beginning with tasks.md breakdown from approved spec.md plus reviewed design context` after the review gate is reconciled.
 
 ## Reject
 - "The plan is approved after this is fixed." This crosses challenger authority.

@@ -8,7 +8,7 @@ description: "Run a specification-approval clarification challenge when formal c
 ## Purpose
 Surface the few questions that could still make `spec.md` approval dishonest.
 
-This skill is a formal gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane.
+This skill is a formal gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. In broad formal clarification, this skill can run in multiple read-only challenger lanes; each lane applies one explicit lens to the same candidate spec bundle.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -25,6 +25,7 @@ This skill is a formal gate inside `specification`, not a workflow phase and not
 - classify each question by approval impact and recommend the smallest next action
 - keep the output compact enough for direct orchestrator reconciliation
 - preserve the escalation boundary: use this formal lane for full-orchestrated or protected-domain approval risk, not for lean-local ceremony
+- when used in multi-challenger fan-out, stay inside the assigned lens instead of trying to cover every domain
 
 ## Boundaries
 Do not:
@@ -43,13 +44,18 @@ Expect a compact bundle from the orchestrator:
 - constraints and validation expectations
 - known assumptions and open questions
 - links to relevant `research/*.md` or lane outputs when they matter
+- assigned lens or specialist domain when part of a multi-challenger fan-out
+- sibling lenses when part of a multi-challenger fan-out
+- scoped-down rationale when this is the only lane for a formal challenge that would otherwise look broad
 - confirmation that formal challenge is triggered, or the specific concern that made inline lean `Risk Challenge` insufficient
 
-If the bundle is too thin to challenge, say what is missing and classify the result as blocking approval rather than guessing.
+If the bundle is too thin to challenge, say what is missing and classify the result as blocking approval rather than guessing. In multi-challenger fan-out, a lens label without a concrete approval-critical question is missing input; ask for the smallest sharper question instead of producing a generic review.
 
 ## Question Selection
 Prefer 5-10 high-signal questions for complex work. Fewer is fine when fewer questions materially affect approval.
 A clean gate may return only a handful of questions, or none. Stop once approval risk is well bounded; do not expand the pass into a completeness sweep across every plausible domain concern.
+
+For multi-challenger fan-out, prefer 3-5 strongest non-duplicative questions per lane. Return more only when the assigned lens exposes genuinely separate approval risks. It is acceptable to return fewer or no questions when the lens is clear. Do not pad because sibling challenger lanes exist.
 
 Keep a question only if all are true:
 - it names a specific hidden assumption, corner case, or seam
@@ -60,11 +66,15 @@ Keep a question only if all are true:
 
 Drop questions that only ask for best-practice coverage, implementation detail, or "more thinking" without changing approval.
 
+When sibling lenses are provided, drop questions that primarily belong to another lane unless the point is a severity conflict or dependency the orchestrator must reconcile across lanes.
+
 ## Classification
 Use exactly one:
 - `blocks_spec_approval` when `spec.md` cannot be honestly approved until the answer is resolved, accepted as risk, or marked as an upstream blocker
 - `blocks_specific_domain` when approval depends on reopening one expert domain such as API, data, security, reliability, domain, QA, delivery, or architecture
 - `non_blocking_but_record` when the point should be explicit in `spec.md` but does not block approval if recorded, deferred, or accepted as risk
+
+These classification names remain stable when the skill is used as one lane in multi-challenger fan-out. `Lens` identifies coverage perspective only; it does not create a new severity or handoff vocabulary.
 
 ## Next Action
 Use exactly one:
@@ -80,9 +90,10 @@ Do not use `requires_user_decision` for questions the orchestrator can answer fr
 ## Reconciliation Expectations
 The orchestrator owns reconciliation after the subagent returns:
 - answer each planning-critical question from evidence where possible
+- for multi-lane fan-out, deduplicate sibling-lane findings and compare conflicting assumptions before recording outcomes
 - reopen targeted research or one read-only expert subagent per expert question when evidence is missing
 - record final resolved outcomes in existing `spec.md` sections, not raw subagent transcripts
-- update `workflow-plans/specification.md` with clarification challenge status, lane used, targeted research status, resolution status, and approval or block rationale
+- update `workflow-plans/specification.md` with clarification challenge status, lane or lane set used, lenses when relevant, targeted research status, resolution status, and approval or block rationale
 - update `workflow-plan.md` with `spec.md` status and clarification gate status
 - rerun this challenge once if material decisions changed or a major seam was reopened
 
@@ -105,6 +116,7 @@ Do not load `approval-blocker-question-examples.md` and `clarification-anti-patt
 ## Deliverable Shape
 Return:
 - `Clarification Summary`
+- `Lens`
 - `Questions`
 - `Reopen / Rerun Recommendation`
 - `Confidence`
@@ -136,3 +148,5 @@ Stop when:
 - turning the pass into architecture authorship, task breakdown, or approval theater
 - treating every visible adjacent-domain effect as a mandatory approval question
 - using formal challenge to add ceremony to bounded lean-local work when inline `Risk Challenge` is sufficient
+- in a multi-lane fan-out, ignoring the assigned lens and producing a generic whole-spec review that duplicates sibling challengers
+- treating a lens label as a question; each lane needs one concrete approval-critical question before it can produce useful output

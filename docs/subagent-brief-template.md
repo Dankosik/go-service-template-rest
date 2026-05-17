@@ -10,6 +10,7 @@ Scope:
 - Agent: <agent-name>
 - Mode: <research | review | adjudication | challenge>
 - Skill: <skill-name | no-skill>
+- Lens or specialist domain: <required for multi-lane fan-out; omit only when not applicable>
 - Read-only boundary: do not edit files, mutate git state, or change task ledgers or implementation handoffs.
 
 Context:
@@ -56,9 +57,52 @@ Short challenge/review variant:
 ```text
 Use <agent-name> for read-only <challenge | review> with <skill-name | no-skill>.
 Scope: <artifact, diff, or decision being challenged/reviewed>.
+Lens: <specific approval-risk lens or specialist domain when part of multi-lane fan-out>.
 Question: <one approval-, risk-, or correctness-critical question>.
 Inspect first: <small path list>.
 Evidence: cite exact files/artifacts/commands; separate facts from assumptions.
 Return: findings only, ordered by impact, with one recommended handoff classification.
 Do not edit files, mutate git state, approve decisions, or change task ledgers/handoffs.
+```
+
+Technical design review variant:
+
+```text
+Use <design-integrator-agent | specialist-agent> for read-only technical design review with <go-design-spec | specialist skill | no-skill>.
+Gate: technical design review before planning.
+Scope: <design bundle or design artifact set being reviewed>.
+Question: Is this technical design coherent and safe enough for planning, or must technical design/specification reopen?
+Inspect first:
+- <task>/spec.md
+- <task>/design/overview.md
+- <task>/design/<triggered artifacts>
+- <task>/workflow-plan.md and <task>/workflow-plans/technical-design*.md when present
+- docs/repo-architecture.md when boundaries, ownership, dependency direction, or runtime flow matter
+Evidence: cite concrete artifact sections and source facts; label assumptions.
+Return: Findings classified as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`; required fixes or reopen targets; accepted-risk candidates; planning proof obligations; recommended gate result: PASS | CONCERNS | FAIL.
+Read-only: no edits, no git mutation, no approval authority, no task-ledger or implementation handoff changes.
+```
+
+Multi-challenger clarification variant:
+
+```text
+Shared candidate bundle:
+- Workflow phase: <specification phase or equivalent>
+- Candidate spec: <path>
+- Related artifacts: <workflow-plan/design/research/tasks paths if relevant>
+- Shared constraints/non-goals: <short list>
+- Sibling lenses: <names of the other planned challenge lenses, so this lane avoids duplicate coverage>
+- Fan-in owner: orchestrator reconciles all lane outputs; lanes do not approve decisions.
+- Scoped-down rationale: <required when using fewer lanes than the broad formal default; omit for full lens set>
+
+Lane:
+- Agent: challenger-agent
+- Mode: challenge
+- Skill: spec-clarification-challenge
+- Lens: <scope/spec coherence | domain invariants | architecture ownership | API/data/compatibility | security/reliability/delivery/validation | custom lens>
+- Question: <one concrete approval-critical question for this lens; not a generic topic label>
+- Inspect first: <small path list, plus lens-specific files only>
+- Evidence: cite exact files/artifacts/commands; separate facts from assumptions.
+- Return: spec-clarification-challenge shape, with the lens named and only the strongest non-duplicative findings/questions ordered by approval impact.
+- Read-only: no edits, no git mutation, no task-ledger or handoff changes.
 ```

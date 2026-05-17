@@ -49,10 +49,11 @@ Before editing, make the implementation target concrete:
 Keep workflow ownership outside this skill:
 - consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, an approved `tasks.md` is sufficient to start the next small implementation task when required decisions/context artifacts exist and readiness permits it
 - for non-trivial planned work, check the recorded implementation-readiness status in `workflow-plan.md` and the planning handoff when those artifacts exist
+- for non-trivial planned work with separate design depth, confirm the technical design review gate is recorded as reconciled before treating planning as implementation-ready
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
-- if the safe implementation depends on a missing decision, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or task-breakdown repair instead of inventing behavior
+- if the safe implementation depends on a missing decision, missing technical-design-review gate, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or task-breakdown repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
 
 ## Implementation-Readiness Gate

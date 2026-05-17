@@ -1,16 +1,16 @@
 ---
 name: technical-design-session
-description: "Own a session dedicated only to task-local technical design for this repository when separate design depth is triggered. Use when approved `spec.md` must be turned into an approved `design/` bundle or a planning-ready `design/overview.md`, with any triggered workflow-control artifacts updated for the planning handoff, without drifting into renewed framing, `tasks.md`, or implementation. Skip direct-path work, lean-local work whose compact design fits in `spec.md`, unstable or contradictory `spec.md`, and tasks already in planning or later."
+description: "Own a session dedicated only to task-local technical design for this repository when separate design depth is triggered. Use when approved `spec.md` must be turned into a review-ready `design/` bundle or `design/overview.md`, with any triggered workflow-control artifacts updated for the mandatory technical-design-review handoff, without drifting into renewed framing, `tasks.md`, planning, or implementation. Skip direct-path work, lean-local work whose compact design fits in `spec.md`, unstable or contradictory `spec.md`, and tasks already in technical design review or later."
 ---
 
 # Technical Design Session
 
 ## Purpose
 Run only the technical-design checkpoint for one task-local session.
-This wrapper makes the `spec.md -> design/ -> tasks.md` handoff explicit: it produces or updates the task-local design bundle, updates both workflow control artifacts, and then stops.
+This wrapper makes the `spec.md -> design/ -> technical design review` handoff explicit: it produces or updates the task-local design bundle, updates workflow control artifacts, and then stops before the mandatory review gate.
 
 Use `.agents/skills/go-design-spec/SKILL.md` as the deeper integrated design method when cross-domain reconciliation or simplification work is needed.
-Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns session protocol, allowed writes, stop rules, and planning handoff only.
+Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns session protocol, allowed writes, stop rules, and technical-design-review handoff only.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -24,7 +24,7 @@ Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns s
 ## Use When
 - approved or planning-stable `spec.md` exists and trigger-based design depth is needed before planning
 - lean-local `design/overview.md` or full split `design/` is missing, stale, partial, or internally inconsistent after being triggered
-- master `workflow-plan.md` needs the `technical-design` checkpoint completed or updated before a later planning session
+- master `workflow-plan.md` needs the `technical-design` checkpoint completed or updated before the technical-design-review stage
 - the task needs triggered design artifacts, triggered conditional artifacts, or a clean design handoff for `planning-and-task-breakdown`
 - the session should stay bounded to technical design instead of spilling into `tasks.md` or code
 
@@ -33,8 +33,8 @@ Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns s
 - lean-local `spec.md` already contains enough `Compact Design` context for planning and records why separate design is not expected
 - `spec.md` is missing, unstable, contradictory, or still needs research, challenge reconciliation, or specification work
 - the task is already in `planning` or a later phase and does not intentionally need design repair
-- approved compact or split design context already exists and the real next step is execution planning
-- the request tries to combine technical design with writing `tasks.md`, implementation, tests, migrations, or review execution
+- approved compact or split design context already exists and the real next step is technical design review, planning, or execution
+- the request tries to combine technical design with technical design review, writing `tasks.md`, implementation, tests, migrations, or post-code review execution
 
 ## Required Inputs
 Need only the minimum phase-ready inputs:
@@ -84,7 +84,7 @@ Default loading rule:
 - Do not load the full `references/` directory by default.
 - Check repo-local authority first: `AGENTS.md`, `docs/spec-first-workflow.md`, task-local workflow files, approved `spec.md`, and `docs/repo-architecture.md` when triggered.
 - Do not copy examples blindly; bind them to the current task's phase, artifacts, blockers, and approved decisions.
-- If a reference exposes a missing decision, route back to `specification`. If it exposes missing execution sequencing, stop at the planning handoff instead of writing `tasks.md`.
+- If a reference exposes a missing decision, route back to `specification`. If it exposes missing execution sequencing, record it for the technical-design-review handoff instead of writing `tasks.md`.
 
 Routing table:
 
@@ -95,7 +95,7 @@ Routing table:
 | [references/required-design-artifact-examples.md](references/required-design-artifact-examples.md) | The core design bundle needs creation, repair, or boundary cleanup across overview, component map, sequence, or ownership map. | Splits task-local technical context into the four required artifacts instead of writing one design dump or hiding design content in workflow files. |
 | [references/conditional-design-artifact-triggers.md](references/conditional-design-artifact-triggers.md) | Optional design artifacts, `test-plan.md`, or `rollout.md` might be needed, or an existing conditional artifact looks like filler. | Creates only artifacts with real pressure and records `not expected` otherwise instead of creating all optional files or skipping planning-critical context. |
 | [references/workflow-plan-technical-design-updates.md](references/workflow-plan-technical-design-updates.md) | Workflow-control files need design artifact status, blocker, repair, reopen, session-boundary, or next-session updates. | Records master and phase-local routing state instead of leaving state in chat, duplicating design content, or letting workflow files disagree. |
-| [references/planning-handoff-and-stop-rules.md](references/planning-handoff-and-stop-rules.md) | Technical design is being closed, marked planning-ready, blocked, or pressured to continue into planning or implementation. | Hands off to a later planning session or reopen target instead of drafting `tasks.md`, code, tests, migrations, generated files, or review output. |
+| [references/planning-handoff-and-stop-rules.md](references/planning-handoff-and-stop-rules.md) | Technical design is being closed, marked review-ready, blocked, or pressured to continue into review, planning, or implementation. | Hands off to the mandatory technical-design-review stage or reopen target instead of drafting `tasks.md`, code, tests, migrations, generated files, or review output. |
 
 ## Allowed Writes
 This session may write or update only:
@@ -119,7 +119,7 @@ Do not:
 - reopen problem framing casually or rewrite approved scope just because design is hard
 - rewrite `spec.md` instead of escalating back to `specification`
 - write `tasks.md`
-- start implementation, tests, migrations, contract generation, or review execution
+- start technical design review, implementation, tests, migrations, contract generation, or post-code review execution
 - use planning or implementation skills as a backdoor into later phases
 - let `workflow-plans/technical-design.md` become a second design bundle or second `tasks.md`
 - treat `design/contracts/` as a runtime source of truth; it is design-only task context and canonical runtime sources still win
@@ -130,22 +130,22 @@ Do not:
 - `AGENTS.md` owns the workflow contract and `docs/spec-first-workflow.md` owns artifact mechanics
 - `spec.md` owns final decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` comes later in a different session
 - use `go-design-spec` as the deeper design-integrity method when you need integration, contradiction cleanup, or simplification beyond simple artifact upkeep
-- for non-trivial work, this session ends at a planning-ready or explicitly blocked design bundle; planning begins in a new session unless an approved waiver already exists
+- for non-trivial work, this session ends at a review-ready or explicitly blocked design bundle; technical design review begins in a new stage unless an explicit compact-design waiver already covers the task
 - required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` rather than guessed into existence
 - `lean local` may use `spec.md` `Compact Design` or one `design/overview.md`; split core design files are for triggered depth, not the default for bounded work
-- planning-ready means the current decision frontier is closed for the next safe slice, not that every visible downstream concern was expanded into its own design task
+- review-ready means the design author believes the current decision frontier is closed, but planning still waits for the mandatory technical design review gate
 - triggered design artifacts are required questions, not equal-length documents; concise approved artifacts are valid when they make stable boundaries and current changes explicit enough for planning
 
 ## Boundary With `go-design-spec`
 `technical-design-session` and `go-design-spec` are complementary, not competing:
-- use `technical-design-session` to confirm phase entry, choose the exact writable surface, update `workflow-plan.md`, update `workflow-plans/technical-design.md`, enforce the stop rule, and hand off to planning
+- use `technical-design-session` to confirm phase entry, choose the exact writable surface, update `workflow-plan.md`, update `workflow-plans/technical-design.md`, enforce the stop rule, and hand off to technical design review
 - use `go-design-spec` inside this session when you need the deeper integrated design method for cross-domain reconciliation, simplification, or design-readiness judgment
 - do not copy the full `go-design-spec` discipline into this wrapper; link to it and reuse it
 - do not let `go-design-spec` blur the session boundary into `tasks.md` or implementation
 
 ## Required Design Artifacts
 For full-orchestrated or otherwise triggered split-design work, the technical-design session should leave these artifacts approved or explicitly blocked with reasons:
-- `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
+- `design/overview.md` for chosen approach, artifact index with review-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
 - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; what changes; what remains stable; and which plausible surfaces are intentionally not touched
 - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
 - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
@@ -170,14 +170,14 @@ Create these only when their trigger is real:
 
 If a trigger is not real, record the artifact as `not expected` with trigger rationale instead of creating filler.
 
-Technical design owns the trigger decision for `test-plan.md` and `rollout.md` when validation or rollout shape affects planning readiness. Create them here only when the approved `spec.md` and current design context are enough to write the artifact honestly. If the trigger is plausible but planning must decide from execution detail, record it as `conditional` with the decision point instead of creating a placeholder.
+Technical design owns the trigger decision for `test-plan.md` and `rollout.md` when validation or rollout shape affects later planning readiness. Create them here only when the approved `spec.md` and current design context are enough to write the artifact honestly. If the trigger is plausible but planning must decide from execution detail, record it as `conditional` with the decision point instead of creating a placeholder.
 
 ## Workflow
 
 ### 1. Confirm This Session Owns Technical Design Only
 - confirm the current phase is `technical-design` or that the task is explicitly resuming this phase
 - if the task is still in research or specification, stop and route it back instead of starting design early
-- if approved design already exists and the real next step is planning, stop and hand off to the planning session
+- if approved design already exists and the real next step is technical design review or planning, stop and route to the recorded next phase instead of rewriting design
 - if the task is direct path or lean local with enough compact design context already recorded, say so directly and do not force this wrapper
 
 ### 2. Verify Design Entry Preconditions
@@ -193,12 +193,12 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 ### 4. Run The Integrated Design Pass
 - use `go-design-spec` when cross-domain design integrity, simplification, or contradiction cleanup is the hard part
 - keep the work inside technical design: reconcile architecture, API, data, reliability, security, observability, testing, and rollout implications only as far as they shape the design bundle or force a new current decision
-- if the design exposes a planning-critical spec gap, stop treating the session as planning-ready and route back to `specification`
+- if the design exposes a planning-critical spec gap, stop treating the session as review-ready and route back to `specification`
 
 ### 5. Write Or Repair The Design Bundle
 - produce or tighten the required core artifacts
 - create only the conditional artifacts whose trigger is real
-- keep `design/overview.md` as the entrypoint and link surface for the bundle, with required artifact status and conditional trigger rationale visible when the bundle is planning-bound
+- keep `design/overview.md` as the entrypoint and link surface for the bundle, with required artifact status and conditional trigger rationale visible when the bundle is review-bound
 - for `test-plan.md` and `rollout.md`, write the artifact only when the validation or rollout shape is design-ready; otherwise record the conditional trigger and decision point for planning
 - keep technical design in `design/`, `test-plan.md`, or `rollout.md` where appropriate; do not absorb it into `spec.md` or phase-control files
 
@@ -216,12 +216,12 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 
 ### 7. Write Or Repair `workflow-plan.md`
 - update current phase status, design artifact status, blockers, reopen conditions, and next-session routing
-- record whether planning can start next, whether the task must return to `specification`, or whether technical design remains blocked
+- record whether technical design review can start next, whether the task must return to `specification`, or whether technical design remains blocked
 - keep the master file as routing/control, not as a second design document
 
 ### 8. Stop At The Boundary
 - once the design bundle and workflow artifacts are consistent, stop
-- do not begin `tasks.md`, implementation work, or validation execution in this session
+- do not begin technical design review, `tasks.md`, implementation work, or validation execution in this session
 
 ## Required Master `workflow-plan.md` Updates
 Every completed or blocked pass must update the master file with:
@@ -229,14 +229,14 @@ Every completed or blocked pass must update the master file with:
 - link or status for `workflow-plans/technical-design.md`
 - status for each triggered design artifact, including whether design stayed merged in `spec.md`, one `design/overview.md`, or split design
 - status for each triggered conditional artifact, including `test-plan.md` or `rollout.md` when applicable; include a short trigger rationale for `not expected`, `conditional`, or `waived` statuses rather than a bare label
-- blockers, accepted assumptions, reopen conditions, and any reason the next session cannot start with planning
+- blockers, accepted assumptions, reopen conditions, and any reason the next session cannot start with technical design review
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
 - `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - updated artifact status for `spec.md`, `design/`, `tasks.md`, and any triggered later artifacts
 
-Do not leave planning readiness or the reopen point implicit in chat.
+Do not leave review readiness or the reopen point implicit in chat.
 
 ## Expected Outputs
 A finished technical-design session produces only technical-design-phase artifacts and routing:
@@ -246,7 +246,7 @@ A finished technical-design session produces only technical-design-phase artifac
 - updated or newly created `workflow-plans/technical-design.md`
 - an honest technical-design phase status such as `complete` or `blocked`, plus a separate routing state such as `reopen specification` when relevant
 
-It does not produce `tasks.md`, implementation code, migration scripts, or review output.
+It does not produce `tasks.md`, implementation code, migration scripts, or technical design review output.
 
 ## Required Final Chat Handoff
 When this session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a `Recommended next-session prompt` section with one copy-pastable fenced text block.
@@ -266,12 +266,12 @@ Rules:
 
 ## Phase-Local Stop Condition
 The session is complete when one of these is true:
-- planning-ready handoff:
-- triggered design artifacts are approved, or design is explicitly merged/waived by the lean-local rationale
+- review-ready handoff:
+  - triggered design artifacts are approved, or design is explicitly merged/waived by the lean-local rationale
   - triggered conditional artifacts are approved or explicitly not expected
   - planning-critical contradictions are resolved or made explicit
   - remaining downstream effects are classified as `forces new decision`, `forces handoff`, `forces proof obligation`, or `no new decision required`
-  - master and phase-local workflow artifacts agree that the next session starts with `planning`
+  - master and phase-local workflow artifacts agree that the next session starts with `technical design review`
 - blocked or loop-back handoff:
   - the missing decision or contradiction is explicit
   - the workflow artifacts record why technical design cannot finish honestly
@@ -279,17 +279,20 @@ The session is complete when one of these is true:
 
 In all cases:
 - `workflow-plan.md` and `workflow-plans/technical-design.md` must agree on phase status, blockers, and next action
-- the stop rule must remain "do not begin planning or implementation in this session"
+- the stop rule must remain "do not begin technical design review, planning, or implementation in this session"
 
-## Planning Handoff
-When the session is planning-ready, hand planning exactly this:
+## Technical Design Review Handoff
+When the session is review-ready, hand technical design review exactly this:
 - approved `spec.md`
 - approved lean compact design context, one `design/overview.md`, or triggered split design artifacts
 - approved triggered conditional design artifacts, or explicit `not expected` rationale
 - any triggered `design/data-model.md`, `design/dependency-graph.md`, or `design/contracts/`
 - `test-plan.md` or `rollout.md` when triggered, or an explicit workflow note that they are not expected
-- unresolved assumptions, accepted trade-offs, and reopen conditions that planning must preserve
-- master and phase-local workflow artifacts updated so the next session starts with `planning`
+- unresolved assumptions, accepted trade-offs, non-goals, and reopen conditions that review and later planning must preserve
+- the expected review question, gate output, and any proof obligations already forced by the design
+- master and phase-local workflow artifacts updated so the next session starts with `technical design review`
+
+The handoff is the review packet. It should be complete enough for the reviewer to classify findings and recommend `PASS`, `CONCERNS`, or `FAIL` without rediscovering which artifacts are authoritative or which conditional artifacts are expected.
 
 If that handoff is not honest yet, route backward or stay blocked instead of drafting `tasks.md` as a workaround.
 
@@ -298,7 +301,7 @@ Escalate instead of forcing output when:
 - `spec.md` is missing, unstable, or still contradicts itself in a planning-critical way
 - a requested design artifact would be filler because its trigger is not real
 - the task is so small that a dedicated design session would be ceremony and a recorded design-skip rationale is the right answer
-- the request tries to combine technical design with planning or implementation
+- the request tries to combine technical design with technical design review, planning, or implementation
 - stable repository architecture context materially matters and has not been loaded yet
 - a required design artifact cannot be completed honestly without reopening `spec.md`
 - phase control already shows that the task has moved to planning or later

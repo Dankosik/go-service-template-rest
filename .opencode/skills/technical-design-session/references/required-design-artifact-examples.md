@@ -7,7 +7,7 @@ When loaded for shaping a triggered split design bundle, this file makes the mod
 Load when creating or repairing `design/overview.md`, `design/component-map.md`, `design/sequence.md`, or `design/ownership-map.md`.
 
 ## Decision Rubric
-- `design/overview.md` is the entrypoint: chosen approach, artifact index, unresolved seams, readiness summary, and links to triggered conditional artifacts. When planning will consume the bundle, the artifact index should show triggered artifact status and trigger rationale for plausible conditional artifacts.
+- `design/overview.md` is the entrypoint: chosen approach, artifact index, unresolved seams, readiness summary, and links to triggered conditional artifacts. When technical design review will consume the bundle, the artifact index should show triggered artifact status and trigger rationale for plausible conditional artifacts.
 - `design/component-map.md` owns affected packages, modules, generated surfaces, adapters, stable areas, and intentionally untouched plausible surfaces; it is not an implementation task list.
 - `design/sequence.md` owns runtime order: request, async, startup, shutdown, failure points, side effects, recovery or retry boundaries when relevant, and sync/async boundaries.
 - `design/ownership-map.md` owns source-of-truth, dependency direction, generated-code authority, adapter responsibility, and what must not own the behavior.
@@ -26,7 +26,7 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
   - `design/contracts/`: expected because the OpenAPI shape changes.
   - `test-plan.md`: not expected; validation obligations fit in `tasks.md`.
   - `rollout.md`: not expected; no mixed-version choreography is in scope.
-- Readiness: planning can start after `design/contracts/` is approved.
+- Readiness: technical design review can start after `design/contracts/` is approved.
 ```
 
 Copy this shape: overview points to the bundle, makes required artifact status scannable, gives trigger rationale for plausible conditional artifacts, and keeps readiness honest.
@@ -74,4 +74,4 @@ Failure: planning-critical source-of-truth ownership is deferred to coding.
 - Creating a polished `design/overview.md` while the required map or sequence files stay empty.
 - Repeating `spec.md` decisions without adding repository fit, runtime order, or ownership.
 - Turning component map bullets into T001/T002 execution steps.
-- Marking the bundle planning-ready while required artifacts disagree with each other.
+- Marking the bundle review-ready while required artifacts disagree with each other.

@@ -43,6 +43,16 @@ Use:
 - `Recommended Action`: `clarify_artifact_status`
 - `Exact Orchestrator Addition`: Align both files to `design/: draft; missing approval: ownership-map.md`; keep the design content in `design/`, not in workflow control.
 
+### Separate design lacks review gate status
+`Gap`: `design/overview.md` or split `design/` is approved, but neither the master nor phase-local control records technical design review status before planning.
+
+Why to copy: planning could start from an unreviewed design bundle, which violates the mandatory pre-planning gate.
+
+Use:
+- `Classification`: `blocks_phase_handoff`
+- `Recommended Action`: `clarify_artifact_status`
+- `Exact Orchestrator Addition`: Add `technical design review: missing; blocker: run or record the technical-design-review gate before planning`; if already reviewed, add `technical design review: PASS | CONCERNS | FAIL` plus accepted design risks/proof obligations or reopen target.
+
 ## Reject
 - "Add the whole `tasks.md` checklist to `workflow-plan.md`." The master tracks status and routing, not executable task state.
 - "Create `test-plan.md` just to be complete." Conditional artifacts need real triggers.

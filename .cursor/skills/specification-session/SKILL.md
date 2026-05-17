@@ -119,7 +119,7 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the artifact mechanics
 - this wrapper owns specification-session protocol only and must not redefine spec shape, design rules, or planning behavior
 - use `spec-document-designer` as the deeper method for writing or normalizing `spec.md`
-- for lean-local work, record inline `Risk Challenge`; for full-orchestrated, high-risk, protected-domain, or otherwise triggered work, run the clarification challenge with a read-only subagent lane, preferably `challenger-agent`, using exactly one skill: `spec-clarification-challenge`
+- for lean-local work, record inline `Risk Challenge`; for full-orchestrated, high-risk, protected-domain, or otherwise triggered work, run formal clarification with read-only challenger lane(s), preferably `challenger-agent` using `spec-clarification-challenge`; broad formal clarification uses distinct lenses rather than one generic challenger
 - the clarification subagent returns questions for orchestrator reconciliation; it never edits files or makes final decisions
 - keep the wrapper focused on session readiness, allowed writes, handoff, and stop rules
 - a finished specification session ends at approved `spec.md` for the triggered checkpoint unless an earlier recorded direct/lean waiver already allows phase collapse
@@ -154,8 +154,9 @@ Do not:
 
 ### 4. Run The Autonomous Clarification Gate
 - for lean local with no escalation trigger, record inline `Risk Challenge` in `spec.md` and classify it as `PASS`, `CONCERNS`, or `FULL_REQUIRED`
+- `Risk Challenge=CONCERNS` alone does not trigger formal multi-challenger clarification; inspect whether the concern exposes unresolved scope, ownership, proof, or escalation gaps that cannot be honestly closed inline
 - for full-orchestrated, high-risk, protected-domain, or otherwise triggered work, prepare a compact input bundle: problem frame, scope and non-goals, candidate decisions, constraints, validation expectations, known assumptions or open questions, and relevant research links
-- invoke one read-only subagent lane, preferably `challenger-agent`, with exactly one skill: `spec-clarification-challenge`
+- invoke the appropriate read-only challenger lane set, preferably `challenger-agent` with `spec-clarification-challenge`; use five distinct lenses by default for broad formal clarification, and use one lane only when the approval risk is narrowly concentrated and the scoped-down rationale is recorded
 - answer each returned question from existing evidence when possible
 - if an answer requires expert work, reopen targeted research or fan-out with one read-only lane per expert question and one skill per lane; in a dedicated specification session, record the reopen and stop unless an upfront direct/lean waiver already allowed same-session collapse
 - if a question is truly external product or business policy and cannot be answered from repo evidence or safe assumptions, record `requires_user_decision` and leave `spec.md` blocked or partially draft instead of inventing the answer
@@ -168,7 +169,8 @@ Do not:
   - input sources used
   - whether the pass is fresh, continuation, or repair
   - clarification challenge status
-  - subagent lane used for the clarification challenge, or the direct/lean waiver rationale
+  - subagent lane or lane set used for the clarification challenge, including lenses for multi-challenger fan-out, or the direct/lean waiver rationale
+  - scoped-down rationale when fewer than the broad default lens set is used
   - whether targeted research was reopened
   - clarification resolution status
   - why `spec.md` is approved, draft, or blocked
@@ -205,6 +207,7 @@ Every completed or blocked pass must update the master file with:
 - link or status for `workflow-plans/specification.md`
 - status for `spec.md` as `approved`, `draft`, or `blocked`
 - clarification gate status, including inline lean `Risk Challenge` or formal `spec-clarification-challenge`
+- formal clarification lane status using `Lanes:` and `Lenses:` when multi-lane, plus `Scoped-down rationale:` when fewer than the broad default is used
 - whether the task is spec-ready for compact lean tasking, triggered `technical design`, or whether research, expert subagent work, or challenge reopened
 - `Session boundary reached`
 - `Ready for next session`

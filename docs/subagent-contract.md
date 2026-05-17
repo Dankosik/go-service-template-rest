@@ -2,18 +2,22 @@
 
 Shared contract for repository read-only subagents. `AGENTS.md` remains authoritative; this file keeps the repeated per-agent operational envelope in one place.
 
-Subagents are triggered by unresolved owned questions, not by default workflow ceremony. Use a lane only when independent evidence, challenge, adjudication, or specialist review can materially improve the current artifact or execution decision.
+Subagents are triggered by unresolved owned questions, not by default workflow ceremony. Use a lane only when independent evidence, challenge, adjudication, or specialist review can materially improve the current artifact or execution decision. The explicit exception is technical design review: when separate technical design depth is triggered, a distinct read-only review gate is mandatory before planning, with lane depth scaled to the task risk.
 
 ## Shared Invariants
 
 - Subagents are advisory and read-only: no code writes, file edits, git-state mutation, task-ledger changes, or implementation-handoff changes.
 - Final decisions, synthesis, implementation, reconciliation, and validation belong to the orchestrator.
-- Each pass uses at most one skill. If a selected skill defines a procedure or output shape, the skill owns it.
+- Each lane uses at most one skill. If a selected skill defines a procedure or output shape, the skill owns it.
 - Agent files own domain scope, use/do-not-use rules, inspect-first surfaces, skill routing, and unique escalation rules.
 - Deep design and corner-case coverage stay in scope, but downstream effect alone does not create a new required domain decision.
 - Open another lane only when another domain must make a new decision before the current artifact can be high quality; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
 - Direct and lean-local work normally stays local unless a real unresolved question triggers a lane.
-- Full-orchestrated work may use multiple lanes, but each lane still needs one owned question and one skill or `no-skill`.
+- Lean-local work with a separate `design/overview.md` must still record a technical design review checkpoint before planning; it may be local when no formal lane trigger exists.
+- Full-orchestrated work may use multiple lanes, but each lane still needs one owned question, one lens or specialist domain, and one skill or `no-skill`.
+- Full-orchestrated triggered design normally uses at least one technical-design-review lane before planning. A local-only review needs a scoped-down rationale.
+- Broad formal spec clarification normally uses multiple challenger lanes with distinct lenses instead of one generic challenger. More lanes are justified by independent approval-risk domains, including when one default lens bundles domains that are independently approval-critical for the task; fewer lanes require a scoped-down rationale.
+- Lens is metadata for coverage, not a replacement for existing challenge or handoff classification vocabularies.
 - Do not invent missing artifacts, source facts, policy decisions, diffs, validation output, or skill results.
 - If input is insufficient, return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed`.
 - If a bounded assumption is safe enough, label it and proceed.
@@ -26,11 +30,21 @@ Every handoff should include:
 - expected mode: research, review, adjudication, or challenge,
 - current workflow phase and task-local artifact paths when present,
 - relevant diff, source files, source-of-truth documents, or specialist outputs to inspect,
+- lens or specialist domain when part of a multi-lane fan-out,
 - constraints, risk hotspots, non-goals, and known blockers,
 - chosen skill name or `no-skill`,
 - explicit read-only boundary.
 
 For short challenge or review lanes, the input bundle may be compressed to one paragraph plus inspect-first paths, as long as the exact question, evidence requirement, skill, and read-only boundary remain explicit.
+
+For technical design review lanes, include the review gate status target and inspect the design bundle before implementation artifacts:
+
+- approved `spec.md`;
+- `design/overview.md` and triggered split or conditional design artifacts;
+- `workflow-plan.md` and `workflow-plans/technical-design.md` or `workflow-plans/technical-design-review.md` when present;
+- `docs/repo-architecture.md` when boundary, ownership, dependency direction, or runtime flow matters;
+- relevant specialist outputs;
+- known assumptions, accepted trade-offs, non-goals, reopen conditions, and expected planning proof obligations.
 
 ## Fan-In Envelope
 
@@ -60,6 +74,32 @@ Recommended handoff classifications:
 
 Pair the classification with the target owner or artifact and the smallest next step.
 
+Technical design review fan-in must end with one gate result:
+
+- `PASS`: planning may start from the reviewed design.
+- `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
+- `FAIL`: planning must not start; reopen technical design or specification.
+
+Classify each technical design review finding by strongest planning impact:
+
+- `blocks_planning`: planning would invent or hide an important decision if it started now.
+- `reopens_design`: the design bundle must change before review can pass.
+- `reopens_spec`: the approved problem frame, invariant, scope, or contract must change.
+- `accepted_risk_candidate`: the orchestrator may accept the risk only with a named reason and boundary.
+- `proof_obligation`: planning may proceed only if the obligation is carried into `tasks.md`, `test-plan.md`, or `rollout.md`.
+- `record_only`: useful context that does not affect planning entry.
+
+`CONCERNS` is valid only when no finding still has `blocks_planning`, `reopens_design`, or `reopens_spec`, and the remaining accepted risks or proof obligations are named for planning.
+
+For multi-lane fan-out, the orchestrator must reconcile lane outputs before treating the gate as complete:
+
+- deduplicate overlapping findings;
+- resolve or record conflicting assumptions;
+- treat lane-level missing input, unresolved blockers, and material blocker-severity conflicts as blocking the relevant approval area until answered, explicitly waived or accepted as risk, or routed to the owning phase;
+- preserve only final decisions, assumptions, constraints, proof obligations, accepted risks, or reopen targets in authoritative artifacts;
+- keep raw lane transcripts out of `spec.md`, `design/`, and `tasks.md`.
+- keep existing per-lane classification names stable unless the workflow docs and templates are intentionally changed together.
+
 ## Escalation Rules
 
 Escalate instead of stretching the lane when:
@@ -75,4 +115,4 @@ Do not escalate only because another domain is affected. If that domain does not
 
 ## Brief Quality Bar
 
-Good subagent briefs are narrow, evidence-oriented, explicit about output, and centered on one owned question instead of a parallel cross-domain design package. Start from `docs/subagent-brief-template.md` when the lane is not trivial; use the short variant for focused challenge or review lanes.
+Good subagent briefs are narrow, evidence-oriented, explicit about output, and centered on one owned question instead of a parallel cross-domain design package. For multi-challenger clarification, all lanes may share the same candidate spec bundle, but each lane must have a distinct lens and a fan-in path. Start from `docs/subagent-brief-template.md` when the lane is not trivial; use the short variant for focused challenge or review lanes.

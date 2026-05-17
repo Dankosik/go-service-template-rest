@@ -9,7 +9,7 @@ Load before starting or resuming technical design when `spec.md`, current phase,
 ## Decision Rubric
 - Start only when `spec.md` is approved or explicitly planning-stable enough for design, and any required clarification gate status is recorded.
 - Confirm master `workflow-plan.md` and `workflow-plans/technical-design.md` agree that the current session owns `technical-design`, or that a reopen target intentionally points back here.
-- If workflow control says the next session starts with `planning` and approved design already exists, stop and hand off instead of reworking design by momentum.
+- If workflow control says the next session starts with `technical design review` or `planning` and approved design already exists, stop and hand off instead of reworking design by momentum.
 - If the user asks for `tasks.md`, code, tests, migrations, generation, or review in the same request, keep this session to design writes and record the later phase as the next session.
 - If `spec.md` contains a planning-critical contradiction, route back to `specification`; do not solve it by inventing design authority.
 
@@ -18,7 +18,7 @@ Load before starting or resuming technical design when `spec.md`, current phase,
 Entry readiness: pass.
 Evidence: `spec.md` approved; clarification gate resolved; current phase is `technical-design`.
 Allowed writes: `design/`, `workflow-plan.md`, and `workflow-plans/technical-design.md` only.
-Next action: build or repair the design bundle, then stop at the planning handoff.
+Next action: build or repair the design bundle, then stop at the technical-design-review handoff.
 ```
 
 Copy this shape: it ties entry permission to artifacts and names the exact write boundary.
@@ -34,7 +34,7 @@ Copy this shape: it blocks for the missing decision instead of using design to h
 
 ```markdown
 Entry readiness: no-op handoff.
-Reason: design artifacts are approved and workflow control says the next session starts with `planning`.
+Reason: design artifacts are approved and workflow control says the next session starts with `technical design review` or `planning`.
 Stop rule: do not reopen technical design unless a recorded blocker or stale artifact requires repair.
 ```
 

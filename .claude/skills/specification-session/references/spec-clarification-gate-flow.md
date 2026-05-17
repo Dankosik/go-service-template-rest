@@ -9,7 +9,9 @@ Load this before full-orchestrated, high-risk, protected-domain, or otherwise fo
 ## Decision Rubric
 - Run the challenge only after candidate decisions are concrete enough to inspect.
 - Prepare a compact bundle: problem frame, scope, non-goals, candidate decisions, constraints, validation expectations, assumptions, open questions, and relevant research links.
-- Use one read-only lane, preferably `challenger-agent`, with exactly one skill: `spec-clarification-challenge`.
+- Use read-only challenger lane(s), preferably `challenger-agent` with `spec-clarification-challenge`. Broad or multi-domain full-orchestrated, protected-domain, high-risk, cross-domain, hard-to-reverse, or user-requested deep challenge work should use five distinct lenses by default: scope/spec coherence; domain invariants/edge cases; architecture ownership/dependency boundaries; API/data/compatibility/source-of-truth; security/reliability/delivery/validation proof.
+- Use one lane only when the approval risk is narrowly concentrated and the scoped-down rationale is recorded. Each lane still uses one skill.
+- Keep `Lens` as coverage metadata. Lane outputs still use existing `spec-clarification-challenge` classifications.
 - Reconcile every returned question before approval, including `non_blocking_but_record` items that must become constraints, assumptions, or validation consequences.
 - If a question requires expert work, record the reopen and stop unless an upfront direct/lean waiver permits same-session collapse.
 - Paste final resolved outcomes into `spec.md`; do not paste the raw challenge transcript.
@@ -29,7 +31,9 @@ Resolved gate in `workflow-plans/specification.md`:
 
 ```text
 Clarification challenge: complete
-Lane: challenger-agent with spec-clarification-challenge
+Lanes: challenger-agent with spec-clarification-challenge
+Lenses: scope/spec coherence; domain invariants/edge cases; architecture ownership; API/data/compatibility; security/reliability/delivery/validation
+Scoped-down rationale: N/A; broad default lens set used
 Resolution: all approval-changing questions answered from existing evidence
 Targeted research reopened: no
 Approval rationale: spec.md decisions now cover scope, constraints, validation, and accepted assumptions.

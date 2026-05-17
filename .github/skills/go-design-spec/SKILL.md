@@ -1,12 +1,12 @@
 ---
 name: go-design-spec
-description: "Assemble and reconcile integrated technical-design context for Go services when separate design depth is triggered. Use when `spec.md` is approved but the work still needs coherent task-local `design/` artifacts, one `design/overview.md`, or cross-domain reconciliation before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work, lean-local work with sufficient compact design in `spec.md`, implementation coding, review execution, or CI/container setup."
+description: "Assemble and reconcile integrated technical-design context for Go services when separate design depth is triggered. Use when `spec.md` is approved but the work still needs coherent task-local `design/` artifacts, one `design/overview.md`, cross-domain reconciliation before the mandatory technical design review, or read-only technical-design-review analysis before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work, lean-local work with sufficient compact design in `spec.md`, implementation coding, post-code review execution, or CI/container setup."
 ---
 
 # Go Design Spec
 
 ## Purpose
-Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave compact or split design context stable enough for planning by closing the current decision frontier without reopening the approved problem frame.
+Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave compact or split design context stable enough for mandatory technical design review by closing the current decision frontier without reopening the approved problem frame.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -18,7 +18,7 @@ Act as the integrator for task-local technical design: reconcile architecture, A
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Scope
-Use this skill to run an integrated technical-design pass: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for task breakdown without expanding every visible downstream effect into new design work.
+Use this skill to run an integrated technical-design pass or technical-design-review analysis: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for review and later task breakdown without expanding every visible downstream effect into new design work.
 
 ## Boundaries
 Do not:
@@ -27,7 +27,7 @@ Do not:
 - make new problem-framing decisions that belong back in `spec.md` or the orchestrator
 - produce task breakdown, phase cards, or coder execution sequencing; that belongs to `planning-and-task-breakdown`
 - introduce new complexity without proving what risk or ambiguity it removes
-- drift into implementation coding, review execution, or tooling/process detail as the main output
+- drift into implementation coding, post-code review execution, or tooling/process detail as the main output
 - leave cross-domain contradictions unresolved inside the design bundle
 
 ## Escalate When
@@ -49,35 +49,37 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 | `design/component-map.md` or `design/ownership-map.md` needs package responsibility, source-of-truth, generated-code, or dependency-direction decisions. | [component-and-ownership-maps.md](references/component-and-ownership-maps.md) | Makes the model name concrete owners and stable boundaries instead of inventing shared helpers, treating generated files as authorities, or hiding ownership in "common" packages. |
 | `design/sequence.md` needs runtime order, failure points, side effects, retries, sync/async boundaries, or partial-failure policy. | [runtime-sequence-and-failure-points.md](references/runtime-sequence-and-failure-points.md) | Makes the model write scenario-level runtime flow with failure ownership instead of a happy-path arrow chain or ambiguous sync/async finality. |
 | Specialist outputs or design artifacts disagree across architecture, API, data, security, reliability, observability, delivery, or QA. | [cross-domain-reconciliation.md](references/cross-domain-reconciliation.md) | Makes the model reconcile by selected option, rejected options, and proof obligations instead of smoothing contradictions into a vague compromise. |
-| The bundle is about to be marked planning-ready or handed to `planning-and-task-breakdown`. | [design-readiness-and-planning-handoff.md](references/design-readiness-and-planning-handoff.md) | Makes the model block or qualify readiness with artifact status, risks, and reopen conditions instead of saying "done enough" while planning must rediscover design. |
+| The bundle is about to be marked review-ready, planning-ready, or handed to `planning-and-task-breakdown`. | [design-readiness-and-planning-handoff.md](references/design-readiness-and-planning-handoff.md) | Makes the model block or qualify readiness with artifact status, risks, review-gate needs, and reopen conditions instead of saying "done enough" while planning must rediscover design. |
 | A proposed layer, interface, helper, adapter, shared package, or simplification may change ownership or widen impact radius. | [complexity-and-abstraction-tradeoffs.md](references/complexity-and-abstraction-tradeoffs.md) | Makes the model require present-day complexity reduction and contract preservation instead of future-proof indirection or simplification that weakens guarantees. |
 
 ## Specialist Stance
 - `spec.md` owns decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` consumes approved decisions plus required design context for the implementation handoff.
+- Separate design depth must pass technical design review before planning; this skill may prepare the design for that gate or support a read-only review lane, but it does not make final approval decisions.
+- When supporting a technical-design-review lane, classify each finding as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`, then recommend `PASS`, `CONCERNS`, or `FAIL`.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
 - Prefer one coherent design handoff over scattered partial notes that still force planning to rediscover technical context.
-- Keep lean-local design merged in `spec.md` when it is sufficient; otherwise keep `design/overview.md` as the entrypoint instead of repeating the same story in every artifact. When the bundle is planning-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
+- Keep lean-local design merged in `spec.md` when it is sufficient; otherwise keep `design/overview.md` as the entrypoint instead of repeating the same story in every artifact. When the bundle is review-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
 - Keep deep design and corner-case coverage, but distinguish `must decide now` from `dependent consequence only`.
 - Open another domain or artifact only when the unresolved point materially changes ownership, correctness model, public contract, safe sequencing, or rollout shape for the current bundle.
 - When another domain is affected but unchanged, record `constraint_only`, `proof_only`, `follow_up_only`, or explicit `no new decision required in <domain>` rather than growing the bundle into a parallel specialist package.
 - Treat split design artifacts as required questions only when split design is triggered, not equal-length documents. Uneven depth is normal: the hard issue may live in one artifact while another stays short because the boundary is stable.
-- Prefer the smallest coherent bundle that lets planning proceed honestly. Do not inflate unaffected surfaces just to make the bundle look balanced.
+- Prefer the smallest coherent bundle that lets technical design review and then planning proceed honestly. Do not inflate unaffected surfaces just to make the bundle look balanced.
 
 ## Boundaries And Handoffs
 This is a technical-design integrator, not a workflow owner:
 - use repository artifacts when they are present, but do not redefine when phases start or stop
 - if `spec.md` is missing or unstable, hand back to specification instead of inventing decisions inside design
-- if planning or implementation details appear, keep only the design constraints that planning must consume and hand execution sequencing to `planning-and-task-breakdown`
+- if planning or implementation details appear, keep only the design constraints that technical design review and planning must consume and hand execution sequencing to `planning-and-task-breakdown`
 - if one domain seam becomes the real hard problem, hand off to that specialist instead of flattening it into a generic integrated design note
 
 ## Expertise
 
 ### Design Bundle Assembly
 - Produce or tighten split core artifacts when their trigger is real:
-  - `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
+  - `design/overview.md` for chosen approach, artifact index with review-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
   - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; responsibilities; what changes versus what stays stable; and which plausible surfaces are intentionally not touched
   - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
   - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
@@ -86,7 +88,7 @@ This is a technical-design integrator, not a workflow owner:
   - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
   - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit
   - `design/contracts/` when API, event, generated, or material internal interface contracts change
-- Call out when `test-plan.md` or `rollout.md` must exist before planning can start, but do not turn this skill into execution planning.
+- Call out when technical design review, `test-plan.md`, or `rollout.md` must exist before planning can start, but do not turn this skill into execution planning.
 - For lean-local work, prefer `spec.md` `Compact Design` or one `design/overview.md` when that honestly answers affected surfaces, ownership/source-of-truth, and sequence/failure behavior.
 
 ### Complexity And Maintainability
@@ -147,6 +149,7 @@ When writing or reviewing the integrated technical-design bundle, cover:
 - contradictions across domains
 - simplification opportunities
 - abstractions or layers that should be removed, merged, or made explicit
+- for technical-design-review mode, the reviewed packet, classified findings, required reopen targets or planning proof obligations, and recommended gate result
 - what changes versus what remains stable
 - runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
 - downstream consequences as:
@@ -156,8 +159,8 @@ When writing or reviewing the integrated technical-design bundle, cover:
   - `no new decision required`
 - concise stable or unchanged notes where a required artifact has little to say beyond preserved boundaries
 - what must loop back into `spec.md` before planning can safely begin
-- whether compact or split design context is stable enough for `planning-and-task-breakdown`
-- the planning handoff boundary and any reason the next session must reopen `spec.md` instead of moving forward
+- whether compact or split design context is stable enough for technical design review and later `planning-and-task-breakdown`
+- the technical-design-review handoff boundary and any reason the next session must reopen `spec.md` instead of moving forward
 - unresolved design risks that should block implementation
 
 ## Escalate Or Reject

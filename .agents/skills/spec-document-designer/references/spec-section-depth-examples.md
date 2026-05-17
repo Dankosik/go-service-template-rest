@@ -8,7 +8,7 @@ Load this when deciding how much detail a `spec.md` section needs, trimming a bl
 
 ## Decision Rubric
 - For tiny direct-path work, include only the behavior delta, the scope cut that prevents drift, stable decisions, and concrete validation hooks.
-- For non-trivial work, add constraints, assumptions, and handoff notes when they shape technical design or planning.
+- For non-trivial work, add constraints, assumptions, and handoff notes when they shape technical design, mandatory technical design review, or planning.
 - Expand a section because risk or ambiguity demands it, not because the default section list exists.
 - Omit empty headings. A missing section is better than a placeholder.
 - Do not use section depth to smuggle component maps, call sequences, file edits, or task order into `spec.md`.

@@ -102,4 +102,4 @@ Before handoff, each critical scenario should include success order, at least th
 ## Repo Pointers
 - `docs/repo-architecture.md`: request/response path, startup/shutdown path, and async extension path.
 - `docs/spec-first-workflow.md`: purpose of `design/sequence.md` and artifact handoff rules.
-- `.agents/skills/technical-design-session/SKILL.md`: design-session stop rule and planning handoff shape.
+- `.agents/skills/technical-design-session/SKILL.md`: design-session stop rule and technical-design-review handoff shape.

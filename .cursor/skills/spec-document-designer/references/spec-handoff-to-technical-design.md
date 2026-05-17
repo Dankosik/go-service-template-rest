@@ -30,7 +30,7 @@ Copy this: the spec fixes behavior and boundary, then points the next phase at d
 
 ```markdown
 ## Open Questions / Assumptions
-- [reopen_spec_if_false] If technical design finds that config is not the sole source of truth for admin tokens, return to specification before planning.
+- [reopen_spec_if_false] If technical design or technical design review finds that config is not the sole source of truth for admin tokens, return to specification before planning.
 ```
 
 Copy this: design has a clear stop rule instead of silently changing the spec's core decision.

@@ -17,6 +17,7 @@ Use when
 - `workflow-plan-adequacy-challenge`: `workflow-plan.md` plus the active `workflow-plans/<phase>.md` need a handoff sufficiency check before non-trivial or agent-backed phase work proceeds.
 - `pre-spec-challenge`: research or synthesis has produced candidate decisions that need independent pressure testing before they harden into `spec.md`.
 - `spec-clarification-challenge`: a non-trivial candidate `spec.md` needs high-impact clarification questions before approval.
+- multi-lens `spec-clarification-challenge`: a broad formal clarification gate assigns this challenger one explicit lens, such as scope/spec coherence, domain invariants, architecture ownership, API/data/compatibility, or security/reliability/delivery/validation.
 - the user explicitly wants hard questions, blind-spot detection, or a second opinion before a workflow, synthesis, or specification gate.
 
 Do not use when
@@ -32,12 +33,14 @@ Inspect first
 - For `workflow-plan-adequacy-challenge`, inspect the task frame, execution shape, `workflow-plan.md`, active `workflow-plans/<phase>.md`, and generated phase-control files that affect handoff.
 - For `pre-spec-challenge`, inspect research evidence, candidate decisions, assumptions, non-goals, rejected alternatives, and risk seams before `spec.md` hardens.
 - For `spec-clarification-challenge`, inspect candidate `spec.md`, validation expectations, assumptions or open questions, and relevant research links before approval.
+- For multi-lens `spec-clarification-challenge`, also inspect the assigned lens, concrete approval question, and sibling lens list; stay inside that lens unless a finding must be escalated to the orchestrator.
 - For any mode, inspect only the artifact bundle being challenged and the single chosen challenge skill; route specialist facts back to separate domain lanes.
 
 Mode routing
 - workflow plan adequacy: use `workflow-plan-adequacy-challenge`. Inspect the task frame, execution shape, master `workflow-plan.md`, active phase workflow plan, and any generated phase-control files whose sufficiency affects handoff.
 - synthesis pressure test: use `pre-spec-challenge`. Inspect the problem frame, research evidence, candidate decisions, assumptions, non-goals, and known risk seams.
 - spec approval clarification: use `spec-clarification-challenge`. Inspect the compact spec input bundle: problem frame, scope and non-goals, candidate decisions, constraints, validation expectations, assumptions or open questions, and relevant research links.
+- spec approval clarification with assigned lens: use `spec-clarification-challenge`, name the assigned lens in the output, answer only the concrete approval question for that lens, and avoid duplicating sibling challenger lanes by turning the pass into a generic whole-spec review.
 - adjudication: use the challenge mode that matches the artifact being challenged. If a challenged point clearly belongs to one domain, send it back through a separate specialist lane.
 - review: not a code-review surface; escalate to domain review agents instead.
 

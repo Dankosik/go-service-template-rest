@@ -22,10 +22,10 @@ The simplification is about artifact depth. Use the smallest workflow shape that
 | Shape | Use When | Artifact Depth | Gate |
 | --- | --- | --- | --- |
 | `direct path` | Tiny, reversible, one surface, obvious validation, no protected-domain trigger. | Usually none; a short inline plan or chat note is enough. | Local first-read sanity check and fresh proof. |
-| `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and local reasoning can close the decision frontier. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. | Inline `Risk Challenge`; no mandatory subagent. |
-| `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, approved `spec.md`, triggered design bundle, `tasks.md`, optional companion artifacts. | Formal challenge/review lanes as triggered and strict phase boundaries. |
+| `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and local reasoning can close the decision frontier. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. | Inline `Risk Challenge`; mandatory technical design review checkpoint when separate design depth is triggered; no mandatory subagent. |
+| `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, approved `spec.md`, triggered design bundle, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Formal challenge/review lanes as triggered, mandatory technical design review when design depth is triggered, and strict phase boundaries. |
 
-`lightweight local` is a compatibility alias for `lean local`. New artifacts should use `lean local`; older task bundles that say `lightweight local` remain valid.
+Use `lean local` for bounded non-trivial single-domain work.
 
 ### Escalation Triggers
 
@@ -70,6 +70,8 @@ Conditional artifacts:
 - `design/overview.md`: when compact design answers are too dense for `spec.md` but do not need split design files.
 - `workflow-plan.md`: when multi-session state or reopen routing needs a durable control file.
 
+If lean local uses a separate `design/overview.md`, run and record a technical design review checkpoint before writing or approving `tasks.md`. The checkpoint may be a local read-only orchestrator review when no formal lane trigger exists, but it must be distinct from the design-writing pass and must record `PASS`, `CONCERNS`, or `FAIL`.
+
 Not expected by default:
 
 - `workflow-plans/<phase>.md`;
@@ -84,6 +86,8 @@ Lean local must not become an unstructured shortcut. It requires an inline `Risk
 
 Full orchestrated keeps the existing full workflow, but all heavier artifacts are trigger-scoped.
 
+Separate technical design is the exception to optional review routing: once `design/overview.md` or split `design/` is triggered, technical design review is mandatory before planning. The review record may live in `workflow-plan.md`, the active phase file, or `workflow-plans/technical-design-review.md` when the review needs durable routing, lanes, blockers, or a session boundary.
+
 Typical layout:
 
 ```text
@@ -94,6 +98,7 @@ specs/<feature-id>/
     research.md                 # only for a dedicated research phase
     specification.md            # only when formal specification routing is needed
     technical-design.md         # only when dedicated design routing is needed
+    technical-design-review.md  # required when separate technical design is triggered and review routing needs durable state
     planning.md                 # only when dedicated planning routing is needed
     review-phase-N.md           # only when planning names a multi-session review checkpoint
     validation-phase-N.md       # only when planning names a multi-session validation checkpoint
@@ -114,7 +119,6 @@ specs/<feature-id>/
 ```
 
 Do not point agents at a specific task-local `specs/...` bundle as required precedent unless that directory exists in the current checkout.
-Historical task bundles that already use this full shape remain valid. Do not rewrite them during unrelated work.
 
 ## 4. Lean `spec.md`
 
@@ -297,11 +301,48 @@ For lean local:
 For full orchestrated or protected-domain work:
 
 - run formal `spec-clarification-challenge` before non-trivial `spec.md` approval unless an explicit eligible waiver exists;
+- for broad or multi-domain full-orchestrated, protected-domain, high-impact, hard-to-reverse, cross-domain, or user-requested deep challenge work, use multi-challenger lens fan-out rather than one generic challenger by default;
 - use read-only challenger output as questions for orchestrator reconciliation, not as authority;
 - store final reconciled outcomes in `spec.md`;
 - record gate status in `workflow-plan.md` and the active phase file when those files are used.
 
 Formal clarification asks only approval-changing questions. Ordinary downstream design detail should be recorded as a constraint, proof obligation, follow-up, or `defer_to_design`, not as a reason to inflate `spec.md`.
+
+Default broad clarification lenses:
+
+- scope and spec coherence;
+- domain invariants and edge cases;
+- architecture ownership and dependency boundaries;
+- API, data, compatibility, and source-of-truth consequences;
+- security, reliability, delivery, and validation proof.
+
+Each lens is a separate read-only lane, usually `challenger-agent` with `spec-clarification-challenge`. Lanes may run in parallel when their questions are independent. Add extra lanes for real independent approval-risk domains, including when one default lens bundles domains that are independently approval-critical for the task. Use fewer lanes only with a recorded scoped-down rationale; a single lane is appropriate only for a narrow formal gate whose approval risk is concentrated in one question.
+
+Before spawning, convert every lens into a concrete approval-critical question and lens-specific inspect-first list. Do not send five challengers the same generic "challenge this spec" prompt. If two lenses produce the same question, merge them or split the real underlying owner question before fan-out.
+
+`Risk Challenge=CONCERNS` in lean local does not by itself trigger formal multi-challenger clarification. It requires named proof obligations and a check for unresolved scope, ownership, validation, or escalation gaps. Route to formal clarification only when those gaps cannot be honestly closed inline or another escalation trigger appears.
+
+Multi-lane workflow-control records should use:
+
+```text
+Clarification challenge: complete | blocked | waived
+Lanes: <agent + skill summary>
+Lenses: <lens list>
+Scoped-down rationale: <why fewer than the broad default, when applicable>
+Resolution: <orchestrator-owned fan-in result>
+```
+
+`Lens` is metadata for coverage, not a replacement for `spec-clarification-challenge` classifications. Lane outputs use `blocks_spec_approval`, `blocks_specific_domain`, and `non_blocking_but_record`; shared handoffs use the classifications from `docs/subagent-contract.md`.
+
+The orchestrator owns fan-in:
+
+- deduplicate overlapping questions and findings;
+- compare conflicting assumptions across lanes;
+- classify each surviving point by strongest justified impact: approval blocker, domain reopen, record-only constraint, proof obligation, accepted risk, or no-action item;
+- preserve a short fan-in table or equivalent status in the workflow-control file: lens, strongest finding, classification, action, and owner;
+- treat lane-level missing input, unresolved blockers, and material blocker-severity conflicts as blocking the relevant approval area until answered, explicitly waived or accepted as risk, or routed to the owning phase;
+- update `spec.md` only with final reconciled outcomes, not raw lane transcripts;
+- reopen research, design, planning, or a specialist lane when a finding exposes a missing owner decision.
 
 ## 9. Design Depth
 
@@ -327,7 +368,53 @@ Conditional design artifacts:
 
 If a design trigger is real but the required decision is missing, reopen specification or technical design instead of burying it in `tasks.md`.
 
-## 10. Planning And Implementation Readiness
+## 10. Technical Design Review
+
+Technical design review is mandatory whenever separate design depth is triggered. It is the special pre-planning gate that tests whether the design bundle is coherent enough for executable planning.
+
+This gate is not required for direct path work or for lean-local work whose design stays inside `spec.md` `Compact Design`; the inline `Risk Challenge` covers that smaller path. It is required when lean local creates a separate `design/overview.md`, and it is required for full-orchestrated triggered design.
+
+Run technical design review after the design bundle and any triggered conditional artifacts are written, but before `tasks.md` or implementation-readiness handoff is approved.
+
+The review packet must be explicit enough that the reviewer does not rediscover phase state from scratch:
+
+- approved `spec.md`;
+- design entrypoint and triggered design artifacts, with status and trigger rationale;
+- triggered `test-plan.md`, `rollout.md`, or explicit not-expected rationale when those surfaces matter;
+- workflow-control paths that define the current phase, blockers, and expected review result;
+- known assumptions, accepted trade-offs, non-goals, and reopen conditions.
+
+The review must be read-only and risk-driven:
+
+- inspect approved `spec.md`, the design bundle, triggered conditional artifacts, `docs/repo-architecture.md` when boundaries matter, and relevant specialist outputs;
+- check source-of-truth ownership, dependency direction, runtime sequence, failure behavior, conditional artifact triggers, validation/rollout handoff, and accidental complexity;
+- separate design defects from implementation preferences;
+- return findings as advisory evidence for orchestrator reconciliation.
+
+Technical design review is not a second design pass. If a finding requires a new decision, rewrite of the design bundle, or changed approval boundary, route it back to technical design or specification instead of solving it inside review.
+
+For lean local with one `design/overview.md`, a local read-only orchestrator review is acceptable when no formal lane trigger exists, but the checkpoint and result must be recorded before `tasks.md`.
+
+For full orchestrated triggered design, use at least one distinct read-only review lane unless a scoped-down local-review rationale is recorded. Add specialist lanes when independent API, data, security, reliability, observability, delivery, performance, or QA design risks are real. A design-integrator lane is the default fit when the hard part is coherence across specialist concerns.
+
+Review gate status:
+
+- `PASS`: planning may start from the reviewed design context.
+- `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
+- `FAIL`: planning must not start; reopen technical design or specification.
+
+Classify findings by strongest planning impact:
+
+- `blocks_planning`: planning would invent or hide an important decision if it started now.
+- `reopens_design`: the design bundle must change before review can pass.
+- `reopens_spec`: the approved problem frame, invariant, scope, or contract must change.
+- `accepted_risk_candidate`: the risk may be accepted only if the orchestrator names the reason and boundary.
+- `proof_obligation`: planning may proceed only if the obligation is carried into `tasks.md`, `test-plan.md`, or `rollout.md`.
+- `record_only`: useful context that does not affect planning entry.
+
+Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/technical-design-review.md` when a dedicated review phase needs durable routing, or the lean-local artifact that owns the review checkpoint. The record must name the reviewed packet, reviewer or lane, scope, findings, orchestrator resolution, final gate status, and planning-input obligations. `CONCERNS` is valid only when every accepted risk and proof obligation is named for planning. Post-code discovery of a missing required technical design review reopens the earlier phase instead of creating a new review artifact after implementation starts.
+
+## 11. Planning And Implementation Readiness
 
 Planning turns approved decisions and required design context into `tasks.md`.
 
@@ -346,13 +433,16 @@ Implementation readiness values:
 
 Readiness belongs in the planning handoff when planning artifacts exist. `tasks.md` may carry a short reference.
 
-## 11. Coding, Review, Reconciliation, And Validation
+Planning also consumes the technical design review result whenever separate design depth was triggered. Missing or blocking review is a planning-entry failure, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted design risks and proof obligations into the implementation-readiness handoff and the relevant ledger or companion artifacts.
+
+## 12. Coding, Review, Reconciliation, And Validation
 
 Coding consumes the approved task handoff. It may create or edit code, tests, migrations, configs, generation inputs, and generated output required by the task ledger.
 
 Post-code work may update only existing control or closeout surfaces:
 
 - existing `workflow-plan.md`;
+- existing `workflow-plans/technical-design-review.md` only to record a reopen or reconciled status when it existed before coding;
 - existing `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` when they were created before coding;
 - existing `tasks.md` checkbox/progress state;
 - `spec.md` `Validation` and `Outcome`.
@@ -363,9 +453,11 @@ Review is read-only and risk-driven. Review findings are advisory until the orch
 
 Validation uses fresh evidence. A closeout claim is valid only when the commands or manual proof actually cover that claim.
 
-## 12. Subagents
+## 13. Subagents
 
 Subagents are triggered by unresolved owning questions, not by phase ceremony.
+
+Read-only must be enforced by the actual execution choice. If a lane cannot reliably stay read-only, keep that question in the main orchestrator flow instead of delegating it.
 
 Use `docs/subagent-contract.md` and `docs/subagent-brief-template.md` for reusable brief shape.
 
@@ -373,14 +465,15 @@ Every lane needs:
 
 - goal and exact question;
 - scope and constraints;
+- lens or specialist domain when multiple challenge lanes share the same artifact;
 - expected output;
 - evidence requirement;
 - skill name or `no-skill`;
 - read-only boundary.
 
-A lane uses at most one skill. If the selected skill defines a stricter deliverable, follow it. Otherwise use the shared envelope from `docs/subagent-contract.md`.
+A lane uses at most one skill. If the selected skill defines a stricter deliverable, follow it. Otherwise use the shared envelope from `docs/subagent-contract.md`. Multi-lane challenge improves coverage only when lanes have distinct lenses and an explicit fan-in path.
 
-## 13. Resume Order
+## 14. Resume Order
 
 Resume from artifacts, not chat memory.
 

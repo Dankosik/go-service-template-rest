@@ -48,8 +48,8 @@ Escalate if:
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
 - For lean-local work, the handoff path is `spec.md` with compact design answers and inline `Risk Challenge` -> `tasks.md`.
-- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> triggered design context -> tasks.md`, and formal `spec-clarification-challenge` is required before approval unless explicitly waived by an eligible exception.
-- For dedicated specification sessions, this pass ends at approved `spec.md`; triggered `technical design` or planning begins in a new session unless an upfront direct/lean waiver was already recorded.
+- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> triggered design context -> technical design review -> tasks.md`, and formal `spec-clarification-challenge` is required before approval unless explicitly waived by an eligible exception.
+- For dedicated specification sessions, this pass ends at approved `spec.md`; triggered `technical design`, technical design review, or planning begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
 - Put stable decisions in `spec.md`, lean compact design answers in `spec.md` or one `design/overview.md`, split task-local technical context in `design/` when triggered, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
@@ -160,7 +160,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 
 ### Clarification-Gate Competency
 - Before approving lean-local `spec.md`, ensure inline `Risk Challenge` is recorded as `PASS` or `CONCERNS`; `FULL_REQUIRED` escalates to the formal path.
-- Before approving full-orchestrated or protected-domain `spec.md`, ensure the orchestrator has run a read-only `spec-clarification-challenge` lane, preferably through `challenger-agent`, using exactly that one skill.
+- Before approving full-orchestrated or protected-domain `spec.md`, ensure the orchestrator has run formal `spec-clarification-challenge`. Broad formal clarification should use multiple read-only `challenger-agent` lanes with distinct lenses; each lane still uses exactly one skill. Scoped-down single-lane gates need a recorded rationale.
 - The challenge returns questions for orchestrator reconciliation; it does not write files or make final decisions.
 - Resolve each planning-critical item from existing evidence, targeted research, an expert subagent lane, explicit risk acceptance, design deferral, or `requires_user_decision`.
 - Store only final resolved outcomes in `spec.md`: stable outcomes in `Decisions`, remaining assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`.
@@ -217,7 +217,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 ### 6. Run Or Enforce The Clarification Gate
 - For lean local, confirm the inline `Risk Challenge` ran after candidate decisions existed and before approval.
 - For full-orchestrated or protected-domain work, confirm the `spec-clarification-challenge` gate ran after candidate decisions existed and before approval.
-- If a required formal gate has not run, prepare the compact bundle and route one read-only subagent lane, preferably `challenger-agent`, using only `spec-clarification-challenge`.
+- If a required formal gate has not run, prepare the compact bundle and route the appropriate read-only challenger lane set, preferably `challenger-agent` with `spec-clarification-challenge`. For broad or multi-domain full-orchestrated, protected-domain, high-risk, cross-domain, hard-to-reverse, or user-requested deep challenge work, route distinct lenses instead of one generic challenger; use a single lane only with scoped-down rationale. Keep `Lens` as coverage metadata and keep the existing challenge classifications stable.
 - If the gate returns material questions, keep `spec.md` draft or blocked until the orchestrator reconciles them.
 - If targeted expert research is required, route the appropriate upstream research or expert lane instead of inventing an answer in the spec.
 - If a question is truly external product or business policy, record `requires_user_decision` and leave the spec blocked or partially draft.
@@ -244,7 +244,7 @@ Rules:
 - Do not create empty sections.
 - Do not dump full task lists or execution steps into `spec.md`.
 - Do not use `spec.md` as a substitute for triggered split `design/`; lean-local `Compact Design` is allowed only when sufficient and explicit.
-- Do not copy a historical bundle under `specs/` as a template; use it only as task-local precedent and preserve the current task's own trigger rationale.
+- Do not copy another bundle under `specs/` as a template; use it only as task-local precedent and preserve the current task's own trigger rationale.
 - When blocked, say what upstream skill or research pass must reopen and why.
 
 ## Definition Of Done
@@ -253,7 +253,7 @@ The pass is complete when:
 - the inline lean `Risk Challenge` or formal clarification gate is reconciled, explicitly waived by an eligible direct/lean exception, or left blocked with rationale
 - stable decisions are separated from raw evidence
 - scope cuts and non-goals are explicit
-- validation expectations are visible early enough for lean tasking or triggered technical design and later planning
+- validation expectations are visible early enough for lean tasking or triggered technical design, mandatory technical design review, and later planning
 - the session stops at approved `spec.md` for dedicated specification work unless an explicit waiver already allows phase collapse
 - the next technical-design or reopen step is clear without turning the spec into a design bundle or a plan
 
