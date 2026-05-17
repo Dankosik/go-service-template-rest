@@ -1,6 +1,6 @@
 ---
 name: research-session
-description: "Own a session dedicated only to research for this repository. Use when the orchestrator already has task framing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update task-local `workflow-plan.md` plus `workflow-plans/research.md` without drifting into `spec.md`, `design/`, `tasks.md`, or implementation. Skip tiny direct-path work and tasks that have already moved into `specification` or later."
+description: "Own a session dedicated only to research for this repository when research needs a durable checkpoint. Use when the orchestrator already has task framing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update triggered workflow-control artifacts without drifting into `spec.md`, design, `tasks.md`, or implementation. Skip direct-path work, lean-local research that fits inside the compact spec/task handoff, and tasks that have already moved into `specification` or later."
 ---
 
 # Research Session
@@ -23,10 +23,11 @@ This wrapper makes evidence gathering and handoff explicit; it does not finalize
 - the orchestrator must choose between `local` research and read-only subagent `fan-out` for this session
 - repository evidence, external references, comparisons, or specialist reads must be gathered before specification
 - preserved `research/*.md` notes would reduce later guesswork, make fan-in easier, or support a future resume
-- master `workflow-plan.md` needs the research checkpoint completed or updated before a later `specification-session`
+- triggered `workflow-plan.md` or `workflow-plans/research.md` needs the research checkpoint completed or updated before a later `specification-session`
 
 ## Skip When
 - the work is tiny enough that inline local reasoning plus a short note is sufficient and a dedicated research session would be ceremony
+- lean-local research can be summarized directly in `spec.md` with source references and no reusable evidence note or phase routing value
 - the task is still at workflow planning; use `workflow-planning-session`
 - the task has already moved into `specification` or later, or `workflow-plans/specification.md` is already the active phase-control file
 - the request tries to combine research with final `spec.md`, `design/`, `tasks.md`, or implementation output in one session
@@ -85,6 +86,7 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics
 - this wrapper owns research-session protocol only and must not redefine later artifact ownership
 - use `research-session` only when a dedicated research session is the intended control shape for the task
+- lean local may keep research local and cite the relevant evidence in `spec.md`; create `research/*.md` only when evidence must persist for resume, audit, or later synthesis
 - support both `local` research and read-only subagent `fan-out`
 - each subagent lane owns one question and at most one skill, or explicit `no-skill`
 - preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
@@ -107,7 +109,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 
 ## Boundary With Future `specification-session`
 - `research-session` may write `workflow-plan.md`, `workflow-plans/research.md`, and optional `research/*.md`
-- the future `specification-session` owns approved `spec.md`, `workflow-plans/specification.md`, and the handoff into `technical design`
+- the future `specification-session` owns approved `spec.md`, inline lean `Risk Challenge` or formal clarification-gate reconciliation, and any triggered `workflow-plans/specification.md`
 - if the task is ready to move forward, record `Next session starts with: specification` and stop instead of drafting spec sections here
 
 ## Workflow
@@ -116,7 +118,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 - check the master workflow plan and active phase context first
 - if the task is still at workflow planning, send it back to `workflow-planning-session`
 - if the task is already at specification or later, stop and point to the correct reopen point instead of reopening research casually
-- if the work is tiny enough for inline local handling, say so directly and stop rather than forcing this wrapper
+- if the work is direct path or lean local with no durable research value, say so directly and stop rather than forcing this wrapper
 
 ### 2. Read Current Phase Context
 - confirm current phase, phase status, blockers, assumptions, and expected next session
@@ -175,7 +177,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 
 ### 9. Stop At The Boundary
 - once research artifacts and routing are consistent, stop
-- do not start `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or implementation in the same session
+- do not start `spec.md`, triggered `workflow-plans/specification.md`, design, `tasks.md`, or implementation in the same session
 
 ## Research Lane Planning Rules
 When a dedicated research phase file is used, `workflow-plans/research.md` should make lane ownership obvious at a glance.
@@ -213,7 +215,7 @@ Every completed or blocked pass must update the master file with:
 - `Next session starts with`
 - `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - blockers, accepted assumptions, and open points that still affect spec readiness
-- artifact status for `spec.md`, `design/`, `tasks.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
+- artifact status for `spec.md`, lean/merged design context or split `design/`, `tasks.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 
 Do not leave spec readiness or handoff state implicit in chat.
 

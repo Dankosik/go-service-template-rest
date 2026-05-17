@@ -1,6 +1,6 @@
 ---
 name: validation-closeout-session
-description: "Own a session dedicated only to final validation and closeout for this repository. Use when the orchestrator must prove a task is actually done with fresh evidence, update task-local `spec.md` `Validation` and `Outcome`, and update existing `workflow-plan.md`, existing `tasks.md` progress when used, plus any pre-created `workflow-plans/validation-phase-N.md` without drifting back into implementation. Skip tiny direct-path work and any task that still expects coding in the same session."
+description: "Own a session dedicated only to final validation and closeout for this repository when closeout needs artifact updates. Use when the orchestrator must prove a task is actually done with fresh evidence, update task-local `spec.md` `Validation` and `Outcome`, and update existing `workflow-plan.md`, existing `tasks.md` progress when used, plus any pre-created `workflow-plans/validation-phase-N.md` without drifting back into implementation. Skip direct-path inline closeout and any task that still expects coding in the same session."
 ---
 
 # Validation Closeout Session
@@ -25,6 +25,7 @@ This wrapper makes proof inputs, artifact updates, reopen handling, and stop con
 - master `workflow-plan.md` must be closed or reopened explicitly
 - existing `tasks.md` checkbox/progress state must be aligned with the proof when the task uses a ledger
 - the task uses a dedicated post-code validation phase and its existing `workflow-plans/validation-phase-<n>.md` must be updated or repaired
+- lean-local `spec.md`/`tasks.md` closeout needs fresh proof recorded without creating extra phase-control artifacts
 
 ## Skip When
 - the work is tiny enough that inline validation plus an explicit note is sufficient and a dedicated closeout session would be ceremony
@@ -50,7 +51,7 @@ Treat the session as ready for closeout only when all of the following are true:
 - the code or artifact changes intended for this task are already in the workspace
 - the current closeout claim is explicit enough to bind to concrete proving commands
 - the required proof obligations can be gathered from existing artifacts without inventing new acceptance criteria
-- any expected validation-phase control artifact and required `tasks.md` already exist from pre-code planning, or the task explicitly does not use them
+- any expected validation-phase control artifact and required `tasks.md` already exist from pre-code planning, lean-local tasking, or the task explicitly does not use them
 - any remaining uncertainty can be expressed honestly as a blocker or reopen condition rather than hidden under optimistic wording
 - the next safe action, if proof fails, is to reopen an earlier phase instead of patching code here
 
@@ -131,17 +132,18 @@ Do not:
 - Do not copy its claim-to-proof table into local folklore or weaken it for convenience.
 - If its proof bar says the claim is not verified, this session must record a blocker or reopen. It may not "balance" the failure with optimistic closeout wording.
 - This wrapper extends the verification gate only by adding artifact ownership:
-  - update `spec.md` so `Validation` and `Outcome` reflect reality
-  - update `workflow-plan.md` so completion or reopen routing is explicit
-  - update existing `tasks.md` progress when the task uses a ledger
-  - update an existing `workflow-plans/validation-phase-<n>.md` when a dedicated validation phase is active
+- update `spec.md` so `Validation` and `Outcome` reflect reality
+- update `workflow-plan.md` so completion or reopen routing is explicit
+- update existing `tasks.md` progress when the task uses a ledger
+- update an existing `workflow-plans/validation-phase-<n>.md` when a dedicated validation phase is active
+- for lean local, update `spec.md` and existing `tasks.md` directly; do not create a validation phase file just to mirror full-orchestrated closeout
 
 ## Workflow
 
 ### 1. Confirm This Session Owns Validation And Closeout Only
 - check the master workflow plan and current phase context first
 - if implementation, review, or reconciliation is still the active phase, stop and hand back the correct reopen point
-- if the work is tiny enough for inline validation only, say so directly and stop rather than forcing this wrapper
+- if the work is direct path and inline validation is enough, say so directly and stop rather than forcing this wrapper
 - if the request asks for code changes during closeout, refuse that boundary crossing before doing anything else
 
 ### 2. Bind The Final Claim To The Right Scope

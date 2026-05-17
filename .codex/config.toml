@@ -1,51 +1,60 @@
 [agents]
-# Repo workflow intentionally allows broad read-only specialist fan-out.
-max_threads = 20
 max_depth = 1
+max_threads = 20
 
-# Project-scoped registry entries are supported by Codex config reference via
-# agents.<name>.config_file; standalone files below remain the authored layer.
-[agents."api-agent"]
+[agents.api-agent]
 config_file = "agents/api-agent.toml"
 
-[agents."architecture-agent"]
+[agents.architecture-agent]
 config_file = "agents/architecture-agent.toml"
 
-[agents."concurrency-agent"]
-config_file = "agents/concurrency-agent.toml"
-
-[agents."challenger-agent"]
+[agents.challenger-agent]
 config_file = "agents/challenger-agent.toml"
 
-[agents."data-agent"]
+[agents.concurrency-agent]
+config_file = "agents/concurrency-agent.toml"
+
+[agents.data-agent]
 config_file = "agents/data-agent.toml"
 
-[agents."delivery-agent"]
+[agents.delivery-agent]
 config_file = "agents/delivery-agent.toml"
 
-[agents."design-integrator-agent"]
+[agents.design-integrator-agent]
 config_file = "agents/design-integrator-agent.toml"
 
-[agents."distributed-agent"]
+[agents.distributed-agent]
 config_file = "agents/distributed-agent.toml"
 
-[agents."domain-agent"]
+[agents.domain-agent]
 config_file = "agents/domain-agent.toml"
 
-[agents."observability-agent"]
+[agents.observability-agent]
 config_file = "agents/observability-agent.toml"
 
-[agents."performance-agent"]
+[agents.performance-agent]
 config_file = "agents/performance-agent.toml"
 
-[agents."qa-agent"]
+[agents.qa-agent]
 config_file = "agents/qa-agent.toml"
 
-[agents."quality-agent"]
+[agents.quality-agent]
 config_file = "agents/quality-agent.toml"
 
-[agents."reliability-agent"]
+[agents.reliability-agent]
 config_file = "agents/reliability-agent.toml"
 
-[agents."security-agent"]
+[agents.security-agent]
 config_file = "agents/security-agent.toml"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+ANTHROPIC_AUTH_TOKEN = "gp-akSxIErQvh2VlhNCfWCWWyz4K9qKm8kN"
+ANTHROPIC_BASE_URL = "https://api.gonkagate.com"
+ANTHROPIC_DEFAULT_HAIKU_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
+ANTHROPIC_DEFAULT_OPUS_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
+ANTHROPIC_DEFAULT_SONNET_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
+ANTHROPIC_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
+CLAUDE_CODE_SUBAGENT_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"

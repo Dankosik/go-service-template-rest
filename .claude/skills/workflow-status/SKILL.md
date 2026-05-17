@@ -23,7 +23,7 @@ This helper reads existing artifacts and summarizes what they already say. It do
 - the user asks "where are we?", "what is next?", "can implementation start?", or "what is blocked?"
 - a session needs a compact task handoff before deciding whether to resume, stop, or reopen an earlier phase
 - the orchestrator needs to identify the current phase, artifact status, implementation-readiness status, missing gate, allowed writes, next action, or stop rule from task-local artifacts
-- a task may be using direct-path or lightweight-local shortcuts and the helper needs to check whether the waiver is explicitly recorded
+- a task may be using direct-path or lean-local shortcuts and the helper needs to check whether the waiver, inline `Risk Challenge`, or compact design rationale is explicitly recorded
 
 ## Skip When
 - the user asks you to write, repair, or advance task artifacts; use the appropriate phase/session skill instead
@@ -41,7 +41,7 @@ Do not:
 - approve, reject, or rewrite the workflow plan
 - treat this status report as a new phase, gate, plan, source of truth, or implementation-readiness artifact
 - infer state from earlier chat memory when artifacts are missing or contradictory
-- treat a missing artifact as intentionally skipped unless an explicit direct-path or lightweight-local waiver is present in the task artifacts or current user-provided artifact excerpt
+- treat a missing artifact as intentionally skipped unless an explicit direct-path or lean-local waiver is present in the task artifacts or current user-provided artifact excerpt
 
 The report may say what the current phase permits other sessions to write, but this helper itself still writes nothing.
 
@@ -65,26 +65,26 @@ Read the smallest artifact set needed to answer the status question:
 1. task-local `workflow-plan.md`, if present
 2. current `workflow-plans/<phase>.md`, if the master names a current phase or next phase
 3. task-local `spec.md`
-4. task-local `design/overview.md`, then required core design files when design status matters:
+4. compact design in `spec.md` or task-local `design/overview.md`, then triggered split design files when split design status matters:
    - `design/component-map.md`
    - `design/sequence.md`
    - `design/ownership-map.md`
 5. task-local `tasks.md` when present or expected by workflow status
 6. optional task-local `test-plan.md`, `rollout.md`, and selected `research/*.md` only when they are present and the status question depends on them
 
-When `workflow-plan.md` is missing, infer only the minimum state from the artifact chain and mark workflow control as incomplete unless an explicit direct-path or lightweight-local waiver explains the missing file.
+When `workflow-plan.md` is missing, infer only the minimum state from the artifact chain and mark workflow control as incomplete unless an explicit direct-path or lean-local rationale explains the missing file.
 
 ## Status Inference Rules
 - Prefer `workflow-plan.md` for current phase, phase status, session-boundary state, blockers, artifact status, and next-session routing.
 - Prefer the current `workflow-plans/<phase>.md` for phase-local next action, stop rule, completion marker, local blockers, and the planning-phase implementation-readiness gate result when the current or completed phase is `planning`.
 - Use `spec.md`, `design/`, and `tasks.md` only to confirm artifact presence and approval signals, not to invent a different phase than the master file records.
-- Treat absent required artifacts as incomplete unless an explicit waiver covers that exact artifact.
+- Treat absent required artifacts as incomplete unless an explicit waiver or trigger-based `not expected` rationale covers that exact artifact.
 - Treat present artifacts with unclear approval state as `present / status unclear`, not `approved`.
-- Treat a missing implementation-readiness status as incomplete for non-trivial planned work unless an explicit eligible direct-path, lightweight-local, or prototype waiver covers it.
+- Treat a missing implementation-readiness status as incomplete for non-trivial planned work unless an explicit eligible direct-path, lean-local, or prototype waiver covers it.
 - If the master and phase-local file conflict, report the conflict as the blocker instead of choosing a winner silently.
 - If `Session boundary reached: yes`, report that the next action belongs to the recorded next session or reopen target; do not continue the prior phase in the same session.
 - If `Ready for next session: no`, report the active phase as still needing work unless the artifacts clearly say the master is stale.
-- `tasks.md` may be read when present or expected by the workflow. This helper reports its status but must not create, repair, or approve `tasks.md` or the implementation-readiness gate.
+- `tasks.md` may be read when present or expected by direct/lean/full workflow. This helper reports its status but must not create, repair, or approve `tasks.md` or the implementation-readiness gate.
 
 ## Implementation Start Rule
 Answer `Implementation may start` conservatively:
@@ -92,12 +92,12 @@ Answer `Implementation may start` conservatively:
 - `Yes` only when readiness is `PASS`, the required artifact chain is approved or explicitly waived, there are no blocking gates, and workflow routing points to implementation or the first task in `tasks.md`.
 - `Yes, in the recorded next session` when readiness is `PASS`, planning is complete, `Session boundary reached: yes`, and `Next session starts with` points at implementation.
 - `Yes, with recorded concerns` only when readiness is `CONCERNS`, named accepted risks and proof obligations are explicit, and routing points to implementation.
-- `No` when readiness is `FAIL`, or when `spec.md`, required `design/`, expected `tasks.md`, phase control, readiness status, or a required review/validation phase file is missing without an explicit waiver.
+- `No` when readiness is `FAIL`, or when `spec.md`, required compact or split design context, expected `tasks.md`, phase control, readiness status, or a required review/validation phase file is missing without an explicit waiver.
 - `No` when the current phase is workflow planning, research, specification, technical design, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
 - `No` when readiness is `CONCERNS` but accepted risks or proof obligations are unnamed.
 - `Unknown` only when the task path is identified but the artifacts are too contradictory to make a safe yes or no call; name the contradiction as the blocker.
 
-For direct-path, lightweight-local, or prototype work, `WAIVED` allows implementation only if the waiver, rationale, scope, and inline tasking are explicit in the current task record. Do not infer a waiver from task size alone.
+For direct-path, lean-local, compatibility `lightweight-local`, or prototype work, `WAIVED` allows implementation only if the waiver, rationale, scope, and inline tasking are explicit in the current task record. Do not infer a waiver from task size alone.
 
 ## Allowed Writes Reference
 Report the phase's allowed write surface using the repository contract, while making clear that this helper writes nothing:
@@ -105,7 +105,7 @@ Report the phase's allowed write surface using the repository contract, while ma
 - `workflow planning`: `workflow-plan.md` and `workflow-plans/workflow-planning.md`
 - `research`: `research/*.md`, task-local `workflow-plan.md`, and the active research phase-control file when the session owns research
 - `specification`: `spec.md`, task-local `workflow-plan.md`, and `workflow-plans/specification.md`
-- `technical design`: task-local `design/` core and triggered conditional design files, task-local `workflow-plan.md`, and `workflow-plans/technical-design.md`
+- `technical design`: compact design in `spec.md`, task-local `design/overview.md`, split `design/` core and triggered conditional design files as applicable, task-local `workflow-plan.md`, and triggered `workflow-plans/technical-design.md`
 - `planning`: `tasks.md` when expected, triggered `test-plan.md` or `rollout.md`, named review/validation phase-control files when needed, task-local `workflow-plan.md`, and `workflow-plans/planning.md`
 - `implementation`: code, tests, migrations, configs, generation inputs, generated outputs required by the approved task ledger, plus existing `workflow-plan.md` routing and existing `tasks.md` progress only
 - `review`: read-only review output only; no code or artifact mutation by review agents
@@ -149,5 +149,5 @@ If artifacts are missing or contradictory, report the missing gate or conflict a
 - treating this helper's status report as an approval record
 - saying implementation may start because a task "looks small" without an explicit waiver and inline tasking
 - treating `workflow-plans/<phase>.md` as a replacement for `workflow-plan.md`
-- turning missing `design/` or expected `tasks.md` into a harmless note for non-trivial work
+- turning missing required compact/split design context or expected `tasks.md` into a harmless note for non-trivial work
 - creating a second source of truth for "implementation readiness"

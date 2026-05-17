@@ -11,7 +11,7 @@ Load when closing a planning session or resolving whether the phase is complete,
 - Set `Ready for next session: yes` only when readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`.
 - If readiness is `FAIL`, the boundary is not reached for implementation; next session starts with the named reopen target.
 - The final planning action is a handoff update, not a code, review, validation, rollout, closeout, `spec.md`, or `design/` action.
-- If the user asks to keep going into implementation, repeat the recorded handoff and stop unless an eligible upfront direct/local waiver already exists.
+- If the user asks to keep going into implementation, repeat the recorded handoff and stop unless an eligible upfront direct/lean waiver already exists.
 
 ## Imitate
 ```markdown

@@ -92,7 +92,7 @@ Relevant Repository Context
 - Canonical Codex subagents live under `.codex/agents/`; Claude mirrors live under `.claude/agents/`.
 - Runtime skill mirrors are maintained by `scripts/dev/sync-skills.sh` and the corresponding `make skills-sync` / `make skills-check` flows.
 - Agent mirrors are maintained by `scripts/dev/sync-agents.sh` and the corresponding `make agents-sync` / `make agents-check` flows.
-- This repo uses a spec-first workflow with master control in `specs/<feature-id>/workflow-plan.md`, phase-local routing in `specs/<feature-id>/workflow-plans/<phase>.md`, decisions in `specs/<feature-id>/spec.md`, and explicit validation evidence.
+- This repo uses trigger-based spec-first workflow: direct path may stay inline, lean local usually uses `spec.md` plus `tasks.md`, and full-orchestrated work uses master control in `specs/<feature-id>/workflow-plan.md` plus triggered phase-local routing in `specs/<feature-id>/workflow-plans/<phase>.md`.
 
 Inspect First
 - `.agents/skills/`

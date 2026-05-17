@@ -1,6 +1,6 @@
 # Subagent Brief Template
 
-Use this template when the orchestrator asks a read-only specialist lane for research, review, adjudication, or challenge. Fill only the sections that matter; keep the brief compact.
+Use this template when the orchestrator asks a read-only specialist lane for research, review, adjudication, or challenge. Open a lane only for an unresolved owned question; do not use the template to make subagents default ceremony. Fill only the sections that matter and keep the brief compact.
 
 ```text
 Goal:
@@ -49,4 +49,16 @@ Inspect first: <paths>.
 Evidence: cite concrete files/artifacts/commands; label assumptions.
 Return: skill output shape, or docs/subagent-contract.md envelope with one handoff classification.
 Prefer `must_decide_now` / `constraint_only` / `proof_only` / `follow_up_only` for adjacent-domain effects when relevant.
+```
+
+Short challenge/review variant:
+
+```text
+Use <agent-name> for read-only <challenge | review> with <skill-name | no-skill>.
+Scope: <artifact, diff, or decision being challenged/reviewed>.
+Question: <one approval-, risk-, or correctness-critical question>.
+Inspect first: <small path list>.
+Evidence: cite exact files/artifacts/commands; separate facts from assumptions.
+Return: findings only, ordered by impact, with one recommended handoff classification.
+Do not edit files, mutate git state, approve decisions, or change task ledgers/handoffs.
 ```

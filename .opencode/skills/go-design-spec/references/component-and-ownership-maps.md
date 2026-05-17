@@ -95,5 +95,5 @@ Before handoff, every changed surface should have one responsibility, one owner 
 
 ## Repo Pointers
 - `docs/repo-architecture.md`: stable component boundaries, source-of-truth table, dependency direction, request/response path, startup/shutdown path, async extension path.
-- `docs/spec-first-workflow.md`: required `design/component-map.md` and `design/ownership-map.md` purpose.
-- `.agents/skills/technical-design-session/SKILL.md`: required design artifacts and handoff boundary.
+- `docs/spec-first-workflow.md`: triggered `design/component-map.md` and `design/ownership-map.md` purpose.
+- `.agents/skills/technical-design-session/SKILL.md`: triggered design artifacts and handoff boundary.

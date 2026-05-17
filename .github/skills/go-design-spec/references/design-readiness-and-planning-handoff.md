@@ -82,9 +82,9 @@ Design is done enough.
 Why it is bad: the next session needs artifact status, blockers, accepted risks, and reopen conditions.
 
 ## Agent Traps
-- `design/overview.md` says planning-ready while required core artifacts are missing, draft, or contradictory.
+- `design/overview.md` says planning-ready while triggered core artifacts are missing, draft, or contradictory.
 - `workflow-plan.md` says current phase is planning, but `workflow-plans/technical-design.md` says design is blocked.
-- `tasks.md` exists before design readiness when no direct/local waiver was recorded.
+- `tasks.md` exists before design readiness when no direct/lean waiver was recorded.
 - `tasks.md` is expected but design handoff leaves package surfaces or ownership unresolved.
 - `rollout.md` is not expected while a migration, backfill, mixed-version window, or failback rule is planning-critical.
 - `test-plan.md` is not expected while validation obligations are too layered for `tasks.md`.
@@ -97,7 +97,7 @@ Before handoff, produce a compact readiness verdict: status, required artifacts,
 - Keep the technical-design phase open when a planning-critical decision, artifact, or contradiction remains unresolved.
 - Route to specification when the missing decision changes scope, external behavior, or accepted risk.
 - Route to a specialist when the missing detail is domain-owned and cannot be safely integrated from existing evidence.
-- Route to planning only when required design artifacts are approved or explicitly waived by an eligible direct/local rationale.
+- Route to planning only when required compact or split design context is approved or explicitly waived/merged by an eligible direct/lean rationale.
 - If planning starts and exposes a missing design decision, reopen technical design instead of inventing the decision in `tasks.md`.
 
 ## Repo Pointers

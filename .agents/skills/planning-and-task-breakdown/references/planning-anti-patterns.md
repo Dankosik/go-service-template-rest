@@ -38,5 +38,5 @@ This fails because it creates just-in-case work and bypasses the decision/design
 ## Agent Traps
 - Do not flag a compact `SKILL.md` as incomplete when detailed examples live in `references/`.
 - Do not flag omitted architecture/API/data/security/reliability/rollout examples when no approved decision in that domain exists.
-- Do not flag direct-path or lightweight-local waivers when they are explicit, narrow, and recorded before crossing a phase boundary.
+- Do not flag direct-path or lean-local waivers when they are explicit, narrow, and recorded before crossing a phase boundary.
 - Do not mistake "not expected" for "forgotten"; conditional artifacts should be absent unless triggered.

@@ -1,17 +1,17 @@
 # Handoff To Technical Design
 
 ## Behavior Change Thesis
-When loaded after `spec.md` looks approved or when the next session route is being chosen, this file makes the model choose a clean `technical-design` handoff recorded in workflow artifacts instead of the likely mistake of starting design work, hiding accepted assumptions in chat, or routing forward while the clarification gate is still blocked.
+When loaded after `spec.md` looks approved or when the next session route is being chosen, this file makes the model choose a clean lean tasking or triggered `technical-design` handoff recorded in workflow artifacts instead of the likely mistake of starting design work, hiding accepted assumptions in chat, or routing forward while the clarification gate is still blocked.
 
 ## When To Load
-Load this after spec approval or when deciding whether the specification session may set `Next session starts with: technical-design`.
+Load this after spec approval or when deciding whether the specification session may set `Next session starts with: technical-design` or a lean-local planning/tasking route.
 
 ## Decision Rubric
-- Handoff requires approved `spec.md`, resolved or explicitly waived clarification gate, and agreement between `workflow-plan.md` and `workflow-plans/specification.md`.
+- Handoff requires approved `spec.md`, resolved inline or formal clarification gate, and agreement between triggered workflow-control artifacts.
 - The handoff names accepted assumptions, blockers, and reopen conditions; it does not create design content.
 - Accepted risk can pass forward only when it does not change scope, ownership, acceptance semantics, or validation proof.
-- If a missing answer still changes a core decision, route to research or specification instead of technical design.
-- The session stops before creating `design/`, `tasks.md`, tests, or implementation changes.
+- If a missing answer still changes a core decision, route to research or specification instead of lean tasking or technical design.
+- The session stops before creating triggered `design/`, `tasks.md`, tests, or implementation changes unless an explicit direct/lean phase-collapse waiver was already recorded.
 
 ## Imitate
 Ready handoff in `workflow-plan.md`:

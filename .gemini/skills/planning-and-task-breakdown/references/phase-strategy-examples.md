@@ -46,6 +46,6 @@ This fails because it mixes decisions, implementation, proof, and possible rollo
 
 ## Agent Traps
 - Do not treat sequential phases as "not parallel enough" when dependencies or checkpoint risk make ordering real.
-- Do not require a separate rollout phase if approved `spec.md + design/` does not trigger rollout work.
+- Do not require a separate rollout phase if approved decisions plus required design context do not trigger rollout work.
 - Do not require every phase to be independently releasable when the plan explicitly names the coupling and keeps the checkpoint honest.
 - Do not treat an explicit session stop as overhead; for non-trivial work it is the handoff rule.

@@ -1,6 +1,6 @@
 ---
 name: workflow-plan-adequacy-challenge
-description: "Review generated workflow-control artifacts for task-specific handoff adequacy. Use inside a read-only challenger subagent after `workflow-plan.md` and the active phase-local `workflow-plans/*.md` file are generated or substantially repaired, before the orchestrator treats the phase plan as sufficient for non-trivial or agent-backed work."
+description: "Review generated workflow-control artifacts for task-specific handoff adequacy. Use inside a read-only challenger subagent after triggered workflow-control artifacts are generated or substantially repaired, before the orchestrator treats the phase plan as sufficient for full-orchestrated, high-risk, complex workflow-control, or agent-backed work. Lean-local work without workflow-control artifacts uses an inline/local self-check instead."
 ---
 
 # Workflow Plan Adequacy Challenge
@@ -8,7 +8,7 @@ description: "Review generated workflow-control artifacts for task-specific hand
 ## Purpose
 Surface the workflow-control gaps that would make phase handoff or the required chat-rendered next-session prompt dishonest or brittle.
 
-This skill is a read-only challenge gate over `workflow-plan.md` and the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, `design/`, or `tasks.md`.
+This skill is a read-only challenge gate over triggered workflow-control artifacts, usually `workflow-plan.md` plus the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, design context, or `tasks.md`.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -21,7 +21,7 @@ This skill is a read-only challenge gate over `workflow-plan.md` and the active 
 
 ## Scope
 - inspect generated or substantially repaired workflow-control artifacts for the current task
-- check consistency between the master `workflow-plan.md` and active `workflow-plans/<phase>.md`
+- check consistency between the master `workflow-plan.md` and active `workflow-plans/<phase>.md` when both are triggered
 - decide whether routing, stop rules, blockers, artifact expectations, lane ownership, completion criteria, and next-session handoff are sufficient for the task's risk and execution shape
 - when the active phase is planning, check that implementation-readiness status and the planning handoff rule are explicit enough for the next session
 - identify missing or unclear control details that could cause bad execution, premature handoff, or later chat archaeology
@@ -32,7 +32,7 @@ This skill is a read-only challenge gate over `workflow-plan.md` and the active 
 Do not:
 - edit files, create workflow artifacts, mutate git state, approve readiness, or change the task ledger or implementation handoff
 - make final product, architecture, API, data, security, reliability, rollout, planning, or validation decisions
-- turn `workflow-plans/<phase>.md` into a second `spec.md`, `design/`, or `tasks.md`
+- turn `workflow-plans/<phase>.md` into a second `spec.md`, design artifact, or `tasks.md`
 - demand generic checklist fields that do not change task execution quality
 - reopen settled scope unless the workflow-control artifact cannot route the current task honestly
 - treat this pass as a substitute for `spec-clarification-challenge`, pre-spec challenge, technical design, or task breakdown
@@ -42,12 +42,12 @@ Do not:
 Expect a compact bundle from the orchestrator:
 - task goal, scope, non-goals, constraints, risk hotspots, and success checks
 - execution shape and current phase
-- current master `workflow-plan.md`
-- active `workflow-plans/<phase>.md`
+- current master `workflow-plan.md`, when triggered
+- active `workflow-plans/<phase>.md`, when triggered
 - any generated review or validation phase-control files whose adequacy affects handoff
 - relevant artifact status for `spec.md`, `design/`, `tasks.md`, `test-plan.md`, or `rollout.md`
 - implementation-readiness status and any recorded `CONCERNS`, `FAIL`, or `WAIVED` rationale when the current phase is planning
-- recorded direct/local waiver or skip rationale, if the orchestrator claims the challenge is not required
+- recorded direct/lean local self-check, waiver, or skip rationale, if the orchestrator claims the formal challenge is not required
 
 If the bundle is too thin to review, return a blocking input-gap finding instead of guessing.
 
@@ -57,12 +57,12 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - research mode is explicit when research is expected; fan-out lanes name role, owned question, and one skill or `no-skill`
 - phase-local file records order or parallelism, fan-in or challenge path when relevant, completion marker, stop rule, local blockers, and parallelizable work
 - phase-local file satisfies the documented minimum for its phase without becoming a second `spec.md`, `design/`, `tasks.md`, raw review transcript, or validation log
-- artifact expectations are explicit and proportional: `spec.md`, `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
+- artifact expectations are explicit and proportional: `spec.md`, compact design context or split `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
 - when the current phase is planning, implementation readiness is recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
 - blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text
 - the workflow-control artifacts contain enough task-specific routing for the next session to start, and for the orchestrator to render the required chat-only next-session prompt, without recreating workflow planning from chat
 - the phase-local plan stays routing-only and does not duplicate final decisions, technical design, optional strategy notes, or the executable `tasks.md` ledger
-- tiny/direct-path or lightweight-local skips include a real rationale instead of silently bypassing control artifacts
+- direct-path or lean-local skips include a real rationale, inline `Risk Challenge` or local self-check when applicable, instead of silently bypassing control artifacts
 
 ## Reference Routing
 References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the file that matches the suspected adequacy gap. Load multiple references only when the same bundle clearly spans independent decision pressures, such as both a lane-ownership gap and an implementation-readiness gap. Treat repository-local `AGENTS.md` plus `docs/spec-first-workflow.md` as authoritative.
@@ -70,7 +70,7 @@ References are compact rubrics and example banks, not exhaustive checklists. Loa
 | Symptom | Load | Behavior Change |
 | --- | --- | --- |
 | Master and active phase disagree about current phase, status, blockers, readiness, session boundary, or next-session start. | `references/master-phase-consistency-examples.md` | Makes the challenger require aligned routing fields in both workflow-control files instead of trusting the clearer artifact or chat intent. |
-| Artifact expectations or statuses are missing, stale, overbroad, or not proportional to the execution shape. | `references/artifact-status-gap-examples.md` | Makes the challenger ask for status/rationale repair only, instead of demanding just-in-case artifacts or copying artifact content into workflow control. |
+| Artifact expectations or statuses are missing, stale, overbroad, or not proportional to the direct/lean/full execution shape. | `references/artifact-status-gap-examples.md` | Makes the challenger ask for status/rationale repair only, instead of demanding just-in-case artifacts or copying artifact content into workflow control. |
 | Research mode, lane role, owned question, single skill, order/parallelism, or fan-in path is missing or muddy. | `references/lane-ownership-and-research-mode.md` | Makes the challenger split vague agent work into lane-level routing instead of telling the orchestrator to "use more agents." |
 | Completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak. | `references/stop-rule-and-completion-marker.md` | Makes the challenger protect the phase boundary with a concrete stop/handoff rule instead of letting the session drift into the next phase. |
 | Planning-phase implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing. | `references/planning-readiness-gap-examples.md` | Makes the challenger route readiness gaps to `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` repair instead of treating "ready to code" prose as enough. |
@@ -124,7 +124,7 @@ Stop when:
 - approving or rejecting the workflow plan as an authority
 - padding findings with generic "add more detail" advice
 - asking for `spec.md` or `tasks.md` content to be copied into a phase workflow plan
-- treating all tiny tasks as if they need the full non-trivial artifact bundle
+- treating all direct or lean-local tasks as if they need the full orchestrated artifact bundle
 - ignoring a master/phase mismatch because the intended next step seems obvious from chat
 - using the challenge to perform domain research, specification clarification, technical design, or task breakdown
 - treating compact, explicit workflow control as a problem solely because it is shorter than a previous task's artifact

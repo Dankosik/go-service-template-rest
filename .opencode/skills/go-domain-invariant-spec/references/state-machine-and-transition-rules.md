@@ -22,7 +22,7 @@ State: planning
 Trigger: expected `tasks.md` is ready for implementation handoff
 Preconditions:
 - `spec.md` is approved or eligible for explicit direct-path waiver
-- required `design/` artifacts are approved or design-skip rationale exists
+- required compact or split design context is approved, merged into `spec.md`, or covered by design-skip rationale
 - validation/proof path is explicit
 Allowed next states:
 - implementation when readiness = PASS

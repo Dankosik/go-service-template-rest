@@ -4,7 +4,7 @@
 When loaded for symptom weak completion or stop rules, this file makes the model protect the phase boundary with concrete handoff routing instead of likely mistake letting the session continue into the next phase.
 
 ## When To Load
-Load this when a phase-local plan has a vague completion marker, no stop rule, unclear phase boundary, or a next action that starts the next phase without an upfront direct/local waiver.
+Load this when a phase-local plan has a vague completion marker, no stop rule, unclear phase boundary, or a next action that starts the next phase without an upfront direct/lean waiver.
 
 ## Decision Rubric
 - Completion marker says what proves this phase is done; stop rule says what this session must not start.
@@ -21,7 +21,7 @@ Why to copy: the session can drift from design into planning even though non-tri
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `clarify_stop_or_completion_rule`
-- `Exact Orchestrator Addition`: Add `Completion marker: required core design artifacts approved and master artifact status updated`; add `Stop rule: stop after technical-design handoff; do not create tasks.md in this session`.
+- `Exact Orchestrator Addition`: Add `Completion marker: required compact or split design context approved and master artifact status updated`; add `Stop rule: stop after technical-design handoff; do not create tasks.md in this session`.
 
 ### Research completion omits fan-in
 `Gap`: Completion marker says "research done" but fan-in and challenge status are absent.

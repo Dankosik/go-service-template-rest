@@ -1,17 +1,17 @@
 # Spec Clarification Gate Flow
 
 ## Behavior Change Thesis
-When loaded before approving a non-trivial `spec.md` or reconciling a clarification result, this file makes the model choose challenge-first reconciliation with final outcomes recorded in `spec.md` instead of the likely mistake of treating the gate as optional ceremony, pasting the transcript, or deferring approval-changing questions to design.
+When loaded before approving a formally challenged `spec.md` or reconciling a clarification result, this file makes the model choose challenge-first reconciliation with final outcomes recorded in `spec.md` instead of the likely mistake of treating the gate as optional ceremony, pasting the transcript, or deferring approval-changing questions to design. Lean-local specs without escalation triggers use inline `Risk Challenge` instead.
 
 ## When To Load
-Load this before non-trivial spec approval, when a `spec-clarification-challenge` result exists, or when the session needs to record why the gate is clear, blocked, or legitimately waived.
+Load this before full-orchestrated, high-risk, protected-domain, or otherwise formally challenged spec approval, when a `spec-clarification-challenge` result exists, or when the session needs to record why the formal gate is clear, blocked, or legitimately waived.
 
 ## Decision Rubric
 - Run the challenge only after candidate decisions are concrete enough to inspect.
 - Prepare a compact bundle: problem frame, scope, non-goals, candidate decisions, constraints, validation expectations, assumptions, open questions, and relevant research links.
 - Use one read-only lane, preferably `challenger-agent`, with exactly one skill: `spec-clarification-challenge`.
 - Reconcile every returned question before approval, including `non_blocking_but_record` items that must become constraints, assumptions, or validation consequences.
-- If a question requires expert work, record the reopen and stop unless an upfront direct/local waiver permits same-session collapse.
+- If a question requires expert work, record the reopen and stop unless an upfront direct/lean waiver permits same-session collapse.
 - Paste final resolved outcomes into `spec.md`; do not paste the raw challenge transcript.
 - Rerun the challenge once only when material decisions changed or a major seam was reopened and resolved.
 
@@ -46,7 +46,7 @@ Gate as decoration:
 Clarification challenge: skipped; spec already looks reasonable.
 ```
 
-This fails for non-trivial work because approval requires either a reconciled gate or an eligible direct/local waiver.
+This fails for formally challenged work because approval requires either a reconciled gate or an eligible direct/lean waiver. Lean-local work should record inline `Risk Challenge` rather than pretending no challenge happened.
 
 Transcript dumping:
 
@@ -60,4 +60,4 @@ This fails because `spec.md` stores orchestrator-owned final outcomes, not subag
 - Running the challenge too early, before the challenger has actual decisions to pressure-test.
 - Treating `non_blocking_but_record` as no-op.
 - Using `defer_to_design` for a question that changes scope, acceptance, ownership, or validation.
-- Starting `technical-design` inside the same non-trivial specification session after the gate clears.
+- Starting triggered `technical-design` inside the same specification session after the gate clears.

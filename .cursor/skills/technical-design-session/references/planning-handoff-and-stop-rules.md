@@ -7,11 +7,11 @@ When loaded for closing a technical-design session, this file makes the model ha
 Load before claiming technical design is planning-ready, setting `Session boundary reached: yes`, or responding to a user request to keep going into planning or implementation.
 
 ## Decision Rubric
-- A planning handoff may be ready only when required design artifacts are approved, triggered conditional artifacts are approved or explicitly not expected, and workflow files agree on blockers and next session.
-- The handoff names what planning may consume: approved `spec.md`, required design artifacts, triggered conditional artifacts, accepted assumptions, unresolved trade-offs, and reopen conditions.
+- A planning handoff may be ready only when required compact or split design context is approved, triggered conditional artifacts are approved or explicitly not expected, and workflow files agree on blockers and next session.
+- The handoff names what planning may consume: approved `spec.md`, compact design or split design artifacts, triggered conditional artifacts, accepted assumptions, unresolved trade-offs, and reopen conditions.
 - The final action is a handoff or blocker update, not `tasks.md`, implementation, tests, migrations, generation, or review.
 - If a planning-critical question remains, route to `specification` or keep `technical-design` blocked; do not pass a TODO to planning.
-- If the design is small but non-trivial, still stop at the recorded boundary unless an eligible upfront direct/local waiver already exists.
+- If the design is small but non-trivial, still stop at the recorded boundary unless an eligible upfront direct/lean waiver already exists.
 
 ## Imitate
 ```markdown

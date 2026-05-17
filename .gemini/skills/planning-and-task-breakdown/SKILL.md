@@ -1,12 +1,12 @@
 ---
 name: planning-and-task-breakdown
-description: "Turn approved `spec.md + design/` into a dependency-ordered, verifiable `tasks.md` ledger for this repository. Use after `spec.md` is stable, required technical-design artifacts are approved or explicitly skipped, and pre-spec challenge is reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
+description: "Turn approved `spec.md` plus required compact or split design context into a dependency-ordered, verifiable `tasks.md` ledger for this repository. Use after `spec.md` is stable, lean compact design or triggered technical-design artifacts are approved or explicitly skipped, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
 ---
 
 # Planning And Task Breakdown
 
 ## Purpose
-Turn stable decisions plus approved technical design into a `tasks.md` executable task ledger that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations.
+Turn stable decisions plus approved compact or split technical design context into a `tasks.md` executable task ledger that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -18,7 +18,7 @@ Turn stable decisions plus approved technical design into a `tasks.md` executabl
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Scope
-- convert approved decisions from `spec.md` and task-local technical context from `design/` into dependency-ordered executable tasks
+- convert approved decisions from `spec.md` and task-local technical context from lean `Compact Design`, one `design/overview.md`, or split `design/` into dependency-ordered executable tasks
 - make `tasks.md` explicit by default for non-trivial implementation work
 - attach acceptance criteria, planned verification, checkpoints, and change-surface hints
 - expose blockers, assumptions, and reopen conditions before coding starts
@@ -27,7 +27,7 @@ Turn stable decisions plus approved technical design into a `tasks.md` executabl
 ## Boundaries
 Do not:
 - make new architecture, API, data, security, reliability, or rollout decisions
-- reconstruct missing architecture, ownership, data, or sequence context from `spec.md` alone when `design/` should supply it
+- reconstruct missing architecture, ownership, data, or sequence context from `spec.md` alone when compact or split design context should supply it
 - write production code, tests, or migrations as the main deliverable
 - dump raw research or repeat the whole spec in planning form
 - treat `spec.md` as the place for full task breakdown by default
@@ -37,25 +37,25 @@ Do not:
 ## Escalate When
 Escalate if:
 - `spec.md` is not stable enough to derive tasks without reopening design
-- non-trivial work is missing `design/overview.md`, the required core design artifacts, or an explicit design-skip rationale
+- non-trivial work is missing lean compact design answers, `design/overview.md`, triggered split design artifacts, or an explicit design-skip/merge rationale
 - a conditional design artifact is clearly triggered but missing
 - core behavior is still undecided across architecture, API, data, security, reliability, or domain semantics
 - the right implementation order depends on a missing migration, compatibility, or ownership decision
 - the change cannot be decomposed without inventing detail the spec does not actually approve
 
 ## Core Defaults
-- `spec.md` is for decisions, `design/` is for technical context, and `tasks.md` is for the executable task ledger and final implementation handoff.
-- For non-trivial work, plan from approved `spec.md + design/`, not from `spec.md` alone.
-- For non-trivial work, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
+- `spec.md` is for decisions, lean `Compact Design` or triggered `design/` is for technical context, and `tasks.md` is for the executable task ledger and final implementation handoff.
+- For lean-local work, plan from approved `spec.md` with explicit compact design answers; for full-orchestrated or design-triggered work, plan from approved `spec.md` plus triggered `design/`.
+- For lean-local and full-orchestrated implementation, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
 - Keep `tasks.md` task-local to the active spec-first bundle. Do not use a repository-root or historical ledger as the current implementation handoff unless workflow control explicitly reopens it and records the resume route.
 - Planning is the last artifact-producing phase before code. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
 - Planning must leave an implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
-- When the planning pass generates or materially changes workflow-control files, expect a read-only `workflow-plan-adequacy-challenge` before handoff; do not treat `tasks.md` detail as a substitute for adequate `workflow-plan.md` and `workflow-plans/<phase>.md` routing.
+- When the planning pass generates or materially changes workflow-control files for full-orchestrated, high-risk, complex, or agent-backed work, expect a read-only `workflow-plan-adequacy-challenge` before handoff; lean-local work without workflow-control artifacts uses the recorded inline/local check instead.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
 - Planning closes the first safe slice, not every visible later-phase implication; if a downstream issue does not change the next slice, record it as a concern, proof obligation, or follow-up instead of widening the plan.
-- For non-trivial work, this pass ends the current session at approved `tasks.md`; implementation begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
+- For dedicated planning sessions, this pass ends at approved `tasks.md`; implementation begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
 - Do not let `tasks.md` absorb phase strategy, design decisions, or speculative tasking that should reopen design.
@@ -72,18 +72,18 @@ Keep this file as the operating contract. References are compact rubrics and exa
 | `references/checkpoints-and-reopen-conditions.md` | stop points, implementation-readiness handoff, blockers, reopen targets, or validation/reconciliation triggers need wording | names executable checkpoints and exact reopen targets instead of asking implementation to improvise or create missing workflow artifacts after coding starts |
 | `references/planning-anti-patterns.md` | reviewing a draft plan or ledger for drift, invented decisions, duplicate authority, false parallelism, vague proof, or artifact misuse | challenges smell patterns as triage instead of treating a plausible-looking plan as ready by checklist momentum |
 
-Reference snippets are patterns, not decisions. If an example would require an architecture, API, data, security, reliability, migration, rollout, or ownership choice not already approved in `spec.md + design/`, stop and reopen the right earlier phase instead of copying the snippet.
+Reference snippets are patterns, not decisions. If an example would require an architecture, API, data, security, reliability, migration, rollout, or ownership choice not already approved in `spec.md` plus required design context, stop and reopen the right earlier phase instead of copying the snippet.
 
 ## Planning Workflow
 
 ### 1. Confirm Planning Readiness
-- Read the stable `spec.md` and the relevant design bundle, not just the chat.
+- Read the stable `spec.md` and the required compact or split design context, not just the chat.
 - Confirm that the main decisions, design constraints, ownership boundaries, and open questions are explicit.
-- For non-trivial work, require `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip rationale.
+- For lean-local work, require explicit `Compact Design` answers or one `design/overview.md`; for split-design work, require `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip/merge rationale.
 - If the design or spec is not stable enough, stop and escalate instead of guessing.
 
 ### 2. Load Execution-Critical Design Context
-- Use `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` to understand what must land first and what may move in parallel.
+- Use lean `Compact Design`, `design/overview.md`, or split `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` to understand what must land first and what may move in parallel.
 - Load triggered conditional artifacts such as `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md` when they affect sequencing.
 - Identify what must exist first: schema or config changes, generated artifacts, interfaces, handlers, background workers, tests, docs, or migration controls.
 - Make the ordering explicit when one task truly depends on another.
@@ -161,12 +161,12 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `tasks.md` for a tiny change just to satisfy ceremony.
-- For non-trivial work, default to `tasks.md` and consume approved `spec.md + design/`.
+- For lean-local and full-orchestrated non-trivial work, default to `tasks.md` and consume approved `spec.md` plus required design context.
 - Create or repair `test-plan.md` or `rollout.md` during planning only when the approved design already contains the needed validation or rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen technical design instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, the next-session context bundle, `tasks.md` status, artifact expectations with trigger rationale, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
 - The implementation-readiness handoff must be explicit: `PASS` may proceed only when the first safe slice needs no hidden architecture, ownership, contract, sequencing, or rollout decisions; `CONCERNS` may proceed only with named risks and proof obligations the next slice can satisfy without replanning; `FAIL` must route to the named earlier phase; and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
-- If required design artifacts are missing or inconsistent, reopen technical design instead of inferring the missing context locally.
+- If required compact or split design context is missing or inconsistent, reopen specification or technical design instead of inferring the missing context locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
 - Prefer sequential phases unless change surfaces are truly disjoint.
@@ -188,7 +188,7 @@ The planning pass is complete when:
 
 ## Escalate Or Reject
 - task breakdown derived from an unstable spec
-- task breakdown that assumes missing `design/` context instead of escalating
+- task breakdown that assumes missing compact or split design context instead of escalating
 - a phase list with no acceptance criteria or verification
 - a generic task like `implement the feature`
 - horizontal slicing that hides risk and postpones integration until the end

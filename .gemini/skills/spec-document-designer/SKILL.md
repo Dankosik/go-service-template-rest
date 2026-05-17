@@ -1,6 +1,6 @@
 ---
 name: spec-document-designer
-description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable `spec.md` with the right section depth, decision placement, clarification-gate reconciliation, audit trail, and technical-design handoff before non-trivial planning. Skip raw ideation, technical-design-bundle assembly, full task breakdown, and implementation coding."
+description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable direct/lean/full-shaped `spec.md` with the right section depth, decision placement, inline `Risk Challenge` or formal clarification-gate reconciliation, audit trail, and handoff before non-trivial planning. Skip raw ideation, triggered design-bundle assembly, full task breakdown, and implementation coding."
 ---
 
 # Spec Document Designer
@@ -22,7 +22,7 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 - normalize existing drafts that are too thin, too bloated, or shaped like a foreign template
 - choose the right section depth for the task while staying inside the repository's artifact model
 - translate useful coverage prompts from external spec workflows into repo-native sections
-- keep blockers, assumptions, clarification outcomes, validation hooks, and plan-summary links visible before handoff to `technical design`
+- keep blockers, assumptions, inline `Risk Challenge` or clarification outcomes, validation hooks, and handoff links visible before lean tasking or triggered `technical design`
 - keep the handoff focused on the current decision frontier: record downstream consequences that matter, but do not promote every visible consequence into a new design decision inside `spec.md`
 
 ## Boundaries
@@ -30,10 +30,10 @@ Do not:
 - refine a raw product idea; use `idea-refine`
 - perform engineering framing on an under-shaped request; use `spec-first-brainstorming`
 - absorb unresolved cross-domain design contradictions that belong in `go-design-spec` or specialist `*-spec` skills
-- assemble the task-local `design/` bundle; that belongs to `go-design-spec`
+- assemble a triggered split `design/` bundle; that belongs to `go-design-spec`
 - produce task breakdown, execution sequencing, or coder instructions; that belongs to `planning-and-task-breakdown`
-- silently skip `technical design` for non-trivial work by smuggling design detail into `spec.md`
-- mark non-trivial `spec.md` approved while the autonomous `spec-clarification-challenge` gate is unresolved or blocked; if the gate is blocked, leave the spec unapproved with a reopen target
+- silently skip triggered `technical design` by smuggling split-design detail into `spec.md`; lean-local compact design answers are allowed when their trigger rationale is explicit
+- mark lean-local `spec.md` approved without inline `Risk Challenge`, or mark full-orchestrated/protected-domain `spec.md` approved while the formal `spec-clarification-challenge` gate is unresolved or blocked
 - copy BMAD, Spec Kit, Superpowers, or SDD templates directly into this repository's `spec.md`
 
 ## Escalate When
@@ -47,12 +47,12 @@ Escalate if:
 
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
-- For non-trivial work, the handoff path is `spec.md -> design/ -> tasks.md`.
-- For non-trivial work, `spec.md` approval requires the autonomous `spec-clarification-challenge` gate before handoff to `technical design`.
-- For non-trivial work, this pass ends the current session at approved `spec.md`; `technical design` begins in a new session unless an upfront `direct path` or `lightweight local` waiver was already recorded.
+- For lean-local work, the handoff path is `spec.md` with compact design answers and inline `Risk Challenge` -> `tasks.md`.
+- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> triggered design context -> tasks.md`, and formal `spec-clarification-challenge` is required before approval unless explicitly waived by an eligible exception.
+- For dedicated specification sessions, this pass ends at approved `spec.md`; triggered `technical design` or planning begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
-- Put stable decisions in `spec.md`, task-local technical context in `design/`, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
+- Put stable decisions in `spec.md`, lean compact design answers in `spec.md` or one `design/overview.md`, split task-local technical context in `design/` when triggered, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
 - Prefer short explicit bullets over template sludge.
 - Omit empty sections instead of padding the document for completeness theater.
 - Deep coverage is good, but `spec.md` should close only the decisions needed before technical design. Later-domain consequences that do not require a new decision now should stay as constraints, proof obligations, or explicit `no new decision required` notes.
@@ -67,11 +67,11 @@ Always load:
 
 Load by trigger:
 - existing spec rewrite or continuation: the active `spec.md`
-- non-trivial work: the matching `workflow-plan.md`
+- triggered workflow control: the matching `workflow-plan.md`
 - research-backed synthesis: the relevant `research/*.md`
-- non-trivial spec approval: `.agents/skills/spec-clarification-challenge/SKILL.md`
+- formal spec approval: `.agents/skills/spec-clarification-challenge/SKILL.md` when full-orchestrated, high-risk, protected-domain, or otherwise triggered
 - task-breakdown drift check: the matching `tasks.md` when it exists
-- existing technical-design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author design in this pass
+- existing technical-design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author triggered split design in this pass
 
 Conflict resolution:
 - repository contract beats the reference file
@@ -124,6 +124,7 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
   - `Task Breakdown / Handoff Link`
   - `Validation`
   - `Outcome`
+- For lean-local specs, prefer the compact shape from `docs/spec-first-workflow.md`: `Intent`, `Scope / Non-goals`, `Behavior / Contract Delta`, `Decisions`, `Compact Design`, `Risk Challenge`, `Task Handoff`, `Validation`, and `Outcome`.
 - Merge sections only when it makes the document clearer.
 - Expand depth based on task risk and ambiguity, not on habit.
 
@@ -147,17 +148,19 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Task sequencing and execution detail belong in `tasks.md`.
 - Unresolved but visible gaps belong in `Open Questions / Assumptions`.
 - Label `Open Questions / Assumptions` by unblock path when the uncertainty affects later sessions: `[assumption]` for bounded proceed-and-revisit assumptions, `[accepted_risk]` for deliberate risk with limits or proof obligations, `[requires_user_decision]` for external product or policy choices, `[targeted_research]` for repository evidence still needed, `[defer_to_design]` only for design-owned details after behavior is decided, and `[reopen_spec_if_false]` for downstream discoveries that would invalidate a spec-level assumption.
-- Do not force `go-design-spec` or the planner to recover ownership, sequence, or execution order from `spec.md` when separate artifacts are warranted.
+- Do not force `go-design-spec` or the planner to recover ownership, sequence, or execution order from `spec.md` when separate artifacts are warranted; for lean local, make those compact answers explicit in `spec.md`.
 
 ### Technical-Design Handoff Competency
-- A non-trivial spec must let `go-design-spec` derive the task-local `design/` bundle without silently reopening core problem framing.
+- A full-orchestrated or design-triggered spec must let `go-design-spec` derive the task-local `design/` bundle without silently reopening core problem framing.
+- A lean-local spec must let `tasks.md` be written from explicit `Compact Design` answers without forcing hidden design recovery during planning.
 - Keep blockers, accepted risks, and reopen conditions explicit.
 - Preserve non-goals and scope cuts so technical design does not re-expand the change.
 - Keep only the task-breakdown or handoff link in `spec.md`.
 - When another domain is only a dependent consequence, record the consequence and its owner instead of expanding `spec.md` into a parallel design bundle.
 
 ### Clarification-Gate Competency
-- Before approving non-trivial `spec.md`, ensure the orchestrator has run a read-only `spec-clarification-challenge` lane, preferably through `challenger-agent`, using exactly that one skill.
+- Before approving lean-local `spec.md`, ensure inline `Risk Challenge` is recorded as `PASS` or `CONCERNS`; `FULL_REQUIRED` escalates to the formal path.
+- Before approving full-orchestrated or protected-domain `spec.md`, ensure the orchestrator has run a read-only `spec-clarification-challenge` lane, preferably through `challenger-agent`, using exactly that one skill.
 - The challenge returns questions for orchestrator reconciliation; it does not write files or make final decisions.
 - Resolve each planning-critical item from existing evidence, targeted research, an expert subagent lane, explicit risk acceptance, design deferral, or `requires_user_decision`.
 - Store only final resolved outcomes in `spec.md`: stable outcomes in `Decisions`, remaining assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`.
@@ -212,16 +215,17 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - Link out instead of duplicating detail when preserved evidence already exists elsewhere, especially for non-obvious research-backed decisions that a later session may need to audit.
 
 ### 6. Run Or Enforce The Clarification Gate
-- For non-trivial work, confirm the `spec-clarification-challenge` gate ran after candidate decisions existed and before approval.
-- If the gate has not run, prepare the compact bundle and route one read-only subagent lane, preferably `challenger-agent`, using only `spec-clarification-challenge`.
+- For lean local, confirm the inline `Risk Challenge` ran after candidate decisions existed and before approval.
+- For full-orchestrated or protected-domain work, confirm the `spec-clarification-challenge` gate ran after candidate decisions existed and before approval.
+- If a required formal gate has not run, prepare the compact bundle and route one read-only subagent lane, preferably `challenger-agent`, using only `spec-clarification-challenge`.
 - If the gate returns material questions, keep `spec.md` draft or blocked until the orchestrator reconciles them.
 - If targeted expert research is required, route the appropriate upstream research or expert lane instead of inventing an answer in the spec.
 - If a question is truly external product or business policy, record `requires_user_decision` and leave the spec blocked or partially draft.
 - If material decisions changed or a major seam reopened and then resolved, rerun the clarification challenge once on the updated candidate synthesis.
 
 ### 7. Run A Technical-Design-Handoff Review
-- Ask whether non-trivial work can proceed into `technical design` without reopening the problem frame.
-- If yes, finalize the spec, keep the downstream design handoff explicit, and stop at the handoff boundary instead of beginning `technical design` in the same session.
+- Ask whether the work can proceed into lean tasking or triggered `technical design` without reopening the problem frame.
+- If yes, finalize the spec, keep the downstream handoff explicit, and stop at the handoff boundary instead of beginning the next concern in the same session.
 - If no, escalate to the missing upstream skill or specialist lane.
 
 ## Output Expectations
@@ -239,24 +243,24 @@ Rules:
 - Merge sections when clearer.
 - Do not create empty sections.
 - Do not dump full task lists or execution steps into `spec.md`.
-- Do not use `spec.md` as a substitute for `design/`.
+- Do not use `spec.md` as a substitute for triggered split `design/`; lean-local `Compact Design` is allowed only when sufficient and explicit.
 - Do not copy a historical bundle under `specs/` as a template; use it only as task-local precedent and preserve the current task's own trigger rationale.
 - When blocked, say what upstream skill or research pass must reopen and why.
 
 ## Definition Of Done
 The pass is complete when:
 - the spec is honest about what is decided and what is not
-- the clarification gate is reconciled, explicitly waived by an eligible direct/local exception, or left blocked with rationale
+- the inline lean `Risk Challenge` or formal clarification gate is reconciled, explicitly waived by an eligible direct/lean exception, or left blocked with rationale
 - stable decisions are separated from raw evidence
 - scope cuts and non-goals are explicit
-- validation expectations are visible early enough for technical design and later planning
-- the session stops at approved `spec.md` for non-trivial work unless an explicit waiver already allows phase collapse
+- validation expectations are visible early enough for lean tasking or triggered technical design and later planning
+- the session stops at approved `spec.md` for dedicated specification work unless an explicit waiver already allows phase collapse
 - the next technical-design or reopen step is clear without turning the spec into a design bundle or a plan
 
 ## Anti-Patterns
 - copying external template headings directly into the repo default shape
 - turning `spec.md` into a PRD, audit report, or task board
-- smuggling component maps, sequence design, or ownership maps into `spec.md` to avoid `design/`
+- smuggling full component maps, sequence design, or ownership maps into `spec.md` to avoid triggered `design/`
 - filling every possible NFR category whether it matters or not
 - hiding contradictions under generic wording
 - treating raw research notes as final decisions

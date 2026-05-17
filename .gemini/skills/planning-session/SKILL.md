@@ -1,6 +1,6 @@
 ---
 name: planning-session
-description: "Own a session dedicated only to task breakdown for this repository. Use when approved `spec.md + design/` are ready to turn into a `tasks.md` implementation handoff, plus `test-plan.md` or `rollout.md` only when truly triggered, and when the implementation-readiness gate must be completed before code starts, with task-local `workflow-plan.md` plus `workflow-plans/planning.md` updated without drifting into implementation. Skip tiny direct-path work and tasks whose spec or design are still unstable."
+description: "Own a session dedicated only to task breakdown for this repository when a distinct planning checkpoint is triggered. Use when approved `spec.md` plus required compact or split design context are ready to turn into a `tasks.md` implementation handoff, plus `test-plan.md` or `rollout.md` only when truly triggered, and when the implementation-readiness gate must be completed before code starts, with any triggered workflow-control artifacts updated without drifting into implementation. Skip direct-path inline plans and tasks whose spec or design context is still unstable."
 ---
 
 # Planning Session
@@ -19,8 +19,8 @@ This wrapper makes task breakdown explicit and stoppable; it does not reopen `sp
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Use When
-- the task already has approved workflow routing, stable `spec.md`, and planning-ready technical design
-- the orchestrator must turn approved `spec.md + design/` into executable planning artifacts for a non-trivial change
+- the task already has approved workflow routing when used, stable `spec.md`, and planning-ready compact or split technical design context
+- the orchestrator must turn approved `spec.md` plus required design context into executable planning artifacts for a non-trivial change
 - `tasks.md` should become the executable task ledger and final implementation handoff before any non-trivial implementation session starts
 - implementation readiness must be checked and recorded before handoff to implementation
 - `test-plan.md` or `rollout.md` may be needed because validation or rollout obligations are too large to fit cleanly inside `tasks.md`
@@ -28,24 +28,23 @@ This wrapper makes task breakdown explicit and stoppable; it does not reopen `sp
 
 ## Skip When
 - the work is tiny enough that inline direct-path planning plus explicit rationale is sufficient and a dedicated planning session would be ceremony
+- lean-local `tasks.md` can be produced in the same local pass without separate planning-phase routing and no multi-session state is needed
 - the task is still in `workflow planning`, `research`, `specification`, or `technical design`
-- `spec.md` is unstable, required design artifacts are missing, or a triggered conditional design artifact has not been produced yet
+- `spec.md` is unstable, required compact/split design context is missing, or a triggered conditional design artifact has not been produced yet
 - the request tries to combine planning with code changes, tests, migrations, or coding/execution in one session
 
 ## Required Inputs
 Planning may begin only when the minimum planning-entry inputs exist:
 - stable task-local `spec.md`
-- approved `design/overview.md`
-- approved `design/component-map.md`
-- approved `design/sequence.md`
-- approved `design/ownership-map.md`
+- compact `spec.md` design answers, one approved `design/overview.md`, or approved split design artifacts, according to the trigger decision
+- approved `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` only when split design is triggered
 - any triggered conditional design artifacts that affect sequencing, validation, or rollout, such as:
   - `design/data-model.md`
   - `design/dependency-graph.md`
   - `design/contracts/`
 - existing task-local `workflow-plan.md`
 - existing task-local `workflow-plans/planning.md`, if present
-- explicit design-skip rationale only when the repository contract already allows it for tiny or direct-path work
+- explicit design-skip or compact-design rationale only when the repository contract allows it for direct or lean-local work
 
 If any required planning input is missing, stale, or contradictory, stop and route back to `technical design` or `specification` instead of guessing.
 
@@ -58,16 +57,13 @@ Then read current phase context in this order:
 1. task-local `workflow-plan.md`, if present
 2. task-local `workflow-plans/planning.md`, if present
 3. task-local `spec.md`
-4. `design/overview.md`
-5. `design/component-map.md`
-6. `design/sequence.md`
-7. `design/ownership-map.md`
-8. triggered conditional design artifacts and any existing `tasks.md`, `test-plan.md`, or `rollout.md` that must be repaired rather than replaced
+4. compact design section in `spec.md`, `design/overview.md`, or split design artifacts according to the trigger decision
+5. triggered conditional design artifacts and any existing `tasks.md`, `test-plan.md`, or `rollout.md` that must be repaired rather than replaced
 
 Rules:
 - follow `AGENTS.md` if workflow guidance conflicts
 - read the master `workflow-plan.md` before the phase-local planning file when both exist
-- do not treat `spec.md` alone as sufficient for non-trivial planning
+- do not treat `spec.md` alone as sufficient for non-trivial planning unless it explicitly records lean-local compact design answers and the design-skip/merge rationale
 - do not broad-read unrelated repository surfaces when the design bundle already defines the sequencing and ownership constraints
 
 ## Lazily Loaded References
@@ -118,12 +114,12 @@ Do not:
 - this is an orchestrator-facing wrapper, not the deeper planning method itself
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics
 - `planning-and-task-breakdown` remains the deeper planning method for dependency ordering, task sizing, acceptance criteria, checkpoints, and verification detail
-- `tasks.md` owns the executable checkbox ledger and final implementation handoff derived from `spec.md + design/`
+- `tasks.md` owns the executable checkbox ledger and final implementation handoff derived from `spec.md` plus required compact or split design context
 - `tasks.md` must belong to the active task-local bundle. A repository-root or historical ledger is not the current handoff unless workflow control explicitly reopens it and records the resume route.
 - implementation readiness is the planning-phase exit gate; it uses `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` and is not a separate workflow phase
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
-- before non-trivial handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, and any named review or validation phase-control files
-- for non-trivial work, the session ends at approved planning artifacts; implementation starts in a new session unless an upfront repository-approved waiver already exists
+- before full-orchestrated, high-risk, complex workflow-control, or agent-backed handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, and any named review or validation phase-control files
+- for dedicated planning sessions, the session ends at approved planning artifacts; implementation starts in a new session unless an upfront direct/lean waiver already exists
 
 ## Boundary With `planning-and-task-breakdown`
 - use `planning-session` to control one planning-only session
@@ -160,13 +156,13 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 
 ### 2. Confirm Planning Readiness
 - verify that `spec.md` is stable enough for task breakdown
-- verify that the required core design artifacts exist unless an explicit design-skip rationale already covers the task
+- verify that the required compact or split design context exists unless an explicit design-skip rationale already covers the task
 - accept concise approved design artifacts when they answer the current planning-critical questions explicitly; do not reopen design just because one required artifact is short or asymmetrical
 - verify that any triggered conditional design artifacts exist when they affect sequencing, validation, or rollout
 - if planning exposes a missing spec or design input, route back explicitly; do not invent the missing context inside `tasks.md`
 
 ### 3. Load Execution-Critical Context
-- use the design bundle to identify dependency-establishing work, safe sequencing, coupling, validation obligations, and rollout risks
+- use the compact design section or design bundle to identify dependency-establishing work, safe sequencing, coupling, validation obligations, and rollout risks
 - read existing `tasks.md`, `test-plan.md`, or `rollout.md` only when repairing or extending an existing planning pass
 - keep the context narrow and planning-specific; this session does not need broad repository rediscovery when the approved design already carries the task-local technical context
 - keep the handoff focused on the first safe implementation slice; later-phase implications that do not change that slice should stay as explicit concerns, proof obligations, or follow-up notes instead of being expanded into new pre-code design work
@@ -203,10 +199,10 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - set readiness to `WAIVED` only for tiny, direct-path, or prototype work with explicit rationale and scope
 - record readiness status in `workflow-plan.md`, the gate result and stop or handoff rule in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful
 - keep implementation entry prerequisites visible so the next session does not need to re-plan
-- for non-trivial or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`
+- for full-orchestrated, high-risk, complex workflow-control, or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`
 - pass the task frame, execution shape, master workflow plan, `workflow-plans/planning.md`, any named review or validation phase-control files, planning artifact status, blockers, and proposed next-session handoff
 - reconcile blocking findings before marking planning complete; leave planning blocked or reopened when the workflow-control artifacts are not sufficient for implementation handoff
-- for tiny/direct-path work, record the explicit skip rationale instead of forcing the challenge
+- for direct path or lean local with no formal trigger, record the explicit local self-check or skip rationale instead of forcing the challenge
 
 ### 8. Stop At The Boundary
 - once planning artifacts and workflow handoff are consistent, stop
@@ -224,7 +220,7 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - named earlier phase when readiness is `FAIL`
 - waiver rationale and scope when readiness is `WAIVED`
 - blockers, accepted assumptions, and reopen conditions that still affect implementation readiness
-- workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale
+- workflow plan adequacy challenge status and resolution, or an explicit direct/lean local self-check or skip rationale
 - `Session boundary reached`
 - `Ready for next session`
 - `Next session starts with`
@@ -264,14 +260,14 @@ Rules:
 ## Planning Completion Criteria
 Planning is complete when:
 - execution order is explicit enough for implementation to start without re-planning
-- `tasks.md` exists for non-trivial work, or an explicit tiny/direct-path waiver explains why it is not separate
+- `tasks.md` exists for lean-local or full-orchestrated non-trivial work, or an explicit tiny/direct-path waiver explains why it is not separate
 - meaningful phases or tasks have acceptance criteria and planned verification
 - blocked work is clearly separated from ready work
 - `test-plan.md` and `rollout.md` exist only when their triggers are real, and their status is explicit when not needed
 - any review or validation phase workflow files that named multi-session routing requires were created before implementation begins, or their absence is recorded as a reopen blocker
 - implementation-readiness gate is `PASS`, `CONCERNS` with named accepted risks and proof obligations, or eligible `WAIVED`; `FAIL` leaves planning blocked or reopened
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
-- required workflow plan adequacy challenge findings are reconciled, or an eligible skip rationale is explicit
+- required workflow plan adequacy challenge findings are reconciled, or an eligible direct/lean skip rationale is explicit
 - the next session can begin the first task or explicit implementation checkpoint without silently reopening spec or design
 - visible later-phase implications that do not change the first safe slice are recorded explicitly instead of being forced into new planning blockers
 
@@ -281,7 +277,7 @@ The session is complete when the planning artifacts and workflow handoff are con
 ## Escalate When
 Escalate instead of forcing output when:
 - `spec.md` is unstable enough that planning would recreate missing decisions
-- required core design artifacts are missing without an approved design-skip rationale
+- required compact or split design context is missing without an approved design-skip/merge rationale
 - a conditional design artifact is clearly triggered but missing
 - rollout, compatibility, migration, or ownership questions remain unresolved and change the implementation order
 - implementation readiness is `FAIL` or would require accepting unnamed risk

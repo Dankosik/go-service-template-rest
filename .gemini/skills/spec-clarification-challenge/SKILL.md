@@ -1,6 +1,6 @@
 ---
 name: spec-clarification-challenge
-description: "Run a specification-approval clarification challenge for non-trivial `spec.md` work. Use inside a read-only challenger subagent during `specification`, after candidate decisions exist and before `spec.md` approval, to surface non-obvious questions, hidden assumptions, corner cases, architecture/data/API/security/reliability seams, and approval blockers the orchestrator must reconcile."
+description: "Run a specification-approval clarification challenge when formal challenge is triggered for `spec.md` work. Use inside a read-only challenger subagent during full-orchestrated, high-risk, protected-domain, or otherwise formally challenged specification, after candidate decisions exist and before `spec.md` approval, to surface non-obvious questions, hidden assumptions, corner cases, architecture/data/API/security/reliability concerns, and approval blockers the orchestrator must reconcile. Lean-local work without an escalation trigger uses inline `Risk Challenge` instead."
 ---
 
 # Spec Clarification Challenge
@@ -8,7 +8,7 @@ description: "Run a specification-approval clarification challenge for non-trivi
 ## Purpose
 Surface the few questions that could still make `spec.md` approval dishonest.
 
-This skill is a gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk.
+This skill is a formal gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -24,6 +24,7 @@ This skill is a gate inside `specification`, not a workflow phase and not a seco
 - find non-obvious questions that could change scope, acceptance semantics, architecture boundaries, source-of-truth ownership, data/API/security/reliability behavior, failure semantics, rollout, or validation strategy
 - classify each question by approval impact and recommend the smallest next action
 - keep the output compact enough for direct orchestrator reconciliation
+- preserve the escalation boundary: use this formal lane for full-orchestrated or protected-domain approval risk, not for lean-local ceremony
 
 ## Boundaries
 Do not:
@@ -42,18 +43,20 @@ Expect a compact bundle from the orchestrator:
 - constraints and validation expectations
 - known assumptions and open questions
 - links to relevant `research/*.md` or lane outputs when they matter
+- confirmation that formal challenge is triggered, or the specific concern that made inline lean `Risk Challenge` insufficient
 
 If the bundle is too thin to challenge, say what is missing and classify the result as blocking approval rather than guessing.
 
 ## Question Selection
 Prefer 5-10 high-signal questions for complex work. Fewer is fine when fewer questions materially affect approval.
-A clean gate may return only a handful of questions, or none. Stop once approval risk is well bounded; do not expand the pass into a completeness sweep across every plausible domain seam.
+A clean gate may return only a handful of questions, or none. Stop once approval risk is well bounded; do not expand the pass into a completeness sweep across every plausible domain concern.
 
 Keep a question only if all are true:
 - it names a specific hidden assumption, corner case, or seam
 - a different answer could change `spec.md` scope, acceptance semantics, ownership, failure behavior, rollout, or validation
 - the orchestrator could answer it from evidence or route it to a targeted expert lane
 - it is not ordinary downstream design elaboration
+- it is not already handled by a sufficient lean-local inline `Risk Challenge`
 
 Drop questions that only ask for best-practice coverage, implementation detail, or "more thinking" without changing approval.
 
@@ -132,3 +135,4 @@ Stop when:
 - copying raw challenge output into `spec.md`
 - turning the pass into architecture authorship, task breakdown, or approval theater
 - treating every visible adjacent-domain effect as a mandatory approval question
+- using formal challenge to add ceremony to bounded lean-local work when inline `Risk Challenge` is sufficient

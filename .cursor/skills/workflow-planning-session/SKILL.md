@@ -1,6 +1,6 @@
 ---
 name: workflow-planning-session
-description: "Own a session dedicated only to workflow planning for this repository. Use when the orchestrator needs to choose execution shape, research mode, subagent lanes, current-phase routing, and later artifact expectations before research begins, and must write or update task-local `workflow-plan.md` plus `workflow-plans/workflow-planning.md` without drifting into research, `spec.md`, `design/`, `tasks.md`, or implementation. Skip tiny direct-path work and any task whose approved pre-research control artifact already lives under a different phase file."
+description: "Own a session dedicated only to workflow planning for this repository when routing itself needs a durable artifact. Use when the orchestrator needs to choose direct path, lean local, or full orchestrated shape, research mode, subagent lanes, current-phase routing, and later artifact expectations before research begins, and must write or update triggered task-local workflow-control artifacts without drifting into research, `spec.md`, design, `tasks.md`, or implementation. Skip direct-path work and lean-local work whose routing can be recorded inside `spec.md`/`tasks.md` without separate control files."
 ---
 
 # Workflow Planning Session
@@ -20,12 +20,13 @@ This wrapper makes the pre-research control pass explicit and stoppable; it does
 
 ## Use When
 - non-trivial or agent-backed work needs explicit workflow control before any subagent call or deeper research
-- the orchestrator must choose `direct path`, `lightweight local`, or `full orchestrated`
+- the orchestrator must choose `direct path`, `lean local`, or `full orchestrated`
 - research mode, subagent lanes, challenge expectations, and later artifact expectations must be written down before the next session
-- task-local `workflow-plan.md` or `workflow-plans/workflow-planning.md` is missing, stale, or inconsistent
+- triggered task-local `workflow-plan.md` or `workflow-plans/workflow-planning.md` is missing, stale, or inconsistent
 
 ## Skip When
 - the work is tiny enough that `AGENTS.md` allows a short inline workflow-planning note and explicit skip rationale instead of dedicated workflow artifacts
+- lean-local routing fits in the compact `spec.md` plus `tasks.md`, with inline `Risk Challenge` and no durable cross-phase state needed
 - the task is already in research or a later phase and the current session should not reopen routing
 - the active task already has an approved pre-research control artifact under another phase file and creating `workflow-plans/workflow-planning.md` would create a competing source of truth
 
@@ -77,16 +78,17 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics.
 - This skill owns session protocol only. It must not redefine later artifact ownership or phase behavior.
 - Use `workflow-planning-session` only when a dedicated workflow-planning session is the intended control shape.
-- Later phase-local files from the repository contract still matter: this wrapper does not replace `workflow-plans/specification.md`, `workflow-plans/technical-design.md`, `workflow-plans/planning.md`, or conditional review/validation phase files.
-- Before handoff on non-trivial or agent-backed work, run or record the read-only `workflow-plan-adequacy-challenge`; tiny/direct-path work may skip it only with an explicit rationale.
-- For non-trivial work, stop after the workflow artifacts are updated. Research or another recorded next phase begins in a new session unless an approved waiver already exists.
+- `lean local` is the default for bounded non-trivial single-domain work; `lightweight local` is only a compatibility alias for older artifacts.
+- Later phase-local files are conditional: create them only when a triggered phase needs durable local routing, not because the full bundle exists as an example.
+- Before handoff on full-orchestrated, high-risk, or agent-backed routing, run or record the read-only `workflow-plan-adequacy-challenge`; direct path and lean local may use a recorded local self-check when no formal trigger exists.
+- For sessions that do create workflow-control artifacts, stop after they are updated. Research or another recorded next phase begins in a new session unless an approved direct/lean waiver already allows collapse.
 
 ## Lazily Loaded References
 Keep `SKILL.md` as the wrapper protocol. References are compact rubrics and example banks, not exhaustive checklists or alternate authority. After reading `AGENTS.md` and `docs/spec-first-workflow.md`, load at most one reference by default: choose the symptom whose behavior change matches the current uncertainty. Load multiple references only when the task clearly spans independent decision pressures, and never bulk-load the whole directory.
 
 | Reference | Load When The Symptom Is... | Behavior Change |
 | --- | --- | --- |
-| [execution-shape-selection.md](references/execution-shape-selection.md) | choosing or checking `direct path`, `lightweight local`, or `full orchestrated` | chooses the smallest defensible execution shape with escalation triggers instead of forcing ceremony or under-routing cross-domain work |
+| [execution-shape-selection.md](references/execution-shape-selection.md) | choosing or checking `direct path`, `lean local`, compatibility `lightweight local`, or `full orchestrated` | chooses the smallest defensible execution shape with escalation triggers instead of forcing ceremony or under-routing cross-domain work |
 | [research-mode-and-fanout-lanes.md](references/research-mode-and-fanout-lanes.md) | deciding `local` versus `fan-out`, or writing lane rows | plans read-only lanes by owned evidence question and one skill per lane instead of broad owner lanes, worker lanes, multi-skill lanes, or same-session research |
 | [artifact-expectation-matrix.md](references/artifact-expectation-matrix.md) | marking later artifacts as expected, missing, draft, approved, conditional, not expected, or waived | records trigger-aware artifact status instead of inventing completeness, creating later artifacts early, or marking everything "not applicable" |
 | [control-file-authoring-split.md](references/control-file-authoring-split.md) | deciding what belongs in `workflow-plan.md` versus `workflow-plans/workflow-planning.md` | keeps cross-phase status in the master and session-local orchestration in the phase file instead of duplicating details or drifting into later artifacts |
@@ -106,11 +108,11 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 - Keep missing facts visible instead of filling them in.
 
 ### 3. Choose Execution Shape And Research Mode
-- Choose `direct path`, `lightweight local`, or `full orchestrated`.
+- Choose `direct path`, `lean local`, or `full orchestrated`, treating `lightweight local` as a compatibility alias when reading older artifacts.
 - Decide whether the next research pass should be `local` or `fan-out`.
 - If `fan-out` is expected, enumerate lanes by owned question, role, and one chosen skill or explicit `no-skill`.
 - Decide whether a later pre-spec challenge pass is expected.
-- Decide whether later `design/`, `tasks.md`, `test-plan.md`, or `rollout.md` artifacts are expected.
+- Decide whether lean-local `spec.md`/`tasks.md`, merged design context, full split `design/`, `test-plan.md`, or `rollout.md` artifacts are expected by trigger.
 - Decide whether later review or validation phase workflow files may be expected, with the rule that planning creates only named files that are genuinely needed before implementation starts.
 
 ### 4. Set Session Routing
@@ -132,10 +134,10 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 - Keep this file routing-only. Do not turn it into `spec.md`, `design/`, or `tasks.md`.
 
 ### 7. Run Or Record The Workflow Plan Adequacy Challenge
-- For non-trivial or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`.
+- For full-orchestrated, high-risk, complex workflow-control, or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`.
 - Give it the task frame, execution shape, master workflow plan, `workflow-plans/workflow-planning.md`, planned lanes, artifact expectations, and next-session handoff.
 - Reconcile blocking findings by repairing the workflow-control artifacts, recording an accepted risk or waiver, or leaving the session blocked.
-- For tiny/direct-path work, record the skip rationale instead of forcing the challenge.
+- For direct path or lean local with no formal trigger, record the local self-check or skip rationale instead of forcing the challenge.
 
 ### 8. Stop At The Boundary
 - Once the two workflow artifacts are consistent and the next session can start without re-planning, stop.
@@ -152,7 +154,7 @@ Every completed pass must update the master file with:
 - `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
 - blockers and accepted assumptions that still affect routing
 - phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
-- workflow plan adequacy challenge status and resolution, or an explicit direct/local skip rationale
+- workflow plan adequacy challenge status and resolution, or an explicit direct/lean local self-check or skip rationale
 - artifact status for `spec.md`, `design/`, `tasks.md`, and any triggered `test-plan.md` or `rollout.md`, with trigger rationale for `not expected`, `conditional`, or `waived` statuses
 - phased-delivery policy, including whether later review and validation phase files are expected or still unknown
 
@@ -188,7 +190,7 @@ The session is complete when:
 - the current workflow-planning checkpoint has a written completion marker and stop rule
 - the next session start point is explicit
 - master and phase-local workflow artifacts agree on phase status, blockers, and handoff
-- required workflow plan adequacy challenge findings are reconciled, or an eligible skip rationale is explicit
+- required workflow plan adequacy challenge findings are reconciled, or an eligible direct/lean skip rationale is explicit
 - later required artifacts are marked as expected, draft, missing, or not expected instead of guessed into existence
 - no research, specification, technical design, planning, or implementation work has started
 

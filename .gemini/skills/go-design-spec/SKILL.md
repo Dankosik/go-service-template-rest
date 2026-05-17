@@ -1,12 +1,12 @@
 ---
 name: go-design-spec
-description: "Assemble and reconcile the integrated technical-design bundle for Go services. Use when `spec.md` is approved but non-trivial work still needs coherent task-local `design/` artifacts and cross-domain reconciliation before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work with an explicit design-skip rationale, implementation coding, review execution, or CI/container setup."
+description: "Assemble and reconcile integrated technical-design context for Go services when separate design depth is triggered. Use when `spec.md` is approved but the work still needs coherent task-local `design/` artifacts, one `design/overview.md`, or cross-domain reconciliation before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work, lean-local work with sufficient compact design in `spec.md`, implementation coding, review execution, or CI/container setup."
 ---
 
 # Go Design Spec
 
 ## Purpose
-Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave `design/` stable enough for planning by closing the current decision frontier without reopening the approved problem frame.
+Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave compact or split design context stable enough for planning by closing the current decision frontier without reopening the approved problem frame.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -34,7 +34,7 @@ Do not:
 Escalate if:
 - `spec.md` is missing, unstable, or still contradicts itself in planning-critical ways
 - the design is internally inconsistent or key assumptions differ across domains
-- a required design artifact cannot be completed honestly without reopening `spec.md`
+- required compact or split design context cannot be completed honestly without reopening `spec.md`
 - critical behavior is not testable, operable, or rollout-safe
 - repository baseline context from `docs/repo-architecture.md` materially matters and has not been loaded yet
 
@@ -53,17 +53,17 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 | A proposed layer, interface, helper, adapter, shared package, or simplification may change ownership or widen impact radius. | [complexity-and-abstraction-tradeoffs.md](references/complexity-and-abstraction-tradeoffs.md) | Makes the model require present-day complexity reduction and contract preservation instead of future-proof indirection or simplification that weakens guarantees. |
 
 ## Specialist Stance
-- `spec.md` owns decisions, `design/` owns task-local technical context, and `tasks.md` consumes approved `spec.md + design/` for the implementation handoff.
+- `spec.md` owns decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` consumes approved decisions plus required design context for the implementation handoff.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
-- Prefer one coherent design-bundle handoff over scattered partial notes that still force planning to rediscover technical context.
-- Keep `design/overview.md` as the bundle entrypoint instead of repeating the same story in every artifact; when the bundle is planning-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
+- Prefer one coherent design handoff over scattered partial notes that still force planning to rediscover technical context.
+- Keep lean-local design merged in `spec.md` when it is sufficient; otherwise keep `design/overview.md` as the entrypoint instead of repeating the same story in every artifact. When the bundle is planning-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
 - Keep deep design and corner-case coverage, but distinguish `must decide now` from `dependent consequence only`.
 - Open another domain or artifact only when the unresolved point materially changes ownership, correctness model, public contract, safe sequencing, or rollout shape for the current bundle.
 - When another domain is affected but unchanged, record `constraint_only`, `proof_only`, `follow_up_only`, or explicit `no new decision required in <domain>` rather than growing the bundle into a parallel specialist package.
-- Treat the required design artifacts as required questions, not equal-length documents. Uneven depth is normal: the hard seam may live in one artifact while another stays short because the boundary is stable.
+- Treat split design artifacts as required questions only when split design is triggered, not equal-length documents. Uneven depth is normal: the hard issue may live in one artifact while another stays short because the boundary is stable.
 - Prefer the smallest coherent bundle that lets planning proceed honestly. Do not inflate unaffected surfaces just to make the bundle look balanced.
 
 ## Boundaries And Handoffs
@@ -76,17 +76,18 @@ This is a technical-design integrator, not a workflow owner:
 ## Expertise
 
 ### Design Bundle Assembly
-- Produce or tighten the required core artifacts for non-trivial work:
+- Produce or tighten split core artifacts when their trigger is real:
   - `design/overview.md` for chosen approach, artifact index with planning-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
   - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; responsibilities; what changes versus what stays stable; and which plausible surfaces are intentionally not touched
   - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
   - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
-- Keep each required artifact only as detailed as its current seam demands. A narrow change can justify very short component, sequence, or ownership notes as long as they explicitly preserve unchanged seams and planning does not need to infer what stayed stable.
+- Keep each triggered artifact only as detailed as its current issue demands. A narrow change can justify very short component, sequence, or ownership notes as long as they explicitly preserve unchanged boundaries and planning does not need to infer what stayed stable.
 - Add conditional artifacts only when their trigger is real:
   - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
   - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit
   - `design/contracts/` when API, event, generated, or material internal interface contracts change
 - Call out when `test-plan.md` or `rollout.md` must exist before planning can start, but do not turn this skill into execution planning.
+- For lean-local work, prefer `spec.md` `Compact Design` or one `design/overview.md` when that honestly answers affected surfaces, ownership/source-of-truth, and sequence/failure behavior.
 
 ### Complexity And Maintainability
 - Avoid speculative abstractions, indirection layers, interface-per-struct patterns, and service-manager-factory chains that do not remove concrete present-day complexity.
@@ -142,7 +143,7 @@ For each planning-critical design recommendation, make clear:
 
 ## Deliverable Shape
 When writing or reviewing the integrated technical-design bundle, cover:
-- the required core `design/` artifacts and any triggered conditional artifacts
+- the required compact or split `design/` artifacts and any triggered conditional artifacts
 - contradictions across domains
 - simplification opportunities
 - abstractions or layers that should be removed, merged, or made explicit
@@ -155,7 +156,7 @@ When writing or reviewing the integrated technical-design bundle, cover:
   - `no new decision required`
 - concise stable or unchanged notes where a required artifact has little to say beyond preserved boundaries
 - what must loop back into `spec.md` before planning can safely begin
-- whether `design/` is stable enough for `planning-and-task-breakdown`
+- whether compact or split design context is stable enough for `planning-and-task-breakdown`
 - the planning handoff boundary and any reason the next session must reopen `spec.md` instead of moving forward
 - unresolved design risks that should block implementation
 

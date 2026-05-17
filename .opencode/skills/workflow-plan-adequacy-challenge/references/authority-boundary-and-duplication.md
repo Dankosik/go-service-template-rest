@@ -9,7 +9,7 @@ Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.
 ## Decision Rubric
 - `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, and implementation-readiness status.
 - `workflow-plans/<phase>.md` owns phase-local orchestration: lanes, order/parallelism, fan-in/challenge path, completion marker, stop rule, next action, blockers, and local adequacy challenge resolution.
-- `spec.md` owns final decisions; `design/` owns technical design; `tasks.md` owns executable task state and implementation handoff.
+- `spec.md` owns final decisions; lean `Compact Design` or triggered `design/` owns technical design context; `tasks.md` owns executable task state and implementation handoff.
 - If workflow control contains canonical artifact content, recommend trimming it to a status, link/path, blocker, or next action. Do not ask for a larger duplicate summary.
 
 ## Imitate
@@ -21,7 +21,7 @@ Why to copy: the problem is duplicate authority, not missing design content.
 Use:
 - `Classification`: `blocks_specific_lane` if it affects only the generated phase-control file; `blocks_phase_handoff` if handoff relies on the duplicate content as the only design record
 - `Recommended Action`: `trim_duplicate_authority`
-- `Exact Orchestrator Addition`: Move design detail back to `design/`; in `workflow-plans/technical-design.md`, keep `Artifact status: design/ draft|approved`, `Completion marker: required design artifacts approved`, and `Next action: update master with design status`.
+- `Exact Orchestrator Addition`: Move triggered split-design detail back to `design/`; in `workflow-plans/technical-design.md`, keep `Artifact status: design/ draft|approved`, `Completion marker: triggered design artifacts approved`, and `Next action: update master with design status`.
 
 ### Master contains task ledger
 `Gap`: `workflow-plan.md` embeds the implementation checklist from `tasks.md`.

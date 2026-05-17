@@ -79,6 +79,6 @@ Failure: creates a competing control artifact for the same checkpoint.
 ## Agent Traps
 - Treating adequacy as a domain research or spec-clarification lane.
 - Marking the session complete while blocking findings remain open.
-- Recording a lightweight-local skip without explaining why challenge overhead is not buying safety.
+- Recording a lean-local skip without explaining why challenge overhead is not buying safety.
 - Continuing into research because the lane table is written.
 - Forcing this wrapper onto tasks whose current phase is already downstream.

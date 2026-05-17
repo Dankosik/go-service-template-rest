@@ -2,14 +2,18 @@
 
 Shared contract for repository read-only subagents. `AGENTS.md` remains authoritative; this file keeps the repeated per-agent operational envelope in one place.
 
+Subagents are triggered by unresolved owned questions, not by default workflow ceremony. Use a lane only when independent evidence, challenge, adjudication, or specialist review can materially improve the current artifact or execution decision.
+
 ## Shared Invariants
 
-- Subagents are advisory and read-only: no code writes, file edits, git-state mutation, or implementation-plan changes.
+- Subagents are advisory and read-only: no code writes, file edits, git-state mutation, task-ledger changes, or implementation-handoff changes.
 - Final decisions, synthesis, implementation, reconciliation, and validation belong to the orchestrator.
 - Each pass uses at most one skill. If a selected skill defines a procedure or output shape, the skill owns it.
 - Agent files own domain scope, use/do-not-use rules, inspect-first surfaces, skill routing, and unique escalation rules.
 - Deep design and corner-case coverage stay in scope, but downstream effect alone does not create a new required domain decision.
 - Open another lane only when another domain must make a new decision before the current artifact can be high quality; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
+- Direct and lean-local work normally stays local unless a real unresolved question triggers a lane.
+- Full-orchestrated work may use multiple lanes, but each lane still needs one owned question and one skill or `no-skill`.
 - Do not invent missing artifacts, source facts, policy decisions, diffs, validation output, or skill results.
 - If input is insufficient, return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed`.
 - If a bounded assumption is safe enough, label it and proceed.
@@ -25,6 +29,8 @@ Every handoff should include:
 - constraints, risk hotspots, non-goals, and known blockers,
 - chosen skill name or `no-skill`,
 - explicit read-only boundary.
+
+For short challenge or review lanes, the input bundle may be compressed to one paragraph plus inspect-first paths, as long as the exact question, evidence requirement, skill, and read-only boundary remain explicit.
 
 ## Fan-In Envelope
 
@@ -69,4 +75,4 @@ Do not escalate only because another domain is affected. If that domain does not
 
 ## Brief Quality Bar
 
-Good subagent briefs are narrow, evidence-oriented, explicit about output, and centered on one owned question instead of a parallel cross-domain design package. Start from `docs/subagent-brief-template.md` when the lane is not trivial.
+Good subagent briefs are narrow, evidence-oriented, explicit about output, and centered on one owned question instead of a parallel cross-domain design package. Start from `docs/subagent-brief-template.md` when the lane is not trivial; use the short variant for focused challenge or review lanes.
