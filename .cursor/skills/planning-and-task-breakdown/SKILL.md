@@ -21,7 +21,7 @@ Turn stable decisions plus approved compact or split technical design context in
 - convert approved decisions from `spec.md` and task-local technical context from lean `Compact Design`, one `design/overview.md`, or split `design/` into dependency-ordered executable tasks
 - make `tasks.md` explicit by default for non-trivial implementation work
 - attach acceptance criteria, planned verification, checkpoints, and change-surface hints
-- expose blockers, assumptions, and reopen conditions before coding starts
+- close or route blockers and decision gates before coding starts; a ready `tasks.md` must not contain unresolved open questions
 - preserve coder freedom on local code shape while removing ambiguity about execution order
 
 ## Boundaries
@@ -33,6 +33,7 @@ Do not:
 - treat `spec.md` as the place for full task breakdown by default
 - let `tasks.md` become a second spec, second design bundle, or bloated strategy memo
 - hide blocked work behind optimistic task wording
+- leave open questions, `TBD` decisions, or unresolved decision gates in a `tasks.md` marked ready for implementation
 
 ## Escalate When
 Escalate if:
@@ -50,14 +51,15 @@ Escalate if:
 - For lean-local and full-orchestrated implementation, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
 - Keep `tasks.md` task-local to the active spec-first bundle. Do not use a repository-root or unrelated ledger as the current implementation handoff unless workflow control explicitly reopens it and records the resume route.
 - Planning is the last artifact-producing phase before code. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
-- Planning must leave an implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
+- Planning must leave an implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations, not open questions; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
+- A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, ownership, contract, sequencing, rollout, or validation policy.
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - If technical design review passed with `CONCERNS`, carry each accepted design risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the implementation-readiness handoff; do not leave it only in the review record.
 - When the planning pass generates or materially changes workflow-control files for full-orchestrated, high-risk, complex, or agent-backed work, expect a read-only `workflow-plan-adequacy-challenge` before handoff; lean-local work without workflow-control artifacts uses the recorded inline/local check instead.
 - Prefer phased execution over one giant task list.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
-- Planning closes the first safe slice, not every visible later-phase implication; if a downstream issue does not change the next slice, record it as a concern, proof obligation, or follow-up instead of widening the plan.
+- Planning closes the first safe slice, not every visible later-phase implication; if a downstream issue does not change the next slice, record it as an accepted concern, proof obligation, or follow-up instead of widening the plan. Follow-ups must be out-of-scope or proof-only, not unresolved decisions for the ready implementation slice.
 - For dedicated planning sessions, this pass ends at approved `tasks.md`; implementation begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
@@ -81,7 +83,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 
 ### 1. Confirm Planning Readiness
 - Read the stable `spec.md` and the required compact or split design context, not just the chat.
-- Confirm that the main decisions, design constraints, ownership boundaries, and open questions are explicit.
+- Confirm that the main decisions, design constraints, ownership boundaries, and proof obligations are explicit, and that no implementation-blocking open questions remain.
 - For lean-local work, require explicit `Compact Design` answers or one `design/overview.md`; for split-design work, require `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip/merge rationale.
 - If one `design/overview.md` or split `design/` exists, require technical design review `PASS` or `CONCERNS` with named accepted risks and proof obligations before planning.
 - Treat review findings classified as `blocks_planning`, `reopens_design`, or `reopens_spec` as planning blockers until the owning phase resolves or explicitly reroutes them.
@@ -107,6 +109,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface instead of vague subsystem labels.
 - Do not add a task if tasking it requires inventing a missing design decision; reopen `technical design` instead.
 - Do not add a task if tasking it requires resolving an unreviewed or blocking design-review finding; reopen `technical design review` instead.
+- Do not add an open-question or decision-gate section to a ready `tasks.md`; route unresolved decisions to the owning earlier phase.
 - Add only a short readiness reference in `tasks.md` when useful.
 
 ### 5. Add Checkpoints
@@ -186,7 +189,7 @@ The planning pass is complete when:
 - the execution order is explicit
 - each meaningful task in `tasks.md` has concrete action, dependency/proof context, and planned verification
 - checkpoints exist where the risk actually changes
-- blocked work is clearly separated from ready work
+- blocked work is routed to the owning earlier phase instead of left as an open question in ready work
 - the next implementation or validation session can start without creating new workflow/process artifacts or missing `tasks.md` to compensate for incomplete planning output
 - any mandatory technical design review gate is reconciled before implementation-readiness is marked ready
 - implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
@@ -194,11 +197,13 @@ The planning pass is complete when:
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - later-phase implications that do not change the first safe slice are visible as proof obligations or follow-ups rather than hidden blockers or premature design work
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
+- no unresolved decision gate, `TBD`, or implementation-blocking open question remains in `tasks.md`
 
 ## Escalate Or Reject
 - task breakdown derived from an unstable spec
 - task breakdown that assumes missing compact or split design context instead of escalating
 - a phase list with no acceptance criteria or verification
+- a `tasks.md` ledger with open questions, unresolved gates, or implementation-time design decisions
 - a generic task like `implement the feature`
 - horizontal slicing that hides risk and postpones integration until the end
 - a `tasks.md` ledger that turns into a strategy memo instead of listing executable, proof-bound work

@@ -17,11 +17,12 @@ Repository-wide operating contract for orchestrator/subagent-first, trigger-base
 4. `spec.md` is the canonical decision record whenever a task-local decision artifact exists.
 5. Non-trivial implementation is task-ledger-gated when a ledger is expected: coding starts only from explicit tasking and implementation readiness of `PASS`, `CONCERNS` with named proof obligations, or eligible `WAIVED`. `FAIL` blocks coding.
 6. When separate technical design depth is triggered, technical design review is a mandatory pre-planning gate. Planning cannot start until a distinct read-only review record identifies the reviewed packet, reconciles findings as `PASS` or `CONCERNS` with named proof obligations, and leaves no unresolved planning blockers; `FAIL` reopens technical design or specification.
-7. No readiness, completion, coverage, or done claim is valid without fresh validation evidence matched to the changed surface.
-8. Subagent, specialist, or challenge output is evidence to reconcile. It is never final authority.
-9. Never invent missing facts, approval records, artifacts, source evidence, validation output, or filler sections for completeness.
-10. If implementation or validation exposes a missing decision, ownership rule, artifact trigger, or proof path, reopen the correct earlier concern instead of deciding silently during code or closeout.
-11. New task routing follows the current trigger matrix and artifact-depth rules in this contract.
+7. `tasks.md` must be implementation-ready when approved: no unresolved open questions, undecided gates, `TBD` decisions, or hidden design work may remain in the task ledger. If planning cannot close a question from the approved spec/design/review context, reopen specification, technical design, or technical design review before approving tasks.
+8. No readiness, completion, coverage, or done claim is valid without fresh validation evidence matched to the changed surface.
+9. Subagent, specialist, or challenge output is evidence to reconcile. It is never final authority.
+10. Never invent missing facts, approval records, artifacts, source evidence, validation output, or filler sections for completeness.
+11. If implementation or validation exposes a missing decision, ownership rule, artifact trigger, or proof path, reopen the correct earlier concern instead of deciding silently during code or closeout.
+12. New task routing follows the current trigger matrix and artifact-depth rules in this contract.
 
 ## 3. Execution-Shape Trigger Matrix
 
@@ -51,7 +52,7 @@ Escalate direct or lean work to `full orchestrated` when any trigger is present:
 - Direct path is the only routine no-bundle path.
 - Lean local still needs durable decisions and executable work when implementation is non-trivial:
   - `spec.md` records intent, scope, `Behavior / Contract Delta`, decisions, compact design answers, inline `Risk Challenge`, handoff, and validation obligations.
-  - `tasks.md` is the main execution surface for lean implementation and any multi-slice, multi-surface, dependency-bearing, resumable, or otherwise non-trivial work.
+  - `tasks.md` is the main execution surface for lean implementation and any multi-slice, multi-surface, dependency-bearing, resumable, or otherwise non-trivial work. It carries executable tasks, dependencies, accepted proof obligations, and validation expectations, not open questions or unresolved decision gates.
   - Inline plans are allowed only for tiny direct-path work with explicit rationale.
 - Full orchestrated work uses only the artifacts whose triggers are real:
   - `workflow-plan.md` owns cross-phase control.
@@ -141,6 +142,7 @@ Rules:
 - Formal workflow-plan adequacy and spec-clarification challenges are trigger-based: required for full orchestrated or high-risk work, optional/local for lean local, and usually skipped for direct path with rationale. Broad formal spec clarification normally fans out across distinct challenger lenses instead of relying on one generic challenger.
 - Technical design review is not optional once separate design depth exists. If it is missing, planning must block or reopen the design phase instead of treating the design bundle as implicitly approved.
 - Break down implementation from approved decisions plus required design context. For lean local, compact design answers in `spec.md` or one `design/overview.md` may be enough; for full orchestrated work, use the triggered design bundle.
+- Approve `tasks.md` only when all planning-entry decisions and gates are closed. If the ledger would need an open-question section, a `TBD`, or an implementation-time design decision, reopen the owning earlier phase instead.
 - If a required artifact is missing and not explicitly waived, reopen the phase that owns it instead of inventing it later.
 
 ## 9. Validation, Closeout, And Resume
@@ -159,6 +161,7 @@ Rules:
 - using `lean local` as an unstructured shortcut without `spec.md`, `tasks.md`, inline `Risk Challenge`, and proof;
 - write-capable subagents;
 - coding non-trivial work without an explicit task handoff;
+- approving a `tasks.md` that still contains open questions, unresolved decision gates, or design work for implementation to figure out;
 - using `workflow-plans/<phase>.md` or `tasks.md` as a second spec or design;
 - placeholder artifacts or fake completeness;
 - linear skill rituals instead of deliberate routing;

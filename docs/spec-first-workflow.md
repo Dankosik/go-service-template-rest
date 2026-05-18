@@ -224,6 +224,7 @@ Rules:
 - Name dependencies when task order matters.
 - Name exact files when known, or narrow artifact/package surfaces when exact file choice is not knowable yet.
 - Include proof expectations per task.
+- Do not include unresolved open questions, `TBD` decisions, or pending decision gates in `tasks.md`. A ready ledger may carry accepted risks and proof obligations, but any implementation-blocking question must reopen specification, technical design, or technical design review.
 - For behavior changes and bug fixes, proof-first or test-first is the default.
 - For docs, config, or mechanical changes where a failing test is not useful, record the waiver as a proof obligation in `tasks.md`, not only in chat.
 
@@ -424,10 +425,12 @@ Lean local and full orchestrated work use `tasks.md` for non-trivial implementat
 
 Planning must not invent missing design context. If exact tasking requires a missing decision, reopen the earlier concern.
 
+Approved `tasks.md` is implementation-ready by definition. It must not contain an open-question section, unresolved decision gate, `TBD`, or instruction for implementation to decide architecture, ownership, contract, sequencing, rollout, or validation policy. Reopen the owning phase and finish the design before writing or approving the ledger.
+
 Implementation readiness values:
 
 - `PASS`: coding may start; no hidden architecture, ownership, contract, sequencing, rollout, or validation decision is needed for the next slice.
-- `CONCERNS`: coding may start only with named accepted risks and explicit proof obligations.
+- `CONCERNS`: coding may start only with named accepted risks and explicit proof obligations; these concerns must be closed as decisions, not open questions.
 - `FAIL`: coding must not start; route to the named earlier phase.
 - `WAIVED`: allowed only for tiny direct-path or prototype scope with explicit rationale.
 
