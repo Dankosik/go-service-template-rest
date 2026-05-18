@@ -565,10 +565,20 @@ Treat missing expected artifacts as incomplete unless an explicit waiver covers 
 
 When any non-implementation workflow phase reaches a boundary and a next session or reopen target exists, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded artifacts. This is default behavior; the user does not need to ask the agent to stop or produce the handoff prompt.
 
+Assume the next session is context-blind: it can read repository files, but it cannot see the current chat. The prompt should carry a short task-specific context capsule that explains the current state, why the named next step is next, and what the next session must not lose. It should not become a transcript, broad project summary, or second copy of the artifacts.
+
+Select context by relevance:
+
+- include the current workflow state, accepted objective, and the reason this exact next phase or reopen target is next;
+- include exact artifact paths, task IDs, phase names, commands, blocker names, accepted decisions, accepted assumptions, accepted risks, and proof obligations that matter to the next phase;
+- include one-line reasons for non-obvious files in the context bundle so the next session knows why to read them;
+- omit generic repository rules already covered by `AGENTS.md`, long artifact excerpts, resolved debate history, unrelated prior-session details, and context the next phase can cheaply rediscover from the listed files;
+- when uncertain, include a bounded assumption or reopen target instead of padding the prompt with unrelated context.
+
 The recommended prompt should be operational, not just descriptive. Include:
 
 - the exact next phase or reopen target;
-- the artifact read order and task-local paths;
+- the artifact read order, task-local paths, and short reasons for any non-obvious context files;
 - the immediate objective and expected output for that one phase;
 - important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
@@ -578,6 +588,8 @@ For implementation from approved `tasks.md`, the prompt may instead tell the nex
 Use no prompt when the workflow is honestly done.
 
 The prompt is chat-only. It is not a workflow artifact and must not become a second source of truth.
+
+Before returning the prompt, apply the start test: a new session with no chat history should know the single next phase, why it is next, what to read first, what constraints and proof obligations matter, and where to stop. Remove any sentence that does not help that session start or avoid a real mistake.
 
 ## 15. Anti-Patterns
 

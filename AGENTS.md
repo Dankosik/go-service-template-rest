@@ -162,6 +162,7 @@ Rules:
 - Resume from artifacts, not chat memory. If approved `tasks.md` exists and implementation or validation is next, read `tasks.md` first and treat it as the execution authority; read `workflow-plan.md` only when no approved ledger exists and phase routing is still active.
 - At every non-implementation phase boundary with a next session or reopen target, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded workflow state. Do this by default; do not wait for the user to ask for the handoff. If the workflow is honestly done, say there is no next session.
 - The recommended prompt must name exactly one next phase or reopen target, list the artifacts to read first, state the expected output for that phase, and include the stop rule: complete that phase only, then stop with updated workflow state and the next prompt. Only an implementation prompt for an approved `tasks.md` may say to execute the ledger through its named proof without stopping between task IDs.
+- The recommended prompt must be self-contained for a fresh session but selective: include only task-specific context needed to understand the next phase, read the right artifacts, and start correctly; do not dump unrelated history, generic repo rules, or full artifact text.
 
 ## 10. Anti-Patterns
 

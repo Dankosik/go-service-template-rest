@@ -260,6 +260,8 @@ Derive that prompt from the recorded workflow handoff state, not memory:
 - blockers, accepted assumptions, accepted risks, or reopen conditions that still matter
 - the expected artifact or output for the next session
 
+Assume the next session cannot see this chat. Make the prompt self-contained for the next phase but selective: include the recorded objective and current state, exact paths, phase names, task IDs, blocker names, accepted decisions, accepted assumptions or risks, proof obligations, and one-line reasons for non-obvious context files. Omit generic repo rules, resolved history, broad summaries, and artifact dumps that the next agent can read from the named files.
+
 Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded first task, implementation checkpoint, or reopen route exactly
