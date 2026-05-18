@@ -273,7 +273,7 @@ Rules:
 - Use markdown checkboxes and stable task IDs.
 - Name one objective and one stopping condition so the ledger can drive a long-running `/goal` without extra chat context.
 - Keep the Goal contract derivative: it may summarize approved scope, constraints, proof, and stop rules, but must not introduce new decisions or weaken implementation readiness.
-- Write the objective and stopping condition so a later implementation handoff can use them directly in a `/goal` starter prompt covering all executable ledger tasks.
+- Write the objective and stopping condition so a later implementation handoff can explicitly ask the next session to set a Codex Goal covering all executable ledger tasks.
 - Point implementation at the files, docs, plans, or logs it must read first.
 - Include checkpoint/progress rules when the ledger spans multiple tasks, sessions, or proof loops.
 - Name dependencies when task order matters.
@@ -612,25 +612,29 @@ The recommended prompt should be operational, not just descriptive. Include:
 - important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
 
-For implementation from approved `tasks.md` that has passed task-ledger review/readiness, the prompt must be a `/goal` starter prompt followed by a separate implementation brief. It may tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
+For implementation from approved `tasks.md` that has passed task-ledger review/readiness, the prompt must explicitly tell the next session to set a Codex Goal first, then execute all required tasks in the approved ledger from start to finish. It must not rely on a slash command being parsed from the handoff. It may tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
 
-Implementation `/goal` handoff rules:
+Implementation goal handoff rules:
 
-- start the fenced prompt with a short `/goal Complete <approved objective> by executing every required task in <tasks.md path> without stopping until <verifiable stopping condition>.`;
+- start the fenced prompt with `First, set a Codex Goal for this session:` followed by a short durable goal objective;
+- the next paragraph must say `After the goal is set, execute every required task in <tasks.md path> from start to finish`;
 - derive `<approved objective>` and `<verifiable stopping condition>` from the `tasks.md` Goal Contract and implementation-readiness handoff;
 - scope the goal to all executable tasks in the approved ledger, from the recorded first task or checkpoint through final validation, not just the first task ID;
-- keep the `/goal` line as a durable objective only; do not pack artifact lists, constraints, risks, commands, or detailed execution rules into it;
+- keep the Codex Goal objective as a durable objective only; do not pack artifact lists, constraints, risks, commands, or detailed execution rules into it;
 - put all execution details under `Implementation brief` so the durable goal stays stable while the working instructions remain readable;
 - include working directory, artifact read order, task-local paths, accepted constraints, accepted risks, proof obligations, and named validation commands or manual proof;
-- if readiness is `CONCERNS` or `WAIVED`, keep the `/goal` line focused on the approved objective and put the concern, waiver rationale, and required proof obligations in the implementation brief;
+- if readiness is `CONCERNS` or `WAIVED`, keep the Codex Goal objective focused on the approved objective and put the concern, waiver rationale, and required proof obligations in the implementation brief;
 - tell the next session to update only ledger-owned progress/evidence and closeout surfaces permitted by `tasks.md`;
-- if the `tasks.md` Goal Contract is missing or too vague to form a verifiable `/goal`, do not invent a broad objective; reopen planning to repair the Goal Contract or mark the implementation prompt as blocked;
+- if the `tasks.md` Goal Contract is missing or too vague to form a verifiable Codex Goal, do not invent a broad objective; reopen planning to repair the Goal Contract or mark the implementation prompt as blocked;
 - include a blocked-stop rule: if an implementation-blocking decision, missing artifact, or failing proof cannot be resolved inside the approved ledger, stop, record the blocker in the allowed ledger/closeout surface, and return the exact reopen target instead of inventing new workflow artifacts.
 
 Recommended implementation prompt shape:
 
 ```text
-/goal Complete <approved objective> by executing every required task in `<task-local>/tasks.md` without stopping until <verifiable stopping condition>.
+First, set a Codex Goal for this session:
+Complete <approved objective> by executing every required task in `<task-local>/tasks.md` without stopping until <verifiable stopping condition>.
+
+After the goal is set, execute every required task in `<task-local>/tasks.md` from start to finish. Start at <T001 or recorded checkpoint>, continue through the ledger's final validation/proof, and do not redefine success around a smaller slice.
 
 Implementation brief:
 

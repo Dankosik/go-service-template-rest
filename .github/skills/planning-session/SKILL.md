@@ -272,11 +272,12 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded first task, implementation checkpoint, or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
-- when the next session starts implementation from an approved `tasks.md` whose task-ledger review/readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, make the fenced prompt start with a short `/goal Complete ... without stopping until ...` line
-- for that implementation prompt, set the goal objective to executing every required task in the approved `tasks.md` through its named proof and stopping condition, not just beginning the first task ID
-- keep artifact lists, constraints, concerns, waiver rationale, proof commands, and execution rules out of the `/goal` line itself
-- after the `/goal` line, add `Implementation brief:` and include working directory, read-first artifact order, readiness status, first executable task or checkpoint, accepted constraints or risks, proof obligations, ledger progress-update rule, and blocked-stop/reopen rule
-- if the `tasks.md` Goal Contract is missing or too vague to form a verifiable `/goal`, stop and reopen planning instead of inventing a broad objective in chat
+- when the next session starts implementation from an approved `tasks.md` whose task-ledger review/readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, make the fenced prompt start with `First, set a Codex Goal for this session:`
+- for that implementation prompt, the goal objective must say to execute every required task in the approved `tasks.md` through its named proof and stopping condition, not just begin the first task ID
+- immediately after the goal objective, say `After the goal is set, execute every required task in <tasks.md path> from start to finish`
+- keep artifact lists, constraints, concerns, waiver rationale, proof commands, and execution rules out of the goal objective itself
+- after that, add `Implementation brief:` and include working directory, read-first artifact order, readiness status, first executable task or checkpoint, accepted constraints or risks, proof obligations, ledger progress-update rule, and blocked-stop/reopen rule
+- if the `tasks.md` Goal Contract is missing or too vague to form a verifiable Codex Goal, stop and reopen planning instead of inventing a broad objective in chat
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Planning Completion Criteria
