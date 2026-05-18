@@ -11,7 +11,8 @@ Subagents are triggered by unresolved owned questions, not by default workflow c
 - Each lane uses at most one skill. If a selected skill defines a procedure or output shape, the skill owns it.
 - Agent files own domain scope, use/do-not-use rules, inspect-first surfaces, skill routing, and unique escalation rules.
 - Deep design and corner-case coverage stay in scope, but downstream effect alone does not create a new required domain decision.
-- Open another lane only when another domain must make a new decision before the current artifact can be high quality; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
+- Open another lane only when another domain must make a new decision before the current artifact can be production-ready for the accepted scope; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
+- A lane must not use `follow_up_only`, `constraint_only`, or `no new decision required` to defer a knowable architecture, ownership, contract, reliability, security, rollout, or validation decision that is required for production readiness in the accepted scope.
 - Direct and lean-local work normally stays local unless a real unresolved question triggers a lane.
 - Lean-local work with a separate `design/overview.md` must still record a technical design review checkpoint before planning; it may be local when no formal lane trigger exists.
 - Full-orchestrated work may use multiple lanes, but each lane still needs one owned question, one lens or specialist domain, and one skill or `no-skill`.
@@ -58,10 +59,10 @@ When the chosen skill does not define a stricter shape, return:
 
 When a downstream domain is touched, strongly prefer classifying each major point with one of:
 
-- `must_decide_now`: another domain must make a new decision before the current artifact can be high quality.
+- `must_decide_now`: another domain must make a new decision before the current artifact can be production-ready for the accepted scope.
 - `constraint_only`: the current decision stands, but later work must preserve a concrete constraint in that domain.
 - `proof_only`: no new decision is required now, but implementation, review, or validation must prove something in that domain.
-- `follow_up_only`: the effect is real but not planning-critical for the current artifact; revisit only if later work reaches that seam.
+- `follow_up_only`: the effect is real but not planning-critical for the current artifact and not required for production readiness in the accepted scope; revisit only if later work reaches that seam.
 
 Recommended handoff classifications:
 

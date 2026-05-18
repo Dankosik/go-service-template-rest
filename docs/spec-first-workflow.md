@@ -15,7 +15,14 @@ The workflow keeps the same quality concerns:
 - executable task handoff when implementation is non-trivial;
 - fresh validation evidence before completion claims.
 
-The simplification is about artifact depth. Use the smallest workflow shape that preserves correctness.
+The simplification is about artifact depth, not decision quality. Use the smallest workflow shape that preserves correctness.
+
+Default decision quality:
+
+- Unless the user explicitly asks for prototype, quick, simple, temporary, or intentionally staged delivery, choose the production-ready architecture and system-design answer for the accepted scope.
+- Do not create an MVP-now/future-hardening split when the production-ready decision is knowable and in scope.
+- Valid staging is explicit: user-requested staging, missing facts that block the production-ready choice, or rollout safety that requires a recorded staged plan.
+- Scope cuts are allowed only as clear non-goals, constraints, or accepted risks. They are not a license to defer required architecture, ownership, contract, reliability, security, or validation decisions.
 
 ## 2. Execution Shapes
 
@@ -25,7 +32,7 @@ The simplification is about artifact depth. Use the smallest workflow shape that
 | `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and local reasoning can close the decision frontier. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. | Inline `Risk Challenge`; mandatory technical design review checkpoint when separate design depth is triggered; no mandatory subagent. |
 | `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, approved `spec.md`, triggered design bundle, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Formal challenge/review lanes as triggered, mandatory technical design review when design depth is triggered, and strict phase boundaries. |
 
-Use `lean local` for bounded non-trivial single-domain work.
+Use `lean local` for bounded non-trivial single-domain work. This changes the amount of workflow ceremony, not the expected production readiness of the chosen solution.
 
 ### Escalation Triggers
 
@@ -210,7 +217,7 @@ Proof: <smallest sufficient proof command or manual proof>
   Files: `internal/...`
   Proof: targeted proof fails for the expected reason before implementation.
 
-- [ ] T002 Implement minimal behavior
+- [ ] T002 Implement scoped production behavior
   Files: `internal/...`
   Proof: targeted proof passes.
 
@@ -264,9 +271,9 @@ It must not replace `spec.md`, `design/`, or `tasks.md`.
 
 Use status words proportionally: `approved`, `draft`, `missing`, `blocked`, `waived`, `not expected`, or `conditional`.
 
-- `waived` requires eligible direct-path, lean, or prototype rationale and scope.
+- `waived` requires eligible direct-path, lean, or explicitly user-requested prototype rationale and scope.
 - `not expected` requires trigger-based rationale when the artifact would otherwise be plausible.
-- `conditional` means a later phase must decide the trigger.
+- `conditional` means a later phase must decide the trigger because current evidence is insufficient; do not use it to postpone a knowable production-readiness decision.
 
 ## 7. Research
 
@@ -307,7 +314,7 @@ For full orchestrated or protected-domain work:
 - store final reconciled outcomes in `spec.md`;
 - record gate status in `workflow-plan.md` and the active phase file when those files are used.
 
-Formal clarification asks only approval-changing questions. Ordinary downstream design detail should be recorded as a constraint, proof obligation, follow-up, or `defer_to_design`, not as a reason to inflate `spec.md`.
+Formal clarification asks only approval-changing questions. Ordinary downstream design detail should be recorded as a constraint, proof obligation, follow-up, or `defer_to_design`, not as a reason to inflate `spec.md`. Do not classify architecture, ownership, contract, reliability, security, rollout, or validation choices this way when they are required to choose a production-ready solution for the accepted scope.
 
 Default broad clarification lenses:
 
@@ -432,7 +439,7 @@ Implementation readiness values:
 - `PASS`: coding may start; no hidden architecture, ownership, contract, sequencing, rollout, or validation decision is needed for the next slice.
 - `CONCERNS`: coding may start only with named accepted risks and explicit proof obligations; these concerns must be closed as decisions, not open questions.
 - `FAIL`: coding must not start; route to the named earlier phase.
-- `WAIVED`: allowed only for tiny direct-path or prototype scope with explicit rationale.
+- `WAIVED`: allowed only for tiny direct-path or explicitly user-requested prototype scope with explicit rationale.
 
 Readiness belongs in the planning handoff when planning artifacts exist. `tasks.md` may carry a short reference.
 
@@ -513,6 +520,8 @@ Avoid:
 - making `workflow-plans/<phase>.md` a second master plan, spec, design bundle, or task ledger;
 - planning non-trivial implementation from `spec.md` alone when design context is triggered;
 - approving non-trivial specs while formal challenge is required and unresolved;
+- splitting work into MVP plus future hardening when the production-ready decision is knowable and in scope;
+- picking the fastest or simplest architecture by default instead of the best production-ready choice for the accepted scope;
 - creating `test-plan.md`, `rollout.md`, split design files, or review/validation phase files for completeness;
 - creating new process artifacts after coding starts;
 - using subagents for broad ceremony rather than narrow unresolved questions;

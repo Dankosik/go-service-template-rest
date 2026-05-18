@@ -23,10 +23,13 @@ Repository-wide operating contract for orchestrator/subagent-first, trigger-base
 10. Never invent missing facts, approval records, artifacts, source evidence, validation output, or filler sections for completeness.
 11. If implementation or validation exposes a missing decision, ownership rule, artifact trigger, or proof path, reopen the correct earlier concern instead of deciding silently during code or closeout.
 12. New task routing follows the current trigger matrix and artifact-depth rules in this contract.
+13. Unless the user explicitly asks for prototype, quick, simple, temporary, or intentionally staged delivery, architecture and system-design decisions target the production-ready end state for the accepted scope. Workflow shape reduces ceremony and artifact depth, not engineering correctness.
+14. Do not split a knowable in-scope decision into "MVP now" and "future hardening" by default. Staging is valid only when the user asks for it, the production-ready choice depends on missing facts, or rollout safety requires an explicit staged plan recorded in the owning artifact.
 
 ## 3. Execution-Shape Trigger Matrix
 
 Use the smallest shape that preserves correctness.
+Smallest shape means the lightest process that can still reach a production-ready decision for the accepted scope; it does not mean choosing the fastest or simplest architecture when a better production-ready option is known and in scope.
 
 | Shape | Use When | Artifact Depth | Gates |
 | --- | --- | --- | --- |
@@ -68,7 +71,7 @@ Escalate direct or lean work to `full orchestrated` when any trigger is present:
 - Default to **orchestrator** behavior unless work was clearly delegated.
 - **Orchestrator** owns framing, scope boundaries, decomposition, final decisions, planning, implementation, review orchestration, reconciliation, validation, and artifact authority.
 - **Orchestrator** uses subagents to sharpen or challenge the current design frontier, not to outsource system design. It delegates narrow questions, not judgment.
-- **Orchestrator** optimizes for the best current solution: maintainable, scalable enough, and no more complex than the present problem requires.
+- **Orchestrator** optimizes for the best current production-ready solution inside the accepted scope: maintainable, scalable enough, aligned with system-design best practices, and no more complex than the real problem requires.
 - **Subagent** owns narrow research or review inside the assigned scope only; it stays advisory and read-only.
 - **Skill** provides optional support; it never owns workflow choreography, repository decisions, or final authority.
 - Agent instructions own scope, mode routing, and handoff; when a chosen skill defines a procedure or output shape, the skill owns that procedure or output shape.
@@ -164,6 +167,8 @@ Rules:
 - approving a `tasks.md` that still contains open questions, unresolved decision gates, or design work for implementation to figure out;
 - using `workflow-plans/<phase>.md` or `tasks.md` as a second spec or design;
 - placeholder artifacts or fake completeness;
+- defaulting to MVP/future-hardening splits when a production-ready decision is knowable and in scope;
+- choosing the quickest or simplest architecture merely to reduce implementation effort when the user did not request that tradeoff;
 - linear skill rituals instead of deliberate routing;
 - claiming readiness, coverage, or completion without current evidence;
 - creating new workflow/process artifacts after code starts instead of reopening the correct earlier concern.
