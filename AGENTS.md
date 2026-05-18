@@ -25,6 +25,8 @@ Repository-wide operating contract for orchestrator/subagent-first, trigger-base
 12. New task routing follows the current trigger matrix and artifact-depth rules in this contract.
 13. Unless the user explicitly asks for prototype, quick, simple, temporary, or intentionally staged delivery, architecture and system-design decisions target the production-ready end state for the accepted scope. Workflow shape reduces ceremony and artifact depth, not engineering correctness.
 14. Do not split a knowable in-scope decision into "MVP now" and "future hardening" by default. Staging is valid only when the user asks for it, the production-ready choice depends on missing facts, or rollout safety requires an explicit staged plan recorded in the owning artifact.
+15. Default session boundary: one session owns one workflow phase and stops at that phase boundary with recorded state plus a copy-pastable next-session prompt whenever a next phase or reopen target exists. The exception is implementation from an approved `tasks.md`: that session may execute the ledger and its named proof without stopping between ledger items, unless a separate review, validation, or reopen phase was explicitly planned.
+16. A broad request to "do the full workflow", "implement the PRD/architecture fully", or similar end-to-end wording is not by itself permission to collapse non-implementation phases into one session. Treat it as a request to advance the overall workflow, starting with the next valid phase, and stop at that phase boundary unless the user explicitly asks for an eligible same-session collapse and the repository contract allows it.
 
 ## 3. Execution-Shape Trigger Matrix
 
@@ -56,6 +58,7 @@ Escalate direct or lean work to `full orchestrated` when any trigger is present:
 - Lean local still needs durable decisions and executable work when implementation is non-trivial:
   - `spec.md` records intent, scope, `Behavior / Contract Delta`, decisions, compact design answers, inline `Risk Challenge`, handoff, and validation obligations.
   - `tasks.md` is the main execution surface for lean implementation and any multi-slice, multi-surface, dependency-bearing, resumable, or otherwise non-trivial work. It carries executable tasks, dependencies, accepted proof obligations, and validation expectations, not open questions or unresolved decision gates.
+  - For long-running or resumable implementation, `tasks.md` should be Goal-ready: one objective, one stopping condition, read-first context, checkpoint/progress rules, and evidence fields that make completion auditable without re-reading chat history.
   - Inline plans are allowed only for tiny direct-path work with explicit rationale.
 - Full orchestrated work uses only the artifacts whose triggers are real:
   - `workflow-plan.md` owns cross-phase control.
@@ -142,6 +145,8 @@ Rules:
 
 - Refine idea-shaped requests before deeper design.
 - Decide shape and artifact expectations before subagent calls.
+- The arrows above describe phase order, not permission to run multiple non-implementation phases in one session by default. Workflow planning, research, specification, technical design, technical design review, task planning, review, reconciliation, and validation/closeout stop at their own boundary and hand off the next phase.
+- Implementation is the normal exception: after `tasks.md` is approved with eligible readiness, an implementation session may work through the approved ledger and run the proof named there unless the ledger or workflow-control artifacts define a separate stop.
 - Formal workflow-plan adequacy and spec-clarification challenges are trigger-based: required for full orchestrated or high-risk work, optional/local for lean local, and usually skipped for direct path with rationale. Broad formal spec clarification normally fans out across distinct challenger lenses instead of relying on one generic challenger.
 - Technical design review is not optional once separate design depth exists. If it is missing, planning must block or reopen the design phase instead of treating the design bundle as implicitly approved.
 - Break down implementation from approved decisions plus required design context. For lean local, compact design answers in `spec.md` or one `design/overview.md` may be enough; for full orchestrated work, use the triggered design bundle.
@@ -155,7 +160,8 @@ Rules:
 - When a GitHub-only check cannot be reproduced locally, name the missing context and keep the claim narrower.
 - Closeout is not complete until artifacts reflect reality: `spec.md` validation/outcome, `workflow-plan.md` when used, existing `tasks.md` progress when used, and any pre-created validation phase file when used.
 - Resume from artifacts, not chat memory. Read `workflow-plan.md` first when it exists; then the current `workflow-plans/<phase>.md` when the task uses one; then the artifacts named in the next-session context bundle or shape-specific resume order.
-- When a phase boundary has a next session or reopen target, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded workflow state. If the workflow is honestly done, say there is no next session.
+- At every non-implementation phase boundary with a next session or reopen target, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded workflow state. Do this by default; do not wait for the user to ask for the handoff. If the workflow is honestly done, say there is no next session.
+- The recommended prompt must name exactly one next phase or reopen target, list the artifacts to read first, state the expected output for that phase, and include the stop rule: complete that phase only, then stop with updated workflow state and the next prompt. Only an implementation prompt for an approved `tasks.md` may say to execute the ledger through its named proof without stopping between task IDs.
 
 ## 10. Anti-Patterns
 

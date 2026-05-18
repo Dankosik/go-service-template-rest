@@ -50,6 +50,30 @@ Escalate from direct or lean local to full orchestrated when the task touches:
 
 If a trigger appears after work starts, record the reopen target and move to the fuller path instead of stretching the current shortcut.
 
+### Default Session Boundary Policy
+
+Phase arrows describe order, not a default license to collapse multiple phases into one chat session.
+
+Default rule: one session owns one workflow phase, then stops. When the phase has a next phase or reopen target, update the relevant workflow state and end the final chat response with a copy-pastable `Recommended next-session prompt` derived from the recorded artifacts.
+
+A broad user request such as "do the full workflow", "implement the PRD and architecture fully", or "create all necessary documents" advances the overall workflow, but it does not override the one-phase session boundary. Start with the next valid phase, finish that phase honestly, then stop with the next-session prompt.
+
+This boundary rule applies to:
+
+- workflow planning;
+- research and fan-in;
+- specification and clarification-gate reconciliation;
+- technical design;
+- technical design review and reconciliation;
+- task planning and implementation-readiness handoff;
+- post-code review or reconciliation phases;
+- validation and closeout;
+- targeted reopen phases.
+
+The normal exception is implementation from an approved `tasks.md`. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation session may execute the approved ledger items and the proof named by the ledger without stopping between task IDs. If the ledger or workflow-control artifacts created a separate review, validation, or reopen phase, that later phase uses the one-session boundary again.
+
+Direct path work has no durable phase boundary by default, so it may still complete inline with fresh proof.
+
 ## 3. Artifact Model By Shape
 
 ### Direct Path
@@ -209,28 +233,47 @@ Recommended shape:
 ```markdown
 # Tasks
 
-Readiness: PASS | CONCERNS
+## Goal Contract
+
+Goal objective: Complete <feature/change> by executing this ledger from `T001` through final validation.
+Stopping condition: all required tasks are checked, required proof passes or records a concrete blocker, and closeout artifacts reflect fresh evidence.
+Read first: `spec.md`, plus `design/overview.md` or `workflow-plan.md` only when those artifacts exist.
+Do not change: <non-goals and preserved constraints from `spec.md`>
+Progress log: after each checkpoint, update the checkbox/evidence lines; if blocked, stop and record `Blocked:` with the missing input or failing proof.
+
+## Implementation Handoff
+
+Implementation readiness: PASS | CONCERNS
 Consumes: `spec.md`
 Proof: <smallest sufficient proof command or manual proof>
+
+## Tasks
 
 - [ ] T001 Add failing proof for <behavior>
   Files: `internal/...`
   Proof: targeted proof fails for the expected reason before implementation.
+  Evidence: Pending.
 
 - [ ] T002 Implement scoped production behavior
   Files: `internal/...`
   Proof: targeted proof passes.
+  Evidence: Pending.
 
 - [ ] T003 Run validation and record outcome
   Proof: `go test ./...`, `rtk make check`, or the smallest relevant command.
+  Evidence: Pending.
 ```
 
 Rules:
 
 - Use markdown checkboxes and stable task IDs.
+- Name one objective and one stopping condition so the ledger can drive a long-running `/goal` without extra chat context.
+- Keep the Goal contract derivative: it may summarize approved scope, constraints, proof, and stop rules, but must not introduce new decisions or weaken implementation readiness.
+- Point implementation at the files, docs, plans, or logs it must read first.
+- Include checkpoint/progress rules when the ledger spans multiple tasks, sessions, or proof loops.
 - Name dependencies when task order matters.
 - Name exact files when known, or narrow artifact/package surfaces when exact file choice is not knowable yet.
-- Include proof expectations per task.
+- Include proof expectations and an evidence slot per task or checkpoint.
 - Do not include unresolved open questions, `TBD` decisions, or pending decision gates in `tasks.md`. A ready ledger may carry accepted risks and proof obligations, but any implementation-blocking question must reopen specification, technical design, or technical design review.
 - For behavior changes and bug fixes, proof-first or test-first is the default.
 - For docs, config, or mechanical changes where a failing test is not useful, record the waiver as a proof obligation in `tasks.md`, not only in chat.
@@ -449,6 +492,8 @@ Planning also consumes the technical design review result whenever separate desi
 
 Coding consumes the approved task handoff. It may create or edit code, tests, migrations, configs, generation inputs, and generated output required by the task ledger.
 
+Implementation sessions may continue across the approved `tasks.md` items and the ledger's named proof checks. They must not use implementation momentum to create or approve missing specification, design, planning, review, or validation-phase artifacts.
+
 Post-code work may update only existing control or closeout surfaces:
 
 - existing `workflow-plan.md`;
@@ -504,7 +549,17 @@ Treat missing expected artifacts as incomplete unless an explicit waiver covers 
 
 ## 14. Final Chat Handoff
 
-When a session reaches a boundary and a next session or reopen target exists, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded artifacts.
+When any non-implementation workflow phase reaches a boundary and a next session or reopen target exists, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded artifacts. This is default behavior; the user does not need to ask the agent to stop or produce the handoff prompt.
+
+The recommended prompt should be operational, not just descriptive. Include:
+
+- the exact next phase or reopen target;
+- the artifact read order and task-local paths;
+- the immediate objective and expected output for that one phase;
+- important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
+- a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
+
+For implementation from approved `tasks.md`, the prompt may instead tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
 
 Use no prompt when the workflow is honestly done.
 

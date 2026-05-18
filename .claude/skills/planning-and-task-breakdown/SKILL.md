@@ -53,6 +53,7 @@ Escalate if:
 - Planning is the last artifact-producing phase before code. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
 - Planning must leave an implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations, not open questions; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
 - A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, ownership, contract, sequencing, rollout, or validation policy.
+- For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one stopping condition, read-first context, preserved constraints, checkpoint/progress rules, and evidence fields that let Codex audit completion without relying on chat memory.
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - If technical design review passed with `CONCERNS`, carry each accepted design risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the implementation-readiness handoff; do not leave it only in the review record.
 - When the planning pass generates or materially changes workflow-control files for full-orchestrated, high-risk, complex, or agent-backed work, expect a read-only `workflow-plan-adequacy-challenge` before handoff; lean-local work without workflow-control artifacts uses the recorded inline/local check instead.
@@ -105,7 +106,10 @@ Reference snippets are patterns, not decisions. If an example would require an a
 
 ### 4. Write The Task Ledger
 - Use `tasks.md` for executable task checkboxes and the final implementation handoff.
+- Start the ledger with a compact Goal contract when implementation may run as a long-lived or resumed Codex goal: objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule.
+- Keep the Goal contract derivative of approved artifacts. It must not introduce new scope, new design decisions, or permission to create missing pre-code workflow artifacts during implementation.
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
+- Include an evidence field for each task or checkpoint when the implementer is expected to update progress during execution.
 - Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface instead of vague subsystem labels.
 - Do not add a task if tasking it requires inventing a missing design decision; reopen `technical design` instead.
 - Do not add a task if tasking it requires resolving an unreviewed or blocking design-review finding; reopen `technical design review` instead.
@@ -139,6 +143,7 @@ Write tasks as outcome slices, not process scripts:
 - use proof obligations and reopen conditions to control risk instead of adding speculative subtasks
 
 Use markdown checkboxes. Each task should include:
+- a compact `Goal Contract` header for long-running or resumable work, limited to objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule;
 - an optional compact `Implementation Handoff` header when it helps the next implementation session, limited to consumed artifacts, readiness status, first task or checkpoint, named `CONCERNS` proof obligations, and reopen target;
 - stable task ID such as `T001`
 - phase/checkpoint label
@@ -152,6 +157,14 @@ Use markdown checkboxes. Each task should include:
 Example:
 
 ```markdown
+## Goal Contract
+
+Goal objective: Complete the approved request-ID behavior change by executing this ledger through final validation.
+Stopping condition: all tasks are checked, required proof passes or records a concrete blocker, and closeout artifacts reflect fresh evidence.
+Read first: approved `spec.md`, `design/`, and this task ledger.
+Do not change: public HTTP semantics other than the approved request-ID echo behavior.
+Progress log: update each task's `Evidence` line after running its proof; if blocked, stop and record `Blocked:` under the task.
+
 ## Implementation Handoff
 
 Consumes: approved `spec.md`, `design/`, and this task ledger.
@@ -162,11 +175,11 @@ Reopen target: planning if required artifact context is missing.
 
 ## Tasks
 
-- [ ] T001 [Phase 1] Update `internal/http/handler.go` to preserve request ID echo behavior. Depends on: none. Proof: `go test ./internal/http`.
-- [ ] T002 [Phase 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`.
+- [ ] T001 [Phase 1] Update `internal/http/handler.go` to preserve request ID echo behavior. Depends on: none. Proof: `go test ./internal/http`. Evidence: Pending.
+- [ ] T002 [Phase 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`. Evidence: Pending.
 ```
 
-Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep the header short; if it starts carrying phase strategy or design rationale, trim it back or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.
+Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep headers short; if the Goal contract or handoff starts carrying phase strategy or design rationale, trim it back or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.
 
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `tasks.md` for a tiny change just to satisfy ceremony.
