@@ -10,9 +10,9 @@ Load this when acceptance criteria, planned verification, manual checks, impleme
 - Acceptance criteria say what must be true; proof obligations say how the session will know.
 - Tie acceptance to approved `spec.md` plus required compact or split design surfaces and expected deferrals, not repository-wide quality slogans.
 - Match proof scope to the changed surface: targeted package test, generator/drift check, diff read, manual artifact-boundary read, or `rtk git diff --check` as appropriate.
-- `CONCERNS` is valid only with named accepted risks and proof obligations; `PASS` is valid only when the first safe slice has no hidden architecture, ownership, contract, sequencing, or rollout decision left to invent.
+- `CONCERNS` is valid only with named accepted risks and proof obligations; `PASS` is valid only when the accepted target-state ledger has no hidden architecture, ownership, contract, sequencing, or rollout decision left to invent.
 - Do not plan proof that requires an unapproved design, rollout, or compatibility decision.
-- Later-phase implications that do not change the first safe slice should become explicit proof obligations or follow-up notes, not synthetic blockers.
+- Out-of-scope implications can become explicit proof obligations or follow-up notes. In-scope target-state cleanup belongs in the ledger or in a reopened earlier phase, not in remembered-later notes.
 
 ## Imitate
 ```markdown

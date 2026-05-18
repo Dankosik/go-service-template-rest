@@ -46,4 +46,4 @@ Copy: this permits runtime separation without dragging mutable core workflow sta
 - Do not conflate "module", "binary", "runtime", and "service"; choose the smallest boundary that solves the actual pressure.
 - Do not require every module to be extraction-ready on day one. Some modules exist to restore local ownership clarity.
 - Do not ignore operational readiness. A service needs credible on-call, observability, deploy, rollback, migration, and compatibility ownership.
-- Do not leave "future extraction" vague; name the evidence that would reopen it.
+- Do not leave possible extraction vague; name the evidence that would reopen it.

@@ -7,7 +7,7 @@ When loaded for uncertainty about whether validation closeout may start, this fi
 Load this when the session boundary is ambiguous: the user asks for closeout, but the current phase, required artifacts, or proof inputs may not actually be closeout-ready.
 
 ## Decision Rubric
-- Proceed only when the implemented scope is already in the workspace, routing points to validation or closeout, expected validation artifacts already exist or were explicitly waived, and fresh proof can run without creating new workflow files.
+- Proceed only when the implemented scope is already in the workspace, approved `tasks.md` points to validation or closeout, any ledger-named validation artifacts already exist or were explicitly waived, and fresh proof can run without creating new workflow files.
 - Skip the wrapper when the work is tiny/direct-path and inline validation is enough; do not manufacture a dedicated closeout session for ceremony.
 - Reopen when implementation, review, or reconciliation is still active; required `tasks.md` or phase-control files are missing; or proving the claim would require new code, tests, migrations, or process artifacts.
 - Treat stale CI, chat memory, or agent summaries as context only, never as readiness proof.
@@ -17,8 +17,8 @@ Load this when the session boundary is ambiguous: the user asks for closeout, bu
 ```markdown
 Closeout readiness: proceed.
 Claim: task done for the approved Phase 1 scope.
-Routing: `workflow-plan.md` says current phase is `validation-phase-1`; the existing validation phase file is present.
-Inputs: `spec.md`, existing `tasks.md`, and `workflow-plans/validation-phase-1.md` list the same proof obligations.
+Routing: approved `tasks.md` says final validation is next and explicitly names `workflow-plans/validation-phase-1.md`; the existing validation phase file is present.
+Inputs: `spec.md`, existing `tasks.md`, and the ledger-named validation phase file list the same proof obligations.
 Proof action: run fresh scoped package tests, API drift check, and migration validation now.
 Boundary: no code, test, migration, or workflow-file creation in this session.
 ```
@@ -27,11 +27,11 @@ Copy the explicit readiness verdict and the boundary statement before choosing c
 
 ```markdown
 Closeout readiness: not ready.
-Claim is broader than the available artifacts: the user asks for task-wide completion, but `workflow-plan.md` still says implementation task T006 is in progress.
+Claim is broader than the available artifacts: the user asks for task-wide completion, but approved `tasks.md` still shows implementation task T006 in progress.
 Next action: stop validation and route the next session to implementation task T006; do not run closeout by momentum.
 ```
 
-Copy the reopen-before-proof shape when the master workflow still points upstream.
+Copy the reopen-before-proof shape when the approved ledger still points upstream.
 
 ## Reject
 

@@ -1,6 +1,6 @@
 ---
 name: validation-closeout-session
-description: "Own a session dedicated only to final validation and closeout for this repository when closeout needs artifact updates. Use when the orchestrator must prove a task is actually done with fresh evidence, update task-local `spec.md` `Validation` and `Outcome`, and update existing `workflow-plan.md`, existing `tasks.md` progress when used, plus any pre-created `workflow-plans/validation-phase-N.md` without drifting back into implementation. Skip direct-path inline closeout and any task that still expects coding in the same session."
+description: "Own a session dedicated only to final validation and closeout for this repository when closeout needs artifact updates. Use when the orchestrator must prove a task is actually done with fresh evidence, update task-local `spec.md` `Validation` and `Outcome`, existing `tasks.md` progress when used, and any pre-created `workflow-plans/validation-phase-N.md` explicitly named by the approved ledger, without drifting back into implementation. Skip direct-path inline closeout and any task that still expects coding in the same session."
 ---
 
 # Validation Closeout Session
@@ -22,9 +22,8 @@ This wrapper makes proof inputs, artifact updates, reopen handling, and stop con
 - the task already completed its intended implementation and any planned review or reconciliation work
 - the orchestrator needs one bounded session to run final validation with fresh evidence and close the task honestly
 - task-local `spec.md` must have `Validation` and `Outcome` updated to reflect what was actually proved
-- master `workflow-plan.md` must be closed or reopened explicitly
 - existing `tasks.md` checkbox/progress state must be aligned with the proof when the task uses a ledger
-- the task uses a dedicated post-code validation phase and its existing `workflow-plans/validation-phase-<n>.md` must be updated or repaired
+- the approved `tasks.md` explicitly names a dedicated post-code validation phase and its existing `workflow-plans/validation-phase-<n>.md` must be updated or repaired
 - lean-local `spec.md`/`tasks.md` closeout needs fresh proof recorded without creating extra phase-control artifacts
 
 ## Skip When
@@ -36,7 +35,7 @@ This wrapper makes proof inputs, artifact updates, reopen handling, and stop con
 ## Required Proof Inputs
 Need the minimum closeout-ready inputs:
 - the exact closeout claim or claims to prove, such as `ready for handoff`, `phase complete`, or `task done`
-- current workflow routing and active phase context
+- the approved `tasks.md` ledger, or current workflow routing only when no approved ledger exists yet
 - the implemented scope or planned phase that is being closed
 - the proof obligations from task-local artifacts such as `spec.md`, existing `tasks.md`, `test-plan.md`, `rollout.md`, or the current review phase file when present
 - the current workspace state against which fresh commands can run
@@ -64,17 +63,16 @@ Always read:
 - `.agents/skills/go-verification-before-completion/SKILL.md`
 
 Then read current phase context in this order:
-1. task-local `workflow-plan.md`, if present
-2. task-local `workflow-plans/validation-phase-<n>.md`, if present
-3. the most recent implementation or review phase workflow file that led into closeout, when present
-4. task-local `spec.md`
-5. existing task-local `tasks.md` when present or expected by the workflow
-6. optional `test-plan.md`, `rollout.md`, or other task-local artifact only when it adds real proof obligations
-8. only the smallest repository file set needed to bind proof commands to the claimed scope
+1. existing task-local `tasks.md` when present or expected by the workflow
+2. task-local `spec.md`
+3. `test-plan.md`, `rollout.md`, or other task-local artifact only when named by `tasks.md` or needed for real proof obligations
+4. task-local `workflow-plans/validation-phase-<n>.md` only when `tasks.md` explicitly names that pre-created phase file
+5. task-local `workflow-plan.md` only when no approved `tasks.md` exists yet
+6. the smallest repository file set needed to bind proof commands to the claimed scope
 
 Rules:
 - follow `AGENTS.md` if other workflow guidance conflicts
-- read the master `workflow-plan.md` before any phase-local file when both exist
+- after approved `tasks.md` exists, treat it as the execution authority; do not let stale workflow routing override the ledger
 - do not broad-read the repository once the closeout claim and proof scope are clear
 - if phase context shows the task is not yet at validation or closeout, stop and point to the correct reopen point instead of validating by momentum
 
@@ -87,7 +85,7 @@ References are compact rubrics and example banks, not exhaustive checklists or r
 | `references/claim-to-proof-closeout.md` | closeout claim is explicit but proof scope is uncertain | narrow the command set and success wording to the claim instead of treating one green check as task-wide proof |
 | `references/spec-validation-outcome-updates.md` | updating `spec.md` `Validation` or `Outcome` | write a proof-shaped closeout record instead of vague "tests pass" or optimistic outcome prose |
 | `references/tasks-progress-update-examples.md` | existing `tasks.md` needs checkbox or progress alignment | update only ledger items proved by fresh evidence instead of bulk-checking or creating tasks during validation |
-| `references/workflow-plan-completion-vs-reopen.md` | existing workflow routing must record phase status plus done or reopen routing state | make master and phase routing agree instead of leaving "mostly done" or `TBD` state |
+| `references/workflow-plan-completion-vs-reopen.md` | the approved ledger explicitly names a pre-created validation phase file that must record done or reopen state | update only the named routing artifact instead of treating every existing `workflow-plan.md` as a closeout surface |
 | `references/failed-proof-and-reopen-handling.md` | required proof fails, is missing, stale, skipped, or too narrow | record the narrowest reopen target and stop instead of fixing code or softening failure during closeout |
 
 Reference rules:
@@ -100,9 +98,8 @@ Reference rules:
 ## Allowed Writes
 This session may write or update only:
 - task-local `spec.md`, limited to `Validation`, `Outcome`, and any minimal cross-reference needed to make reopen state honest
-- existing task-local `workflow-plan.md`
-- existing task-local `workflow-plans/validation-phase-<n>.md` when the task already uses a dedicated validation phase
 - existing task-local `tasks.md`, limited to checkbox/progress state that the fresh proof actually supports
+- existing task-local `workflow-plans/validation-phase-<n>.md` only when the approved `tasks.md` explicitly names that pre-created phase file
 
 Do not create a phase-local validation file or missing `tasks.md` in this session. If either required artifact is missing, reopen planning or the relevant earlier phase instead of inventing it during closeout.
 
@@ -133,15 +130,14 @@ Do not:
 - If its proof bar says the claim is not verified, this session must record a blocker or reopen. It may not "balance" the failure with optimistic closeout wording.
 - This wrapper extends the verification gate only by adding artifact ownership:
 - update `spec.md` so `Validation` and `Outcome` reflect reality
-- update `workflow-plan.md` so completion or reopen routing is explicit
 - update existing `tasks.md` progress when the task uses a ledger
-- update an existing `workflow-plans/validation-phase-<n>.md` when a dedicated validation phase is active
+- update an existing `workflow-plans/validation-phase-<n>.md` only when the approved ledger explicitly names that phase file
 - for lean local, update `spec.md` and existing `tasks.md` directly; do not create a validation phase file just to mirror full-orchestrated closeout
 
 ## Workflow
 
 ### 1. Confirm This Session Owns Validation And Closeout Only
-- check the master workflow plan and current phase context first
+- check the approved `tasks.md` and claimed closeout scope first; use workflow routing only when no approved ledger exists yet
 - if implementation, review, or reconciliation is still the active phase, stop and hand back the correct reopen point
 - if the work is direct path and inline validation is enough, say so directly and stop rather than forcing this wrapper
 - if the request asks for code changes during closeout, refuse that boundary crossing before doing anything else
@@ -196,7 +192,7 @@ Do not:
 - stop after recording the reopen; do not "just fix one thing" in this session
 
 ### 8. Write Or Repair `workflow-plans/validation-phase-<n>.md` When Used
-- only update this file when planning created it before implementation started
+- only update this file when planning created it before implementation started and the approved `tasks.md` explicitly names it
 - if the task should be using a dedicated validation phase file and it is missing, or if required `tasks.md` is missing, record a reopen target instead of creating it now
 - record phase-local closeout routing only:
   - closeout claim or claims
@@ -210,20 +206,13 @@ Do not:
 - keep this file routing-only; do not turn it into a second `Validation` section, a second `tasks.md`, or an implementation scratchpad
 - if the task is not using a dedicated validation phase file, do not invent one
 
-### 9. Write Or Repair `workflow-plan.md`
-- update master phase status, blockers, and next-session routing
-- make the closeout phase status explicit, and use a separate task or routing state when closeout reopens an earlier phase
-- if the task is honestly done, close the workflow instead of leaving ambiguous "mostly done" language:
-  - `Session boundary reached: yes`
-  - `Ready for next session: no`
-  - `Next session starts with: N/A` unless a later follow-up task is intentionally created
-- if the task is not done, route the next session to the exact reopen target:
-  - `Session boundary reached: yes`
-  - `Ready for next session: yes`
-  - `Next session starts with: <exact reopen target>`
+### 9. Leave `workflow-plan.md` Alone After Ledger Approval
+- do not update `workflow-plan.md` during closeout merely because it exists
+- if fresh proof fails, record the reopen target in `spec.md` `Validation`/`Outcome`, existing `tasks.md` progress, and the explicitly named validation phase file when one is in use
+- if there is no approved `tasks.md` yet and workflow routing still owns the phase, stop and reopen planning instead of using this closeout session to repair master workflow state
 
 ### 10. Stop At The Boundary
-- once `spec.md`, `workflow-plan.md`, existing `tasks.md` when used, and any active validation phase file agree on the result, stop
+- once `spec.md`, existing `tasks.md` when used, and any explicitly named validation phase file agree on the result, stop
 - do not begin code changes, new test authoring, or the next implementation task in the same session
 
 ## What `Done` Means
@@ -231,34 +220,25 @@ Closeout is done only when all of the following are true:
 - every positive closeout claim in scope has fresh evidence from this session
 - `spec.md` `Validation` records the actual commands and observed results instead of intention or memory
 - `spec.md` `Outcome` says only what the evidence proved, with no optimistic overreach
-- `workflow-plan.md` makes the task state explicit as complete or done, with the session boundary closed
 - existing `tasks.md`, when used, has checkbox/progress state aligned with the fresh proof and no invented tasks
-- `workflow-plans/validation-phase-<n>.md`, when used, shows the phase is complete and why the session stopped
+- `workflow-plans/validation-phase-<n>.md`, when explicitly named by `tasks.md`, shows the phase is complete and why the session stopped
 - no new implementation work was performed during closeout
 
 If any of those fail, the task is not done yet. Record the reopen honestly.
 
-## Required Master `workflow-plan.md` Updates
-Every completed, blocked, or reopened pass must update the master file with:
-- current phase set to this validation or closeout checkpoint and current phase status
-- link or status for `workflow-plans/validation-phase-<n>.md` when a dedicated validation phase is active, or an explicit note that none is used
-- status for `spec.md` closeout updates, including whether `Validation` and `Outcome` were refreshed this session
-- status for existing `tasks.md` progress updates when the task uses a ledger, or the planning reopen target if required `tasks.md` is missing
-- `Session boundary reached`
-- `Ready for next session`
-- `Next session starts with`
-- `Next session context bundle` as an always-present field: say default resume order is sufficient or there is no next session, or list exact artifact paths and one-line reasons for a reopen or follow-up session
-- blockers, failed proof, accepted limits, and reopen targets that still affect closure
-- whether the task is honestly done or has reopened an earlier phase
+## No Required Master `workflow-plan.md` Updates After `tasks.md`
+After approved `tasks.md` exists, master workflow-control updates are not part of validation closeout. Every completed, blocked, or reopened pass must instead update:
+- `spec.md` closeout fields, including whether `Validation` and `Outcome` were refreshed this session
+- existing `tasks.md` progress when the task uses a ledger, or a planning reopen target if required `tasks.md` is missing
+- an explicitly named existing validation phase file, only when the approved ledger requires it
 
-Do not leave final task state implicit in chat.
+Do not leave final task state implicit in chat, but do not mirror it into `workflow-plan.md` just because that file exists.
 
 ## Expected Outputs
 A finished validation-closeout session produces only closeout artifacts and routing:
 - updated `spec.md` with fresh `Validation` evidence and honest `Outcome`
-- updated `workflow-plan.md`
-- updated `workflow-plans/validation-phase-<n>.md` only when a dedicated validation phase is actually in use and the file already exists
 - updated existing `tasks.md` checkbox/progress state only when the task already uses it
+- updated `workflow-plans/validation-phase-<n>.md` only when the approved ledger explicitly names it and the file already exists
 - an honest closeout phase status such as `complete` or `blocked`, plus a separate task or routing state when reopened, with the next session start point made explicit
 
 It does not produce implementation output, design changes, new plans, or silent fixes.
@@ -283,7 +263,7 @@ Rules:
 The session is complete when:
 - the closeout claim is explicit and bound to the right scope
 - fresh proof was run or the proof gap was documented honestly
-- `spec.md`, `workflow-plan.md`, existing `tasks.md` when used, and any active validation phase file agree on completion or reopen state
+- `spec.md`, existing `tasks.md` when used, and any explicitly named validation phase file agree on completion or reopen state
 - the next session start point is explicit, including `N/A` for a truly closed task or the exact reopen target when not closed
 - no implementation or other earlier-phase work started in this session
 

@@ -22,7 +22,7 @@ env:
   GOFLAGS: -mod=readonly
   GOLANGCI_LINT_VERSION: v2.10.1
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
-  COVERAGE_MIN: "65.0"
+  COVERAGE_MIN: "80.0"
 
 jobs:
   publish-main:

@@ -305,7 +305,7 @@ Bootstrap shortcuts:
   - This is the closest local equivalent to the CI `test-coverage` job.
   - Clears ambient `GOCOVERDIR` before coverage collection so local experiment settings do not contaminate the report.
 
-- `make coverage-check [COVERAGE_MIN=65.0]`
+- `make coverage-check [COVERAGE_MIN=80.0]`
   - Fails if coverage from `coverage.out` is below the configured threshold.
   - Coverage threshold excludes:
     - generated OpenAPI artifact (`internal/api/openapi.gen.go`),

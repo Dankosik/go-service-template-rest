@@ -6,7 +6,7 @@ description: "Design API-contract-first specifications for Go services. Use when
 # API Contract Designer Spec
 
 ## Purpose
-Turn product and behavior changes into one client-visible API contract that is explicit enough for OpenAPI, implementation, tests, and rollout to converge without semantic drift.
+Turn product and behavior changes into one target-state client-visible API contract that is explicit enough for OpenAPI, implementation, tests, and any unavoidable compatibility work to converge without semantic drift.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -202,14 +202,15 @@ If several symptoms apply, read the smallest set of references that covers the c
 
 ### Compatibility And Evolution
 - Preserve compatibility by default.
+- Choose the target contract first; add coexistence, deprecation, or migration behavior only when existing clients or compatibility policy require it.
 - Classify each change as `additive`, `behavior-change`, or `breaking`.
 - Give stronger scrutiny to status, error, retry, idempotency, precondition, async, and consistency changes than to payload growth alone.
 - Treat enum-value expansion, default-value changes, nullability tightening, cursor or sort-contract changes, and weaker freshness guarantees as compatibility decisions, not harmless cleanup.
 - “Additive” is not automatically safe if common clients use closed-world validation, exhaustive enum switches, or strict response decoders.
-- Keep contract changes rollout-safe for mixed-version deployments.
+- Keep contract changes rollout-safe for mixed-version deployments when such deployments are a real constraint.
 - Action-endpoint cleanup needs an explicit deprecation or coexistence strategy if clients already depend on it.
 - When legacy and replacement endpoints coexist, define whether they share idempotency space, ETag or precondition behavior, and status-code semantics.
-- When coexistence is temporary, define which surface is authoritative for validation rules, concurrency semantics, and deprecation milestones instead of letting old and new routes silently diverge.
+- When coexistence is unavoidable, define which surface is authoritative for validation rules, concurrency semantics, and deprecation milestones instead of letting old and new routes silently diverge. Include exit criteria, removal/proof tasks, and owner in the accepted scope.
 - Use explicit deprecation signaling when relevant, such as documented timelines and standard headers like `Deprecation` or `Sunset`, rather than burying migration in prose only.
 - Do not quietly change error mapping, consistency behavior, or retry semantics inside a supposedly stable contract.
 
@@ -224,7 +225,7 @@ For every major API recommendation, include:
 - durable acceptance boundary and timeout-recovery semantics for non-idempotent writes
 - async, consistency, and freshness behavior
 - deterministic validation semantics and any legacy-surface coexistence rules when they affect callers
-- if old and new surfaces coexist, a short comparison of which semantics are shared versus temporarily divergent
+- if old and new surfaces must coexist, a short comparison of which semantics are shared versus divergent, plus the same-scope exit and removal criteria
 - any invented status, media type, or companion surface only when it has an explicit client-facing reason
 - adjacent-skill handoffs when the contract depends on another seam
 - compatibility class, assumptions, risks, and reopen conditions

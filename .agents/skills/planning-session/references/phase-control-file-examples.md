@@ -50,7 +50,7 @@ Phase status: pending
 Consumes: approved artifact bundle, existing `tasks.md`, and review phase notes for the named checkpoint when present.
 Closeout claim: phase complete for T001-T006.
 Proof scope: commands and manual checks named in `tasks.md` plus triggered `test-plan.md` if present.
-Allowed future writes: `spec.md` Validation/Outcome, existing `tasks.md` progress, `workflow-plan.md`, and this existing validation phase file only.
+Allowed future writes: `spec.md` Validation/Outcome, existing `tasks.md` progress, and this existing validation phase file only.
 Stop rule: do not implement fixes or create missing process artifacts; reopen the narrowest earlier phase if proof fails or required artifacts are missing.
 Next action: run fresh validation for the named proof scope.
 ```

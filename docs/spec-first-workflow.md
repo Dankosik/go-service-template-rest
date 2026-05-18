@@ -20,8 +20,10 @@ The simplification is about artifact depth, not decision quality. Use the smalle
 Default decision quality:
 
 - Unless the user explicitly asks for prototype, quick, simple, temporary, or intentionally staged delivery, choose the production-ready architecture and system-design answer for the accepted scope.
+- Default to a target-state plan: decide the final architecture now, and make the implementation ledger include the work needed to reach that state without remembered-later cleanup.
 - Do not create an MVP-now/future-hardening split when the production-ready decision is knowable and in scope.
-- Valid staging is explicit: user-requested staging, missing facts that block the production-ready choice, or rollout safety that requires a recorded staged plan.
+- Temporary bridges, compatibility shims, feature flags, canaries, or staged rollout are not default recommendations. Use them only when the user requests staging or a live external constraint makes a one-step target-state change unsafe or impossible.
+- When staging is unavoidable, record the target state, exit criteria, removal/proof tasks, and owner in the owning artifact as part of the accepted scope. Do not leave the cleanup as a follow-up or future-hardening note.
 - Scope cuts are allowed only as clear non-goals, constraints, or accepted risks. They are not a license to defer required architecture, ownership, contract, reliability, security, or validation decisions.
 
 ## 2. Execution Shapes
@@ -70,7 +72,7 @@ This boundary rule applies to:
 - validation and closeout;
 - targeted reopen phases.
 
-The normal exception is implementation from an approved `tasks.md`. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation session may execute the approved ledger items and the proof named by the ledger without stopping between task IDs. If the ledger or workflow-control artifacts created a separate review, validation, or reopen phase, that later phase uses the one-session boundary again.
+The normal exception is implementation from an approved `tasks.md`. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation session may execute the approved ledger items and the proof named by the ledger without stopping between task IDs. After that point, workflow-control files are pre-code routing history unless the approved ledger explicitly names a separate review, validation, or reopen phase file as part of the work.
 
 Direct path work has no durable phase boundary by default, so it may still complete inline with fresh proof.
 
@@ -236,8 +238,8 @@ Recommended shape:
 ## Goal Contract
 
 Goal objective: Complete <feature/change> by executing this ledger from `T001` through final validation.
-Stopping condition: all required tasks are checked, required proof passes or records a concrete blocker, and closeout artifacts reflect fresh evidence.
-Read first: `spec.md`, plus `design/overview.md` or `workflow-plan.md` only when those artifacts exist.
+Stopping condition: all required tasks are checked, required proof passes or records a concrete blocker, and ledger-owned closeout evidence is current.
+Read first: `spec.md`, plus `design/overview.md` when that artifact exists. Do not read `workflow-plan.md` for implementation unless no approved ledger exists yet.
 Do not change: <non-goals and preserved constraints from `spec.md`>
 Progress log: after each checkpoint, update the checkbox/evidence lines; if blocked, stop and record `Blocked:` with the missing input or failing proof.
 
@@ -294,6 +296,8 @@ Use `workflow-plan.md` when cross-phase or multi-session state is real. It owns:
 - active gate status such as clarification, adequacy, or implementation readiness.
 
 It does not own final decisions, technical design, executable tasks, raw research, or validation transcripts.
+
+Once `tasks.md` is approved, `workflow-plan.md` no longer owns implementation progress, task completion, or closeout state. It may remain useful historical context, but agents must not update it during implementation or closeout. Pre-created review or validation phase files may be updated only when the approved ledger explicitly names them as required artifacts.
 
 ### `workflow-plans/<phase>.md`
 
@@ -427,6 +431,8 @@ This gate is not required for direct path work or for lean-local work whose desi
 
 Run technical design review after the design bundle and any triggered conditional artifacts are written, but before `tasks.md` or implementation-readiness handoff is approved.
 
+If technical design review returns `FAIL`, the next action is a reopen of technical design or specification. After the repair, planning still waits for a follow-up technical design review verdict on the revised packet. The follow-up may be targeted to the failed findings and changed artifacts when the repair is narrow, but it must still check that adjacent design assumptions remain valid and record a new or explicitly updated gate status.
+
 The review packet must be explicit enough that the reviewer does not rediscover phase state from scratch:
 
 - approved `spec.md`;
@@ -440,6 +446,8 @@ The review must be read-only and risk-driven:
 - inspect approved `spec.md`, the design bundle, triggered conditional artifacts, `docs/repo-architecture.md` when boundaries matter, and relevant specialist outputs;
 - check source-of-truth ownership, dependency direction, runtime sequence, failure behavior, conditional artifact triggers, validation/rollout handoff, and accidental complexity;
 - separate design defects from implementation preferences;
+- choose the strongest justified gate status, avoiding both over-blocking on proof-only concerns and under-blocking on missing ownership, contract, sequencing, rollout, or validation decisions;
+- when recommending `FAIL`, name the smallest reopen target, the decision or artifact that must change, and the concrete condition that a follow-up review should verify;
 - return findings as advisory evidence for orchestrator reconciliation.
 
 Technical design review is not a second design pass. If a finding requires a new decision, rewrite of the design bundle, or changed approval boundary, route it back to technical design or specification instead of solving it inside review.
@@ -452,7 +460,7 @@ Review gate status:
 
 - `PASS`: planning may start from the reviewed design context.
 - `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
-- `FAIL`: planning must not start; reopen technical design or specification.
+- `FAIL`: planning must not start; reopen technical design or specification. Repair alone is not enough to enter planning; the revised packet needs a follow-up review verdict of `PASS` or `CONCERNS`.
 
 Classify findings by strongest planning impact:
 
@@ -463,7 +471,7 @@ Classify findings by strongest planning impact:
 - `proof_obligation`: planning may proceed only if the obligation is carried into `tasks.md`, `test-plan.md`, or `rollout.md`.
 - `record_only`: useful context that does not affect planning entry.
 
-Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/technical-design-review.md` when a dedicated review phase needs durable routing, or the lean-local artifact that owns the review checkpoint. The record must name the reviewed packet, reviewer or lane, scope, findings, orchestrator resolution, final gate status, and planning-input obligations. `CONCERNS` is valid only when every accepted risk and proof obligation is named for planning. Post-code discovery of a missing required technical design review reopens the earlier phase instead of creating a new review artifact after implementation starts.
+Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/technical-design-review.md` when a dedicated review phase needs durable routing, or the lean-local artifact that owns the review checkpoint. The record must name the reviewed packet, reviewer or lane, scope, findings, orchestrator resolution, final gate status, and planning-input obligations. Follow-up review after `FAIL` must also name the prior failed review, the revised artifacts or decisions, which blockers were closed, any remaining accepted risks or proof obligations, and the new gate status. `CONCERNS` is valid only when every accepted risk and proof obligation is named for planning. Post-code discovery of a missing required technical design review reopens the earlier phase instead of creating a new review artifact after implementation starts.
 
 ## 11. Planning And Implementation Readiness
 
@@ -486,7 +494,7 @@ Implementation readiness values:
 
 Readiness belongs in the planning handoff when planning artifacts exist. `tasks.md` may carry a short reference.
 
-Planning also consumes the technical design review result whenever separate design depth was triggered. Missing or blocking review is a planning-entry failure, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted design risks and proof obligations into the implementation-readiness handoff and the relevant ledger or companion artifacts.
+Planning also consumes the technical design review result whenever separate design depth was triggered. Missing review, blocking review, or repaired design after `FAIL` without a follow-up verdict is a planning-entry failure, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted design risks and proof obligations into the implementation-readiness handoff and the relevant ledger or companion artifacts.
 
 ## 12. Coding, Review, Reconciliation, And Validation
 
@@ -494,13 +502,13 @@ Coding consumes the approved task handoff. It may create or edit code, tests, mi
 
 Implementation sessions may continue across the approved `tasks.md` items and the ledger's named proof checks. They must not use implementation momentum to create or approve missing specification, design, planning, review, or validation-phase artifacts.
 
-Post-code work may update only existing control or closeout surfaces:
+Post-code work is ledger-driven. It may update only:
 
-- existing `workflow-plan.md`;
-- existing `workflow-plans/technical-design-review.md` only to record a reopen or reconciled status when it existed before coding;
-- existing `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` when they were created before coding;
 - existing `tasks.md` checkbox/progress state;
 - `spec.md` `Validation` and `Outcome`.
+- existing `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` only when the approved `tasks.md` explicitly names that pre-created phase file as part of the post-code checkpoint.
+
+Do not update `workflow-plan.md` or phase-control files merely because they exist. After `tasks.md` is approved, those files are not the implementation source of truth.
 
 Do not create new workflow/process artifacts after implementation starts. Reopen the earlier phase that owns the missing artifact instead.
 
@@ -532,14 +540,20 @@ A lane uses at most one skill. If the selected skill defines a stricter delivera
 
 Resume from artifacts, not chat memory.
 
-If `workflow-plan.md` exists:
+If approved `tasks.md` exists and implementation, review, validation, or closeout is next:
+
+1. read `tasks.md`;
+2. read the artifacts named by `tasks.md`, usually `spec.md` and any required design, test-plan, or rollout context;
+3. read `workflow-plans/<phase>.md` only when `tasks.md` explicitly names a pre-created review or validation phase file.
+
+If there is no approved `tasks.md` and `workflow-plan.md` exists:
 
 1. read `workflow-plan.md`;
 2. read the current `workflow-plans/<phase>.md` if the task uses one;
 3. read the files named in the `Next session context bundle`;
 4. then read phase artifacts as needed.
 
-If there is no `workflow-plan.md` because the task is direct or lean:
+If there is no approved `tasks.md` and no `workflow-plan.md` because the task is direct or lean:
 
 1. read `spec.md` when it exists;
 2. read `tasks.md` when implementation or validation is next;

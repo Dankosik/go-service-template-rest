@@ -171,10 +171,10 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - use the compact design section or design bundle to identify dependency-establishing work, safe sequencing, coupling, validation obligations, and rollout risks
 - read existing `tasks.md`, `test-plan.md`, or `rollout.md` only when repairing or extending an existing planning pass
 - keep the context narrow and planning-specific; this session does not need broad repository rediscovery when the approved design already carries the task-local technical context
-- keep the handoff focused on the first safe implementation slice; later-phase implications that do not change that slice should stay as explicit concerns, proof obligations, or follow-up notes instead of being expanded into new pre-code design work
+- keep the handoff focused on the accepted target-state ledger; out-of-scope implications may stay as explicit concerns, proof obligations, or follow-up notes, but in-scope target-state cleanup belongs in `tasks.md` or in a reopened earlier phase
 
 ### 4. Produce Or Repair Planning Artifacts
-- apply `planning-and-task-breakdown` as the deeper method when the task needs phased execution breakdown
+- apply `planning-and-task-breakdown` as the deeper method when the task needs target-state execution breakdown, dependency ordering, or real checkpoints
 - write or update `tasks.md` as the executable task ledger by default for non-trivial work
 - create `test-plan.md` only when test obligations are too large or multi-layered for `tasks.md` and the approved design already contains the needed validation context
 - create `rollout.md` only when migration sequencing, backfill, compatibility, deploy order, or failback notes need a dedicated artifact and the approved design already contains the needed rollout context
@@ -280,7 +280,7 @@ Planning is complete when:
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
 - required workflow plan adequacy challenge findings are reconciled, or an eligible direct/lean skip rationale is explicit
 - the next session can begin the first task or explicit implementation checkpoint without silently reopening spec or design
-- visible later-phase implications that do not change the first safe slice are recorded explicitly instead of being forced into new planning blockers
+- out-of-scope implications are recorded explicitly instead of being forced into new planning blockers, while in-scope target-state work is included in the ledger or routed back to the owning earlier phase
 
 ## Stop Condition
 The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.

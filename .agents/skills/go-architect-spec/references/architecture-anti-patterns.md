@@ -24,7 +24,7 @@ Copy: this names why read-only still couples schemas, releases, connection pools
 ### Indefinite Dual Writes
 Context: during extraction, both old and new paths write the same business state. A temporary compatibility topic has no removal condition.
 
-Choose: declare one authoritative writer per phase. Bound comparison writes or bridge events with owner, drift metric, reconciliation rule, and contraction task.
+Choose: declare the target writer first, then one authoritative writer per migration checkpoint only if compatibility is unavoidable. Bound comparison writes or bridge events with owner, drift metric, reconciliation rule, and contraction task.
 
 Copy: this rejects "temporary" as a substitute for ownership.
 

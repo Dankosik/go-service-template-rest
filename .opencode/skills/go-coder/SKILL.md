@@ -48,7 +48,7 @@ Before editing, make the implementation target concrete:
 ## Boundaries And Handoffs
 Keep workflow ownership outside this skill:
 - consume existing task artifacts or an explicit user plan when they are present; for non-trivial planned work, an approved `tasks.md` is sufficient to start the next small implementation task when required decisions/context artifacts exist and readiness permits it
-- for non-trivial planned work, check the recorded implementation-readiness status in `workflow-plan.md` and the planning handoff when those artifacts exist
+- for non-trivial planned work, use the approved `tasks.md` implementation handoff as the execution authority; check `workflow-plan.md` only before coding when no approved ledger exists yet
 - for non-trivial planned work with separate design depth, confirm the technical design review gate is recorded as reconciled before treating planning as implementation-ready
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context

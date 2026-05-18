@@ -26,7 +26,7 @@ Verification Commands:
 - `make migrate-check`
 Observed Result: all three commands passed in this session.
 Conclusion: verified for Phase 1 scope.
-Next Action: close `validation-phase-1` and mark the workflow complete unless later planned phases remain.
+Next Action: close the ledger-named `validation-phase-1` record, if used, and mark `tasks.md` complete unless later planned phases remain.
 
 ## Outcome
 

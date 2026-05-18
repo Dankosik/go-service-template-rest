@@ -6,7 +6,7 @@ description: "Turn approved `spec.md` plus required compact or split design cont
 # Planning And Task Breakdown
 
 ## Purpose
-Turn stable decisions plus approved compact or split technical design context into a `tasks.md` executable task ledger that is small-slice, phase-aware, and honest about dependencies, checkpoints, and proof obligations.
+Turn stable decisions plus approved compact or split technical design context into a `tasks.md` executable task ledger that reaches the accepted target state, stays honest about dependencies, and names only the checkpoints and proof obligations the work actually needs.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -57,10 +57,10 @@ Escalate if:
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - If technical design review passed with `CONCERNS`, carry each accepted design risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the implementation-readiness handoff; do not leave it only in the review record.
 - When the planning pass generates or materially changes workflow-control files for full-orchestrated, high-risk, complex, or agent-backed work, expect a read-only `workflow-plan-adequacy-challenge` before handoff; lean-local work without workflow-control artifacts uses the recorded inline/local check instead.
-- Prefer phased execution over one giant task list.
+- Prefer a single target-state implementation ledger over phased delivery. Use phase or checkpoint labels only for dependency ordering, reviewability, or proof boundaries, not to defer known in-scope work.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
-- Planning closes the first safe slice, not every visible later-phase implication; if a downstream issue does not change the next slice, record it as an accepted concern, proof obligation, or follow-up instead of widening the plan. Follow-ups must be out-of-scope or proof-only, not unresolved decisions for the ready implementation slice.
+- Planning closes the accepted target-state scope, not just an initial implementation slice. If a downstream issue is in scope and affects production readiness, include it in the ledger or reopen the owning earlier phase. Follow-ups are allowed only for explicit non-goals or proof-only consequences, not target-state cleanup.
 - For dedicated planning sessions, this pass ends at approved `tasks.md`; implementation begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
@@ -71,7 +71,7 @@ Keep this file as the operating contract. References are compact rubrics and exa
 
 | Reference | Load For Symptom | Behavior Change |
 | --- | --- | --- |
-| `references/phase-strategy-examples.md` | phase boundaries, session stops, review/validation checkpoints, or single-pass versus phased execution are unclear | chooses one risk-bounded phase with a real handoff instead of a giant "implement everything" phase or a ceremony-only checkpoint |
+| `references/phase-strategy-examples.md` | phase boundaries, session stops, review/validation checkpoints, or single-pass versus phased execution are unclear | chooses a target-state ledger with real checkpoints instead of partial phased delivery, a giant "implement everything" phase, or a ceremony-only checkpoint |
 | `references/dependency-ordered-task-ledgers.md` | task order, `[P]` markers, generated artifacts, migrations, or source-of-truth-first sequencing is unclear | derives dependencies from approved design artifacts and source-of-truth flow instead of marking everything parallel or starting with derived files |
 | `references/task-sizing-and-slicing.md` | tasks are too large, too horizontal, too vague, hard to review, or hard to verify in one focused session | splits work into reviewable, proof-bound slices instead of hiding independent surfaces behind one broad task |
 | `references/acceptance-criteria-and-proof-obligations.md` | acceptance criteria, proof commands, manual checks, or `CONCERNS` obligations are vague | states task-specific truths and matching proof commands instead of "looks good", "run tests", or optimistic readiness language |
@@ -98,7 +98,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Do not confuse implementation taste with real dependency.
 
 ### 3. Slice The Work
-- Prefer one coherent reviewable increment per phase.
+- Prefer one coherent reviewable increment per checkpoint or target-state work bundle.
 - When possible, use vertical slices that land observable behavior.
 - If the work must start with enabling seams or migration groundwork, say so directly.
 - If two tasks must land together to remain safe, explain the coupling.
@@ -146,7 +146,7 @@ Use markdown checkboxes. Each task should include:
 - a compact `Goal Contract` header for long-running or resumable work, limited to objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule;
 - an optional compact `Implementation Handoff` header when it helps the next implementation session, limited to consumed artifacts, readiness status, first task or checkpoint, named `CONCERNS` proof obligations, and reopen target;
 - stable task ID such as `T001`
-- phase/checkpoint label
+- checkpoint label, or phase label only when the approved design/user request explicitly uses phases
 - optional `[P]` marker only when safe to parallelize
 - short action
 - exact file path when known, or a narrow package/artifact surface when exact file choice is genuinely design-time unknown
@@ -160,7 +160,7 @@ Example:
 ## Goal Contract
 
 Goal objective: Complete the approved request-ID behavior change by executing this ledger through final validation.
-Stopping condition: all tasks are checked, required proof passes or records a concrete blocker, and closeout artifacts reflect fresh evidence.
+Stopping condition: all tasks are checked, required proof passes or records a concrete blocker, and ledger-owned closeout evidence is current.
 Read first: approved `spec.md`, `design/`, and this task ledger.
 Do not change: public HTTP semantics other than the approved request-ID echo behavior.
 Progress log: update each task's `Evidence` line after running its proof; if blocked, stop and record `Blocked:` under the task.
@@ -175,8 +175,8 @@ Reopen target: planning if required artifact context is missing.
 
 ## Tasks
 
-- [ ] T001 [Phase 1] Update `internal/http/handler.go` to preserve request ID echo behavior. Depends on: none. Proof: `go test ./internal/http`. Evidence: Pending.
-- [ ] T002 [Phase 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`. Evidence: Pending.
+- [ ] T001 [Checkpoint 1] Update `internal/http/handler.go` to preserve request ID echo behavior. Depends on: none. Proof: `go test ./internal/http`. Evidence: Pending.
+- [ ] T002 [Checkpoint 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`. Evidence: Pending.
 ```
 
 Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep headers short; if the Goal contract or handoff starts carrying phase strategy or design rationale, trim it back or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.
@@ -188,7 +188,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - If a required technical design review gate is missing or blocking, reopen technical design review instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, the next-session context bundle, `tasks.md` status, artifact expectations with trigger rationale, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat.
-- The implementation-readiness handoff must be explicit: `PASS` may proceed only when the first safe slice needs no hidden architecture, ownership, contract, sequencing, or rollout decisions; `CONCERNS` may proceed only with named risks and proof obligations the next slice can satisfy without replanning; `FAIL` must route to the named earlier phase; and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
+- The implementation-readiness handoff must be explicit: `PASS` may proceed only when the accepted target-state ledger needs no hidden architecture, ownership, contract, sequencing, or rollout decisions; `CONCERNS` may proceed only with named risks and proof obligations the implementation can satisfy without replanning; `FAIL` must route to the named earlier phase; and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
 - If required compact or split design context is missing or inconsistent, reopen specification or technical design instead of inferring the missing context locally.
 - If required technical design review is missing or inconsistent, reopen technical design review instead of inferring approval locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
@@ -208,7 +208,7 @@ The planning pass is complete when:
 - implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
-- later-phase implications that do not change the first safe slice are visible as proof obligations or follow-ups rather than hidden blockers or premature design work
+- out-of-scope implications are visible as non-goals, accepted risks, or proof-only follow-ups rather than hidden target-state cleanup
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
 - no unresolved decision gate, `TBD`, or implementation-blocking open question remains in `tasks.md`
 

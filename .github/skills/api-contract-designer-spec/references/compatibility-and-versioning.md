@@ -4,6 +4,7 @@
 Load this when a contract change affects existing clients, status codes, error shapes, pagination defaults, enum values, field nullability, URI versioning, deprecation, sunset, or coexistence between old and new endpoints.
 
 ## Decision Rubric
+- Choose the target contract first. Add coexistence, preview, deprecation, or migration behavior only when existing clients or compatibility policy require it.
 - Classify each change as `additive`, `behavior-change`, or `breaking`, and name the client assumption that makes it so.
 - Treat status codes, problem types, retry/idempotency/precondition behavior, async behavior, pagination, sorting, and consistency as compatibility surface, not cleanup.
 - Keep the major API version in the URI prefix by this skill's default, but preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it. Do not put minor or patch versions in REST paths unless the API already does.
@@ -14,7 +15,7 @@ Load this when a contract change affects existing clients, status codes, error s
 - Adding pagination to an unpaginated collection can be breaking because old clients may silently miss data.
 - Deprecation means "discourage new dependence and plan migration"; Sunset means "may become unavailable." Use both only when both meanings are true.
 - `Deprecation` uses an RFC 9745 Structured Field Date such as `@1688169599`; `Sunset` uses an RFC 8594 HTTP-date. Do not normalize them to the same timestamp syntax.
-- When old and new endpoints coexist, define which is authoritative for validation, state transitions, idempotency key scope, `ETag` space, error mapping, and consistency.
+- When old and new endpoints coexist, define which is authoritative for validation, state transitions, idempotency key scope, `ETag` space, error mapping, and consistency. Include exit criteria, removal/proof tasks, and owner when coexistence is not the target state.
 
 ## Imitate
 ```http
@@ -31,7 +32,7 @@ Good: lifecycle discouragement and expected unavailability are separate signals 
 Change: add optional response field `risk_level` to `GET /v1/orders/{id}`.
 Compatibility class: additive with semantic risk.
 Client impact: strict JSON decoders may reject the field; exhaustive enum-like handling may need guidance.
-Decision: add in v1 only if the API policy already requires ignoring unknown response fields; otherwise stage behind a preview or v2.
+Decision: add in v1 only if the API policy already requires ignoring unknown response fields; otherwise make preview or v2 the explicit target contract and include migration/removal criteria in the same accepted scope.
 ```
 
 Good: "additive" is not treated as automatically safe.
@@ -58,3 +59,4 @@ Bad: status and problem type are client-visible control flow.
 - Making a nullable field non-null, or always returning an omitted field as `null`, can break presence-sensitive clients.
 - Sunset dates are hints, not guarantees. Do not imply clients can safely wait until the exact timestamp.
 - A replacement endpoint should not silently diverge on idempotency, `ETag`, or error mapping during coexistence.
+- Do not leave preview, coexistence, or deprecated surfaces as remembered-later cleanup.

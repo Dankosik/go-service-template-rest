@@ -13,10 +13,12 @@ Subagents are triggered by unresolved owned questions, not by default workflow c
 - Deep design and corner-case coverage stay in scope, but downstream effect alone does not create a new required domain decision.
 - Open another lane only when another domain must make a new decision before the current artifact can be production-ready for the accepted scope; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
 - A lane must not use `follow_up_only`, `constraint_only`, or `no new decision required` to defer a knowable architecture, ownership, contract, reliability, security, rollout, or validation decision that is required for production readiness in the accepted scope.
+- A lane must not recommend temporary bridges, compatibility shims, feature flags, canaries, or staged rollout unless the user requested staging or the inspected live constraints make a one-step target-state change unsafe or impossible. If such staging is unavoidable, the lane must include target state, exit criteria, removal/proof task, and owner.
 - Direct and lean-local work normally stays local unless a real unresolved question triggers a lane.
 - Lean-local work with a separate `design/overview.md` must still record a technical design review checkpoint before planning; it may be local when no formal lane trigger exists.
 - Full-orchestrated work may use multiple lanes, but each lane still needs one owned question, one lens or specialist domain, and one skill or `no-skill`.
 - Full-orchestrated triggered design normally uses at least one technical-design-review lane before planning. A local-only review needs a scoped-down rationale.
+- If technical design review returns `FAIL`, the repaired design or spec packet must receive a follow-up review verdict before planning. The follow-up may be targeted, but it must inspect the revised packet, verify the failed blockers were closed, and check that adjacent assumptions did not drift.
 - Broad formal spec clarification normally uses multiple challenger lanes with distinct lenses instead of one generic challenger. More lanes are justified by independent approval-risk domains, including when one default lens bundles domains that are independently approval-critical for the task; fewer lanes require a scoped-down rationale.
 - Lens is metadata for coverage, not a replacement for existing challenge or handoff classification vocabularies.
 - Do not invent missing artifacts, source facts, policy decisions, diffs, validation output, or skill results.
@@ -45,6 +47,7 @@ For technical design review lanes, include the review gate status target and ins
 - `workflow-plan.md` and `workflow-plans/technical-design.md` or `workflow-plans/technical-design-review.md` when present;
 - `docs/repo-architecture.md` when boundary, ownership, dependency direction, or runtime flow matters;
 - relevant specialist outputs;
+- prior technical design review findings and claimed resolutions when this is a follow-up review after `FAIL`;
 - known assumptions, accepted trade-offs, non-goals, reopen conditions, and expected planning proof obligations.
 
 ## Fan-In Envelope
@@ -79,7 +82,7 @@ Technical design review fan-in must end with one gate result:
 
 - `PASS`: planning may start from the reviewed design.
 - `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
-- `FAIL`: planning must not start; reopen technical design or specification.
+- `FAIL`: planning must not start; reopen technical design or specification. After repair, a follow-up review verdict is still required before planning.
 
 Classify each technical design review finding by strongest planning impact:
 
@@ -91,6 +94,8 @@ Classify each technical design review finding by strongest planning impact:
 - `record_only`: useful context that does not affect planning entry.
 
 `CONCERNS` is valid only when no finding still has `blocks_planning`, `reopens_design`, or `reopens_spec`, and the remaining accepted risks or proof obligations are named for planning.
+
+A follow-up technical design review after `FAIL` must identify the prior failed gate, the revised artifacts or decisions, the blockers that are now closed, any changed assumptions, the residual planning obligations, and the final gate result. A design author's repair note is evidence, not a substitute for the follow-up verdict.
 
 For multi-lane fan-out, the orchestrator must reconcile lane outputs before treating the gate as complete:
 

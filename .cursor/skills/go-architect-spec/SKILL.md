@@ -1,12 +1,12 @@
 ---
 name: go-architect-spec
-description: "Design architecture-first specifications for Go services. Use when planning new features, refactors, service extractions, or behavior changes before coding and you need explicit boundary ownership, workload-driven sync/async design, invariant and consistency rules, failure/degradation model, and rollout-safe implementation sequencing. Reach for this whenever the hard part is deciding module vs service boundaries, long-running workflow ownership, read/write topology, or modular-monolith vs microservice trade-offs. Skip when the task is a local code fix, low-level API/DB/security implementation, test-case authoring, or CI/container configuration."
+description: "Design architecture-first specifications for Go services. Use when planning new features, refactors, service extractions, or behavior changes before coding and you need explicit target-state boundary ownership, workload-driven sync/async design, invariant and consistency rules, failure/degradation model, and only the rollout constraints that are truly required. Reach for this whenever the hard part is deciding module vs service boundaries, long-running workflow ownership, read/write topology, or modular-monolith vs microservice trade-offs. Skip when the task is a local code fix, low-level API/DB/security implementation, test-case authoring, or CI/container configuration."
 ---
 
 # Go Architect Spec
 
 ## Purpose
-Turn ambiguous service changes into explicit architecture decisions that remain correct under growth, failure, backlog pressure, and mixed-version rollout, and express them as a compact architecture section rather than drifting into API, schema, or tool detail.
+Turn ambiguous service changes into explicit target-state architecture decisions that remain correct under growth, failure, backlog pressure, and any unavoidable mixed-version constraints, and express them as a compact architecture section rather than drifting into API, schema, or tool detail.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -54,7 +54,7 @@ Keep the main output architecture-first. Route API payloads, SQL migration mecha
 | Request-path vs queue, saga, process manager, choreography, orchestration, or workflow engine | [sync-async-workflow-ownership.md](references/sync-async-workflow-ownership.md) | Name the process owner, pivot, and client-visible completion model instead of choosing a broker/tool first. |
 | CQRS, read services, projections, materialized views, search indexes, exports, dashboards, aggregators, or stale reads | [read-write-topology-and-projections.md](references/read-write-topology-and-projections.md) | Keep projections derived-only with freshness and bypass rules instead of letting query convenience become write truth. |
 | External provider, partner lifecycle, webhook state, vendor status vocabulary, or ambiguous third-party result semantics | [external-provider-anti-corruption.md](references/external-provider-anti-corruption.md) | Normalize provider evidence behind a local lifecycle owner instead of importing vendor states as internal truth. |
-| Ownership move, service extraction rollout, source-of-truth change, mixed-version window, canary, shadow read, or rollback boundary | [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) | Select phased compatibility with one authoritative writer per phase instead of big-bang cutover or indefinite bridges. |
+| Ownership move, service extraction rollout, source-of-truth change, mixed-version window, canary, shadow read, or rollback boundary | [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) | Select the target-state authority model first, then add bounded compatibility only when live constraints make one-step adoption unsafe. |
 | Premature microservices, distributed monolith, shared database, service-per-table, direct cross-service DB reads, dual writes, retry storm, fragile fallback, or permanent shim smell | [architecture-anti-patterns.md](references/architecture-anti-patterns.md) | Convert the smell into a blocker, accepted risk, or reopen condition with concrete failure consequences. |
 
 ## Core Defaults
@@ -62,7 +62,7 @@ Keep the main output architecture-first. Route API payloads, SQL migration mecha
 - Prefer one explicit source of truth per invariant-bearing entity or process.
 - Prefer runtime splits, bounded worker pools, queues, projections, or read replicas before service splits when the problem is mainly batch work, fan-out, or read scale.
 - Prefer local ACID inside one service-owned datastore; use explicit eventual-consistency patterns across services.
-- Prefer additive, compatibility-first evolution (`expand -> migrate/backfill -> contract`) over big-bang replacement.
+- Prefer direct target-state evolution when the approved scope can safely land together. Use additive compatibility-first evolution (`expand -> migrate/backfill -> contract`) only when live data, existing clients, or mixed-version operation make one-step adoption unsafe.
 - Treat operational overhead, observability cost, and release coordination as first-class costs in every decomposition decision.
 
 ## Architecture Facts To Lock First
@@ -149,9 +149,9 @@ Before recommending topology, make these facts explicit:
 - Collapse a flow back into one ownership boundary if the distributed design adds coordination cost without independent ownership, scaling, or deployability benefits.
 - Require reconciliation ownership, cadence, and repair path for critical eventual-consistency flows.
 - Reject dual writes, hidden invariant ownership, and distributed locks as the primary correctness mechanism.
-- Never allow indefinite dual writes or permanent compatibility shims. If a bridge is temporarily required for migration, bound its authority, reconciliation, and removal criteria up front.
-- Make schema, state, and event evolution additive-first; require tolerant readers, mixed-version compatibility, and explicit contraction criteria.
-- Prefer shadow, dark-read, dual-read, canary, or strangler cutover phases over one-shot boundary moves when data or ownership is shifting; define exit criteria and irreversible checkpoints explicitly.
+- Never allow indefinite dual writes or permanent compatibility shims. If a bridge is temporarily required for migration, bound its authority, reconciliation, removal task, owner, and proof criteria up front inside the accepted scope.
+- Make schema, state, and event evolution additive-first only when live compatibility requires it; otherwise keep the design on the direct target-state path. When additive evolution is required, include explicit contraction criteria and removal proof.
+- Use shadow, dark-read, dual-read, canary, or strangler cutover checkpoints only when data or ownership shifts make a one-step target-state move unsafe; define exit criteria and irreversible checkpoints explicitly.
 
 ### Resilience, Degradation, And Release Safety
 - Classify dependencies by criticality before selecting fallback behavior.
@@ -181,8 +181,8 @@ For every major architecture recommendation, include:
 - when external providers matter, how their semantics are normalized and prevented from becoming lifecycle truth
 - trade-offs, risks, and control mechanisms
 - measurable acceptance boundaries
-- rollout strategy and rollback limits
-- explicit reopen or extraction criteria when proposing a read runtime, separate runtime, or future service split
+- rollout strategy and rollback limits only when live constraints require them
+- explicit reopen or extraction criteria when proposing a read runtime, separate runtime, or possible service split
 - for runtime split vs real service extraction, use an all-conditions test when precision matters and state what rollback does and does not revert
 - any invented numeric target marked as an assumption rather than a silent fact
 - assumptions, blockers, and reopen conditions

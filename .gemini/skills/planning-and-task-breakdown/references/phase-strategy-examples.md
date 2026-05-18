@@ -1,21 +1,21 @@
 # Phase Strategy Examples
 
 ## Behavior Change Thesis
-When loaded for unclear phase boundaries or session stop points, this file makes the model choose one risk-bounded phase with a real handoff instead of a giant "implement everything" phase or a ceremony-only checkpoint.
+When loaded for unclear phase boundaries or session stop points, this file makes the model choose a target-state task ledger with real checkpoints instead of partial phased delivery, a giant "implement everything" phase, or a ceremony-only checkpoint.
 
 ## When To Load
 Load this when choosing phase boundaries, session stops, review/validation checkpoints, or single-pass versus phased execution.
 
 ## Decision Rubric
-- A phase owns a coherent risk boundary, not a folder, role, or wish list.
-- Prefer a reviewable increment with a named stop rule; split when later work depends on proof from the current slice.
+- A checkpoint owns a coherent risk boundary, not a folder, role, or wish list.
+- Prefer a reviewable target-state increment with a named stop rule. Split only when proof, dependency order, or a user-approved rollout constraint makes the split real.
 - Use `tasks.md` for the executable handoff; keep strategy inside small, executable task slices instead of creating a separate strategy artifact.
 - Add review, validation, rollout, or reconciliation checkpoints only when approved scope or risk triggers them.
 - If a phase needs an architecture, API, data, security, reliability, rollout, or ownership decision not already approved, reopen the earlier phase instead of planning through it.
 
 ## Imitate
 ```markdown
-### Phase 1: Canonical Planning Contract
+### Checkpoint: Canonical Planning Contract
 Objective: update only the authoritative planning-contract surfaces named in `design/component-map.md`.
 Depends On: approved `spec.md`, approved core `design/` bundle.
 Task Ledger Link / IDs: T001-T003.
@@ -47,5 +47,6 @@ This fails because it mixes decisions, implementation, proof, and possible rollo
 ## Agent Traps
 - Do not treat sequential phases as "not parallel enough" when dependencies or checkpoint risk make ordering real.
 - Do not require a separate rollout phase if approved decisions plus required design context do not trigger rollout work.
-- Do not require every phase to be independently releasable when the plan explicitly names the coupling and keeps the checkpoint honest.
+- Do not turn known in-scope cleanup into a future phase. If it is required for the target state, keep it in the accepted ledger or reopen design.
+- Do not require every checkpoint to be independently releasable when the plan explicitly names the coupling and keeps the checkpoint honest.
 - Do not treat an explicit session stop as overhead; for non-trivial work it is the handoff rule.

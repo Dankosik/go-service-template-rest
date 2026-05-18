@@ -7,12 +7,12 @@ When loaded for a handoff that feels almost ready, this file makes the model cho
 Load when assigning or auditing implementation-readiness status.
 
 ## Decision Rubric
-- `PASS`: the next implementation slice can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions; required spec, design, `tasks.md`, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path already support that slice.
-- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the next implementation task can satisfy without re-planning.
+- `PASS`: the accepted target-state implementation ledger can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions; required spec, design, `tasks.md`, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path already support it.
+- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the implementation ledger can satisfy without re-planning.
 - `FAIL`: implementation must not start; name the earlier phase to reopen when a missing artifact, unresolved decision, or blocker could change correctness, ownership, rollout, sequencing, or validation.
 - `WAIVED`: use only for tiny, direct-path, or prototype-scoped work with explicit rationale and scope; never use it to bypass normal non-trivial planning.
 - Record the readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, and short reference in `tasks.md` when useful.
-- Do not turn visible later-phase implications into blockers unless they change the first safe slice; record those instead as explicit concerns, proof obligations, or follow-up notes.
+- Do not turn out-of-scope implications into blockers; record those as explicit concerns, proof obligations, or follow-up notes. In-scope target-state work belongs in the ledger or in a reopened earlier phase.
 
 ## Imitate
 ```markdown

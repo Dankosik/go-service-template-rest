@@ -1,16 +1,16 @@
-# Workflow Plan Completion Vs Reopen
+# Named Validation Phase Completion Vs Reopen
 
 ## Behavior Change Thesis
-When loaded for updating existing workflow routing after closeout proof, this file makes the model choose explicit phase status plus task or routing state, such as `complete` with `Task state: done` or `blocked` with `Routing state: reopened`, instead of leaving ambiguous "mostly done", `TBD`, or contradictory artifact status.
+When loaded for updating a ledger-named validation phase after closeout proof, this file makes the model choose explicit phase status plus task or routing state, such as `complete` with `Task state: done` or `blocked` with `Routing state: reopened`, instead of updating master `workflow-plan.md` by habit or leaving ambiguous "mostly done", `TBD`, or contradictory artifact status.
 
 ## When To Load
-Load this when the proof result is known and the next task is to update existing `workflow-plan.md` or an existing `workflow-plans/validation-phase-<n>.md` with final closeout routing.
+Load this when the proof result is known and approved `tasks.md` explicitly names an existing `workflow-plans/validation-phase-<n>.md` that must record final closeout routing. Do not load it merely because `workflow-plan.md` exists.
 
 ## Decision Rubric
 - Completion routing requires all positive closeout claims to have fresh passing proof and all closeout artifacts to agree.
 - Reopen routing requires the narrowest honest upstream target, the blocking proof gap, an explicit next-session start point, and a separate `Routing state` or `Task state` line rather than overloading `Phase status`.
-- A validation phase file may be updated only if it already exists and the workflow uses it; otherwise record that it is not used or reopen planning if it was required and missing.
-- Master `workflow-plan.md` must not say complete while `spec.md`, `tasks.md`, or validation phase notes say proof failed or remains missing.
+- A validation phase file may be updated only if it already exists and approved `tasks.md` names it; otherwise record that it is not used in `tasks.md`/`spec.md` closeout or reopen planning if it was required and missing.
+- Master `workflow-plan.md` is not a closeout surface after approved `tasks.md`; do not update it to mirror completion or reopen state.
 - Avoid limbo states: no `mostly done`, `maybe`, `TBD`, or silent follow-up.
 
 ## Imitate
@@ -31,7 +31,7 @@ Next session context bundle: no next session; task is done
 Task state: done
 ```
 
-Copy the agreement shape: every relevant artifact has a status and no next session remains.
+Copy the agreement shape: every ledger-owned closeout artifact has a status and no next session remains.
 
 Reopen:
 
@@ -56,10 +56,10 @@ No dedicated validation phase:
 
 ```markdown
 Validation phase file: not used by approved direct-path waiver
-Routing: update existing `workflow-plan.md` and `spec.md` only; do not create `workflow-plans/validation-phase-1.md`.
+Routing: update `spec.md` and existing `tasks.md` only; do not update `workflow-plan.md` and do not create `workflow-plans/validation-phase-1.md`.
 ```
 
-Copy this when an approved direct-path waiver or workflow plan says no validation phase file is used.
+Copy this when an approved direct-path waiver or approved ledger says no validation phase file is used.
 
 ## Reject
 
@@ -85,6 +85,6 @@ Missing validation phase file created during closeout; status complete.
 Fails because closeout cannot create missing workflow process artifacts.
 
 ## Agent Traps
-- Updating the master workflow only and forgetting the existing validation phase file.
+- Updating the master workflow plan after `tasks.md` approval instead of the ledger-owned closeout artifacts.
 - Recording `Session boundary reached: yes` but leaving `Next session starts with: TBD`.
 - Calling the workflow done while existing `tasks.md` still marks a failed proof item unchecked without a reopen route.
