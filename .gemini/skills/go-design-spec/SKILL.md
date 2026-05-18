@@ -55,7 +55,8 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 ## Specialist Stance
 - `spec.md` owns decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` consumes approved decisions plus required design context for the implementation handoff.
 - Separate design depth must pass technical design review before planning; this skill may prepare the design for that gate or support a read-only review lane, but it does not make final approval decisions.
-- When supporting a technical-design-review lane, classify each finding as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`, then recommend `PASS`, `CONCERNS`, or `FAIL`.
+- When supporting a technical-design-review lane, classify each finding as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`, then recommend `PASS`, `CONCERNS`, or `FAIL` with status rationale.
+- In technical-design-review mode, judge whether planning can produce implementation-ready tasks without inventing architecture, ownership, contract, sequencing, rollout, or validation policy. If planning would need to make a design choice, the review should reopen design or specification instead of passing with a proof-only concern.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
@@ -142,6 +143,17 @@ For each planning-critical design recommendation, make clear:
 - only the downstream effects that force a new decision, handoff, or proof obligation in architecture, API, data, security, observability, reliability, or testing
 - assumptions, blockers, and reopen conditions only when they affect the current bundle or the first safe implementation slice
 - avoid widening the bundle just to produce symmetrical coverage across artifacts or domains
+
+## Technical Design Review Decision Quality
+When this skill is used for read-only technical design review, do not only list defects. Make the gate decision auditable:
+
+- Name the planning decision at risk for each material finding: ownership, interface, persistence, runtime sequence, failure/recovery, validation, rollout, dependency direction, or implementation proof.
+- Identify any real `live fork`, meaning two plausible options would materially change the task ledger. If a live fork exists and the design has not selected one, recommend `FAIL` and reopen `technical design` or `specification`.
+- For `CONCERNS`, prove the issue is a bounded risk that implementation can validate without choosing a missing design. Name the exact proof obligation and where planning should carry it.
+- For `FAIL`, name the smallest reopen target, the decision or artifact that must change, and the condition a follow-up review must verify.
+- For `PASS`, name the falsification checks performed, such as source-of-truth ownership, dependency direction, sequence/failure behavior, validation path, rollout assumptions, and conditional artifact triggers.
+- Include one strongest counterargument or simpler alternative for each material recommendation and explain why it does not change the result.
+- Downgrade taste, local style, or optional cleanup to `record_only` unless it creates concrete planning or production-readiness risk.
 
 ## Deliverable Shape
 When writing or reviewing the integrated technical-design bundle, cover:

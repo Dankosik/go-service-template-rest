@@ -34,14 +34,14 @@ Use:
 - `Exact Orchestrator Addition`: Add `Completion marker: lanes returned or local research complete; orchestrator synthesized comparable claims; pre-spec challenge run or explicitly waived with rationale`.
 
 ### Planning points to implementation too early
-`Gap`: Stop rule exists, but next action says "start coding" from planning while implementation readiness is missing.
+`Gap`: Stop rule exists, but next action says "start coding" from planning while task-ledger review or implementation readiness is missing.
 
 Why to copy: the phase boundary points at implementation without the readiness gate.
 
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `clarify_readiness_status`
-- `Exact Orchestrator Addition`: Add `Stop rule: do not hand off to implementation until implementation readiness is PASS, eligible CONCERNS, or eligible WAIVED`.
+- `Exact Orchestrator Addition`: Add `Stop rule: do not hand off to implementation until task-ledger review and implementation readiness are PASS, eligible CONCERNS, or eligible WAIVED`.
 
 ## Reject
 - "Add every future implementation step to the stop rule." Implementation steps belong in `tasks.md`.
@@ -50,5 +50,5 @@ Use:
 
 ## Agent Traps
 - Do not confuse "next action" with permission to begin the next phase in the same session.
-- Do not let a completion marker hide missing challenge/fan-in/readiness work.
+- Do not let a completion marker hide missing challenge/fan-in/task-review/readiness work.
 - Do not ask for a long phase doctrine when one concrete stop rule would repair the control gap.

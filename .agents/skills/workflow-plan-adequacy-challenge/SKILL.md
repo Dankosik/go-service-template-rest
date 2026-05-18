@@ -24,7 +24,7 @@ This skill is a read-only challenge gate over triggered workflow-control artifac
 - check consistency between the master `workflow-plan.md` and active `workflow-plans/<phase>.md` when both are triggered
 - decide whether routing, stop rules, blockers, artifact expectations, lane ownership, completion criteria, and next-session handoff are sufficient for the task's risk and execution shape
 - when the active phase is technical design review, check that the review gate scope, lane ownership, and `PASS`/`CONCERNS`/`FAIL` result path are explicit enough for planning
-- when the active phase is planning, check that technical design review status and implementation-readiness status are explicit enough for the next session
+- when the active phase is planning, check that technical design review status, task-ledger review status, and implementation-readiness status are explicit enough for the next session
 - identify missing or unclear control details that could cause bad execution, premature handoff, or later chat archaeology
 - keep findings actionable enough for the orchestrator to update the workflow-control artifacts directly
 - prefer concise, task-specific routing over generic completeness prose; short but explicit control artifacts are acceptable
@@ -48,7 +48,7 @@ Expect a compact bundle from the orchestrator:
 - any generated technical-design-review, review, or validation phase-control files whose adequacy affects handoff
 - relevant artifact status for `spec.md`, `design/`, `tasks.md`, `test-plan.md`, or `rollout.md`
 - technical-design-review status when separate design depth was triggered
-- implementation-readiness status and any recorded `CONCERNS`, `FAIL`, or `WAIVED` rationale when the current phase is planning
+- task-ledger review and implementation-readiness status, plus any recorded `CONCERNS`, `FAIL`, or `WAIVED` rationale when the current phase is planning
 - recorded direct/lean local self-check, waiver, or skip rationale, if the orchestrator claims the formal challenge is not required
 
 If the bundle is too thin to review, return a blocking input-gap finding instead of guessing.
@@ -62,7 +62,7 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - phase-local file satisfies the documented minimum for its phase without becoming a second `spec.md`, `design/`, `tasks.md`, raw review transcript, or validation log
 - artifact expectations are explicit and proportional: `spec.md`, compact design context or split `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
 - when separate design depth is triggered, technical design review is recorded as `PASS`, `CONCERNS`, `FAIL`, blocked, or pending; `CONCERNS` names accepted design risks and proof obligations; `FAIL` names whether technical design or specification reopens
-- when the current phase is planning, implementation readiness is recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
+- when the current phase is planning, task-ledger review and implementation readiness are recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
 - blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text
 - the workflow-control artifacts contain enough task-specific routing for the next session to start, and for the orchestrator to render the required chat-only next-session prompt, without recreating workflow planning from chat
 - the phase-local plan stays routing-only and does not duplicate final decisions, technical design, optional strategy notes, or the executable `tasks.md` ledger
@@ -77,7 +77,7 @@ References are compact rubrics and example banks, not exhaustive checklists. Loa
 | Artifact expectations or statuses are missing, stale, overbroad, or not proportional to the direct/lean/full execution shape. | `references/artifact-status-gap-examples.md` | Makes the challenger ask for status/rationale repair only, instead of demanding just-in-case artifacts or copying artifact content into workflow control. |
 | Research mode, lane role, owned question, single skill, order/parallelism, or fan-in path is missing or muddy. | `references/lane-ownership-and-research-mode.md` | Makes the challenger split vague agent work into lane-level routing instead of telling the orchestrator to "use more agents." |
 | Completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak. | `references/stop-rule-and-completion-marker.md` | Makes the challenger protect the phase boundary with a concrete stop/handoff rule instead of letting the session drift into the next phase. |
-| Planning-phase implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing. | `references/planning-readiness-gap-examples.md` | Makes the challenger route readiness gaps to `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` repair instead of treating "ready to code" prose as enough. |
+| Planning-phase task-ledger review or implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing. | `references/planning-readiness-gap-examples.md` | Makes the challenger route readiness gaps to `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` repair instead of treating "ready to code" prose as enough. |
 | Finding severity is unclear, especially `blocks_phase_handoff` versus `blocks_specific_lane` versus `non_blocking_but_record`. | `references/non-blocking-vs-blocking-findings.md` | Makes the challenger classify by execution impact instead of making every imperfection block the phase or every gap a nit. |
 | Workflow-control files duplicate `spec.md`, `design/`, or `tasks.md`, or a finding would ask them to do so. | `references/authority-boundary-and-duplication.md` | Makes the challenger recommend `trim_duplicate_authority` or a status-only repair instead of creating a second source of truth. |
 

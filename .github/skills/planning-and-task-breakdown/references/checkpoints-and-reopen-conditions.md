@@ -4,7 +4,7 @@
 When loaded for handoff or blocker wording, this file makes the model name executable checkpoints and exact reopen targets instead of telling the implementation session to "figure it out" or create missing workflow artifacts after coding starts.
 
 ## When To Load
-Load this when writing review checkpoints, validation checkpoints, implementation-readiness handoff, blockers, stop rules, or reopen conditions for specification, technical design, planning, or validation.
+Load this when writing review checkpoints, validation checkpoints, task-ledger review or implementation-readiness handoff, blockers, stop rules, or reopen conditions for specification, technical design, planning, or validation.
 
 ## Decision Rubric
 - A checkpoint is useful only if it changes go/no-go state, review scope, validation scope, or the next-session handoff.
@@ -17,7 +17,7 @@ Load this when writing review checkpoints, validation checkpoints, implementatio
 ```markdown
 ## Handoffs / Reopen Conditions
 
-Implementation may start only when readiness is `PASS` or eligible `CONCERNS`.
+Implementation may start only when task-ledger review and readiness are `PASS` or eligible `CONCERNS`.
 
 Reopen `technical design` if:
 - an implementation task needs a file/package ownership decision not present in `design/ownership-map.md`

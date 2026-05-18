@@ -31,8 +31,8 @@ Default decision quality:
 | Shape | Use When | Artifact Depth | Gate |
 | --- | --- | --- | --- |
 | `direct path` | Tiny, reversible, one surface, obvious validation, no protected-domain trigger. | Usually none; a short inline plan or chat note is enough. | Local first-read sanity check and fresh proof. |
-| `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and local reasoning can close the decision frontier. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. | Inline `Risk Challenge`; mandatory technical design review checkpoint when separate design depth is triggered; no mandatory subagent. |
-| `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, approved `spec.md`, triggered design bundle, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Formal challenge/review lanes as triggered, mandatory technical design review when design depth is triggered, and strict phase boundaries. |
+| `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and local reasoning can close the decision frontier. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. | Inline `Risk Challenge`; mandatory technical design review checkpoint when separate design depth is triggered; post-ledger task review/readiness gate; no mandatory subagent. |
+| `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, approved `spec.md`, triggered design bundle, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Formal challenge/review lanes as triggered, mandatory technical design review when design depth is triggered, post-ledger task review/readiness gate, and strict phase boundaries. |
 
 Use `lean local` for bounded non-trivial single-domain work. This changes the amount of workflow ceremony, not the expected production readiness of the chosen solution.
 
@@ -67,12 +67,12 @@ This boundary rule applies to:
 - specification and clarification-gate reconciliation;
 - technical design;
 - technical design review and reconciliation;
-- task planning and implementation-readiness handoff;
+- task planning, task-ledger review, and implementation-readiness handoff;
 - post-code review or reconciliation phases;
 - validation and closeout;
 - targeted reopen phases.
 
-The normal exception is implementation from an approved `tasks.md`. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation session may execute the approved ledger items and the proof named by the ledger without stopping between task IDs. After that point, workflow-control files are pre-code routing history unless the approved ledger explicitly names a separate review, validation, or reopen phase file as part of the work.
+The normal exception is implementation from an approved `tasks.md` that has passed the post-ledger task-review/readiness gate. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation session may execute the approved ledger items and the proof named by the ledger without stopping between task IDs. After that point, workflow-control files are pre-code routing history unless the approved ledger explicitly names a separate review, validation, or reopen phase file as part of the work.
 
 Direct path work has no durable phase boundary by default, so it may still complete inline with fresh proof.
 
@@ -95,7 +95,7 @@ Lean local is the default for bounded non-trivial single-domain work.
 Expected artifacts:
 
 - `spec.md`: compact decision record.
-- `tasks.md`: executable task ledger and implementation handoff.
+- `tasks.md`: executable task ledger and implementation handoff after task review passes.
 
 Conditional artifacts:
 
@@ -245,9 +245,11 @@ Progress log: after each checkpoint, update the checkbox/evidence lines; if bloc
 
 ## Implementation Handoff
 
-Implementation readiness: PASS | CONCERNS
-Consumes: `spec.md`
+Task ledger review: PASS | CONCERNS | FAIL | WAIVED
+Implementation readiness: PASS | CONCERNS | FAIL | WAIVED
+Consumes: `spec.md`, compact design or `design/`, technical-design-review result when present
 Proof: <smallest sufficient proof command or manual proof>
+Reopen target: <none | planning | specification | technical-design | technical-design-review>
 
 ## Tasks
 
@@ -271,12 +273,14 @@ Rules:
 - Use markdown checkboxes and stable task IDs.
 - Name one objective and one stopping condition so the ledger can drive a long-running `/goal` without extra chat context.
 - Keep the Goal contract derivative: it may summarize approved scope, constraints, proof, and stop rules, but must not introduce new decisions or weaken implementation readiness.
+- Write the objective and stopping condition so a later implementation handoff can use them directly in a `/goal` starter prompt covering all executable ledger tasks.
 - Point implementation at the files, docs, plans, or logs it must read first.
 - Include checkpoint/progress rules when the ledger spans multiple tasks, sessions, or proof loops.
 - Name dependencies when task order matters.
 - Name exact files when known, or narrow artifact/package surfaces when exact file choice is not knowable yet.
 - Include proof expectations and an evidence slot per task or checkpoint.
 - Do not include unresolved open questions, `TBD` decisions, or pending decision gates in `tasks.md`. A ready ledger may carry accepted risks and proof obligations, but any implementation-blocking question must reopen specification, technical design, or technical design review.
+- Treat a newly written `tasks.md` as a draft until the task-ledger review has compared it against `spec.md`, required design context, technical-design-review obligations, and triggered validation or rollout obligations.
 - For behavior changes and bug fixes, proof-first or test-first is the default.
 - For docs, config, or mechanical changes where a failing test is not useful, record the waiver as a proof obligation in `tasks.md`, not only in chat.
 
@@ -293,7 +297,7 @@ Use `workflow-plan.md` when cross-phase or multi-session state is real. It owns:
 - next-session context bundle;
 - artifact status and trigger rationale;
 - blockers, accepted assumptions, accepted risks, and reopen targets;
-- active gate status such as clarification, adequacy, or implementation readiness.
+- active gate status such as clarification, adequacy, task-ledger review, or implementation readiness.
 
 It does not own final decisions, technical design, executable tasks, raw research, or validation transcripts.
 
@@ -429,7 +433,7 @@ Technical design review is mandatory whenever separate design depth is triggered
 
 This gate is not required for direct path work or for lean-local work whose design stays inside `spec.md` `Compact Design`; the inline `Risk Challenge` covers that smaller path. It is required when lean local creates a separate `design/overview.md`, and it is required for full-orchestrated triggered design.
 
-Run technical design review after the design bundle and any triggered conditional artifacts are written, but before `tasks.md` or implementation-readiness handoff is approved.
+Run technical design review after the design bundle and any triggered conditional artifacts are written, but before `tasks.md` or the task-ledger review/readiness handoff is approved.
 
 If technical design review returns `FAIL`, the next action is a reopen of technical design or specification. After the repair, planning still waits for a follow-up technical design review verdict on the revised packet. The follow-up may be targeted to the failed findings and changed artifacts when the repair is narrow, but it must still check that adjacent design assumptions remain valid and record a new or explicitly updated gate status.
 
@@ -446,7 +450,10 @@ The review must be read-only and risk-driven:
 - inspect approved `spec.md`, the design bundle, triggered conditional artifacts, `docs/repo-architecture.md` when boundaries matter, and relevant specialist outputs;
 - check source-of-truth ownership, dependency direction, runtime sequence, failure behavior, conditional artifact triggers, validation/rollout handoff, and accidental complexity;
 - separate design defects from implementation preferences;
+- identify any live fork where two plausible design options would materially change ownership, interfaces, data shape, async or sync semantics, operability, rollout, or validation, and verify the design has selected one with a rejection reason for the other;
+- challenge the design from the first safe implementation slice: ask whether planning can create executable tasks without adding architecture, ownership, contract, sequencing, rollout, or validation policy;
 - choose the strongest justified gate status, avoiding both over-blocking on proof-only concerns and under-blocking on missing ownership, contract, sequencing, rollout, or validation decisions;
+- explain why the status is not stronger or weaker, especially for `CONCERNS` versus `FAIL`;
 - when recommending `FAIL`, name the smallest reopen target, the decision or artifact that must change, and the concrete condition that a follow-up review should verify;
 - return findings as advisory evidence for orchestrator reconciliation.
 
@@ -462,6 +469,13 @@ Review gate status:
 - `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
 - `FAIL`: planning must not start; reopen technical design or specification. Repair alone is not enough to enter planning; the revised packet needs a follow-up review verdict of `PASS` or `CONCERNS`.
 
+Gate decision discipline:
+
+- Use `PASS` only when the reviewer has tried to falsify the design against source-of-truth ownership, sequence/failure behavior, validation, rollout, and artifact-trigger expectations and found no planning blocker.
+- Use `CONCERNS` only when the design is coherent enough for planning and the remaining risk can be carried as a named accepted risk or proof obligation without asking implementation to choose a missing design decision.
+- Use `FAIL` when planning would have to choose between live design options, repair ownership or dependency direction, define missing contract/data/rollout/failure semantics, or resolve a spec/design contradiction.
+- Use `record_only` or no finding for cleaner-code preferences unless the issue changes planning safety or production-readiness proof.
+
 Classify findings by strongest planning impact:
 
 - `blocks_planning`: planning would invent or hide an important decision if it started now.
@@ -473,7 +487,7 @@ Classify findings by strongest planning impact:
 
 Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/technical-design-review.md` when a dedicated review phase needs durable routing, or the lean-local artifact that owns the review checkpoint. The record must name the reviewed packet, reviewer or lane, scope, findings, orchestrator resolution, final gate status, and planning-input obligations. Follow-up review after `FAIL` must also name the prior failed review, the revised artifacts or decisions, which blockers were closed, any remaining accepted risks or proof obligations, and the new gate status. `CONCERNS` is valid only when every accepted risk and proof obligation is named for planning. Post-code discovery of a missing required technical design review reopens the earlier phase instead of creating a new review artifact after implementation starts.
 
-## 11. Planning And Implementation Readiness
+## 11. Planning, Task Review, And Implementation Readiness
 
 Planning turns approved decisions and required design context into `tasks.md`.
 
@@ -483,18 +497,33 @@ Lean local and full orchestrated work use `tasks.md` for non-trivial implementat
 
 Planning must not invent missing design context. If exact tasking requires a missing decision, reopen the earlier concern.
 
-Approved `tasks.md` is implementation-ready by definition. It must not contain an open-question section, unresolved decision gate, `TBD`, or instruction for implementation to decide architecture, ownership, contract, sequencing, rollout, or validation policy. Reopen the owning phase and finish the design before writing or approving the ledger.
+`tasks.md` is a draft until the task-ledger review/readiness gate checks it against the approved artifact chain. This gate must run after the ledger is written or materially repaired and before implementation starts.
 
-Implementation readiness values:
+Task-ledger review must verify:
+
+- every in-scope behavior, non-goal, constraint, and accepted decision from `spec.md` is represented in executable tasking, preserved constraints, or explicit non-task rationale;
+- required compact design, `design/overview.md`, or split `design/` ownership, sequence, dependency, failure, and conditional-artifact rules are reflected in task order and proof expectations;
+- technical-design-review `CONCERNS` are carried as named accepted risks and proof obligations, and any `FAIL`, unresolved `blocks_planning`, `reopens_design`, or `reopens_spec` finding blocks handoff;
+- triggered `test-plan.md`, `rollout.md`, review phase, or validation phase obligations are either represented in the ledger or explicitly marked not expected with rationale before code starts;
+- the ledger contains no open-question section, unresolved decision gate, `TBD`, hidden design work, or instruction for implementation to decide architecture, ownership, contract, sequencing, rollout, or validation policy.
+
+If the review finds a blocker, use the smallest owning reopen target:
+
+- `planning` for missing task coverage, wrong ordering, vague proof, missing evidence fields, or workflow-control handoff gaps that do not change approved decisions or design;
+- `technical design review` when a required review verdict is missing, stale after repair, or has unresolved blocking findings;
+- `technical design` when the ledger needs ownership, sequence, dependency, rollout, validation, or conditional-artifact context the design does not provide;
+- `specification` when the missing or contradictory point changes accepted scope, behavior, invariant, public contract, non-goal, or approval boundary.
+
+Task-ledger review and implementation readiness use the same status vocabulary:
 
 - `PASS`: coding may start; no hidden architecture, ownership, contract, sequencing, rollout, or validation decision is needed for the next slice.
 - `CONCERNS`: coding may start only with named accepted risks and explicit proof obligations; these concerns must be closed as decisions, not open questions.
 - `FAIL`: coding must not start; route to the named earlier phase.
 - `WAIVED`: allowed only for tiny direct-path or explicitly user-requested prototype scope with explicit rationale.
 
-Readiness belongs in the planning handoff when planning artifacts exist. `tasks.md` may carry a short reference.
+Readiness belongs in the planning handoff when planning artifacts exist. `workflow-plan.md` and `workflow-plans/planning.md` record the gate status when those artifacts are used; `tasks.md` may carry a short reference. Implementation may start only after task-ledger review produces `PASS`, eligible `CONCERNS`, or eligible `WAIVED`.
 
-Planning also consumes the technical design review result whenever separate design depth was triggered. Missing review, blocking review, or repaired design after `FAIL` without a follow-up verdict is a planning-entry failure, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted design risks and proof obligations into the implementation-readiness handoff and the relevant ledger or companion artifacts.
+Planning also consumes the technical design review result whenever separate design depth was triggered. Missing review, blocking review, or repaired design after `FAIL` without a follow-up verdict is a planning-entry failure and a task-review blocker, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted design risks and proof obligations into the task-ledger review/readiness handoff and the relevant ledger or companion artifacts.
 
 ## 12. Coding, Review, Reconciliation, And Validation
 
@@ -583,7 +612,48 @@ The recommended prompt should be operational, not just descriptive. Include:
 - important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
 
-For implementation from approved `tasks.md`, the prompt may instead tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
+For implementation from approved `tasks.md` that has passed task-ledger review/readiness, the prompt must be a `/goal` starter prompt followed by a separate implementation brief. It may tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
+
+Implementation `/goal` handoff rules:
+
+- start the fenced prompt with a short `/goal Complete <approved objective> by executing every required task in <tasks.md path> without stopping until <verifiable stopping condition>.`;
+- derive `<approved objective>` and `<verifiable stopping condition>` from the `tasks.md` Goal Contract and implementation-readiness handoff;
+- scope the goal to all executable tasks in the approved ledger, from the recorded first task or checkpoint through final validation, not just the first task ID;
+- keep the `/goal` line as a durable objective only; do not pack artifact lists, constraints, risks, commands, or detailed execution rules into it;
+- put all execution details under `Implementation brief` so the durable goal stays stable while the working instructions remain readable;
+- include working directory, artifact read order, task-local paths, accepted constraints, accepted risks, proof obligations, and named validation commands or manual proof;
+- if readiness is `CONCERNS` or `WAIVED`, keep the `/goal` line focused on the approved objective and put the concern, waiver rationale, and required proof obligations in the implementation brief;
+- tell the next session to update only ledger-owned progress/evidence and closeout surfaces permitted by `tasks.md`;
+- if the `tasks.md` Goal Contract is missing or too vague to form a verifiable `/goal`, do not invent a broad objective; reopen planning to repair the Goal Contract or mark the implementation prompt as blocked;
+- include a blocked-stop rule: if an implementation-blocking decision, missing artifact, or failing proof cannot be resolved inside the approved ledger, stop, record the blocker in the allowed ledger/closeout surface, and return the exact reopen target instead of inventing new workflow artifacts.
+
+Recommended implementation prompt shape:
+
+```text
+/goal Complete <approved objective> by executing every required task in `<task-local>/tasks.md` without stopping until <verifiable stopping condition>.
+
+Implementation brief:
+
+Work in `<absolute repo path>`.
+Read first:
+- `<task-local>/tasks.md` because it is the approved implementation ledger and source of truth.
+- `<task-local>/spec.md` because it is the canonical decision record.
+- <additional task-local artifacts named by `tasks.md`, each with a one-line reason>.
+
+Current state:
+- Next phase: implementation.
+- Task-ledger review: <PASS | CONCERNS | WAIVED>.
+- Implementation readiness: <PASS | CONCERNS | WAIVED>.
+- First executable task/checkpoint: <T001 or named checkpoint>.
+- Accepted concerns or waiver: <none | named concern/waiver plus proof obligation>.
+
+Execution rules:
+- Execute all required tasks in `tasks.md` in dependency order through the ledger's named proof; do not stop between task IDs unless blocked.
+- Preserve the accepted constraints, non-goals, risks, and proof obligations recorded in the listed artifacts.
+- Do not create or approve missing pre-code workflow artifacts during implementation.
+- Update existing `tasks.md` progress/evidence and any ledger-owned closeout surfaces exactly as allowed by `tasks.md`.
+- If blocked by a missing decision, missing artifact, or unresolved failing proof outside the approved ledger, stop with the blocker, evidence, and exact reopen target.
+```
 
 Use no prompt when the workflow is honestly done.
 
@@ -600,6 +670,7 @@ Avoid:
 - using lean local without `spec.md`, `tasks.md`, inline `Risk Challenge`, and proof;
 - making `workflow-plans/<phase>.md` a second master plan, spec, design bundle, or task ledger;
 - planning non-trivial implementation from `spec.md` alone when design context is triggered;
+- starting implementation from an unreviewed `tasks.md` or treating a draft ledger as approval;
 - approving non-trivial specs while formal challenge is required and unresolved;
 - splitting work into MVP plus future hardening when the production-ready decision is knowable and in scope;
 - picking the fastest or simplest architecture by default instead of the best production-ready choice for the accepted scope;

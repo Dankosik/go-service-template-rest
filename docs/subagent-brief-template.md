@@ -79,7 +79,8 @@ Inspect first:
 - <task>/workflow-plan.md and <task>/workflow-plans/technical-design*.md when present
 - docs/repo-architecture.md when boundaries, ownership, dependency direction, or runtime flow matter
 Evidence: cite concrete artifact sections and source facts; label assumptions.
-Return: Findings classified as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`; required fixes or reopen targets; accepted-risk candidates; planning proof obligations; recommended gate result: PASS | CONCERNS | FAIL.
+Decision quality: for each material finding, state the planning decision at risk, the strongest counterargument or simpler alternative considered, and why the severity/gate result is not stronger or weaker.
+Return: Findings classified as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`; required fixes or reopen targets; accepted-risk candidates; planning proof obligations; recommended gate result: PASS | CONCERNS | FAIL with status rationale.
 Read-only: no edits, no git mutation, no approval authority, no task-ledger or implementation handoff changes.
 ```
 

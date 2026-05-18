@@ -84,6 +84,16 @@ Technical design review fan-in must end with one gate result:
 - `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
 - `FAIL`: planning must not start; reopen technical design or specification. After repair, a follow-up review verdict is still required before planning.
 
+Technical design review must also include decision-quality rationale. For every material finding or gate result, state:
+
+- the planning decision that would become unsafe, ambiguous, or unreviewable if the issue is ignored;
+- whether the issue is a real design defect, a missing approved decision, a bounded implementation proof, or only an implementation preference;
+- the strongest plausible counterargument or simpler alternative considered, and why it does or does not change the recommendation;
+- why the chosen gate result is not stronger or weaker, such as why a finding is `CONCERNS` instead of `FAIL`, or `record_only` instead of `proof_obligation`;
+- for `PASS`, the main falsification checks performed and why they did not expose a planning blocker.
+
+Do not let design review become taste review. A stylistic preference, preferred abstraction shape, or "could be cleaner" concern is not a blocker unless it creates a concrete ownership, contract, sequencing, failure-mode, rollout, operability, or validation risk for planning. Conversely, do not downgrade a missing production-readiness decision to a proof obligation when planning would have to invent the decision.
+
 Classify each technical design review finding by strongest planning impact:
 
 - `blocks_planning`: planning would invent or hide an important decision if it started now.

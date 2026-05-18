@@ -1,6 +1,6 @@
 ---
 name: planning-session
-description: "Own a session dedicated only to task breakdown for this repository when a distinct planning checkpoint is triggered. Use when approved `spec.md` plus required compact or split design context and any mandatory technical-design-review gate are ready to turn into a `tasks.md` implementation handoff, plus `test-plan.md` or `rollout.md` only when truly triggered, and when the implementation-readiness gate must be completed before code starts, with any triggered workflow-control artifacts updated without drifting into implementation. Skip direct-path inline plans and tasks whose spec, design context, or required technical design review is still unstable."
+description: "Own a session dedicated only to task breakdown for this repository when a distinct planning checkpoint is triggered. Use when approved `spec.md` plus required compact or split design context and any mandatory technical-design-review gate are ready to turn into a `tasks.md` implementation handoff, plus `test-plan.md` or `rollout.md` only when truly triggered, and when the post-ledger task review/readiness gate must check `tasks.md` before code starts, with any triggered workflow-control artifacts updated without drifting into implementation. Skip direct-path inline plans and tasks whose spec, design context, or required technical design review is still unstable."
 ---
 
 # Planning Session
@@ -23,7 +23,7 @@ This wrapper makes task breakdown explicit and stoppable; it does not reopen `sp
 - any mandatory technical design review for separate design depth is complete or explicitly blocks planning
 - the orchestrator must turn approved `spec.md` plus required design context into executable planning artifacts for a non-trivial change
 - `tasks.md` should become the executable task ledger and final implementation handoff before any non-trivial implementation session starts
-- implementation readiness must be checked and recorded before handoff to implementation
+- the completed `tasks.md` must be reviewed against `spec.md`, required design context, technical-design-review obligations, and triggered validation or rollout obligations before handoff to implementation
 - `test-plan.md` or `rollout.md` may be needed because validation or rollout obligations are too large to fit cleanly inside `tasks.md`
 - master `workflow-plan.md` and `workflow-plans/planning.md` need the planning checkpoint completed or repaired before handoff into implementation
 
@@ -86,7 +86,7 @@ Routing table:
 | --- | --- | --- |
 | `references/planning-session-readiness.md` | Planning inputs are missing, stale, contradictory, or not yet checked before `tasks.md` writes. | Blocks or reopens upstream instead of planning from `spec.md` alone or inventing missing design context. |
 | `references/allowed-writes-and-prohibited-actions.md` | The write boundary is contested, or the user asks to bundle planning with code, tests, `spec.md`, `design/`, review, or validation work. | Narrows the session to planning-only writes instead of editing downstream artifacts or creating just-in-case files. |
-| `references/implementation-readiness-gate.md` | Assigning `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`, especially when a handoff feels almost ready. | Chooses a gate status from concrete blockers and proof obligations instead of optimistic `PASS` or vague concern wording. |
+| `references/implementation-readiness-gate.md` | Reviewing completed `tasks.md` and assigning task-ledger review / implementation-readiness `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`, especially when a handoff feels almost ready. | Chooses a gate status from concrete blockers, spec/design alignment, and proof obligations instead of optimistic `PASS` or vague concern wording. |
 | `references/workflow-plan-update-examples.md` | Updating master `workflow-plan.md` planning state, artifact status, adequacy challenge status, or next-session handoff. | Records cross-phase state in the master artifact instead of leaving it in chat or only in `workflow-plans/planning.md`. |
 | `references/phase-control-file-examples.md` | Creating or repairing `workflow-plans/planning.md` or pre-code phase-control files for named review or validation phases. | Creates only named routing skeletons instead of just-in-case phase files or duplicate `tasks.md` content. |
 | `references/session-boundary-and-stop-rules.md` | Closing the planning session or deciding whether the next action is implementation, a reopen target, or stop. | Stops at the planning boundary with a named next session instead of starting T001 or declaring completion with an incomplete handoff. |
@@ -120,7 +120,7 @@ Do not:
 - `planning-and-task-breakdown` remains the deeper planning method for dependency ordering, task sizing, acceptance criteria, checkpoints, and verification detail
 - `tasks.md` owns the executable checkbox ledger and final implementation handoff derived from `spec.md` plus required compact or split design context
 - `tasks.md` must belong to the active task-local bundle. A repository-root or unrelated ledger is not the current handoff unless workflow control explicitly reopens it and records the resume route.
-- implementation readiness is the planning-phase exit gate; it uses `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` and is not a separate workflow phase
+- task-ledger review is the post-ledger pre-implementation stage inside the planning checkpoint unless workflow control explicitly records a separate review phase; it compares `tasks.md` to the approved artifact chain before readiness can become `PASS`, eligible `CONCERNS`, or eligible `WAIVED`
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - technical design review is the required pre-planning gate for separate design depth; planning must not downgrade it into an optional note or infer it from the design author's own handoff
 - before full-orchestrated, high-risk, complex workflow-control, or agent-backed handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, and any named review or validation phase-control files
@@ -195,16 +195,21 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - make the planning phase status explicit, and use a separate routing state when planning reopens an earlier phase
 - record the next session start point without beginning that session here
 
-### 7. Handoff Into Implementation
+### 7. Review `tasks.md` And Handoff Into Implementation
+- after expected `tasks.md` and any triggered companion planning artifacts are ready, run the task-ledger review before recording implementation readiness
+- compare `tasks.md` to `spec.md`, compact or split design context, technical-design-review obligations, triggered `test-plan.md` or `rollout.md`, and any required review or validation phase-control files
+- verify that every accepted in-scope behavior, preserved constraint, accepted risk, proof obligation, dependency, and reopen condition is either represented in executable tasking or explicitly not expected with rationale
+- if the review finds task coverage, order, proof, evidence-field, or workflow-control gaps that do not alter approved decisions, repair planning and rerun the review
+- if the review finds missing or contradictory behavior, ownership, sequence, rollout, validation, or review-gate decisions, set readiness to `FAIL` and route to `specification`, `technical design`, or `technical design review` as the owning phase
 - if planning is complete, set `Next session starts with` to the first task ID or explicit implementation checkpoint from `tasks.md`
 - record whether later review or validation phase files are expected
 - record whether `tasks.md` is approved, draft, missing, or explicitly waived for a tiny/direct-path exception
-- run the implementation-readiness gate after expected `tasks.md` is ready
+- record the task-ledger review result before or together with the implementation-readiness gate
 - set readiness to `PASS` only when the next implementation slice can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions; required artifacts and proof path must already support that slice
 - set readiness to `CONCERNS` only when implementation may start with named accepted risks and explicit proof obligations that the next slice can satisfy without replanning
 - set readiness to `FAIL` when implementation must not start, and name the earlier phase to reopen
 - set readiness to `WAIVED` only for tiny, direct-path, or prototype work with explicit rationale and scope
-- record readiness status in `workflow-plan.md`, the gate result and stop or handoff rule in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful
+- record task-ledger review and readiness status in `workflow-plan.md`, the gate result and stop or handoff rule in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful
 - keep implementation entry prerequisites visible so the next session does not need to re-plan
 - for full-orchestrated, high-risk, complex workflow-control, or agent-backed work, invoke one read-only challenger lane with exactly one skill: `workflow-plan-adequacy-challenge`
 - pass the task frame, execution shape, master workflow plan, `workflow-plans/planning.md`, any named review or validation phase-control files, planning artifact status, blockers, and proposed next-session handoff
@@ -225,6 +230,7 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - accepted design risks and review proof obligations carried forward when technical-design-review status is `CONCERNS`
 - whether later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` were created now because named multi-session routing needs them, are explicitly not expected with rationale, or still remain blocked on a reopen
 - implementation-readiness status as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
+- task-ledger review result as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
 - named accepted risks and proof obligations when readiness is `CONCERNS`
 - named earlier phase when readiness is `FAIL`
 - waiver rationale and scope when readiness is `WAIVED`
@@ -266,6 +272,11 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded first task, implementation checkpoint, or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- when the next session starts implementation from an approved `tasks.md` whose task-ledger review/readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, make the fenced prompt start with a short `/goal Complete ... without stopping until ...` line
+- for that implementation prompt, set the goal objective to executing every required task in the approved `tasks.md` through its named proof and stopping condition, not just beginning the first task ID
+- keep artifact lists, constraints, concerns, waiver rationale, proof commands, and execution rules out of the `/goal` line itself
+- after the `/goal` line, add `Implementation brief:` and include working directory, read-first artifact order, readiness status, first executable task or checkpoint, accepted constraints or risks, proof obligations, ledger progress-update rule, and blocked-stop/reopen rule
+- if the `tasks.md` Goal Contract is missing or too vague to form a verifiable `/goal`, stop and reopen planning instead of inventing a broad objective in chat
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Planning Completion Criteria
@@ -279,13 +290,14 @@ Planning is complete when:
 - review findings classified as `blocks_planning`, `reopens_design`, or `reopens_spec` are resolved, explicitly rerouted, or still block planning rather than being hidden inside optimistic tasks
 - any review or validation phase workflow files that named multi-session routing requires were created before implementation begins, or their absence is recorded as a reopen blocker
 - implementation-readiness gate is `PASS`, `CONCERNS` with named accepted risks and proof obligations, or eligible `WAIVED`; `FAIL` leaves planning blocked or reopened
+- task-ledger review confirms `tasks.md` matches approved `spec.md`, required design context, technical-design-review obligations, and triggered validation or rollout obligations; `FAIL` names the owning reopen target
 - master and phase-local workflow artifacts agree on planning status, blockers, and the next session start point
 - required workflow plan adequacy challenge findings are reconciled, or an eligible direct/lean skip rationale is explicit
 - the next session can begin the first task or explicit implementation checkpoint without silently reopening spec or design
 - out-of-scope implications are recorded explicitly instead of being forced into new planning blockers, while in-scope target-state work is included in the ledger or routed back to the owning earlier phase
 
 ## Stop Condition
-The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.
+The session is complete when the planning artifacts and workflow handoff are consistent enough that implementation can begin in the next session, task-ledger review and implementation readiness are `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, required adequacy-challenge findings are reconciled or explicitly waived, and no implementation work has started in the current one.
 
 ## Escalate When
 Escalate instead of forcing output when:
