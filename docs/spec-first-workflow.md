@@ -272,6 +272,7 @@ Rules:
 
 - Use markdown checkboxes and stable task IDs.
 - Name one objective and one stopping condition so the ledger can drive a long-running `/goal` without extra chat context.
+- Treat non-trivial `tasks.md` as Goal-ready by default in this repository. That means the ledger should contain the Goal Contract fields a later handoff needs; it does not mean a Goal prompt is rendered before the ledger passes review/readiness.
 - Keep the Goal contract derivative: it may summarize approved scope, constraints, proof, and stop rules, but must not introduce new decisions or weaken implementation readiness.
 - Write the objective and stopping condition so a later implementation handoff can explicitly ask the next session to set a Codex Goal covering all executable ledger tasks.
 - Point implementation at the files, docs, plans, or logs it must read first.
@@ -612,10 +613,12 @@ The recommended prompt should be operational, not just descriptive. Include:
 - important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
 
-For implementation from approved `tasks.md` that has passed task-ledger review/readiness, the prompt must explicitly tell the next session to set a Codex Goal first, then execute all required tasks in the approved ledger from start to finish. It must not rely on a slash command being parsed from the handoff. It may tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
+For implementation from approved `tasks.md` that has passed task-ledger review/readiness, compose the prompt with `.agents/skills/codex-goal-prompt-composer/SKILL.md`. The prompt must explicitly tell the next session to set a Codex Goal first, then execute all required tasks in the approved ledger from start to finish. It must not rely on a slash command being parsed from the handoff. It may tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
 
 Implementation goal handoff rules:
 
+- use `codex-goal-prompt-composer` whenever the recommended next-session prompt sets a Codex Goal;
+- apply that skill's Goal Line Quality Gate before returning the prompt;
 - start the fenced prompt with `First, set a Codex Goal for this session:` followed by a short durable goal objective;
 - the next paragraph must say `After the goal is set, execute every required task in <tasks.md path> from start to finish`;
 - derive `<approved objective>` and `<verifiable stopping condition>` from the `tasks.md` Goal Contract and implementation-readiness handoff;

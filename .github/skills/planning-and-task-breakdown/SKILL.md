@@ -107,9 +107,11 @@ Reference snippets are patterns, not decisions. If an example would require an a
 
 ### 4. Write The Task Ledger
 - Use `tasks.md` for executable task checkboxes and the final implementation handoff.
-- Start the ledger with a compact Goal contract when implementation may run as a long-lived or resumed Codex goal: objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule.
+- Treat non-trivial `tasks.md` as Goal-ready by default in this repository: start the ledger with a compact Goal contract unless the work is explicitly tiny/direct and not meant to become a Goal handoff.
+- The Goal contract includes objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule.
 - Keep the Goal contract derivative of approved artifacts. It must not introduce new scope, new design decisions, or permission to create missing pre-code workflow artifacts during implementation.
 - Write the Goal contract so the planning handoff can reuse it directly as a concise Codex Goal objective for the next implementation session, covering every executable task in the approved ledger through final validation.
+- When rendering the final chat implementation handoff from that Goal contract, use `.agents/skills/codex-goal-prompt-composer/SKILL.md`.
 - Keep detailed artifact lists, constraints, accepted concerns, proof commands, and progress rules in the Goal contract fields and handoff metadata, not inside the objective sentence itself.
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
 - Include an evidence field for each task or checkpoint when the implementer is expected to update progress during execution.

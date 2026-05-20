@@ -272,7 +272,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded first task, implementation checkpoint, or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
-- when the next session starts implementation from an approved `tasks.md` whose task-ledger review/readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, make the fenced prompt start with `First, set a Codex Goal for this session:`
+- when the next session starts implementation from an approved `tasks.md` whose task-ledger review/readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, use `.agents/skills/codex-goal-prompt-composer/SKILL.md` and make the fenced prompt start with `First, set a Codex Goal for this session:`
 - for that implementation prompt, the goal objective must say to execute every required task in the approved `tasks.md` through its named proof and stopping condition, not just begin the first task ID
 - immediately after the goal objective, say `After the goal is set, execute every required task in <tasks.md path> from start to finish`
 - keep artifact lists, constraints, concerns, waiver rationale, proof commands, and execution rules out of the goal objective itself

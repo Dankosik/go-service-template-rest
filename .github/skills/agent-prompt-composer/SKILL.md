@@ -35,6 +35,7 @@ When this skill is invoked through a wrapper prompt that says where to read inpu
 - Label repository evidence carefully. A path can be user-mentioned, confirmed by bounded lookup, or inferred as likely; do not promote one category into another.
 - Add repository context only when it materially helps the downstream model start in the right place.
 - When composing a prompt for an independent next session, assume that session cannot see this chat. Include the smallest context capsule that explains the objective, current state, exact read-first artifacts, non-obvious decisions, blockers, proof obligations, and stop rule needed for that one next action.
+- When the requested handoff sets a Codex Goal, use `.agents/skills/codex-goal-prompt-composer/SKILL.md` for the Goal-first prompt shape instead of treating it as generic prompt polishing.
 - Make uncertainty visible without turning the handoff into a questionnaire by default.
 - Compose the final English handoff so a capable coding agent can act without re-interpreting the raw user input from scratch.
 
