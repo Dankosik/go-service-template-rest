@@ -25,6 +25,7 @@ Default decision quality:
 - Temporary bridges, compatibility shims, feature flags, canaries, or staged rollout are not default recommendations. Use them only when the user requests staging or a live external constraint makes a one-step target-state change unsafe or impossible.
 - When staging is unavoidable, record the target state, exit criteria, removal/proof tasks, and owner in the owning artifact as part of the accepted scope. Do not leave the cleanup as a follow-up or future-hardening note.
 - Scope cuts are allowed only as clear non-goals, constraints, or accepted risks. They are not a license to defer required architecture, ownership, contract, reliability, security, or validation decisions.
+- When design or code calls another microservice, verify the provider's current contract from its sibling repository, generated contract, published spec, or live contract endpoint before approval or completion, and record the source used in the owning artifact or proof.
 
 ## 2. Execution Shapes
 
