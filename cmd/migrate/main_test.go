@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // Uses process-wide cwd and APP__ environment cleanup.
 func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) {
 	clearPrefixedEnvForTest(t, "APP__")
 
@@ -64,6 +65,7 @@ func TestRunReturnsConfigLoadError(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Uses process-wide cwd through t.Chdir.
 func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if err := os.MkdirAll("env/migrations", 0o755); err != nil {

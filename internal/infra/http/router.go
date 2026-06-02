@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/billing-service/internal/api"
+	"github.com/Dankosik/billing-service/internal/infra/telemetry"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -17,6 +17,7 @@ import (
 type RouterConfig struct {
 	MaxBodyBytes     int64
 	ReadinessTimeout time.Duration
+	ServiceAuth      ServiceAuthConfig
 }
 
 func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) (http.Handler, error) {
@@ -30,6 +31,14 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		return nil, fmt.Errorf("http router: max body bytes must be > 0")
+	}
+
+	authenticator := strict.serviceAuthenticator
+	if cfg.ServiceAuth.Enabled && authenticator == nil {
+		authenticator, err = NewRemoteJWKSAuthenticator(cfg.ServiceAuth)
+		if err != nil {
+			return nil, fmt.Errorf("http router: service auth: %w", err)
+		}
 	}
 
 	server := api.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
@@ -47,7 +56,11 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		}),
 	)
 
-	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware))
+	middlewares := []api.MiddlewareFunc{captureRouteLabelMiddleware}
+	if authenticator != nil || cfg.ServiceAuth.Enabled {
+		middlewares = []api.MiddlewareFunc{protectedServiceAuthMiddleware(authenticator), captureRouteLabelMiddleware}
+	}
+	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, middlewares...))
 
 	// Serve /metrics directly on the root router to avoid full payload buffering in strict handler path.
 	metricsHandler := captureRouteLabelMiddleware(strict.metrics.Handler())

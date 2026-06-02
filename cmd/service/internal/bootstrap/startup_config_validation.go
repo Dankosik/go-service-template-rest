@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/Dankosik/billing-service/internal/config"
 )
 
 func validateStartupBudgetCompatibility(cfg config.Config) error {
@@ -24,6 +24,11 @@ func validateStartupBudgetCompatibility(cfg config.Config) error {
 	}
 	if cfg.Mongo.Enabled {
 		if err := validateStartupTimeoutBudget("mongo.connect_timeout", cfg.Mongo.ConnectTimeout, mongoProbeBudget); err != nil {
+			return err
+		}
+	}
+	if cfg.Redpanda.Enabled {
+		if err := validateStartupTimeoutBudget("redpanda.healthcheck_timeout", cfg.Redpanda.HealthcheckTimeout, redpandaProbeBudget); err != nil {
 			return err
 		}
 	}

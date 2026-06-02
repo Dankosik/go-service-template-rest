@@ -13,11 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/app/health"
-	"github.com/example/go-service-template-rest/internal/app/ping"
-	"github.com/example/go-service-template-rest/internal/config"
-	httpx "github.com/example/go-service-template-rest/internal/infra/http"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/billing-service/internal/app/billingauthority"
+	"github.com/Dankosik/billing-service/internal/app/health"
+	"github.com/Dankosik/billing-service/internal/app/ping"
+	"github.com/Dankosik/billing-service/internal/config"
+	httpx "github.com/Dankosik/billing-service/internal/infra/http"
+	"github.com/Dankosik/billing-service/internal/infra/postgres"
+	"github.com/Dankosik/billing-service/internal/infra/telemetry"
 )
 
 const (
@@ -33,6 +35,7 @@ const (
 	postgresProbeBudget = 5 * time.Second
 	redisProbeBudget    = 3 * time.Second
 	mongoProbeBudget    = 5 * time.Second
+	redpandaProbeBudget = 3 * time.Second
 
 	startupReadinessHeadroom = startupFailFastThreshold
 
@@ -65,7 +68,7 @@ func Run(args []string) (runErr error) {
 	}
 
 	bootstrapLog := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})).With(
-		"service.name", "service",
+		"service.name", "billing-service",
 		"service.version", "unknown",
 		"deployment.environment.name", "unknown",
 	)
@@ -146,18 +149,29 @@ func Run(args []string) (runErr error) {
 		}
 		return ingressGuard.Check(ctx)
 	}
+	authorityHandler, err := buildBillingAuthorityHandler(bootstrap.cfg, probeOutcome.postgresPool)
+	if err != nil {
+		return err
+	}
 
 	handler, err := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
 			Health:        healthSvc,
 			Ping:          pingSvc,
+			Authority:     authorityHandler,
 			ReadinessGate: externalReadinessGate,
 		},
 		metrics,
 		httpx.RouterConfig{
 			MaxBodyBytes:     bootstrap.cfg.HTTP.MaxBodyBytes,
 			ReadinessTimeout: bootstrap.cfg.HTTP.ReadinessTimeout,
+			ServiceAuth: httpx.ServiceAuthConfig{
+				Enabled:  bootstrap.cfg.ServiceAuth.Enabled,
+				Issuer:   bootstrap.cfg.ServiceAuth.Issuer,
+				Audience: bootstrap.cfg.ServiceAuth.Audience,
+				JWKSURL:  bootstrap.cfg.ServiceAuth.JWKSURL,
+			},
 		},
 	)
 	if err != nil {
@@ -185,6 +199,28 @@ func Run(args []string) (runErr error) {
 	})
 }
 
+func buildBillingAuthorityHandler(cfg config.Config, pool *postgres.Pool) (httpx.BillingAuthorityService, error) {
+	if !cfg.Authority.Enabled {
+		return nil, nil //nolint:nilnil // Disabled authority intentionally leaves routes fail-closed at handler level.
+	}
+	if pool == nil {
+		return nil, fmt.Errorf("balance usage authority runtime: postgres pool is required")
+	}
+	repository, err := postgres.NewBillingAuthorityRepository(pool)
+	if err != nil {
+		return nil, fmt.Errorf("balance usage authority runtime: build repository: %w", err)
+	}
+	service, err := billingauthority.New(repository)
+	if err != nil {
+		return nil, fmt.Errorf("balance usage authority runtime: build service: %w", err)
+	}
+	adapter, err := httpx.NewBillingAuthorityHTTPAdapter(service)
+	if err != nil {
+		return nil, fmt.Errorf("balance usage authority runtime: build http adapter: %w", err)
+	}
+	return adapter, nil
+}
+
 func releaseSignalNotificationOnDone(ctx context.Context, stop context.CancelFunc) context.CancelFunc {
 	released := make(chan struct{})
 	var releaseOnce sync.Once
@@ -209,7 +245,7 @@ func releaseSignalNotificationOnDone(ctx context.Context, stop context.CancelFun
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	var overlays overlayPathsFlag
 
-	flags := flag.NewFlagSet("service", flag.ContinueOnError)
+	flags := flag.NewFlagSet("billing-service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 
 	configPath := flags.String("config", "", "path to base config file")

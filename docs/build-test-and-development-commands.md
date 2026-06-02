@@ -1,6 +1,6 @@
 # Build, Test, and Development Commands
 
-This document is the detailed command reference for local development in `go-service-template-rest`.
+This document is the detailed command reference for local development in `billing-service`.
 
 ## Scope
 

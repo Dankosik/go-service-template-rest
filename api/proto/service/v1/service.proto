@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package service.v1;
+package billing.v1;
 
-option go_package = "github.com/example/go-service-template-rest/internal/api/service/v1;servicev1";
+option go_package = "github.com/Dankosik/billing-service/internal/api/service/v1;billingv1";
 
-service TemplateService {
+service BillingService {
   rpc Ping (PingRequest) returns (PingResponse);
 }
 

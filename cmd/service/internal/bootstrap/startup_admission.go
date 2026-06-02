@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/billing-service/internal/infra/telemetry"
 )
 
 var errStartupAdmissionPending = errors.New("startup admission is not ready")

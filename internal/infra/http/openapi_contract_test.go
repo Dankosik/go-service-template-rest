@@ -7,14 +7,15 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/app/health"
-	"github.com/example/go-service-template-rest/internal/app/ping"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/billing-service/internal/api"
+	"github.com/Dankosik/billing-service/internal/app/health"
+	"github.com/Dankosik/billing-service/internal/app/ping"
+	"github.com/Dankosik/billing-service/internal/infra/telemetry"
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
@@ -331,7 +332,52 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 	}
 }
 
-const securityDecisionExtension = "x-security-decision"
+func TestOpenAPIRuntimeContractProtectedBillingRoutesDeclareExpectedScopes(t *testing.T) {
+	t.Parallel()
+
+	swagger := mustOpenAPISwagger(t)
+	expectedScopes := map[string][]string{
+		"POST /internal/billing/v1/accounts/resolve":                  {"billing.accounts.resolve"},
+		"GET /internal/billing/v1/accounts/{accountScopeKey}/balance": {"billing.balances.read"},
+		"POST /internal/billing/v1/usage/reservations":                {"billing.usage.write"},
+		"POST /internal/billing/v1/usage/finalizations":               {"billing.usage.write"},
+		"POST /internal/billing/v1/usage/write-offs":                  {"billing.usage.write"},
+		"POST /internal/billing/v1/usage/reversals":                   {"billing.usage.write"},
+		"POST /internal/billing/v1/usage/readback":                    {"billing.usage.read"},
+		"POST /internal/billing/v1/operations/readback":               {"billing.operations.read"},
+		"GET /internal/billing/v1/reconciliation/cases":               {"billing.reconciliation.read"},
+		"GET /internal/billing/v1/admin/accounts/{accountScopeKey}/ledger": {
+			"billing.admin.read",
+		},
+		"GET /internal/billing/v1/admin/accounts/{accountScopeKey}/exposure": {
+			"billing.admin.read",
+		},
+	}
+
+	for route, wantScopes := range expectedScopes {
+		t.Run(route, func(t *testing.T) {
+			t.Parallel()
+
+			method, path, ok := strings.Cut(route, " ")
+			if !ok {
+				t.Fatalf("route %q missing method/path separator", route)
+			}
+			operation := openAPIOperation(t, swagger, method, path)
+			gotScopes, err := operationRouteScopes(operation)
+			if err != nil {
+				t.Fatalf("route scopes: %v", err)
+			}
+			if !reflect.DeepEqual(gotScopes, wantScopes) {
+				t.Fatalf("x-route-scopes = %v, want %v", gotScopes, wantScopes)
+			}
+		})
+	}
+}
+
+const (
+	securityDecisionExtension = "x-security-decision"
+	routeScopesExtension      = "x-route-scopes"
+)
 
 const (
 	securityExposurePublic                     = "public"
@@ -430,6 +476,54 @@ func mustOpenAPISwagger(t *testing.T) *openapi3.T {
 		t.Fatalf("GetSwagger() error = %v", err)
 	}
 	return swagger
+}
+
+func openAPIOperation(t *testing.T, swagger *openapi3.T, method, path string) *openapi3.Operation {
+	t.Helper()
+
+	if swagger == nil || swagger.Paths == nil {
+		t.Fatal("OpenAPI paths are nil")
+	}
+	item := swagger.Paths.Value(path)
+	if item == nil {
+		t.Fatalf("OpenAPI path %q not found", path)
+	}
+	var operation *openapi3.Operation
+	switch method {
+	case http.MethodGet:
+		operation = item.Get
+	case http.MethodPost:
+		operation = item.Post
+	default:
+		t.Fatalf("unsupported test method %q", method)
+	}
+	if operation == nil {
+		t.Fatalf("OpenAPI operation %s %s not found", method, path)
+	}
+	return operation
+}
+
+func operationRouteScopes(operation *openapi3.Operation) ([]string, error) {
+	if operation == nil {
+		return nil, fmt.Errorf("operation is nil")
+	}
+	raw, ok := operation.Extensions[routeScopesExtension]
+	if !ok {
+		return nil, fmt.Errorf("missing %s", routeScopesExtension)
+	}
+	values, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be an array", routeScopesExtension)
+	}
+	scopes := make([]string, 0, len(values))
+	for _, value := range values {
+		scope, ok := value.(string)
+		if !ok || strings.TrimSpace(scope) == "" {
+			return nil, fmt.Errorf("%s contains non-string or empty scope", routeScopesExtension)
+		}
+		scopes = append(scopes, scope)
+	}
+	return scopes, nil
 }
 
 type failingProbe struct {

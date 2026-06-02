@@ -34,6 +34,22 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	serviceAuthCfg, err := readServiceAuthSnapshot(k)
+	if err != nil {
+		return Config{}, err
+	}
+	redpandaCfg, err := readRedpandaSnapshot(k)
+	if err != nil {
+		return Config{}, err
+	}
+	microleaseCfg, err := readMicroleaseSnapshot(k)
+	if err != nil {
+		return Config{}, err
+	}
+	authorityCfg, err := readAuthoritySnapshot(k)
+	if err != nil {
+		return Config{}, err
+	}
 	featureFlagsCfg, err := readFeatureFlagsSnapshot(k)
 	if err != nil {
 		return Config{}, err
@@ -47,6 +63,10 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 		Postgres:      postgresCfg,
 		Redis:         redisCfg,
 		Mongo:         mongoCfg,
+		ServiceAuth:   serviceAuthCfg,
+		Redpanda:      redpandaCfg,
+		Microlease:    microleaseCfg,
+		Authority:     authorityCfg,
 		FeatureFlags:  featureFlagsCfg,
 	}, nil
 }
@@ -284,6 +304,177 @@ func readMongoSnapshot(k *koanf.Koanf) (MongoConfig, error) {
 	}, nil
 }
 
+func readServiceAuthSnapshot(k *koanf.Koanf) (ServiceAuthConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "service_auth.enabled", &enabled); err != nil {
+		return ServiceAuthConfig{}, err
+	}
+	return ServiceAuthConfig{
+		Enabled:  enabled,
+		Issuer:   readTrimmedConfigString(k, "service_auth.issuer"),
+		Audience: readTrimmedConfigString(k, "service_auth.audience"),
+		JWKSURL:  readTrimmedConfigString(k, "service_auth.jwks_url"),
+	}, nil
+}
+
+func readRedpandaSnapshot(k *koanf.Koanf) (RedpandaConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "redpanda.enabled", &enabled); err != nil {
+		return RedpandaConfig{}, err
+	}
+	var healthcheckTimeout time.Duration
+	if err := readDurationInto(k, "redpanda.healthcheck_timeout", &healthcheckTimeout); err != nil {
+		return RedpandaConfig{}, err
+	}
+	return RedpandaConfig{
+		Enabled:            enabled,
+		Brokers:            readTrimmedConfigString(k, "redpanda.brokers"),
+		TerminalTopic:      readTrimmedConfigString(k, "redpanda.terminal_topic"),
+		CheckpointTopic:    readTrimmedConfigString(k, "redpanda.checkpoint_topic"),
+		CloseTopic:         readTrimmedConfigString(k, "redpanda.close_topic"),
+		BillingFactsTopic:  readTrimmedConfigString(k, "redpanda.billing_facts_topic"),
+		ConsumerGroup:      readTrimmedConfigString(k, "redpanda.consumer_group"),
+		HealthcheckTimeout: healthcheckTimeout,
+	}, nil
+}
+
+func readMicroleaseSnapshot(k *koanf.Koanf) (MicroleaseConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "microlease.enabled", &enabled); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var workerEnabled bool
+	if err := readBoolInto(k, "microlease.worker_enabled", &workerEnabled); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var maxMicrolease int64
+	if err := readInt64Into(k, "microlease.max_microlease_usd_atoms", &maxMicrolease); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var exposureCap int64
+	if err := readInt64Into(k, "microlease.account_microlease_exposure_cap_usd_atoms", &exposureCap); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var safetyFloor int64
+	if err := readInt64Into(k, "microlease.min_safety_floor_usd_atoms", &safetyFloor); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	ttl, err := readDuration(k, "microlease.ttl")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	cutoff, err := readDuration(k, "microlease.debit_cutoff_before_expiry")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	terminalDeadline, err := readDuration(k, "microlease.terminal_deadline")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	warningAge, err := readDuration(k, "microlease.stale_debit_warning_age")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	criticalAge, err := readDuration(k, "microlease.stale_debit_critical_age")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	reconciliationSLA, err := readDuration(k, "microlease.reconciliation_sla")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	renewalInterval, err := readDuration(k, "microlease.admission_control_renewal_interval")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	maxStaleness, err := readDuration(k, "microlease.admission_control_max_staleness")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	maxIssueDuration, err := readDuration(k, "microlease.max_issue_transaction_duration")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	maxTerminalDuration, err := readDuration(k, "microlease.max_terminal_transaction_duration")
+	if err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var refillThreshold int
+	if err := readIntInto(k, "microlease.refill_threshold_percent", &refillThreshold); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var scanBatch int
+	if err := readIntInto(k, "microlease.max_reconciliation_scan_batch_size", &scanBatch); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	var riskAccepted bool
+	if err := readBoolInto(k, "microlease.first_rollout_risk_acceptance_recorded", &riskAccepted); err != nil {
+		return MicroleaseConfig{}, err
+	}
+	return MicroleaseConfig{
+		Enabled:                            enabled,
+		WorkerEnabled:                      workerEnabled,
+		DefaultAdmissionState:              readTrimmedConfigString(k, "microlease.default_admission_state"),
+		MaxMicroleaseUSDAtoms:              maxMicrolease,
+		AccountMicroleaseExposureCapAtoms:  exposureCap,
+		MinSafetyFloorUSDAtoms:             safetyFloor,
+		TTL:                                ttl,
+		DebitCutoffBeforeExpiry:            cutoff,
+		TerminalDeadline:                   terminalDeadline,
+		StaleDebitWarningAge:               warningAge,
+		StaleDebitCriticalAge:              criticalAge,
+		ReconciliationSLA:                  reconciliationSLA,
+		AdmissionControlRenewalInterval:    renewalInterval,
+		AdmissionControlMaxStaleness:       maxStaleness,
+		RefillThresholdPercent:             refillThreshold,
+		MaxIssueTransactionDuration:        maxIssueDuration,
+		MaxTerminalTransactionDuration:     maxTerminalDuration,
+		MaxReconciliationScanBatchSize:     scanBatch,
+		FirstRolloutRiskAcceptanceRecorded: riskAccepted,
+	}, nil
+}
+
+func readAuthoritySnapshot(k *koanf.Koanf) (AuthorityConfig, error) {
+	var enabled bool
+	if err := readBoolInto(k, "balance_usage_authority.enabled", &enabled); err != nil {
+		return AuthorityConfig{}, err
+	}
+	var requireWorkerReady bool
+	if err := readBoolInto(k, "balance_usage_authority.require_worker_ready", &requireWorkerReady); err != nil {
+		return AuthorityConfig{}, err
+	}
+	var requireRedpandaReady bool
+	if err := readBoolInto(k, "balance_usage_authority.require_redpanda_ready", &requireRedpandaReady); err != nil {
+		return AuthorityConfig{}, err
+	}
+	var requireAdmissionControlFresh bool
+	if err := readBoolInto(k, "balance_usage_authority.require_admission_control_fresh", &requireAdmissionControlFresh); err != nil {
+		return AuthorityConfig{}, err
+	}
+	maxStaleness, err := readDuration(k, "balance_usage_authority.max_admission_control_staleness")
+	if err != nil {
+		return AuthorityConfig{}, err
+	}
+	var rejectRedisSpendAuthority bool
+	if err := readBoolInto(k, "balance_usage_authority.reject_redis_spend_authority", &rejectRedisSpendAuthority); err != nil {
+		return AuthorityConfig{}, err
+	}
+	var failClosedWhenDependencyNotReady bool
+	if err := readBoolInto(k, "balance_usage_authority.fail_closed_when_dependency_not_ready", &failClosedWhenDependencyNotReady); err != nil {
+		return AuthorityConfig{}, err
+	}
+	return AuthorityConfig{
+		Enabled:                          enabled,
+		Mode:                             readTrimmedConfigString(k, "balance_usage_authority.mode"),
+		RequireWorkerReady:               requireWorkerReady,
+		RequireRedpandaReady:             requireRedpandaReady,
+		RequireAdmissionControlFresh:     requireAdmissionControlFresh,
+		MaxAdmissionControlStaleness:     maxStaleness,
+		RejectRedisSpendAuthority:        rejectRedisSpendAuthority,
+		FailClosedWhenDependencyNotReady: failClosedWhenDependencyNotReady,
+	}, nil
+}
+
 func readFeatureFlagsSnapshot(k *koanf.Koanf) (FeatureFlagsConfig, error) {
 	var postgresReadinessProbe bool
 	if err := readBoolInto(k, "feature_flags.postgres_readiness_probe", &postgresReadinessProbe); err != nil {
@@ -297,11 +488,24 @@ func readFeatureFlagsSnapshot(k *koanf.Koanf) (FeatureFlagsConfig, error) {
 	if err := readBoolInto(k, "feature_flags.redis_readiness_probe", &redisReadinessProbe); err != nil {
 		return FeatureFlagsConfig{}, err
 	}
+	var redpandaReadinessProbe bool
+	if err := readBoolInto(k, "feature_flags.redpanda_readiness_probe", &redpandaReadinessProbe); err != nil {
+		return FeatureFlagsConfig{}, err
+	}
 	return FeatureFlagsConfig{
 		PostgresReadinessProbe: postgresReadinessProbe,
 		MongoReadinessProbe:    mongoReadinessProbe,
 		RedisReadinessProbe:    redisReadinessProbe,
+		RedpandaReadinessProbe: redpandaReadinessProbe,
 	}, nil
+}
+
+func readDuration(k *koanf.Koanf, key string) (time.Duration, error) {
+	var value time.Duration
+	if err := readDurationInto(k, key, &value); err != nil {
+		return 0, err
+	}
+	return value, nil
 }
 
 func readRawConfigString(k *koanf.Koanf, key string) string {

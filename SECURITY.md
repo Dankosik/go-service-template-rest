@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-This repository is a template. Security fixes should be applied on the default branch and rolled into active service repositories created from this template.
+Security fixes should be applied on the default branch and rolled into active deployments of this service.
 
 ## Reporting a Vulnerability
 
@@ -10,7 +10,7 @@ Please report vulnerabilities privately.
 
 Preferred channel:
 - GitHub private vulnerability report (Security Advisory):
-  - https://github.com/Dankosik/go-service-template-rest/security/advisories/new
+  - https://github.com/Dankosik/billing-service/security/advisories/new
 
 If the advisory form is unavailable, open a private communication channel with maintainers and include:
 - affected component/path;

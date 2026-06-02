@@ -1,6 +1,6 @@
 # Project Structure & Module Organization
 
-This document explains the `go-service-template-rest` repository layout: what is stored where, why it is placed there, and where to add new code.
+This document explains the `billing-service` repository layout: what is stored where, why it is placed there, and where to add new code.
 
 ## 1) Project Tree
 

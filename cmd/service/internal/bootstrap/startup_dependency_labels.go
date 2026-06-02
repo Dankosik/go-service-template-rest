@@ -1,6 +1,6 @@
 package bootstrap
 
-import "github.com/example/go-service-template-rest/internal/infra/telemetry"
+import "github.com/Dankosik/billing-service/internal/infra/telemetry"
 
 type startupDependencyProbeLabels struct {
 	dependency   string

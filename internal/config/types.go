@@ -14,6 +14,10 @@ type Config struct {
 	Postgres      PostgresConfig      `koanf:"postgres"`
 	Redis         RedisConfig         `koanf:"redis"`
 	Mongo         MongoConfig         `koanf:"mongo"`
+	ServiceAuth   ServiceAuthConfig   `koanf:"service_auth"`
+	Redpanda      RedpandaConfig      `koanf:"redpanda"`
+	Microlease    MicroleaseConfig    `koanf:"microlease"`
+	Authority     AuthorityConfig     `koanf:"balance_usage_authority"`
 	FeatureFlags  FeatureFlagsConfig  `koanf:"feature_flags"`
 }
 
@@ -97,8 +101,60 @@ type MongoConfig struct {
 	MaxPoolSize            int           `koanf:"max_pool_size"`
 }
 
+type ServiceAuthConfig struct {
+	Enabled  bool   `koanf:"enabled"`
+	Issuer   string `koanf:"issuer"`
+	Audience string `koanf:"audience"`
+	JWKSURL  string `koanf:"jwks_url"`
+}
+
+type RedpandaConfig struct {
+	Enabled            bool          `koanf:"enabled"`
+	Brokers            string        `koanf:"brokers"`
+	TerminalTopic      string        `koanf:"terminal_topic"`
+	CheckpointTopic    string        `koanf:"checkpoint_topic"`
+	CloseTopic         string        `koanf:"close_topic"`
+	BillingFactsTopic  string        `koanf:"billing_facts_topic"`
+	ConsumerGroup      string        `koanf:"consumer_group"`
+	HealthcheckTimeout time.Duration `koanf:"healthcheck_timeout"`
+}
+
+type MicroleaseConfig struct {
+	Enabled                            bool          `koanf:"enabled"`
+	WorkerEnabled                      bool          `koanf:"worker_enabled"`
+	DefaultAdmissionState              string        `koanf:"default_admission_state"`
+	MaxMicroleaseUSDAtoms              int64         `koanf:"max_microlease_usd_atoms"`
+	AccountMicroleaseExposureCapAtoms  int64         `koanf:"account_microlease_exposure_cap_usd_atoms"`
+	MinSafetyFloorUSDAtoms             int64         `koanf:"min_safety_floor_usd_atoms"`
+	TTL                                time.Duration `koanf:"ttl"`
+	DebitCutoffBeforeExpiry            time.Duration `koanf:"debit_cutoff_before_expiry"`
+	TerminalDeadline                   time.Duration `koanf:"terminal_deadline"`
+	StaleDebitWarningAge               time.Duration `koanf:"stale_debit_warning_age"`
+	StaleDebitCriticalAge              time.Duration `koanf:"stale_debit_critical_age"`
+	ReconciliationSLA                  time.Duration `koanf:"reconciliation_sla"`
+	AdmissionControlRenewalInterval    time.Duration `koanf:"admission_control_renewal_interval"`
+	AdmissionControlMaxStaleness       time.Duration `koanf:"admission_control_max_staleness"`
+	RefillThresholdPercent             int           `koanf:"refill_threshold_percent"`
+	MaxIssueTransactionDuration        time.Duration `koanf:"max_issue_transaction_duration"`
+	MaxTerminalTransactionDuration     time.Duration `koanf:"max_terminal_transaction_duration"`
+	MaxReconciliationScanBatchSize     int           `koanf:"max_reconciliation_scan_batch_size"`
+	FirstRolloutRiskAcceptanceRecorded bool          `koanf:"first_rollout_risk_acceptance_recorded"`
+}
+
+type AuthorityConfig struct {
+	Enabled                          bool          `koanf:"enabled"`
+	Mode                             string        `koanf:"mode"`
+	RequireWorkerReady               bool          `koanf:"require_worker_ready"`
+	RequireRedpandaReady             bool          `koanf:"require_redpanda_ready"`
+	RequireAdmissionControlFresh     bool          `koanf:"require_admission_control_fresh"`
+	MaxAdmissionControlStaleness     time.Duration `koanf:"max_admission_control_staleness"`
+	RejectRedisSpendAuthority        bool          `koanf:"reject_redis_spend_authority"`
+	FailClosedWhenDependencyNotReady bool          `koanf:"fail_closed_when_dependency_not_ready"`
+}
+
 type FeatureFlagsConfig struct {
 	PostgresReadinessProbe bool `koanf:"postgres_readiness_probe"`
 	MongoReadinessProbe    bool `koanf:"mongo_readiness_probe"`
 	RedisReadinessProbe    bool `koanf:"redis_readiness_probe"`
+	RedpandaReadinessProbe bool `koanf:"redpanda_readiness_probe"`
 }

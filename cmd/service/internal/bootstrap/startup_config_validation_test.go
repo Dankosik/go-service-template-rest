@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/Dankosik/billing-service/internal/config"
+	"github.com/Dankosik/billing-service/internal/infra/telemetry"
 )
 
 func TestValidateStartupBudgetCompatibilityRejectsDependencyTimeoutsAboveProbeBudgets(t *testing.T) {
@@ -62,6 +62,16 @@ func TestValidateStartupBudgetCompatibilityRejectsDependencyTimeoutsAboveProbeBu
 			},
 			wantKey: "mongo.connect_timeout",
 		},
+		{
+			name: "redpanda healthcheck timeout",
+			cfg: config.Config{
+				Redpanda: config.RedpandaConfig{
+					Enabled:            true,
+					HealthcheckTimeout: redpandaProbeBudget + time.Nanosecond,
+				},
+			},
+			wantKey: "redpanda.healthcheck_timeout",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -97,6 +107,9 @@ func TestValidateStartupBudgetCompatibilityIgnoresDisabledDependencies(t *testin
 		},
 		Mongo: config.MongoConfig{
 			ConnectTimeout: mongoProbeBudget + time.Second,
+		},
+		Redpanda: config.RedpandaConfig{
+			HealthcheckTimeout: redpandaProbeBudget + time.Second,
 		},
 	})
 	if err != nil {

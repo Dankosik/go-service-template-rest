@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/Dankosik/billing-service/internal/config"
+	"github.com/Dankosik/billing-service/internal/infra/postgres"
 )
 
 func postgresStartupProbeAddress(cfg config.PostgresConfig) (string, error) {

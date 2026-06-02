@@ -1,4 +1,4 @@
-# Railway deployment-policy source of truth for privacy-sanitization-service.
+# Railway deployment-policy source of truth for billing-service.
 # Owners: Platform + Service Owner.
 # Scope: non-secret deployment policy only. Keep secrets in Railway variables.
 # Review rule: policy changes must go through PR review and pass `make guardrails-check`.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
+	"github.com/Dankosik/billing-service/internal/infra/postgres/sqlcgen"
 )
 
 // ErrPingHistoryRepository classifies errors from the template ping_history sample repository.
