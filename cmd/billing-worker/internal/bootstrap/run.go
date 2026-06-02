@@ -2,10 +2,12 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -52,10 +54,97 @@ func Run(args []string) error {
 		return fmt.Errorf("build billing worker runtime: %w", err)
 	}
 	defer cleanup()
-	if err := worker.Run(ctx); err != nil {
-		return fmt.Errorf("run billing worker: %w", err)
+	healthServer := newWorkerHealthServer(cfg.HTTP, worker)
+	healthErrCh := make(chan error, 1)
+	go func() {
+		slog.Info("billing worker health server started", "addr", cfg.HTTP.Addr)
+		err := healthServer.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			healthErrCh <- err
+			return
+		}
+		healthErrCh <- nil
+	}()
+	defer shutdownWorkerHealthServer(healthServer, cfg.HTTP.ShutdownTimeout)
+
+	workerErrCh := make(chan error, 1)
+	go func() {
+		workerErrCh <- worker.Run(ctx)
+	}()
+
+	select {
+	case err := <-healthErrCh:
+		if err != nil {
+			stop()
+			<-workerErrCh
+			return fmt.Errorf("serve billing worker health: %w", err)
+		}
+		return nil
+	case err := <-workerErrCh:
+		if err != nil {
+			return fmt.Errorf("run billing worker: %w", err)
+		}
+		return nil
 	}
-	return nil
+}
+
+type workerReadyChecker interface {
+	Ready(context.Context) error
+}
+
+func newWorkerHealthServer(cfg config.HTTPConfig, checker workerReadyChecker) *http.Server {
+	return &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           workerHealthHandler(cfg, checker),
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+		MaxHeaderBytes:    cfg.MaxHeaderBytes,
+	}
+}
+
+func workerHealthHandler(cfg config.HTTPConfig, checker workerReadyChecker) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health/live", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/health/ready", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if checker == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		readyCtx, cancel := context.WithTimeout(r.Context(), cfg.ReadinessTimeout)
+		defer cancel()
+		if err := checker.Ready(readyCtx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	return mux
+}
+
+func shutdownWorkerHealthServer(srv *http.Server, timeout time.Duration) {
+	if srv == nil {
+		return
+	}
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Warn("billing worker health server shutdown failed", "err", err)
+	}
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

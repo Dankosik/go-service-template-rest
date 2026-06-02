@@ -1,9 +1,13 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -134,6 +138,14 @@ func (s *fakeRuntimeStore) RenewAdmissionControl(_ context.Context, limit int32)
 
 type fakeRuntimeProducer struct {
 	produced int
+}
+
+type fakeReadyChecker struct {
+	err error
+}
+
+func (c fakeReadyChecker) Ready(context.Context) error {
+	return c.err
 }
 
 func (p *fakeRuntimeProducer) Produce(context.Context, redpanda.ProduceMessage) error {
@@ -289,6 +301,62 @@ func TestNewWorkerRuntimeBuildsRunnableConcreteTaskGraph(t *testing.T) {
 	}
 	if got := store.limits[microleaseworker.RoleAdmissionControlRenew]; got != 7 {
 		t.Fatalf("admission renewal limit = %d, want configured batch 7", got)
+	}
+}
+
+func TestWorkerLogObserverKeepsTaskEvidenceBounded(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	observer := newWorkerLogObserver(slog.New(slog.NewJSONHandler(&out, nil)))
+
+	observer.ObserveWorkerTask(microleaseworker.RoleTerminalConsumer, "success", "")
+	observer.ObserveWorkerTask("acct_runtime", "request-accepted", "microlease-leaked")
+
+	logs := out.String()
+	for _, want := range []string{
+		`"worker_role":"terminal_consumer"`,
+		`"result":"success"`,
+		`"worker_role":"other"`,
+		`"result":"other"`,
+		`"reason_class":"other"`,
+	} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("logs missing %s: %s", want, logs)
+		}
+	}
+	for _, forbidden := range []string{"acct_runtime", "request-accepted", "microlease-leaked"} {
+		if strings.Contains(logs, forbidden) {
+			t.Fatalf("logs leaked forbidden value %q: %s", forbidden, logs)
+		}
+	}
+}
+
+func TestWorkerHealthHandlerReportsReadiness(t *testing.T) {
+	t.Parallel()
+
+	handler := workerHealthHandler(config.HTTPConfig{ReadinessTimeout: time.Second}, fakeReadyChecker{})
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("ready status = %d, want %d", resp.Code, http.StatusOK)
+	}
+}
+
+func TestWorkerHealthHandlerFailsClosedBeforeReadiness(t *testing.T) {
+	t.Parallel()
+
+	handler := workerHealthHandler(config.HTTPConfig{ReadinessTimeout: time.Second}, fakeReadyChecker{err: microleaseworker.ErrNotReady})
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("ready status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
 	}
 }
 

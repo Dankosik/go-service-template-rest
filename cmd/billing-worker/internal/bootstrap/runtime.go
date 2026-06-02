@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -167,11 +168,80 @@ func newWorkerRuntime(cfg config.Config, deps workerRuntimeDependencies) (*micro
 	if err != nil {
 		return nil, err
 	}
-	worker, err := microleaseworker.New(workerConfig(cfg), deps.probes, tasks, nil)
+	logWorkerRuntimeConfigured(slog.Default(), tasks, len(deps.probes))
+	worker, err := microleaseworker.New(workerConfig(cfg), deps.probes, tasks, newWorkerLogObserver(slog.Default()))
 	if err != nil {
 		return nil, fmt.Errorf("create microlease worker: %w", err)
 	}
 	return worker, nil
+}
+
+type workerLogObserver struct {
+	log *slog.Logger
+}
+
+func newWorkerLogObserver(log *slog.Logger) workerLogObserver {
+	if log == nil {
+		log = slog.Default()
+	}
+	return workerLogObserver{log: log}
+}
+
+func (o workerLogObserver) ObserveWorkerTask(role, result, reasonClass string) {
+	o.log.Info(
+		"billing worker task",
+		"worker_role", workerRoleLogLabel(role),
+		"result", workerResultLogLabel(result),
+		"reason_class", workerReasonLogLabel(reasonClass),
+	)
+}
+
+func logWorkerRuntimeConfigured(log *slog.Logger, tasks []microleaseworker.Task, probeCount int) {
+	if log == nil {
+		log = slog.Default()
+	}
+	roles := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		roles = append(roles, workerRoleLogLabel(task.Role))
+	}
+	log.Info(
+		"billing worker runtime configured",
+		"worker_roles", strings.Join(roles, ","),
+		"dependency_probe_count", probeCount,
+	)
+}
+
+func workerRoleLogLabel(role string) string {
+	switch role {
+	case microleaseworker.RoleTerminalConsumer,
+		microleaseworker.RoleCheckpointConsumer,
+		microleaseworker.RoleCloseConsumer,
+		microleaseworker.RoleInboxRetry,
+		microleaseworker.RoleOutboxRelay,
+		microleaseworker.RoleStaleReconciliation,
+		microleaseworker.RoleAdmissionControlRenew:
+		return role
+	default:
+		return "other"
+	}
+}
+
+func workerResultLogLabel(result string) string {
+	switch result {
+	case "success", "error", "skipped":
+		return result
+	default:
+		return "other"
+	}
+}
+
+func workerReasonLogLabel(reason string) string {
+	switch reason {
+	case "", "task_error", "concurrency_limit":
+		return reason
+	default:
+		return "other"
+	}
 }
 
 func runtimeTasks(cfg config.Config, deps workerRuntimeDependencies) ([]microleaseworker.Task, error) {
