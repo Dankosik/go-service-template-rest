@@ -4,16 +4,16 @@
 When loaded before approving a formally challenged `spec.md` or reconciling a clarification result, this file makes the model choose challenge-first reconciliation with final outcomes recorded in `spec.md` instead of the likely mistake of treating the gate as optional ceremony, pasting the transcript, or deferring approval-changing questions to design. Lean-local specs without escalation triggers use inline `Risk Challenge` instead.
 
 ## When To Load
-Load this before full-orchestrated, high-risk, protected-domain, or otherwise formally challenged spec approval, when a `spec-clarification-challenge` result exists, or when the session needs to record why the formal gate is clear, blocked, or legitimately waived.
+Load this before full-orchestrated, high-risk, protected-domain, or otherwise formally challenged spec approval, when a `spec-clarification-challenge` result exists, or when the session needs to record why the formal gate is clear, blocked, or not expected after recorded shape reclassification.
 
 ## Decision Rubric
 - Run the challenge only after candidate decisions are concrete enough to inspect.
 - Prepare a compact bundle: problem frame, scope, non-goals, candidate decisions, constraints, validation expectations, assumptions, open questions, and relevant research links.
 - Use read-only challenger lane(s), preferably `challenger-agent` with `spec-clarification-challenge`. Broad or multi-domain full-orchestrated, protected-domain, high-risk, cross-domain, hard-to-reverse, or user-requested deep challenge work should use five distinct lenses by default: scope/spec coherence; domain invariants/edge cases; architecture ownership/dependency boundaries; API/data/compatibility/source-of-truth; security/reliability/delivery/validation proof.
-- Use one lane only when the approval risk is narrowly concentrated and the scoped-down rationale is recorded. Each lane still uses one skill.
+- Use one lane only when the approval risk is narrowly concentrated and the scoped-down rationale lists default lenses considered, the retained lane, and why omitted lenses cannot change approval. Each lane still uses one skill.
 - Keep `Lens` as coverage metadata. Lane outputs still use existing `spec-clarification-challenge` classifications.
 - Reconcile every returned question before approval, including `non_blocking_but_record` items that must become constraints, assumptions, or validation consequences.
-- If a question requires expert work, record the reopen and stop unless an upfront direct/lean waiver permits same-session collapse.
+- If a question requires expert work, record the reopen and stop. A direct/lean waiver may affect phase collapse only; it cannot waive expert work required by a clarification finding.
 - Paste final resolved outcomes into `spec.md`; do not paste the raw challenge transcript.
 - Rerun the challenge once only when material decisions changed or a major seam was reopened and resolved.
 
@@ -50,7 +50,7 @@ Gate as decoration:
 Clarification challenge: skipped; spec already looks reasonable.
 ```
 
-This fails for formally challenged work because approval requires either a reconciled gate or an eligible direct/lean waiver. Lean-local work should record inline `Risk Challenge` rather than pretending no challenge happened.
+This fails for formally challenged work because approval requires a reconciled gate unless recorded shape reclassification proves the formal trigger no longer applies. Lean-local work should record inline `Risk Challenge` and its subagent gate decision rather than pretending no challenge happened.
 
 Transcript dumping:
 

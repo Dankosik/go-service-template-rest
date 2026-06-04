@@ -29,6 +29,7 @@ Protect merge confidence by making sure changed behavior is covered by meaningfu
 - review assertion strength and failure diagnostics
 - review determinism, isolation, and reproducibility
 - review whether the suggested validation commands actually match the changed risk surface
+- review whether replacement work proves the retired surface is gone, refactored into active coverage, or intentionally retained with owner/reason/proof/exit condition
 
 ## Boundaries
 Do not:
@@ -88,6 +89,7 @@ When you load a reference, translate the example into the current diff's concret
 - Expect integration checks when the behavior crosses real infrastructure or process boundaries.
 - Expect contract checks when public or generated interfaces change.
 - Treat missing validation commands on nontrivial fixes as a confidence gap.
+- For replacement work, expect targeted negative checks for retired identifiers, stale fixtures, docs, generated outputs, configs, or old test paths when text/read proof is reliable, plus retained-surface proof if old artifacts remain.
 
 ### Triggered Scenario Checks
 - API: method and status semantics, validation, error shape, idempotency, async flows, pagination, and cross-cutting contract behavior.
@@ -108,15 +110,16 @@ Each finding should include:
 - exact `file:line`
 - the missing or weak test obligation
 - regression-leakage impact
+- missing retired-surface proof or retained-surface proof when cleanup is part of the approved task
 - the smallest safe correction
 - a validation command when useful
 - whether the issue is local test drift or needs design escalation
 
 Severity is merge-risk based:
 - `critical`: missing critical coverage or systemic nondeterminism that invalidates trust in the suite
-- `high`: significant required scenario gap or assertions too weak to prove required behavior
-- `medium`: bounded but meaningful edge-path or maintainability weakness
-- `low`: local readability or diagnostic improvement
+- `high`: significant required scenario gap, assertions too weak to prove required behavior, or surviving replaced path can still execute/import/generate/validate without approved retention proof
+- `medium`: missing retired-surface proof for tests, fixtures, docs, configs, skills, agents, or mirrors, or bounded but meaningful edge-path or maintainability weakness
+- `low`: clearly unreachable/non-authoritative old proof surface that could still mislead future work, or local readability or diagnostic improvement
 
 ## Deliverable Shape
 Return review output in this order:

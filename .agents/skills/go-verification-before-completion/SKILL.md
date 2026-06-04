@@ -70,12 +70,15 @@ Use these defaults unless the claim scope requires something stricter:
 - repository test claim: run the repository test target or an explicit repository-wide `go test` pattern
 - race-safety claim: run race-detector coverage for the changed concurrent path
 - lint, build, generated API, and migration claims: run the repository target that owns that proof
+- replacement or cleanup claims: require targeted negative proof for retired identifiers, routes, configs, commands, generated artifacts, fixtures, docs, skills, agents, or mirrors where search/read proof is reliable, and retained-surface proof with owner/reason/continued-need/exit-condition when old artifacts remain
+- negative proof must name the retired identifiers, paths, commands, config keys, generated files, fixtures, docs, skills, agents, or mirrors searched; a generic `rg legacy` is not sufficient unless the retired surface is literally named `legacy`
 - readiness claim: combine the checks required by the changed surface; never use one green check as proof for unrelated surfaces
 
 ### Freshness And Scope
 - "Fresh" means executed in the current iteration against the current workspace state.
 - Focused verification is valid only for a focused claim.
 - Broad claims require broad proof.
+- Generated or mirrored cleanup claims require source-of-truth proof plus drift/sync checks; a hand-edited derived artifact is not sufficient proof.
 - Do not extrapolate from targeted checks to repository-wide success.
 
 ### Delegation And Trust

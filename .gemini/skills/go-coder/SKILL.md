@@ -21,6 +21,7 @@ Implement approved Go changes as production-grade, review-clean code that preser
 - implementing approved Go features, fixes, refactors, integrations, regenerations, and targeted test updates
 - translating an approved requirement or executable task ledger into code without changing the decision that was already made
 - keeping code, tests, generated artifacts, and verification evidence aligned with the approved change
+- removing, refactoring, or explicitly retaining legacy surfaces when that cleanup is required by the approved task ledger
 
 ## Do Not Use This Skill For
 - open design work where architecture, API, data, security, reliability, or rollout semantics are still undecided
@@ -41,6 +42,8 @@ Before editing, make the implementation target concrete:
 - If more than one behavior is plausible, name the bounded assumption you are taking; stop when the choice would change product, architecture, API, data, security, reliability, or rollout semantics.
 - For direct-path multi-step work without `tasks.md`, keep a tiny local `goal -> check` loop before coding; do not expand it into workflow artifacts unless the repository workflow requires them.
 - Every changed line should trace to the approved task, required generated drift, or cleanup made necessary by your own change.
+- Cleanup required by the approved task is in scope. Remove replaced or unused old code and adjacent tests, fixtures, generated artifacts, configs, docs, scripts, examples, skills, agents, or mirrors unless the approved artifact chain explicitly retains them with owner, reason, proof, and exit condition.
+- If you discover an old surface not named by the approved spec or task ledger, classify it before editing: in-scope and safe to remove/refactor; intentionally retained by an existing approved artifact; or requiring reopen because removal or retention changes contract, data, security, reliability, rollout, generated-source, or another protected-domain behavior.
 - Do not add speculative flexibility, configurability, abstractions, or impossible-case handling just because it might be useful later.
 - Prefer outcome-first implementation: identify the required behavior and proof, then choose the smallest code path that satisfies both. Do not follow a longer process just because an older prompt pattern would have enumerated more steps.
 - Use additional file reads, reference loads, generation, or test loops only while they can change correctness, generated drift, or proof strength; stop once the approved task's quality bar is met.
@@ -53,6 +56,7 @@ Keep workflow ownership outside this skill:
 - do not create or repair workflow, research, specification, design, planning, or missing task-ledger artifacts as a side effect of coding
 - update checkbox/progress state in existing `tasks.md` only when the current implementation task explicitly maps to it; do not add new tasks, rewrite task strategy, or use it to invent missing design context
 - create or update code, tests, migrations, configs, generation inputs, and generated output only when the implementation task requires them
+- when replacing a path, update the owning source first, then regenerate or sync generated/mirrored artifacts; do not hand-edit derived output as the primary cleanup
 - if the safe implementation depends on a missing decision, missing technical-design-review gate, missing implementation-readiness gate, readiness `FAIL`, readiness `CONCERNS` without named accepted risks and proof obligations, or required `tasks.md` being absent, stop and name the smallest unblock decision or task-breakdown repair instead of inventing behavior
 - if code changes expose a real planning or design gap, hand it back to the orchestrator or the relevant spec/design skill rather than expanding this skill into workflow choreography
 
@@ -227,6 +231,8 @@ References are compact rubrics and example banks, not exhaustive checklists or G
 ### Verification Should Match The Risk
 - Run the smallest command set that honestly verifies the changed surface.
 - Regenerate code when the source of truth changed, then verify no unintended drift remains.
+- For replacement work, include targeted negative checks for retired identifiers or references where text search is reliable, plus retained-surface proof when old artifacts intentionally remain.
+- Name the retired identifiers, paths, commands, config keys, generated files, fixtures, docs, skills, agents, or mirrors in the negative proof; a generic `rg legacy` is not sufficient unless the retired surface is literally named `legacy`.
 - If verification fails, report that failure plainly; do not translate a red check into a green handoff.
 - Do not claim `done`, `fixed`, or `ready` without fresh command evidence for that exact claim.
 
@@ -242,9 +248,10 @@ Before handoff, ask:
 3. What can still alias, leak, block, go stale, be retried twice, or collapse a contract?
 4. Did I choose the clearest fix shape, or did I add abstraction that the next maintainer now has to reverse-engineer?
 5. Did I validate the real changed behavior, including the relevant edge case?
-6. Are code, tests, generated artifacts, `tasks.md` progress when present, and task notes aligned with what I actually changed and verified?
-7. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
-8. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
+6. Did I remove or refactor the replaced old path, or record retained legacy surfaces with owner, reason, proof, and exit condition exactly where the approved ledger allows?
+7. Are code, tests, generated artifacts, `tasks.md` progress when present, and task notes aligned with what I actually changed and verified?
+8. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
+9. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
 ## Blocked Work
 If the approved spec, task ledger, or contract blocks implementation before code changes begin:

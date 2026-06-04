@@ -123,6 +123,11 @@ Do not:
 - task-ledger review is the post-ledger pre-implementation stage inside the planning checkpoint unless workflow control explicitly records a separate review phase; it compares `tasks.md` to the approved artifact chain before readiness can become `PASS`, eligible `CONCERNS`, or eligible `WAIVED`
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - technical design review is the required pre-planning gate for separate design depth; planning must not downgrade it into an optional note or infer it from the design author's own handoff
+- before marking `tasks.md` approved for non-trivial work, default to a read-only task-ledger review fan-out when implementation readiness depends on independent lenses
+- typical task-ledger review lanes are coverage/traceability, dependency ordering, proof/QA, and any triggered API, data, security, reliability, delivery, performance, observability, or rollout lens
+- each ledger-review lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md` or makes final readiness decisions
+- skipping or scoping down this fan-out requires `Ledger-review fan-out rationale:` that explicitly evaluates the default lanes and explains why each omitted lane cannot change readiness
+- implementation readiness remains `FAIL` or blocked unless task-ledger review fan-out status is recorded or `Ledger-review fan-out rationale:` explains why local review covers every readiness risk
 - before full-orchestrated, high-risk, complex workflow-control, or agent-backed handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, and any named review or validation phase-control files
 - for dedicated planning sessions, the session ends at approved planning artifacts; implementation starts in a new session unless an upfront direct/lean waiver already exists
 
@@ -197,6 +202,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 
 ### 7. Review `tasks.md` And Handoff Into Implementation
 - after expected `tasks.md` and any triggered companion planning artifacts are ready, run the task-ledger review before recording implementation readiness
+- before the final task-ledger review result, run read-only task-ledger review fan-out by default; otherwise record `Ledger-review fan-out rationale:` that evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens
+- keep every ledger-review lane read-only and limited to the approved artifact chain; the orchestrator repairs planning or reopens earlier phases from fan-in
 - compare `tasks.md` to `spec.md`, compact or split design context, technical-design-review obligations, triggered `test-plan.md` or `rollout.md`, and any required review or validation phase-control files
 - verify that every accepted in-scope behavior, preserved constraint, accepted risk, proof obligation, dependency, and reopen condition is either represented in executable tasking or explicitly not expected with rationale
 - if the review finds task coverage, order, proof, evidence-field, or workflow-control gaps that do not alter approved decisions, repair planning and rerun the review
@@ -207,6 +214,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - record the task-ledger review result before or together with the implementation-readiness gate
 - set readiness to `PASS` only when the next implementation slice can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions; required artifacts and proof path must already support that slice
 - set readiness to `CONCERNS` only when implementation may start with named accepted risks and explicit proof obligations that the next slice can satisfy without replanning
+- keep readiness `FAIL` or blocked when non-trivial planning lacks recorded task-ledger review fan-out status or a valid `Ledger-review fan-out rationale:`
 - set readiness to `FAIL` when implementation must not start, and name the earlier phase to reopen
 - set readiness to `WAIVED` only for tiny, direct-path, or prototype work with explicit rationale and scope
 - record task-ledger review and readiness status in `workflow-plan.md`, the gate result and stop or handoff rule in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful
@@ -231,6 +239,8 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - whether later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` were created now because named multi-session routing needs them, are explicitly not expected with rationale, or still remain blocked on a reopen
 - implementation-readiness status as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
 - task-ledger review result as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
+- task-ledger review fan-out status, lane summary, fan-in result, or `Ledger-review fan-out rationale:`
+- subagent/readiness gates status, evidence artifact, proof obligations, and reopen target when blocked
 - named accepted risks and proof obligations when readiness is `CONCERNS`
 - named earlier phase when readiness is `FAIL`
 - waiver rationale and scope when readiness is `WAIVED`
@@ -277,6 +287,7 @@ Rules:
 - immediately after the goal objective, say `After the goal is set, execute every required task in <tasks.md path> from start to finish`
 - keep artifact lists, constraints, concerns, waiver rationale, proof commands, and execution rules out of the goal objective itself
 - after that, add `Implementation brief:` and include working directory, read-first artifact order, readiness status, first executable task or checkpoint, accepted constraints or risks, proof obligations, ledger progress-update rule, and blocked-stop/reopen rule
+- when the next phase depends on a subagent/review gate or local-only rationale, include `Subagent/readiness gates: <status, evidence artifact, proof obligations, reopen target if blocked>`
 - if the `tasks.md` Goal Contract is missing or too vague to form a verifiable Codex Goal, stop and reopen planning instead of inventing a broad objective in chat
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 

@@ -24,6 +24,7 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 - translate useful coverage prompts from external spec workflows into repo-native sections
 - keep blockers, assumptions, inline `Risk Challenge` or clarification outcomes, validation hooks, and handoff links visible before lean tasking or triggered `technical design`
 - keep the handoff focused on the current decision frontier: record downstream consequences that matter, but do not promote every visible consequence into a new design decision inside `spec.md`
+- for replacement or cleanup-discipline work, name known legacy surfaces and the expected remove/refactor/retain semantics before tasking begins
 
 ## Boundaries
 Do not:
@@ -47,12 +48,13 @@ Escalate if:
 
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
-- For lean-local work, the handoff path is `spec.md` with compact design answers and inline `Risk Challenge` -> `tasks.md`.
-- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> triggered design context -> technical design review -> tasks.md`, and formal `spec-clarification-challenge` is required before approval unless explicitly waived by an eligible exception.
+- For lean-local work, the handoff path is `spec.md` with compact design answers, recorded subagent gate decision, and inline `Risk Challenge` -> `tasks.md`.
+- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> triggered design context -> technical design review -> tasks.md`, and formal `spec-clarification-challenge` is required before approval.
 - For dedicated specification sessions, this pass ends at approved `spec.md`; triggered `technical design`, technical design review, or planning begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
 - Put stable decisions in `spec.md`, lean compact design answers in `spec.md` or one `design/overview.md`, split task-local technical context in `design/` when triggered, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
+- For replacement specs, record known old identifiers, routes, configs, commands, generated outputs, fixtures, docs, skills, agents, or mirrors and decide whether each is removed, refactored into the active path, or retained with owner, reason, proof, and exit condition.
 - Prefer short explicit bullets over template sludge.
 - Omit empty sections instead of padding the document for completeness theater.
 - Deep coverage is good, but `spec.md` should close only the decisions needed before technical design. Later-domain consequences that do not require a new decision now should stay as constraints, proof obligations, or explicit `no new decision required` notes.
@@ -124,12 +126,14 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
   - `Task Breakdown / Handoff Link`
   - `Validation`
   - `Outcome`
-- For lean-local specs, prefer the compact shape from `docs/spec-first-workflow.md`: `Intent`, `Scope / Non-goals`, `Behavior / Contract Delta`, `Decisions`, `Compact Design`, `Risk Challenge`, `Task Handoff`, `Validation`, and `Outcome`.
+- For lean-local specs, prefer the compact shape from `docs/spec-first-workflow.md`: `Intent`, `Scope / Non-goals`, `Behavior / Contract Delta`, `Decisions`, `Compact Design`, `Subagent Gate Decision`, `Risk Challenge`, `Task Handoff`, `Validation`, and `Outcome`.
 - Merge sections only when it makes the document clearer.
 - Expand depth based on task risk and ambiguity, not on habit.
 
 ### Coverage Competency
 - Capture the behavior delta, affected actors, scope cuts, edge semantics, validation expectations, and material constraints.
+- When the behavior delta replaces an old path, capture the legacy-surface delta explicitly: what old surfaces are gone, what is refactored into the active path, what remains intentionally retained, and what proof will make that claim auditable.
+- Ask and answer before approval: `Does this change replace an existing path?` If yes, list known old code, tests, fixtures, configs, docs, generated outputs, skills, agents, or mirrors. If no, record `No known replacement surface`.
 - Use these external patterns only as coverage lenses:
   - independently testable slices
   - user journeys or demoable units
@@ -159,8 +163,9 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 - When another domain is only a dependent consequence, record the consequence and its owner instead of expanding `spec.md` into a parallel design bundle.
 
 ### Clarification-Gate Competency
-- Before approving lean-local `spec.md`, ensure inline `Risk Challenge` is recorded as `PASS` or `CONCERNS`; `FULL_REQUIRED` escalates to the formal path.
-- Before approving full-orchestrated or protected-domain `spec.md`, ensure the orchestrator has run formal `spec-clarification-challenge`. Broad formal clarification should use multiple read-only `challenger-agent` lanes with distinct lenses; each lane still uses exactly one skill. Scoped-down single-lane gates need a recorded rationale.
+- Before approving lean-local `spec.md`, ensure the subagent gate decision is recorded as consumed lane summaries or local-only rationale, and inline `Risk Challenge` is recorded as `PASS` or `CONCERNS`; `FULL_REQUIRED` escalates to the formal path.
+- Before approving full-orchestrated or protected-domain `spec.md`, ensure the orchestrator has run formal `spec-clarification-challenge`. Broad formal clarification should use multiple read-only `challenger-agent` lanes with distinct lenses; each lane still uses exactly one skill. Scoped-down single-lane gates need a rationale listing every default lens, the approval-critical question considered for that lens, retained lane or lanes, and why omitted lenses cannot change approval.
+- Formal clarification is not waivable while the work remains full-orchestrated, protected-domain, high-risk, hard-to-reverse, cross-domain, or user-requested deep challenge. If the trigger no longer applies, record shape reclassification with trigger-matrix evidence before marking the formal gate not expected.
 - The challenge returns questions for orchestrator reconciliation; it does not write files or make final decisions.
 - Resolve each planning-critical item from existing evidence, targeted research, an expert subagent lane, explicit risk acceptance, design deferral, or `requires_user_decision`.
 - Store only final resolved outcomes in `spec.md`: stable outcomes in `Decisions`, remaining assumptions in `Open Questions / Assumptions`, and proof consequences in `Validation`.
@@ -217,9 +222,10 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 ### 6. Run Or Enforce The Clarification Gate
 - For lean local, confirm the inline `Risk Challenge` ran after candidate decisions existed and before approval.
 - For full-orchestrated or protected-domain work, confirm the `spec-clarification-challenge` gate ran after candidate decisions existed and before approval.
-- If a required formal gate has not run, prepare the compact bundle and route the appropriate read-only challenger lane set, preferably `challenger-agent` with `spec-clarification-challenge`. For broad or multi-domain full-orchestrated, protected-domain, high-risk, cross-domain, hard-to-reverse, or user-requested deep challenge work, route distinct lenses instead of one generic challenger; use a single lane only with scoped-down rationale. Keep `Lens` as coverage metadata and keep the existing challenge classifications stable.
+- If a required formal gate has not run, prepare the compact bundle and route the appropriate read-only challenger lane set, preferably `challenger-agent` with `spec-clarification-challenge`. For broad or multi-domain full-orchestrated, protected-domain, high-risk, cross-domain, hard-to-reverse, or user-requested deep challenge work, route distinct lenses instead of one generic challenger; use a single lane only with scoped-down rationale that proves omitted lenses cannot affect approval. Keep `Lens` as coverage metadata and keep the existing challenge classifications stable.
 - If the gate returns material questions, keep `spec.md` draft or blocked until the orchestrator reconciles them.
 - If targeted expert research is required, route the appropriate upstream research or expert lane instead of inventing an answer in the spec.
+- A direct/lean waiver may affect same-session phase collapse only; it cannot waive targeted expert research or subagent work required by a clarification finding.
 - If a question is truly external product or business policy, record `requires_user_decision` and leave the spec blocked or partially draft.
 - If material decisions changed or a major seam reopened and then resolved, rerun the clarification challenge once on the updated candidate synthesis.
 
@@ -250,11 +256,13 @@ Rules:
 ## Definition Of Done
 The pass is complete when:
 - the spec is honest about what is decided and what is not
-- the inline lean `Risk Challenge` or formal clarification gate is reconciled, explicitly waived by an eligible direct/lean exception, or left blocked with rationale
+- the subagent gate decision plus inline lean `Risk Challenge` or formal clarification gate is reconciled, marked not expected after recorded shape reclassification, or left blocked with rationale
 - stable decisions are separated from raw evidence
 - scope cuts and non-goals are explicit
 - validation expectations are visible early enough for lean tasking or triggered technical design, mandatory technical design review, and later planning
-- the session stops at approved `spec.md` for dedicated specification work unless an explicit waiver already allows phase collapse
+- replacement specs leave no known legacy-surface removal, refactor, retention, or negative-proof decision for implementation to infer
+- replacement specs either list known legacy surfaces or explicitly say `No known replacement surface`
+- the session stops at approved `spec.md` for dedicated specification work unless an explicit direct/lean waiver already allows phase collapse; phase-collapse waiver does not waive targeted expert research or subagent work required by a clarification finding
 - the next technical-design or reopen step is clear without turning the spec into a design bundle or a plan
 
 ## Anti-Patterns

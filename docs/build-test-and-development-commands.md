@@ -251,7 +251,7 @@ Bootstrap shortcuts:
 - `make modernize-check`
   - Runs: `go tool golangci-lint run --enable-only=modernize --timeout=3m`
   - Purpose: informational modern Go cleanup suggestions for maintainers.
-  - Note: this is intentionally separate from PR-blocking `make lint`; nightly runs it with `continue-on-error`.
+  - Note: this is intentionally separate from PR-blocking `make lint`; nightly runs it with `continue-on-error`. It does not replace task-specific legacy cleanup proof for retired identifiers, old routes, stale fixtures, generated outputs, docs, skills, or mirrors.
 
 - `make docker-modernize-check`
   - Docker equivalent of `make modernize-check`.
@@ -539,7 +539,7 @@ Bootstrap shortcuts:
 
 - `make guardrails-check`
   - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce required repository files, tool-version alignment, required branch-protection context alignment, and core architecture import boundaries.
+  - Purpose: enforce required repository files including root `SOUL.md`, tool-version alignment, required branch-protection context alignment, the AGENTS/SOUL lower-precedence boundary, subagent-gate/read-only instruction anchors, and core architecture import boundaries.
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
@@ -655,6 +655,7 @@ Targeted parity checks:
 | Go security and secret scans | `make govulncheck`, `make gosec`, `make go-security`, `make secret-scan`, `make docker-govulncheck`, `make docker-gosec`, `make docker-go-security`, or `make docker-secret-scan` |
 | Modern Go cleanup suggestions | `make modernize-check` or `make docker-modernize-check` |
 | Test parallelism suggestions | `make test-parallelism-check` or `make docker-test-parallelism-check` |
+| Legacy cleanup replacement proof | Targeted `rg`/read checks for retired identifiers, old routes, stale configs, fixtures, generated artifacts, docs, skills, agents, and mirrors; record removed, refactored, retained with owner/reason/proof/exit condition, or not-applicable status in the task ledger or closeout artifact. |
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |

@@ -40,7 +40,7 @@ Copy the shape: exact current state, trigger, guard, legal next state, forbidden
 ```text
 | From | Trigger | Guard | To | Violation outcome |
 | --- | --- | --- | --- | --- |
-| `specification` | `spec.md` candidate complete | clarification gate reconciled or eligible waiver recorded | `technical_design` | keep `spec.md` draft or blocked |
+| `specification` | `spec.md` candidate complete | clarification gate reconciled, or formal gate not expected after recorded shape reclassification plus subagent gate decision | `technical_design` | keep `spec.md` draft or blocked |
 | `implementation` | proof exposes missing required `tasks.md` | none | `planning_reopen` | stop coding; do not invent task ledger mid-code |
 ```
 

@@ -38,6 +38,7 @@ Need the minimum closeout-ready inputs:
 - the approved `tasks.md` ledger, or current workflow routing only when no approved ledger exists yet
 - the implemented scope or planned phase that is being closed
 - the proof obligations from task-local artifacts such as `spec.md`, existing `tasks.md`, `test-plan.md`, `rollout.md`, or the current review phase file when present
+- the cleanup classification required by the approved ledger: removed, refactored into active path, retained with owner/reason/proof/exit condition, or not applicable for each known old surface
 - the current workspace state against which fresh commands can run
 - existing `Validation`, `Outcome`, and validation-phase notes when this is a continuation or repair
 
@@ -131,6 +132,7 @@ Do not:
 - This wrapper extends the verification gate only by adding artifact ownership:
 - update `spec.md` so `Validation` and `Outcome` reflect reality
 - update existing `tasks.md` progress when the task uses a ledger
+- record removal/refactor/retention evidence in existing `tasks.md` and `spec.md` closeout fields instead of leaving cleanup proof implicit in chat
 - update an existing `workflow-plans/validation-phase-<n>.md` only when the approved ledger explicitly names that phase file
 - for lean local, update `spec.md` and existing `tasks.md` directly; do not create a validation phase file just to mirror full-orchestrated closeout
 
@@ -150,6 +152,8 @@ Do not:
 
 ### 3. Gather Proof Inputs And Choose Commands
 - derive proof obligations from `spec.md`, existing `tasks.md`, `test-plan.md`, `rollout.md`, and current phase artifacts
+- include targeted old-surface negative checks, retained-surface proof, generated/mirror drift proof, and stale-proof rejection when the approved task includes cleanup or replacement work
+- require named negative proof for each retired surface; do not accept generic searches such as `rg legacy` unless the retired surface is literally named `legacy`
 - choose the smallest command set that honestly proves the current claim, following `go-verification-before-completion`
 - keep the verification surface proportional: scoped claims may use scoped commands; repository-wide claims need repository-wide proof
 - if a required command is unclear, stop and escalate instead of improvising a weaker check
@@ -175,6 +179,8 @@ Do not:
 ### 6. Update Existing `tasks.md` Progress When Used
 - only update `tasks.md` when it already exists and belongs to this task
 - update checkbox/progress state only for tasks whose proof was actually run and observed in this session
+- for cleanup tasks, record each known old surface as removed, refactored into the active path, retained with owner/reason/proof/exit condition, or not applicable based on fresh proof
+- when a `Legacy cleanup audit` table exists, update it row by row from fresh evidence instead of replacing it with prose
 - do not add, split, reorder, or rewrite tasks during closeout
 - if expected `tasks.md` is missing, record a planning reopen target instead of creating it here
 
@@ -221,6 +227,7 @@ Closeout is done only when all of the following are true:
 - `spec.md` `Validation` records the actual commands and observed results instead of intention or memory
 - `spec.md` `Outcome` says only what the evidence proved, with no optimistic overreach
 - existing `tasks.md`, when used, has checkbox/progress state aligned with the fresh proof and no invented tasks
+- cleanup-sensitive tasks record fresh remove/refactor/retain/not-applicable evidence, including retained-surface owner/reason/proof/exit condition when old artifacts remain
 - `workflow-plans/validation-phase-<n>.md`, when explicitly named by `tasks.md`, shows the phase is complete and why the session stopped
 - no new implementation work was performed during closeout
 

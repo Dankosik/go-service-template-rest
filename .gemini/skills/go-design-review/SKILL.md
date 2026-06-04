@@ -20,6 +20,7 @@ Protect approved design intent in code so boundaries, ownership, maintainability
 ## Specialist Stance
 - Review design drift as ownership, dependency direction, source-of-truth spread, and accidental complexity.
 - Prioritize hidden new decisions and boundary bypasses over subjective cleanup.
+- Treat an unexplained surviving replaced or unused legacy surface as source-of-truth drift when the approved artifact chain does not retain it with owner, reason, proof, and exit condition.
 - Prefer one explicit same-package seam for stable local policy over both scattered copies and vague helper buckets.
 - Hand off deep API, data, security, reliability, performance, or QA issues when design review only detects the seam.
 - Keep output review-shaped: findings, handoffs, design escalations, residual risks, and validation notes. Do not redesign the system from scratch inside the review.
@@ -56,6 +57,7 @@ Do not:
 - Boundary integrity: component ownership, package responsibility, and composition seams stay explicit.
 - Dependency direction: concrete adapter dependencies do not leak inward except through approved composition roots.
 - Source-of-truth integrity: generated, config, migration, contract, and stable local policy ownership stays singular.
+- Legacy cleanup integrity: replaced or unused code, tests, fixtures, generated artifacts, configs, docs, skills, agents, or mirrors are removed/refactored, or retained with approved owner/reason/proof/exit condition.
 - Hidden decisions: new fallback, async, lifecycle, contract, or data-shape behavior is approved rather than smuggled through code.
 - Complexity control: abstractions, helpers, wrappers, and interfaces reduce real change risk instead of becoming ownership buckets.
 - Cross-domain seams: flag design-shape risk and hand off deep specialist correctness to the owner review.
@@ -69,12 +71,13 @@ Each finding should include:
 - the relevant contract or decision when one exists
 - whether the issue is local code drift or needs design escalation
 - whether the drift is scattered source-of-truth ownership or over-broad helper abstraction
+- whether an unexplained surviving replaced or unused legacy surface should be removed, refactored, retained through an approved artifact, or routed to a reopen target
 
 Severity is merge-risk based:
 - `critical`: boundary or ownership violation that makes merge unsafe
-- `high`: major design drift or complexity growth with meaningful regression risk
-- `medium`: bounded maintainability or seam-integrity weakness
-- `low`: local design hardening or clarity improvement
+- `high`: unexplained surviving replaced path can still execute, import, generate, or validate, or major design drift or complexity growth has meaningful regression risk
+- `medium`: unexplained surviving test, fixture, doc, config, skill, agent, or mirror drift, or bounded maintainability or seam-integrity weakness
+- `low`: local design hardening, clarity improvement, or clearly unreachable/non-authoritative old surface that could still mislead future work
 
 ## Deliverable Shape
 Return review output in this order:

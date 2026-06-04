@@ -35,6 +35,7 @@ Protect local reasoning quality in changed Go code without endorsing refactors t
 - Findings come first and must be ordered by merge risk, not by section order or taste.
 - Green tests do not prove a cleanup preserved local reasoning safety.
 - Always check touched helper or policy changes for source-of-truth drift: flag stable same-package policy still scattered across files and bogus extraction into vague helper buckets only when there is concrete future-change risk.
+- For cleanup or replacement diffs, flag unexplained surviving replaced or unused legacy code as reasoning debt when the approved artifact chain does not justify retention with owner, reason, proof, and exit condition.
 - Prefer official Go docs, Go Code Review Comments, Go module/package organization docs, and repository-local review patterns over external clean-code advice. Treat Effective Go as enduring core-language idiom guidance, not sole authority for modules, generics, or newer standard-library behavior; treat generic clean-code material as calibration only.
 
 ## Scope
@@ -79,6 +80,7 @@ Do not:
 - Prefer local, behavior-preserving simplification over broad rewrites.
 - If a wrapper protects ownership, cleanup, or contract shape, do not remove it just because it is short.
 - Prefer the smallest change that makes intent obvious on first read.
+- Do not treat stale old-path code as harmless readability clutter when the task replaced that path; require remove/refactor/retain status and proof before calling the cleanup complete.
 
 ## Expertise
 - Risk calibration: prioritize cleanups that merge distinct behaviors, change precedence, hide side effects, or force readers to track hidden modes.
@@ -115,12 +117,14 @@ Each finding should include:
 - a validation command when useful
 - whether the change is behavior-preserving, a specialist handoff, or needs design escalation
 - whether the issue is under-extraction of a same-package source-of-truth seam or over-extraction into a vague helper
+- whether surviving old-path code is approved retention or unexplained legacy drift that can mislead future changes
 - the reference file used when one materially shaped the finding
 
 Severity is merge-risk based:
 - `critical`: the cleanup obscures critical behavior or contract semantics enough that safe change is unlikely
-- `high`: strong evidence of hidden state, false simplification, or API opacity with material maintenance risk
-- `medium`: bounded but meaningful readability debt with a realistic future-change cost
+- `high`: unexplained surviving replaced path can still execute, import, generate, or validate, or there is strong evidence of hidden state, false simplification, or API opacity with material maintenance risk
+- `medium`: unexplained surviving test, fixture, doc, config, skill, agent, or mirror drift, or bounded but meaningful readability debt with a realistic future-change cost
+- `low`: clearly unreachable/non-authoritative old surface that could still mislead future work, or local simplification opportunity that materially improves clarity
 - `low`: local simplification opportunity that still materially improves clarity
 
 ## Deliverable Shape

@@ -8,7 +8,7 @@ description: "Run a specification-approval clarification challenge when formal c
 ## Purpose
 Surface the few questions that could still make `spec.md` approval dishonest.
 
-This skill is a formal gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. In broad formal clarification, this skill can run in multiple read-only challenger lanes; each lane applies one explicit lens to the same candidate spec bundle.
+This skill is a formal gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. In broad formal clarification, this skill normally runs as one lane in a multi-lane read-only challenger set. Single-lane use is valid only when the orchestrator provides a scoped-down rationale listing the default lenses considered and showing with evidence that omitted lenses cannot change approval.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -45,8 +45,9 @@ Expect a compact bundle from the orchestrator:
 - known assumptions and open questions
 - links to relevant `research/*.md` or lane outputs when they matter
 - assigned lens or specialist domain when part of a multi-challenger fan-out
+- one concrete approval-critical question for this lane; a lens label alone is insufficient input
 - sibling lenses when part of a multi-challenger fan-out
-- scoped-down rationale when this is the only lane for a formal challenge that would otherwise look broad
+- scoped-down rationale when this is the only lane for a formal challenge that would otherwise look broad; it must list default lenses considered, the retained lane, and why omitted lenses cannot change approval
 - confirmation that formal challenge is triggered, or the specific concern that made inline lean `Risk Challenge` insufficient
 
 If the bundle is too thin to challenge, say what is missing and classify the result as blocking approval rather than guessing. In multi-challenger fan-out, a lens label without a concrete approval-critical question is missing input; ask for the smallest sharper question instead of producing a generic review.

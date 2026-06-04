@@ -3,6 +3,7 @@ set -euo pipefail
 
 required_files=(
   "AGENTS.md"
+  "SOUL.md"
   "README.md"
   "railway.toml"
   "Makefile"
@@ -136,15 +137,43 @@ require_regex '-f build/docker/Dockerfile' ".github/workflows/cd.yml" "cd workfl
 
 # Keep the runtime bridge from AGENTS.md to the detailed workflow reference.
 require_regex 'docs/spec-first-workflow\.md' "AGENTS.md" "AGENTS.md must point to docs/spec-first-workflow.md for non-trivial workflow execution"
+require_regex 'SOUL\.md' "AGENTS.md" "AGENTS.md must reference SOUL.md for orchestrator personality guidance"
+require_regex '^@SOUL\.md$' "AGENTS.md" "AGENTS.md must include SOUL.md using the repository include convention"
+require_regex 'lower-precedence orchestrator personality guidance' "AGENTS.md" "AGENTS.md must keep SOUL.md lower-precedence"
+require_regex 'AGENTS\.md`, `docs/spec-first-workflow\.md`, task-local artifacts, and explicit user/system/developer instructions override `SOUL\.md`' "AGENTS.md" "AGENTS.md must keep operational authority above SOUL.md"
+require_regex 'Replaced or unused legacy code is not acceptable as remembered-later cleanup' "AGENTS.md" "AGENTS.md must keep the legacy cleanup invariant"
+require_regex 'current owner, reason, proof of continued need, and exit condition' "AGENTS.md" "legacy cleanup invariant must require bounded retained-surface proof"
+require_regex 'lower-precedence personality and engineering-judgment guidance' "SOUL.md" "SOUL.md must describe itself as lower-precedence personality guidance"
+require_regex 'conflicts with `AGENTS\.md`, the detailed workflow companion, or task-local artifacts, follow the authoritative artifact and treat the conflict as drift to repair' "SOUL.md" "SOUL.md must preserve the AGENTS/task-local precedence boundary"
 require_regex 'follow `AGENTS\.md`' "docs/spec-first-workflow.md" "spec-first-workflow doc must declare AGENTS.md as the controlling contract"
+require_regex 'known in-scope legacy surfaces are represented as removal/refactor work' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep legacy cleanup task-ledger mechanics"
+require_regex 'targeted negative searches or reads for retired identifiers' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep legacy cleanup validation proof mechanics"
+require_regex 'Legacy cleanup audit' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep the per-surface legacy cleanup audit table"
+require_regex 'No known replacement surface' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep the no-replacement explicit path"
 require_regex 'Do not point agents at a specific task-local `specs/\.\.\.` bundle as required precedent unless that directory exists in the current checkout' "docs/spec-first-workflow.md" "spec-first-workflow doc must warn against non-existent task-local specs examples"
 require_absent_regex 'study `specs/[^`]+`' "docs/spec-first-workflow.md" "spec-first-workflow doc must not require studying a concrete specs bundle that may be absent"
 require_regex 'Do not create synthetic bundles as examples' "specs/README.md" "specs README must prevent fake example bundles"
 require_regex '^max_threads = 20$' ".codex/config.toml" "Codex subagent fan-out ceiling must stay explicit"
 require_regex '^max_depth = 1$' ".codex/config.toml" "Codex subagent nesting depth must stay at the documented default"
 require_regex 'agents\.<name>\.config_file' ".codex/config.toml" "Codex registry compatibility note must stay documented"
+for agent_config in .codex/agents/*.toml; do
+  require_regex '^sandbox_mode = "read-only"$' "${agent_config}" "Codex subagent source configs must enforce read-only execution"
+done
 require_regex 'make agents-check' ".github/workflows/ci.yml" "CI must check Codex/Claude agent mirror drift"
 require_regex 'AGENTS_SYNC_SCRIPT' "Makefile" "Makefile must expose agent mirror sync/check targets"
+require_regex 'Subagent gate: complete \| scoped_down \| local_only \| waived \| not_expected \| blocked' "AGENTS.md" "AGENTS.md must keep subagent gate readiness status explicit"
+require_regex 'Subagent Gate Decision' "docs/spec-first-workflow.md" "lean spec template must keep Subagent Gate Decision"
+require_regex 'Subagent gates consumed' "docs/spec-first-workflow.md" "tasks template must record consumed subagent gates"
+require_regex 'Ledger-review fan-out rationale' "docs/spec-first-workflow.md" "tasks template must record ledger-review fan-out rationale"
+require_regex 'Read-only enforcement' "docs/subagent-brief-template.md" "subagent brief template must require read-only enforcement, not prompt-only boundary"
+require_regex 'Formal `spec-clarification-challenge` is not waivable' "AGENTS.md" "formal clarification must not be waived while full/protected triggers remain"
+require_regex 'local-only rationale is valid only when it lists the decision frontier' "docs/subagent-contract.md" "local-only rationale must stay auditable"
+require_regex 'retained with owner, reason, proof, and exit condition' ".agents/skills/spec-document-designer/SKILL.md" "spec skill must require retained legacy-surface proof"
+require_regex 'missing in-scope legacy cleanup is a planning-readiness failure' ".agents/skills/planning-and-task-breakdown/SKILL.md" "planning skill must fail missing legacy cleanup tasking"
+require_regex 'Cleanup required by the approved task is in scope' ".agents/skills/go-coder/SKILL.md" "coder skill must treat approved legacy cleanup as in scope"
+require_regex 'unexplained surviving replaced or unused legacy surface' ".agents/skills/go-design-review/SKILL.md" "design review skill must flag unexplained legacy surfaces"
+require_regex 'targeted negative proof for retired identifiers' ".agents/skills/go-verification-before-completion/SKILL.md" "verification skill must require legacy cleanup negative proof"
+require_regex 'generic `rg legacy` is not sufficient' ".agents/skills/go-verification-before-completion/SKILL.md" "verification skill must reject generic legacy negative proof"
 
 # Keep branch protection required checks aligned with CI job contexts.
 required_contexts=(

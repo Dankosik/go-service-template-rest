@@ -88,6 +88,9 @@ Do not:
 - use `research-session` only when a dedicated research session is the intended control shape for the task
 - lean local may keep research local and cite the relevant evidence in `spec.md`; create `research/*.md` only when evidence must persist for resume, audit, or later synthesis
 - support both `local` research and read-only subagent `fan-out`
+- for a dedicated non-trivial research session, default to read-only fan-out when the research questions span more than one independent domain, artifact family, source-of-truth seam, or risk lens
+- a local-only pass must record `Local research rationale:` and `Escalation seams:` in `workflow-plans/research.md`
+- `Local research rationale:` must list the research decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out
 - each subagent lane owns one question and at most one skill, or explicit `no-skill`
 - preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
 - preserved `research/*.md` notes stay flexible, but the minimum context-first bar is visible question or scope, findings with evidence and limits, conflicts or weak evidence, source notes, and handoff implication
@@ -131,8 +134,10 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 - keep unknowns visible instead of filling them in
 
 ### 4. Choose Research Mode And Plan Lanes
-- choose `local` when the work is bounded enough that the orchestrator can gather the evidence directly without losing clarity
-- choose `fan-out` when cross-domain coverage, second opinions, ambiguity reduction, or preserved specialist evidence would materially improve the outcome
+- choose `fan-out` by default when the research questions span independent domains, artifact families, source-of-truth seams, protected domains, or risk lenses
+- choose `local` only when the work is bounded enough that one orchestrator pass preserves domain separation and independent lanes would not materially improve the evidence
+- when choosing `local`, record `Local research rationale:` and `Escalation seams:` so later phases can tell why fan-out was skipped
+- generic "bounded" or "single-source" wording is not enough for local-only non-trivial research; the rationale must name candidate lanes considered and why each omitted lane cannot change the downstream decision
 - for each lane, record:
   - owned question
   - local or subagent execution
@@ -140,7 +145,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
   - one chosen skill or explicit `no-skill`
   - evidence target or expected source surface
   - order or parallelism
-- if `fan-out` is used, keep every lane read-only and prefer enough coverage over artificial subagent minimization
+- if `fan-out` is used, keep every lane read-only, add a local orchestrator fan-in lane or fan-in note, and prefer enough coverage over artificial subagent minimization
 - record whether a later pre-spec challenge pass is expected after research fan-in
 
 ### 5. Run Research And Preserve Only What Helps

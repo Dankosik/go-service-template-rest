@@ -39,7 +39,7 @@ Escalate if:
 - repository baseline context from `docs/repo-architecture.md` materially matters and has not been loaded yet
 
 ## Reference Files
-Use references lazily. Load repo-native task artifacts and repository docs first, then open at most one reference by default: the one that matches the active design pressure. Load multiple references only when the task clearly spans independent pressures, such as both runtime failure sequencing and a new abstraction boundary.
+Use references lazily. Load repo-native task artifacts and repository docs first, then open at most one reference by default: the one that matches the active design pressure. Load multiple references only when the task clearly spans independent pressures, such as both runtime failure sequencing and a new abstraction boundary. This limit applies to this skill's reference files, not to consuming multiple specialist lane outputs produced by the workflow.
 
 References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Each file exists to change a likely design choice. If a reference exposes a missing final decision, escalate to the orchestrator or the appropriate specialist instead of deciding inside this integrator skill. If a reference exposes missing execution sequencing, hand off to `planning-and-task-breakdown` instead of writing `tasks.md`.
 
@@ -61,6 +61,9 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
 - Preserve specialist ownership: integrate and challenge domain decisions, but do not replace architecture, data, security, observability, or QA expertise.
+- For non-trivial split or review-bound design, do not flatten independently planning-critical domain seams into one integrator pass. Request or consume multiple narrow read-only specialist lane outputs by default when more than one domain can change ownership, contracts, persistence, failure behavior, validation, or rollout.
+- Domain impact alone is not a fan-out trigger. If the approved artifacts and repository evidence show the domain has no new decision to make, keep it inside the integrated pass and classify it as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required`.
+- If the integrator proceeds locally without specialist fan-out, record `Design fan-out rationale:` with the candidate seams considered, collapsed seam classifications, and escalation seams.
 - Prefer one coherent design handoff over scattered partial notes that still force planning to rediscover technical context.
 - Keep lean-local design merged in `spec.md` when it is sufficient; otherwise keep `design/overview.md` as the entrypoint instead of repeating the same story in every artifact. When the bundle is review-bound, its artifact index should include status and trigger rationale for required and plausible conditional artifacts.
 - Keep deep design and corner-case coverage, but distinguish `must decide now` from `dependent consequence only`.
@@ -74,7 +77,7 @@ This is a technical-design integrator, not a workflow owner:
 - use repository artifacts when they are present, but do not redefine when phases start or stop
 - if `spec.md` is missing or unstable, hand back to specification instead of inventing decisions inside design
 - if planning or implementation details appear, keep only the design constraints that technical design review and planning must consume and hand execution sequencing to `planning-and-task-breakdown`
-- if one domain seam becomes the real hard problem, hand off to that specialist instead of flattening it into a generic integrated design note
+- if one or more domain seams become the real hard problem, hand off to the relevant specialist lane set instead of flattening them into a generic integrated design note
 
 ## Expertise
 
@@ -85,6 +88,7 @@ This is a technical-design integrator, not a workflow owner:
   - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
   - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
 - Keep each triggered artifact only as detailed as its current issue demands. A narrow change can justify very short component, sequence, or ownership notes as long as they explicitly preserve unchanged boundaries and planning does not need to infer what stayed stable.
+- For replacement designs, make source-of-truth and generated-artifact consequences explicit: which old code, tests, fixtures, configs, docs, generated outputs, skills, agents, or mirrors are removed, refactored into the active path, retained with owner/reason/proof/exit condition, or routed back to specification because removal changes an approved boundary.
 - Add conditional artifacts only when their trigger is real:
   - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
   - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit
@@ -104,6 +108,7 @@ This is a technical-design integrator, not a workflow owner:
 ### Boundary And Ownership Consistency
 - When boundaries are touched, check them against domain capability, data ownership, team ownership, and transaction boundary.
 - Require explicit source-of-truth ownership for critical entities and cross-service flows.
+- Require retained legacy surfaces to have a current owner, reason, proof of continued need, and exit condition; otherwise design must choose removal/refactor or reopen the owning phase.
 - Reject design narratives that quietly rely on shared-schema coupling, cross-service direct DB access, or cross-service ACID.
 - Surface distributed-monolith signals early: coordinated releases, chatty dependency graphs, hidden shared logic, or cross-service flow ownership ambiguity.
 
@@ -164,6 +169,7 @@ When writing or reviewing the integrated technical-design bundle, cover:
 - for technical-design-review mode, the reviewed packet, classified findings, required reopen targets or planning proof obligations, and recommended gate result
 - what changes versus what remains stable
 - runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
+- legacy-surface treatment when replacement work is in scope: remove/refactor/retain decisions, generated or mirror source-of-truth order, and retained-surface exit conditions
 - downstream consequences as:
   - `forces new decision`
   - `forces handoff`

@@ -131,6 +131,9 @@ Do not:
 - `spec.md` owns final decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` comes later in a different session
 - use `go-design-spec` as the deeper design-integrity method when you need integration, contradiction cleanup, or simplification beyond simple artifact upkeep
 - for non-trivial work, this session ends at a review-ready or explicitly blocked design bundle; technical design review begins in a new stage unless an explicit compact-design waiver already covers the task
+- for non-trivial triggered technical design, first identify independent planning-critical design questions and run or record narrow read-only specialist fan-out before the integrated design pass
+- if design specialist fan-out is skipped, record `Design fan-out rationale:` in `workflow-plans/technical-design.md` with the reason no independent lane would materially improve correctness
+- a single integrated local design pass is eligible only when the approved `spec.md` is stable, the current decision frontier has one primary design question, no adjacent domain has an unresolved live fork, and API/data/security/reliability/observability/QA effects can be recorded as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` without changing ownership, contracts, persistence, failure semantics, validation, or rollout
 - required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` rather than guessed into existence
 - `lean local` may use `spec.md` `Compact Design` or one `design/overview.md`; split core design files are for triggered depth, not the default for bounded work
 - review-ready means the design author believes the current decision frontier is closed, but planning still waits for the mandatory technical design review gate
@@ -190,22 +193,32 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 - load it before rebuilding task-local design from scratch when stable boundaries or runtime flow matter
 - keep the read set narrow when the session is only repairing one known design seam
 
-### 4. Run The Integrated Design Pass
+### 4. Plan And Run Design Specialist Fan-Out
+- first identify the decision frontier as owned questions, not domain labels
+- for each candidate domain seam, ask whether a real live fork exists that would change the design bundle or later task ledger
+- default to multiple narrow read-only specialist lanes when API, data, security, reliability, observability, delivery, performance, QA, architecture, or dependency seams have unresolved live forks or domain-owned decisions
+- each lane owns one question and one skill or `no-skill`; lanes return evidence, risks, and recommended handoffs only
+- collapse duplicate or consequence-only seams into one `go-design-spec` pass and record the classification
+- the orchestrator performs fan-in, then uses `go-design-spec` to integrate outcomes into the writable design bundle
+- if fan-out is skipped or scoped down, record `Design fan-out rationale:`, `Collapsed seams:`, and `Escalation seams:` in `workflow-plans/technical-design.md`; skipped design fan-out without candidate-lane analysis blocks review-ready status
+
+### 5. Run The Integrated Design Pass
 - use `go-design-spec` when cross-domain design integrity, simplification, or contradiction cleanup is the hard part
 - keep the work inside technical design: reconcile architecture, API, data, reliability, security, observability, testing, and rollout implications only as far as they shape the design bundle or force a new current decision
 - if the design exposes a planning-critical spec gap, stop treating the session as review-ready and route back to `specification`
 
-### 5. Write Or Repair The Design Bundle
+### 6. Write Or Repair The Design Bundle
 - produce or tighten the required core artifacts
 - create only the conditional artifacts whose trigger is real
 - keep `design/overview.md` as the entrypoint and link surface for the bundle, with required artifact status and conditional trigger rationale visible when the bundle is review-bound
 - for `test-plan.md` and `rollout.md`, write the artifact only when the validation or rollout shape is design-ready; otherwise record the conditional trigger and decision point for planning
 - keep technical design in `design/`, `test-plan.md`, or `rollout.md` where appropriate; do not absorb it into `spec.md` or phase-control files
 
-### 6. Write Or Repair `workflow-plans/technical-design.md`
+### 7. Write Or Repair `workflow-plans/technical-design.md`
 - record only the local orchestration for this phase:
   - phase status
   - whether the pass is fresh, resumed, or repair work
+  - design specialist lane set, fan-in result, or `Design fan-out rationale:`
   - completion marker
   - local stop rule
   - next action
@@ -214,12 +227,12 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
   - design artifacts written, approved, blocked, or still pending
 - keep this file routing-only; it must not replace the design bundle or turn into `tasks.md`
 
-### 7. Write Or Repair `workflow-plan.md`
+### 8. Write Or Repair `workflow-plan.md`
 - update current phase status, design artifact status, blockers, reopen conditions, and next-session routing
 - record whether technical design review can start next, whether the task must return to `specification`, or whether technical design remains blocked
 - keep the master file as routing/control, not as a second design document
 
-### 8. Stop At The Boundary
+### 9. Stop At The Boundary
 - once the design bundle and workflow artifacts are consistent, stop
 - do not begin technical design review, `tasks.md`, implementation work, or validation execution in this session
 
@@ -229,6 +242,7 @@ Every completed or blocked pass must update the master file with:
 - link or status for `workflow-plans/technical-design.md`
 - status for each triggered design artifact, including whether design stayed merged in `spec.md`, one `design/overview.md`, or split design
 - status for each triggered conditional artifact, including `test-plan.md` or `rollout.md` when applicable; include a short trigger rationale for `not expected`, `conditional`, or `waived` statuses rather than a bare label
+- design specialist fan-out status, lane summary, fan-in result, or explicit `Design fan-out rationale:`
 - blockers, accepted assumptions, reopen conditions, and any reason the next session cannot start with technical design review
 - `Session boundary reached`
 - `Ready for next session`

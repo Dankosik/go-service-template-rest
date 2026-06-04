@@ -80,6 +80,9 @@ Do not:
 - Use `workflow-planning-session` only when a dedicated workflow-planning session is the intended control shape.
 - `lean local` is the default for bounded non-trivial single-domain work; `lightweight local` is only a compatibility alias for older artifacts.
 - Later phase-local files are conditional: create them only when a triggered phase needs durable local routing, not because the full bundle exists as an example.
+- For dedicated non-trivial workflow planning, lane planning is an explicit deliverable. Default the next research/checkpoint plan to multiple read-only specialist lanes when two or more independent evidence or approval-risk questions are visible.
+- Choose `local` only with `Local-only rationale:` naming why one orchestrator pass preserves domain separation and what escalation seam would reopen fan-out.
+- `Local-only rationale:` must list the decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out; generic "bounded" or "single-domain" wording is invalid.
 - Before handoff on full-orchestrated, high-risk, or agent-backed routing, run or record the read-only `workflow-plan-adequacy-challenge`; direct path and lean local may use a recorded local self-check when no formal trigger exists.
 - For sessions that do create workflow-control artifacts, stop after they are updated. Research or another recorded next phase begins in a new session unless an approved direct/lean waiver already allows collapse.
 
@@ -107,10 +110,12 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 - Capture what must change, scope cuts, constraints, risk hotspots, success checks, blockers, and visible assumptions.
 - Keep missing facts visible instead of filling them in.
 
-### 3. Choose Execution Shape And Research Mode
+### 3. Choose Execution Shape And Lane Plan
 - Choose `direct path`, `lean local`, or `full orchestrated`, treating `lightweight local` as a compatibility alias when reading older artifacts.
-- Decide whether the next research pass should be `local` or `fan-out`.
+- Identify independent evidence, review, or approval-risk questions before choosing local versus fan-out.
+- Decide whether the next research or phase checkpoint should be `local` or `fan-out`.
 - If `fan-out` is expected, enumerate lanes by owned question, role, and one chosen skill or explicit `no-skill`.
+- If the next checkpoint is local-only, record `Local-only rationale:` and `Escalation seams:` instead of leaving the skip implicit.
 - Decide whether a later pre-spec challenge pass is expected.
 - Decide whether lean-local `spec.md`/`tasks.md`, merged design context, full split `design/`, `test-plan.md`, or `rollout.md` artifacts are expected by trigger.
 - Decide whether later review or validation phase workflow files may be expected, with the rule that planning creates only named files that are genuinely needed before implementation starts.
@@ -130,7 +135,7 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 
 ### 6. Write Or Repair `workflow-plans/workflow-planning.md`
 - Record only the local orchestration for this session.
-- Include research mode when relevant, planned subagent lanes, order or parallelism, fan-in or challenge path, phase status, completion marker, next action, blockers, what can run in parallel, and the local stop rule.
+- Include research mode when relevant, planned subagent lanes or local-only rationale, order or parallelism, fan-in or challenge path, phase status, completion marker, next action, blockers, what can run in parallel, and the local stop rule.
 - Keep this file routing-only. Do not turn it into `spec.md`, `design/`, or `tasks.md`.
 
 ### 7. Run Or Record The Workflow Plan Adequacy Challenge
@@ -155,6 +160,7 @@ Every completed pass must update the master file with:
 - blockers and accepted assumptions that still affect routing
 - phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
 - workflow plan adequacy challenge status and resolution, or an explicit direct/lean local self-check or skip rationale
+- subagent gate decision for the next checkpoint: planned lane set, local-only rationale, or why no lane is expected
 - artifact status for `spec.md`, `design/`, `tasks.md`, and any triggered `test-plan.md` or `rollout.md`, with trigger rationale for `not expected`, `conditional`, or `waived` statuses
 - phased-delivery policy, including whether later review and validation phase files are expected or still unknown
 

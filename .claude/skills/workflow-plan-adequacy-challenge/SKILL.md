@@ -57,6 +57,8 @@ If the bundle is too thin to review, return a blocking input-gap finding instead
 Keep only gaps whose absence could change execution quality, handoff safety, or resume reliability:
 - master and phase files agree on current phase, phase status, blockers, session boundary, next action, next-session start point, and the master file's always-present next-session context bundle
 - research or challenge mode is explicit when fan-out is expected; fan-out lanes name role, lens or specialist domain, owned question, and one skill or `no-skill`
+- non-trivial decision phases record a `Subagent Gate Audit` or equivalent lane/skip summary: trigger, gate type, required lane policy, lane table or local-only rationale, lane result summary, fan-in, gate result, readiness consequence, and reopen target when blocked
+- non-trivial phase approval records `Subagent gate: complete | scoped_down | local_only | waived | not_expected | blocked`; missing gate status is a readiness blocker, not a formatting issue
 - broad formal clarification records `Lanes:` and `Lenses:`; scoped-down formal clarification records the rationale for fewer lanes
 - phase-local file records order or parallelism, fan-in or challenge path when relevant, completion marker, stop rule, local blockers, and parallelizable work
 - phase-local file satisfies the documented minimum for its phase without becoming a second `spec.md`, `design/`, `tasks.md`, raw review transcript, or validation log
@@ -67,6 +69,7 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - the workflow-control artifacts contain enough task-specific routing for the next session to start, and for the orchestrator to render the required chat-only next-session prompt, without recreating workflow planning from chat
 - the phase-local plan stays routing-only and does not duplicate final decisions, technical design, optional strategy notes, or the executable `tasks.md` ledger
 - direct-path or lean-local skips include a real rationale, inline `Risk Challenge` or local self-check when applicable, instead of silently bypassing control artifacts
+- local-only decisions in non-trivial phases list the decision frontier, candidate lanes or lenses considered, evidence checked, why omitted lanes cannot change approval or readiness, and the seam that would reopen fan-out
 
 ## Reference Routing
 References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the file that matches the suspected adequacy gap. Load multiple references only when the same bundle clearly spans independent decision pressures, such as both a lane-ownership gap and an implementation-readiness gap. Treat repository-local `AGENTS.md` plus `docs/spec-first-workflow.md` as authoritative.
