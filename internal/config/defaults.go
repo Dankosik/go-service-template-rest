@@ -1,6 +1,6 @@
 package config
 
-import "github.com/Dankosik/billing-service/internal/observability/otelconfig"
+import "github.com/example/go-service-template-rest/internal/observability/otelconfig"
 
 func defaultValues() map[string]any {
 	return map[string]any{
@@ -39,7 +39,7 @@ func defaultValues() map[string]any {
 		"redis.read_timeout":             "1s",
 		"redis.write_timeout":            "1s",
 		"redis.pool_size":                20,
-		"redis.key_prefix":               "billing-service",
+		"redis.key_prefix":               "service",
 		"redis.fresh_ttl":                "60s",
 		"redis.stale_window":             "0s",
 		"redis.negative_ttl":             "10s",
@@ -54,50 +54,7 @@ func defaultValues() map[string]any {
 		"mongo.server_selection_timeout": "3s",
 		"mongo.max_pool_size":            100,
 
-		"service_auth.enabled":  false,
-		"service_auth.issuer":   "",
-		"service_auth.audience": "",
-		"service_auth.jwks_url": "",
-
-		"redpanda.enabled":             false,
-		"redpanda.brokers":             "",
-		"redpanda.terminal_topic":      "billing.microlease.terminal.v1",
-		"redpanda.checkpoint_topic":    "billing.microlease.checkpoint.v1",
-		"redpanda.close_topic":         "billing.microlease.close.v1",
-		"redpanda.billing_facts_topic": "billing.microlease.facts.v1",
-		"redpanda.consumer_group":      "billing-service-microleases",
-		"redpanda.healthcheck_timeout": "3s",
-
-		"microlease.enabled":                                   false,
-		"microlease.worker_enabled":                            false,
-		"microlease.default_admission_state":                   "fail_closed",
-		"microlease.max_microlease_usd_atoms":                  int64(100_000_000),
-		"microlease.account_microlease_exposure_cap_usd_atoms": int64(200_000_000),
-		"microlease.min_safety_floor_usd_atoms":                int64(5_000_000),
-		"microlease.ttl":                                       "30s",
-		"microlease.debit_cutoff_before_expiry":                "5s",
-		"microlease.terminal_deadline":                         "120s",
-		"microlease.stale_debit_warning_age":                   "60s",
-		"microlease.stale_debit_critical_age":                  "180s",
-		"microlease.reconciliation_sla":                        "5m",
-		"microlease.admission_control_renewal_interval":        "30s",
-		"microlease.admission_control_max_staleness":           "45s",
-		"microlease.refill_threshold_percent":                  25,
-		"microlease.max_issue_transaction_duration":            "100ms",
-		"microlease.max_terminal_transaction_duration":         "250ms",
-		"microlease.max_reconciliation_scan_batch_size":        100,
-		"microlease.first_rollout_risk_acceptance_recorded":    false,
-
-		"balance_usage_authority.enabled":                               false,
-		"balance_usage_authority.mode":                                  "inert_expand",
-		"balance_usage_authority.require_worker_ready":                  true,
-		"balance_usage_authority.require_redpanda_ready":                true,
-		"balance_usage_authority.require_admission_control_fresh":       true,
-		"balance_usage_authority.max_admission_control_staleness":       "45s",
-		"balance_usage_authority.reject_redis_spend_authority":          true,
-		"balance_usage_authority.fail_closed_when_dependency_not_ready": true,
-
-		"observability.otel.service_name":                  "billing-service",
+		"observability.otel.service_name":                  "service",
 		"observability.otel.traces_sampler":                otelconfig.DefaultTracesSampler,
 		"observability.otel.traces_sampler_arg":            otelconfig.DefaultTracesSamplerArg,
 		"observability.otel.exporter.otlp_endpoint":        "",
@@ -108,6 +65,5 @@ func defaultValues() map[string]any {
 		"feature_flags.postgres_readiness_probe": true,
 		"feature_flags.mongo_readiness_probe":    false,
 		"feature_flags.redis_readiness_probe":    false,
-		"feature_flags.redpanda_readiness_probe": false,
 	}
 }

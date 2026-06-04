@@ -25,14 +25,9 @@ func (cfg Config) MongoReadinessProbeRequired() bool {
 	return cfg.Mongo.Enabled && cfg.FeatureFlags.MongoReadinessProbe
 }
 
-// RedpandaReadinessProbeRequired reports whether Redpanda participates in runtime readiness.
-func (cfg Config) RedpandaReadinessProbeRequired() bool {
-	return cfg.Redpanda.Enabled && cfg.FeatureFlags.RedpandaReadinessProbe
-}
-
 // ReadinessProbeBudgets returns the enabled runtime readiness probe budgets.
 func (cfg Config) ReadinessProbeBudgets() []ReadinessProbeBudget {
-	budgets := make([]ReadinessProbeBudget, 0, 4)
+	budgets := make([]ReadinessProbeBudget, 0, 3)
 	if cfg.PostgresReadinessProbeRequired() {
 		budgets = append(budgets, ReadinessProbeBudget{
 			ConfigKey: "postgres.healthcheck_timeout",
@@ -49,12 +44,6 @@ func (cfg Config) ReadinessProbeBudgets() []ReadinessProbeBudget {
 		budgets = append(budgets, ReadinessProbeBudget{
 			ConfigKey: "mongo.connect_timeout",
 			Budget:    cfg.Mongo.ConnectTimeout,
-		})
-	}
-	if cfg.RedpandaReadinessProbeRequired() {
-		budgets = append(budgets, ReadinessProbeBudget{
-			ConfigKey: "redpanda.healthcheck_timeout",
-			Budget:    cfg.Redpanda.HealthcheckTimeout,
 		})
 	}
 	return budgets

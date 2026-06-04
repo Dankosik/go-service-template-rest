@@ -1,9 +1,7 @@
-SERVICE_NAME := billing-service
+SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
 OPENAPI_GENERATED_FILES := internal/api/openapi.gen.go
-PROTO_EVENTS_FILES := $(wildcard api/proto/events/v1/*.proto)
-PROTO_EVENTS_GENERATED_FILES := $(patsubst api/proto/events/v1/%.proto,internal/api/events/v1/%.gen.go,$(PROTO_EVENTS_FILES))
 GO_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')
 GOFUMPT_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*' -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*' -not -name '*_mock_test.go' -not -name '*_string.go')
 REDOCLY_CLI_VERSION := 2.20.3
@@ -21,11 +19,6 @@ BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
 DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
 SKILLS_SYNC_SCRIPT := bash ./scripts/dev/sync-skills.sh
 AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
-UNAME_S := $(shell uname -s)
-SQLC_GENERATE_ENV :=
-ifeq ($(UNAME_S),Darwin)
-SQLC_GENERATE_ENV := CGO_CFLAGS=-DHAVE_STRCHRNUL
-endif
 
 .DEFAULT_GOAL := help
 
@@ -33,7 +26,6 @@ endif
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
 	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	proto-generate proto-drift-check proto-check \
 	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
@@ -61,7 +53,6 @@ help:
 	@echo "  make doctor-native  # diagnose native toolchain readiness"
 	@echo "  make doctor-docker  # diagnose Docker tooling readiness"
 	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
-	@echo "  make proto-check    # event proto generation, drift, and contract tests"
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
 	@echo "  make test-summary            # concise unit test summary"
@@ -422,7 +413,7 @@ stringer-drift-check: stringer-generate
 	fi
 
 sqlc-generate:
-	$(SQLC_GENERATE_ENV) go tool sqlc generate -f internal/infra/postgres/sqlc.yaml
+	go tool sqlc generate -f internal/infra/postgres/sqlc.yaml
 
 sqlc-check: sqlc-generate
 	@git diff --quiet -- internal/infra/postgres/sqlcgen || (echo "tracked sqlc drift detected in internal/infra/postgres/sqlcgen"; git diff -- internal/infra/postgres/sqlcgen; exit 1)
@@ -487,23 +478,6 @@ openapi-breaking:
 openapi-check: openapi-generate openapi-drift-check
 	go test ./internal/api
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
-
-proto-generate:
-	@test -n "$(PROTO_EVENTS_FILES)" || (echo "no event proto files found under api/proto/events/v1"; exit 1)
-	go run ./scripts/eventdto-gen
-
-proto-drift-check:
-	@git diff --quiet -- $(PROTO_EVENTS_GENERATED_FILES) || (echo "tracked event proto codegen drift detected in $(PROTO_EVENTS_GENERATED_FILES)"; git diff -- $(PROTO_EVENTS_GENERATED_FILES); exit 1)
-	@untracked="$$(git ls-files --others --exclude-standard -- $(PROTO_EVENTS_GENERATED_FILES))"; \
-	if [ -n "$$untracked" ]; then \
-		echo "untracked event proto artifacts detected"; \
-		echo "$$untracked"; \
-		echo "run 'make proto-generate' and commit updated event DTO files"; \
-		exit 1; \
-	fi
-
-proto-check: proto-generate proto-drift-check
-	go test ./internal/api/events/v1
 
 docker-openapi-check:
 	$(DOCKER_TOOLING_SCRIPT) openapi-check

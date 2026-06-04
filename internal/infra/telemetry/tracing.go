@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Dankosik/billing-service/internal/observability/otelconfig"
+	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"

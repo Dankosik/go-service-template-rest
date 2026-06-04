@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dankosik/billing-service/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/felixge/httpsnoop"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dankosik/billing-service/internal/observability/otelconfig"
+	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 	"github.com/knadh/koanf/v2"
 )
 
@@ -47,12 +47,6 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts valid
 	}
 
 	if err := validateDatastoreConfig(*cfg); err != nil {
-		return result, err
-	}
-	if err := validateAuthorityRuntimeConfig(*cfg); err != nil {
-		return result, err
-	}
-	if err := validateMicroleaseRuntimeConfig(*cfg); err != nil {
 		return result, err
 	}
 	if err := validateReadinessProbeBudgets(*cfg); err != nil {
@@ -138,214 +132,6 @@ func validateDatastoreConfig(cfg Config) error {
 		return err
 	}
 	if err := validateMongo(cfg.Mongo); err != nil {
-		return err
-	}
-	return nil
-}
-
-func validateMicroleaseRuntimeConfig(cfg Config) error {
-	if err := validateServiceAuth(cfg.ServiceAuth); err != nil {
-		return err
-	}
-	if err := validateRedpanda(cfg.Redpanda); err != nil {
-		return err
-	}
-	if err := validateMicrolease(cfg.Microlease); err != nil {
-		return err
-	}
-	if cfg.Microlease.Enabled || cfg.Microlease.WorkerEnabled {
-		if !cfg.Postgres.Enabled {
-			return fmt.Errorf("%w: postgres.enabled must be true when microlease runtime is enabled", ErrValidate)
-		}
-		if !cfg.ServiceAuth.Enabled {
-			return fmt.Errorf("%w: service_auth.enabled must be true when microlease runtime is enabled", ErrValidate)
-		}
-		if !cfg.Redpanda.Enabled {
-			return fmt.Errorf("%w: redpanda.enabled must be true when microlease runtime is enabled", ErrValidate)
-		}
-		if cfg.Redis.Enabled {
-			return fmt.Errorf("%w: redis.enabled must remain false for the first microlease runtime target", ErrValidate)
-		}
-	}
-	return nil
-}
-
-func validateAuthorityRuntimeConfig(cfg Config) error {
-	if err := validateAuthority(cfg.Authority); err != nil {
-		return err
-	}
-	if cfg.Authority.RequireAdmissionControlFresh &&
-		cfg.Authority.MaxAdmissionControlStaleness > cfg.Microlease.AdmissionControlMaxStaleness {
-		return fmt.Errorf("%w: balance_usage_authority.max_admission_control_staleness must not exceed microlease.admission_control_max_staleness", ErrValidate)
-	}
-	if !cfg.Authority.Enabled {
-		return nil
-	}
-	if !cfg.Postgres.Enabled {
-		return fmt.Errorf("%w: postgres.enabled must be true when balance_usage_authority.enabled=true", ErrValidate)
-	}
-	if !cfg.ServiceAuth.Enabled {
-		return fmt.Errorf("%w: service_auth.enabled must be true when balance_usage_authority.enabled=true", ErrValidate)
-	}
-	if !cfg.Microlease.Enabled {
-		return fmt.Errorf("%w: microlease.enabled must be true when balance_usage_authority.enabled=true", ErrValidate)
-	}
-	if cfg.Authority.RequireWorkerReady && !cfg.Microlease.WorkerEnabled {
-		return fmt.Errorf("%w: microlease.worker_enabled must be true when balance_usage_authority requires worker readiness", ErrValidate)
-	}
-	if cfg.Authority.RequireRedpandaReady && !cfg.Redpanda.Enabled {
-		return fmt.Errorf("%w: redpanda.enabled must be true when balance_usage_authority requires Redpanda readiness", ErrValidate)
-	}
-	if cfg.Authority.RejectRedisSpendAuthority && cfg.Redis.Enabled {
-		return fmt.Errorf("%w: redis.enabled must remain false for balance/usage spend authority", ErrValidate)
-	}
-	return nil
-}
-
-func validateAuthority(cfg AuthorityConfig) error {
-	switch cfg.Mode {
-	case "inert_expand", "shadow_no_spend", "internal_cohort", "migrated", "rollback":
-	default:
-		return fmt.Errorf("%w: balance_usage_authority.mode must be one of [inert_expand,shadow_no_spend,internal_cohort,migrated,rollback]", ErrValidate)
-	}
-	if !cfg.Enabled && cfg.Mode != "inert_expand" {
-		return fmt.Errorf("%w: balance_usage_authority.mode must be inert_expand while disabled", ErrValidate)
-	}
-	if err := validateDurationRange("balance_usage_authority.max_admission_control_staleness", cfg.MaxAdmissionControlStaleness, time.Second, 5*time.Minute); err != nil {
-		return err
-	}
-	if cfg.Enabled && !cfg.FailClosedWhenDependencyNotReady {
-		return fmt.Errorf("%w: balance_usage_authority.fail_closed_when_dependency_not_ready must be true when enabled", ErrValidate)
-	}
-	if cfg.Enabled && !cfg.RejectRedisSpendAuthority {
-		return fmt.Errorf("%w: balance_usage_authority.reject_redis_spend_authority must be true when enabled", ErrValidate)
-	}
-	return nil
-}
-
-func validateServiceAuth(cfg ServiceAuthConfig) error {
-	if !cfg.Enabled {
-		return nil
-	}
-	if strings.TrimSpace(cfg.Issuer) == "" {
-		return fmt.Errorf("%w: service_auth.issuer is required when service_auth.enabled=true", ErrValidate)
-	}
-	if strings.TrimSpace(cfg.Audience) == "" {
-		return fmt.Errorf("%w: service_auth.audience is required when service_auth.enabled=true", ErrValidate)
-	}
-	if strings.TrimSpace(cfg.JWKSURL) == "" {
-		return fmt.Errorf("%w: service_auth.jwks_url is required when service_auth.enabled=true", ErrValidate)
-	}
-	if !strings.HasPrefix(cfg.JWKSURL, "https://") && !strings.HasPrefix(cfg.JWKSURL, "http://") {
-		return fmt.Errorf("%w: service_auth.jwks_url must be http or https", ErrValidate)
-	}
-	return nil
-}
-
-func validateRedpanda(cfg RedpandaConfig) error {
-	if err := validateDurationRange("redpanda.healthcheck_timeout", cfg.HealthcheckTimeout, 100*time.Millisecond, 10*time.Second); err != nil {
-		return err
-	}
-	if !cfg.Enabled {
-		return nil
-	}
-	if strings.TrimSpace(cfg.Brokers) == "" {
-		return fmt.Errorf("%w: redpanda.brokers is required when redpanda.enabled=true", ErrValidate)
-	}
-	for broker := range strings.SplitSeq(cfg.Brokers, ",") {
-		if err := validateHostPortWithNumericTCPPort("redpanda.brokers", strings.TrimSpace(broker)); err != nil {
-			return err
-		}
-	}
-	for _, topic := range []struct {
-		key   string
-		value string
-	}{
-		{key: "redpanda.terminal_topic", value: cfg.TerminalTopic},
-		{key: "redpanda.checkpoint_topic", value: cfg.CheckpointTopic},
-		{key: "redpanda.close_topic", value: cfg.CloseTopic},
-		{key: "redpanda.billing_facts_topic", value: cfg.BillingFactsTopic},
-		{key: "redpanda.consumer_group", value: cfg.ConsumerGroup},
-	} {
-		if strings.TrimSpace(topic.value) == "" {
-			return fmt.Errorf("%w: %s cannot be empty when redpanda.enabled=true", ErrValidate, topic.key)
-		}
-	}
-	return nil
-}
-
-func validateMicrolease(cfg MicroleaseConfig) error {
-	if cfg.DefaultAdmissionState != "fail_closed" && cfg.DefaultAdmissionState != "strict" && cfg.DefaultAdmissionState != "throttle" && cfg.DefaultAdmissionState != "open" {
-		return fmt.Errorf("%w: microlease.default_admission_state must be one of [fail_closed,strict,throttle,open]", ErrValidate)
-	}
-	if !cfg.Enabled && cfg.DefaultAdmissionState != "fail_closed" {
-		return fmt.Errorf("%w: microlease.default_admission_state must be fail_closed while microlease.enabled=false", ErrValidate)
-	}
-	if err := validateMicroleaseMoneyAndDurations(cfg); err != nil {
-		return err
-	}
-	if err := validateMicroleaseRuntimeLimits(cfg); err != nil {
-		return err
-	}
-	if !cfg.FirstRolloutRiskAcceptanceRecorded {
-		if cfg.MaxMicroleaseUSDAtoms > 100_000_000 || cfg.AccountMicroleaseExposureCapAtoms > 200_000_000 {
-			return fmt.Errorf("%w: first rollout microlease caps exceed approved budget without risk acceptance", ErrValidate)
-		}
-	}
-	return nil
-}
-
-func validateMicroleaseMoneyAndDurations(cfg MicroleaseConfig) error {
-	if err := validateInt64Range("microlease.max_microlease_usd_atoms", cfg.MaxMicroleaseUSDAtoms, 1, 100_000_000); err != nil {
-		return err
-	}
-	if err := validateInt64Range("microlease.account_microlease_exposure_cap_usd_atoms", cfg.AccountMicroleaseExposureCapAtoms, 1, 200_000_000); err != nil {
-		return err
-	}
-	if err := validateInt64Range("microlease.min_safety_floor_usd_atoms", cfg.MinSafetyFloorUSDAtoms, 5_000_000, 200_000_000); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.ttl", cfg.TTL, time.Second, 5*time.Minute); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.debit_cutoff_before_expiry", cfg.DebitCutoffBeforeExpiry, time.Second, cfg.TTL-time.Nanosecond); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.terminal_deadline", cfg.TerminalDeadline, time.Second, 10*time.Minute); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.stale_debit_warning_age", cfg.StaleDebitWarningAge, time.Second, 10*time.Minute); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.stale_debit_critical_age", cfg.StaleDebitCriticalAge, time.Second, 30*time.Minute); err != nil {
-		return err
-	}
-	if cfg.StaleDebitWarningAge >= cfg.StaleDebitCriticalAge {
-		return fmt.Errorf("%w: microlease.stale_debit_warning_age must be less than microlease.stale_debit_critical_age", ErrValidate)
-	}
-	if err := validateDurationRange("microlease.reconciliation_sla", cfg.ReconciliationSLA, time.Minute, 30*time.Minute); err != nil {
-		return err
-	}
-	return nil
-}
-
-func validateMicroleaseRuntimeLimits(cfg MicroleaseConfig) error {
-	if err := validateDurationRange("microlease.admission_control_renewal_interval", cfg.AdmissionControlRenewalInterval, time.Second, cfg.AdmissionControlMaxStaleness); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.admission_control_max_staleness", cfg.AdmissionControlMaxStaleness, time.Second, 5*time.Minute); err != nil {
-		return err
-	}
-	if err := validateIntRange("microlease.refill_threshold_percent", cfg.RefillThresholdPercent, 1, 100); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.max_issue_transaction_duration", cfg.MaxIssueTransactionDuration, time.Millisecond, 250*time.Millisecond); err != nil {
-		return err
-	}
-	if err := validateDurationRange("microlease.max_terminal_transaction_duration", cfg.MaxTerminalTransactionDuration, time.Millisecond, time.Second); err != nil {
-		return err
-	}
-	if err := validateIntRange("microlease.max_reconciliation_scan_batch_size", cfg.MaxReconciliationScanBatchSize, 1, 1000); err != nil {
 		return err
 	}
 	return nil
@@ -607,13 +393,6 @@ func validateDurationRange(name string, value time.Duration, lowerBound time.Dur
 }
 
 func validateIntRange(name string, value int, lowerBound int, upperBound int) error {
-	if value < lowerBound || value > upperBound {
-		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, lowerBound, upperBound)
-	}
-	return nil
-}
-
-func validateInt64Range(name string, value int64, lowerBound int64, upperBound int64) error {
 	if value < lowerBound || value > upperBound {
 		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, lowerBound, upperBound)
 	}

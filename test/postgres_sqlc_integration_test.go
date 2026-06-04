@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dankosik/billing-service/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"

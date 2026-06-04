@@ -5,7 +5,7 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/Dankosik/billing-service/internal/api"
+	"github.com/example/go-service-template-rest/internal/api"
 )
 
 const (

@@ -1,6 +1,6 @@
 # Repository Architecture Baseline
 
-This document is the stable repository-wide architecture baseline for `billing-service`.
+This document is the stable repository-wide architecture baseline for `go-service-template-rest`.
 Use it to recover the standing component boundaries, ownership rules, and runtime flow before writing task-local design in `specs/<feature-id>/design/`.
 
 This file is intentionally narrower than:

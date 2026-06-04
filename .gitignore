@@ -3,7 +3,6 @@ coverage.out
 .artifacts/test/
 .env
 .cache/
-.codegraph/
 .idea/
 .vscode/
 .DS_Store

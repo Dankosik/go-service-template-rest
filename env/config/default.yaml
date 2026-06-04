@@ -38,7 +38,7 @@ redis:
   read_timeout: 1s
   write_timeout: 1s
   pool_size: 20
-  key_prefix: billing-service
+  key_prefix: service
   fresh_ttl: 60s
   stale_window: 0s
   negative_ttl: 10s
@@ -54,56 +54,9 @@ mongo:
   server_selection_timeout: 3s
   max_pool_size: 100
 
-service_auth:
-  enabled: false
-  issuer: ""
-  audience: ""
-  jwks_url: ""
-
-redpanda:
-  enabled: false
-  brokers: ""
-  terminal_topic: billing.microlease.terminal.v1
-  checkpoint_topic: billing.microlease.checkpoint.v1
-  close_topic: billing.microlease.close.v1
-  billing_facts_topic: billing.microlease.facts.v1
-  consumer_group: billing-service-microleases
-  healthcheck_timeout: 3s
-
-microlease:
-  enabled: false
-  worker_enabled: false
-  default_admission_state: fail_closed
-  max_microlease_usd_atoms: 100000000
-  account_microlease_exposure_cap_usd_atoms: 200000000
-  min_safety_floor_usd_atoms: 5000000
-  ttl: 30s
-  debit_cutoff_before_expiry: 5s
-  terminal_deadline: 120s
-  stale_debit_warning_age: 60s
-  stale_debit_critical_age: 180s
-  reconciliation_sla: 5m
-  admission_control_renewal_interval: 30s
-  admission_control_max_staleness: 45s
-  refill_threshold_percent: 25
-  max_issue_transaction_duration: 100ms
-  max_terminal_transaction_duration: 250ms
-  max_reconciliation_scan_batch_size: 100
-  first_rollout_risk_acceptance_recorded: false
-
-balance_usage_authority:
-  enabled: false
-  mode: inert_expand
-  require_worker_ready: true
-  require_redpanda_ready: true
-  require_admission_control_fresh: true
-  max_admission_control_staleness: 45s
-  reject_redis_spend_authority: true
-  fail_closed_when_dependency_not_ready: true
-
 observability:
   otel:
-    service_name: billing-service
+    service_name: service
     traces_sampler: parentbased_traceidratio
     traces_sampler_arg: 0.10
     exporter:
@@ -116,4 +69,3 @@ feature_flags:
   postgres_readiness_probe: true
   mongo_readiness_probe: false
   redis_readiness_probe: false
-  redpanda_readiness_probe: false
