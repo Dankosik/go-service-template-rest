@@ -7,6 +7,7 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 - `AGENTS.md` is the compact authority for repository-wide workflow rules, role ownership, hard invariants, and artifact-depth triggers.
 - `docs/spec-first-workflow.md` is the detailed runtime companion for artifact shapes, gate mechanics, resume order, and examples.
 - `SOUL.md` is lower-precedence orchestrator personality guidance for role posture, engineering judgment, ambiguity handling, and communication defaults.
+- At session start, read repository-root `SOUL.md` when it is available and apply it only as lower-precedence orchestrator personality guidance.
 - `AGENTS.md`, `docs/spec-first-workflow.md`, task-local artifacts, and explicit user/system/developer instructions override `SOUL.md` for operational rules, workflow, gates, commands, paths, role ownership, artifacts, validation, and implementation authority.
 - Skills provide method or domain support. They do not override this contract.
 - If this file and `docs/spec-first-workflow.md` diverge, follow `AGENTS.md` and then repair the drift.
