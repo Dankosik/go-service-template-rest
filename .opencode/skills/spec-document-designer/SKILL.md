@@ -25,6 +25,8 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 - keep blockers, assumptions, inline `Risk Challenge` or clarification outcomes, validation hooks, and handoff links visible before lean tasking or triggered `technical design`
 - keep the handoff focused on the current decision frontier: record downstream consequences that matter, but do not promote every visible consequence into a new design decision inside `spec.md`
 - for replacement or cleanup-discipline work, name known legacy surfaces and the expected remove/refactor/retain semantics before tasking begins
+- for non-trivial custom implementation, new runtime dependencies, or meaningful helper/abstraction choices, record dependency/OSS due diligence before tasking begins
+- for non-trivial architecture, system-design, workflow, integration, resilience, consistency, data-flow, or abstraction choices, record Pattern Fit Diligence before tasking begins or route to research/technical design when the pattern comparison is not ready
 
 ## Boundaries
 Do not:
@@ -55,6 +57,8 @@ Escalate if:
 - Treat external frameworks as coverage prompts, not as headings to copy.
 - Put stable decisions in `spec.md`, lean compact design answers in `spec.md` or one `design/overview.md`, split task-local technical context in `design/` when triggered, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
 - For replacement specs, record known old identifiers, routes, configs, commands, generated outputs, fixtures, docs, skills, agents, or mirrors and decide whether each is removed, refactored into the active path, or retained with owner, reason, proof, and exit condition.
+- For dependency-sensitive specs, record selected and rejected stdlib, established repository-pattern, mature OSS, and custom-code options with current evidence. Missing dependency/OSS due diligence blocks approval when the task would otherwise add a dependency, build custom infrastructure, or introduce a meaningful helper/abstraction.
+- For pattern-sensitive specs, record selected and rejected design or system-design patterns with current source descriptions, real-use examples, task applicability, Go/repository fit, and custom-design justification when no known pattern fits. Missing Pattern Fit Diligence blocks approval when the task would otherwise invent architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape.
 - Prefer short explicit bullets over template sludge.
 - Omit empty sections instead of padding the document for completeness theater.
 - Deep coverage is good, but `spec.md` should close only the decisions needed before technical design. Later-domain consequences that do not require a new decision now should stay as constraints, proof obligations, or explicit `no new decision required` notes.
@@ -126,12 +130,14 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
   - `Task Breakdown / Handoff Link`
   - `Validation`
   - `Outcome`
-- For lean-local specs, prefer the compact shape from `docs/spec-first-workflow.md`: `Intent`, `Scope / Non-goals`, `Behavior / Contract Delta`, `Decisions`, `Compact Design`, `Subagent Gate Decision`, `Risk Challenge`, `Task Handoff`, `Validation`, and `Outcome`.
+- For lean-local specs, prefer the compact shape from `docs/spec-first-workflow.md`: `Intent`, `Scope / Non-goals`, `Behavior / Contract Delta`, `Decisions`, `Dependency / OSS Due Diligence`, `Compact Design`, `Subagent Gate Decision`, `Risk Challenge`, `Task Handoff`, `Validation`, and `Outcome`.
 - Merge sections only when it makes the document clearer.
 - Expand depth based on task risk and ambiguity, not on habit.
 
 ### Coverage Competency
 - Capture the behavior delta, affected actors, scope cuts, edge semantics, validation expectations, and material constraints.
+- Capture dependency/OSS due diligence when relevant: current Go stdlib fit, established repo pattern fit, OSS candidates, maintenance/release activity, adoption such as stars or domain-equivalent signals, license, security posture, transitive dependency cost, API stability, repository-boundary fit, selected option, rejected options, and custom-code justification.
+- Capture Pattern Fit Diligence when relevant: known candidate patterns, concise source descriptions, real-use examples, why the pattern forces match or do not match this task, Go/repository fit, selected pattern, rejected patterns, and custom-design justification.
 - When the behavior delta replaces an old path, capture the legacy-surface delta explicitly: what old surfaces are gone, what is refactored into the active path, what remains intentionally retained, and what proof will make that claim auditable.
 - Ask and answer before approval: `Does this change replace an existing path?` If yes, list known old code, tests, fixtures, configs, docs, generated outputs, skills, agents, or mirrors. If no, record `No known replacement surface`.
 - Use these external patterns only as coverage lenses:
@@ -157,6 +163,8 @@ Make `spec.md` stable enough for `technical design` while preserving the reposit
 ### Technical-Design Handoff Competency
 - A full-orchestrated or design-triggered spec must let `go-design-spec` derive the task-local `design/` bundle without silently reopening core problem framing.
 - A lean-local spec must let `tasks.md` be written from explicit `Compact Design` answers without forcing hidden design recovery during planning.
+- A dependency-sensitive spec must let technical design or planning consume the chosen dependency/custom-code approach without rerunning open-ended library selection.
+- A pattern-sensitive spec must let technical design or planning consume the selected design/system pattern without rerunning open-ended pattern selection; when the comparison is too dense, link to preserved `research/pattern-fit.md` and route detailed application to `design/`.
 - Keep blockers, accepted risks, and reopen conditions explicit.
 - Preserve non-goals and scope cuts so technical design does not re-expand the change.
 - Keep only the task-breakdown or handoff link in `spec.md`.
@@ -262,6 +270,7 @@ The pass is complete when:
 - validation expectations are visible early enough for lean tasking or triggered technical design, mandatory technical design review, and later planning
 - replacement specs leave no known legacy-surface removal, refactor, retention, or negative-proof decision for implementation to infer
 - replacement specs either list known legacy surfaces or explicitly say `No known replacement surface`
+- pattern-sensitive specs either record selected/rejected Pattern Fit Diligence or route the missing comparison to research or technical design before planning
 - the session stops at approved `spec.md` for dedicated specification work unless an explicit direct/lean waiver already allows phase collapse; phase-collapse waiver does not waive targeted expert research or subagent work required by a clarification finding
 - the next technical-design or reopen step is clear without turning the spec into a design bundle or a plan
 
@@ -272,4 +281,5 @@ The pass is complete when:
 - filling every possible NFR category whether it matters or not
 - hiding contradictions under generic wording
 - treating raw research notes as final decisions
+- naming a popular pattern without task-specific applicability, Go-fit, and rejected alternatives
 - using this skill when framing, specialist design, or planning clearly owns the work

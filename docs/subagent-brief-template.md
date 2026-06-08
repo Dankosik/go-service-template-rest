@@ -20,6 +20,8 @@ Context:
 - Source-of-truth inputs: <contracts, docs, diffs, files, commands, specialist outputs>
 - Constraints and non-goals: <short list>
 - Known blockers or assumptions: <short list>
+- Dependency/OSS scope: <new dependency, custom infrastructure, material abstraction, or "not in scope"; include expected stdlib/repo-pattern/OSS comparison when relevant>
+- Pattern fit scope: <architecture/workflow/integration/resilience/consistency/data-flow/abstraction pattern choice, or "not in scope"; include expected known-pattern comparison when relevant>
 - Legacy cleanup scope: <known old surfaces or "not in scope"; include expected remove/refactor/retain proof when relevant>
 - Fan-in owner: orchestrator reconciles lane outputs; this lane does not approve final decisions.
 
@@ -32,6 +34,8 @@ Question:
 Evidence requirement:
 - Cite exact files, artifact sections, commands, or source facts.
 - Separate facts from assumptions and inferences.
+- When dependency choice or custom implementation is in scope, compare current Go stdlib, established repo patterns, and mature OSS options; cite maintenance/release activity, adoption such as stars or domain-equivalent signals, license, security posture, transitive dependency cost, API stability, fit, selected option, rejected options, and custom-code justification when applicable.
+- When design/system patterns are in scope, compare known applicable patterns; cite concrete pattern descriptions and real-use examples, task applicability, Go/repository fit, selected pattern, rejected patterns, and custom-design justification when no pattern fits.
 - When cleanup is in scope, report unexplained surviving replaced or unused surfaces and classify each as removed, refactored, retained with owner/reason/proof/exit condition, not applicable, or reopen risk.
 - Do not invent missing artifacts or validation results.
 
@@ -51,7 +55,7 @@ Use <agent-name> in <mode> with <skill-name | no-skill>.
 Read-only enforcement: <read-only execution choice>; no edits, no git mutation, no task-ledger or handoff changes.
 Question: <exact question>.
 Inspect first: <paths>.
-Evidence: cite concrete files/artifacts/commands; label assumptions.
+Evidence: cite concrete files/artifacts/commands; label assumptions; when dependency/custom-code choice is in scope, include stdlib/repo-pattern/OSS comparison with current maintenance, adoption, license, security, and fit signals; when pattern choice is in scope, include known-pattern comparison with source descriptions, examples, task applicability, Go fit, and rejected alternatives.
 Legacy cleanup: if in scope, report any unexplained surviving old surfaces and retained-surface proof.
 Return: skill output shape, or docs/subagent-contract.md envelope with one handoff classification.
 Prefer `must_decide_now` / `constraint_only` / `proof_only` / `follow_up_only` for adjacent-domain effects when relevant.
@@ -65,7 +69,7 @@ Scope: <artifact, diff, or decision being challenged/reviewed>.
 Lens: <specific approval-risk lens or specialist domain when part of multi-lane fan-out>.
 Question: <one approval-, risk-, or correctness-critical question>.
 Inspect first: <small path list>.
-Evidence: cite exact files/artifacts/commands; separate facts from assumptions.
+Evidence: cite exact files/artifacts/commands; separate facts from assumptions; when dependency/custom-code choice is in scope, include stdlib/repo-pattern/OSS comparison with current maintenance, adoption, license, security, and fit signals; when pattern choice is in scope, include known-pattern comparison with source descriptions, examples, task applicability, Go fit, and rejected alternatives.
 Legacy cleanup: if replacement work is in scope, report retired surfaces still present without approved retention owner/reason/proof/exit condition.
 Return: findings only, ordered by impact, with one recommended handoff classification.
 Do not edit files, mutate git state, approve decisions, or change task ledgers/handoffs.

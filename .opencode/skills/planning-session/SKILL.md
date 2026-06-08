@@ -43,7 +43,10 @@ Planning may begin only when the minimum planning-entry inputs exist:
 - any triggered conditional design artifacts that affect sequencing, validation, or rollout, such as:
   - `design/data-model.md`
   - `design/dependency-graph.md`
+  - `design/pattern-fit.md`
   - `design/contracts/`
+- approved dependency/OSS due-diligence outcome when implementation adds a dependency, integrates OSS, builds custom infrastructure, or introduces a material helper/abstraction
+- approved Pattern Fit Diligence outcome when implementation relies on a non-trivial architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern
 - existing task-local `workflow-plan.md`
 - existing task-local `workflow-plans/planning.md`, if present
 - explicit design-skip or compact-design rationale only when the repository contract allows it for direct or lean-local work
@@ -121,6 +124,8 @@ Do not:
 - `tasks.md` owns the executable checkbox ledger and final implementation handoff derived from `spec.md` plus required compact or split design context
 - `tasks.md` must belong to the active task-local bundle. A repository-root or unrelated ledger is not the current handoff unless workflow control explicitly reopens it and records the resume route.
 - task-ledger review is the post-ledger pre-implementation stage inside the planning checkpoint unless workflow control explicitly records a separate review phase; it compares `tasks.md` to the approved artifact chain before readiness can become `PASS`, eligible `CONCERNS`, or eligible `WAIVED`
+- dependency/OSS due-diligence decisions from `spec.md` or design must be carried into `tasks.md` as dependency, integration, license/security, drift, and proof tasks when relevant; missing due diligence blocks implementation readiness
+- Pattern Fit Diligence decisions from `spec.md` or design must be carried into `tasks.md` as design-preserving constraints, proof tasks, and reopen conditions when relevant; missing pattern comparison blocks implementation readiness when implementation would otherwise choose or invent the pattern
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - technical design review is the required pre-planning gate for separate design depth; planning must not downgrade it into an optional note or infer it from the design author's own handoff
 - before marking `tasks.md` approved for non-trivial work, default to a read-only task-ledger review fan-out when implementation readiness depends on independent lenses
@@ -168,6 +173,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - verify that `spec.md` is stable enough for task breakdown
 - verify that the required compact or split design context exists unless an explicit design-skip rationale already covers the task
 - verify that mandatory technical design review is complete when separate design depth was triggered
+- verify that dependency/OSS due-diligence decisions are present when custom infrastructure, a new dependency, or a material helper/abstraction is in scope
+- verify that Pattern Fit Diligence decisions are present when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern choice is in scope
 - accept concise approved design artifacts when they answer the current planning-critical questions explicitly; do not reopen design just because one required artifact is short or asymmetrical
 - verify that any triggered conditional design artifacts exist when they affect sequencing, validation, or rollout
 - if planning exposes a missing spec, design, or technical-design-review input, route back explicitly; do not invent the missing context inside `tasks.md`
@@ -206,6 +213,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 - keep every ledger-review lane read-only and limited to the approved artifact chain; the orchestrator repairs planning or reopens earlier phases from fan-in
 - compare `tasks.md` to `spec.md`, compact or split design context, technical-design-review obligations, triggered `test-plan.md` or `rollout.md`, and any required review or validation phase-control files
 - verify that every accepted in-scope behavior, preserved constraint, accepted risk, proof obligation, dependency, and reopen condition is either represented in executable tasking or explicitly not expected with rationale
+- verify that approved dependency/OSS choices are represented in executable dependency, integration, license/security, drift, and proof tasks where relevant; missing due diligence reopens specification or technical design instead of passing to implementation
+- verify that approved Pattern Fit choices are represented in executable constraints, proof tasks, or explicit non-task rationale where relevant; missing Pattern Fit Diligence reopens research, specification, or technical design instead of passing to implementation
 - if the review finds task coverage, order, proof, evidence-field, or workflow-control gaps that do not alter approved decisions, repair planning and rerun the review
 - if the review finds missing or contradictory behavior, ownership, sequence, rollout, validation, or review-gate decisions, set readiness to `FAIL` and route to `specification`, `technical design`, or `technical design review` as the owning phase
 - if planning is complete, set `Next session starts with` to the first task ID or explicit implementation checkpoint from `tasks.md`
@@ -300,6 +309,7 @@ Planning is complete when:
 - `test-plan.md` and `rollout.md` exist only when their triggers are real, and their status is explicit when not needed
 - mandatory technical design review is `PASS` or `CONCERNS` with named accepted design risks and proof obligations when separate design depth was triggered
 - review findings classified as `blocks_planning`, `reopens_design`, or `reopens_spec` are resolved, explicitly rerouted, or still block planning rather than being hidden inside optimistic tasks
+- selected design/system pattern constraints and proof obligations are explicit enough that implementation does not need to choose, reinterpret, or invent the pattern
 - any review or validation phase workflow files that named multi-session routing requires were created before implementation begins, or their absence is recorded as a reopen blocker
 - implementation-readiness gate is `PASS`, `CONCERNS` with named accepted risks and proof obligations, or eligible `WAIVED`; `FAIL` leaves planning blocked or reopened
 - task-ledger review confirms `tasks.md` matches approved `spec.md`, required design context, technical-design-review obligations, and triggered validation or rollout obligations; `FAIL` names the owning reopen target

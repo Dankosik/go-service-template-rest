@@ -44,6 +44,8 @@ Need only the minimum phase-ready inputs:
 - current `workflow-plans/technical-design.md`, if present
 - existing compact or split `design/` artifacts when this is a continuation or repair pass
 - known blockers, assumptions, and specialist outputs that still affect design integrity
+- approved dependency/OSS due-diligence decisions or blockers when design selects a new dependency, custom infrastructure, or material helper/abstraction
+- approved Pattern Fit Diligence decisions, preserved `research/pattern-fit.md`, or blockers when design selects an architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern
 
 If a planning-critical input is missing, record it as a blocker or reopen condition instead of inventing detail.
 
@@ -134,6 +136,8 @@ Do not:
 - for non-trivial triggered technical design, first identify independent planning-critical design questions and run or record narrow read-only specialist fan-out before the integrated design pass
 - if design specialist fan-out is skipped, record `Design fan-out rationale:` in `workflow-plans/technical-design.md` with the reason no independent lane would materially improve correctness
 - a single integrated local design pass is eligible only when the approved `spec.md` is stable, the current decision frontier has one primary design question, no adjacent domain has an unresolved live fork, and API/data/security/reliability/observability/QA effects can be recorded as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` without changing ownership, contracts, persistence, failure semantics, validation, or rollout
+- dependency-sensitive design must preserve the approved stdlib, repository-pattern, mature-OSS, or custom-code decision. If the design needs a new dependency or custom infrastructure not covered by due diligence, route back to `specification` or targeted research instead of hiding the choice in design prose.
+- pattern-sensitive design must preserve the approved Pattern Fit decision. If design needs a new or different architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern not covered by Pattern Fit Diligence, route back to research or specification instead of hiding the choice in design prose.
 - required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` rather than guessed into existence
 - `lean local` may use `spec.md` `Compact Design` or one `design/overview.md`; split core design files are for triggered depth, not the default for bounded work
 - review-ready means the design author believes the current decision frontier is closed, but planning still waits for the mandatory technical design review gate
@@ -166,6 +170,7 @@ Do not move split-design technical context back into `spec.md`. Lean-local compa
 Create these only when their trigger is real:
 - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
 - `design/dependency-graph.md` when package or module dependency shape changes, generated-code flow changes, or coupling risk must be made explicit
+- `design/pattern-fit.md` when selected and rejected design or system-design patterns, source examples, task applicability, Go-fit, and repository-fit are too dense for `design/overview.md`
 - `design/contracts/` when API contracts, event contracts, generated contracts, or material internal interfaces change
   - keep this folder design-only; authoritative runtime contracts stay in canonical repository-owned sources such as `api/openapi/service.yaml`, generation inputs, or other contract authorities
 - `test-plan.md` when validation obligations are too large or multi-layered to fit cleanly inside `tasks.md`
@@ -197,6 +202,8 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 - first identify the decision frontier as owned questions, not domain labels
 - for each candidate domain seam, ask whether a real live fork exists that would change the design bundle or later task ledger
 - default to multiple narrow read-only specialist lanes when API, data, security, reliability, observability, delivery, performance, QA, architecture, or dependency seams have unresolved live forks or domain-owned decisions
+- open a dependency/OSS research or review lane when a selected library or custom implementation depends on current external maintenance, adoption, license, security, or integration evidence that could change the design
+- open a Pattern Fit research or review lane when a selected design/system pattern depends on external descriptions, real-use examples, competing known patterns, or Go/repository-fit evidence that could change the design
 - each lane owns one question and one skill or `no-skill`; lanes return evidence, risks, and recommended handoffs only
 - collapse duplicate or consequence-only seams into one `go-design-spec` pass and record the classification
 - the orchestrator performs fan-in, then uses `go-design-spec` to integrate outcomes into the writable design bundle
@@ -210,6 +217,8 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 ### 6. Write Or Repair The Design Bundle
 - produce or tighten the required core artifacts
 - create only the conditional artifacts whose trigger is real
+- include dependency/OSS due-diligence consequences in the design bundle when they affect package boundaries, adapter shape, configuration, generation, security/license proof, or validation
+- include Pattern Fit consequences in the design bundle when the selected pattern affects ownership, sequence, package boundaries, failure behavior, data flow, validation, rollout, or Go implementation shape
 - keep `design/overview.md` as the entrypoint and link surface for the bundle, with required artifact status and conditional trigger rationale visible when the bundle is review-bound
 - for `test-plan.md` and `rollout.md`, write the artifact only when the validation or rollout shape is design-ready; otherwise record the conditional trigger and decision point for planning
 - keep technical design in `design/`, `test-plan.md`, or `rollout.md` where appropriate; do not absorb it into `spec.md` or phase-control files
@@ -303,6 +312,7 @@ When the session is review-ready, hand technical design review exactly this:
 - approved lean compact design context, one `design/overview.md`, or triggered split design artifacts
 - approved triggered conditional design artifacts, or explicit `not expected` rationale
 - any triggered `design/data-model.md`, `design/dependency-graph.md`, or `design/contracts/`
+- any triggered `design/pattern-fit.md` or preserved `research/pattern-fit.md` when pattern comparison affects design readiness
 - `test-plan.md` or `rollout.md` when triggered, or an explicit workflow note that they are not expected
 - unresolved assumptions, accepted trade-offs, non-goals, and reopen conditions that review and later planning must preserve
 - the expected review question, gate output, and any proof obligations already forced by the design

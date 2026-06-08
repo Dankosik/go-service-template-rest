@@ -38,6 +38,7 @@ Need only the minimum phase-ready inputs:
 - known constraints, risk hotspots, and success checks
 - current workflow routing and task-local artifact location
 - any already-known research questions, blockers, or assumptions
+- Pattern Fit Diligence scope when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction patterns could change the later spec or design
 - existing research artifacts or lane outputs when this is a continuation
 
 If a research prerequisite is missing, record it as an assumption or blocker instead of inventing facts.
@@ -91,6 +92,8 @@ Do not:
 - for a dedicated non-trivial research session, default to read-only fan-out when the research questions span more than one independent domain, artifact family, source-of-truth seam, or risk lens
 - a local-only pass must record `Local research rationale:` and `Escalation seams:` in `workflow-plans/research.md`
 - `Local research rationale:` must list the research decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out
+- when Pattern Fit Diligence is in scope, search for known applicable design or system-design patterns, concrete descriptions, and real-use examples; compare candidates by task forces, repository boundaries, operational proof, and idiomatic Go fit instead of selecting a design shape from intuition alone
+- preserve the comparison in `research/pattern-fit.md` when multiple candidates, external sources, or examples would materially help later synthesis or auditability; keep final selected/rejected pattern decisions for `spec.md` or the design bundle
 - each subagent lane owns one question and at most one skill, or explicit `no-skill`
 - preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
 - preserved `research/*.md` notes stay flexible, but the minimum context-first bar is visible question or scope, findings with evidence and limits, conflicts or weak evidence, source notes, and handoff implication
@@ -130,6 +133,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 
 ### 3. Define The Research Questions
 - list only the questions whose answers can change scope, correctness, constraints, risk handling, or spec readiness
+- include a pattern-fit question when the task would otherwise invent an architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape
 - separate must-answer-now from nice-to-know
 - keep unknowns visible instead of filling them in
 
@@ -151,6 +155,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 ### 5. Run Research And Preserve Only What Helps
 - gather repository or external evidence for the chosen questions
 - create `research/*.md` only when the evidence, comparisons, or source notes need to survive beyond this session
+- for pattern-fit research, record candidate pattern name, source description, real-use example, applicability to this task, Go/repository fit, rejected alternatives, and evidence limits
 - keep research artifacts evidence-oriented: question or scope, findings with sources or file references, evidence limits, assumptions, conflicts or open points, and why the note matters for the handoff
 - do not force a universal research template; the required quality is source-hygiene and resume value, not exact headings. Copy the evidence discipline, not a rigid section list
 - do not treat `research/*.md` as the decision record
@@ -229,6 +234,7 @@ A finished research session produces only research-phase artifacts and routing:
 - updated or newly created `workflow-plan.md`
 - updated or newly created `workflow-plans/research.md`
 - optional `research/*.md` for preserved evidence or comparisons
+- optional `research/pattern-fit.md` for preserved Pattern Fit Diligence
 - an honest research phase status such as `complete` or `blocked`, plus a separate reopen routing state when relevant, with the next session start point made explicit
 
 It does not produce approved `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or implementation output.

@@ -23,6 +23,13 @@ Default decision quality:
 
 - Unless the user explicitly asks for prototype, quick, simple, temporary, or intentionally staged delivery, choose the production-ready architecture and system-design answer for the accepted scope.
 - Default to a target-state plan: decide the final architecture now, and make the implementation ledger include the work needed to reach that state without remembered-later cleanup.
+- Before approving non-trivial custom implementation, a new runtime dependency, or a meaningful new helper/abstraction, compare the current Go standard library, established repository patterns, and mature open-source options. Prefer a maintained open-source library over custom code when it fits the accepted contract and has compatible license, healthy maintenance/release/security signals, sufficient adoption for its domain, and lower ownership cost than local implementation.
+- Dependency/OSS due diligence must use current evidence when freshness matters. Useful signals include recent releases or commits, issue and maintainer activity, documented compatibility, license, security advisories or `govulncheck` relevance, transitive dependency cost, API stability, stars or other domain-appropriate adoption signals, and how naturally the library fits repository ownership boundaries.
+- Record the selected option, rejected options, evidence date or source, and reason for custom code when no suitable dependency is chosen. Missing due diligence blocks approval or readiness for work that would otherwise build custom infrastructure or add a dependency.
+- Before approving a non-trivial architecture, system-design, workflow, integration, data-flow, resilience, or abstraction decision, run Pattern Fit Diligence. Search for known design or system-design patterns that plausibly solve the task, read concrete pattern descriptions and real-use examples, compare candidates against the accepted scope, repository boundaries, operational proof path, and idiomatic Go constraints, then record the selected pattern, rejected patterns, evidence, applicability, and Go-fit. Prefer a proven pattern when it fits; justify custom design only when the known candidates fail a concrete task force.
+- Pattern Fit Diligence is not cargo-culting. Do not force Gang-of-Four, enterprise, cloud, or distributed-systems vocabulary onto a simple Go change. The comparison should explain why a pattern fits this task now, or why the straightforward repo-native design is better.
+- Code-level pattern fit is a coding and review concern below architecture/system-design. When local implementation is becoming verbose, duplicated, branch-heavy, or helper-heavy, prefer current Go stdlib and established repo idioms first, then small Go-idiomatic code patterns that reduce code and clarify ownership. Do not import class-oriented design-pattern scaffolding into Go unless a concrete local force justifies it and simpler explicit code was rejected.
+- Maintainable implementation shape is part of decision quality. Planning and coding must preserve focused file and package responsibilities instead of growing hand-written source files into catch-all modules. Line count is a smoke signal, not the only rule: mixed abstraction levels, unrelated concerns, and hard-to-review growth require a focused same-package seam file, a correct owner package, or a recorded rationale for keeping the code together.
 - When a change replaces an old path, replaced or unused legacy code must be removed, refactored into the active path, or explicitly retained with current owner, reason, proof of continued need, and exit condition. This applies to source code and adjacent tests, fixtures, generated output, config, scripts, examples, docs, skills, agents, and mirrors.
 - Do not create an MVP-now/future-hardening split when the production-ready decision is knowable and in scope.
 - Temporary bridges, compatibility shims, feature flags, canaries, or staged rollout are not default recommendations. Use them only when the user requests staging or a live external constraint makes a one-step target-state change unsafe or impossible.
@@ -194,6 +201,30 @@ REMOVED:
 - D1: ...
 - D2: ...
 
+## Dependency / OSS Due Diligence
+Applies: yes | no
+Selected approach:
+- <stdlib | existing repo pattern | OSS dependency | custom implementation>
+Evidence:
+- <current source/date, adoption, maintenance, license, security, fit>
+Rejected options:
+- <option> because <reason>
+Custom-code justification:
+- <required when selected approach is custom implementation>
+
+## Pattern Fit Diligence
+Applies: yes | no
+Selected pattern:
+- <named pattern or "straightforward repo-native design">
+Evidence:
+- <source/date or repository precedent, concise pattern description, and real-use example>
+Applicability:
+- <why the pattern's forces match this task, or why no known pattern fits>
+Go fit:
+- <why the shape preserves idiomatic Go: explicit control flow, small interfaces, context/cancellation, package ownership, and simple composition>
+Rejected patterns:
+- <pattern> because <scope/reliability/operability/Go-fit mismatch>
+
 ## Compact Design
 Affected surfaces:
 - `internal/...`
@@ -222,7 +253,9 @@ Reopen target: <none | research | specification | technical-design | planning>
    Answer: ...
 2. What hidden invariant or owner could this break?
    Answer: ...
-3. What fresh proof will make the completion claim trustworthy?
+3. Are we writing custom code for a problem already solved by current stdlib, an established repo pattern, or mature OSS?
+   Answer: ...
+4. What fresh proof will make the completion claim trustworthy?
    Answer: ...
 Gate: PASS | CONCERNS | FULL_REQUIRED
 
@@ -241,6 +274,8 @@ Rules:
 - `Behavior / Contract Delta` describes added, modified, and removed behavior instead of restating the whole system.
 - Replacement specs must name known legacy surfaces, expected remove/refactor/retain semantics, and the proof that will show each old surface is gone, active through the new path, intentionally retained, or out of scope.
 - If the change does not replace an existing path, record `No known replacement surface` so planning does not invent cleanup work.
+- `Dependency / OSS Due Diligence` is required when the change would add a dependency, create custom infrastructure, introduce a meaningful helper/abstraction, or solve a problem with plausible standard-library, repository-pattern, or OSS alternatives. If not applicable, record `Applies: no` only when the reason is obvious from scope.
+- `Pattern Fit Diligence` is required when the change needs a non-trivial architecture, workflow, integration, resilience, consistency, data-flow, abstraction, or system-design choice. Keep it compact in lean specs when the choice is simple; preserve `research/pattern-fit.md` when multiple candidates, external sources, or examples need to survive; use `design/pattern-fit.md` only when the comparison is planning-critical and too large for `spec.md` or `design/overview.md`.
 - `Compact Design` answers affected surfaces, ownership/source-of-truth, and sequence/failure behavior. If those answers become dense or contested, split into design artifacts or escalate.
 - `Subagent Gate Decision` is required for non-trivial lean specs. If workflow-control already records the same audit, link to it instead of duplicating raw lane output. A non-trivial lean `spec.md` without this section or link remains draft.
 - `Risk Challenge` is the lean replacement for a formal challenge lane only when no escalation trigger is present.
@@ -367,6 +402,10 @@ Research is a concern, not always a dedicated phase.
 
 Use local-only research for direct path or when a recorded local-only rationale shows the evidence is trivial, single-source, or not improved by independent lanes.
 
+Dependency/OSS due diligence is a research concern even when it stays compact. Use local research for obvious stdlib or established-repo-pattern choices; use read-only research fan-out when the selected library or custom implementation decision depends on current external health, license/security posture, domain adoption, or integration trade-offs that could materially change approval.
+
+Pattern Fit Diligence is also a research concern when the task has a real design fork. Search for concrete descriptions and examples of relevant patterns, including architecture, integration, consistency, workflow, resilience, data-topology, and Go-friendly implementation patterns. Preserve `research/pattern-fit.md` when the pattern evidence, examples, or candidate comparison would otherwise be lost across sessions; final pattern decisions still belong in `spec.md` or the design bundle.
+
 For non-trivial decisions, first identify distinct evidence questions and normally use read-only fan-out when the questions span more than one domain, artifact family, source-of-truth seam, or risk lens.
 
 Any local-only rationale must list the decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out. Generic "bounded" or "single-domain" rationale is invalid for non-trivial phase approval.
@@ -480,6 +519,7 @@ Conditional design artifacts:
 
 - `design/data-model.md`: persisted state, schema, cache contract, projections, replay behavior, retention, or migration shape.
 - `design/dependency-graph.md`: module/package dependency shape, generated-code dependency flow, coupling risk, or source-of-truth ambiguity.
+- `design/pattern-fit.md`: selected and rejected design or system-design patterns, source descriptions, real-use examples, task applicability, Go-fit, repository-fit, and custom-design justification when the comparison is too dense for `design/overview.md`.
 - `design/contracts/`: API/event/generated/material internal interface design context. Runtime authorities like `api/openapi/service.yaml` still win.
 - `test-plan.md`: validation obligations are too large or layered for `tasks.md`.
 - `rollout.md`: migration sequencing, compatibility window, deploy order, rollback, or failback matters.
@@ -507,7 +547,7 @@ The review packet must be explicit enough that the reviewer does not rediscover 
 The review must be read-only and risk-driven:
 
 - inspect approved `spec.md`, the design bundle, triggered conditional artifacts, `docs/repo-architecture.md` when boundaries matter, and relevant specialist outputs;
-- check source-of-truth ownership, dependency direction, runtime sequence, failure behavior, conditional artifact triggers, validation/rollout handoff, and accidental complexity;
+- check source-of-truth ownership, dependency direction, runtime sequence, failure behavior, conditional artifact triggers, validation/rollout handoff, dependency/OSS due diligence, Pattern Fit Diligence, and accidental complexity;
 - separate design defects from implementation preferences;
 - identify any live fork where two plausible design options would materially change ownership, interfaces, data shape, async or sync semantics, operability, rollout, or validation, and verify the design has selected one with a rejection reason for the other;
 - challenge the design from the first safe implementation slice: ask whether planning can create executable tasks without adding architecture, ownership, contract, sequencing, rollout, or validation policy;
@@ -532,7 +572,7 @@ Review gate status:
 
 Gate decision discipline:
 
-- Use `PASS` only when the reviewer has tried to falsify the design against source-of-truth ownership, sequence/failure behavior, validation, rollout, and artifact-trigger expectations and found no planning blocker.
+- Use `PASS` only when the reviewer has tried to falsify the design against source-of-truth ownership, sequence/failure behavior, validation, rollout, dependency/OSS due diligence, Pattern Fit Diligence, and artifact-trigger expectations and found no planning blocker.
 - Use `CONCERNS` only when the design is coherent enough for planning and the remaining risk can be carried as a named accepted risk or proof obligation without asking implementation to choose a missing design decision.
 - Use `FAIL` when planning would have to choose between live design options, repair ownership or dependency direction, define missing contract/data/rollout/failure semantics, or resolve a spec/design contradiction.
 - Use `record_only` or no finding for cleaner-code preferences unless the issue changes planning safety or production-readiness proof.
@@ -563,6 +603,9 @@ Planning must not invent missing design context. If exact tasking requires a mis
 Task-ledger review must verify:
 
 - every in-scope behavior, non-goal, constraint, and accepted decision from `spec.md` is represented in executable tasking, preserved constraints, or explicit non-task rationale;
+- every approved dependency/OSS due-diligence decision is represented in executable dependency, integration, license/security, generation, or proof tasks where relevant; if due diligence is missing for custom infrastructure or a new dependency, reopen specification or technical design instead of letting implementation decide;
+- every approved Pattern Fit decision is represented in executable tasking, design-preserving constraints, validation, or explicit non-task rationale; if pattern comparison is missing for an invented design shape, reopen research, specification, or technical design instead of asking implementation to choose a pattern;
+- file and package placement is narrow enough that implementation will not have to choose where a substantial code block belongs; when work touches a large or mixed-responsibility hand-written file, the ledger names the owning file, focused new seam file, package boundary, or approved rationale for keeping the code together;
 - known in-scope legacy surfaces are represented as removal/refactor work, retained-surface rationale with owner/reason/proof/exit condition, or explicit not-applicable proof; missing cleanup coverage is a planning blocker, not implementation discretion;
 - replacement ledgers include a per-surface cleanup audit table; generic prose is not enough when known old surfaces exist;
 - required compact design, `design/overview.md`, or split `design/` ownership, sequence, dependency, failure, and conditional-artifact rules are reflected in task order and proof expectations;
@@ -595,6 +638,14 @@ Planning also consumes the technical design review result whenever separate desi
 
 Coding consumes the approved task handoff. It may create or edit code, tests, migrations, configs, generation inputs, and generated output required by the task ledger.
 
+Before adding substantial code to an existing hand-written source file, inspect its current responsibility, sibling files in the package, and package owner. If the new code is a distinct concern, abstraction level, mapping, validation, lifecycle, adapter, or test-helper policy, place it in a focused same-package seam file or the correct owner package instead of enlarging a catch-all file. If that split would change approved architecture, public contract, dependency direction, generated-source ownership, or another protected decision, stop and reopen the owning phase.
+
+Coding may use the selected dependency or custom approach recorded in approved artifacts. If implementation discovers that the chosen approach needs a new runtime dependency, custom infrastructure, or a material helper/abstraction not covered by dependency/OSS due diligence, stop and reopen specification, technical design, or planning according to where the decision belongs. Do not add the dependency or build the custom substitute silently inside coding.
+
+Coding may implement the selected design or system-design pattern recorded in approved artifacts. If implementation discovers that the chosen shape needs a different pattern, a previously rejected pattern, or a custom design not covered by Pattern Fit Diligence, stop and reopen research, specification, technical design, or planning according to where the decision belongs. Do not introduce a new pattern or pattern-like abstraction during coding just because it seems cleaner locally.
+
+Coding may use local code-level patterns only to simplify approved behavior. Good candidates include table-driven tests for several meaningful cases, guard clauses, same-package policy seams, first-class function strategy, narrow consumer-owned interfaces, map-driven dispatch, middleware or decorator only at an existing composition seam, and functional options only when optional construction has real combinatorial pressure. If the pattern adds files, interfaces, callbacks, option bags, or indirection without reducing duplication, branch complexity, ownership ambiguity, or test burden, inline the code or use the stdlib/repo idiom instead.
+
 Cleanup made necessary by the approved task is part of implementation scope. Coding removes stale old-path code and adjacent artifacts, refactors old code into the active path when that is the approved target state, or stops at the smallest reopen target when retention/removal would change public contract, data behavior, security, reliability, rollout, generated contracts, or another protected domain.
 
 If implementation discovers an old surface not named by the approved spec or ledger, classify it before editing: in-scope and safe to remove/refactor, intentionally retained by an existing approved artifact, or requiring reopen because removal or retention changes contract, data, security, reliability, rollout, generated-source, or another protected-domain behavior.
@@ -612,6 +663,14 @@ Do not update `workflow-plan.md` or phase-control files merely because they exis
 Do not create new workflow/process artifacts after implementation starts. Reopen the earlier phase that owns the missing artifact instead.
 
 Review is read-only and risk-driven. Review findings are advisory until the orchestrator reconciles them. Review should flag unexplained surviving replaced or unused code, tests, fixtures, configs, docs, generated artifacts, skills, agents, or mirrors as merge-risk findings unless an approved artifact records why the surface remains with owner, reason, proof, and exit condition.
+
+Review should also flag custom implementations, newly added dependencies, or meaningful helper abstractions that lack approved stdlib, repository-pattern, and OSS due diligence. Severity depends on ownership risk, security/license exposure, transitive dependency cost, and whether a mature maintained library or standard-library path appears to satisfy the same contract.
+
+Review should also flag architecture, workflow, integration, resilience, data-flow, or abstraction shapes that lack approved Pattern Fit Diligence when they appear invented, cargo-culted, or inconsistent with the selected pattern. Severity depends on whether the missing comparison could change ownership, interfaces, failure behavior, validation, rollout, or idiomatic Go implementation shape.
+
+Review should also flag verbose local code that missed an obvious Go-native simplification or small code-level pattern, and pattern-shaped code that adds indirection without reducing duplication, branch complexity, ownership ambiguity, or test burden.
+
+Review should also flag hand-written source files that grew into mixed-responsibility, multi-abstraction-level, or hard-to-review catch-all modules when the approved artifacts did not justify that placement. Severity depends on whether the file now hides ownership, couples unrelated concerns, blocks focused tests, or makes future changes likely to land in the wrong owner.
 
 Severity for unexplained surviving replaced paths is risk-based: `high` when the old path can still execute, import, generate, or validate; `medium` for test, fixture, doc, config, skill, agent, or mirror drift; `low` only when the surface is clearly unreachable, non-authoritative, and unlikely to mislead future work.
 
@@ -767,6 +826,9 @@ Avoid:
 - approving non-trivial specs while formal challenge is required and unresolved;
 - splitting work into MVP plus future hardening when the production-ready decision is knowable and in scope;
 - picking the fastest or simplest architecture by default instead of the best production-ready choice for the accepted scope;
+- inventing a custom architecture or system-design shape without Pattern Fit Diligence, or applying a named pattern without task-specific evidence and Go/repository fit;
+- importing class-oriented design-pattern scaffolding into Go or adding pattern-shaped helpers when direct stdlib/repo-native code is shorter and clearer;
+- growing large hand-written source files as an implementation shortcut instead of placing new code in the focused owner file, same-package seam file, or correct package boundary;
 - creating `test-plan.md`, `rollout.md`, split design files, or review/validation phase files for completeness;
 - creating new process artifacts after coding starts;
 - using subagents for broad ceremony rather than narrow unresolved questions;

@@ -66,6 +66,8 @@ Escalate if:
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
 - Keep tasks small enough to implement, verify, and review in one focused session.
 - Planning closes the accepted target-state scope, not just an initial implementation slice. If a downstream issue is in scope and affects production readiness, include it in the ledger or reopen the owning earlier phase. Follow-ups are allowed only for explicit non-goals or proof-only consequences, not target-state cleanup.
+- If the approved artifact chain selects a new dependency, OSS integration, or custom implementation after due diligence, carry the required integration, license/security, generation, configuration, drift, and proof tasks into the ledger. If due diligence is missing for custom infrastructure, a new runtime dependency, or a meaningful helper/abstraction, reopen specification or technical design instead of asking implementation to decide.
+- If the approved artifact chain selects a design or system-design pattern, carry the pattern-preserving implementation constraints and proof obligations into the ledger. If Pattern Fit Diligence is missing for an invented architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape, reopen research, specification, or technical design instead of asking implementation to choose the pattern.
 - For replacement work, missing in-scope legacy cleanup is a planning-readiness failure: the ledger must task removal/refactor work, retained-surface owner/reason/proof/exit-condition recording, or explicit not-applicable proof instead of leaving the old surface for implementation to interpret.
 - For dedicated planning sessions, this pass ends at approved `tasks.md`; implementation begins in a new session unless an upfront direct/lean waiver was already recorded.
 - Put risky or dependency-establishing work early.
@@ -91,6 +93,8 @@ Reference snippets are patterns, not decisions. If an example would require an a
 ### 1. Confirm Planning Readiness
 - Read the stable `spec.md` and the required compact or split design context, not just the chat.
 - Confirm that the main decisions, design constraints, ownership boundaries, and proof obligations are explicit, and that no implementation-blocking open questions remain.
+- Confirm dependency/OSS due-diligence decisions are explicit when the implementation would add a dependency, integrate OSS, build custom infrastructure, or introduce a material helper/abstraction.
+- Confirm Pattern Fit Diligence decisions are explicit when implementation would rely on a non-trivial architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern.
 - For lean-local work, require explicit `Compact Design` answers or one `design/overview.md`; for split-design work, require `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip/merge rationale.
 - If one `design/overview.md` or split `design/` exists, require technical design review `PASS` or `CONCERNS` with named accepted risks and proof obligations before planning.
 - Treat review findings classified as `blocks_planning`, `reopens_design`, or `reopens_spec` as planning blockers until the owning phase resolves or explicitly reroutes them.
@@ -120,6 +124,8 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Keep detailed artifact lists, constraints, accepted concerns, proof commands, and progress rules in the Goal contract fields and handoff metadata, not inside the objective sentence itself.
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
 - Include an evidence field for each task or checkpoint when the implementer is expected to update progress during execution.
+- Include dependency tasks when relevant: module change, license/security check, transitive dependency review, generated or config updates, integration tests, and any proof obligations from the approved dependency/OSS due diligence.
+- Include pattern-preserving tasks when relevant: package or boundary placement, runtime sequence, idempotency/dedup/recovery hooks, validation proof, documentation updates, or negative checks required by the approved Pattern Fit decision.
 - When approved decisions replace old code or artifacts, include cleanup audit/removal tasking for old identifiers, routes, configs, commands, tests, fixtures, generated artifacts, scripts, docs, skills, agents, and mirrors that belong to the replaced path.
 - For replacement work, add a compact `Legacy cleanup audit` table with columns `Surface`, `Status`, `Evidence`, and `Retention owner/reason/exit`; use exactly `removed`, `refactored`, `retained`, or `not_applicable` for status.
 - Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface instead of vague subsystem labels.
@@ -138,6 +144,8 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Run read-only task-ledger review fan-out by default; otherwise record `Ledger-review fan-out rationale:` that evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens.
 - Keep ledger-review lanes read-only and advisory; they return findings and proof obligations for orchestrator fan-in, not edits or final readiness decisions.
 - Confirm every in-scope behavior and preserved constraint is represented in tasking, proof, or explicit non-task rationale.
+- Confirm every approved dependency/OSS due-diligence outcome is represented in tasking or explicit non-task rationale, and that missing due diligence for custom code or a new dependency reopens specification or technical design rather than passing to implementation.
+- Confirm every approved Pattern Fit outcome is represented in tasking, proof, or explicit non-task rationale, and that missing Pattern Fit Diligence for an invented design shape reopens research, specification, or technical design rather than passing to implementation.
 - Confirm every known in-scope legacy surface is represented as remove/refactor work, retained with owner/reason/proof/exit condition, or proven not applicable; missing cleanup tasking reopens planning unless it changes spec or design scope.
 - Confirm replacement ledgers use the `Legacy cleanup audit` table; prose-only cleanup classification is too easy to miss during implementation and closeout.
 - Confirm task order matches ownership, sequence, dependency, migration, validation, and rollout constraints from the design context.
@@ -220,6 +228,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - If required compact or split design context is missing or inconsistent, reopen specification or technical design instead of inferring the missing context locally.
 - If required technical design review is missing or inconsistent, reopen technical design review instead of inferring approval locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
+- Keep dependency decisions aligned with repository realities: prefer existing repo patterns and current stdlib where sufficient, and include module, license/security, transitive dependency, and drift checks when introducing OSS.
+- Keep Pattern Fit decisions aligned with repository realities: prefer established patterns only when their forces match the task, translate them into idiomatic Go and explicit package ownership, and include proof that validates the selected pattern's guarantee rather than only its vocabulary.
 - Keep generated and mirrored cleanup source-of-truth order explicit: update owning sources first, regenerate or sync derived artifacts, and add drift proof instead of hand-editing mirrors or generated output as primary cleanup.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
 - Prefer sequential phases unless change surfaces are truly disjoint.
@@ -240,6 +250,7 @@ The planning pass is complete when:
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - out-of-scope implications are visible as non-goals, accepted risks, or proof-only follow-ups rather than hidden target-state cleanup
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
+- selected pattern constraints and proof obligations are clear enough that `go-coder` does not need to reinterpret or choose a design/system pattern
 - no unresolved decision gate, `TBD`, or implementation-blocking open question remains in `tasks.md`
 
 ## Escalate Or Reject

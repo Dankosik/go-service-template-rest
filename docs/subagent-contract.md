@@ -14,6 +14,8 @@ Subagents are the normal read-only evidence surface for non-trivial decision wor
 - Open another lane only when another domain must make a new decision before the current artifact can be production-ready for the accepted scope; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
 - A lane must not use `follow_up_only`, `constraint_only`, or `no new decision required` to defer a knowable architecture, ownership, contract, reliability, security, rollout, or validation decision that is required for production readiness in the accepted scope.
 - A lane must not recommend temporary bridges, compatibility shims, feature flags, canaries, or staged rollout unless the user requested staging or the inspected live constraints make a one-step target-state change unsafe or impossible. If such staging is unavoidable, the lane must include target state, exit criteria, removal/proof task, and owner.
+- When a lane evaluates non-trivial custom implementation, a new runtime dependency, or a meaningful helper/abstraction, it must compare the current Go standard library, established repository patterns, and mature open-source options. Report selected and rejected options with current evidence for maintenance/release activity, adoption such as stars or domain-equivalent signals, license, security posture, transitive dependency cost, API stability, repository-boundary fit, and the reason custom code is still justified when no library is selected.
+- When a lane evaluates a non-trivial architecture, system-design, workflow, integration, data-flow, resilience, or abstraction choice, it must perform Pattern Fit Diligence for its owned question. Search for known applicable design or system-design patterns, read concrete descriptions and real-use examples, compare each viable candidate against task forces, repository boundaries, operability, validation, and idiomatic Go fit, and report the selected pattern, rejected patterns, evidence, and custom-design justification when no pattern fits.
 - For replacement or cleanup-relevant scopes, lanes must inspect for unexplained surviving legacy surfaces in their assigned files or diff. Report each old surface as removed, refactored into the active path, retained with owner/reason/proof/exit condition, not applicable, or a reopen risk; do not leave stale code, tests, fixtures, configs, docs, generated outputs, skills, agents, or mirrors as implicit follow-up work.
 - Direct work normally stays local. Lean-local and full-orchestrated non-trivial work normally use multiple narrow lanes when independent questions exist; local-only lean work requires recorded rationale.
 - Every non-trivial phase approval must record `Subagent gate: complete | scoped_down | local_only | waived | not_expected | blocked` with an evidence pointer or rationale and readiness consequence. Missing gate status keeps the owning phase draft or blocked.
@@ -38,6 +40,8 @@ Every handoff should include:
 - relevant diff, source files, source-of-truth documents, or specialist outputs to inspect,
 - lens or specialist domain when part of a multi-lane fan-out,
 - constraints, risk hotspots, non-goals, and known blockers,
+- dependency/OSS due-diligence scope when a new dependency, custom infrastructure, or material abstraction is plausible,
+- Pattern Fit Diligence scope when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction patterns could change the design,
 - known old surfaces, retired identifiers, generated/mirror sources, or retained compatibility surfaces when cleanup is in scope,
 - chosen skill name or `no-skill`,
 - fan-out decision: planned lanes with owned questions, or the recorded local-only rationale,
@@ -78,6 +82,8 @@ When the chosen skill does not define a stricter shape, return:
 - `Decision or findings`: the role-specific conclusion, recommendation, blocker call, or ordered findings.
 - `Evidence`: tight references to files, artifacts, commands, contracts, or source facts.
 - `Legacy cleanup status`: when cleanup is in scope, list unexplained surviving old surfaces and whether each is removed, refactored, retained with owner/reason/proof/exit condition, not applicable, or requires reopen.
+- `Dependency/OSS status`: when dependency choice or custom implementation is in scope, list selected and rejected stdlib, repository-pattern, and OSS options with evidence and any missing due-diligence blocker.
+- `Pattern Fit status`: when design/system patterns are in scope, list selected and rejected patterns, source descriptions or examples, task applicability, Go/repository fit, and any missing due-diligence blocker.
 - `Open risks/gaps`: unresolved assumptions, compatibility, ownership, test, validation, or rollout risks.
 - `Recommended handoff`: one smallest next action with target owner or artifact.
 - `Confidence`: high, medium, or low with the key uncertainty.

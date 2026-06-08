@@ -57,6 +57,8 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 - Separate design depth must pass technical design review before planning; this skill may prepare the design for that gate or support a read-only review lane, but it does not make final approval decisions.
 - When supporting a technical-design-review lane, classify each finding as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`, then recommend `PASS`, `CONCERNS`, or `FAIL` with status rationale.
 - In technical-design-review mode, judge whether planning can produce implementation-ready tasks without inventing architecture, ownership, contract, sequencing, rollout, or validation policy. If planning would need to make a design choice, the review should reopen design or specification instead of passing with a proof-only concern.
+- Before selecting custom infrastructure, a new runtime dependency, or a meaningful helper/abstraction, compare the current Go standard library, established repository patterns, and mature open-source options. Design may proceed only when the selected option and rejected alternatives have current evidence for maintenance, adoption, license, security, transitive dependency cost, API stability, and repository-boundary fit.
+- Before selecting an architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape, perform Pattern Fit Diligence. Search for known applicable design or system-design patterns, read concrete descriptions and real-use examples, compare candidates against the task's forces, repository boundaries, operational proof path, and idiomatic Go fit, and record selected and rejected patterns. Design may proceed with a custom shape only when known patterns fail a concrete requirement.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
 - Treat accidental complexity as a blocker when it increases integration risk or widens impact radius without clear benefit.
 - Prefer additive, compatibility-first evolution over big-bang replacement.
@@ -98,10 +100,16 @@ This is a technical-design integrator, not a workflow owner:
 
 ### Complexity And Maintainability
 - Avoid speculative abstractions, indirection layers, interface-per-struct patterns, and service-manager-factory chains that do not remove concrete present-day complexity.
+- Prefer maintained OSS over custom infrastructure when it satisfies the approved contract with lower ownership cost and acceptable license/security/adoption signals. Prefer custom code only when stdlib, established repo patterns, and mature OSS candidates fail a concrete contract, ownership, operational, or integration requirement.
 - Require every abstraction to justify:
   - what problem it removes now
   - why a simpler alternative was rejected
   - what maintenance and change-radius cost it introduces
+- Require every selected design or system-design pattern to justify:
+  - what task force or failure mode it addresses now
+  - which known alternatives were rejected and why
+  - how the pattern stays idiomatic in Go: explicit control flow, small interfaces, context-aware I/O, package ownership, and simple composition
+  - what proof will show the implementation preserved the pattern's guarantee rather than only its vocabulary
 - Prefer explicit boundaries, explicit control flow, and predictable dependency direction over hidden magic.
 - Optimize for local change paths and bounded impact radius.
 
@@ -144,6 +152,8 @@ For each planning-critical design recommendation, make clear:
 - whether a real `live fork` exists, meaning two plausible approaches would materially change ownership, interfaces, persistence shape, async model, operability, or rollout
 - when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
 - when no `live fork` exists, the chosen repo-consistent approach and why no competing option needs current design treatment
+- for dependency-sensitive choices, the selected stdlib/repo-pattern/OSS/custom option, rejected options, current evidence signals, and why planning should not reopen library selection
+- for pattern-sensitive choices, the selected design/system pattern or straightforward repo-native design, rejected pattern alternatives, source descriptions or examples, applicability, Go-fit, and why planning should not reopen pattern selection
 - trade-offs across simplicity, flexibility, cost, risk, and change impact
 - only the downstream effects that force a new decision, handoff, or proof obligation in architecture, API, data, security, observability, reliability, or testing
 - assumptions, blockers, and reopen conditions only when they affect the current bundle or the first safe implementation slice
@@ -157,6 +167,8 @@ When this skill is used for read-only technical design review, do not only list 
 - For `CONCERNS`, prove the issue is a bounded risk that implementation can validate without choosing a missing design. Name the exact proof obligation and where planning should carry it.
 - For `FAIL`, name the smallest reopen target, the decision or artifact that must change, and the condition a follow-up review must verify.
 - For `PASS`, name the falsification checks performed, such as source-of-truth ownership, dependency direction, sequence/failure behavior, validation path, rollout assumptions, and conditional artifact triggers.
+- For dependency-sensitive design, include dependency/OSS due-diligence in the falsification checks; missing current evidence for a new dependency or custom infrastructure is a planning blocker, not a coding preference.
+- For pattern-sensitive design, include Pattern Fit Diligence in the falsification checks; missing known-pattern comparison for an invented design shape is a planning blocker, and cargo-cult pattern naming without task-specific Go/repository fit should reopen design.
 - Include one strongest counterargument or simpler alternative for each material recommendation and explain why it does not change the result.
 - Downgrade taste, local style, or optional cleanup to `record_only` unless it creates concrete planning or production-readiness risk.
 
@@ -169,6 +181,8 @@ When writing or reviewing the integrated technical-design bundle, cover:
 - for technical-design-review mode, the reviewed packet, classified findings, required reopen targets or planning proof obligations, and recommended gate result
 - what changes versus what remains stable
 - runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
+- dependency/OSS due-diligence outcome when relevant: selected and rejected stdlib, repository-pattern, OSS, and custom options with current evidence and planning consequences
+- Pattern Fit Diligence outcome when relevant: selected and rejected design/system patterns, source descriptions or examples, applicability, Go/repository fit, and planning consequences
 - legacy-surface treatment when replacement work is in scope: remove/refactor/retain decisions, generated or mirror source-of-truth order, and retained-surface exit conditions
 - downstream consequences as:
   - `forces new decision`
@@ -186,6 +200,9 @@ When writing or reviewing the integrated technical-design bundle, cover:
 - any hidden “decide later in coding” gap that would change ownership, correctness, contract, sequencing, or rollout
 - contradictory assumptions left unresolved across domain specs
 - a new abstraction or layer with no measurable simplification outcome
+- a new dependency, custom infrastructure decision, or material helper/abstraction without recorded stdlib, repository-pattern, and mature-OSS due diligence
+- an invented architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape without recorded Pattern Fit Diligence
+- a named design/system pattern applied without evidence that its forces match this task and its implementation can stay idiomatic in Go
 - simplification that weakens API, data, reliability, or security contracts
 - migration, cache, retry, or degradation assumptions that are not rollout-safe
 - design rationale based on taste instead of workload, constraints, and operating cost

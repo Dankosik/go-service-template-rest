@@ -1,6 +1,6 @@
 ---
 name: go-coder
-description: "Implement production-grade Go changes from approved requirements and task ledgers with review-clean defaults: explicit design, language-native and stdlib-first choices, seam-named same-package source-of-truth extraction when stable policy starts to spread, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
+description: "Implement production-grade Go changes from approved requirements and task ledgers with review-clean defaults: explicit design, language-native and stdlib-first choices, mature-OSS-before-custom discipline when approved, seam-named same-package source-of-truth extraction when stable policy starts to spread, idiomatic control flow, preserved invariants, safe boundaries, and fresh verification evidence."
 ---
 
 # Go Coder
@@ -31,7 +31,11 @@ Implement approved Go changes as production-grade, review-clean code that preser
 ## Specialist Stance
 - Treat the approved requirement, spec, and existing `tasks.md` task ledger as the source of truth for behavior and execution scope.
 - Choose the smallest complete change that satisfies the approved intent and makes the diff tell one coherent story.
+- Choose the owning file before writing substantial code. A large or fast-growing hand-written source file is a signal to inspect package siblings and split by real responsibility instead of defaulting to "append more here."
 - Prefer explicit, boring, review-clean Go over clever abstraction, and prefer language-native or standard-library solutions over repo-local reinventions when they express the same contract.
+- Use approved OSS dependencies when the artifact chain selected them through dependency/OSS due diligence. Do not add a new runtime dependency, build custom infrastructure, or introduce a material helper/abstraction unless approved artifacts record the stdlib, repository-pattern, OSS, and custom-code comparison.
+- Implement approved design or system-design patterns exactly as recorded in the artifact chain. Do not introduce a new pattern, framework-shaped abstraction, workflow shape, or pattern-like helper unless approved artifacts record Pattern Fit Diligence for it.
+- Use code-level patterns only as simplification tools: choose them when they reduce repeated policy, branching, construction noise, or test burden while keeping Go ownership explicit; otherwise write direct Go.
 - When stable normalization, mapping, validation, classification, or section-reading policy starts to spread across files in one package, prefer one seam-named same-package source of truth over repeated file-local copies.
 - Avoid both kinds of helper drift: scattered policy duplicated across files, and generic `util/common/shared` buckets that hide ownership instead of clarifying it.
 - If the approved source is silent on a local detail, choose the most conservative idiomatic path that preserves existing semantics and local package conventions.
@@ -42,8 +46,12 @@ Before editing, make the implementation target concrete:
 - If more than one behavior is plausible, name the bounded assumption you are taking; stop when the choice would change product, architecture, API, data, security, reliability, or rollout semantics.
 - For direct-path multi-step work without `tasks.md`, keep a tiny local `goal -> check` loop before coding; do not expand it into workflow artifacts unless the repository workflow requires them.
 - Every changed line should trace to the approved task, required generated drift, or cleanup made necessary by your own change.
+- File Responsibility Check: before the first edit, record a short placement decision: `owner file/package` and `split or keep rationale`. Inspect the hand-written file's current responsibility, sibling files, and approximate size; if it is already roughly 600+ lines or the edit would push it there, default to a focused same-package seam file unless the rationale shows one cohesive owner. If the change adds a distinct concern, abstraction level, mapping, validation, lifecycle, adapter, or test-helper policy, create or extend the focused seam file or correct owner package instead of growing a catch-all file.
 - Cleanup required by the approved task is in scope. Remove replaced or unused old code and adjacent tests, fixtures, generated artifacts, configs, docs, scripts, examples, skills, agents, or mirrors unless the approved artifact chain explicitly retains them with owner, reason, proof, and exit condition.
 - If you discover an old surface not named by the approved spec or task ledger, classify it before editing: in-scope and safe to remove/refactor; intentionally retained by an existing approved artifact; or requiring reopen because removal or retention changes contract, data, security, reliability, rollout, generated-source, or another protected-domain behavior.
+- If implementation discovers a need for an unapproved dependency, mature OSS replacement, custom infrastructure, or material helper/abstraction, stop and reopen specification, technical design, or planning. Do not use coding momentum to make dependency or build-vs-buy decisions that were not approved.
+- If implementation discovers that the approved design needs a different pattern, a previously rejected pattern, or a custom pattern-like shape, stop and reopen research, specification, technical design, or planning. Do not use coding momentum to make pattern-selection decisions that were not approved.
+- Before writing verbose branching, repeated mapping/validation, or several near-copy helpers, check whether a current stdlib helper, existing repo idiom, table-driven shape, small same-package policy seam, first-class function strategy, narrow consumer-owned interface, or map-driven dispatch would make the code shorter and clearer.
 - Do not add speculative flexibility, configurability, abstractions, or impossible-case handling just because it might be useful later.
 - Prefer outcome-first implementation: identify the required behavior and proof, then choose the smallest code path that satisfies both. Do not follow a longer process just because an older prompt pattern would have enumerated more steps.
 - Use additional file reads, reference loads, generation, or test loops only while they can change correctness, generated drift, or proof strength; stop once the approved task's quality bar is met.
@@ -105,9 +113,28 @@ References are compact rubrics and example banks, not exhaustive checklists or G
 - When touching existing code, opportunistically collapse obsolete wrappers or one-off helpers into builtins or stdlib calls when that reduces code and preserves behavior.
 - Avoid repo-local utility wrappers around obvious stdlib calls unless they encode policy the caller should not have to reconstruct.
 
+### Mature OSS Before Custom Infrastructure
+- When approved artifacts select a maintained OSS dependency, integrate it narrowly through the owning package or adapter instead of wrapping it in vague `common` layers.
+- Do not choose an OSS package during coding just because it exists. The selection must be approved with current evidence for maintenance/release activity, adoption such as stars or domain-equivalent signals, license, security posture, transitive dependency cost, API stability, and fit with repository boundaries.
+- Prefer custom code only when stdlib, established repo patterns, and mature OSS candidates fail a concrete contract, ownership, operational, or integration requirement already recorded in the approved artifact chain.
+- Keep dependency use explicit and reviewable: update `go.mod`/`go.sum` intentionally, avoid broad transitive imports, preserve cancellation/error/observability contracts, and add the focused proof named by the ledger.
+
+### Approved Patterns Before Local Invention
+- When approved artifacts select a design or system-design pattern, translate it into explicit Go code with clear package ownership, direct control flow, context-aware I/O, narrow interfaces, and focused tests.
+- Do not copy pattern vocabulary into code if the implementation does not preserve the pattern's actual guarantee, such as atomic message linkage, idempotent consumption, anti-corruption boundaries, derived-only projections, bounded retries, or explicit process ownership.
+- Prefer straightforward repo-native code when approved artifacts selected no named pattern because known candidates did not fit. Do not resurrect rejected patterns during coding.
+- If a local helper or abstraction starts to look like a new pattern, verify it is already covered by the approved Pattern Fit decision or reopen the owning phase.
+
+### Code-Level Patterns For Simpler Go
+- Treat code-level patterns as small local tools, not architecture. Good candidates include table-driven tests, guard clauses, same-package policy seams, first-class function strategy, narrow consumer-owned interfaces, map-driven dispatch, middleware or decorator at existing HTTP/composition seams, and functional options only when optional construction has real combinatorial pressure.
+- Prefer direct stdlib or repo-native code when a pattern would add types, files, interfaces, callbacks, or option bags without removing repetition or clarifying ownership.
+- Avoid class-oriented GoF scaffolding such as abstract factories, visitors, singletons, and manager hierarchies unless approved artifacts or local proof show a concrete Go-native force and a simpler alternative was rejected.
+- A code-level pattern must make the next reader's path shorter: less branching, fewer repeated literals, clearer ownership, a stronger type contract, or easier targeted tests. If it mainly names a pattern, remove it.
+
 ### Make The Diff Tell One Story
 - Keep the change shaped around one bug class or requirement, not a side quest of adjacent cleanup.
 - Prefer direct edits in the owning code over new wrappers, helper layers, or abstractions that only move code around.
+- Prefer a focused same-package file split when substantial new code would make one hand-written file own unrelated concerns or multiple abstraction levels.
 - Before extracting a helper, check whether one direct builtin or stdlib call would be clearer at the call site.
 - Before extracting a helper, ask whether the real problem is repeated stable same-package policy. If yes, prefer one seam-named owner file over several file-local near-copies.
 - If a helper is used once and hides the main control flow, inline it.
@@ -247,11 +274,12 @@ Before handoff, ask:
 2. Is the exported or package-local surface still as small and obvious as it can be?
 3. What can still alias, leak, block, go stale, be retried twice, or collapse a contract?
 4. Did I choose the clearest fix shape, or did I add abstraction that the next maintainer now has to reverse-engineer?
-5. Did I validate the real changed behavior, including the relevant edge case?
-6. Did I remove or refactor the replaced old path, or record retained legacy surfaces with owner, reason, proof, and exit condition exactly where the approved ledger allows?
-7. Are code, tests, generated artifacts, `tasks.md` progress when present, and task notes aligned with what I actually changed and verified?
-8. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
-9. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
+5. Did I avoid turning any touched hand-written file into a mixed-responsibility catch-all, and if a large file stayed large, can I explain the cohesive owner that justifies it?
+6. Did I validate the real changed behavior, including the relevant edge case?
+7. Did I remove or refactor the replaced old path, or record retained legacy surfaces with owner, reason, proof, and exit condition exactly where the approved ledger allows?
+8. Are code, tests, generated artifacts, `tasks.md` progress when present, and task notes aligned with what I actually changed and verified?
+9. Did I check whether the current Go toolchain already provides this through a builtin or the standard library, and if I still kept custom code, can I explain the missing semantic that justified it?
+10. Did I leave stable same-package policy scattered across files when one seam-named helper file should own it, or overreact by pushing local policy into a vague helper bucket?
 
 ## Blocked Work
 If the approved spec, task ledger, or contract blocks implementation before code changes begin:

@@ -193,6 +193,12 @@ Use these paths as starting points before choosing a narrower recipe below:
 | Postgres-backed endpoint | Keep app behavior and app-owned ports in `internal/app/<feature>`, evolve `env/migrations`, add sqlc queries under `internal/infra/postgres/queries`, regenerate `sqlcgen`, map rows in a hand-written Postgres repository, then inject the concrete adapter in bootstrap. | Repository tests under `internal/infra/postgres`, integration tests under `test/` when container-backed behavior matters, `make sqlc-check`, and migration rehearsal. |
 | Background job or worker | Keep business behavior in `internal/app/<feature>`, put queue/scheduler/database/external-system mechanics in `internal/infra/<integration>`, and create a `cmd/<binary>` composition root when lifecycle or scaling differs from the HTTP service. | App tests near the feature, adapter tests near the integration, bootstrap/lifecycle tests for the new binary, and shutdown/cancellation proof for worker loops. |
 
+### File-Level Responsibility Rule
+
+Choose the file owner before adding code, not after a file becomes hard to review. Existing large hand-written files are a placement warning: inspect sibling files and split new behavior into a focused owner file when the code has a distinct concern such as mapping, validation, lifecycle wiring, repository translation, route policy, telemetry vocabulary, or test setup policy.
+
+Prefer same-package seam files with concrete names (`*_mapping.go`, `*_validation.go`, `*_config.go`, `route_*.go`, `*_repository.go`) before creating broader packages. Do not split generated files by hand, and do not split straightforward cohesive logic only to satisfy a line count; the goal is one clear responsibility and one abstraction level per file where practical.
+
 ### First Production Feature Checklist
 
 Before coding the first real business feature, write down the feature owner and keep this path intact:

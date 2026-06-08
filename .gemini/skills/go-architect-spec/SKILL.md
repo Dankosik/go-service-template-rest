@@ -64,6 +64,7 @@ Keep the main output architecture-first. Route API payloads, SQL migration mecha
 - Prefer local ACID inside one service-owned datastore; use explicit eventual-consistency patterns across services.
 - Prefer direct target-state evolution when the approved scope can safely land together. Use additive compatibility-first evolution (`expand -> migrate/backfill -> contract`) only when live data, existing clients, or mixed-version operation make one-step adoption unsafe.
 - Treat operational overhead, observability cost, and release coordination as first-class costs in every decomposition decision.
+- Before selecting a named architecture or system-design pattern, search for concrete descriptions and real-use examples, then compare candidate patterns against invariant ownership, workload shape, failure behavior, rollout constraints, repository boundaries, and idiomatic Go implementation. Prefer a proven pattern when it fits; use custom architecture only when known patterns fail a concrete force.
 
 ## Architecture Facts To Lock First
 Before recommending topology, make these facts explicit:
@@ -177,6 +178,7 @@ For every major architecture recommendation, include:
 - whether a real `live fork` exists
 - when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
 - when no `live fork` exists, the chosen repo-consistent approach and why it is the only decision that needs current architecture treatment
+- selected and rejected architecture/system-design patterns, source descriptions or examples, task applicability, Go/repository fit, and custom-design justification when no known pattern fits
 - who owns write truth and which views are derived only
 - when external providers matter, how their semantics are normalized and prevented from becoming lifecycle truth
 - trade-offs, risks, and control mechanisms
@@ -199,6 +201,7 @@ When writing the architecture spec or review, cover:
 - consistency model, invariants, and state-machine expectations
 - anti-corruption or provider-boundary rules when external systems affect domain behavior
 - failure, degradation, and rollout strategy
+- Pattern Fit Diligence when a named or custom architecture/system-design pattern affects ownership, workflow, consistency, resilience, data flow, or abstraction shape
 - only the downstream API, data, security, operability, or delivery effects that force a new decision, handoff, or proof obligation
 - explicit `no new decision required in <domain>` notes when an adjacent domain is affected but not decision-critical now
 
@@ -210,4 +213,6 @@ When writing the architecture spec or review, cover:
 - a distributed flow without invariant ownership, pivot definition, and explicit state model
 - a migration that relies on indefinite dual writes, permanent compatibility shims, or manual heroics
 - a workflow-engine or broker recommendation based on tool familiarity instead of workload evidence
+- a named architecture or system-design pattern without task-specific applicability, real-use evidence, and Go/repository fit
+- a custom architecture shape without rejected known-pattern alternatives
 - any architecture decision left for coding to discover later

@@ -22,6 +22,9 @@ Protect approved design intent in code so boundaries, ownership, maintainability
 - Prioritize hidden new decisions and boundary bypasses over subjective cleanup.
 - Treat an unexplained surviving replaced or unused legacy surface as source-of-truth drift when the approved artifact chain does not retain it with owner, reason, proof, and exit condition.
 - Prefer one explicit same-package seam for stable local policy over both scattered copies and vague helper buckets.
+- Treat unapproved custom infrastructure, new runtime dependencies, and meaningful helper/abstraction choices as design drift when the approved artifact chain lacks stdlib, repository-pattern, mature-OSS, and custom-code due diligence.
+- Treat invented or cargo-culted design/system patterns as design drift when the approved artifact chain lacks Pattern Fit Diligence or when implementation violates the selected pattern's real guarantee.
+- Treat code-level pattern choices as design drift only when they become ownership, dependency, or maintainability problems: useful local patterns reduce code and clarify seams; pattern-shaped mini-frameworks create accidental complexity.
 - Hand off deep API, data, security, reliability, performance, or QA issues when design review only detects the seam.
 - Keep output review-shaped: findings, handoffs, design escalations, residual risks, and validation notes. Do not redesign the system from scratch inside the review.
 
@@ -58,6 +61,9 @@ Do not:
 - Dependency direction: concrete adapter dependencies do not leak inward except through approved composition roots.
 - Source-of-truth integrity: generated, config, migration, contract, and stable local policy ownership stays singular.
 - Legacy cleanup integrity: replaced or unused code, tests, fixtures, generated artifacts, configs, docs, skills, agents, or mirrors are removed/refactored, or retained with approved owner/reason/proof/exit condition.
+- Dependency/OSS integrity: new dependencies, custom infrastructure, and material abstractions match approved due diligence, including selected and rejected stdlib, repository-pattern, OSS, and custom-code options.
+- Pattern fit integrity: architecture, workflow, integration, resilience, data-flow, or abstraction shapes match the approved selected pattern or recorded straightforward design, and missing Pattern Fit Diligence is routed back to research, specification, or technical design.
+- Code-level pattern integrity: local patterns such as same-package seams, map dispatch, narrow interfaces, functional options, middleware, or table-driven tests reduce code, clarify ownership, or improve proof instead of turning into unapproved mini-frameworks.
 - Hidden decisions: new fallback, async, lifecycle, contract, or data-shape behavior is approved rather than smuggled through code.
 - Complexity control: abstractions, helpers, wrappers, and interfaces reduce real change risk instead of becoming ownership buckets.
 - Cross-domain seams: flag design-shape risk and hand off deep specialist correctness to the owner review.
@@ -72,6 +78,9 @@ Each finding should include:
 - whether the issue is local code drift or needs design escalation
 - whether the drift is scattered source-of-truth ownership or over-broad helper abstraction
 - whether an unexplained surviving replaced or unused legacy surface should be removed, refactored, retained through an approved artifact, or routed to a reopen target
+- whether a dependency/custom-code choice lacks approved due diligence or needs specification, technical design, or planning escalation
+- whether a pattern-like design shape lacks approved Pattern Fit Diligence or fails to preserve the selected pattern's guarantee
+- whether a code-level pattern simplifies local ownership and proof, or expands into accidental complexity that needs simplification or design escalation
 
 Severity is merge-risk based:
 - `critical`: boundary or ownership violation that makes merge unsafe

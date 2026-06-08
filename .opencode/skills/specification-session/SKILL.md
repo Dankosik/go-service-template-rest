@@ -38,6 +38,8 @@ Need only the minimum phase-ready inputs from earlier work:
 - current workflow routing and task-local artifact location
 - the latest upstream phase output that made specification the next checkpoint
 - relevant research findings, comparison notes, or explicit rationale for why more research is not needed
+- dependency/OSS due-diligence evidence when a new runtime dependency, custom infrastructure, or meaningful helper/abstraction is plausible
+- Pattern Fit Diligence evidence when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction patterns could change candidate decisions
 - candidate decisions compact enough to give a read-only clarification challenger a useful input bundle
 - unresolved assumptions, blockers, or challenge outcomes that still affect spec honesty
 - existing `spec.md`, if this is a continuation or repair rather than a fresh pass
@@ -50,6 +52,8 @@ Treat the session as spec-ready only when all of the following are true:
 - material constraints, risks, and validation expectations are visible
 - the current evidence is strong enough to avoid fiction, or the remaining uncertainty is small enough to live honestly in `Open Questions / Assumptions`
 - prior research or direct analysis already answered the must-answer-now questions, or the workflow plan explicitly records why more research is not required
+- dependency/OSS due diligence is complete or explicitly not applicable when candidate decisions would otherwise add a dependency, build custom infrastructure, or introduce a meaningful helper/abstraction
+- Pattern Fit Diligence is complete or explicitly not applicable when candidate decisions would otherwise invent architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape
 - for lean-local work, the inline `Risk Challenge` can be recorded as `PASS` or `CONCERNS`; for full-orchestrated or protected-domain work, the formal `spec-clarification-challenge` gate can be run and reconciled before `spec.md` is marked approved
 - the task can hand off to compact lean design/tasking or to triggered `technical design` without reopening core framing by default
 - the session distinguishes what technical design must decide next from what can remain an explicit constraint, proof obligation, or follow-up note
@@ -149,6 +153,8 @@ Do not:
 ### 3. Reuse `spec-document-designer` For The Actual Spec Pass
 - once the boundary is confirmed, use `spec-document-designer` to draft or normalize `spec.md`
 - keep stable decisions in `Decisions`, visible unknowns in `Open Questions / Assumptions`, and validation hooks explicit
+- record dependency/OSS due diligence in `spec.md` when relevant so technical design and planning do not have to rerun open-ended library selection
+- record Pattern Fit Diligence in `spec.md` or link preserved `research/pattern-fit.md` when relevant so technical design and planning do not have to rerun open-ended pattern selection
 - label material unknowns in `Open Questions / Assumptions` by unblock path, such as `[assumption]`, `[accepted_risk]`, `[requires_user_decision]`, `[targeted_research]`, `[defer_to_design]`, or `[reopen_spec_if_false]`
 - for non-obvious research-backed decisions, link to the preserved `research/*.md` note or source surface when provenance would help a later session trust or revisit the decision; do not copy the evidence narrative into `Decisions`
 - keep technical detail out of `spec.md` when it belongs in a triggered later `design/` artifact; lean local may include compact affected-surface, ownership, and sequence/failure answers in `Compact Design`
