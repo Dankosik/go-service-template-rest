@@ -92,6 +92,7 @@ Do not:
 - for a dedicated non-trivial research session, default to read-only fan-out when the research questions span more than one independent domain, artifact family, source-of-truth seam, or risk lens
 - a local-only pass must record `Local research rationale:` and `Escalation seams:` in `workflow-plans/research.md`
 - `Local research rationale:` must list the research decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out
+- Missing explicit subagent authorization is not a valid `Local research rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record the research mode as blocked and return a next-session prompt with `Subagent authorization:`.
 - when Pattern Fit Diligence is in scope, search for known applicable design or system-design patterns, concrete descriptions, and real-use examples; compare candidates by task forces, repository boundaries, operational proof, and idiomatic Go fit instead of selecting a design shape from intuition alone
 - preserve the comparison in `research/pattern-fit.md` when multiple candidates, external sources, or examples would materially help later synthesis or auditability; keep final selected/rejected pattern decisions for `spec.md` or the design bundle
 - each subagent lane owns one question and at most one skill, or explicit `no-skill`
@@ -255,6 +256,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase or reopen route exactly, including targeted re-research when that is the next step
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Stop Condition

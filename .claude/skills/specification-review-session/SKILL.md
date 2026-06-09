@@ -78,6 +78,7 @@ Do not edit spec content, decisions, assumptions, validation text, `design/`, `t
 - Use at least one distinct read-only review lane for non-trivial work. Use multiple lanes when independent lenses could change readiness.
 - Common lenses are product/scope coherence, domain invariants and edge cases, API/data/source-of-truth effects, architecture ownership, security/reliability/delivery, validation/QA, dependency/OSS, Pattern Fit, and legacy cleanup.
 - A scoped-down review must list candidate lenses considered and why omitted lenses cannot change readiness. Local-only review is valid only for explicit direct-path/prototype waiver or unavailable read-only lane execution with recorded consequence.
+- Missing explicit subagent authorization is not unavailable read-only lane execution and is not a valid local-only or scoped-down review rationale. If required review lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record the review gate as blocked and return a next-session prompt with `Subagent authorization:`.
 - Review does not patch the spec. It either passes, passes with named concerns, or fails with a reopen target.
 
 ## Workflow
@@ -153,7 +154,7 @@ Do not leave the review verdict or next phase only in chat.
 ## Required Final Chat Handoff
 When this session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a `Recommended next-session prompt` section with one copy-pastable fenced text block.
 
-The prompt must name exactly one next phase or reopen target, list the artifacts to read first, state the expected output for that one phase, and include the stop rule. If there is no next session or `Ready for next session: no`, do not invent a prompt.
+The prompt must name exactly one next phase or reopen target, list the artifacts to read first, state the expected output for that one phase, and include the stop rule. For any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.` If there is no next session or `Ready for next session: no`, do not invent a prompt.
 
 ## Stop Condition
 The session is complete when:

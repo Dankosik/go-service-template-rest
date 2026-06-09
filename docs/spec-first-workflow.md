@@ -700,7 +700,7 @@ Task-ledger review must verify:
 - the ledger contains no open-question section, unresolved decision gate, `TBD`, hidden design work, or instruction for implementation to decide architecture, ownership, contract, sequencing, rollout, or validation policy.
 - subagent gates consumed by planning are listed, no lane blocker or material severity conflict remains unresolved, and subagent-derived proof obligations are mapped into `tasks.md`, `test-plan.md`, or `rollout.md`.
 
-Before marking `tasks.md` approved for non-trivial work, use a read-only task-ledger review fan-out by default. Typical lanes are coverage and traceability, dependency ordering, proof and QA, and any triggered API, data, security, reliability, delivery, performance, observability, or rollout lens. Each lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md` or makes final readiness decisions. A local-only or scoped-down ledger review must explicitly evaluate the default lanes and explain why each omitted lane cannot change readiness. Without recorded task-ledger review fan-out status or `Ledger-review fan-out rationale:`, implementation readiness remains `FAIL` or blocked.
+Before marking `tasks.md` approved for non-trivial work, use a read-only task-ledger review fan-out by default. Typical lanes are coverage and traceability, dependency ordering, proof and QA, and any triggered API, data, security, reliability, delivery, performance, observability, or rollout lens. Each lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md` or makes final readiness decisions. A local-only or scoped-down ledger review must explicitly evaluate the default lanes and explain why each omitted lane cannot change readiness. Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`. Without recorded task-ledger review fan-out status or `Ledger-review fan-out rationale:`, implementation readiness remains `FAIL` or blocked.
 
 If the review finds a blocker, use the smallest owning reopen target:
 
@@ -777,6 +777,14 @@ Read-only must be enforced by the actual execution choice. If a lane cannot reli
 
 Use `docs/subagent-contract.md` and `docs/subagent-brief-template.md` for reusable brief shape.
 
+If the active tool surface exposes subagent spawning only after an explicit user request for subagents, delegation, or parallel agent work, the repository workflow must carry that request in next-session prompts instead of requiring the user to remember it manually. Before declaring spawning unavailable, use tool discovery for subagent or multi-agent spawn tools when none are visible. If a required lane cannot run solely because the current prompt lacks explicit authorization, record `Subagent gate: blocked: missing explicit subagent authorization`; do not downgrade the gate to `local_only`, `scoped_down`, `waived`, or `not_expected`.
+
+Use this exact line in any non-trivial next-session or reopen prompt whose next phase may depend on research fan-out, specification review lanes, clarification challenge lanes, design fan-out, technical design review, task-ledger review, workflow-plan adequacy challenge, review fan-out, or validation fan-out:
+
+```text
+Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.
+```
+
 Every lane needs:
 
 - goal and exact question;
@@ -843,6 +851,7 @@ The recommended prompt should be operational, not just descriptive. Include:
 - the artifact read order, task-local paths, and short reasons for any non-obvious context files;
 - the immediate objective and expected output for that one phase;
 - important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
+- `Subagent authorization:` with explicit permission for read-only subagents, delegation, and parallel agent work whenever the next phase is non-trivial or may run subagent/readiness gates;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
 
 When the next phase is `technical-design`, the prompt must tell the next session to first record or run `Design fan-out` and only then write or repair integrated design artifacts.
@@ -877,6 +886,7 @@ After the goal is set, execute every required task in `<task-local>/tasks.md` fr
 Implementation brief:
 
 Work in `<absolute repo path>`.
+Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.
 Read first:
 - `<task-local>/tasks.md` because it is the approved implementation ledger and source of truth.
 - `<task-local>/spec.md` because it is the canonical decision record.

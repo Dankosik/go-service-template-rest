@@ -131,5 +131,11 @@ Expected output:
 Stop after that phase and return the next-session prompt.
 ```
 
+When composing an implementation prompt from an approved ledger, include this line in the implementation brief so any required read-only review, validation, or adequacy fan-out has explicit tool authorization without relying on the user to remember it:
+
+```text
+Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.
+```
+
 ## Source Notes
 OpenAI's Codex Goal guidance at `https://developers.openai.com/codex/use-cases/follow-goals` frames goals as long-running work toward a verifiable stopping condition, with one objective, read-first context, proof artifacts or commands, checkpoints, a short progress log, and explicit pause/stop behavior. If this product behavior appears stale or the user asks for current docs, refresh against the official Codex Goal page before changing this skill.

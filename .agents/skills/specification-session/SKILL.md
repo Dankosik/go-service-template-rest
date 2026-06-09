@@ -127,6 +127,7 @@ Do not:
 - do not collapse broad formal clarification into one generic challenger merely because one agent could inspect all domains; use the default lens set as separate read-only lanes
 - formal clarification is not waivable while the work remains full-orchestrated, protected-domain, high-risk, hard-to-reverse, cross-domain, or user-requested deep challenge; if the trigger no longer applies, record shape reclassification with trigger-matrix evidence before marking the formal gate not expected
 - fewer formal clarification lanes require `Scoped-down rationale:` listing every default lens, the approval-critical question considered for that lens, retained lane or lanes, and why omitted lenses cannot change spec review-readiness
+- Missing explicit subagent authorization is not a valid scoped-down or local-only clarification rationale. If required clarification lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, leave the specification gate blocked and return a next-session prompt with `Subagent authorization:`.
 - the clarification subagent returns questions for orchestrator reconciliation; it never edits files or makes final decisions
 - keep the wrapper focused on session readiness, allowed writes, handoff, and stop rules
 - a finished specification session ends at review-ready `spec.md` and routes the next session to specification review unless an earlier recorded direct-path waiver makes `spec.md` unnecessary
@@ -254,6 +255,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase or reopen route exactly, including targeted research or user-decision reopens
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Stop Condition

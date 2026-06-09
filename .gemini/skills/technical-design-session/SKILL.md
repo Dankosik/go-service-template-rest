@@ -137,6 +137,7 @@ Do not:
 - for non-trivial triggered technical design, first identify independent planning-critical design questions and run or record narrow read-only specialist fan-out before the integrated design pass
 - review-ready handoff is invalid unless the active workflow surface records `Design fan-out: complete | scoped_down | local_only | blocked` with lane summaries, candidate-lane analysis, or blocker state
 - if design specialist fan-out is skipped, record `Design fan-out rationale:` in `workflow-plans/technical-design.md` with the reason no independent lane would materially improve correctness
+- Missing explicit subagent authorization is not a valid `Design fan-out rationale:`. If required design lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record `Design fan-out: blocked` and return a next-session prompt with `Subagent authorization:`.
 - a single integrated local design pass is eligible only when the reviewed `spec.md` is stable, the current decision frontier has one primary design question, no adjacent domain has an unresolved live fork, and API/data/security/reliability/observability/QA effects can be recorded as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` without changing ownership, contracts, persistence, failure semantics, validation, or rollout
 - dependency-sensitive design must preserve the approved stdlib, repository-pattern, mature-OSS, or custom-code decision. If the design needs a new dependency or custom infrastructure not covered by due diligence, route back to `specification` or targeted research instead of hiding the choice in design prose.
 - pattern-sensitive design must preserve the approved Pattern Fit decision. If design needs a new or different architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern not covered by Pattern Fit Diligence, route back to research or specification instead of hiding the choice in design prose.
@@ -291,6 +292,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Phase-Local Stop Condition

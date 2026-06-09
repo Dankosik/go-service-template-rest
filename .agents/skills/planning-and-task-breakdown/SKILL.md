@@ -57,6 +57,7 @@ Escalate if:
 - Before marking `tasks.md` approved for non-trivial work, default to a read-only task-ledger review fan-out when implementation readiness depends on independent lenses. Typical lanes are coverage/traceability, dependency ordering, proof/QA, and any triggered API, data, security, reliability, delivery, performance, observability, or rollout lens.
 - Each ledger-review lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md` or makes final readiness decisions. The orchestrator repairs planning or reopens from fan-in.
 - Skipping or scoping down ledger-review fan-out requires `Ledger-review fan-out rationale:` that explicitly evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens, then explains why each omitted lane cannot change readiness.
+- Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record implementation readiness as `FAIL` or blocked and return a next-session prompt with `Subagent authorization:`.
 - Implementation readiness remains `FAIL` or blocked unless task-ledger review fan-out status is recorded or `Ledger-review fan-out rationale:` explains why local review covers every readiness risk.
 - A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, ownership, contract, sequencing, rollout, or validation policy.
 - For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one stopping condition, read-first context, preserved constraints, checkpoint/progress rules, and evidence fields that let Codex audit completion without relying on chat memory.
@@ -146,6 +147,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 ### 6. Review The Draft Ledger Before Handoff
 - Compare the completed `tasks.md` against the reviewed `spec.md`, specification-review result, required compact or split design context, design fan-out result when separate technical design depth was triggered, technical-design-review result, and triggered `test-plan.md` or `rollout.md`.
 - Run read-only task-ledger review fan-out by default; otherwise record `Ledger-review fan-out rationale:` that evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens.
+- If subagent spawning is expected but no spawn tool is visible, use tool discovery for subagent or multi-agent tooling before declaring fan-out unavailable.
 - Keep ledger-review lanes read-only and advisory; they return findings and proof obligations for orchestrator fan-in, not edits or final readiness decisions.
 - Confirm every in-scope behavior and preserved constraint is represented in tasking, proof, or explicit non-task rationale.
 - Confirm every approved dependency/OSS due-diligence outcome is represented in tasking or explicit non-task rationale, and that missing due diligence for custom code or a new dependency reopens specification or technical design rather than passing to implementation.
@@ -256,6 +258,7 @@ The planning pass is complete when:
 - task-ledger review confirms `tasks.md` matches reviewed `spec.md`, specification-review obligations, required design context, design fan-out obligations, technical-design-review obligations, and triggered validation or rollout obligations before implementation-readiness is marked ready
 - implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
+- required read-only fan-out was run, validly scoped down, or explicitly blocked; missing explicit subagent authorization is never treated as local review adequacy
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - out-of-scope implications are visible as non-goals, accepted risks, or proof-only follow-ups rather than hidden target-state cleanup
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context

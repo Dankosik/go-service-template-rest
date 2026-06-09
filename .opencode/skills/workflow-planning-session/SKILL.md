@@ -83,6 +83,7 @@ Do not:
 - For dedicated non-trivial workflow planning, lane planning is an explicit deliverable. Default the next research/checkpoint plan to multiple read-only specialist lanes when two or more independent evidence or approval-risk questions are visible.
 - Choose `local` only with `Local-only rationale:` naming why one orchestrator pass preserves domain separation and what escalation seam would reopen fan-out.
 - `Local-only rationale:` must list the decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out; generic "bounded" or "single-domain" wording is invalid.
+- Missing explicit subagent authorization is not a valid `Local-only rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record the gate as blocked and return a next-session prompt with `Subagent authorization:`.
 - Before handoff on full-orchestrated, high-risk, or agent-backed routing, run or record the read-only `workflow-plan-adequacy-challenge`; direct path and lean local may use a recorded local self-check when no formal trigger exists.
 - For sessions that do create workflow-control artifacts, stop after they are updated. Research or another recorded next phase begins in a new session unless an approved direct/lean waiver already allows collapse.
 
@@ -191,6 +192,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase, direct-path execution checkpoint, or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Stop Condition

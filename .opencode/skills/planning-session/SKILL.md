@@ -140,6 +140,7 @@ Do not:
 - typical task-ledger review lanes are coverage/traceability, dependency ordering, proof/QA, and any triggered API, data, security, reliability, delivery, performance, observability, or rollout lens
 - each ledger-review lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md` or makes final readiness decisions
 - skipping or scoping down this fan-out requires `Ledger-review fan-out rationale:` that explicitly evaluates the default lanes and explains why each omitted lane cannot change readiness
+- missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`; if required lanes are blocked only because the prompt lacks explicit subagent/delegation authorization, keep readiness `FAIL` or blocked and return a next-session prompt with `Subagent authorization:`
 - implementation readiness remains `FAIL` or blocked unless task-ledger review fan-out status is recorded or `Ledger-review fan-out rationale:` explains why local review covers every readiness risk
 - before full-orchestrated, high-risk, complex workflow-control, or agent-backed handoff into implementation, run or record the read-only `workflow-plan-adequacy-challenge` over `workflow-plan.md`, `workflow-plans/planning.md`, `tasks.md` status, and any named review or validation phase-control files
 - for dedicated planning sessions, the session ends at approved planning artifacts; implementation starts in a new session unless an upfront direct/lean waiver already exists
@@ -219,6 +220,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks such as "implement featu
 ### 7. Review `tasks.md` And Handoff Into Implementation
 - after expected `tasks.md` and any triggered companion planning artifacts are ready, run the task-ledger review before recording implementation readiness
 - before the final task-ledger review result, run read-only task-ledger review fan-out by default; otherwise record `Ledger-review fan-out rationale:` that evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens
+- if subagent spawning is expected but no spawn tool is visible, use tool discovery for subagent or multi-agent tooling before declaring fan-out unavailable
 - keep every ledger-review lane read-only and limited to the approved artifact chain; the orchestrator repairs planning or reopens earlier phases from fan-in
 - compare `tasks.md` to reviewed `spec.md`, specification-review obligations, compact or split design context, design fan-out obligations, technical-design-review obligations, triggered `test-plan.md` or `rollout.md`, and any required review or validation phase-control files
 - verify that every accepted in-scope behavior, preserved constraint, accepted risk, proof obligation, dependency, and reopen condition is either represented in executable tasking or explicitly not expected with rationale
@@ -303,6 +305,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded first task, implementation checkpoint, or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
+- for any non-trivial next phase, reopen target, implementation handoff, or gate that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
 - when the next session starts implementation from an approved `tasks.md` whose task-ledger review/readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, use `.agents/skills/codex-goal-prompt-composer/SKILL.md` and make the fenced prompt start with `First, set a Codex Goal for this session:`
 - for that implementation prompt, the goal objective must say to execute every required task in the approved `tasks.md` through its named proof and stopping condition, not just begin the first task ID
 - immediately after the goal objective, say `After the goal is set, execute every required task in <tasks.md path> from start to finish`
