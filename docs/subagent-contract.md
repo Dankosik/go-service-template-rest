@@ -2,7 +2,7 @@
 
 Shared contract for repository read-only subagents. `AGENTS.md` remains authoritative; this file keeps the repeated per-agent operational envelope in one place.
 
-Subagents are the normal read-only evidence surface for non-trivial decision work, not optional rescue workers after the orchestrator gets stuck. Use lanes as a planned coverage map: split the current decision frontier into narrow owned questions, assign each question to the smallest suitable expert lane, then reconcile compact lane summaries into the owning artifact. Direct path may stay local; non-trivial local-only decisions require a recorded rationale. Technical design review remains a distinct read-only gate whenever separate technical design depth is triggered, with lane depth scaled to the task risk.
+Subagents are the normal read-only evidence surface for non-trivial decision work, not optional rescue workers after the orchestrator gets stuck. Use lanes as a planned coverage map: split the current decision frontier into narrow owned questions, assign each question to the smallest suitable expert lane, then reconcile compact lane summaries into the owning artifact. Direct path may stay local; non-trivial local-only decisions require a recorded rationale. Specification review remains a distinct read-only gate after non-trivial `spec.md` is written and before downstream phases. Technical-design authoring has its own fan-out decision before the design bundle is review-ready. Technical design review remains a distinct read-only gate whenever separate technical design depth is triggered, with lane depth scaled to the task risk.
 
 ## Shared Invariants
 
@@ -19,6 +19,8 @@ Subagents are the normal read-only evidence surface for non-trivial decision wor
 - For replacement or cleanup-relevant scopes, lanes must inspect for unexplained surviving legacy surfaces in their assigned files or diff. Report each old surface as removed, refactored into the active path, retained with owner/reason/proof/exit condition, not applicable, or a reopen risk; do not leave stale code, tests, fixtures, configs, docs, generated outputs, skills, agents, or mirrors as implicit follow-up work.
 - Direct work normally stays local. Lean-local and full-orchestrated non-trivial work normally use multiple narrow lanes when independent questions exist; local-only lean work requires recorded rationale.
 - Every non-trivial phase approval must record `Subagent gate: complete | scoped_down | local_only | waived | not_expected | blocked` with an evidence pointer or rationale and readiness consequence. Missing gate status keeps the owning phase draft or blocked.
+- Every non-trivial task-local `spec.md` must receive a specification-review verdict before technical design, planning, or implementation starts. The review uses read-only lanes by default and records `PASS`, `CONCERNS`, or `FAIL`; `FAIL` reopens specification, research, specialist review, or a required user decision.
+- Separate technical-design authoring must record `Design fan-out: complete | scoped_down | local_only | blocked` before the design bundle is review-ready. Run read-only specialist lanes for unresolved live forks or domain-owned design decisions; `local_only` requires candidate-lane analysis proving no omitted lane can change design correctness or planning readiness. For full-orchestrated, protected-domain, high-impact, or user-requested agent-backed technical design, `local_only` is invalid; scoped-down authoring still runs at least one read-only specialist lane unless read-only execution is unavailable and the gate is `blocked`. Missing design fan-out status blocks technical design review, planning, and implementation.
 - Lean-local work with a separate `design/overview.md` must still record a technical design review checkpoint before planning; local-only review requires a rationale explaining why no independent lane would materially improve correctness.
 - Full-orchestrated work uses multiple lanes by default; each lane still needs one owned question, one lens or specialist domain, and one skill or `no-skill`.
 - Full-orchestrated triggered design uses at least one technical-design-review lane before planning. A local-only review needs a scoped-down rationale and is invalid when independent design questions remain.
@@ -49,9 +51,17 @@ Every handoff should include:
 
 For short challenge or review lanes, the input bundle may be compressed to one paragraph plus inspect-first paths, as long as the exact question, evidence requirement, skill, and read-only enforcement remain explicit.
 
+For specification review lanes, include the review gate status target and inspect the completed spec before downstream artifacts:
+
+- review-ready `spec.md`;
+- `workflow-plan.md`, `workflow-plans/specification.md`, and `workflow-plans/specification-review.md` when present;
+- preserved `research/*.md` or formal clarification fan-in that the spec relies on;
+- relevant source-of-truth artifacts named by the spec;
+- known assumptions, accepted trade-offs, non-goals, reopen conditions, and expected downstream proof obligations.
+
 For technical design review lanes, include the review gate status target and inspect the design bundle before implementation artifacts:
 
-- approved `spec.md`;
+- specification-review-approved `spec.md`;
 - `design/overview.md` and triggered split or conditional design artifacts;
 - `workflow-plan.md` and `workflow-plans/technical-design.md` or `workflow-plans/technical-design-review.md` when present;
 - `docs/repo-architecture.md` when boundary, ownership, dependency direction, or runtime flow matters;
@@ -64,7 +74,7 @@ For technical design review lanes, include the review gate status target and ins
 Before spawning lanes for a non-trivial phase, the orchestrator should record a compact lane plan in the active workflow surface or handoff:
 
 - `Trigger`: why fan-out is required, scoped down, waived, or not expected.
-- `Gate type`: research fan-out, spec clarification, workflow adequacy, technical design review, task-ledger review, review/validation fan-out, or another named gate.
+- `Gate type`: research fan-out, spec clarification, specification review, workflow adequacy, technical-design-authoring fan-out, technical design review, task-ledger review, review/validation fan-out, or another named gate.
 - `Required lane policy`: default lens set, expanded lane set, scoped-down lane set, or local-only rationale.
 - `Lane table`: lane ID, agent, mode, lens/domain, owned question, skill or `no-skill`, inspect-first evidence target, order or parallelism, read-only enforcement, and status.
 - `Fan-in owner`: always the orchestrator.
@@ -105,6 +115,24 @@ Recommended handoff classifications:
 - `no_action`
 
 Pair the classification with the target owner or artifact and the smallest next step.
+
+Specification review fan-in must end with one gate result:
+
+- `PASS`: technical design, compact tasking, or planning may start from the reviewed spec.
+- `CONCERNS`: the next phase may start only with named accepted spec risks and proof obligations.
+- `FAIL`: downstream phases must not start; reopen specification, research, specialist review, or required user decision. After repair, a follow-up review verdict is still required before downstream work.
+
+Specification review findings should use the strongest downstream-readiness classification:
+
+- `blocks_spec_approval`: the spec cannot become downstream-ready until the issue is resolved.
+- `reopens_specification`: the spec content must change before review can pass.
+- `reopens_research`: missing evidence prevents an honest spec decision.
+- `requires_user_decision`: the missing decision belongs to the user or external policy/business owner.
+- `accepted_risk_candidate`: the orchestrator may proceed only with a named accepted risk and boundary.
+- `proof_obligation`: downstream artifacts must carry a named proof.
+- `record_only`: useful context that does not affect downstream entry.
+
+Do not let specification review become spec authorship. Review agents do not edit `spec.md`; if a finding requires changing scope, decisions, assumptions, validation, or handoff language, return `FAIL` or the smallest reopen target instead of patching the spec inside review.
 
 Technical design review fan-in must end with one gate result:
 

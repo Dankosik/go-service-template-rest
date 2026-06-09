@@ -3,8 +3,8 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Workflow planning and research are already complete for a non-trivial change: add tenant-scoped async export jobs with persisted status, signed download URLs, and admin-only controls. `workflow-plan.md` says the next session starts with `specification`. Use only the specification-session wrapper. Finalize the approved `spec.md`, update `workflow-plan.md`, create or update `workflow-plans/specification.md`, and stop before technical design begins.",
-      "expected_output": "A specification-only result that confirms spec readiness, runs or reconciles the required clarification challenge before approval, produces approved `spec.md` plus the two workflow artifacts, routes the next session to `technical-design`, and stops at the phase boundary.",
+      "prompt": "Workflow planning and research are already complete for a non-trivial change: add tenant-scoped async export jobs with persisted status, signed download URLs, and admin-only controls. `workflow-plan.md` says the next session starts with `specification`. Use only the specification-session wrapper. Finalize review-ready `spec.md`, update `workflow-plan.md`, create or update `workflow-plans/specification.md`, and stop before specification review begins.",
+      "expected_output": "A specification-only result that confirms spec readiness, runs or reconciles the required clarification challenge before review-readiness, produces review-ready `spec.md` plus the two workflow artifacts, routes the next session to `specification-review`, and stops at the phase boundary.",
       "files": [],
       "expectations": [
         "The output reads or refers to current phase context first and keeps the work inside the specification checkpoint.",
@@ -16,7 +16,7 @@
     {
       "id": 1,
       "prompt": "We have some early research notes for enterprise SSO, but core choices are still unresolved: SAML vs OIDC, org-level vs instance-level, JIT provisioning rules, and tenant-isolation semantics. Someone still asked you to run the specification-session wrapper and approve the spec. Use only this wrapper.",
-      "expected_output": "A boundary-aware result that refuses to fabricate an approved `spec.md`, marks the task as not spec-ready, updates routing toward the right upstream phase, and stops without entering technical design.",
+      "expected_output": "A boundary-aware result that refuses to fabricate review-ready `spec.md`, marks the task as not spec-ready, updates routing toward the right upstream phase, and stops without entering specification review or technical design.",
       "files": [],
       "expectations": [
         "The output identifies why the inputs are not spec-ready instead of pretending the open questions can live as harmless assumptions.",

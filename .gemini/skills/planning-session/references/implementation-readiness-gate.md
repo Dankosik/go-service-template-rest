@@ -7,7 +7,7 @@ When loaded for a handoff that feels almost ready, this file makes the model rev
 Load when reviewing completed `tasks.md` or assigning/auditing implementation-readiness status.
 
 ## Decision Rubric
-- First compare `tasks.md` to `spec.md`, compact or split design context, technical-design-review obligations, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path. A written ledger is still draft until this review passes.
+- First compare `tasks.md` to reviewed `spec.md`, specification-review obligations, compact or split design context, technical-design-review obligations, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path. A written ledger is still draft until this review passes.
 - `PASS`: the accepted target-state implementation ledger matches that artifact chain and can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions.
 - `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the implementation ledger can satisfy without re-planning.
 - `FAIL`: implementation must not start; name `planning` for ledger repair, `technical design review` for missing or unresolved review gates, `technical design` for missing ownership/sequence/rollout/validation context, or `specification` for scope/behavior/contract contradictions.

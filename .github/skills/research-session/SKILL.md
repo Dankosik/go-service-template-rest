@@ -110,12 +110,12 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 | The hard choice is whether the session should stay `local` or use read-only `fan-out`. | Makes the model choose mode by evidence surface, risk, and independent-question shape instead of choosing fan-out because "more agents is safer" or staying local to hide cross-domain uncertainty. | `references/local-vs-fanout-mode-selection.md` |
 | Mode is chosen or likely, but `workflow-plans/research.md` has vague lanes, unclear roles, weak source targets, or missing parallelism. | Makes the model assign one owned question, one role, one skill, one evidence target, and a fan-in path per lane instead of using broad domain labels, multi-skill lanes, write-capable workers, or decision-approving subagents. | `references/research-lane-planning.md` |
 | The session must decide whether to preserve `research/*.md`, or an existing research note has poor source hygiene. | Makes the model write compact evidence notes with source relevance, limitations, and handoff value instead of dumping generic notes, command output, links, or `spec.md` decisions. | `references/evidence-note-structure.md` |
-| Research lanes are complete, partial, or blocked and need a clean boundary handoff. | Makes the model hand off comparable evidence, conflicts, readiness, and next-session routing instead of converting research into approved `spec.md` decisions or drifting into design and planning. | `references/fan-in-handoff-examples.md` |
+| Research lanes are complete, partial, or blocked and need a clean boundary handoff. | Makes the model hand off comparable evidence, conflicts, readiness, and next-session routing instead of converting research into review-ready `spec.md` decisions or drifting into specification, review, design, and planning. | `references/fan-in-handoff-examples.md` |
 | A research session has concrete drift smells across multiple surfaces, or no narrower positive reference matches. | Makes the model stop, repair the boundary, or route back to the right phase instead of treating `research-session` as a catch-all path into specification, design, planning, implementation, or note sprawl. | `references/research-session-anti-patterns.md` |
 
 ## Boundary With Future `specification-session`
 - `research-session` may write `workflow-plan.md`, `workflow-plans/research.md`, and optional `research/*.md`
-- the future `specification-session` owns approved `spec.md`, inline lean `Risk Challenge` or formal clarification-gate reconciliation, and any triggered `workflow-plans/specification.md`
+- the future `specification-session` owns review-ready `spec.md`, inline lean `Risk Challenge` or formal clarification-gate reconciliation, and any triggered `workflow-plans/specification.md`
 - if the task is ready to move forward, record `Next session starts with: specification` and stop instead of drafting spec sections here
 
 ## Workflow
@@ -237,7 +237,7 @@ A finished research session produces only research-phase artifacts and routing:
 - optional `research/pattern-fit.md` for preserved Pattern Fit Diligence
 - an honest research phase status such as `complete` or `blocked`, plus a separate reopen routing state when relevant, with the next session start point made explicit
 
-It does not produce approved `spec.md`, `workflow-plans/specification.md`, `design/`, `tasks.md`, or implementation output.
+It does not produce review-ready `spec.md`, `workflow-plans/specification.md`, `workflow-plans/specification-review.md`, `design/`, `tasks.md`, or implementation output.
 
 ## Required Final Chat Handoff
 When this session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a `Recommended next-session prompt` section with one copy-pastable fenced text block.

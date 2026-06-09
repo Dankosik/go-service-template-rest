@@ -1,14 +1,14 @@
 ---
 name: spec-clarification-challenge
-description: "Run a specification-approval clarification challenge when formal challenge is triggered for `spec.md` work. Use inside a read-only challenger subagent during full-orchestrated, high-risk, protected-domain, or otherwise formally challenged specification, after candidate decisions exist and before `spec.md` approval, to surface non-obvious questions, hidden assumptions, corner cases, architecture/data/API/security/reliability concerns, and approval blockers the orchestrator must reconcile. Lean-local work without an escalation trigger uses inline `Risk Challenge` instead."
+description: "Run a specification clarification challenge when formal challenge is triggered for `spec.md` work. Use inside a read-only challenger subagent during full-orchestrated, high-risk, protected-domain, or otherwise formally challenged specification, after candidate decisions exist and before `spec.md` is marked review-ready, to surface non-obvious questions, hidden assumptions, corner cases, architecture/data/API/security/reliability concerns, and review-readiness blockers the orchestrator must reconcile. Lean-local work without an escalation trigger uses inline `Risk Challenge` instead."
 ---
 
 # Spec Clarification Challenge
 
 ## Purpose
-Surface the few questions that could still make `spec.md` approval dishonest.
+Surface the few questions that could still make `spec.md` review-readiness dishonest.
 
-This skill is a formal gate inside `specification`, not a workflow phase and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. In broad formal clarification, this skill normally runs as one lane in a multi-lane read-only challenger set. Single-lane use is valid only when the orchestrator provides a scoped-down rationale listing the default lenses considered and showing with evidence that omitted lenses cannot change approval.
+This skill is a formal gate inside `specification`, not a workflow phase, not the mandatory post-spec specification-review gate, and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk before the spec becomes review-ready. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. In broad formal clarification, this skill normally runs as one lane in a multi-lane read-only challenger set. Single-lane use is valid only when the orchestrator provides a scoped-down rationale listing the default lenses considered and showing with evidence that omitted lenses cannot change review-readiness.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -20,7 +20,7 @@ This skill is a formal gate inside `specification`, not a workflow phase and not
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Scope
-- inspect candidate decisions that are already close to `spec.md` approval
+- inspect candidate decisions that are already close to `spec.md` review-readiness
 - find non-obvious questions that could change scope, acceptance semantics, architecture boundaries, source-of-truth ownership, data/API/security/reliability behavior, failure semantics, rollout, or validation strategy
 - classify each question by approval impact and recommend the smallest next action
 - keep the output compact enough for direct orchestrator reconciliation
@@ -108,7 +108,7 @@ Use references for behavior change, not reassurance. Before loading a reference,
 | A hidden assumption may make approval dishonest, but the question wording is too broad or weak. | `references/approval-blocker-question-examples.md` | Choose a candidate-decision-specific blocker question instead of a generic checklist prompt. |
 | The orchestrator bundle may be too thin to challenge without guessing. | `references/input-bundle-sufficiency.md` | Return a missing-input blocker instead of inventing candidate decisions or validation expectations. |
 | A question seems important, but classification between whole-spec blocker, one-domain reopen, and record-only note is unclear. | `references/domain-reopen-classification.md` | Route the seam to the smallest approval-safe owner instead of doing expert analysis inside this challenge or blocking everything. |
-| A valid concern may belong in `design/` rather than blocking `spec.md` approval. | `references/defer-to-design-vs-block-spec.md` | Preserve spec-level invariants and proof obligations while deferring only stable mechanism choices. |
+| A valid concern may belong in `design/` rather than blocking `spec.md` review-readiness. | `references/defer-to-design-vs-block-spec.md` | Preserve spec-level invariants and proof obligations while deferring only stable mechanism choices. |
 | A question may need external product, business, support, contractual, policy, or legal judgment. | `references/requires-user-decision-examples.md` | Use `requires_user_decision` only for non-repo-answerable policy choices instead of asking the human for technical facts or inventing policy. |
 | A draft output is bloated, generic, answer-heavy, or too eager to approve. | `references/clarification-anti-patterns.md` | Prune checklist noise, design authorship, human-escalation shortcuts, and approval theater before returning. |
 

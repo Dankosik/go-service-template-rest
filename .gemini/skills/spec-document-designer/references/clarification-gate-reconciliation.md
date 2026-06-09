@@ -4,7 +4,7 @@
 When loaded after a `spec-clarification-challenge` pass, this file makes the model reconcile findings into final spec sections and gate status instead of pasting the challenge transcript or approving through unresolved blockers.
 
 ## When To Load
-Load this after challenge findings arrive, when checking whether non-trivial `spec.md` approval is legitimate, or when a draft contains reviewer comments rather than resolved outcomes.
+Load this after challenge findings arrive, when checking whether non-trivial `spec.md` review-readiness is legitimate, or when a draft contains reviewer comments rather than resolved outcomes.
 
 ## Decision Rubric
 - Treat the challenge as advisory. The orchestrator owns final decisions.

@@ -4,7 +4,7 @@
 When loaded for a concern that may be downstream design, this file makes the model preserve only spec-level decisions and defer stable mechanisms instead of likely mistake either blocking approval for implementation details or hiding unsettled invariants behind `design/`.
 
 ## When To Load
-Load this when a question may be valid but might belong in `design/` rather than blocking `spec.md` approval.
+Load this when a question may be valid but might belong in `design/` rather than blocking `spec.md` review-readiness.
 
 The key distinction: `spec.md` must settle the decision, invariant, acceptance meaning, and proof obligation. `design/` can choose the mechanism when those are already stable.
 

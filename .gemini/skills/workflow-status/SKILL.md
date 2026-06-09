@@ -66,12 +66,13 @@ Read the smallest artifact set needed to answer the status question:
 2. task-local `workflow-plan.md`, if present and no approved ledger exists yet or the question is about a pre-code phase
 3. current `workflow-plans/<phase>.md`, if the master names a current phase or next phase and no approved ledger supersedes that routing
 4. task-local `spec.md`
-5. compact design in `spec.md` or task-local `design/overview.md`, then triggered split design files when split design status matters:
+5. task-local `workflow-plans/specification-review.md` or another recorded specification-review result when non-trivial `spec.md` exists
+6. compact design in `spec.md` or task-local `design/overview.md`, then triggered split design files when split design status matters:
    - `design/component-map.md`
    - `design/sequence.md`
    - `design/ownership-map.md`
-6. task-local `workflow-plans/technical-design-review.md` or another recorded technical design review result when separate design depth exists
-7. optional task-local `test-plan.md`, `rollout.md`, and selected `research/*.md` only when they are present and the status question depends on them
+7. task-local `workflow-plans/technical-design-review.md` or another recorded technical design review result when separate design depth exists
+8. optional task-local `test-plan.md`, `rollout.md`, and selected `research/*.md` only when they are present and the status question depends on them
 
 When approved `tasks.md` exists, treat `workflow-plan.md` as historical routing, and treat `workflow-plans/*` as historical unless the ledger explicitly names a pre-created review or validation phase file. When no approved ledger exists and `workflow-plan.md` is missing, infer only the minimum state from the artifact chain and mark workflow control as incomplete unless an explicit direct-path or lean-local rationale explains the missing file.
 
@@ -82,6 +83,7 @@ When approved `tasks.md` exists, treat `workflow-plan.md` as historical routing,
 - Use `spec.md` and `design/` to confirm approval signals and context. Use `tasks.md` as execution authority after approval; do not let stale master routing invent a different implementation phase.
 - Treat absent required artifacts as incomplete unless an explicit waiver or trigger-based `not expected` rationale covers that exact artifact.
 - Treat present artifacts with unclear approval state as `present / status unclear`, not `approved`.
+- Treat a missing specification review result as incomplete for non-trivial `spec.md` unless an explicit direct-path or prototype waiver covers it.
 - Treat a missing task-ledger review or implementation-readiness status as incomplete for non-trivial planned work unless an explicit eligible direct-path, lean-local, or prototype waiver covers it.
 - Treat a missing technical design review result as incomplete whenever separate `design/overview.md` or split `design/` exists and no explicit compact-design/waiver rationale covers the task.
 - If the master and phase-local file conflict, report the conflict as the blocker instead of choosing a winner silently.
@@ -95,8 +97,8 @@ Answer `Implementation may start` conservatively:
 - `Yes` only when task-ledger review and readiness are `PASS`, the required artifact chain is approved or explicitly waived, there are no blocking gates, and approved `tasks.md` points to implementation or the first task.
 - `Yes, in the recorded next session` when task-ledger review and readiness are `PASS`, planning is complete, `Session boundary reached: yes`, and `Next session starts with` points at implementation.
 - `Yes, with recorded concerns` only when readiness is `CONCERNS`, task-ledger review is `PASS` or `CONCERNS`, named accepted risks and proof obligations are explicit, and routing points to implementation.
-- `No` when task-ledger review or readiness is `FAIL`, or when `spec.md`, required compact or split design context, mandatory technical design review, expected `tasks.md`, phase control, task-ledger review status, readiness status, or a required review/validation phase file is missing without an explicit waiver.
-- `No` when the current phase is workflow planning, research, specification, technical design, technical design review, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
+- `No` when task-ledger review or readiness is `FAIL`, or when `spec.md`, mandatory specification review, required compact or split design context, mandatory technical design review, expected `tasks.md`, phase control, task-ledger review status, readiness status, or a required review/validation phase file is missing without an explicit waiver.
+- `No` when the current phase is workflow planning, research, specification, specification review, technical design, technical design review, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
 - `No` when task-ledger review or readiness is `CONCERNS` but accepted risks or proof obligations are unnamed.
 - `Unknown` only when the task path is identified but the artifacts are too contradictory to make a safe yes or no call; name the contradiction as the blocker.
 
@@ -108,6 +110,7 @@ Report the phase's allowed write surface using the repository contract, while ma
 - `workflow planning`: `workflow-plan.md` and `workflow-plans/workflow-planning.md`
 - `research`: `research/*.md`, task-local `workflow-plan.md`, and the active research phase-control file when the session owns research
 - `specification`: `spec.md`, task-local `workflow-plan.md`, and `workflow-plans/specification.md`
+- `specification review`: read-only review output plus task-local `workflow-plan.md` and `workflow-plans/specification-review.md`; review agents do not edit `spec.md`, `design/`, `tasks.md`, or implementation handoffs, and the orchestrator records `PASS`, `CONCERNS`, or `FAIL`
 - `technical design`: compact design in `spec.md`, task-local `design/overview.md`, split `design/` core and triggered conditional design files as applicable, task-local `workflow-plan.md`, and triggered `workflow-plans/technical-design.md`
 - `technical design review`: read-only review output and workflow-control updates only; review agents do not edit design artifacts, `tasks.md`, or implementation handoffs, and the orchestrator records `PASS`, `CONCERNS`, or `FAIL`
 - `planning`: `tasks.md` when expected, triggered `test-plan.md` or `rollout.md`, named review/validation phase-control files when needed, task-ledger review/readiness status in task-local `workflow-plan.md`, and `workflow-plans/planning.md`
@@ -131,6 +134,7 @@ Workflow Status
 - Artifact status: <compact list>
 - Task-ledger review: <PASS / CONCERNS / FAIL / WAIVED / missing / unknown, with one reason>
 - Implementation readiness: <PASS / CONCERNS / FAIL / WAIVED / missing / unknown, with one reason>
+- Specification review: <PASS / CONCERNS / FAIL / missing / not expected / unknown, with one reason>
 - Missing gate or blocker: <first meaningful blocker, or none found>
 - Allowed writes for current phase: <phase write surface; status helper writes nothing>
 - Next action: <from artifacts, or first safe action>

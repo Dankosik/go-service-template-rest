@@ -8,7 +8,7 @@ Load before claiming technical design is review-ready, setting `Session boundary
 
 ## Decision Rubric
 - A technical-design-review handoff may be ready only when required compact or split design context is approved, triggered conditional artifacts are approved or explicitly not expected, and workflow files agree on blockers and next session.
-- The handoff names what review must inspect and later planning may consume: approved `spec.md`, compact design or split design artifacts, triggered conditional artifacts, accepted assumptions, unresolved trade-offs, and reopen conditions.
+- The handoff names what review must inspect and later planning may consume: specification-review-approved `spec.md`, compact design or split design artifacts, triggered conditional artifacts, accepted assumptions, unresolved trade-offs, and reopen conditions.
 - The final action is a handoff or blocker update, not `tasks.md`, implementation, tests, migrations, generation, or technical design review output.
 - If a planning-critical question remains, route to `specification` or keep `technical-design` blocked; do not pass a TODO to review or planning.
 - If the design is small but non-trivial, still stop at the recorded boundary unless an eligible upfront direct/lean waiver already exists.
@@ -16,7 +16,7 @@ Load before claiming technical design is review-ready, setting `Session boundary
 ## Imitate
 ```markdown
 Technical design review handoff: ready.
-Review must inspect: approved `spec.md`; approved overview, component map, sequence, and ownership map; approved `design/data-model.md`; approved `design/contracts/`; `rollout.md` not expected.
+Review must inspect: specification-review-approved `spec.md`; approved overview, component map, sequence, and ownership map; approved `design/data-model.md`; approved `design/contracts/`; `rollout.md` not expected.
 Accepted assumptions: existing persisted state remains unchanged outside the new job table.
 Next session starts with: technical design review.
 Stop rule: do not run review, write `tasks.md`, code, tests, migrations, generated files, or review output in this session.

@@ -30,7 +30,7 @@
       "files": [],
       "expectations": [
         "The output distinguishes research-session outputs from the future `specification-session` outputs.",
-        "The output does not write or recommend writing approved `spec.md`, `workflow-plans/specification.md`, or `design/` in the same session.",
+        "The output does not write or recommend writing review-ready `spec.md`, `workflow-plans/specification.md`, `workflow-plans/specification-review.md`, or `design/` in the same session.",
         "The output records the correct next-session routing or escalation instead of silently continuing into specification."
       ]
     }

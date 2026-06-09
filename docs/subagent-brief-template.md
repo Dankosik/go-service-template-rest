@@ -75,6 +75,26 @@ Return: findings only, ordered by impact, with one recommended handoff classific
 Do not edit files, mutate git state, approve decisions, or change task ledgers/handoffs.
 ```
 
+Specification review variant:
+
+```text
+Use <reviewer-agent | specialist-agent> for read-only specification review with <specialist skill | no-skill>.
+Gate: specification review after `spec.md` is review-ready and before technical design, planning, or implementation.
+Scope: <task>/spec.md and named supporting artifacts.
+Question: Is this `spec.md` complete, deep, and explicit enough for the next phase, or must specification/research/user decision reopen?
+Inspect first:
+- <task>/spec.md
+- <task>/workflow-plan.md and <task>/workflow-plans/specification*.md when present
+- <task>/research/*.md or formal clarification fan-in when the spec relies on them
+- source-of-truth artifacts named by the spec
+Evidence: cite concrete artifact sections and source facts; label assumptions.
+Coverage: check scope/non-goals, behavior/contract delta, product/operator expectations, domain invariants, edge cases, API/data/source-of-truth effects, dependency/OSS diligence, Pattern Fit Diligence, legacy-surface handling, security/reliability/delivery implications, validation proof obligations, and downstream handoff clarity.
+Lens coverage: for each considered lens, return `covered`, `not_applicable`, `concern`, or `fail` with an evidence pointer and short reason.
+Finding format: `Spec anchor`, `Evidence`, `Impact`, `Classification`, `Required disposition`.
+Return: Findings classified as `blocks_spec_approval`, `reopens_specification`, `reopens_research`, `requires_user_decision`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`; required fixes or reopen targets; accepted-risk candidates; downstream proof obligations; recommended gate result: PASS | CONCERNS | FAIL with status rationale.
+Read-only enforcement: <read-only execution choice>; no edits, no git mutation, no approval authority, no task-ledger or implementation handoff changes.
+```
+
 Technical design review variant:
 
 ```text

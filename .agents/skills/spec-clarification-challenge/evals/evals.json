@@ -4,7 +4,7 @@
     {
       "id": 0,
       "prompt": "Read the scenario file and run the spec-clarification-challenge pass. Return only the skill's expected deliverable shape.",
-      "expected_output": "A compact approval-focused clarification challenge that surfaces non-obvious export-job questions before `spec.md` approval, with blocker classifications and next actions for orchestrator reconciliation.",
+      "expected_output": "A compact review-readiness-focused clarification challenge that surfaces non-obvious export-job questions before `spec.md` is marked review-ready, with blocker classifications and next actions for orchestrator reconciliation.",
       "files": [
         "evals/files/async-export-spec-bundle.md"
       ],
@@ -31,7 +31,7 @@
     {
       "id": 2,
       "prompt": "Read the scenario file and run the spec-clarification-challenge pass. Return only the skill's expected deliverable shape.",
-      "expected_output": "A targeted clarification challenge that identifies cache ownership, tenant keying, invalidation, and validation-strategy seams that could block or constrain `spec.md` approval.",
+      "expected_output": "A targeted clarification challenge that identifies cache ownership, tenant keying, invalidation, and validation-strategy seams that could block or constrain `spec.md` review-readiness.",
       "files": [
         "evals/files/account-summary-cache-spec-bundle.md"
       ],

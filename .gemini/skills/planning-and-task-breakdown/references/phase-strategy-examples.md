@@ -17,7 +17,7 @@ Load this when choosing phase boundaries, session stops, review/validation check
 ```markdown
 ### Checkpoint: Canonical Planning Contract
 Objective: update only the authoritative planning-contract surfaces named in `design/component-map.md`.
-Depends On: approved `spec.md`, approved core `design/` bundle.
+Depends On: specification-review-approved `spec.md`, approved core `design/` bundle.
 Task Ledger Link / IDs: T001-T003.
 Acceptance Criteria:
 - the listed contract surfaces describe the same planning boundary

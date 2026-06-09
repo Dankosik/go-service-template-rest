@@ -1,13 +1,13 @@
 ---
 name: technical-design-session
-description: "Own a session dedicated only to task-local technical design for this repository when separate design depth is triggered. Use when approved `spec.md` must be turned into a review-ready `design/` bundle or `design/overview.md`, with any triggered workflow-control artifacts updated for the mandatory technical-design-review handoff, without drifting into renewed framing, `tasks.md`, planning, or implementation. Skip direct-path work, lean-local work whose compact design fits in `spec.md`, unstable or contradictory `spec.md`, and tasks already in technical design review or later."
+description: "Own a session dedicated only to task-local technical design for this repository when separate design depth is triggered. Use when specification-review-approved `spec.md` must be turned into a review-ready `design/` bundle or `design/overview.md`, with any triggered workflow-control artifacts updated for the mandatory technical-design-review handoff, without drifting into renewed framing, `tasks.md`, planning, or implementation. Skip direct-path work, lean-local work whose compact design fits in reviewed `spec.md`, unstable or unreviewed `spec.md`, and tasks already in technical design review or later."
 ---
 
 # Technical Design Session
 
 ## Purpose
 Run only the technical-design checkpoint for one task-local session.
-This wrapper makes the `spec.md -> design/ -> technical design review` handoff explicit: it produces or updates the task-local design bundle, updates workflow control artifacts, and then stops before the mandatory review gate.
+This wrapper makes the `specification-review-approved spec.md -> design/ -> technical design review` handoff explicit: it produces or updates the task-local design bundle, updates workflow control artifacts, and then stops before the mandatory review gate.
 
 Use `.agents/skills/go-design-spec/SKILL.md` as the deeper integrated design method when cross-domain reconciliation or simplification work is needed.
 Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns session protocol, allowed writes, stop rules, and technical-design-review handoff only.
@@ -22,7 +22,7 @@ Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns s
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Use When
-- approved or planning-stable `spec.md` exists and trigger-based design depth is needed before planning
+- specification-review-approved or explicitly waived direct-path `spec.md` exists and trigger-based design depth is needed before planning
 - lean-local `design/overview.md` or full split `design/` is missing, stale, partial, or internally inconsistent after being triggered
 - master `workflow-plan.md` needs the `technical-design` checkpoint completed or updated before the technical-design-review stage
 - the task needs triggered design artifacts, triggered conditional artifacts, or a clean design handoff for `planning-and-task-breakdown`
@@ -31,14 +31,15 @@ Do not turn this wrapper into a duplicate of `go-design-spec`; this skill owns s
 ## Skip When
 - the work is tiny or direct-path and already has an explicit design-skip rationale
 - lean-local `spec.md` already contains enough `Compact Design` context for planning and records why separate design is not expected
-- `spec.md` is missing, unstable, contradictory, or still needs research, challenge reconciliation, or specification work
+- `spec.md` is missing, unstable, contradictory, unreviewed, failed specification review, or still needs research, challenge reconciliation, or specification work
 - the task is already in `planning` or a later phase and does not intentionally need design repair
 - approved compact or split design context already exists and the real next step is technical design review, planning, or execution
 - the request tries to combine technical design with technical design review, writing `tasks.md`, implementation, tests, migrations, or post-code review execution
 
 ## Required Inputs
 Need only the minimum phase-ready inputs:
-- approved or planning-stable `spec.md`
+- specification-review-approved `spec.md`
+- specification-review result when non-trivial `spec.md` exists, including accepted risks and proof obligations when status is `CONCERNS`
 - current task-local artifact location
 - current `workflow-plan.md`, if present
 - current `workflow-plans/technical-design.md`, if present
@@ -55,7 +56,7 @@ Always read:
 - `docs/spec-first-workflow.md`
 - task-local `workflow-plan.md`, if present
 - task-local `workflow-plans/technical-design.md`, if present
-- approved `spec.md`
+- specification-review-approved `spec.md`
 
 Load `docs/repo-architecture.md` when at least one is true:
 - this is a fresh non-trivial technical-design pass
@@ -84,7 +85,7 @@ Default loading rule:
 - Load at most one reference by default.
 - Load a second reference only when the task clearly spans multiple independent decision pressures, such as uncertain entry readiness plus closing handoff, or required artifact shaping plus conditional artifact triggers.
 - Do not load the full `references/` directory by default.
-- Check repo-local authority first: `AGENTS.md`, `docs/spec-first-workflow.md`, task-local workflow files, approved `spec.md`, and `docs/repo-architecture.md` when triggered.
+- Check repo-local authority first: `AGENTS.md`, `docs/spec-first-workflow.md`, task-local workflow files, reviewed `spec.md`, specification-review result, and `docs/repo-architecture.md` when triggered.
 - Do not copy examples blindly; bind them to the current task's phase, artifacts, blockers, and approved decisions.
 - If a reference exposes a missing decision, route back to `specification`. If it exposes missing execution sequencing, record it for the technical-design-review handoff instead of writing `tasks.md`.
 
@@ -134,8 +135,9 @@ Do not:
 - use `go-design-spec` as the deeper design-integrity method when you need integration, contradiction cleanup, or simplification beyond simple artifact upkeep
 - for non-trivial work, this session ends at a review-ready or explicitly blocked design bundle; technical design review begins in a new stage unless an explicit compact-design waiver already covers the task
 - for non-trivial triggered technical design, first identify independent planning-critical design questions and run or record narrow read-only specialist fan-out before the integrated design pass
+- review-ready handoff is invalid unless the active workflow surface records `Design fan-out: complete | scoped_down | local_only | blocked` with lane summaries, candidate-lane analysis, or blocker state
 - if design specialist fan-out is skipped, record `Design fan-out rationale:` in `workflow-plans/technical-design.md` with the reason no independent lane would materially improve correctness
-- a single integrated local design pass is eligible only when the approved `spec.md` is stable, the current decision frontier has one primary design question, no adjacent domain has an unresolved live fork, and API/data/security/reliability/observability/QA effects can be recorded as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` without changing ownership, contracts, persistence, failure semantics, validation, or rollout
+- a single integrated local design pass is eligible only when the reviewed `spec.md` is stable, the current decision frontier has one primary design question, no adjacent domain has an unresolved live fork, and API/data/security/reliability/observability/QA effects can be recorded as `constraint_only`, `proof_only`, `follow_up_only`, or `no new decision required` without changing ownership, contracts, persistence, failure semantics, validation, or rollout
 - dependency-sensitive design must preserve the approved stdlib, repository-pattern, mature-OSS, or custom-code decision. If the design needs a new dependency or custom infrastructure not covered by due diligence, route back to `specification` or targeted research instead of hiding the choice in design prose.
 - pattern-sensitive design must preserve the approved Pattern Fit decision. If design needs a new or different architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern not covered by Pattern Fit Diligence, route back to research or specification instead of hiding the choice in design prose.
 - required and conditional artifacts should be explicit in the workflow files as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` rather than guessed into existence
@@ -178,7 +180,7 @@ Create these only when their trigger is real:
 
 If a trigger is not real, record the artifact as `not expected` with trigger rationale instead of creating filler.
 
-Technical design owns the trigger decision for `test-plan.md` and `rollout.md` when validation or rollout shape affects later planning readiness. Create them here only when the approved `spec.md` and current design context are enough to write the artifact honestly. If the trigger is plausible but planning must decide from execution detail, record it as `conditional` with the decision point instead of creating a placeholder.
+Technical design owns the trigger decision for `test-plan.md` and `rollout.md` when validation or rollout shape affects later planning readiness. Create them here only when the specification-review-approved `spec.md` and current design context are enough to write the artifact honestly. If the trigger is plausible but planning must decide from execution detail, record it as `conditional` with the decision point instead of creating a placeholder.
 
 ## Workflow
 
@@ -189,7 +191,7 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 - if the task is direct path or lean local with enough compact design context already recorded, say so directly and do not force this wrapper
 
 ### 2. Verify Design Entry Preconditions
-- confirm that `spec.md` is stable enough to derive task-local design without casually reopening framing
+- confirm that specification review is `PASS` or `CONCERNS` with named accepted risks and proof obligations, and that `spec.md` is stable enough to derive task-local design without casually reopening framing
 - reuse existing design artifacts and specialist outputs before inventing new files
 - surface blockers when missing inputs would make the design dishonest
 
@@ -227,7 +229,9 @@ Technical design owns the trigger decision for `test-plan.md` and `rollout.md` w
 - record only the local orchestration for this phase:
   - phase status
   - whether the pass is fresh, resumed, or repair work
+  - `Design fan-out: complete | scoped_down | local_only | blocked`
   - design specialist lane set, fan-in result, or `Design fan-out rationale:`
+  - candidate seams, collapsed seams, and escalation seams when lanes are skipped or scoped down
   - completion marker
   - local stop rule
   - next action
@@ -292,6 +296,7 @@ Rules:
 ## Phase-Local Stop Condition
 The session is complete when one of these is true:
 - review-ready handoff:
+  - design fan-out status is `complete`, `scoped_down`, or `local_only` with lane evidence or valid candidate-lane analysis; `blocked` or absent status is not review-ready
   - triggered design artifacts are approved, or design is explicitly merged/waived by the lean-local rationale
   - triggered conditional artifacts are approved or explicitly not expected
   - planning-critical contradictions are resolved or made explicit
@@ -308,7 +313,8 @@ In all cases:
 
 ## Technical Design Review Handoff
 When the session is review-ready, hand technical design review exactly this:
-- approved `spec.md`
+- specification-review-approved `spec.md`
+- specification-review result and any accepted risks or proof obligations
 - approved lean compact design context, one `design/overview.md`, or triggered split design artifacts
 - approved triggered conditional design artifacts, or explicit `not expected` rationale
 - any triggered `design/data-model.md`, `design/dependency-graph.md`, or `design/contracts/`

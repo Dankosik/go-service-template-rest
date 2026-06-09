@@ -1,7 +1,7 @@
 # Fan-In Handoff
 
 ## Behavior Change Thesis
-When loaded after research lanes are complete, partial, or blocked, this file makes the model hand off comparable evidence, conflicts, readiness, and next-session routing instead of likely mistake: converting research into approved `spec.md` decisions or drifting into design and planning.
+When loaded after research lanes are complete, partial, or blocked, this file makes the model hand off comparable evidence, conflicts, readiness, and next-session routing instead of likely mistake: converting research into review-ready `spec.md` decisions or drifting into specification, review, design, and planning.
 
 ## When To Load
 Load when research is done enough to summarize fan-in or when a blocked session needs a clean stop rule.

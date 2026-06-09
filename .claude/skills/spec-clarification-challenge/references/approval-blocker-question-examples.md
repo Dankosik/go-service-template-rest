@@ -4,7 +4,7 @@
 When loaded for a challenge with vague approval-risk wording, this file makes the model ask candidate-decision-specific blocker questions instead of likely mistake "What about X?" checklist prompts.
 
 ## When To Load
-Load this when the challenge needs examples of questions that can make `spec.md` approval dishonest. Use it for hidden assumptions that could change scope, acceptance semantics, ownership, failure behavior, rollout, or validation.
+Load this when the challenge needs examples of questions that can make `spec.md` review-readiness dishonest. Use it for hidden assumptions that could change scope, acceptance semantics, ownership, failure behavior, rollout, or validation.
 
 Do not load it just to pad a challenge. A blocker question earns its place because a different answer changes approval.
 

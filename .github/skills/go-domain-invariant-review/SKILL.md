@@ -48,7 +48,7 @@ Do not:
 
 ## Source Authority
 Use repo-local evidence before general domain modeling advice:
-- approved `spec.md`, domain docs, plans, task artifacts, and task-local design files
+- reviewed `spec.md`, domain docs, plans, task artifacts, and task-local design files
 - existing tests, fixtures, and accepted behavior examples
 - changed code and adjacent code when no approved artifact is attached
 

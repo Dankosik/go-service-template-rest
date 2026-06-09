@@ -25,7 +25,7 @@ Technical design review handoff with artifact status, accepted risk, and reopen 
 ## Technical Design Review Handoff
 
 Review must inspect:
-- approved `spec.md`
+- specification-review-approved `spec.md`
 - `design/overview.md`
 - `design/component-map.md`
 - `design/sequence.md`

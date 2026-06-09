@@ -117,6 +117,7 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 - If `fan-out` is expected, enumerate lanes by owned question, role, and one chosen skill or explicit `no-skill`.
 - If the next checkpoint is local-only, record `Local-only rationale:` and `Escalation seams:` instead of leaving the skip implicit.
 - Decide whether a later pre-spec challenge pass is expected.
+- Decide whether non-trivial specification review will need `workflow-plans/specification-review.md`; this is expected whenever a task-local `spec.md` is expected and the work is not direct path.
 - Decide whether lean-local `spec.md`/`tasks.md`, merged design context, full split `design/`, `test-plan.md`, or `rollout.md` artifacts are expected by trigger.
 - Decide whether later review or validation phase workflow files may be expected, with the rule that planning creates only named files that are genuinely needed before implementation starts.
 
@@ -130,7 +131,7 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 - Record the execution shape and why it fits.
 - Record research mode when later research is expected.
 - Record current phase, phase status, session-boundary state, next-session routing, blockers, and phase workflow plan links or status.
-- Record artifact status for `spec.md`, `design/`, `tasks.md`, and conditional later artifacts as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` instead of a bare label.
+- Record artifact status for `spec.md`, specification review, `design/`, `tasks.md`, and conditional later artifacts as `approved`, `draft`, `missing`, `blocked`, `conditional`, `waived`, or `not expected`, with trigger rationale for `conditional`, `waived`, or `not expected` instead of a bare label.
 - Record whether later review or validation phase workflow files are expected and must be created during planning because named multi-session routing needs them, rather than mid-implementation or mid-validation.
 
 ### 6. Write Or Repair `workflow-plans/workflow-planning.md`
@@ -161,7 +162,7 @@ Every completed pass must update the master file with:
 - phase workflow plan links or status, including `workflow-plans/workflow-planning.md`
 - workflow plan adequacy challenge status and resolution, or an explicit direct/lean local self-check or skip rationale
 - subagent gate decision for the next checkpoint: planned lane set, local-only rationale, or why no lane is expected
-- artifact status for `spec.md`, `design/`, `tasks.md`, and any triggered `test-plan.md` or `rollout.md`, with trigger rationale for `not expected`, `conditional`, or `waived` statuses
+- artifact status for `spec.md`, specification review, `design/`, `tasks.md`, and any triggered `test-plan.md` or `rollout.md`, with trigger rationale for `not expected`, `conditional`, or `waived` statuses
 - phased-delivery policy, including whether later review and validation phase files are expected or still unknown
 
 Do not leave those fields implicit in chat.

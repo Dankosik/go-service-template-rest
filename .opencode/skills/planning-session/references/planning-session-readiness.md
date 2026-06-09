@@ -7,7 +7,8 @@ When loaded for a planning pass with uncertain inputs, this file makes the model
 Load when required planning inputs are missing, stale, contradictory, or not yet checked before artifact writes.
 
 ## Decision Rubric
-- Begin planning only from stable `spec.md` plus required approved design artifacts, unless an explicit eligible direct-path design-skip rationale already exists.
+- Begin planning only from stable specification-review-approved `spec.md` plus required approved design artifacts, unless an explicit eligible direct-path design-skip rationale already exists.
+- Treat missing or blocking specification review as a planning-entry blocker for non-trivial work.
 - Treat `workflow-plan.md` and `workflow-plans/planning.md` as repairable planning inputs, not as optional chat memory.
 - Check triggered conditional design artifacts before task breakdown; if sequencing, validation, rollout, data, contract, ownership, or dependency order depends on one, it must exist or planning blocks.
 - If a missing decision would change implementation order, proof shape, ownership, compatibility, or rollout, record a reopen target instead of turning it into a task.

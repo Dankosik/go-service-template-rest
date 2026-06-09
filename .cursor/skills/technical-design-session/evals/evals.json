@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "We already have an approved `spec.md` for tenant-scoped async export jobs with persisted job state, signed download URLs, an admin control surface, and an outbox-backed completion event. The current `workflow-plan.md` says the next session starts with `technical-design`. Use only the technical-design-session wrapper. Produce the task-local design bundle and update the workflow control artifacts so technical design review can start next. This change touches HTTP transport, app orchestration, persistence, async flow, and generated contracts.",
+      "prompt": "We already have a specification-review-approved `spec.md` for tenant-scoped async export jobs with persisted job state, signed download URLs, an admin control surface, and an outbox-backed completion event. The current `workflow-plan.md` says the next session starts with `technical-design`. Use only the technical-design-session wrapper. Produce the task-local design bundle and update the workflow control artifacts so technical design review can start next. This change touches HTTP transport, app orchestration, persistence, async flow, and generated contracts.",
       "expected_output": "A technical-design-only result that loads the right phase context, uses the repository architecture baseline because the change touches stable boundaries and runtime flow, writes the required design artifacts plus triggered conditional ones, updates `workflow-plan.md` and `workflow-plans/technical-design.md`, and stops before task breakdown.",
       "files": [],
       "expectations": [

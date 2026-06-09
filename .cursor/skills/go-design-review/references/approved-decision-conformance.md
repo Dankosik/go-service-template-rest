@@ -4,7 +4,7 @@
 When loaded for symptom "the diff introduces behavior or structure not in the approved artifacts," this file makes the model treat code as design drift or a reopen trigger instead of letting implementation become the new decision record.
 
 ## When To Load
-Load this when a diff appears to introduce behavior, ownership, lifecycle, fallback, contract, async, rollout, or delivery decisions not present in approved `spec.md`, `design/`, `tasks.md`, or repository baseline.
+Load this when a diff appears to introduce behavior, ownership, lifecycle, fallback, contract, async, rollout, or delivery decisions not present in reviewed `spec.md`, `design/`, `tasks.md`, or repository baseline.
 
 Use this only when approved intent exists or the repo baseline clearly owns the decision. Do not demand artifacts for eligible tiny/direct-path fixes.
 

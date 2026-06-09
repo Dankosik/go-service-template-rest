@@ -38,7 +38,7 @@ Full-orchestrated artifact record:
 - `workflow-plans/workflow-planning.md`: draft, active phase file.
 - `research/*.md`: missing, expected later for reusable fan-out evidence.
 - `spec.md`: missing, expected after research and synthesis.
-- `design/`: missing, expected after approved `spec.md`.
+- `design/`: missing, expected after specification-review-approved `spec.md`.
 - `tasks.md`: missing, expected by default for non-trivial implementation work.
 - `test-plan.md`: conditional, trigger unknown.
 - `rollout.md`: conditional, trigger unknown.
