@@ -60,7 +60,7 @@ Escalate if:
 - Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record implementation readiness as `FAIL` or blocked and return a next-session prompt with `Subagent authorization:`.
 - Implementation readiness remains `FAIL` or blocked unless task-ledger review fan-out status is recorded or `Ledger-review fan-out rationale:` explains why local review covers every readiness risk.
 - A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, ownership, contract, sequencing, rollout, or validation policy.
-- For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one stopping condition, read-first context, preserved constraints, checkpoint/progress rules, and evidence fields that let Codex audit completion without relying on chat memory.
+- For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one successful completion condition, a separate blocked-stop condition, read-before-coding context, task-specific read context when useful, preserved constraints, checkpoint/progress rules, resume rules, and evidence fields that let Codex audit completion without relying on chat memory. A recorded blocker is a valid stop, not a successful completion claim.
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - Planning must not treat a spec author's handoff as review. Non-trivial `spec.md` requires a distinct specification-review gate before task breakdown can be approved.
 - If specification review passed with `CONCERNS`, carry each accepted spec risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the implementation-readiness handoff; do not leave it only in the review record.
@@ -114,6 +114,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 
 ### 3. Slice The Work
 - Prefer one coherent reviewable increment per checkpoint or target-state work bundle.
+- Keep one reviewable diff story per task. If the title needs "and" to be accurate, split it unless the approved design makes the coupling inseparable.
 - When possible, use vertical slices that land observable behavior.
 - If the work must start with enabling seams or migration groundwork, say so directly.
 - If two tasks must land together to remain safe, explain the coupling.
@@ -122,13 +123,17 @@ Reference snippets are patterns, not decisions. If an example would require an a
 ### 4. Write The Task Ledger
 - Use `tasks.md` for executable task checkboxes and the final implementation handoff.
 - Treat non-trivial `tasks.md` as Goal-ready by default in this repository: start the ledger with a compact Goal contract unless the work is explicitly tiny/direct and not meant to become a Goal handoff.
-- The Goal contract includes objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule.
+- The Goal contract includes objective, completion condition, separate blocked-stop condition, read-before-coding artifacts, task-specific read context when useful, preserved constraints, progress-log rule, resume rule, and blocked-stop rule.
 - Keep the Goal contract derivative of approved artifacts. It must not introduce new scope, new design decisions, or permission to create missing pre-code workflow artifacts during implementation.
 - Write the Goal contract so the planning handoff can reuse it directly as a concise Codex Goal objective for the next implementation session, covering every executable task in the approved ledger through final validation.
 - When rendering the final chat implementation handoff from that Goal contract, use `.agents/skills/codex-goal-prompt-composer/SKILL.md`.
 - Keep detailed artifact lists, constraints, accepted concerns, proof commands, and progress rules in the Goal contract fields and handoff metadata, not inside the objective sentence itself.
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
-- Include an evidence field for each task or checkpoint when the implementer is expected to update progress during execution.
+- Include structured evidence fields for each task or checkpoint when the implementer is expected to update progress during execution. Prefer `Command/read`, `Result`, `Key output/ref`, `Changed proof files`, and `Residual blocker/narrower claim` unless a one-line evidence field is enough for tiny/direct-path work.
+- Do not let the evidence shape imply that skipped, unavailable, failing, stale, or too-narrow proof can satisfy a task. The affected task must stay unchecked with `Blocked:` or a narrower claim.
+- Include `Source:` anchors for tasks whose requirements come from non-obvious spec decisions, review findings, design sections, `test-plan.md`, or `rollout.md`, so task-ledger review can trace material work back to approved artifacts.
+- For behavior changes and bug fixes, include proof-first or test-first tasking by default. If a failing proof is not useful, add `Proof-first waiver: <reason>` to the relevant task or checkpoint.
+- Include a compact task-local implementation quality bar when the work is broad enough that clean code, package ownership, generated-source discipline, dependency/custom-helper discipline, concurrency/lifecycle behavior, observability, or test-layer choices could otherwise be implicit.
 - Include dependency tasks when relevant: module change, license/security check, transitive dependency review, generated or config updates, integration tests, and any proof obligations from the approved dependency/OSS due diligence.
 - Include pattern-preserving tasks when relevant: package or boundary placement, runtime sequence, idempotency/dedup/recovery hooks, validation proof, documentation updates, or negative checks required by the approved Pattern Fit decision.
 - When approved decisions replace old code or artifacts, include cleanup audit/removal tasking for old identifiers, routes, configs, commands, tests, fixtures, generated artifacts, scripts, docs, skills, agents, and mirrors that belong to the replaced path.
@@ -142,6 +147,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 ### 5. Add Checkpoints
 - Add review and validation checkpoints at natural risk boundaries.
 - Each checkpoint should say what must be true before the next phase starts.
+- When checkpoints exist, add a compact `Checkpoint Gates` table or equivalent wording that maps checkpoint names to task ranges and required proof/currentness before later tasks rely on the checkpoint.
 - Keep checkpoints proportional; tiny work may need one final checkpoint only.
 
 ### 6. Review The Draft Ledger Before Handoff
@@ -153,6 +159,16 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Confirm every approved dependency/OSS due-diligence outcome is represented in tasking or explicit non-task rationale, and that missing due diligence for custom code or a new dependency reopens specification or technical design rather than passing to implementation.
 - Confirm every approved Pattern Fit outcome is represented in tasking, proof, or explicit non-task rationale, and that missing Pattern Fit Diligence for an invented design shape reopens research, specification, or technical design rather than passing to implementation.
 - Confirm design fan-out is `complete`, valid `scoped_down`, or eligible `local_only` when separate technical design depth was triggered; missing, `blocked`, or ineligible `local_only` design fan-out reopens technical design instead of passing to implementation.
+- Confirm the Goal Contract separates successful completion from blocked-stop behavior; if "recorded blocker" can be read as successful completion, repair planning before readiness can pass.
+- Confirm each task has one reviewable diff story, or records why coupled changes cannot be split safely.
+- Confirm read context is split into required start context and task-specific context when the artifact list is long or domain-specific; implementation should not have to read every companion artifact before the first safe edit.
+- Confirm checkpoint gates identify the proof/currentness required before dependent later tasks proceed.
+- Confirm material task requirements have `Source:` anchors or equivalent traceability to approved spec, review, design, test-plan, or rollout artifacts.
+- Confirm behavior-change and bug-fix tasks include proof-first/test-first tasking, or an explicit task-level `Proof-first waiver:` with rationale.
+- Confirm evidence fields are structured enough for closeout to distinguish passed proof, unavailable proof, blocked proof, and narrower claims.
+- Confirm skipped, unavailable, stale, failing, or too-narrow proof cannot satisfy a task checkbox, checkpoint, or completion claim.
+- Confirm long-running ledgers have a resume rule that tells a context-blind implementation session where to continue and how much proof to rerun.
+- Confirm the task-local implementation quality bar is present or explicitly unnecessary for the task shape.
 - Confirm every known in-scope legacy surface is represented as remove/refactor work, retained with owner/reason/proof/exit condition, or proven not applicable; missing cleanup tasking reopens planning unless it changes spec or design scope.
 - Confirm replacement ledgers use the `Legacy cleanup audit` table; prose-only cleanup classification is too easy to miss during implementation and closeout.
 - Confirm task order matches ownership, sequence, dependency, migration, validation, and rollout constraints from the design context.
@@ -183,7 +199,7 @@ Write tasks as outcome slices, not process scripts:
 - use proof obligations and reopen conditions to control risk instead of adding speculative subtasks
 
 Use markdown checkboxes. Each task should include:
-- a compact `Goal Contract` header for long-running or resumable work, limited to objective, stopping condition, read-first artifacts, preserved constraints, progress-log rule, and blocked-stop rule;
+- a compact `Goal Contract` header for long-running or resumable work, limited to objective, completion condition, separate blocked-stop condition, read-before-coding artifacts, task-specific read context when useful, preserved constraints, task-local implementation quality bar when needed, progress-log rule, resume rule, and blocked-stop rule;
 - an optional compact `Implementation Handoff` header when it helps the next implementation session, limited to consumed artifacts, task-ledger review/readiness status, first task or checkpoint, named `CONCERNS` proof obligations, and reopen target;
 - `Subagent gates consumed`, task-ledger review fan-out status or `Ledger-review fan-out rationale:`, and `Subagent-derived proof obligations` lines for non-trivial implementation readiness;
 - stable task ID such as `T001`
@@ -201,9 +217,22 @@ Example:
 ## Goal Contract
 
 Goal objective: Complete the approved request-ID behavior change by executing this ledger through final validation.
-Stopping condition: all tasks are checked, required proof passes or records a concrete blocker, and ledger-owned closeout evidence is current.
-Read first: reviewed `spec.md`, specification-review result, `design/`, and this task ledger.
+Completion condition: all tasks are checked, required proof passes, task evidence is current, and ledger-owned closeout updates are complete.
+Blocked-stop condition: if required proof cannot pass, a required command cannot run, an implementation-blocking decision is missing, or an approved artifact is insufficient, stop with the Goal blocked, leave affected tasks unchecked, record `Blocked:` with evidence and the owning reopen target, and do not claim completion.
+Read before coding:
+- this task ledger because it is the approved implementation authority.
+- reviewed `spec.md` because it is the canonical decision record.
+- specification-review result because it records accepted proof obligations.
+Read before relevant tasks:
+- `design/` before tasks that touch approved package or runtime boundaries.
 Do not change: public HTTP semantics other than the approved request-ID echo behavior.
+Task-local implementation quality bar:
+- before starting each task, bind task ID, `Source`, owner file/package, proof, and stop/reopen condition; repair the ledger or reopen if any of those are missing.
+- before checking a task, self-review that the diff still traces to the `Source`, introduces no unapproved decision/dependency/pattern, keeps file responsibility focused, and has proof that covers this task rather than a neighboring surface.
+- choose the owning package/file before substantial edits and avoid catch-all growth.
+- change owning sources before generated output and prove drift when generation applies.
+- add no unapproved dependency, custom helper framework, or new pattern-like abstraction.
+Resume rule: on resume, read git status and this ledger first, then continue at the first unchecked task whose dependencies are satisfied.
 Progress log: update each task's `Evidence` line after running its proof; if blocked, stop and record `Blocked:` under the task.
 
 ## Implementation Handoff
@@ -215,10 +244,37 @@ First task: T001.
 Accepted concerns: none.
 Reopen target: planning if required artifact context is missing.
 
+## Checkpoint Gates
+
+| Checkpoint | Tasks | Gate before continuing |
+| --- | --- | --- |
+| CP1 request ID behavior | T001-T002 | Targeted HTTP proof is current before final validation. |
+
 ## Tasks
 
-- [ ] T001 [Checkpoint 1] Update `internal/http/handler.go` to preserve request ID echo behavior. Depends on: none. Proof: `go test ./internal/http`. Evidence: Pending.
-- [ ] T002 [Checkpoint 1] [P] Add regression coverage in `internal/http/handler_test.go`. Depends on: T001. Proof: `go test ./internal/http`. Evidence: Pending.
+- [ ] T001 [Checkpoint 1] Update `internal/http/handler.go` to preserve request ID echo behavior.
+  Depends on: none.
+  Files: `internal/http/handler.go`.
+  Source: `spec.md` request-ID behavior decision.
+  Proof: `go test ./internal/http`.
+  Evidence:
+  - Command/read: Pending.
+  - Result: Pending.
+  - Key output/ref: Pending.
+  - Changed proof files: Pending.
+  - Residual blocker/narrower claim: Pending.
+
+- [ ] T002 [Checkpoint 1] [P] Add regression coverage in `internal/http/handler_test.go`.
+  Depends on: T001.
+  Files: `internal/http/handler_test.go`.
+  Source: specification-review request-ID proof obligation.
+  Proof: `go test ./internal/http`.
+  Evidence:
+  - Command/read: Pending.
+  - Result: Pending.
+  - Key output/ref: Pending.
+  - Changed proof files: Pending.
+  - Residual blocker/narrower claim: Pending.
 ```
 
 Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`. Keep headers short; if the Goal contract or handoff starts carrying phase strategy or design rationale, trim it back or reopen `design/`. Use multi-line items for readability, not as permission to hide new decisions or broad subplans inside a checkbox.

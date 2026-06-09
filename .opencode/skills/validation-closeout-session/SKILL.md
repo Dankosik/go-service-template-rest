@@ -129,6 +129,7 @@ Do not:
 - Reuse `go-verification-before-completion` for the actual proof pass: explicit claim, explicit scope, commands actually run, observed result, and proportional conclusion.
 - Do not copy its claim-to-proof table into local folklore or weaken it for convenience.
 - If its proof bar says the claim is not verified, this session must record a blocker or reopen. It may not "balance" the failure with optimistic closeout wording.
+- Skipped, unavailable, stale, failing, or too-narrow proof cannot satisfy a task checkbox, checkpoint, or completion claim. Leave affected tasks unchecked and record `Blocked:` or the narrower claim.
 - This wrapper extends the verification gate only by adding artifact ownership:
 - update `spec.md` so `Validation` and `Outcome` reflect reality
 - update existing `tasks.md` progress when the task uses a ledger
@@ -179,6 +180,8 @@ Do not:
 ### 6. Update Existing `tasks.md` Progress When Used
 - only update `tasks.md` when it already exists and belongs to this task
 - update checkbox/progress state only for tasks whose proof was actually run and observed in this session
+- when `tasks.md` uses structured evidence fields, update the existing fields directly: command/read, result, key output or evidence ref, changed proof files when relevant, and residual blocker or narrower claim
+- if the observed proof is skipped, unavailable, stale, failing, or narrower than the task, leave the checkbox unchecked and record `Blocked:` or the narrower claim in the existing evidence fields
 - for cleanup tasks, record each known old surface as removed, refactored into the active path, retained with owner/reason/proof/exit condition, or not applicable based on fresh proof
 - when a `Legacy cleanup audit` table exists, update it row by row from fresh evidence instead of replacing it with prose
 - do not add, split, reorder, or rewrite tasks during closeout
@@ -227,6 +230,7 @@ Closeout is done only when all of the following are true:
 - `spec.md` `Validation` records the actual commands and observed results instead of intention or memory
 - `spec.md` `Outcome` says only what the evidence proved, with no optimistic overreach
 - existing `tasks.md`, when used, has checkbox/progress state aligned with the fresh proof and no invented tasks
+- no task, checkpoint, or completion claim is marked green using skipped, unavailable, stale, failing, or too-narrow proof
 - cleanup-sensitive tasks record fresh remove/refactor/retain/not-applicable evidence, including retained-surface owner/reason/proof/exit condition when old artifacts remain
 - `workflow-plans/validation-phase-<n>.md`, when explicitly named by `tasks.md`, shows the phase is complete and why the session stopped
 - no new implementation work was performed during closeout

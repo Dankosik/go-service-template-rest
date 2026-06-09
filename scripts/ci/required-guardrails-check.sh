@@ -28,6 +28,15 @@ required_files=(
   "docs/subagent-contract.md"
   "docs/subagent-brief-template.md"
   "docs/spec-first-workflow.md"
+  "docs/spec-first-workflow/shared/artifact-model.md"
+  "docs/spec-first-workflow/shared/subagents-and-handoff.md"
+  "docs/spec-first-workflow/phases/research.md"
+  "docs/spec-first-workflow/phases/specification.md"
+  "docs/spec-first-workflow/phases/specification-review.md"
+  "docs/spec-first-workflow/phases/technical-design.md"
+  "docs/spec-first-workflow/phases/technical-design-review.md"
+  "docs/spec-first-workflow/phases/planning-task-review.md"
+  "docs/spec-first-workflow/phases/implementation-validation-closeout.md"
   ".agents/skills/specification-review-session/SKILL.md"
   "specs/README.md"
   "scripts/dev/sync-skills.sh"
@@ -69,6 +78,41 @@ require_absent_regex() {
     echo "guardrail check failed: ${message}"
     echo "  file: ${file}"
     echo "  forbidden pattern: ${pattern}"
+    exit 1
+  fi
+}
+
+require_markdown_links_exist() {
+  local file="$1"
+  local prefix="$2"
+  local base_dir="$3"
+  local message="$4"
+  local count=0
+  local missing=()
+  local link
+
+  while IFS= read -r link; do
+    [[ -z "${link}" ]] && continue
+    count=$((count + 1))
+    if [[ ! -f "${base_dir}/${link}" ]]; then
+      missing+=("${link}")
+    fi
+  done < <(grep -Eo "\\(${prefix}[^)]*\\.md\\)" "${file}" | tr -d '()' || true)
+
+  if [[ "${count}" -eq 0 ]]; then
+    echo "guardrail check failed: ${message}"
+    echo "  file: ${file}"
+    echo "  expected at least one markdown link with prefix: ${prefix}"
+    exit 1
+  fi
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "guardrail check failed: ${message}"
+    echo "  file: ${file}"
+    echo "  missing linked files:"
+    for link in "${missing[@]}"; do
+      echo "  - ${base_dir}/${link}"
+    done
     exit 1
   fi
 }
@@ -148,13 +192,20 @@ require_regex 'current owner, reason, proof of continued need, and exit conditio
 require_regex 'lower-precedence personality and engineering-judgment guidance' "SOUL.md" "SOUL.md must describe itself as lower-precedence personality guidance"
 require_regex 'conflicts with `AGENTS\.md`, the detailed workflow companion, or task-local artifacts, follow the authoritative artifact and treat the conflict as drift to repair' "SOUL.md" "SOUL.md must preserve the AGENTS/task-local precedence boundary"
 require_regex 'follow `AGENTS\.md`' "docs/spec-first-workflow.md" "spec-first-workflow doc must declare AGENTS.md as the controlling contract"
-require_regex 'known in-scope legacy surfaces are represented as removal/refactor work' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep legacy cleanup task-ledger mechanics"
-require_regex 'targeted negative searches or reads for retired identifiers' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep legacy cleanup validation proof mechanics"
-require_regex 'Legacy cleanup audit' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep the per-surface legacy cleanup audit table"
-require_regex 'No known replacement surface' "docs/spec-first-workflow.md" "spec-first-workflow doc must keep the no-replacement explicit path"
-require_regex 'Do not point agents at a specific task-local `specs/\.\.\.` bundle as required precedent unless that directory exists in the current checkout' "docs/spec-first-workflow.md" "spec-first-workflow doc must warn against non-existent task-local specs examples"
-require_regex 'workflow-plans/specification-review\.md' "docs/spec-first-workflow.md" "spec-first-workflow doc must name the durable specification-review phase surface"
-require_absent_regex 'study `specs/[^`]+`' "docs/spec-first-workflow.md" "spec-first-workflow doc must not require studying a concrete specs bundle that may be absent"
+require_markdown_links_exist "docs/spec-first-workflow.md" "spec-first-workflow/" "docs" "spec-first-workflow router links must point to existing split docs"
+for workflow_detail_doc in docs/spec-first-workflow/shared/*.md docs/spec-first-workflow/phases/*.md; do
+  require_regex '^## Read When$' "${workflow_detail_doc}" "split workflow docs must state when to read the file"
+  require_regex '^## Inputs$' "${workflow_detail_doc}" "split workflow docs must state phase/shared inputs"
+  require_regex '^## Outputs$' "${workflow_detail_doc}" "split workflow docs must state phase/shared outputs"
+  require_regex '^## Stop Rule$' "${workflow_detail_doc}" "split workflow docs must state the stop rule"
+done
+require_regex 'known in-scope legacy surfaces are represented as removal/refactor work' "docs/spec-first-workflow/phases/planning-task-review.md" "planning/task-review doc must keep legacy cleanup task-ledger mechanics"
+require_regex 'targeted negative searches or reads for retired identifiers' "docs/spec-first-workflow/phases/implementation-validation-closeout.md" "implementation/validation doc must keep legacy cleanup validation proof mechanics"
+require_regex 'Legacy cleanup audit' "docs/spec-first-workflow/phases/planning-task-review.md" "planning/task-review doc must keep the per-surface legacy cleanup audit table"
+require_regex 'No known replacement surface' "docs/spec-first-workflow/phases/specification.md" "specification doc must keep the no-replacement explicit path"
+require_regex 'Do not point agents at a specific task-local `specs/\.\.\.` bundle as required precedent unless that directory exists in the current checkout' "docs/spec-first-workflow/shared/artifact-model.md" "artifact-model doc must warn against non-existent task-local specs examples"
+require_regex 'workflow-plans/specification-review\.md' "docs/spec-first-workflow/shared/artifact-model.md" "artifact-model doc must name the durable specification-review phase surface"
+require_absent_regex 'study `specs/[^`]+`' "docs/spec-first-workflow/shared/artifact-model.md" "artifact-model doc must not require studying a concrete specs bundle that may be absent"
 require_regex 'Do not create synthetic bundles as examples' "specs/README.md" "specs README must prevent fake example bundles"
 require_regex '^max_threads = 20$' ".codex/config.toml" "Codex subagent fan-out ceiling must stay explicit"
 require_regex '^max_depth = 1$' ".codex/config.toml" "Codex subagent nesting depth must stay at the documented default"
@@ -169,16 +220,16 @@ require_regex 'missing explicit subagent authorization' "AGENTS.md" "AGENTS.md m
 require_regex 'Design fan-out: complete \| scoped_down \| local_only \| blocked' "AGENTS.md" "AGENTS.md must keep technical-design authoring fan-out status explicit"
 require_regex 'For full-orchestrated, protected-domain, high-impact, or user-requested agent-backed technical design, `local_only` is invalid' "AGENTS.md" "serious technical design must not bypass subagents with local_only"
 require_regex 'technical-design next-session prompt must explicitly instruct the next agent to first record or run `Design fan-out`' "AGENTS.md" "technical-design handoff prompts must start with design fan-out"
-require_regex 'Subagent Gate Decision' "docs/spec-first-workflow.md" "lean spec template must keep Subagent Gate Decision"
-require_regex 'Technical Design Authoring Fan-Out' "docs/spec-first-workflow.md" "spec-first-workflow doc must require technical-design authoring fan-out"
-require_regex 'Design fan-out status' "docs/spec-first-workflow.md" "tasks handoff must carry design fan-out status into planning and implementation"
-require_regex 'Subagent gates consumed' "docs/spec-first-workflow.md" "tasks template must record consumed subagent gates"
-require_regex 'Ledger-review fan-out rationale' "docs/spec-first-workflow.md" "tasks template must record ledger-review fan-out rationale"
-require_regex 'Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work' "docs/spec-first-workflow.md" "workflow handoff prompts must carry explicit subagent authorization"
+require_regex 'Subagent Gate Decision' "docs/spec-first-workflow/phases/specification.md" "lean spec template must keep Subagent Gate Decision"
+require_regex 'Technical Design Authoring Fan-Out' "docs/spec-first-workflow/phases/technical-design.md" "technical-design doc must require technical-design authoring fan-out"
+require_regex 'Design fan-out status' "docs/spec-first-workflow/phases/planning-task-review.md" "tasks handoff must carry design fan-out status into planning and implementation"
+require_regex 'Subagent gates consumed' "docs/spec-first-workflow/phases/planning-task-review.md" "tasks template must record consumed subagent gates"
+require_regex 'Ledger-review fan-out rationale' "docs/spec-first-workflow/phases/planning-task-review.md" "tasks template must record ledger-review fan-out rationale"
+require_regex 'Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "workflow handoff prompts must carry explicit subagent authorization"
 require_regex 'Read-only enforcement' "docs/subagent-brief-template.md" "subagent brief template must require read-only enforcement, not prompt-only boundary"
 require_regex 'Specification review variant' "docs/subagent-brief-template.md" "subagent brief template must include specification-review lane guidance"
 require_regex 'Spec anchor' "docs/subagent-brief-template.md" "subagent brief template must require anchored specification-review findings"
-require_regex 'lens coverage table' "docs/spec-first-workflow.md" "spec-first-workflow doc must require specification-review lens coverage"
+require_regex 'lens coverage table' "docs/spec-first-workflow/phases/specification-review.md" "specification-review doc must require specification-review lens coverage"
 require_regex 'Specification review fan-in' "docs/subagent-contract.md" "subagent contract must define specification-review fan-in"
 require_regex 'technical-design-authoring fan-out' "docs/subagent-contract.md" "subagent contract must distinguish design authoring fan-out from design review"
 require_regex 'missing explicit subagent authorization' "docs/subagent-contract.md" "subagent contract must block when authorization is missing instead of silently going local-only"
@@ -195,7 +246,7 @@ require_regex 'Specification review: <PASS / CONCERNS / FAIL / missing / not exp
 require_regex 'Formal `spec-clarification-challenge` is not waivable' "AGENTS.md" "formal clarification must not be waived while full/protected triggers remain"
 require_regex 'local-only rationale is valid only when it lists the decision frontier' "docs/subagent-contract.md" "local-only rationale must stay auditable"
 require_regex 'Pattern Fit Diligence' "AGENTS.md" "AGENTS.md must require pattern-fit diligence for non-trivial design choices"
-require_regex 'research/pattern-fit\.md' "docs/spec-first-workflow.md" "workflow doc must name the durable pattern-fit research surface"
+require_regex 'research/pattern-fit\.md' "docs/spec-first-workflow/phases/research.md" "research doc must name the durable pattern-fit research surface"
 require_regex 'Pattern fit scope' "docs/subagent-brief-template.md" "subagent brief template must carry pattern-fit scope"
 require_regex 'open a Pattern Fit research or review lane' ".agents/skills/technical-design-session/SKILL.md" "technical design session must route pattern-fit evidence when relevant"
 require_regex 'Before selecting an architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape, perform Pattern Fit Diligence' ".agents/skills/go-design-spec/SKILL.md" "design skill must require pattern-fit diligence before selecting design shape"
@@ -203,12 +254,12 @@ require_regex 'Confirm Pattern Fit Diligence decisions are explicit' ".agents/sk
 require_regex 'Approved Patterns Before Local Invention' ".agents/skills/go-coder/SKILL.md" "coder skill must implement approved patterns rather than inventing local shapes"
 require_regex 'Code-Level Patterns For Simpler Go' ".agents/skills/go-coder/SKILL.md" "coder skill must prefer small Go code patterns only when they simplify code"
 require_regex 'code-level pattern' ".agents/skills/go-language-simplifier-review/SKILL.md" "language simplifier review must check local code-level pattern simplification"
-require_regex 'Code-level pattern fit is a coding and review concern' "docs/spec-first-workflow.md" "workflow doc must separate code-level patterns from architecture pattern fit"
+require_regex 'Code-level pattern fit is a coding and review concern' "docs/spec-first-workflow/shared/artifact-model.md" "artifact-model doc must separate code-level patterns from architecture pattern fit"
 require_regex 'retained with owner, reason, proof, and exit condition' ".agents/skills/spec-document-designer/SKILL.md" "spec skill must require retained legacy-surface proof"
 require_regex 'missing in-scope legacy cleanup is a planning-readiness failure' ".agents/skills/planning-and-task-breakdown/SKILL.md" "planning skill must fail missing legacy cleanup tasking"
 require_regex 'Cleanup required by the approved task is in scope' ".agents/skills/go-coder/SKILL.md" "coder skill must treat approved legacy cleanup as in scope"
 require_regex 'File Responsibility Check' ".agents/skills/go-coder/SKILL.md" "coder skill must check file responsibility before growing hand-written files"
-require_regex 'Maintainable implementation shape is part of decision quality' "docs/spec-first-workflow.md" "workflow doc must treat focused file/package responsibility as decision quality"
+require_regex 'Maintainable implementation shape is part of decision quality' "docs/spec-first-workflow/shared/artifact-model.md" "artifact-model doc must treat focused file/package responsibility as decision quality"
 require_regex 'unexplained surviving replaced or unused legacy surface' ".agents/skills/go-design-review/SKILL.md" "design review skill must flag unexplained legacy surfaces"
 require_regex 'targeted negative proof for retired identifiers' ".agents/skills/go-verification-before-completion/SKILL.md" "verification skill must require legacy cleanup negative proof"
 require_regex 'generic `rg legacy` is not sufficient' ".agents/skills/go-verification-before-completion/SKILL.md" "verification skill must reject generic legacy negative proof"
