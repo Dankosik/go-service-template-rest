@@ -59,7 +59,7 @@ Chat-only handoff instead of artifact-backed handoff:
 I'll mention in the final response that technical design is next.
 ```
 
-This fails when it replaces the workflow updates, because future sessions resume from workflow artifacts, not chat memory. A final response may still render a recommended next-session prompt, but only after `workflow-plan.md` and `workflow-plans/specification.md` already record the handoff.
+This fails when it replaces the workflow updates, because future sessions resume from workflow artifacts, not chat memory. A final response may still render a recommended next-session prompt, but only after `workflow-plan.md` and `workflow-plans/specification.md` already record the routing state, start point, and context bundle. Do not write the full ready-to-paste prompt into those files.
 
 ## Agent Traps
 - Marking `Ready for next session: yes` while `spec.md` is draft or the clarification gate is blocked.

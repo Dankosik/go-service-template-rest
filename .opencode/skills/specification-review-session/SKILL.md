@@ -156,6 +156,8 @@ When this session ends with `Session boundary reached: yes` and `Ready for next 
 
 The prompt must name exactly one next phase or reopen target, list the artifacts to read first, state the expected output for that one phase, and include the stop rule. For any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.` If there is no next session or `Ready for next session: no`, do not invent a prompt.
 
+Keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it. Workflow files may record only the next phase, start point, context bundle, blockers, accepted risks, and proof obligations needed to render the chat prompt.
+
 ## Stop Condition
 The session is complete when:
 - the review packet was inspected or a missing-input blocker was recorded;

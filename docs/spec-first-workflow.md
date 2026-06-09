@@ -67,7 +67,7 @@ If a trigger appears after work starts, record the reopen target and move to the
 
 Phase arrows describe order, not a default license to collapse multiple phases into one chat session.
 
-Default rule: one session owns one workflow phase, then stops. When the phase has a next phase or reopen target, update the relevant workflow state and end the final chat response with a copy-pastable `Recommended next-session prompt` derived from the recorded artifacts.
+Default rule: one session owns one workflow phase, then stops. When the phase has a next phase or reopen target, update the relevant workflow state and end the final chat response with a copy-pastable `Recommended next-session prompt` derived from the recorded artifacts. The ready-to-paste prompt is rendered in chat only; workflow files keep the state needed to render it, not the full prompt text.
 
 A broad user request such as "do the full workflow", "implement the PRD and architecture fully", or "create all necessary documents" advances the overall workflow, but it does not override the one-phase session boundary. Start with the next valid phase, finish that phase honestly, then stop with the next-session prompt.
 
@@ -368,8 +368,8 @@ Use `workflow-plan.md` when cross-phase or multi-session state is real. It owns:
 - execution shape and rationale;
 - current phase and phase status;
 - session boundary state;
-- next-session routing;
-- next-session context bundle;
+- next-session routing, meaning the next phase or reopen target and start point, not the full chat prompt;
+- next-session context bundle, meaning artifact paths and one-line reasons needed to render the chat prompt, not a copy-paste prompt body;
 - artifact status and trigger rationale;
 - blockers, accepted assumptions, accepted risks, and reopen targets;
 - active gate status such as clarification, adequacy, task-ledger review, or implementation readiness.
@@ -835,6 +835,8 @@ Treat missing expected artifacts as incomplete unless an explicit waiver covers 
 
 When any non-implementation workflow phase reaches a boundary and a next session or reopen target exists, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded artifacts. This is default behavior; the user does not need to ask the agent to stop or produce the handoff prompt.
 
+Render the prompt in the final chat response only. Do not write the full ready-to-paste prompt into `workflow-plan.md`, `workflow-plans/*`, `spec.md`, `tasks.md`, an ad hoc prompt file, generated notes, or any other repository artifact. Artifacts may record the workflow state, next-session start point, context bundle, blockers, accepted risks, and proof obligations needed to regenerate the prompt; they must not become a second source of truth for the prompt text.
+
 Assume the next session is context-blind: it can read repository files, but it cannot see the current chat. The prompt should carry a short task-specific context capsule that explains the current state, why the named next step is next, and what the next session must not lose. It should not become a transcript, broad project summary, or second copy of the artifacts.
 
 Select context by relevance:
@@ -910,7 +912,7 @@ Execution rules:
 
 Use no prompt when the workflow is honestly done.
 
-The prompt is chat-only. It is not a workflow artifact and must not become a second source of truth.
+The prompt is chat-only. It is not a workflow artifact and must not become a second source of truth. If an artifact currently contains the full prompt body, trim it back to routing state and context-bundle entries unless the user explicitly asked for a standalone prompt document.
 
 Before returning the prompt, apply the start test: a new session with no chat history should know the single next phase, why it is next, what to read first, what constraints and proof obligations matter, and where to stop. Remove any sentence that does not help that session start or avoid a real mistake.
 

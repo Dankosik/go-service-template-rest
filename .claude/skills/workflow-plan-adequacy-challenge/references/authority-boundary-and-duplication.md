@@ -7,7 +7,7 @@ When loaded for symptom workflow-control files duplicate canonical artifact cont
 Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.md`, or a finding would copy or summarize too much from canonical artifacts. Do not load it as the default reference when a narrower status, lane, stop-rule, or readiness gap matches.
 
 ## Decision Rubric
-- `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, and implementation-readiness status.
+- `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, next-session context bundle, and implementation-readiness status. It does not own the full ready-to-paste next-session prompt; that prompt is rendered in final chat only.
 - `workflow-plans/<phase>.md` owns phase-local orchestration: lanes, order/parallelism, fan-in/challenge path, completion marker, stop rule, next action, blockers, and local adequacy challenge resolution.
 - `spec.md` owns final decisions; lean `Compact Design` or triggered `design/` owns technical design context; `tasks.md` owns executable task state and implementation handoff.
 - If workflow control contains canonical artifact content, recommend trimming it to a status, link/path, blocker, or next action. Do not ask for a larger duplicate summary.
