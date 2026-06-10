@@ -1,6 +1,6 @@
 ---
 name: planning-and-task-breakdown
-description: "Turn specification-review-approved `spec.md` plus required compact or split design context into a dependency-ordered, verifiable `tasks.md` ledger for this repository, then run the post-ledger task review/readiness check before implementation handoff. Use after `spec.md` is stable, mandatory specification review is reconciled for non-trivial work, lean compact design or triggered technical-design artifacts are approved or explicitly skipped, mandatory technical design review is reconciled when separate design depth exists, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability decisions and skip actual coding."
+description: "Turn specification-review-approved `spec.md` plus required compact or split design context into a dependency-ordered, verifiable `tasks.md` ledger for this repository, then run the post-ledger task review/readiness check before implementation handoff. Use after `spec.md` is stable, mandatory specification review is reconciled for non-trivial work, lean compact design or triggered system/integration and Go code ownership artifacts are approved or explicitly skipped, mandatory technical design review is reconciled when separate design depth exists, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability/package-ownership decisions and skip actual coding."
 ---
 
 # Planning And Task Breakdown
@@ -28,7 +28,7 @@ Turn stable reviewed decisions plus approved compact or split technical design c
 ## Boundaries
 Do not:
 - make new architecture, API, data, security, reliability, or rollout decisions
-- reconstruct missing architecture, ownership, data, or sequence context from `spec.md` alone when compact or split design context should supply it
+- reconstruct missing architecture, system behavior, package/file ownership, data, sequence, cleanup, or test-ownership context from `spec.md` alone when compact or split design context should supply it
 - write production code, tests, or migrations as the main deliverable
 - dump raw research or repeat the whole spec in planning form
 - treat `spec.md` as the place for full task breakdown by default
@@ -40,11 +40,11 @@ Do not:
 Escalate if:
 - `spec.md` is not stable enough to derive tasks without reopening design
 - mandatory specification review is missing, `FAIL`, stale after repair, or has unresolved findings
-- non-trivial work is missing lean compact design answers, `design/overview.md`, triggered split design artifacts, or an explicit design-skip/merge rationale
+- non-trivial work is missing lean compact design answers, `design/overview.md`, triggered system/integration design, triggered Go code ownership design, triggered split design artifacts, or an explicit design-skip/merge rationale
 - separate design depth was triggered but mandatory technical design review is missing, `FAIL`, or has unresolved findings
 - a conditional design artifact is clearly triggered but missing
 - core behavior is still undecided across architecture, API, data, security, reliability, or domain semantics
-- the right implementation order depends on a missing migration, compatibility, or ownership decision
+- the right implementation order depends on a missing migration, compatibility, system ownership, package/file ownership, cleanup, or test-ownership decision
 - the change cannot be decomposed without inventing detail the spec does not actually approve
 
 ## Core Defaults
@@ -59,7 +59,7 @@ Escalate if:
 - Skipping or scoping down ledger-review fan-out requires `Ledger-review fan-out rationale:` that explicitly evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens, then explains why each omitted lane cannot change readiness.
 - Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record implementation readiness as `FAIL` or blocked and return a next-session prompt with `Subagent authorization:`.
 - Implementation readiness remains `FAIL` or blocked unless task-ledger review fan-out status is recorded or `Ledger-review fan-out rationale:` explains why local review covers every readiness risk.
-- A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, ownership, contract, sequencing, rollout, or validation policy.
+- A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, or test ownership.
 - For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one successful completion condition, a separate blocked-stop condition, read-before-coding context, task-specific read context when useful, preserved constraints, checkpoint/progress rules, resume rules, and evidence fields that let Codex audit completion without relying on chat memory. A recorded blocker is a valid stop, not a successful completion claim.
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - Planning must not treat a spec author's handoff as review. Non-trivial `spec.md` requires a distinct specification-review gate before task breakdown can be approved.
@@ -100,13 +100,14 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Confirm dependency/OSS due-diligence decisions are explicit when the implementation would add a dependency, integrate OSS, build custom infrastructure, or introduce a material helper/abstraction.
 - Confirm Pattern Fit Diligence decisions are explicit when implementation would rely on a non-trivial architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern.
 - Confirm specification review is `PASS` or `CONCERNS` with named obligations for non-trivial `spec.md`.
-- For lean-local work, require explicit `Compact Design` answers or one `design/overview.md`; for split-design work, require `design/overview.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip/merge rationale.
+- For lean-local work, require explicit `Compact Design` answers or one `design/overview.md`; for split-design work, require `design/overview.md`, triggered `design/system-integration.md`, triggered `design/go-code-ownership.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip/merge rationale.
+- When Go code ownership design was triggered, confirm the design packet has a source responsibility audit, rejected owner locations, owner package/file or approved placement rule, cleanup owner, and test owner before planning.
 - If one `design/overview.md` or split `design/` exists, require technical design review `PASS` or `CONCERNS` with named accepted risks and proof obligations before planning.
 - Treat review findings classified as `blocks_planning`, `reopens_design`, or `reopens_spec` as planning blockers until the owning phase resolves or explicitly reroutes them.
 - If the design or spec is not stable enough, stop and escalate instead of guessing.
 
 ### 2. Load Execution-Critical Design Context
-- Use lean `Compact Design`, `design/overview.md`, or split `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` to understand what must land first and what may move in parallel.
+- Use lean `Compact Design`, `design/overview.md`, triggered `design/system-integration.md`, triggered `design/go-code-ownership.md`, or split `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` to understand what must land first and what may move in parallel.
 - Load triggered conditional artifacts such as `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md` when they affect sequencing.
 - Identify what must exist first: schema or config changes, generated artifacts, interfaces, handlers, background workers, tests, docs, or migration controls.
 - Make the ordering explicit when one task truly depends on another.
@@ -138,8 +139,9 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Include pattern-preserving tasks when relevant: package or boundary placement, runtime sequence, idempotency/dedup/recovery hooks, validation proof, documentation updates, or negative checks required by the approved Pattern Fit decision.
 - When approved decisions replace old code or artifacts, include cleanup audit/removal tasking for old identifiers, routes, configs, commands, tests, fixtures, generated artifacts, scripts, docs, skills, agents, and mirrors that belong to the replaced path.
 - For replacement work, add a compact `Legacy cleanup audit` table with columns `Surface`, `Status`, `Evidence`, and `Retention owner/reason/exit`; use exactly `removed`, `refactored`, `retained`, or `not_applicable` for status.
-- Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface instead of vague subsystem labels.
-- Do not add a task if tasking it requires inventing a missing design decision; reopen `technical design` instead.
+- Name exact file paths when known. When exact file choice is genuinely design-time unknown, name a narrow package or artifact surface plus the approved placement rule and first-task inspection bounds instead of vague subsystem labels.
+- Do not use `implementation decides`, `choose appropriate file`, `place where it fits`, `refactor as needed`, `split if necessary`, `cleanup later`, or equivalent wording for owner, sequence, generated authority, cleanup/test ownership, validation policy, or accepted-risk proof paths.
+- Do not add a task if tasking it requires inventing a missing system/integration or Go code ownership decision; reopen the owning design checkpoint instead.
 - Do not add a task if tasking it requires resolving an unreviewed or blocking design-review finding; reopen `technical design review` instead.
 - Do not add an open-question or decision-gate section to a ready `tasks.md`; route unresolved decisions to the owning earlier phase.
 - Add only a short readiness reference in `tasks.md` when useful.
@@ -151,14 +153,14 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Keep checkpoints proportional; tiny work may need one final checkpoint only.
 
 ### 6. Review The Draft Ledger Before Handoff
-- Compare the completed `tasks.md` against the reviewed `spec.md`, specification-review result, required compact or split design context, design fan-out result when separate technical design depth was triggered, technical-design-review result, and triggered `test-plan.md` or `rollout.md`.
+- Compare the completed `tasks.md` against the reviewed `spec.md`, specification-review result, required compact or split design context including triggered system/integration and Go code ownership decisions, design fan-out result when separate technical design depth was triggered, technical-design-review result, and triggered `test-plan.md` or `rollout.md`.
 - Run read-only task-ledger review fan-out by default; otherwise record `Ledger-review fan-out rationale:` that evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens.
 - If subagent spawning is expected but no spawn tool is visible, use tool discovery for subagent or multi-agent tooling before declaring fan-out unavailable.
 - Keep ledger-review lanes read-only and advisory; they return findings and proof obligations for orchestrator fan-in, not edits or final readiness decisions.
 - Confirm every in-scope behavior and preserved constraint is represented in tasking, proof, or explicit non-task rationale.
 - Confirm every approved dependency/OSS due-diligence outcome is represented in tasking or explicit non-task rationale, and that missing due diligence for custom code or a new dependency reopens specification or technical design rather than passing to implementation.
 - Confirm every approved Pattern Fit outcome is represented in tasking, proof, or explicit non-task rationale, and that missing Pattern Fit Diligence for an invented design shape reopens research, specification, or technical design rather than passing to implementation.
-- Confirm design fan-out is `complete`, valid `scoped_down`, or eligible `local_only` when separate technical design depth was triggered; missing, `blocked`, or ineligible `local_only` design fan-out reopens technical design instead of passing to implementation.
+- Confirm design fan-out is `complete`, valid `scoped_down`, or eligible `local_only` for every triggered design checkpoint when separate technical design depth was triggered; missing, `blocked`, or ineligible `local_only` design fan-out reopens the owning design checkpoint instead of passing to implementation.
 - Confirm the Goal Contract separates successful completion from blocked-stop behavior; if "recorded blocker" can be read as successful completion, repair planning before readiness can pass.
 - Confirm each task has one reviewable diff story, or records why coupled changes cannot be split safely.
 - Confirm read context is split into required start context and task-specific context when the artifact list is long or domain-specific; implementation should not have to read every companion artifact before the first safe edit.
@@ -229,7 +231,7 @@ Do not change: public HTTP semantics other than the approved request-ID echo beh
 Task-local implementation quality bar:
 - before starting each task, bind task ID, `Source`, owner file/package, proof, and stop/reopen condition; repair the ledger or reopen if any of those are missing.
 - before checking a task, self-review that the diff still traces to the `Source`, introduces no unapproved decision/dependency/pattern, keeps file responsibility focused, and has proof that covers this task rather than a neighboring surface.
-- choose the owning package/file before substantial edits and avoid catch-all growth.
+- choose the owning package/file from the approved placement rule before substantial edits and avoid catch-all growth.
 - change owning sources before generated output and prove drift when generation applies.
 - add no unapproved dependency, custom helper framework, or new pattern-like abstraction.
 Resume rule: on resume, read git status and this ledger first, then continue at the first unchecked task whose dependencies are satisfied.
@@ -282,14 +284,14 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `tasks.md` for a tiny change just to satisfy ceremony.
 - For lean-local and full-orchestrated non-trivial work, default to `tasks.md` and consume reviewed `spec.md` plus required design context.
-- Create or repair `test-plan.md` or `rollout.md` during planning only when the approved design already contains the needed validation or rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen technical design instead of filling the gap inside the plan.
+- Create or repair `test-plan.md` or `rollout.md` during planning only when the approved design already contains the needed validation or rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen `system-integration-design` or `go-code-ownership-design` according to the missing decision owner instead of filling the gap inside the plan.
 - If a required specification review gate is missing or blocking, reopen specification review instead of filling the gap inside the plan.
 - If a required technical design review gate is missing or blocking, reopen technical design review instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, the next-session context bundle, `tasks.md` status, artifact expectations with trigger rationale, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat. It must not store the full ready-to-paste next-session prompt; render that prompt only in the final chat response.
 - The task-ledger review and implementation-readiness handoff must be explicit: `PASS` may proceed only when the accepted target-state ledger matches the approved artifact chain and needs no hidden architecture, ownership, contract, sequencing, or rollout decisions; `CONCERNS` may proceed only with named risks and proof obligations the implementation can satisfy without replanning; `FAIL` must route to the named earlier phase; and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
 - The task-ledger review must also record consumed subagent gates, lane-derived proof obligations, accepted risks or waivers, and whether unresolved lane blockers or severity conflicts remain.
-- If required compact or split design context is missing or inconsistent, reopen specification or technical design instead of inferring the missing context locally.
+- If required compact or split design context is missing or inconsistent, reopen specification, `system-integration-design`, or `go-code-ownership-design` instead of inferring the missing context locally.
 - If required specification review is missing or inconsistent, reopen specification review instead of inferring approval locally.
 - If required technical design review is missing or inconsistent, reopen technical design review instead of inferring approval locally.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
@@ -318,6 +320,7 @@ The planning pass is complete when:
 - the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
 - out-of-scope implications are visible as non-goals, accepted risks, or proof-only follow-ups rather than hidden target-state cleanup
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
+- owner package/file, placement evidence, cleanup owner, and test owner are concrete enough that `go-coder` does not need to make a design choice
 - selected pattern constraints and proof obligations are clear enough that `go-coder` does not need to reinterpret or choose a design/system pattern
 - no unresolved decision gate, `TBD`, or implementation-blocking open question remains in `tasks.md`
 
@@ -326,6 +329,7 @@ The planning pass is complete when:
 - task breakdown that assumes missing compact or split design context instead of escalating
 - a phase list with no acceptance criteria or verification
 - a `tasks.md` ledger with open questions, unresolved gates, or implementation-time design decisions
+- a `tasks.md` ledger that hides owner/file choice behind vague wording such as `choose appropriate file`, `place where it fits`, `split if necessary`, or `implementation decides`
 - a generic task like `implement the feature`
 - horizontal slicing that hides risk and postpones integration until the end
 - a `tasks.md` ledger that turns into a strategy memo instead of listing executable, proof-bound work

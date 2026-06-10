@@ -192,7 +192,7 @@ Do not:
 - choose the narrowest honest reopen target:
   - reopen implementation when the behavior or tests are wrong
   - reopen `review-phase-<n>` when an unresolved review issue blocks honest closeout
-  - reopen `planning`, `technical-design`, or `specification` when the proof gap exposes a real upstream contract or sequencing problem
+  - reopen `planning`, `technical-design-review`, `system-integration-design`, `go-code-ownership-design`, or `specification` when the proof gap exposes a real upstream contract, sequencing, package ownership, cleanup, or test-ownership problem
 - make each reopen item explicit:
   - failed or missing proof
   - why it blocks closeout now

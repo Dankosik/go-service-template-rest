@@ -7,8 +7,8 @@ When loaded for workflow-control updates after a design pass, this file makes th
 Load after writing or repairing design artifacts, or whenever technical design is blocked and workflow control must record the reopen target.
 
 ## Decision Rubric
-- Update `workflow-plan.md` with current phase, phase status, design artifact statuses, conditional artifact statuses, blockers, reopen conditions, `Session boundary reached`, `Ready for next session`, and `Next session starts with`.
-- Update `workflow-plans/technical-design.md` with pass type, local status, completion marker, artifact statuses, local stop rule, blockers, parallelizable follow-up if any, and technical-design-review handoff state.
+- Update `workflow-plan.md` with current design checkpoint, phase status, design artifact statuses, conditional artifact statuses, blockers, reopen conditions, `Session boundary reached`, `Ready for next session`, and `Next session starts with`.
+- Update the active design phase-control file, either `workflow-plans/system-integration-design.md` or `workflow-plans/go-code-ownership-design.md`, with pass type, local status, completion marker, artifact statuses, local stop rule, blockers, parallelizable follow-up if any, and next-checkpoint or technical-design-review handoff state.
 - Negative artifact statuses such as `not expected`, `conditional`, or `waived` need a short trigger rationale; a bare label is not enough for resume.
 - Keep workflow files routing-only; link to design artifacts rather than copying component maps, sequence detail, or ownership tables into them.
 - If master and phase-local workflow files disagree, repair or block before claiming the session is complete.
@@ -18,7 +18,7 @@ Load after writing or repairing design artifacts, or whenever technical design i
 ## Imitate
 ```markdown
 `workflow-plan.md`
-Current phase: technical-design
+Current phase: go-code-ownership-design
 Phase status: complete
 Required design artifacts: approved
 Conditional artifacts: `design/data-model.md` approved; `design/contracts/` approved; `rollout.md` not expected
@@ -32,7 +32,7 @@ Next session starts with: technical design review
 Copy this shape: the master owns cross-phase routing and next-session readiness.
 
 ```markdown
-`workflow-plans/technical-design.md`
+`workflow-plans/go-code-ownership-design.md`
 Pass type: repair
 Repaired artifact: `design/sequence.md`
 Still blocked: `design/contracts/` is draft
@@ -61,13 +61,13 @@ Failure: resume state is left in chat and inference.
 
 ```markdown
 `workflow-plan.md`: next session starts with planning.
-`workflow-plans/technical-design.md`: `design/sequence.md` still pending.
+`workflow-plans/go-code-ownership-design.md`: `design/go-code-ownership.md` still pending.
 ```
 
 Failure: master and phase-local control disagree.
 
 ```markdown
-`workflow-plans/technical-design.md`: component map details...
+`workflow-plans/system-integration-design.md`: component map details...
 ```
 
 Failure: phase control becomes a second design artifact.

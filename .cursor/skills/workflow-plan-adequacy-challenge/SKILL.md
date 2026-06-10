@@ -24,6 +24,7 @@ This skill is a read-only challenge gate over triggered workflow-control artifac
 - check consistency between the master `workflow-plan.md` and active `workflow-plans/<phase>.md` when both are triggered
 - decide whether routing, stop rules, blockers, artifact expectations, lane ownership, completion criteria, and next-session handoff are sufficient for the task's risk and execution shape
 - when the active phase is specification review, check that the review gate scope, lane ownership, and `PASS`/`CONCERNS`/`FAIL` result path are explicit enough for technical design or planning
+- when the active phase is system/integration design or Go code ownership design, check that checkpoint scope, `Design fan-out`, artifact expectations, stop rule, and next-session route are explicit enough for the next checkpoint or review
 - when the active phase is technical design review, check that the review gate scope, lane ownership, and `PASS`/`CONCERNS`/`FAIL` result path are explicit enough for planning
 - when the active phase is planning, check that specification review status, technical design review status, task-ledger review status, and implementation-readiness status are explicit enough for the next session
 - identify missing or unclear control details that could cause bad execution, premature handoff, or later chat archaeology
@@ -49,7 +50,7 @@ Expect a compact bundle from the orchestrator:
 - any generated technical-design-review, review, or validation phase-control files whose adequacy affects handoff
 - relevant artifact status for `spec.md`, `design/`, `tasks.md`, `test-plan.md`, or `rollout.md`
 - specification-review status when non-trivial `spec.md` exists
-- technical-design-review status when separate design depth was triggered
+- system/integration design status, Go code ownership design status, and technical-design-review status when separate design depth was triggered
 - task-ledger review and implementation-readiness status, plus any recorded `CONCERNS`, `FAIL`, or `WAIVED` rationale when the current phase is planning
 - recorded direct/lean local self-check, waiver, or skip rationale, if the orchestrator claims the formal challenge is not required
 
@@ -66,7 +67,7 @@ Keep only gaps whose absence could change execution quality, handoff safety, or 
 - phase-local file satisfies the documented minimum for its phase without becoming a second `spec.md`, `design/`, `tasks.md`, raw review transcript, or validation log
 - artifact expectations are explicit and proportional: `spec.md`, compact design context or split `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
 - when non-trivial `spec.md` exists, specification review is recorded as `PASS`, `CONCERNS`, `FAIL`, blocked, or pending; `CONCERNS` names accepted spec risks and proof obligations; `FAIL` names whether specification, research, specialist review, or user decision reopens
-- when separate design depth is triggered, technical design review is recorded as `PASS`, `CONCERNS`, `FAIL`, blocked, or pending; `CONCERNS` names accepted design risks and proof obligations; `FAIL` names whether technical design or specification reopens
+- when separate design depth is triggered, system/integration design and Go code ownership design are recorded as complete, blocked, not expected, or pending before technical design review; technical design review is recorded as `PASS`, `CONCERNS`, `FAIL`, blocked, or pending; `CONCERNS` names accepted design risks and proof obligations; `FAIL` names whether system/integration design, Go code ownership design, technical design, or specification reopens
 - when the current phase is planning, task-ledger review and implementation readiness are recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
 - blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text
 - the workflow-control artifacts contain enough task-specific routing for the next session to start, and for the orchestrator to render the required chat-only next-session prompt, without recreating workflow planning from chat

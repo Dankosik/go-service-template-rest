@@ -1,15 +1,16 @@
 # Component And Ownership Maps
 
 ## Behavior Change Thesis
-When loaded for unclear package responsibility or source-of-truth ownership, this file makes the model choose explicit owner and dependency-direction records instead of likely mistakes like `internal/common` ownership, generated-file authority, or cross-layer dependencies hidden in a component table.
+When loaded for unclear package responsibility or source-of-truth ownership, this file makes the model choose explicit owner, source-responsibility, and dependency-direction records instead of likely mistakes like `internal/common` ownership, generated-file authority, or cross-layer dependencies hidden in a component table.
 
 ## When To Load
-Load this when the symptom is unclear component ownership: `design/component-map.md` or `design/ownership-map.md` needs package responsibility, source-of-truth, generated-code, dependency-direction, or stable-versus-changing surface decisions.
+Load this when the symptom is unclear component ownership: `design/component-map.md`, `design/ownership-map.md`, or `design/go-code-ownership.md` needs package responsibility, source responsibility evidence, source-of-truth, generated-code, dependency-direction, or stable-versus-changing surface decisions.
 
 Do not load this to choose a new service boundary from scratch. If the hard question is decomposition, service extraction, or modular-monolith design, use the architecture specialist and integrate its result here.
 
 ## Decision Rubric
 - Name surfaces as concrete repo paths or runtime components; avoid capability words without owners.
+- For code ownership, name current owner files, sibling files inspected, rejected owner locations, and the selected owner file or approved placement rule.
 - Separate "current responsibility", "change", and "stable boundary" so planning can preserve what is not changing.
 - Treat generator inputs as authorities and generated outputs as derived unless another repo-owned source says otherwise.
 - Keep `internal/app` transport-agnostic and keep concrete adapters in `internal/infra/*` or bootstrap wiring.
@@ -84,7 +85,7 @@ Why it is bad: generated bindings are derived from `api/openapi/service.yaml`.
 - A "temporary" bridge has no owner, exit condition, or reconciliation rule.
 
 ## Validation Shape
-Before handoff, every changed surface should have one responsibility, one owner for source-of-truth decisions, and an explicit stable boundary. If the table cannot say who owns a write, block planning or route to the relevant specialist.
+Before handoff, every changed surface should have one responsibility, one owner for source-of-truth decisions, source responsibility evidence when code placement is non-trivial, and an explicit stable boundary. If the table cannot say who owns a write or where substantial code is allowed to land, block planning or route to the relevant specialist.
 
 ## Escalation Rules
 - Escalate to `go-architect-spec` when the map exposes a real boundary, runtime, service extraction, or module ownership decision.

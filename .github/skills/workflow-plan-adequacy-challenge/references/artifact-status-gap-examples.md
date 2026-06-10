@@ -34,7 +34,7 @@ Use:
 - `Exact Orchestrator Addition`: Add `rollout.md: not expected; rationale: no migration, mixed-version, delivery sequencing, or rollback choreography change`.
 
 ### Master and phase disagree on design approval
-`Gap`: `design/` is marked approved in the master, but the technical-design phase file still says `design/ownership-map.md` is draft.
+`Gap`: `design/` is marked approved in the master, but `workflow-plans/go-code-ownership-design.md` still says `design/ownership-map.md` is draft.
 
 Why to copy: planning could start while a required design artifact is still incomplete.
 

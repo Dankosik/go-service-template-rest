@@ -1,22 +1,22 @@
 # Technical Design Review Handoff And Stop Rules
 
 ## Behavior Change Thesis
-When loaded for closing a technical-design session, this file makes the model hand off to the mandatory technical-design-review stage or reopen target instead of drafting `tasks.md`, code, tests, migrations, generated files, or review output once the design feels ready.
+When loaded for closing a design checkpoint session, this file makes the model hand off to the mandatory technical-design-review stage or reopen target instead of drafting `tasks.md`, code, tests, migrations, generated files, or review output once the design feels ready.
 
 ## When To Load
 Load before claiming technical design is review-ready, setting `Session boundary reached: yes`, or responding to a user request to keep going into review, planning, or implementation.
 
 ## Decision Rubric
-- A technical-design-review handoff may be ready only when required compact or split design context is approved, triggered conditional artifacts are approved or explicitly not expected, and workflow files agree on blockers and next session.
+- A technical-design-review handoff may be ready only when required compact or split design context is approved, triggered system/integration design and Go code ownership design are approved or explicitly not expected, triggered conditional artifacts are approved or explicitly not expected, and workflow files agree on blockers and next session.
 - The handoff names what review must inspect and later planning may consume: specification-review-approved `spec.md`, compact design or split design artifacts, triggered conditional artifacts, accepted assumptions, unresolved trade-offs, and reopen conditions.
 - The final action is a handoff or blocker update, not `tasks.md`, implementation, tests, migrations, generation, or technical design review output.
-- If a planning-critical question remains, route to `specification` or keep `technical-design` blocked; do not pass a TODO to review or planning.
+- If a planning-critical question remains, route to `specification`, `system-integration-design`, or `go-code-ownership-design`, or keep the active design checkpoint blocked; do not pass a TODO to review or planning.
 - If the design is small but non-trivial, still stop at the recorded boundary unless an eligible upfront direct/lean waiver already exists.
 
 ## Imitate
 ```markdown
 Technical design review handoff: ready.
-Review must inspect: specification-review-approved `spec.md`; approved overview, component map, sequence, and ownership map; approved `design/data-model.md`; approved `design/contracts/`; `rollout.md` not expected.
+Review must inspect: specification-review-approved `spec.md`; approved overview, system/integration design, Go code ownership design, component map, sequence, and ownership map; approved `design/data-model.md`; approved `design/contracts/`; `rollout.md` not expected.
 Accepted assumptions: existing persisted state remains unchanged outside the new job table.
 Next session starts with: technical design review.
 Stop rule: do not run review, write `tasks.md`, code, tests, migrations, generated files, or review output in this session.
@@ -36,7 +36,7 @@ Copy this shape: it names the upstream decision and forbids the workaround.
 
 ```markdown
 Technical design review handoff: not needed.
-Reason: workflow control already records reviewed design and next session `planning`; no technical-design repair target is present.
+Reason: workflow control already records reviewed design and next session `planning`; no design-checkpoint repair target is present.
 Stop rule: do not rework design in this session.
 ```
 

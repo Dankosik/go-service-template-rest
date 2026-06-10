@@ -38,7 +38,7 @@ Copy this shape: concerns are specific, accepted, and testable in the next phase
 ```markdown
 Task ledger review: FAIL.
 Implementation readiness: FAIL.
-Reopen target: technical-design.
+Reopen target: system-integration-design.
 Reason: task order depends on an unsettled backfill source-of-truth decision.
 Gate result: implementation must not start.
 ```

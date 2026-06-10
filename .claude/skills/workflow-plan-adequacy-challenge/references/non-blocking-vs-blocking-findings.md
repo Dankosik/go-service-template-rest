@@ -21,7 +21,7 @@ Why to copy: later sessions may inspect the wrong phase plan or assume no phase-
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `add_missing_routing`
-- `Exact Orchestrator Addition`: Add `Phase workflow plans: specification active at workflow-plans/specification.md; technical-design pending; planning pending`.
+- `Exact Orchestrator Addition`: Add `Phase workflow plans: specification active at workflow-plans/specification.md; system-integration-design pending; go-code-ownership-design pending; planning pending`.
 
 ### One unclear lane
 `Gap`: One fan-out lane lacks a single chosen skill, but other lanes are clear and local research can proceed while it is repaired.

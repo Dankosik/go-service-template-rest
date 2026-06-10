@@ -20,13 +20,13 @@ Unresolved domain direction:
 Blocker: SAML vs OIDC, provisioning rules, and tenant isolation semantics are unresolved.
 Why it blocks: each answer can change actors, acceptance criteria, data ownership, API behavior, and validation proof.
 Spec state: blocked, not approved.
-Next session starts with: targeted research or upstream framing, not technical-design.
+Next session starts with: targeted research or upstream framing, not system-integration-design.
 ```
 
 Phase drift:
 
 ```text
-Blocker: master workflow plan says current phase is technical-design, but the request asks to reopen specification casually.
+Blocker: master workflow plan says current phase is system-integration-design, but the request asks to reopen specification casually.
 Why it blocks: this session cannot rewrite an earlier phase without an explicit reopen target.
 Spec state: unchanged unless workflow-plan.md records specification as reopened.
 Next session starts with: the phase recorded by workflow-plan.md, or a formal reopen of specification.
@@ -65,4 +65,4 @@ This fails because technical design cannot own a missing specification decision.
 - Treating a planning-critical blocker as a harmless assumption because the wording sounds narrow.
 - Creating `tasks.md` or a design note to park the blocker.
 - Asking the user for repository-discoverable facts instead of reopening targeted research.
-- Leaving `workflow-plan.md` ready for `technical-design` while `workflow-plans/specification.md` says blocked.
+- Leaving `workflow-plan.md` ready for `system-integration-design` while `workflow-plans/specification.md` says blocked.

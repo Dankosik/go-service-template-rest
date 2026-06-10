@@ -31,11 +31,11 @@ Non-trivial workflow-control records should also include a `Subagent Gate Audit`
 ```text
 Subagent Gate Audit:
 - Trigger: <why lanes are required, scoped down, waived, or not expected>
-- Gate type: <research fan-out | spec-clarification | specification-review | workflow-adequacy | technical-design-authoring fan-out | technical-design-review | task-ledger-review | review/validation fan-out>
+- Gate type: <research fan-out | spec-clarification | specification-review | workflow-adequacy | design-authoring fan-out | technical-design-review | task-ledger-review | review/validation fan-out>
 - Required lane policy: <default lens set | expanded lane set | scoped-down lane set | local-only rationale>
 - Lane table: <lane id, agent, mode, lens/domain, owned question, skill/no-skill, inspect-first target, order/parallelism, read-only enforcement, status>
-- Lane result summary: <strongest finding, classification, recommended handoff, evidence pointer>
-- Fan-in: <orchestrator resolution, action, owner/artifact updated, unresolved conflicts, accepted risks, proof obligations>
+- Lane result summary: <strongest finding, classification, falsification check or decisive evidence test, recommended handoff, owner or reopen target, evidence pointer>
+- Fan-in: <orchestrator resolution, action, owner/artifact updated, unresolved conflicts, accepted risks, proof obligations, why severity is not stronger/weaker when material>
 - Gate result: <complete | blocked | waived | not_expected | PASS | CONCERNS | FAIL>
 - Readiness consequence: <next phase allowed yes/no, with proof obligations when allowed with concerns>
 - Reopen target: <required when blocked or failed>
@@ -50,7 +50,7 @@ The orchestrator owns fan-in:
 - deduplicate overlapping questions and findings;
 - compare conflicting assumptions across lanes;
 - classify each surviving point by strongest justified impact: approval blocker, domain reopen, record-only constraint, proof obligation, accepted risk, or no-action item;
-- preserve a short fan-in table or equivalent status in the workflow-control file: lens, strongest finding, classification, action, and owner;
+- preserve a short fan-in table or equivalent status in the workflow-control file: lens, trigger or source, falsification check or decisive evidence test, strongest finding, classification, action, owner or reopen target, and why severity is not stronger or weaker when material;
 - treat lane-level missing input, unresolved blockers, and material blocker-severity conflicts as blocking the relevant approval area until answered, explicitly waived or accepted as risk, or routed to the owning phase;
 - update `spec.md` only with final reconciled outcomes, not raw lane transcripts;
 - reopen research, design, planning, or a specialist lane when a finding exposes a missing owner decision.
@@ -142,7 +142,7 @@ The recommended prompt should be operational, not just descriptive. Include:
 - `Subagent authorization:` with explicit permission for read-only subagents, delegation, and parallel agent work whenever the next phase is non-trivial or may run subagent/readiness gates;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
 
-When the next phase is `technical-design`, the prompt must tell the next session to first record or run `Design fan-out` and only then write or repair integrated design artifacts.
+When the next phase is a design authoring checkpoint, the prompt must name exactly one checkpoint, usually `system-integration-design` first or `go-code-ownership-design` after system design is complete. It must tell the next session to first record or run the checkpoint-scoped `Design fan-out` and only then write or repair design artifacts for that checkpoint.
 
 For implementation from approved `tasks.md` that has passed task-ledger review/readiness, compose the prompt with `.agents/skills/codex-goal-prompt-composer/SKILL.md`. The prompt must explicitly tell the next session to set a Codex Goal first, then execute all required tasks in the approved ledger from start to finish. It must not rely on a slash command being parsed from the handoff. It may tell the next session to execute the approved ledger and run its named proof without stopping between task IDs. It must still prohibit creating or approving missing pre-code workflow artifacts during implementation.
 

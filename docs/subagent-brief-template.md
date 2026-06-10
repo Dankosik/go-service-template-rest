@@ -43,6 +43,7 @@ Expected output:
 - If the chosen skill defines an output shape, follow that shape.
 - Otherwise use the shared envelope from docs/subagent-contract.md:
   Decision or findings / Evidence / Open risks or gaps / Recommended handoff / Confidence.
+- For material review or challenge findings, include the fan-in destination, owner or reopen target, and why the severity is not stronger or weaker.
 - When adjacent domains are touched, prefer classifying each major point as `must_decide_now`, `constraint_only`, `proof_only`, or `follow_up_only`.
 - Recommended handoff must use one classification:
   spawn_agent, reopen_phase, needs_user_decision, accept_risk, record_only, or no_action.
@@ -89,9 +90,10 @@ Inspect first:
 - source-of-truth artifacts named by the spec
 Evidence: cite concrete artifact sections and source facts; label assumptions.
 Coverage: check scope/non-goals, behavior/contract delta, product/operator expectations, domain invariants, edge cases, API/data/source-of-truth effects, dependency/OSS diligence, Pattern Fit Diligence, legacy-surface handling, security/reliability/delivery implications, validation proof obligations, and downstream handoff clarity.
-Lens coverage: for each considered lens, return `covered`, `not_applicable`, `concern`, or `fail` with an evidence pointer and short reason.
-Finding format: `Spec anchor`, `Evidence`, `Impact`, `Classification`, `Required disposition`.
+Lens coverage: for each considered lens, return `Lens | Trigger/source | Owned readiness question | Falsification check | Status | Evidence pointer | Reason | Disposition`, where status is `covered`, `not_applicable`, `concern`, or `fail`. `covered` means the lane tried to disprove readiness for that lens; related prose alone is insufficient.
+Finding format: `Spec anchor`, `Evidence`, `Impact`, `Decision owner`, `Primary classification`, `Owner/reopen target`, `Why not stronger/weaker`, `Required disposition`.
 Return: Findings classified as `blocks_spec_approval`, `reopens_specification`, `reopens_research`, `requires_user_decision`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`; required fixes or reopen targets; accepted-risk candidates; downstream proof obligations; recommended gate result: PASS | CONCERNS | FAIL with status rationale.
+Gate decision order: any `fail` lens, missing required spec decision, or unresolved blocker classification means FAIL; otherwise bounded accepted risks or proof obligations mean CONCERNS; otherwise covered or justified not-applicable readiness-critical lenses mean PASS.
 Read-only enforcement: <read-only execution choice>; no edits, no git mutation, no approval authority, no task-ledger or implementation handoff changes.
 ```
 
@@ -100,17 +102,24 @@ Technical design review variant:
 ```text
 Use <design-integrator-agent | specialist-agent> for read-only technical design review with <go-design-spec | specialist skill | no-skill>.
 Gate: technical design review before planning.
-Scope: <design bundle or design artifact set being reviewed>.
-Question: Is this technical design coherent and safe enough for planning, or must technical design/specification reopen?
+Scope: <system/integration and Go code ownership design packet being reviewed>.
+Question: Is this design packet coherent and safe enough for planning, or must system/integration design, Go code ownership design, or specification reopen?
 Inspect first:
 - <task>/spec.md
 - <task>/design/overview.md
+- <task>/design/system-integration.md when triggered
+- <task>/design/go-code-ownership.md when triggered
 - <task>/design/<triggered artifacts>
-- <task>/workflow-plan.md and <task>/workflow-plans/technical-design*.md when present
+- <task>/workflow-plan.md and <task>/workflow-plans/system-integration-design.md, <task>/workflow-plans/go-code-ownership-design.md, <task>/workflow-plans/technical-design-review.md when present
 - docs/repo-architecture.md when boundaries, ownership, dependency direction, or runtime flow matter
 Evidence: cite concrete artifact sections and source facts; label assumptions.
+Planning-safety check: name the first task-planning decision that would still require architecture, system behavior, package/file ownership, sequencing, rollout, validation, cleanup, or test-ownership judgment. If any exists, classify it as a planning blocker and name the owning reopen target.
+Planning blocker test: what would `tasks.md` have to invent before it could name task sources, owner files/packages, order, proof, checkpoint, cleanup/test obligations, or stop/reopen conditions?
+System-handoff falsification: when system/integration design is triggered, verify each planning-critical mechanism has selected or preserved behavior, source-of-truth owner, affected runtime or failure branch, code-carrying constraint, rejected live alternative and closure rule, proof carrier, and reopen trigger; missing or contradictory fields are `blocks_planning` unless not-applicable is evidenced.
 Decision quality: for each material finding, state the planning decision at risk, the strongest counterargument or simpler alternative considered, and why the severity/gate result is not stronger or weaker.
+Finding format: include owner or reopen target, planning impact, primary classification, and why the issue is not stronger or weaker.
 Return: Findings classified as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`; required fixes or reopen targets; accepted-risk candidates; planning proof obligations; recommended gate result: PASS | CONCERNS | FAIL with status rationale.
+Follow-up after FAIL: include `Prior finding | Repair/evidence anchor | Rechecked areas | Closure status | Residual proof obligation/reopen target`.
 Read-only enforcement: <read-only execution choice>; no edits, no git mutation, no approval authority, no task-ledger or implementation handoff changes.
 ```
 

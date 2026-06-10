@@ -146,7 +146,7 @@ When workflow-control exists, update the master file with:
 Do not leave the review verdict or next phase only in chat.
 
 ### 7. Stop At The Boundary
-- If `PASS`, route to triggered `technical-design`, compact lean planning, or the next recorded phase.
+- If `PASS`, route to triggered `system-integration-design`, compact lean planning, or the next recorded phase.
 - If `CONCERNS`, route to the next phase only with named obligations.
 - If `FAIL`, route to the smallest reopen target.
 - Do not begin the next phase in this session.

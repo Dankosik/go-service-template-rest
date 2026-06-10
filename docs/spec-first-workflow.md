@@ -36,7 +36,7 @@ Use this file as the stable workflow entrypoint. Do not load every detailed work
 | Shape | Use When | Detailed Mechanics |
 | --- | --- | --- |
 | `direct path` | Tiny, reversible, one surface, obvious validation, no protected-domain trigger. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) |
-| `lean local` | Bounded non-trivial single-domain work with stable ownership and limited research. | [Artifact Model](spec-first-workflow/shared/artifact-model.md), [Specification](spec-first-workflow/phases/specification.md), [Specification Review](spec-first-workflow/phases/specification-review.md), [Planning / Task Review](spec-first-workflow/phases/planning-task-review.md) |
+| `lean local` | Bounded non-trivial single-domain work with stable ownership and limited research. | [Artifact Model](spec-first-workflow/shared/artifact-model.md), [Specification](spec-first-workflow/phases/specification.md), [Specification Review](spec-first-workflow/phases/specification-review.md), triggered [System / Integration Design](spec-first-workflow/phases/system-integration-design.md), triggered [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md), [Planning](spec-first-workflow/phases/planning.md), [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) |
 | `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) plus the active phase file below |
 
 Escalation triggers, artifact depth, status vocabulary, lean `spec.md`, lean `tasks.md`, and workflow-control artifact rules live in [Artifact Model](spec-first-workflow/shared/artifact-model.md).
@@ -49,9 +49,11 @@ Escalation triggers, artifact depth, status vocabulary, lean `spec.md`, lean `ta
 | Research, evidence fan-out, dependency/OSS diligence, or Pattern Fit research. | [Research](spec-first-workflow/phases/research.md) |
 | Write or repair `spec.md`, reconcile clarification challenge, or run lean `Risk Challenge`. | [Specification](spec-first-workflow/phases/specification.md) |
 | Review a completed non-trivial `spec.md` before design, planning, or implementation. | [Specification Review](spec-first-workflow/phases/specification-review.md) |
-| Author compact or split technical design and record `Design fan-out`. | [Technical Design](spec-first-workflow/phases/technical-design.md) |
-| Review triggered technical design before planning. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) |
-| Draft or repair `tasks.md`, run task-ledger review, or approve implementation readiness. | [Planning / Task Review](spec-first-workflow/phases/planning-task-review.md) |
+| Decide service behavior as a system participant: REST/API, external calls, queues, database/cache/source-of-truth, sequence, failure behavior, validation, or rollout. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
+| Decide Go package/file ownership, focused responsibilities, dependency direction, local abstractions, cleanup/removal, and test ownership. | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) |
+| Review triggered system/integration and Go code ownership design before planning. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) |
+| Draft or repair `tasks.md` from reviewed specification and required design context. | [Planning](spec-first-workflow/phases/planning.md) |
+| Review completed `tasks.md`, run task-ledger review, or approve implementation readiness. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) |
 | Implement from an approved ledger, run post-code review/reconciliation, validate, or close out. | [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) |
 | Plan subagent lanes, audit subagent gates, resume from artifacts, or render final handoff prompts. | [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) |
 
@@ -82,7 +84,7 @@ Avoid:
 - using lean local without `spec.md`, `tasks.md`, inline `Risk Challenge`, and proof;
 - using lean local as a local-only decision path without a recorded subagent gate decision;
 - making `workflow-plans/<phase>.md` a second master plan, spec, design bundle, or task ledger;
-- planning non-trivial implementation from `spec.md` alone when design context is triggered;
+- planning non-trivial implementation from `spec.md` alone when system/integration or Go code ownership design context is triggered;
 - starting implementation from an unreviewed `tasks.md` or treating a draft ledger as approval;
 - approving non-trivial specs while formal challenge is required and unresolved;
 - splitting work into MVP plus future hardening when the production-ready decision is knowable and in scope;
@@ -90,6 +92,7 @@ Avoid:
 - inventing a custom architecture or system-design shape without Pattern Fit Diligence, or applying a named pattern without task-specific evidence and Go/repository fit;
 - importing class-oriented design-pattern scaffolding into Go or adding pattern-shaped helpers when direct stdlib/repo-native code is shorter and clearer;
 - growing large hand-written source files as an implementation shortcut instead of placing new code in the focused owner file, same-package seam file, or correct package boundary;
+- treating system/integration design as enough for planning when package/file responsibility, dependency direction, cleanup/removal, or test ownership still need design;
 - creating `test-plan.md`, `rollout.md`, split design files, or review/validation phase files for completeness;
 - creating new process artifacts after coding starts;
 - using subagents for broad ceremony rather than narrow unresolved questions;

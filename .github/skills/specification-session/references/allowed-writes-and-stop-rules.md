@@ -19,7 +19,7 @@ Boundary refusal:
 ```text
 Cannot write `design/overview.md` in this session.
 Reason: specification-session may update only `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md`.
-Action: finish or block specification, then route the next session to `technical-design` if `spec.md` is approved.
+Action: finish or block specification, then route the next session to `system-integration-design` if separate design depth is triggered and `spec.md` is approved; route to planning only when compact design is explicitly sufficient.
 ```
 
 Allowed writes note for `workflow-plans/specification.md`:

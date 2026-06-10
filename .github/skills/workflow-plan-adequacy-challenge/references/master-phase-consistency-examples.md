@@ -14,14 +14,14 @@ Load this when `workflow-plan.md` and the active `workflow-plans/<phase>.md` dis
 
 ## Imitate
 ### Wrong active phase
-`Gap`: Master says `Current phase: technical-design`, but the active phase file is `workflow-plans/planning.md`.
+`Gap`: Master says `Current phase: go-code-ownership-design`, but the active phase file is `workflow-plans/planning.md`.
 
 Why to copy: it ties the mismatch to a concrete failure, skipping design approval and starting task breakdown from the wrong phase.
 
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `add_missing_routing`
-- `Exact Orchestrator Addition`: In `workflow-plan.md`, set `Current phase: technical-design`; set `Phase workflow plans: technical-design active; planning pending`; in `workflow-plans/technical-design.md`, set `Next action: finish and approve design bundle; Stop rule: do not begin planning in this session`.
+- `Exact Orchestrator Addition`: In `workflow-plan.md`, set `Current phase: go-code-ownership-design`; set `Phase workflow plans: go-code-ownership-design active; planning pending`; in `workflow-plans/go-code-ownership-design.md`, set `Next action: finish and approve Go code ownership design; Stop rule: do not begin planning in this session`.
 
 ### False handoff readiness
 `Gap`: Master says `Session boundary reached: yes`, but the phase file says `Phase status: in_progress` with unresolved blockers.
@@ -45,7 +45,7 @@ Use:
 
 ## Reject
 - "The plan is approved after this is fixed." This crosses challenger authority.
-- "Copy the full design sequence into `workflow-plans/technical-design.md`." This turns the phase workflow file into a second design artifact.
+- "Copy the full design sequence into `workflow-plans/system-integration-design.md`." This turns the phase workflow file into a second design artifact.
 - "Add more detail about everything." This does not name the mismatched field or the smallest repair.
 
 ## Agent Traps

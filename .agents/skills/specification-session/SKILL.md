@@ -97,7 +97,7 @@ These references calibrate this wrapper; they do not override `AGENTS.md`, `docs
 | Non-trivial `spec.md` review-readiness depends on running, reconciling, blocking, or marking the clarification gate not expected after shape reclassification. | `references/spec-clarification-gate-flow.md` | Reconcile `spec-clarification-challenge` outcomes into final decisions instead of treating the gate as optional, pasting transcripts, or deferring approval blockers to later review. |
 | `workflow-plan.md` or `workflow-plans/specification.md` needs repair or handoff updates. | `references/workflow-plan-specification-updates.md` | Keep master routing separate from phase-local orchestration instead of duplicating `spec.md`, adding implementation order, or leaving state in chat. |
 | `spec.md` cannot honestly become review-ready because of under-framed input, contradictory evidence, unresolved challenge questions, product-only policy, or phase drift. | `references/blocked-specification-examples.md` | Leave `spec.md` draft or blocked with a precise reopen target instead of inventing decisions or punting approval-changing gaps to specification review. |
-| `spec.md` is review-ready or near review-ready and the next session route is being chosen. | `references/handoff-to-technical-design.md` | Record a clean `specification-review` handoff and stop instead of starting review, design work, or hiding assumptions in chat. |
+| `spec.md` is review-ready or near review-ready and the next session route is being chosen. | `references/handoff-to-specification-review.md` | Record a clean `specification-review` handoff and stop instead of starting review, design work, or hiding assumptions in chat. |
 
 ## Allowed Writes
 This session may write or update only:
@@ -133,7 +133,7 @@ Do not:
 - a finished specification session ends at review-ready `spec.md` and routes the next session to specification review unless an earlier recorded direct-path waiver makes `spec.md` unnecessary
 
 ## Boundary With `spec-document-designer`
-- `spec-document-designer` owns the deeper `spec.md` authoring method: section choice, decision placement, artifact ownership, and technical-design handoff quality
+- `spec-document-designer` owns the deeper `spec.md` authoring method: section choice, decision placement, artifact ownership, and design-checkpoint handoff quality
 - `specification-session` owns when that method may run inside a dedicated session, what phase inputs are required, what files may be changed, how `workflow-plan.md` and `workflow-plans/specification.md` must be updated, and why the session must stop
 - do not duplicate the full `spec-document-designer` section guidance here; reuse it after the phase boundary is confirmed
 - if the real need is only local spec shaping without session routing, use `spec-document-designer` directly instead of this wrapper
@@ -160,7 +160,7 @@ Do not:
 - for non-obvious research-backed decisions, link to the preserved `research/*.md` note or source surface when provenance would help a later session trust or revisit the decision; do not copy the evidence narrative into `Decisions`
 - keep technical detail out of `spec.md` when it belongs in a triggered later `design/` artifact; lean local may include compact affected-surface, ownership, and sequence/failure answers in `Compact Design`
 - keep execution sequencing out of `spec.md`; that belongs to later planning
-- record downstream domain effects only to the level needed for the technical-design handoff; do not turn visible consequences into premature design tasks when no new decision is required yet
+- record downstream domain effects only to the level needed for the design-checkpoint handoff; do not turn visible consequences into premature design tasks when no new decision is required yet
 
 ### 4. Run The Autonomous Clarification Gate
 - for lean local with no escalation trigger, record inline `Risk Challenge` in `spec.md` and classify it as `PASS`, `CONCERNS`, or `FULL_REQUIRED`

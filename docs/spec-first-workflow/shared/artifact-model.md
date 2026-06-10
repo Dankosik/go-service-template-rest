@@ -31,6 +31,7 @@ Use this shared file to choose shape and artifact ownership, then continue in th
 - Before approving non-trivial custom implementation, a new runtime dependency, or a meaningful new helper/abstraction, compare the current Go standard library, established repository patterns, and mature open-source options. Prefer a maintained open-source library over custom code when it fits the accepted contract and has compatible license, healthy maintenance/release/security signals, sufficient adoption for its domain, and lower ownership cost than local implementation.
 - Dependency/OSS due diligence must use current evidence when freshness matters. Useful signals include recent releases or commits, issue and maintainer activity, documented compatibility, license, security advisories or `govulncheck` relevance, transitive dependency cost, API stability, stars or other domain-appropriate adoption signals, and how naturally the library fits repository ownership boundaries.
 - Record the selected option, rejected options, evidence date or source, and reason for custom code when no suitable dependency is chosen. Missing due diligence blocks approval or readiness for work that would otherwise build custom infrastructure or add a dependency.
+- A material decision is not complete unless it records the selected answer, rationale or evidence, bounded assumptions, rejected alternatives when real, downstream consequence, and reopen trigger. `TBD`, open alternatives, or implementation-time product choices in required decision fields keep the artifact `draft` or `blocked`.
 - Before approving a non-trivial architecture, system-design, workflow, integration, data-flow, resilience, or abstraction decision, run Pattern Fit Diligence. Search for known design or system-design patterns that plausibly solve the task, read concrete pattern descriptions and real-use examples, compare candidates against the accepted scope, repository boundaries, operational proof path, and idiomatic Go constraints, then record the selected pattern, rejected patterns, evidence, applicability, and Go-fit. Prefer a proven pattern when it fits; justify custom design only when the known candidates fail a concrete task force.
 - Pattern Fit Diligence is not cargo-culting. Do not force Gang-of-Four, enterprise, cloud, or distributed-systems vocabulary onto a simple Go change. The comparison should explain why a pattern fits this task now, or why the straightforward repo-native design is better.
 - Code-level pattern fit is a coding and review concern below architecture/system-design. When local implementation is becoming verbose, duplicated, branch-heavy, or helper-heavy, prefer current Go stdlib and established repo idioms first, then small Go-idiomatic code patterns that reduce code and clarify ownership. Do not import class-oriented design-pattern scaffolding into Go unless a concrete local force justifies it and simpler explicit code was rejected.
@@ -47,8 +48,8 @@ Use this shared file to choose shape and artifact ownership, then continue in th
 | Shape | Use When | Artifact Depth | Gate |
 | --- | --- | --- | --- |
 | `direct path` | Tiny, reversible, one surface, obvious validation, no protected-domain trigger. | Usually none; a short inline plan or chat note is enough. | Local first-read sanity check and fresh proof. |
-| `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and enough clarity to keep artifact depth lean. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. | Subagent gate decision; inline `Risk Challenge`; mandatory specification review before design or planning; mandatory technical design review checkpoint when separate design depth is triggered; post-ledger task review/readiness gate. |
-| `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, reviewed `spec.md`, triggered design bundle, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Planned read-only fan-out and fan-in as the default decision basis, mandatory specification review, mandatory technical design review when design depth is triggered, post-ledger task review/readiness gate, and strict phase boundaries. |
+| `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and enough clarity to keep artifact depth lean. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. Compact system/integration and Go code ownership answers may live together when concise and uncontested. | Subagent gate decision; inline `Risk Challenge`; mandatory specification review before design or planning; mandatory technical design review checkpoint when separate design depth is triggered; post-ledger task review/readiness gate. |
+| `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, reviewed `spec.md`, triggered system/integration design, triggered Go code ownership design, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Planned read-only fan-out and fan-in as the default decision basis, mandatory specification review, ordered design checkpoints when separate design depth is triggered, mandatory technical design review, post-ledger task review/readiness gate, and strict phase boundaries. |
 
 Use `lean local` for bounded non-trivial single-domain work. This changes the amount of workflow ceremony, not the expected production readiness, expert coverage, or evidence quality of the chosen solution.
 
@@ -82,7 +83,8 @@ This boundary rule applies to:
 - research and fan-in;
 - specification and clarification-gate reconciliation;
 - specification review and reconciliation;
-- technical design;
+- system/integration design;
+- Go code ownership design;
 - technical design review and reconciliation;
 - task planning, task-ledger review, and implementation-readiness handoff;
 - post-code review or reconciliation phases;
@@ -118,6 +120,8 @@ Conditional artifacts:
 
 - `research/*.md`: when evidence must survive resume, audit, or later synthesis.
 - `design/overview.md`: when compact design answers are too dense for `spec.md` but do not need split design files.
+- `design/system-integration.md`: when service behavior, contracts, external calls, queues, data/cache/source-of-truth, runtime sequence, failure behavior, validation, or rollout need a dedicated design artifact.
+- `design/go-code-ownership.md`: when package/file ownership, focused responsibilities, dependency direction, local abstractions, cleanup/removal, or test ownership need a dedicated design artifact.
 - `workflow-plan.md`: when multi-session state or reopen routing needs a durable control file.
 
 Non-trivial lean-local work must run and record a specification review gate after `spec.md` is written and before compact tasking, separate `design/overview.md`, or planning starts. The review should use at least one read-only specification-review lane unless the task has an explicit direct/prototype waiver; when independent product, domain, API/data, architecture, security, reliability, delivery, or validation questions exist, split them into narrow lanes. If no workflow-control artifact exists, record the verdict and named obligations in `spec.md`; if workflow-control exists, record or link the review there.
@@ -127,7 +131,7 @@ If lean local uses a separate `design/overview.md`, run and record a technical d
 Not expected by default:
 
 - `workflow-plans/<phase>.md`;
-- split `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md`;
+- split `design/system-integration.md`, `design/go-code-ownership.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md`;
 - `test-plan.md`;
 - `rollout.md`;
 - review or validation phase files.
@@ -152,7 +156,8 @@ specs/<feature-id>/
     research.md                 # only for a dedicated research phase
     specification.md            # only when formal specification routing is needed
     specification-review.md     # required when non-trivial spec review routing needs durable state
-    technical-design.md         # only when dedicated design routing is needed
+    system-integration-design.md # only when dedicated system/integration design routing is needed
+    go-code-ownership-design.md # only when dedicated Go code ownership design routing is needed
     technical-design-review.md  # required when separate technical design is triggered and review routing needs durable state
     planning.md                 # only when dedicated planning routing is needed
     review-phase-N.md           # only when planning names a multi-session review checkpoint
@@ -162,6 +167,8 @@ specs/<feature-id>/
   spec.md
   design/
     overview.md                 # entrypoint when design is triggered
+    system-integration.md       # triggered service/system behavior design context
+    go-code-ownership.md        # triggered Go package/file responsibility design context
     component-map.md            # split only when useful
     sequence.md                 # split only when useful
     ownership-map.md            # split only when useful

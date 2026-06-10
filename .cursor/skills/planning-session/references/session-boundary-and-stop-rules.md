@@ -28,7 +28,7 @@ Copy this shape: it closes the phase and names the next phase without entering i
 Planning phase blocked.
 Session boundary reached: no.
 Ready for next session: no.
-Next session starts with: technical-design.
+Next session starts with: go-code-ownership-design.
 Stop rule: do not create implementation tasks that depend on the missing ownership decision.
 ```
 

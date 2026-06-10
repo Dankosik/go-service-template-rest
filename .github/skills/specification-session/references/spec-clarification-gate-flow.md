@@ -64,4 +64,4 @@ This fails because `spec.md` stores orchestrator-owned final outcomes, not subag
 - Running the challenge too early, before the challenger has actual decisions to pressure-test.
 - Treating `non_blocking_but_record` as no-op.
 - Using `defer_to_design` for a question that changes scope, acceptance, ownership, or validation.
-- Starting triggered `technical-design` inside the same specification session after the gate clears.
+- Starting triggered `system-integration-design` or `go-code-ownership-design` inside the same specification session after the gate clears.

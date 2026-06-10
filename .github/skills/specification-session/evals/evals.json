@@ -10,7 +10,7 @@
         "The output reads or refers to current phase context first and keeps the work inside the specification checkpoint.",
         "The output produces or updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into `design/` or implementation.",
         "The output records clarification challenge status, the read-only lane used or waiver rationale, and resolution status before marking `spec.md` approved.",
-        "The output makes the handoff explicit in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with: technical-design` when the spec is approved."
+        "The output makes the handoff explicit in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with: system-integration-design` when the spec is approved and separate design depth is triggered."
       ]
     },
     {
@@ -33,7 +33,7 @@
       "expectations": [
         "The output distinguishes the wrapper's job from `spec-document-designer`, `go-design-spec`, and planning work.",
         "The output does not write or recommend writing `design/`, `tasks.md`, or implementation output in the same session.",
-        "The output stops after specification artifacts and workflow updates, with clarification gate state recorded and the next session routed to `technical-design` or another honest reopen point."
+        "The output stops after specification artifacts and workflow updates, with clarification gate state recorded and the next session routed to `system-integration-design` or another honest reopen point."
       ]
     }
   ]

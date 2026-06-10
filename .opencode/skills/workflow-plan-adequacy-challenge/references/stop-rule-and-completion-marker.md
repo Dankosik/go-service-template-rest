@@ -13,15 +13,15 @@ Load this when a phase-local plan has a vague completion marker, no stop rule, u
 - Record without blocking when the stop rule is adequate but the next action could be sharper for resume reliability.
 
 ## Imitate
-### Technical design drifts into planning
-`Gap`: `workflow-plans/technical-design.md` says "finish design and then plan implementation" without a stop rule.
+### Design checkpoint drifts into planning
+`Gap`: `workflow-plans/go-code-ownership-design.md` says "finish design and then plan implementation" without a stop rule.
 
 Why to copy: the session can drift from design into planning even though non-trivial phases are session-bounded.
 
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `clarify_stop_or_completion_rule`
-- `Exact Orchestrator Addition`: Add `Completion marker: required compact or split design context approved and master artifact status updated`; add `Stop rule: stop after technical-design handoff; do not create tasks.md in this session`.
+- `Exact Orchestrator Addition`: Add `Completion marker: required Go code ownership design context approved and master artifact status updated`; add `Stop rule: stop after go-code-ownership-design handoff; do not create tasks.md in this session`.
 
 ### Research completion omits fan-in
 `Gap`: Completion marker says "research done" but fan-in and challenge status are absent.

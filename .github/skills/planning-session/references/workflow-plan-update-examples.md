@@ -50,7 +50,7 @@ Current phase: planning
 Phase status: blocked
 Session boundary reached: no
 Ready for next session: no
-Next session starts with: technical-design
+Next session starts with: go-code-ownership-design
 Next session context bundle: `spec.md`, current `design/overview.md`, and the blocked design artifact that owns the missing decision.
 
 Artifact status:
@@ -59,8 +59,8 @@ Artifact status:
 
 Implementation readiness: FAIL
 Blocker: implementation order depends on a missing ownership decision in the design bundle.
-Reopen target: technical-design
-Routing state: reopen technical-design
+Reopen target: go-code-ownership-design
+Routing state: reopen go-code-ownership-design
 ```
 
 Copy this shape: the blocked master update routes upstream instead of implying implementation can start.

@@ -21,7 +21,7 @@ Current phase: specification
 Current phase status: complete
 Session boundary reached: yes
 Ready for next session: yes
-Next session starts with: technical-design
+Next session starts with: system-integration-design
 Phase workflow plans: specification complete
 Artifacts: spec.md approved; design/ missing; tasks.md missing
 Clarification gate: complete and reconciled
@@ -37,7 +37,7 @@ Input sources used: workflow-plan.md, research summary, candidate decisions, exi
 Clarification challenge: complete and reconciled
 Completion marker: spec.md approved and master routing updated
 Stop rule: stop before technical design, planning, tests, or implementation
-Next action: begin technical-design in a new session
+Next action: begin system-integration-design in a new session
 Parallelizable work: none in this phase
 ```
 
@@ -56,7 +56,7 @@ This fails because `spec.md` is the canonical decision artifact.
 Chat-only handoff instead of artifact-backed handoff:
 
 ```text
-I'll mention in the final response that technical design is next.
+I'll mention in the final response that `system-integration-design` is next when separate design depth is triggered.
 ```
 
 This fails when it replaces the workflow updates, because future sessions resume from workflow artifacts, not chat memory. A final response may still render a recommended next-session prompt, but only after `workflow-plan.md` and `workflow-plans/specification.md` already record the routing state, start point, and context bundle. Do not write the full ready-to-paste prompt into those files.

@@ -51,7 +51,7 @@ Escalate if:
 ## Core Defaults
 - `spec.md` is the canonical decisions artifact.
 - For lean-local work, the handoff path is `spec.md` with compact design answers, recorded subagent gate decision, and inline `Risk Challenge` -> specification review -> `tasks.md`.
-- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> specification review -> triggered design context -> technical design review -> tasks.md`, and formal `spec-clarification-challenge` is required before the spec is review-ready.
+- For full-orchestrated or protected-domain work, the handoff path is `spec.md -> specification review -> system-integration-design -> go-code-ownership-design -> technical design review -> tasks.md`, with compact design collapse only when explicitly justified, and formal `spec-clarification-challenge` is required before the spec is review-ready.
 - For dedicated specification sessions, this pass ends at review-ready `spec.md`; specification review begins in a new session unless the task is direct-path and no `spec.md` is required.
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
@@ -77,7 +77,7 @@ Load by trigger:
 - research-backed synthesis: the relevant `research/*.md`
 - formal spec review-readiness: `.agents/skills/spec-clarification-challenge/SKILL.md` when full-orchestrated, high-risk, protected-domain, or otherwise triggered
 - task-breakdown drift check: the matching `tasks.md` when it exists
-- existing technical-design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author triggered split design in this pass
+- existing design bundle nearby: `design/overview.md` and only the smallest set of affected design artifacts needed to confirm ownership boundaries, not to author triggered split design in this pass
 
 Conflict resolution:
 - repository contract beats the reference file
@@ -101,11 +101,11 @@ Before loading a reference, use this behavior-change thesis test: "When loaded f
 | The draft has `TODO`, `TBD`, blockers, soft assumptions, or user-only decisions | Label and route uncertainty by unblock path instead of inventing certainty or hiding blockers in `Decisions` | `references/open-questions-and-assumptions.md` |
 | A `spec-clarification-challenge` pass returned findings, or non-trivial spec review-readiness is questionable | Reconcile findings into final spec sections and gate status instead of pasting transcripts or marking review-ready through blockers | `references/clarification-gate-reconciliation.md` |
 | Validation language is vague, acceptance criteria need proof shaping, or `Outcome` is being written | Separate forward-looking proof obligations from evidence-backed outcome claims instead of writing "run tests" or "done" | `references/validation-and-outcome-sections.md` |
-| A non-trivial spec is at `spec.md -> design/` handoff, or design detail leaks into the spec | Keep `spec.md` at behavior-decision level with explicit handoff and reopen conditions instead of stuffing component maps, sequences, ownership maps, or task lists into the spec | `references/spec-handoff-to-technical-design.md` |
+| A non-trivial spec is at `spec.md -> design/` handoff, or design detail leaks into the spec | Keep `spec.md` at behavior-decision level with explicit handoff and reopen conditions instead of stuffing component maps, sequences, ownership maps, or task lists into the spec | `references/spec-handoff-to-design-checkpoints.md` |
 
 Neighboring-reference rule:
 - For mixed-content cleanup, prefer `decision-placement-and-artifact-ownership.md`.
-- For final handoff readiness or design leakage at review-readiness time, prefer `spec-handoff-to-technical-design.md`.
+- For final handoff readiness or design leakage at review-readiness time, prefer `spec-handoff-to-design-checkpoints.md`.
 - For foreign-template sprawl plus depth problems, prefer `spec-section-depth-examples.md` if the main decision is sizing; prefer `spec-patterns.md` if the main decision is translating framework concerns.
 - Do not load a broad reference when a narrower row already matches the symptom.
 
@@ -273,7 +273,7 @@ The pass is complete when:
 - replacement specs either list known legacy surfaces or explicitly say `No known replacement surface`
 - pattern-sensitive specs either record selected/rejected Pattern Fit Diligence or route the missing comparison to research or technical design before planning
 - the session stops at review-ready `spec.md` for dedicated specification work; specification review is the next non-trivial gate and phase-collapse waiver does not waive targeted expert research or subagent work required by a clarification finding
-- the next technical-design or reopen step is clear without turning the spec into a design bundle or a plan
+- the next design checkpoint or reopen step is clear without turning the spec into a design bundle or a plan
 
 ## Anti-Patterns
 - copying external template headings directly into the repo default shape

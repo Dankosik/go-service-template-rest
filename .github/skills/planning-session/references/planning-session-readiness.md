@@ -18,7 +18,7 @@ Load when required planning inputs are missing, stale, contradictory, or not yet
 ```markdown
 Planning status: blocked.
 Reason: `design/ownership-map.md` is missing, and task ordering depends on source-of-truth ownership.
-Reopen target: technical-design.
+Reopen target: go-code-ownership-design.
 Writes performed: none.
 ```
 

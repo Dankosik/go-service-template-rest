@@ -54,4 +54,4 @@ Failure: evidence belongs in `research/`, topology and sequence belong in design
 - Turning "this package exists" into a spec decision.
 - Preserving task IDs copied from a prompt.
 - Using `spec.md` to avoid creating a required downstream artifact.
-- Loading `spec-handoff-to-technical-design.md` for the same symptom by default; use that narrower reference only when the immediate question is handoff readiness or design leakage at approval time.
+- Loading `spec-handoff-to-design-checkpoints.md` for the same symptom by default; use that narrower reference only when the immediate question is handoff readiness or design leakage at approval time.

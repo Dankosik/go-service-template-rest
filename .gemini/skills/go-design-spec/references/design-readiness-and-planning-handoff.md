@@ -14,7 +14,7 @@ Do not load this to write `tasks.md`. This reference only checks whether the des
 - `design/overview.md` should make that status scannable in its artifact index when technical design review is the next session, instead of forcing review or planning to rediscover conditional triggers from separate files.
 - Accepted risks must have proof obligations and reopen conditions.
 - A planning-critical blocker cannot live only in chat.
-- If planning would need to choose package surfaces, source-of-truth ownership, runtime ownership, rollout sequence, or validation strategy, design is not ready.
+- If planning would need to choose package surfaces, owner files, source responsibility evidence, source-of-truth ownership, runtime ownership, rollout sequence, or validation strategy, design is not ready.
 - The handoff summary should tell the next session where to start and where not to drift.
 
 ## Imitate
@@ -41,7 +41,7 @@ Not expected:
 Accepted risks:
 - Backfill duration is unknown; planning must include a verification checkpoint before contract cleanup.
 
-- If review or planning cannot task the migration without inventing source-of-truth or rollback policy, reopen technical design.
+- If review or planning cannot task the migration without inventing source-of-truth or rollback policy, reopen `system-integration-design`.
 - If API behavior must change to expose migration state, reopen specification and API design.
 ```
 
@@ -70,7 +70,7 @@ Handoff that makes planning rediscover design:
 Review or planning should inspect the repo and decide which packages change.
 ```
 
-Why it is bad: `design/component-map.md` should already identify the relevant packages or explain why exact files are design-time unknown.
+Why it is bad: `design/component-map.md` or `design/go-code-ownership.md` should already identify the relevant packages, source responsibility evidence, rejected owner locations, and approved placement rule when exact files are design-time unknown.
 
 Readiness claim without artifact status:
 
@@ -82,9 +82,9 @@ Why it is bad: the next session needs artifact status, blockers, accepted risks,
 
 ## Agent Traps
 - `design/overview.md` says review-ready while triggered core artifacts are missing, draft, or contradictory.
-- `workflow-plan.md` says current phase is technical design review or planning, but `workflow-plans/technical-design.md` says design is blocked.
+- `workflow-plan.md` says current phase is technical design review or planning, but `workflow-plans/go-code-ownership-design.md` says design is blocked.
 - `tasks.md` exists before design readiness when no direct/lean waiver was recorded.
-- `tasks.md` is expected but design handoff leaves package surfaces or ownership unresolved.
+- `tasks.md` is expected but design handoff leaves package surfaces, owner files, placement rules, source responsibility audit, or ownership unresolved.
 - `rollout.md` is not expected while a migration, backfill, mixed-version window, or failback rule is planning-critical.
 - `test-plan.md` is not expected while validation obligations are too layered for `tasks.md`.
 - A blocker is recorded only in chat, not in the design or workflow artifacts that the next session will read.
@@ -93,12 +93,12 @@ Why it is bad: the next session needs artifact status, blockers, accepted risks,
 Before handoff, produce a compact readiness verdict: status, required artifacts, triggered and non-triggered conditional artifacts, blockers, accepted risks, reopen conditions, next session start point, and stop rule. If any field changes correctness, ownership, rollout, or validation, block technical design review or planning.
 
 ## Escalation Rules
-- Keep the technical-design phase open when a planning-critical decision, artifact, or contradiction remains unresolved.
+- Keep the owning design checkpoint open when a planning-critical decision, artifact, or contradiction remains unresolved.
 - Route to specification when the missing decision changes scope, external behavior, or accepted risk.
 - Route to a specialist when the missing detail is domain-owned and cannot be safely integrated from existing evidence.
 - Route to technical design review only when required compact or split design context is approved or explicitly waived/merged by an eligible direct/lean rationale.
 - Route to planning only after mandatory technical design review is reconciled when separate design depth exists.
-- If planning starts and exposes a missing design decision, reopen technical design instead of inventing the decision in `tasks.md`.
+- If planning starts and exposes a missing design decision, reopen `system-integration-design` or `go-code-ownership-design` according to the missing decision owner instead of inventing the decision in `tasks.md`.
 
 ## Repo Pointers
 - `docs/spec-first-workflow.md`: planning-entry gate, planning gate, implementation-readiness gate, session-boundary gate, and design-bundle rules.

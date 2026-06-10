@@ -14,14 +14,14 @@ Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.
 
 ## Imitate
 ### Phase plan became a second design file
-`Gap`: `workflow-plans/technical-design.md` contains the full component map and sequence instead of a design artifact status plus next action.
+`Gap`: `workflow-plans/system-integration-design.md` contains the full component map and sequence instead of a design artifact status plus next action.
 
 Why to copy: the problem is duplicate authority, not missing design content.
 
 Use:
 - `Classification`: `blocks_specific_lane` if it affects only the generated phase-control file; `blocks_phase_handoff` if handoff relies on the duplicate content as the only design record
 - `Recommended Action`: `trim_duplicate_authority`
-- `Exact Orchestrator Addition`: Move triggered split-design detail back to `design/`; in `workflow-plans/technical-design.md`, keep `Artifact status: design/ draft|approved`, `Completion marker: triggered design artifacts approved`, and `Next action: update master with design status`.
+- `Exact Orchestrator Addition`: Move triggered split-design detail back to `design/`; in `workflow-plans/system-integration-design.md`, keep `Artifact status: design/ draft|approved`, `Completion marker: triggered system/integration design artifacts approved`, and `Next action: update master with design status`.
 
 ### Master contains task ledger
 `Gap`: `workflow-plan.md` embeds the implementation checklist from `tasks.md`.

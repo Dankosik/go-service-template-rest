@@ -59,7 +59,7 @@ Copy this shape: ownership names who owns each decision and who does not.
 Failure: it omits side effects, failure points, and sync/async finality.
 
 ```markdown
-`workflow-plans/technical-design.md`: component map follows...
+`workflow-plans/system-integration-design.md`: component map follows...
 ```
 
 Failure: workflow control becomes the design bundle.

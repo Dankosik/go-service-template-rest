@@ -44,7 +44,7 @@ Failure: just-in-case phase files create control artifacts not called for by nam
 I updated `design/sequence.md` with the missing migration order so the ledger can be approved.
 ```
 
-Failure: planning exposed a technical-design gap and must reopen that phase instead of editing design.
+Failure: planning exposed a design gap and must reopen `system-integration-design` or `go-code-ownership-design` instead of editing design.
 
 ## Agent Traps
 - Treating "only a tiny test" or "only a quick migration" as harmless during a planning session.

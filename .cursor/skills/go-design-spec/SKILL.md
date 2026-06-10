@@ -1,12 +1,12 @@
 ---
 name: go-design-spec
-description: "Assemble and reconcile integrated technical-design context for Go services when separate design depth is triggered. Use when `spec.md` is approved but the work still needs coherent task-local `design/` artifacts, one `design/overview.md`, cross-domain reconciliation before the mandatory technical design review, or read-only technical-design-review analysis before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work, lean-local work with sufficient compact design in `spec.md`, implementation coding, post-code review execution, or CI/container setup."
+description: "Assemble and reconcile integrated technical-design context for Go services when separate design depth is triggered. Use when `spec.md` is approved but the work still needs coherent system/integration design, Go code ownership design, task-local `design/` artifacts, cross-domain reconciliation before the mandatory technical design review, or read-only technical-design-review analysis before `planning-and-task-breakdown`. Skip when the task is a local code fix, pure spec authoring, direct-path work, lean-local work with sufficient compact design in `spec.md`, implementation coding, post-code review execution, or CI/container setup."
 ---
 
 # Go Design Spec
 
 ## Purpose
-Act as the integrator for task-local technical design: reconcile architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave compact or split design context stable enough for mandatory technical design review by closing the current decision frontier without reopening the approved problem frame.
+Act as the integrator for task-local technical design: reconcile system/integration design, Go code ownership design, architecture, API, data, reliability, security, observability, and testing implications; reduce accidental complexity; and leave compact or split design context stable enough for mandatory technical design review by closing the current decision frontier without reopening the approved problem frame.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -18,7 +18,7 @@ Act as the integrator for task-local technical design: reconcile architecture, A
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Scope
-Use this skill to run an integrated technical-design pass or technical-design-review analysis: reduce accidental complexity, remove contradictions, preserve maintainability, keep architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for review and later task breakdown without expanding every visible downstream effect into new design work.
+Use this skill to run an integrated technical-design pass or technical-design-review analysis: reduce accidental complexity, remove contradictions, preserve maintainability, keep system/integration mechanics, Go code ownership, architecture, API, data, reliability, security, observability, and testing implications coherent, and leave the task-local design stable enough for review and later task breakdown without expanding every visible downstream effect into new design work.
 
 ## Boundaries
 Do not:
@@ -46,7 +46,7 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 | Symptom | Load | Behavior change |
 | --- | --- | --- |
 | The design bundle shape is unclear, conditional artifacts are being created "for completeness", or `spec.md`, `design/`, and `tasks.md` are starting to absorb each other's jobs. | [design-bundle-assembly.md](references/design-bundle-assembly.md) | Makes the model produce a minimal, indexed design bundle with real artifact triggers instead of filler artifacts or disguised spec/planning content. |
-| `design/component-map.md` or `design/ownership-map.md` needs package responsibility, source-of-truth, generated-code, or dependency-direction decisions. | [component-and-ownership-maps.md](references/component-and-ownership-maps.md) | Makes the model name concrete owners and stable boundaries instead of inventing shared helpers, treating generated files as authorities, or hiding ownership in "common" packages. |
+| `design/component-map.md`, `design/ownership-map.md`, or `design/go-code-ownership.md` needs package responsibility, source responsibility evidence, source-of-truth, generated-code, or dependency-direction decisions. | [component-and-ownership-maps.md](references/component-and-ownership-maps.md) | Makes the model name concrete owners and stable boundaries instead of inventing shared helpers, treating generated files as authorities, or hiding ownership in "common" packages. |
 | `design/sequence.md` needs runtime order, failure points, side effects, retries, sync/async boundaries, or partial-failure policy. | [runtime-sequence-and-failure-points.md](references/runtime-sequence-and-failure-points.md) | Makes the model write scenario-level runtime flow with failure ownership instead of a happy-path arrow chain or ambiguous sync/async finality. |
 | Specialist outputs or design artifacts disagree across architecture, API, data, security, reliability, observability, delivery, or QA. | [cross-domain-reconciliation.md](references/cross-domain-reconciliation.md) | Makes the model reconcile by selected option, rejected options, and proof obligations instead of smoothing contradictions into a vague compromise. |
 | The bundle is about to be marked review-ready, planning-ready, or handed to `planning-and-task-breakdown`. | [design-readiness-and-planning-handoff.md](references/design-readiness-and-planning-handoff.md) | Makes the model block or qualify readiness with artifact status, risks, review-gate needs, and reopen conditions instead of saying "done enough" while planning must rediscover design. |
@@ -55,8 +55,9 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 ## Specialist Stance
 - `spec.md` owns decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` consumes approved decisions plus required design context for the implementation handoff.
 - Separate design depth must pass technical design review before planning; this skill may prepare the design for that gate or support a read-only review lane, but it does not make final approval decisions.
+- Separate design depth is ordered by default: system/integration design decides service behavior first, then Go code ownership design decides package/file responsibility, dependency direction, local abstractions, cleanup/removal, and test ownership without changing observable behavior.
 - When supporting a technical-design-review lane, classify each finding as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`, then recommend `PASS`, `CONCERNS`, or `FAIL` with status rationale.
-- In technical-design-review mode, judge whether planning can produce implementation-ready tasks without inventing architecture, ownership, contract, sequencing, rollout, or validation policy. If planning would need to make a design choice, the review should reopen design or specification instead of passing with a proof-only concern.
+- In technical-design-review mode, judge whether planning can produce implementation-ready tasks without inventing architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, or test ownership. If planning would need to make a design choice, the review should reopen the owning design checkpoint or specification instead of passing with a proof-only concern.
 - Before selecting custom infrastructure, a new runtime dependency, or a meaningful helper/abstraction, compare the current Go standard library, established repository patterns, and mature open-source options. Design may proceed only when the selected option and rejected alternatives have current evidence for maintenance, adoption, license, security, transitive dependency cost, API stability, and repository-boundary fit.
 - Before selecting an architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape, perform Pattern Fit Diligence. Search for known applicable design or system-design patterns, read concrete descriptions and real-use examples, compare candidates against the task's forces, repository boundaries, operational proof path, and idiomatic Go fit, and record selected and rejected patterns. Design may proceed with a custom shape only when known patterns fail a concrete requirement.
 - Prefer the simplest explicit design that satisfies current requirements and preserves change locality.
@@ -85,8 +86,10 @@ This is a technical-design integrator, not a workflow owner:
 
 ### Design Bundle Assembly
 - Produce or tighten split core artifacts when their trigger is real:
-  - `design/overview.md` for chosen approach, artifact index with review-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
-  - `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; responsibilities; what changes versus what stays stable; and which plausible surfaces are intentionally not touched
+- `design/overview.md` for chosen approach, artifact index with review-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
+- `design/system-integration.md` for service behavior, contracts, external calls, queues, data/cache/source-of-truth, runtime sequence, failure behavior, validation, and rollout when these need their own artifact
+- `design/go-code-ownership.md` for package/file ownership, focused responsibility boundaries, dependency direction, local abstraction choices, cleanup/removal, and test ownership when these need their own artifact
+- `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; responsibilities; what changes versus what stays stable; and which plausible surfaces are intentionally not touched
   - `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
   - `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
 - Keep each triggered artifact only as detailed as its current issue demands. A narrow change can justify very short component, sequence, or ownership notes as long as they explicitly preserve unchanged boundaries and planning does not need to infer what stayed stable.
@@ -112,6 +115,8 @@ This is a technical-design integrator, not a workflow owner:
   - what proof will show the implementation preserved the pattern's guarantee rather than only its vocabulary
 - Prefer explicit boundaries, explicit control flow, and predictable dependency direction over hidden magic.
 - Optimize for local change paths and bounded impact radius.
+- In Go code ownership design, require owner package/file decisions before planning for every meaningful changed responsibility; large hand-written files are placement warnings and should default toward focused same-package seam files unless one cohesive owner clearly justifies staying put.
+- Treat SOLID as a pressure test for focused responsibility and explicit dependencies, not as permission to import class-oriented hierarchy, manager/factory chains, or interface-per-struct scaffolding into Go.
 
 ### Boundary And Ownership Consistency
 - When boundaries are touched, check them against domain capability, data ownership, team ownership, and transaction boundary.
@@ -154,6 +159,7 @@ For each planning-critical design recommendation, make clear:
 - when no `live fork` exists, the chosen repo-consistent approach and why no competing option needs current design treatment
 - for dependency-sensitive choices, the selected stdlib/repo-pattern/OSS/custom option, rejected options, current evidence signals, and why planning should not reopen library selection
 - for pattern-sensitive choices, the selected design/system pattern or straightforward repo-native design, rejected pattern alternatives, source descriptions or examples, applicability, Go-fit, and why planning should not reopen pattern selection
+- for code ownership choices, the source responsibility audit, selected owner package/file or approved placement rule, split-or-keep rationale, rejected owner locations, cleanup/removal decisions, test ownership, and why planning should not reopen placement
 - trade-offs across simplicity, flexibility, cost, risk, and change impact
 - only the downstream effects that force a new decision, handoff, or proof obligation in architecture, API, data, security, observability, reliability, or testing
 - assumptions, blockers, and reopen conditions only when they affect the current bundle or the first safe implementation slice
@@ -163,24 +169,29 @@ For each planning-critical design recommendation, make clear:
 When this skill is used for read-only technical design review, do not only list defects. Make the gate decision auditable:
 
 - Name the planning decision at risk for each material finding: ownership, interface, persistence, runtime sequence, failure/recovery, validation, rollout, dependency direction, or implementation proof.
-- Identify any real `live fork`, meaning two plausible options would materially change the task ledger. If a live fork exists and the design has not selected one, recommend `FAIL` and reopen `technical design` or `specification`.
+- Identify any real `live fork`, meaning two plausible options would materially change the task ledger. If a live fork exists and the design has not selected one, recommend `FAIL` and reopen `system-integration-design`, `go-code-ownership-design`, or `specification` according to the decision owner.
 - For `CONCERNS`, prove the issue is a bounded risk that implementation can validate without choosing a missing design. Name the exact proof obligation and where planning should carry it.
 - For `FAIL`, name the smallest reopen target, the decision or artifact that must change, and the condition a follow-up review must verify.
-- For `PASS`, name the falsification checks performed, such as source-of-truth ownership, dependency direction, sequence/failure behavior, validation path, rollout assumptions, and conditional artifact triggers.
+- For `PASS`, name the falsification checks performed, such as source-of-truth ownership, source responsibility audit for code placement, dependency direction, sequence/failure behavior, validation path, rollout assumptions, and conditional artifact triggers.
 - For dependency-sensitive design, include dependency/OSS due-diligence in the falsification checks; missing current evidence for a new dependency or custom infrastructure is a planning blocker, not a coding preference.
 - For pattern-sensitive design, include Pattern Fit Diligence in the falsification checks; missing known-pattern comparison for an invented design shape is a planning blocker, and cargo-cult pattern naming without task-specific Go/repository fit should reopen design.
+- For Go code ownership review, test whether planning can fill `Files:`, `Owner package/file:`, `Placement evidence:`, cleanup owner, and test owner from the design packet without opening source to make a design choice; otherwise recommend `FAIL` to `go-code-ownership-design`.
 - Include one strongest counterargument or simpler alternative for each material recommendation and explain why it does not change the result.
 - Downgrade taste, local style, or optional cleanup to `record_only` unless it creates concrete planning or production-readiness risk.
+- If changing the recommendation would change a task source, owner file/package, import direction, cleanup task, proof owner, or reopen target, treat it as design-level rather than style.
 
 ## Deliverable Shape
 When writing or reviewing the integrated technical-design bundle, cover:
 - the required compact or split `design/` artifacts and any triggered conditional artifacts
+- system/integration decisions separately from Go code ownership decisions when both are triggered
 - contradictions across domains
 - simplification opportunities
 - abstractions or layers that should be removed, merged, or made explicit
 - for technical-design-review mode, the reviewed packet, classified findings, required reopen targets or planning proof obligations, and recommended gate result
 - what changes versus what remains stable
 - runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
+- package/file owner map, responsibility boundaries, dependency direction, local abstraction choices, cleanup/removal, and test ownership that planning must respect
+- source responsibility evidence and rejected owner locations for non-trivial package/file placement decisions
 - dependency/OSS due-diligence outcome when relevant: selected and rejected stdlib, repository-pattern, OSS, and custom options with current evidence and planning consequences
 - Pattern Fit Diligence outcome when relevant: selected and rejected design/system patterns, source descriptions or examples, applicability, Go/repository fit, and planning consequences
 - legacy-surface treatment when replacement work is in scope: remove/refactor/retain decisions, generated or mirror source-of-truth order, and retained-surface exit conditions
@@ -198,6 +209,7 @@ When writing or reviewing the integrated technical-design bundle, cover:
 ## Escalate Or Reject
 - missing or unstable `spec.md`
 - any hidden “decide later in coding” gap that would change ownership, correctness, contract, sequencing, or rollout
+- non-trivial code ownership recommendations that lack source responsibility audit, current file responsibility, sibling-file evidence, rejected owner locations, or an approved placement rule
 - contradictory assumptions left unresolved across domain specs
 - a new abstraction or layer with no measurable simplification outcome
 - a new dependency, custom infrastructure decision, or material helper/abstraction without recorded stdlib, repository-pattern, and mature-OSS due diligence

@@ -130,7 +130,7 @@ When a valid Goal cannot be composed, do not produce a vague Goal. Return a shor
 ```text
 Do not set a Codex Goal yet.
 
-Reopen <planning | specification | technical-design | technical-design-review> for `<task-local path>`.
+Reopen <planning | specification | system-integration-design | go-code-ownership-design | technical-design-review> for `<task-local path>`.
 
 Reason:
 - <missing Goal Contract, failing readiness, unresolved decision, vague completion condition, conflated completion/blocker semantics, or missing proof>.
