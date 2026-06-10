@@ -27,7 +27,7 @@ This template is built from the opposite assumption: if you want agents to be us
 That is why this repository is opinionated in four places:
 
 1. **The workflow is explicit.**
-   Non-trivial work starts with optional idea refinement, then framing, workflow planning, research, synthesis, pre-spec challenge, specification with an autonomous clarification gate, mandatory specification review, technical design, task breakdown, coding from `tasks.md`, review, and validation. The loop is visible, not implied, one session normally owns one phase before coding, and session wrappers such as `workflow-planning-session`, `research-session`, `specification-session`, `specification-review-session`, `technical-design-session`, `planning-session`, and `validation-closeout-session` keep those handoffs explicit.
+   Non-trivial work starts with optional idea refinement, then framing, workflow planning, research, synthesis, pre-spec challenge, specification with an autonomous clarification gate, mandatory specification review, technical design, triggered test design, task breakdown, coding from approved `tasks.md`, review, and validation. The loop is visible, not implied, one session normally owns one phase before coding, and session wrappers such as `workflow-planning-session`, `research-session`, `specification-session`, `specification-review-session`, `technical-design-session`, `test-design-session`, `planning-session`, and `validation-closeout-session` keep those handoffs explicit.
 2. **The specialists are real.**
    Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
 3. **The skills are Go-native.**
@@ -41,7 +41,7 @@ If you want a Go backend template that feels natural inside Codex or Claude Code
 
 The fix is not a single block of text. It shapes the whole repository:
 
-- **Artifacts with clear jobs**: `specs/<feature-id>/workflow-plan.md` keeps master control, `specs/<feature-id>/workflow-plans/<phase>.md` holds phase-local orchestration, `specs/<feature-id>/spec.md` keeps final decisions, `specs/<feature-id>/design/` carries task-local technical design for non-trivial work, `specs/<feature-id>/tasks.md` owns the executable checkbox ledger, and the phase/session wrappers keep those handoffs explicit across sessions.
+- **Artifacts with clear jobs**: `specs/<feature-id>/workflow-plan.md` keeps master control, `specs/<feature-id>/workflow-plans/<phase>.md` holds phase-local orchestration, `specs/<feature-id>/spec.md` keeps final decisions, `specs/<feature-id>/design/` carries task-local technical design for non-trivial work, `specs/<feature-id>/test-plan.md` carries triggered scenario design, `specs/<feature-id>/tasks.md` owns the executable checkbox ledger, and the phase/session wrappers keep those handoffs explicit across sessions.
 - **Go-aware subagents**: the agent portfolio is organized around real backend concerns instead of generic brainstorming personas.
 - **Go-native skills**: the skill library gives the orchestrator and subagents concrete playbooks for Go design, implementation, review, and verification.
 - **Verification as a first-class rule**: “done” is tied to fresh command evidence, not to confident prose from an LLM.
@@ -52,12 +52,12 @@ The fix is not a single block of text. It shapes the whole repository:
 This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
 
 ```text
-intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec challenge -> specification + clarification challenge -> specification review -> system/integration design -> Go code ownership design -> technical design review -> planning -> coding from tasks.md -> review -> validation
+intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec challenge -> specification + clarification challenge -> specification review -> system/integration design -> Go code ownership design -> technical design review -> test design? -> planning -> task review/readiness -> coding from tasks.md -> review -> validation
 ```
 
 - `intake`: frame the change, scope it, and record assumptions.
 - `idea refine`: when the request is still a raw concept, use `idea-refine` to make the user, problem, success criteria, MVP, and not-doing boundary explicit before engineering framing.
-- `workflow planning`: choose the execution shape, decide whether work stays local or fans out, set the current phase in master `workflow-plan.md`, write the phase-local orchestration in `workflow-plans/<phase>.md`, and state whether later `design/`, `tasks.md`, `test-plan.md`, or `rollout.md` artifacts will be required. Early checkpoints often use `workflow-plans/workflow-planning.md` or `workflow-plans/research.md`; later ones use files like `workflow-plans/specification.md`, `workflow-plans/system-integration-design.md`, `workflow-plans/go-code-ownership-design.md`, or `workflow-plans/planning.md`. Do not optimize for a small lane count; optimize for coverage.
+- `workflow planning`: choose the execution shape, decide whether work stays local or fans out, set the current phase in master `workflow-plan.md`, write the phase-local orchestration in `workflow-plans/<phase>.md`, and state whether later `design/`, `test-design`, `tasks.md`, `test-plan.md`, or `rollout.md` artifacts will be required. Early checkpoints often use `workflow-plans/workflow-planning.md` or `workflow-plans/research.md`; later ones use files like `workflow-plans/specification.md`, `workflow-plans/system-integration-design.md`, `workflow-plans/go-code-ownership-design.md`, `workflow-plans/test-design.md`, or `workflow-plans/planning.md`. Do not optimize for a small lane count; optimize for coverage.
 - `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains. When in doubt on a complex task, prefer more lanes over fewer.
 - `synthesis`: compare specialist output and produce candidate decisions.
 - `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
@@ -65,9 +65,11 @@ intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec
 - `specification review`: run a distinct read-only gate after non-trivial `spec.md` is review-ready and before technical design, planning, or implementation; reconcile findings as `PASS`, `CONCERNS`, or `FAIL`, with `FAIL` reopening specification, research, or a user/specialist decision.
 - `system/integration design`: for non-trivial work, decide service behavior, contracts, external calls, queues, database/cache/source-of-truth, runtime sequence, failure behavior, validation, and rollout shape.
 - `Go code ownership design`: decide package/file ownership, focused responsibilities, dependency direction, local abstractions, cleanup/removal, and test ownership without changing the approved system behavior.
-- `technical design review`: run the mandatory pre-planning review gate when separate design depth is triggered. Load [`docs/repo-architecture.md`](docs/repo-architecture.md) when stable repository boundaries or runtime flows matter.
-- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn reviewed `spec.md + design/` into small, verifiable execution slices in `tasks.md`; any later review or validation phase workflow files are created here before code starts only when named multi-session routing needs them, and the planning exit records implementation readiness as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`.
-- `implementation`: change the service in the main flow, not inside research agents. New code/test files are fine when approved `tasks.md` requires them; new workflow/process artifacts are not. Existing `tasks.md` checkbox/progress state may be updated; missing required `tasks.md` or implementation readiness of `FAIL` routes back to planning or the named earlier phase instead of being invented mid-code.
+- `technical design review`: run the mandatory pre-test-design/pre-planning review gate when separate design depth is triggered. Load [`docs/repo-architecture.md`](docs/repo-architecture.md) when stable repository boundaries or runtime flows matter.
+- `test design`: when triggered, use `test-design-session` plus `go-qa-tester-spec` to turn approved behavior and design context into `test-plan.md` scenario IDs, proof levels, pass/fail observables, fail-before expectations, quality gates, and reopen targets before planning writes tasks.
+- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn reviewed `spec.md + design/` plus approved or not-expected test design into small, verifiable execution slices in `tasks.md`; any later review or validation phase workflow files are created here before code starts only when named multi-session routing needs them, while task-ledger review and implementation readiness remain pending for the separate task-review/readiness gate.
+- `task review/readiness`: review `tasks.md` against the approved artifact chain, including `test-plan.md` scenario IDs when present, and only then record implementation readiness as `PASS`, eligible `CONCERNS`, eligible `WAIVED`, or `FAIL`.
+- `implementation`: change the service in the main flow, not inside research agents. New code/test files are fine when approved `tasks.md` requires them; new workflow/process artifacts are not. Existing `tasks.md` checkbox/progress state may be updated; missing required `tasks.md`, missing scenario mapping, or implementation readiness of `FAIL` routes back to planning, test design, or the named earlier phase instead of being invented mid-code.
 - `review`: run targeted review agents only where the risk justifies them.
 - `validation`: do not claim "done" without fresh command evidence, and do not create new planning/process artifacts during closeout. Existing `tasks.md` may be progress-updated only when it already belongs to the task.
 
@@ -80,7 +82,8 @@ When a task benefits from explicit session boundaries, use the phase/session wra
 - `specification-session`: own `spec.md` review-readiness, the clarification gate, and `workflow-plans/specification.md` only.
 - `specification-review-session`: own the post-spec read-only review gate and `workflow-plans/specification-review.md` only.
 - `technical-design-session`: own exactly one active design checkpoint, either `workflow-plans/system-integration-design.md` or `workflow-plans/go-code-ownership-design.md`, plus the relevant task-local `design/` artifacts only.
-- `planning-session`: own `tasks.md`, optional `test-plan.md` or `rollout.md`, any later review or validation phase workflow files already required, and `workflow-plans/planning.md` only.
+- `test-design-session`: own `test-plan.md` or an explicit no-test-plan rationale, plus `workflow-plans/test-design.md`, without writing `tasks.md` or tests.
+- `planning-session`: own `tasks.md`, optional `rollout.md`, any later review or validation phase workflow files already required, and `workflow-plans/planning.md` only; it consumes `test-plan.md` from test design when triggered.
 - `validation-closeout-session`: own fresh proof, `spec.md` closeout updates, and existing validation-phase routing only.
 
 Think of the workflow-control artifacts as complementary, not competing:
@@ -182,7 +185,7 @@ The catalog has two layers:
 | [`specification-session`](.agents/skills/specification-session/SKILL.md) | owns the specification checkpoint only, runs or reconciles the non-trivial clarification gate, and updates review-ready `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into review, design, or planning | research or bounded local analysis is strong enough that the next honest step is finalizing the decision record for review |
 | [`specification-review-session`](.agents/skills/specification-review-session/SKILL.md) | owns the mandatory post-spec read-only review checkpoint, reconciles subagent findings as `PASS`, `CONCERNS`, or `FAIL`, and updates `workflow-plans/specification-review.md` without editing spec content | a non-trivial `spec.md` is review-ready and must be checked before design, planning, or implementation can start |
 | [`technical-design-session`](.agents/skills/technical-design-session/SKILL.md) | owns one active design checkpoint only and turns reviewed `spec.md` plus prior checkpoint context into planning-ready `design/` artifacts plus `workflow-plans/system-integration-design.md` or `workflow-plans/go-code-ownership-design.md` | non-trivial work needs task-local system/integration or Go code ownership design before task breakdown |
-| [`planning-session`](.agents/skills/planning-session/SKILL.md) | owns the planning checkpoint only and produces `tasks.md`, optional `test-plan.md` or `rollout.md`, and any later review or validation phase workflow files already required, while updating `workflow-plans/planning.md` | reviewed `spec.md + design/` are ready to turn into ordered, coder-facing execution work |
+| [`planning-session`](.agents/skills/planning-session/SKILL.md) | owns the planning checkpoint only, consumes approved `test-plan.md` when test design was triggered, produces `tasks.md`, optional `rollout.md`, and any later review or validation phase workflow files already required, while updating `workflow-plans/planning.md` | reviewed `spec.md + design/` plus approved or not-expected test design are ready to turn into ordered, coder-facing execution work |
 | [`validation-closeout-session`](.agents/skills/validation-closeout-session/SKILL.md) | owns final validation and closeout only, refreshes `spec.md` `Validation` and `Outcome`, and updates existing validation-phase routing honestly | implementation is finished and you need fresh proof before saying a phase or task is complete |
 
 ### Core Workflow, Implementation, And Verification Skills
@@ -278,7 +281,7 @@ The repository is designed so the main agent acts like an orchestrator, not like
 - `workflow-plans/<phase>.md` is the phase workflow artifact for one phase only.
 - `design/` is the task-local technical design bundle for non-trivial work.
 - `tasks.md` is the executable task ledger and final pre-code handoff, not a second spec or second design bundle.
-- Implementation readiness is the planning exit gate, not a phase. It is recorded in `workflow-plan.md`, with the result and stop or handoff rule in `workflow-plans/planning.md`.
+- Task review/readiness is the planning exit gate. It is recorded in `workflow-plan.md` and the relevant workflow-control surface after `tasks.md` is reviewed, with the result and stop or implementation handoff rule.
 - `research/*.md` is optional supporting evidence, not a competing source of truth.
 
 For non-trivial implementation work, the artifact shape is intentionally simple:

@@ -10,7 +10,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when imple
 
 ## Inputs
 
-- Approved `tasks.md` first, then artifacts named by that ledger.
+- Approved `tasks.md` first, then artifacts named by that ledger, including `test-plan.md` when the ledger references scenario IDs.
 - Existing `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` only when the ledger explicitly names that pre-created phase file.
 - Repository-owned validation commands and current workspace state.
 
@@ -22,7 +22,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when imple
 
 ## Stop Rule
 
-Do not create or approve missing pre-code workflow artifacts after implementation starts. If proof or validation exposes a missing decision or artifact, record the blocker in the allowed surface and reopen the owning earlier phase.
+Do not create or approve missing pre-code workflow artifacts after implementation starts. If proof or validation exposes a missing decision, missing `test-plan.md` scenario, or missing artifact, record the blocker in the allowed surface and reopen the owning earlier phase.
 
 ## Ledger-First Execution
 
@@ -30,9 +30,9 @@ Implementation starts from an approved, reviewed `tasks.md` or it does not start
 
 Before the first edit, read current workspace state and separate pre-existing unrelated changes from this session's work. Do not use unrelated dirty files as task evidence, do not clean them up without an explicit request, and do not let their presence widen the ledger's approved scope.
 
-Before the first edit, set or verify the Codex Goal from the `tasks.md` Goal Contract and implementation handoff. The goal must cover every required ledger task through final validation, not only the first task or checkpoint. Also confirm the ledger records implementation readiness as `PASS`, eligible `CONCERNS`, or eligible `WAIVED`; identifies the first executable task or checkpoint; and separates successful completion from blocked-stop behavior. If readiness, the Goal Contract, or the completion condition is missing, stale after repair, `FAIL`, or too vague to determine the next executable task and final proof, stop and reopen planning, specification review, technical design review, or the owning earlier phase named by the gap.
+Before the first edit, set or verify the Codex Goal from the `tasks.md` Goal Contract and implementation handoff. The goal must cover every required ledger task through final validation, not only the first task or checkpoint. Also confirm the ledger records implementation readiness as `PASS`, eligible `CONCERNS`, or eligible `WAIVED`; identifies the first executable task or checkpoint; and separates successful completion from blocked-stop behavior. If readiness, the Goal Contract, `test-plan.md` scenario mapping when referenced, or the completion condition is missing, stale after repair, `FAIL`, or too vague to determine the next executable task and final proof, stop and reopen planning, test design, specification review, technical design review, or the owning earlier phase named by the gap.
 
-At the start of each task, bind the task ID to its source anchor, dependencies, owner package/file, proof, evidence fields, and stop or reopen condition. Do not infer hidden architecture, ownership, dependency, rollout, or validation choices from chat memory. If a required field is absent or contradicts approved artifacts, leave the task unchecked and reopen the owning phase instead of deciding during implementation.
+At the start of each task, bind the task ID to its source anchor, dependencies, owner package/file, test-design scenario ID when present, proof, evidence fields, and stop or reopen condition. Do not infer hidden architecture, ownership, dependency, rollout, scenario class, proof level, or validation choices from chat memory. If a required field is absent or contradicts approved artifacts, leave the task unchecked and reopen the owning phase instead of deciding during implementation.
 
 Execute tasks in dependency order through the ledger's final proof unless blocked. After each task or checkpoint, update the existing `tasks.md` checkbox and evidence fields with the command or read performed, result, key output or evidence reference, changed proof files when relevant, and any residual blocker or narrower claim. A task remains unchecked when proof is skipped, unavailable, stale, failing, cached in a way that does not prove the claim, or narrower than the task's stated behavior.
 
@@ -54,7 +54,7 @@ Cleanup made necessary by the approved task is part of implementation scope. Cod
 
 If implementation discovers an old surface not named by the approved spec or ledger, classify it before editing: in-scope and safe to remove/refactor, intentionally retained by an existing approved artifact, or requiring reopen because removal or retention changes contract, data, security, reliability, rollout, generated-source, or another protected-domain behavior.
 
-Implementation sessions may continue across the approved `tasks.md` items and the ledger's named proof checks. They must not use implementation momentum to create or approve missing specification, design, planning, review, or validation-phase artifacts.
+Implementation sessions may continue across the approved `tasks.md` items and the ledger's named proof checks. They must not use implementation momentum to create or approve missing specification, design, test-design, planning, review, or validation-phase artifacts.
 
 Post-code work is ledger-driven. It may update only:
 
@@ -66,7 +66,7 @@ Do not update `workflow-plan.md` or phase-control files merely because they exis
 
 Do not create new workflow/process artifacts after implementation starts. Reopen the earlier phase that owns the missing artifact instead.
 
-Review is read-only and risk-driven. Review findings are advisory until the orchestrator reconciles them. During orchestrator reconciliation or implementation, fix findings that are inside the approved ledger and proof path. If a finding requires a new decision, missing artifact, broader validation policy, changed dependency choice, generated-source authority change, or retention/removal decision outside the approved ledger, record the blocker in the allowed surface and reopen the owning earlier phase instead of creating a new pre-code artifact after coding starts.
+Review is read-only and risk-driven. Review findings are advisory until the orchestrator reconciles them. During orchestrator reconciliation or implementation, fix findings that are inside the approved ledger and proof path. If a finding requires a new decision, missing test-design scenario, missing artifact, broader validation policy, changed dependency choice, generated-source authority change, or retention/removal decision outside the approved ledger, record the blocker in the allowed surface and reopen the owning earlier phase instead of creating a new pre-code artifact after coding starts.
 
 Review should flag unexplained surviving replaced or unused code, tests, fixtures, configs, docs, generated artifacts, skills, agents, or mirrors as merge-risk findings unless an approved artifact records why the surface remains with owner, reason, proof, and exit condition.
 

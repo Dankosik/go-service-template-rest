@@ -13,7 +13,7 @@ Load when writing or repairing `workflow-plans/planning.md`, or when planning mu
 - Review phase-control files should name review scope, read-only lanes, finding status, compact finding disposition, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule.
 - Validation phase-control files should name closeout claim, proof inputs, command/proof scope, phase status, blockers or reopen target, completion marker, next action, and stop rule.
 - If a future phase-control file needs design facts that do not exist, block planning and reopen upstream instead of filling the gap.
-- Put executable tasks and the implementation handoff in `tasks.md`, test depth in triggered `test-plan.md`, and rollout choreography in triggered `rollout.md`.
+- Put executable tasks and the task-review/readiness handoff in `tasks.md`, consume test depth from approved `test-plan.md` when `test-design` triggered it, and put rollout choreography in triggered `rollout.md`.
 
 ## Imitate
 ```markdown
@@ -50,7 +50,7 @@ Phase: validation-phase-1
 Phase status: pending
 Consumes: approved artifact bundle, existing `tasks.md`, and review phase notes for the named checkpoint when present.
 Closeout claim: phase complete for T001-T006.
-Proof scope: commands and manual checks named in `tasks.md` plus triggered `test-plan.md` if present.
+Proof scope: commands and manual checks named in `tasks.md` plus approved `test-plan.md` if test design triggered it.
 Allowed future writes: `spec.md` Validation/Outcome, existing `tasks.md` progress, and this existing validation phase file only.
 Stop rule: do not implement fixes or create missing process artifacts; reopen the narrowest earlier phase if proof fails or required artifacts are missing.
 Next action: run fresh validation for the named proof scope.

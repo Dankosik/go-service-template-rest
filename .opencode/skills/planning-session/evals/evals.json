@@ -4,37 +4,37 @@
     {
       "id": 0,
       "prompt": "We already have approved `spec.md + design/` for tenant-scoped async report exports with persisted job state, admin retry/cancel, signed download URLs, and audit events. Use only the planning-session wrapper to produce the planning outputs for this task. The work is non-trivial and will need small task slices, strong validation coverage, and explicit rollout notes for mixed-version deploys and backfill safety.",
-      "expected_output": "A planning-only result that turns approved `spec.md + design/` into a `tasks.md` executable ledger, adds `test-plan.md` or `rollout.md` only where triggered, records implementation readiness, updates `workflow-plan.md` plus `workflow-plans/planning.md`, and stops at the handoff into implementation.",
+      "expected_output": "A planning-only result that turns approved `spec.md + design/` plus approved or not-expected test design into a `tasks.md` executable ledger, adds `rollout.md` only where triggered, leaves task-ledger review and implementation readiness as `pending_task_review`, updates `workflow-plan.md` plus `workflow-plans/planning.md`, and stops at the handoff into task-review/readiness.",
       "files": [],
       "expectations": [
         "The output stays inside the planning boundary and does not reopen spec or design or start implementation.",
-        "The output treats `tasks.md` as the executable checkbox ledger and final implementation handoff, with `test-plan.md` or `rollout.md` created only because the prompt actually triggers them.",
+        "The output treats `tasks.md` as the executable checkbox ledger and planning handoff, consumes approved `test-plan.md` only when test design triggered it, and creates `rollout.md` only because the prompt actually triggers it.",
         "The output records `tasks.md` status in both `workflow-plan.md` and `workflow-plans/planning.md`.",
-        "The output records implementation readiness as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; for this complete non-trivial handoff it should be `PASS` unless a named accepted risk changes it to `CONCERNS`.",
-        "The output updates the implementation handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with` pointing at the first task or explicit implementation checkpoint."
+        "The output leaves task-ledger review and implementation readiness as `pending_task_review` for the separate readiness gate.",
+        "The output updates the planning handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with` pointing at task-review/readiness."
       ]
     },
     {
       "id": 1,
       "prompt": "Use only the planning-session wrapper. The spec is approved for adding soft-delete plus restore with audit events across the admin API, but the design bundle is missing `design/sequence.md` and there is no approved migration or rollout artifact for a live backfill that must remain safe during mixed-version traffic. Produce only the planning-session output that is honest right now.",
-      "expected_output": "A blocked planning result that refuses to invent missing design context, records implementation readiness as `FAIL`, routes back to the appropriate earlier phase, and keeps implementation unopened.",
+      "expected_output": "A blocked planning result that refuses to invent missing design context, records planning as blocked with the appropriate reopen target, and keeps task-review/readiness plus implementation unopened.",
       "files": [],
       "expectations": [
         "The output calls out the missing required design input and the unresolved rollout or migration gap as blockers to planning readiness.",
         "The output does not silently reopen design by writing a pretend-complete `tasks.md` that guesses the missing sequencing or rollout behavior.",
-        "The output uses `FAIL` for implementation readiness and names the earlier phase to reopen.",
+        "The output names the earlier phase to reopen instead of assigning implementation readiness.",
         "The output updates routing toward `technical design` or another earlier phase instead of handing off to implementation."
       ]
     },
     {
       "id": 2,
       "prompt": "Approved `spec.md + design/` already exist for a bounded feature. Use the planning-session wrapper to write the task breakdown, and then go ahead and start T001 in the same session so we do not lose momentum.",
-      "expected_output": "A session-bounded planning result that writes or repairs expected `tasks.md`, records implementation readiness and the handoff, and refuses to start coding in the same session.",
+      "expected_output": "A session-bounded planning result that writes or repairs expected `tasks.md`, records the task-review/readiness handoff, and refuses to start coding in the same session.",
       "files": [],
       "expectations": [
         "The output makes the planning-session stop boundary explicit and keeps implementation for the next session.",
-        "The output records implementation readiness before handoff instead of treating the user's momentum request as a bypass.",
-        "The output records `Next session starts with` as the first task or explicit implementation checkpoint rather than beginning it inline.",
+        "The output leaves implementation readiness for the separate task-review/readiness gate instead of treating the user's momentum request as a bypass.",
+        "The output records `Next session starts with` as task-review/readiness rather than beginning implementation inline.",
         "The output does not produce code, test changes, migrations, or implementation execution output."
       ]
     },
@@ -53,14 +53,14 @@
     {
       "id": 4,
       "prompt": "Use only the planning-session wrapper. Approved `spec.md + design/` exist for adding tenant-aware account summaries across API, service, repository, and tests. Produce the planning artifacts. The work is non-trivial, has two independent test/documentation updates that may run in parallel after the repository contract lands, and exact handler and repository files are known from design.",
-      "expected_output": "A planning-only result that creates `tasks.md` as the final handoff checkbox ledger with stable task IDs, phase labels, safe `[P]` markers only for disjoint work, exact known file paths, dependency markers, and proof expectations, and records readiness for implementation handoff.",
+      "expected_output": "A planning-only result that creates `tasks.md` as the task-review/readiness handoff checkbox ledger with stable task IDs, phase labels, safe `[P]` markers only for disjoint work, exact known file paths, dependency markers, proof expectations, and approved test-design traceability when present.",
       "files": [],
       "expectations": [
         "`tasks.md` uses markdown checkboxes with stable IDs such as `T001` and includes phase/checkpoint labels.",
         "`[P]` appears only on tasks that are safe to parallelize and dependencies such as `Depends on: T001` are explicit when nontrivial.",
         "Tasks include exact known file paths or narrow package/artifact surfaces plus proof expectations, and avoid generic wording like `implement feature`.",
         "`tasks.md` does not become a second spec or design bundle.",
-        "Implementation readiness is recorded as `PASS` or `CONCERNS` with named proof obligations before the next-session handoff."
+        "Task-ledger review and implementation readiness remain `pending_task_review` before the next-session handoff."
       ]
     }
   ]

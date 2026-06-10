@@ -22,7 +22,10 @@ Implementation may start only when task-ledger review and readiness are `PASS` o
 Reopen `technical design` if:
 - an implementation task needs a file/package ownership decision not present in `design/ownership-map.md`
 - a task requires ordering that contradicts `design/sequence.md`
-- a conditional artifact such as `test-plan.md` or `rollout.md` becomes necessary but was not created during planning
+- rollout choreography becomes necessary but was not created during planning
+
+Reopen `test-design` if:
+- a required test scenario matrix, scenario ID, proof level, fail-before signal, or quality gate is missing before task breakdown
 
 Reopen `specification` if:
 - acceptance criteria require a product or behavior decision not already recorded in `spec.md`

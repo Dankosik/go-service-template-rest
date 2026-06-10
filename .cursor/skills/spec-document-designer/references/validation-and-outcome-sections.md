@@ -13,7 +13,7 @@ Load this when writing proof expectations before handoff, repairing vague accept
 - Do not dictate test file names, exact commands, or task order unless they are already known and materially constrain planning.
 - Do not claim broader validation than the fresh evidence supports.
 - Convert behavior-level acceptance criteria into `Decisions`; convert proof-level acceptance criteria into `Validation`.
-- If proof obligations are too layered for `spec.md`, trigger `test-plan.md` during planning instead of bloating `Validation`.
+- If proof obligations are too layered for `spec.md`, trigger the `test-design` phase instead of bloating `Validation` or leaving scenario design to planning.
 
 ## Imitate
 

@@ -1,6 +1,6 @@
 ---
 name: planning-session
-description: "Own a session dedicated only to task breakdown for this repository when a distinct planning checkpoint is triggered. Use when specification-review-approved `spec.md` plus required compact or split design context, including triggered system/integration and Go code ownership design, and any mandatory technical-design-review gate are ready to turn into a draft or repaired `tasks.md`, plus `test-plan.md` or `rollout.md` only when truly triggered, then hand off to the separate task-review/readiness gate before code starts. Skip direct-path inline plans and tasks whose spec, specification review, design context, or required technical design review is still unstable."
+description: "Own a session dedicated only to task breakdown for this repository when a distinct planning checkpoint is triggered. Use when specification-review-approved `spec.md` plus required compact or split design context, including triggered system/integration and Go code ownership design, any mandatory technical-design-review gate, and triggered test-design are ready to turn into a draft or repaired `tasks.md`, plus `rollout.md` only when truly triggered, then hand off to the separate task-review/readiness gate before code starts. Skip direct-path inline plans and tasks whose spec, specification review, design context, required technical design review, or triggered test design is still unstable."
 ---
 
 # Planning Session
@@ -24,15 +24,15 @@ This wrapper makes task breakdown explicit and stoppable; it does not reopen `sp
 - any mandatory technical design review for separate design depth is complete or explicitly blocks planning
 - the orchestrator must turn reviewed `spec.md` plus required design context into executable planning artifacts for a non-trivial change
 - `tasks.md` should become the executable draft ledger that the separate task-review/readiness phase can approve before any non-trivial implementation session starts
-- the completed `tasks.md` must be handed off for review against reviewed `spec.md`, specification-review obligations, required design context, technical-design-review obligations, and triggered validation or rollout obligations before implementation
-- `test-plan.md` or `rollout.md` may be needed because validation or rollout obligations are too large to fit cleanly inside `tasks.md`
+- the completed `tasks.md` must be handed off for review against reviewed `spec.md`, specification-review obligations, required design context, technical-design-review obligations, approved test-design scenarios, and triggered validation or rollout obligations before implementation
+- `rollout.md` may be needed because rollout obligations are too large to fit cleanly inside `tasks.md`; `test-plan.md` belongs to the earlier `test-design` phase when triggered
 - master `workflow-plan.md` and `workflow-plans/planning.md` need the planning checkpoint completed or repaired before handoff into implementation
 
 ## Skip When
 - the work is tiny enough that inline direct-path planning plus explicit rationale is sufficient and a dedicated planning session would be ceremony
 - lean-local `tasks.md` can be produced in the same local pass without separate planning-phase routing and no multi-session state is needed
 - the task is still in `workflow planning`, `research`, `specification`, unresolved `specification review`, `technical design`, or unresolved `technical design review`
-- `spec.md` is unstable or unreviewed, required compact/split design context is missing, a triggered conditional design artifact has not been produced yet, or mandatory technical design review is missing or blocking
+- `spec.md` is unstable or unreviewed, required compact/split design context is missing, a triggered conditional design artifact has not been produced yet, mandatory technical design review is missing or blocking, or triggered test design is missing or blocking
 - the request tries to combine planning with code changes, tests, migrations, or coding/execution in one session
 
 ## Required Inputs
@@ -43,6 +43,7 @@ Planning may begin only when the minimum planning-entry inputs exist:
 - approved `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` only when split design is triggered
 - completed design fan-out result when separate technical design depth was triggered, with `complete`, valid `scoped_down`, or eligible `local_only`
 - completed technical design review result when separate `design/overview.md` or split `design/` was triggered, with `PASS` or `CONCERNS` plus named accepted design risks and proof obligations
+- approved `test-plan.md` when test design was triggered, or explicit `test-design: not expected` rationale when proof can live directly in `tasks.md`
 - any triggered conditional design artifacts that affect sequencing, validation, or rollout, such as:
   - `design/data-model.md`
   - `design/dependency-graph.md`
@@ -70,7 +71,8 @@ Then read current phase context in this order:
 4. specification review result when non-trivial `spec.md` exists
 5. compact design section in `spec.md`, `design/overview.md`, or split design artifacts according to the trigger decision
 6. technical design review result when separate design depth was triggered
-7. triggered conditional design artifacts and any existing `tasks.md`, `test-plan.md`, or `rollout.md` that must be repaired rather than replaced
+7. approved `test-plan.md` when test design was triggered, or the explicit no-test-plan rationale
+8. triggered conditional design artifacts and any existing `tasks.md` or `rollout.md` that must be repaired rather than replaced
 
 Rules:
 - follow `AGENTS.md` if workflow guidance conflicts
@@ -104,7 +106,6 @@ Routing table:
 ## Allowed Writes
 This session may write or update only:
 - task-local `tasks.md`
-- task-local `test-plan.md` when validation obligations do not fit cleanly inside `tasks.md`
 - task-local `rollout.md` when migration or delivery choreography needs a dedicated artifact
 - task-local `workflow-plans/review-phase-N.md` when named multi-session routing requires those review checkpoints
 - task-local `workflow-plans/validation-phase-N.md` when named multi-session routing requires those validation checkpoints
@@ -132,13 +133,14 @@ Do not:
 - `tasks.md` must belong to the active task-local bundle. A repository-root or unrelated ledger is not the current handoff unless workflow control explicitly reopens it and records the resume route.
 - task-ledger review is the separate post-planning, pre-implementation stage owned by `docs/spec-first-workflow/phases/task-review-readiness.md`; planning prepares the ledger and handoff but does not assign `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`
 - Goal-ready `tasks.md` separates successful completion from blocked-stop behavior; a recorded blocker is a valid stop, not a successful completion claim
-- broad or resumable ledgers should include selective read-before-coding context, task-specific read context, checkpoint gates, source traceability, proof-first tasking or an explicit `Proof-first waiver:`, structured evidence fields, a task-local implementation quality bar when needed, and a resume rule
+- broad or resumable ledgers should include selective read-before-coding context, task-specific read context, checkpoint gates, source traceability, approved test-design scenario IDs when present, proof-first tasking or an explicit `Proof-first waiver:`, structured evidence fields, a task-local implementation quality bar when needed, and a resume rule
 - skipped, unavailable, stale, failing, or too-narrow proof cannot satisfy a task checkbox, checkpoint, or completion claim
 - dependency/OSS due-diligence decisions from `spec.md` or design must be carried into `tasks.md` as dependency, integration, license/security, drift, and proof tasks when relevant; missing due diligence blocks planning handoff and routes back to specification or technical design
 - Pattern Fit Diligence decisions from `spec.md` or design must be carried into `tasks.md` as design-preserving constraints, proof tasks, and reopen conditions when relevant; missing pattern comparison blocks planning handoff when implementation would otherwise choose or invent the pattern
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - planning consumes the design authoring fan-out gate when separate technical design depth was triggered; missing, blocked, or ineligible `local_only` design fan-out reopens technical design
 - technical design review is the required pre-planning gate for separate design depth; planning must not downgrade it into an optional note or infer it from the design author's own handoff
+- planning consumes triggered test design; missing, blocked, stale, or ineligible `test-design` fan-out reopens test design before `tasks.md` is drafted
 - before ending planning, leave task-ledger review fields as `pending_task_review` and route to `task-review/readiness`
 - planning may record a suggested task-review fan-out candidate set, but the review phase owns the final lane decision, gate record, and implementation-readiness status
 - before full-orchestrated, high-risk, complex workflow-control, or agent-backed handoff, planning may prepare the packet for `workflow-plan-adequacy-challenge`; the challenge or readiness gate still runs outside this planning wrapper
@@ -172,7 +174,7 @@ For non-trivial work, `tasks.md` should use markdown checkboxes and include, per
 Prefer vertical, reviewable slices with one reviewable diff story per task. If a task title needs "and" to be accurate, split it unless the approved design makes the coupling inseparable. Avoid generic tasks such as "implement feature." Multi-line task items are allowed for readability, but they must remain executable ledger items instead of design notes or strategy memos. If exact tasking requires a missing design decision or unresolved design-review finding, reopen `system-integration-design`, `go-code-ownership-design`, or `technical design review` instead of inventing the task.
 
 ## Boundary With Coding/Execution
-- `planning-session` may write `tasks.md`, optional `test-plan.md`, optional `rollout.md`, review or validation phase workflow files already required by named multi-session routing, `workflow-plan.md`, and `workflow-plans/planning.md`
+- `planning-session` may write `tasks.md`, optional `rollout.md`, review or validation phase workflow files already required by named multi-session routing, `workflow-plan.md`, and `workflow-plans/planning.md`; it consumes `test-plan.md` from test design when triggered
 - coding/execution owns code changes, test changes, migrations, generated output, and task-level validation evidence
 - if planning is complete, record `Next session starts with` as the first task ID or explicit implementation checkpoint from `tasks.md`, then stop instead of beginning it here
 
@@ -197,24 +199,24 @@ Prefer vertical, reviewable slices with one reviewable diff story per task. If a
 
 ### 3. Load Execution-Critical Context
 - use the compact design section or design bundle to identify dependency-establishing work, safe sequencing, coupling, validation obligations, and rollout risks
-- read existing `tasks.md`, `test-plan.md`, or `rollout.md` only when repairing or extending an existing planning pass
+- read existing `tasks.md` or `rollout.md` only when repairing or extending an existing planning pass; read `test-plan.md` only as an approved test-design input
 - keep the context narrow and planning-specific; this session does not need broad repository rediscovery when the approved design already carries the task-local technical context
 - keep the handoff focused on the accepted target-state ledger; out-of-scope implications may stay as explicit concerns, proof obligations, or follow-up notes, but in-scope target-state cleanup belongs in `tasks.md` or in a reopened earlier phase
 
 ### 4. Produce Or Repair Planning Artifacts
 - apply `planning-and-task-breakdown` as the deeper method when the task needs target-state execution breakdown, dependency ordering, or real checkpoints
 - write or update `tasks.md` as the executable task ledger by default for non-trivial work
-- create `test-plan.md` only when test obligations are too large or multi-layered for `tasks.md` and the approved design already contains the needed validation context
 - create `rollout.md` only when migration sequencing, backfill, compatibility, deploy order, or failback notes need a dedicated artifact and the approved design already contains the needed rollout context
 - create review or validation phase workflow files only when named multi-session routing already requires them, so later sessions update existing control artifacts instead of inventing them mid-execution
 - keep blocked work separate from ready work
 - keep reopen conditions explicit when implementation must hand back to `specification`, `specification review`, `technical design`, or `technical design review`
-- if exact tasking, `test-plan.md`, or `rollout.md` requires a missing design decision or unresolved design-review finding, route back to `technical design` or `technical design review` instead of inventing executable tasks or companion-artifact context
+- if exact tasking or `rollout.md` requires a missing design decision or unresolved design-review finding, route back to `technical design` or `technical design review` instead of inventing executable tasks or companion-artifact context
+- if exact tasking requires new scenario classes, proof levels, fail-before signals, or quality gates not present in approved `test-plan.md` or a no-test-plan rationale, route back to `test-design`
 
 ### 5. Write Or Repair `workflow-plans/planning.md`
 - record only the phase-local orchestration for this planning session
 - include planning status, completion marker, stop rule, next action, blockers, artifact outputs, and what can run in parallel later
-- record whether companion artifacts such as `tasks.md`, `test-plan.md`, `rollout.md`, or later review/validation phase workflow files were required, created, or explicitly not needed
+- record whether companion artifacts such as `tasks.md`, approved `test-plan.md`, `rollout.md`, or later review/validation phase workflow files were required, created, or explicitly not needed
 - record the technical-design-review gate result when separate design depth was triggered
 - keep this file routing-only; do not turn it into `spec.md`, `design/`, or `tasks.md`
 
@@ -243,12 +245,14 @@ Every completed, blocked, or reopened planning pass must update the master file 
 - current phase set to this planning checkpoint and current phase status
 - link or status for `workflow-plans/planning.md`
 - status for `tasks.md` as `draft_review_ready`, `blocked`, `missing`, explicitly waived, or not expected only for an eligible tiny/direct-path exception
-- status for `test-plan.md` and `rollout.md` as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
+- status for test design and `test-plan.md` as `approved`, `blocked`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
+- status for `rollout.md` as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
 - specification-review status as `PASS`, `CONCERNS`, `FAIL`, or not expected with rationale
 - accepted spec risks and review proof obligations carried forward when specification-review status is `CONCERNS`
 - design fan-out status as `complete`, `scoped_down`, `local_only`, `blocked`, or not expected with rationale
 - technical-design-review status as `PASS`, `CONCERNS`, `FAIL`, or not expected with rationale
 - accepted design risks and review proof obligations carried forward when technical-design-review status is `CONCERNS`
+- accepted test-design risks, scenario IDs, and proof obligations carried forward when `test-plan.md` exists
 - whether later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` were created now because named multi-session routing needs them, are explicitly not expected with rationale, or still remain blocked on a reopen
 - implementation-readiness status as `pending_task_review` unless an eligible direct-path waiver means no ledger review is expected
 - task-ledger review result as `pending_task_review` unless an eligible direct-path waiver means no ledger review is expected
@@ -269,7 +273,6 @@ Do not leave planning readiness or handoff state implicit in chat.
 ## Allowed Outputs
 A finished planning session may produce only:
 - updated or newly created `tasks.md`
-- optional `test-plan.md`
 - optional `rollout.md`
 - optional `workflow-plans/review-phase-N.md`
 - optional `workflow-plans/validation-phase-N.md`
@@ -308,9 +311,10 @@ Planning is complete when:
 - `tasks.md` exists for lean-local or full-orchestrated non-trivial work, or an explicit tiny/direct-path waiver explains why it is not separate
 - meaningful phases or tasks have acceptance criteria and planned verification
 - blocked work is clearly separated from ready work
-- `test-plan.md` and `rollout.md` exist only when their triggers are real, and their status is explicit when not needed
+- `test-plan.md` exists only when test design triggered it, no-test-plan rationale is explicit when not needed, and `rollout.md` exists only when its trigger is real
 - mandatory specification review is `PASS` or `CONCERNS` with named accepted spec risks and proof obligations for non-trivial `spec.md`
 - mandatory technical design review is `PASS` or `CONCERNS` with named accepted design risks and proof obligations when separate design depth was triggered
+- triggered test design is approved or explicitly not expected, and `tasks.md` traces proof-first/test work to scenario IDs when `test-plan.md` exists
 - review findings classified as spec/design/planning blockers are resolved, explicitly rerouted, or still block planning rather than being hidden inside optimistic tasks
 - selected design/system pattern constraints and proof obligations are explicit enough that implementation does not need to choose, reinterpret, or invent the pattern
 - any review or validation phase workflow files that named multi-session routing requires were created before implementation begins, or their absence is recorded as a reopen blocker
@@ -331,6 +335,7 @@ Escalate instead of forcing output when:
 - required compact or split design context is missing without an approved design-skip/merge rationale
 - mandatory specification review is missing or `FAIL` for non-trivial `spec.md`
 - mandatory technical design review is missing or `FAIL` after separate design depth was triggered
+- triggered test design is missing, stale, blocked, or needed but not recorded
 - a conditional design artifact is clearly triggered but missing
 - rollout, compatibility, migration, or ownership questions remain unresolved and change the implementation order
 - task-review/readiness would need to accept unnamed risk or invent missing context from planning
@@ -342,6 +347,7 @@ Escalate instead of forcing output when:
 - copying strategy or decisions into `tasks.md` instead of keeping it an executable task ledger
 - creating generic tasks like "implement feature" instead of vertical, proof-bound slices
 - forcing `test-plan.md` or `rollout.md` when their triggers are not real
+- inventing test scenarios inside `tasks.md` instead of reopening `test-design`
 - leaving required named review/validation phase workflow files to be invented mid-implementation or mid-validation
 - hiding blockers inside optimistic task wording
 - marking implementation handoff ready before the separate task-review/readiness gate has run

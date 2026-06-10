@@ -1,42 +1,42 @@
 # Technical Design Review Phase
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when reviewing triggered system/integration and Go code ownership design before planning.
+Detailed phase companion for `docs/spec-first-workflow.md`. Read this when reviewing triggered system/integration and Go code ownership design before test design or planning.
 
 ## Read When
 
 - Separate design depth was triggered and the system/integration plus Go code ownership design packet is review-ready, or one checkpoint is explicitly not expected.
-- Planning is waiting on technical-design-review status.
+- Test design or planning is waiting on technical-design-review status.
 - A repaired design after `FAIL` needs a fresh or explicitly updated follow-up verdict.
 
 ## Inputs
 
-- Specification-review-approved `spec.md`, design entrypoint, triggered system/integration artifacts, triggered Go code ownership artifacts, and conditional `test-plan.md` or `rollout.md` when present.
+- Specification-review-approved `spec.md`, design entrypoint, triggered system/integration artifacts, triggered Go code ownership artifacts, and conditional `test-design` or `rollout.md` trigger decisions when present.
 - Workflow-control paths that define current phase, blockers, expected review result, and checkpoint-scoped `Design fan-out` status.
 - Relevant specialist outputs and `docs/repo-architecture.md` when boundaries matter.
 
 ## Outputs
 
-- `PASS`, `CONCERNS`, or `FAIL` with findings, orchestrator resolution, planning-entry consequence, accepted risks, proof obligations, carrying destination, and reopen target.
+- `PASS`, `CONCERNS`, or `FAIL` with findings, orchestrator resolution, test-design and planning-entry consequence, accepted risks, proof obligations, carrying destination, and reopen target.
 
 ## Stop Rule
 
-Keep technical design review read-only. Do not solve design defects inside review and do not start planning until the review status permits it.
+Keep technical design review read-only. Do not solve design defects inside review and do not start test design or planning until the review status permits it.
 
 ## Technical Design Review
 
-Technical design review is mandatory whenever separate design depth is triggered. It is the special pre-planning gate that tests whether the system/integration and Go code ownership design packet is coherent enough for executable planning.
+Technical design review is mandatory whenever separate design depth is triggered. It is the special pre-test-design and pre-planning gate that tests whether the system/integration and Go code ownership design packet is coherent enough for scenario design and executable planning.
 
 This gate is not required for direct path work or for lean-local work whose design stays inside `spec.md` `Compact Design`; the inline `Risk Challenge` covers that smaller path. It is required when lean local creates a separate `design/overview.md`, and it is required for full-orchestrated triggered design.
 
-Run technical design review after the triggered system/integration design, triggered Go code ownership design, and any triggered conditional artifacts are written or explicitly not expected, but before `tasks.md` or the task-ledger review/readiness handoff is approved.
+Run technical design review after the triggered system/integration design, triggered Go code ownership design, and any triggered conditional artifacts or phase decisions are written or explicitly not expected, but before `test-plan.md`, `tasks.md`, or the task-ledger review/readiness handoff is approved.
 
-If technical design review returns `FAIL`, the next action is a reopen of system/integration design, Go code ownership design, specification, or specification review according to the failed decision owner. After the repair, planning still waits for a follow-up technical design review verdict on the revised packet. The follow-up may be targeted to the failed findings and changed artifacts when the repair is narrow, but it must still check that adjacent design assumptions remain valid and record a new or explicitly updated gate status.
+If technical design review returns `FAIL`, the next action is a reopen of system/integration design, Go code ownership design, specification, or specification review according to the failed decision owner. After the repair, test design and planning still wait for a follow-up technical design review verdict on the revised packet. The follow-up may be targeted to the failed findings and changed artifacts when the repair is narrow, but it must still check that adjacent design assumptions remain valid and record a new or explicitly updated gate status.
 
 The review packet must be explicit enough that the reviewer does not rediscover phase state from scratch:
 
 - specification-review-approved `spec.md`;
 - design entrypoint, triggered system/integration artifacts, triggered Go code ownership artifacts, and trigger rationale;
-- triggered `test-plan.md`, `rollout.md`, or explicit not-expected rationale when those surfaces matter;
+- triggered `test-design`, `rollout.md`, or explicit not-expected rationale when those surfaces matter;
 - workflow-control paths that define the current phase, blockers, and expected review result;
 - checkpoint-scoped `Design fan-out` records with candidate seams, lane table or local-only rationale, collapsed and escalation seams, fan-in outcome, and unresolved lane blockers or material conflicts;
 - prior specification-review or design-authoring proof obligations that the design claims to consume;
@@ -50,7 +50,7 @@ The review must be read-only and risk-driven:
 - when system/integration design is triggered, falsify the system mechanism closure for each planning-critical mechanism: selected or preserved behavior, source-of-truth owner, affected runtime or failure branch, code-carrying constraint, rejected live alternative and closure rule, proof carrier, and reopen trigger must be present or explicitly not applicable with evidence;
 - separate design defects from implementation preferences;
 - identify any live fork where two plausible design options would materially change ownership, interfaces, data shape, async or sync semantics, operability, rollout, or validation, and verify the design has selected one with a rejection reason for the other;
-- challenge the design from the first safe implementation slice: ask whether planning can create executable tasks without adding architecture, system behavior, ownership, package/file boundaries, contract, sequencing, failure behavior, rollout, validation policy, cleanup policy, or test ownership;
+- challenge the design from the first safe implementation slice: ask whether test design and planning can create scenario obligations and executable tasks without adding architecture, system behavior, ownership, package/file boundaries, contract, sequencing, failure behavior, rollout, validation policy, cleanup policy, or test ownership;
 - choose the strongest justified gate status, avoiding both over-blocking on proof-only concerns and under-blocking on missing ownership, contract, sequencing, rollout, or validation decisions;
 - explain why the status is not stronger or weaker, especially for `CONCERNS` versus `FAIL`;
 - when recommending `FAIL`, name the smallest reopen target, the decision or artifact that must change, and the concrete condition that a follow-up review should verify;
@@ -58,9 +58,9 @@ The review must be read-only and risk-driven:
 
 Technical design review is not a second design pass. If a finding requires a new decision, rewrite of the design bundle, or changed approval boundary, route it back to the owning design checkpoint or specification instead of solving it inside review.
 
-Use a simple discriminator for ownership. If the missing answer changes accepted scope, invariant, observable contract, source of truth, or approval boundary, it is specification-owned. If it changes service behavior, contracts, source of truth, runtime sequence, data/cache shape, failure behavior, rollout, validation handoff, or conditional artifact triggers inside the approved scope, it is system/integration-design-owned. If it changes package/file ownership, focused responsibility, dependency direction, local abstraction shape, cleanup/removal, generated/manual boundary, or test ownership without changing observable behavior, it is Go-code-ownership-design-owned. If it only chooses task order, checkpoint placement, proof sequencing, or diff slicing after the design decision is already complete, it is planning-owned.
+Use a simple discriminator for ownership. If the missing answer changes accepted scope, invariant, observable contract, source of truth, or approval boundary, it is specification-owned. If it changes service behavior, contracts, source of truth, runtime sequence, data/cache shape, failure behavior, rollout, validation handoff, or conditional artifact triggers inside the approved scope, it is system/integration-design-owned. If it changes package/file ownership, focused responsibility, dependency direction, local abstraction shape, cleanup/removal, generated/manual boundary, or test ownership without changing observable behavior, it is Go-code-ownership-design-owned. If it chooses scenario classes, proof levels, pass/fail observables, fail-before expectations, or quality gates after behavior and ownership are already approved, it is test-design-owned. If it only chooses task order, checkpoint placement, proof sequencing, or diff slicing after the design and test-design decisions are already complete, it is planning-owned.
 
-Planning readiness is the core falsification test. Reviewers should try to draft the first few task sources mentally, not to create `tasks.md`, but to expose whether planning would have to invent architecture. Planning is not ready when the ledger would need to decide any of these before it can name task sources, task order, evidence, or stop conditions:
+Test-design and planning readiness are the core falsification tests. Reviewers should try to draft the first few scenario and task sources mentally, not to create `test-plan.md` or `tasks.md`, but to expose whether later phases would have to invent architecture. Test design or planning is not ready when scenarios or the ledger would need to decide any of these before they can name scenario sources, task sources, proof level, task order, evidence, or stop conditions:
 
 - the authoritative owner, generated or hand-written source, package boundary, owner file, adapter, composition root, or source-of-truth surface;
 - the selected runtime sequence, sync or async boundary, failure behavior, cleanup, retry/no-retry, degraded-mode, or rollback semantics;
@@ -85,11 +85,11 @@ Review the `Design fan-out` rationale as an approval input, not as ceremony:
 - Confirm the record uses an eligible status: `complete`, valid `scoped_down`, eligible `local_only`, or `blocked` with the smallest unblock route.
 - Confirm candidate seams cover the planning-critical frontier from `system-integration-design.md` and `go-code-ownership-design.md`, including system ownership, source of truth, sequence, failure behavior, rollout, validation, dependency/OSS, Pattern Fit, package/file ownership, cleanup/removal, and test ownership seams when those surfaces are plausible.
 - For `complete`, verify each unresolved live fork or domain-owned design decision had a read-only lane, the lane result was reconciled, and no lane blocker or material severity conflict remains.
-- For `scoped_down`, verify at least one needed lane ran when full-orchestrated, protected-domain, high-impact, or user-requested agent-backed design is in scope, and that omitted lanes have evidence-backed reasons why they cannot change design correctness or planning readiness.
+- For `scoped_down`, verify at least one needed lane ran when full-orchestrated, protected-domain, high-impact, or user-requested agent-backed design is in scope, and that omitted lanes have evidence-backed reasons why they cannot change design correctness, test-design readiness, or planning readiness.
 - For `local_only`, verify the work is eligible for local-only authoring and the rationale lists candidate lanes, evidence checked, why each omitted lane cannot change readiness, and the seam that would reopen fan-out.
 - For `blocked`, verify the review does not proceed to `PASS` or `CONCERNS`; route to the smallest unblock path.
 
-Look for hidden live forks by comparing the reviewed spec, specification-review obligations, authoring fan-in, design alternatives, and not-expected conditional artifacts. Wording such as "either", "could", "may", "TBD", "future", or "implementation decides" is not automatically a blocker, but it is a prompt to ask whether two viable options would change ownership, interfaces, data shape, sequence, package/file placement, cleanup, operability, rollout, validation, tests, or proof. If yes, the design must select one option or reopen the owner before planning.
+Look for hidden live forks by comparing the reviewed spec, specification-review obligations, authoring fan-in, design alternatives, and not-expected conditional artifacts. Wording such as "either", "could", "may", "TBD", "future", or "implementation decides" is not automatically a blocker, but it is a prompt to ask whether two viable options would change ownership, interfaces, data shape, sequence, package/file placement, cleanup, operability, rollout, validation, tests, or proof. If yes, the design must select one option or reopen the owner before test design or planning.
 
 Before assigning `PASS` or `CONCERNS`, first check the handoff and readiness criteria in `system-integration-design.md` and `go-code-ownership-design.md` for every triggered checkpoint. Missing artifact-trigger decisions, unresolved planning-critical seams, vague proof obligations, or generic source-of-truth ownership are `FAIL`, not planning concerns.
 
@@ -98,7 +98,7 @@ Invalid shallow-review passes include:
 - accepting `not affected`, `covered by tests`, `use existing mechanism`, or `not expected` without a source evidence pointer and falsification handle;
 - treating a rejected live alternative as closed without a closure rule or reopen trigger;
 - accepting generic validation or rollout proof without a carrying artifact, owner phase, pass/fail signal, and reopen target;
-- allowing planning to decide source of truth, runtime sequence, failure policy, rollout mechanism, owner package/file, cleanup owner, proof owner, or test owner.
+- allowing test design or planning to decide source of truth, runtime sequence, failure policy, rollout mechanism, owner package/file, cleanup owner, proof owner, or test owner.
 
 Separate design defects from implementation preferences:
 
@@ -109,30 +109,30 @@ Separate design defects from implementation preferences:
 
 Review gate status:
 
-- `PASS`: planning may start from the reviewed design context.
-- `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
-- `FAIL`: planning must not start; reopen system/integration design, Go code ownership design, specification, or specification review. Repair alone is not enough to enter planning; the revised packet needs a follow-up review verdict of `PASS` or `CONCERNS`.
+- `PASS`: test design or planning may start from the reviewed design context.
+- `CONCERNS`: test design or planning may start only with named accepted design risks and proof obligations.
+- `FAIL`: test design and planning must not start; reopen system/integration design, Go code ownership design, specification, or specification review. Repair alone is not enough to enter test design or planning; the revised packet needs a follow-up review verdict of `PASS` or `CONCERNS`.
 
 Gate decision discipline:
 
-- Use `PASS` only when the reviewer has tried to falsify the design against source-of-truth ownership, sequence/failure behavior, validation, rollout, dependency/OSS due diligence, Pattern Fit Diligence, and artifact-trigger expectations and found no planning blocker.
-- Use `CONCERNS` only when the design is coherent enough for planning and the remaining risk can be carried as a named accepted risk or proof obligation without asking planning or implementation to choose a missing design decision.
-- Use `FAIL` when planning would have to choose between live design options, repair system or code ownership, repair dependency direction, define missing contract/data/rollout/failure semantics, decide package/file placement, invent missing source responsibility audit or rejected owner locations, decide cleanup/test ownership, or resolve a spec/design contradiction.
+- Use `PASS` only when the reviewer has tried to falsify the design against source-of-truth ownership, sequence/failure behavior, validation, rollout, dependency/OSS due diligence, Pattern Fit Diligence, and artifact-trigger expectations and found no test-design or planning blocker.
+- Use `CONCERNS` only when the design is coherent enough for test design or planning and the remaining risk can be carried as a named accepted risk or proof obligation without asking test design, planning, or implementation to choose a missing design decision.
+- Use `FAIL` when test design or planning would have to choose between live design options, repair system or code ownership, repair dependency direction, define missing contract/data/rollout/failure semantics, decide package/file placement, invent missing source responsibility audit or rejected owner locations, decide cleanup/test ownership, or resolve a spec/design contradiction.
 - Use `record_only` or no finding for cleaner-code preferences unless the issue changes planning safety or production-readiness proof.
 
 Use this decision order:
 
-1. If planning would have to invent or choose a design/spec decision, the verdict is `FAIL`.
-2. Otherwise, if remaining items are bounded accepted risks or proof obligations that planning can carry without changing the design decision, the verdict is `CONCERNS`.
+1. If test design or planning would have to invent or choose a design/spec decision, the verdict is `FAIL`.
+2. Otherwise, if remaining items are bounded accepted risks or proof obligations that test design or planning can carry without changing the design decision, the verdict is `CONCERNS`.
 3. Otherwise, if the reviewed design survives the risk-driven checks above, the verdict is `PASS`.
 
 Classify findings by strongest planning impact:
 
-- `blocks_planning`: planning would invent or hide an important decision if it started now.
+- `blocks_planning`: test design or planning would invent or hide an important decision if either started now.
 - `reopens_design`: the design bundle must change before review can pass.
 - `reopens_spec`: the approved problem frame, invariant, scope, or contract must change.
 - `accepted_risk_candidate`: the risk may be accepted only if the orchestrator names the reason and boundary.
-- `proof_obligation`: planning may proceed only if the obligation is carried into `tasks.md`, `test-plan.md`, or `rollout.md`.
+- `proof_obligation`: test design or planning may proceed only if the obligation is carried into `test-plan.md`, `tasks.md`, or `rollout.md`.
 - `record_only`: useful context that does not affect planning entry.
 
 Carry-forward proof obligations in review-ready form. A `CONCERNS` result must tell planning exactly where each concern goes:
@@ -141,7 +141,7 @@ Carry-forward proof obligations in review-ready form. A `CONCERNS` result must t
 Finding or accepted risk | Carrying artifact | Required evidence | Freshness or negative proof | Reopen target if proof fails
 ```
 
-Use `tasks.md` for executable proof, `test-plan.md` for layered validation obligations, and `rollout.md` for deployment, migration, compatibility, rollback, failback, or operator readback proof. If the review cannot name the carrying artifact and required evidence without deciding more design, the status is `FAIL`, not `CONCERNS`.
+Use `test-plan.md` for scenario and layered validation obligations, `tasks.md` for executable proof tasks, and `rollout.md` for deployment, migration, compatibility, rollback, failback, or operator readback proof. If the review cannot name the carrying artifact and required evidence without deciding more design, the status is `FAIL`, not `CONCERNS`.
 
 When `FAIL` is the right result, choose the smallest reopen target that can change the failing fact:
 
@@ -153,22 +153,22 @@ When `FAIL` is the right result, choose the smallest reopen target that can chan
 - `technical design review` only for a follow-up review after a repaired packet, stale review verdict, unresolved review-lane conflict, or incomplete review record when the design packet itself does not need a new authoring decision.
 - `user/specialist decision` only when the missing fact belongs outside repository artifacts; record the exact question and the phase that must resume after the answer.
 
-Do not route a `FAIL` to planning. Planning can repair task coverage, ordering, and evidence mapping after design review passes; it cannot author missing architecture.
+Do not route a `FAIL` to test design or planning when the failed fact belongs to specification or design. Test design can choose scenarios only after behavior is decided; planning can repair task coverage, ordering, and evidence mapping after design review and any triggered test design pass; neither phase can author missing architecture.
 
-Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/technical-design-review.md` when a dedicated review phase needs durable routing, or the lean-local artifact that owns the review checkpoint. The record must name the reviewed packet, reviewer or lane, scope, findings, orchestrator resolution, final gate status, and planning-input obligations. When the review uses lanes, scoped-down review, or local-only review, include a `Subagent Gate Audit` or pointer with lane result summary, fan-in, gate result, readiness consequence, and unresolved conflicts or proof obligations. Follow-up review after `FAIL` must also name the prior failed review, the revised artifacts or decisions, which blockers were closed, any remaining accepted risks or proof obligations, and the new gate status. Include a closure table:
+Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/technical-design-review.md` when a dedicated review phase needs durable routing, or the lean-local artifact that owns the review checkpoint. The record must name the reviewed packet, reviewer or lane, scope, findings, orchestrator resolution, final gate status, and test-design or planning-input obligations. When the review uses lanes, scoped-down review, or local-only review, include a `Subagent Gate Audit` or pointer with lane result summary, fan-in, gate result, readiness consequence, and unresolved conflicts or proof obligations. Follow-up review after `FAIL` must also name the prior failed review, the revised artifacts or decisions, which blockers were closed, any remaining accepted risks or proof obligations, and the new gate status. Include a closure table:
 
 ```text
 Prior finding | Repair/evidence anchor | Rechecked areas | Closure status | Residual proof obligation/reopen target
 ```
 
-Every technical-design-review record must include this planning-entry smoke test before planning may start:
+Every technical-design-review record must include this test-design/planning-entry smoke test before test design or planning may start:
 
 ```text
-Planning-entry test: pass | fail
-Reason: <why planning can or cannot draft tasks without choosing architecture, system behavior, package/file ownership, source responsibility audit, sequencing, rollout, validation policy, cleanup, or test ownership>
+Test-design/planning-entry test: pass | fail
+Reason: <why test design or planning can or cannot draft scenarios/tasks without choosing architecture, system behavior, package/file ownership, source responsibility audit, sequencing, rollout, validation policy, cleanup, or test ownership>
 Hidden design work: <none | finding id and reopen target>
 ```
 
-A repair note from the design author is evidence for this table, not the verdict. The follow-up may be narrower than the original review only when the record explains why untouched areas cannot change planning readiness; otherwise rerun the affected review coverage before returning `PASS` or `CONCERNS`.
+A repair note from the design author is evidence for this table, not the verdict. The follow-up may be narrower than the original review only when the record explains why untouched areas cannot change test-design or planning readiness; otherwise rerun the affected review coverage before returning `PASS` or `CONCERNS`.
 
 `CONCERNS` is valid only when every accepted risk and proof obligation is named for planning. Post-code discovery of a missing required technical design review reopens the earlier phase instead of creating a new review artifact after implementation starts.

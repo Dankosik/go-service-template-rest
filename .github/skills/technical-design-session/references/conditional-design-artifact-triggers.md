@@ -4,19 +4,20 @@
 When loaded for uncertain conditional artifacts, this file makes the model create only artifacts with real data, dependency, contract, validation, or rollout pressure instead of creating all optional files for completeness or skipping planning-critical context as "implementation detail."
 
 ## When To Load
-Load when deciding whether to add `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md`.
+Load when deciding whether to add `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, trigger `test-design`, or add `rollout.md`.
 
 ## Decision Rubric
 - Trigger `design/data-model.md` for persisted state, schema, migration shape, cache contract, projections, replay behavior, data retention, or correctness-sensitive backfill.
 - Trigger `design/dependency-graph.md` for package/module direction changes, generated-code dependency flow, new adapter boundaries, circular-coupling risk, or source-of-truth ambiguity across packages.
 - Trigger `design/contracts/` for changed REST resources, event payloads, generated contracts, or material internal interfaces that planning must preserve; runtime authorities remain canonical.
-- Trigger `test-plan.md` only when validation obligations are too large or multi-layered for the later `tasks.md`, such as contract plus migration plus reliability fail-path plus e2e smoke proof.
+- Trigger `test-design` only when validation obligations need scenario IDs, proof levels, fail-before expectations, or quality gates before `tasks.md`, such as contract plus migration plus reliability fail-path plus e2e smoke proof.
 - Trigger `rollout.md` for mixed-version compatibility, expand/backfill/verify/contract sequencing, operational failback, or deploy ordering that affects correctness.
-- Create `test-plan.md` or `rollout.md` in technical design only when the approved spec and current design context are enough to write the artifact honestly. If planning must decide from executable sequencing, record the artifact as `conditional` with the decision point.
-- If planning later discovers the trigger but needs a missing compatibility, migration, validation, or rollout decision, reopen `system-integration-design` instead of inventing the companion artifact from task breakdown.
+- Do not create `test-plan.md` in technical design. Record `test-design` as `triggered`, `not expected`, `conditional`, or `blocked`; the later test-design phase owns `test-plan.md`.
+- Create `rollout.md` in technical design only when the approved spec and current design context are enough to write the artifact honestly. If planning must decide from executable sequencing, record the artifact as `conditional` with the decision point.
+- If planning later discovers a missing test scenario matrix, reopen `test-design`; if it discovers a missing compatibility, migration, validation, or rollout decision, reopen `system-integration-design` instead of inventing the companion artifact from task breakdown.
 - If no trigger is real, record the artifact as `not expected`; do not create a placeholder file.
 - If a triggered artifact needs a missing spec decision, block or reopen rather than drafting filler.
-- A triggered `test-plan.md` should stay proof-focused: trigger/scope, proof obligations by changed surface or failure path, planned commands or manual proof shape, exit criteria, and reopen target for missing or failing proof.
+- A triggered `test-design` handoff should name why scenario design is needed and what approved behavior, design, or review obligations the later `test-plan.md` must consume.
 - A triggered `rollout.md` should stay choreography-focused: trigger/scope, rollout sequence, safety checks, operator-visible state, rollback or forward-recovery conditions, and links to task IDs for execution detail.
 
 ## Imitate
@@ -44,12 +45,12 @@ Reason: package dependency direction remains unchanged, and the component map in
 Copy this shape: it documents a negative decision without creating filler.
 
 ```markdown
-Triggered: `test-plan.md`.
+Triggered: `test-design`.
 Reason: validation spans OpenAPI drift, migration compatibility, retry fail-path behavior, and an e2e smoke check; putting every proof branch in `tasks.md` would make the ledger noisy.
-Minimum content: scope, proof obligations by surface, planned commands, exit criteria, and reopen target for failing proof.
+Minimum handoff: approved behavior/design anchors, proof obligations by surface, likely proof levels, and reopen target for missing scenario design.
 ```
 
-Copy this shape: it creates a proof artifact only because the validation surface is too layered for the ledger.
+Copy this shape: it triggers proof design only because the validation surface is too layered for the ledger.
 
 ```markdown
 Triggered: `rollout.md`.
@@ -73,7 +74,7 @@ Skip `design/data-model.md`; the migration can be figured out during coding.
 Failure: migration ordering affects correctness and planning.
 
 ```markdown
-Create `test-plan.md` with unit, integration, and e2e headings for completeness.
+Trigger `test-design` with unit, integration, and e2e headings for completeness.
 ```
 
 Failure: generic headings do not prove a validation obligation that cannot fit in `tasks.md`.

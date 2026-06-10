@@ -27,7 +27,7 @@ Artifact status:
 - `spec.md`: approved
 - `design/`: approved
 - `tasks.md`: draft_review_ready
-- `test-plan.md`: not expected; proof obligations fit in `tasks.md`
+- `test-design`: not expected; proof obligations fit in `tasks.md`
 - `rollout.md`: not expected; no migration or delivery choreography
 - `workflow-plans/planning.md`: complete
 - review/validation phase-control files: not expected; `tasks.md` is sufficient for the task-review/readiness packet

@@ -72,7 +72,8 @@ Read the smallest artifact set needed to answer the status question:
    - `design/sequence.md`
    - `design/ownership-map.md`
 7. task-local `workflow-plans/technical-design-review.md` or another recorded technical design review result when separate design depth exists
-8. optional task-local `test-plan.md`, `rollout.md`, and selected `research/*.md` only when they are present and the status question depends on them
+8. task-local `workflow-plans/test-design.md`, `test-plan.md`, or another recorded test-design result when scenario design is triggered
+9. optional task-local `rollout.md` and selected `research/*.md` only when they are present and the status question depends on them
 
 When approved `tasks.md` exists, treat `workflow-plan.md` as historical routing, and treat `workflow-plans/*` as historical unless the ledger explicitly names a pre-created review or validation phase file. When no approved ledger exists and `workflow-plan.md` is missing, infer only the minimum state from the artifact chain and mark workflow control as incomplete unless an explicit direct-path or lean-local rationale explains the missing file.
 
@@ -86,6 +87,7 @@ When approved `tasks.md` exists, treat `workflow-plan.md` as historical routing,
 - Treat a missing specification review result as incomplete for non-trivial `spec.md` unless an explicit direct-path or prototype waiver covers it.
 - Treat a missing task-ledger review or implementation-readiness status as incomplete for non-trivial planned work unless an explicit eligible direct-path, lean-local, or prototype waiver covers it.
 - Treat a missing technical design review result as incomplete whenever separate `design/overview.md` or split `design/` exists and no explicit compact-design/waiver rationale covers the task.
+- Treat a missing test-design result as incomplete whenever `test-plan.md` is triggered or expected and no explicit no-test-plan rationale covers the task.
 - If the master and phase-local file conflict, report the conflict as the blocker instead of choosing a winner silently.
 - If `Session boundary reached: yes`, report that the next action belongs to the recorded next session or reopen target; do not continue the prior phase in the same session.
 - If `Ready for next session: no`, report the active phase as still needing work unless the artifacts clearly say the master is stale.
@@ -97,8 +99,8 @@ Answer `Implementation may start` conservatively:
 - `Yes` only when task-ledger review and readiness are `PASS`, the required artifact chain is approved or explicitly waived, there are no blocking gates, and approved `tasks.md` points to implementation or the first task.
 - `Yes, in the recorded next session` when task-ledger review and readiness are `PASS`, planning is complete, `Session boundary reached: yes`, and `Next session starts with` points at implementation.
 - `Yes, with recorded concerns` only when readiness is `CONCERNS`, task-ledger review is `PASS` or `CONCERNS`, named accepted risks and proof obligations are explicit, and routing points to implementation.
-- `No` when task-ledger review or readiness is `FAIL`, or when `spec.md`, mandatory specification review, required compact or split design context, triggered system/integration design, triggered Go code ownership design, mandatory technical design review, expected `tasks.md`, phase control, task-ledger review status, readiness status, or a required review/validation phase file is missing without an explicit waiver.
-- `No` when the current phase is workflow planning, research, specification, specification review, system/integration design, Go code ownership design, technical design review, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
+- `No` when task-ledger review or readiness is `FAIL`, or when `spec.md`, mandatory specification review, required compact or split design context, triggered system/integration design, triggered Go code ownership design, mandatory technical design review, triggered test design, expected `tasks.md`, phase control, task-ledger review status, readiness status, or a required review/validation phase file is missing without an explicit waiver.
+- `No` when the current phase is workflow planning, research, specification, specification review, system/integration design, Go code ownership design, technical design review, test design, planning, review, reconciliation, validation, or done and the artifacts do not route to implementation.
 - `No` when task-ledger review or readiness is `CONCERNS` but accepted risks or proof obligations are unnamed.
 - `Unknown` only when the task path is identified but the artifacts are too contradictory to make a safe yes or no call; name the contradiction as the blocker.
 
@@ -110,6 +112,7 @@ Report the phase's allowed write surface by reading the owning phase file under 
 Use a compact summary in the status report:
 
 - `planning`: draft or repair `tasks.md` and route to `task-review/readiness`; readiness fields stay `pending_task_review`.
+- `test-design`: draft or repair `test-plan.md`, or record a no-test-plan rationale; do not draft `tasks.md`.
 - `task-review/readiness`: record the read-only task-ledger review and implementation-readiness verdict; do not repair the ledger inline.
 - `implementation` or later: follow the approved ledger and update only ledger-owned progress, proof, and closeout surfaces.
 - any other phase: summarize the owning phase doc's outputs and stop rule instead of carrying a local copy of its write list.
@@ -128,6 +131,7 @@ Workflow Status
 - Task-ledger review: <PASS / CONCERNS / FAIL / WAIVED / missing / unknown, with one reason>
 - Implementation readiness: <PASS / CONCERNS / FAIL / WAIVED / missing / unknown, with one reason>
 - Specification review: <PASS / CONCERNS / FAIL / missing / not expected / unknown, with one reason>
+- Test design: <approved / blocked / not expected / missing / unknown, with one reason>
 - Missing gate or blocker: <first meaningful blocker, or none found>
 - Allowed writes for current phase: <phase write surface; status helper writes nothing>
 - Next action: <from artifacts, or first safe action>

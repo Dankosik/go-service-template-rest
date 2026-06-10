@@ -20,7 +20,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when separ
 ## Outputs
 
 - A system/integration design record in `design/overview.md`, `design/system-integration.md`, or triggered split design artifacts.
-- Trigger decisions for `design/contracts/`, `design/data-model.md`, `design/sequence.md`, `design/dependency-graph.md`, `design/pattern-fit.md`, `test-plan.md`, and `rollout.md` when those surfaces are plausible.
+- Trigger decisions for `design/contracts/`, `design/data-model.md`, `design/sequence.md`, `design/dependency-graph.md`, `design/pattern-fit.md`, `test-design`, and `rollout.md` when those surfaces are plausible.
 - Recorded `Design fan-out (system/integration): complete | scoped_down | local_only | blocked` with candidate seams, lane table or rationale, fan-in result, and readiness consequence.
 - Workflow-control updates that route next to `go-code-ownership-design`, or to the smallest reopen target when system/integration design is blocked.
 
@@ -62,9 +62,10 @@ Use the smallest durable artifact shape that lets Go code ownership design proce
   - `design/sequence.md` for runtime order, sync/async boundaries, side effects, failure points, cleanup, retry/recovery, and parallel versus sequential behavior.
   - `design/dependency-graph.md` for module/package dependency shape, generated-code flow, coupling risk, or source-of-truth ambiguity.
   - `design/pattern-fit.md` for dense Pattern Fit comparison.
-  - `test-plan.md` or `rollout.md` only when validation or rollout shape is too large or safety-critical for `tasks.md`.
+  - `test-design` when validation shape needs a scenario matrix, proof levels, fail-before expectations, or quality gates before planning.
+  - `rollout.md` only when rollout shape is too large or safety-critical for `tasks.md`.
 
-The design artifact inventory must list each plausible conditional artifact as `created`, `not expected`, `conditional`, or `blocked`. `not expected` requires a concrete trigger test and evidence anchor showing the artifact cannot change Go code ownership design, planning, proof, rollout, or review readiness. `conditional` is valid only when a later phase owns the trigger decision from execution detail; it cannot defer a knowable production-readiness decision. When the trigger is real but undecided, this phase is blocked.
+The design artifact inventory must list each plausible conditional artifact or phase as `created`, `not expected`, `conditional`, or `blocked`. For `test-design`, use `triggered`, `not expected`, `conditional`, or `blocked` instead of creating `test-plan.md` inside system/integration design. `not expected` requires a concrete trigger test and evidence anchor showing the artifact or phase cannot change Go code ownership design, planning, proof, rollout, or review readiness. `conditional` is valid only when a later phase owns the trigger decision from execution detail; it cannot defer a knowable production-readiness decision. When the trigger is real but undecided, this phase is blocked.
 
 ## Required Design Questions
 
@@ -102,7 +103,7 @@ Invalid shallow answers:
 - `not affected`, `unchanged`, or `use existing behavior` without the preserved source-of-truth owner, evidence pointer, and reviewer falsification handle;
 - `covered by tests` without the claim, proof type or artifact, owner phase, pass/fail signal, and reopen target;
 - `use existing pattern` or `repo default` without naming the actual pattern or mechanism, source evidence, selected boundary, and rejected live alternative when one exists;
-- `not expected` for `design/contracts/`, `design/data-model.md`, `design/sequence.md`, `design/dependency-graph.md`, `design/pattern-fit.md`, `test-plan.md`, or `rollout.md` without a trigger test showing the artifact cannot change Go code ownership design, planning, proof, rollout, or review readiness;
+- `not expected` for `design/contracts/`, `design/data-model.md`, `design/sequence.md`, `design/dependency-graph.md`, `design/pattern-fit.md`, `test-design`, or `rollout.md` without a trigger test showing the artifact or phase cannot change Go code ownership design, planning, proof, rollout, or review readiness;
 - `implementation decides`, `choose during coding`, or equivalent wording for source of truth, runtime sequence, failure policy, validation, rollout, or proof ownership.
 
 ## Fan-Out

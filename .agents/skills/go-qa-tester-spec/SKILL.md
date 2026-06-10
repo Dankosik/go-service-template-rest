@@ -1,12 +1,12 @@
 ---
 name: go-qa-tester-spec
-description: "Design test-strategy-first specifications for Go services. Use when planning or revising testing before coding and you need explicit unit, integration, contract, and e2e-smoke obligations, traceability to invariants and reliability fail-paths, quality-gate expectations, and an implementation-ready test strategy. Skip when the task is writing test code, reviewing a diff, fixing a local implementation bug, or making architecture/API/data/security decisions as the primary domain."
+description: "Design test-strategy-first specifications for Go services. Use inside the repository test-design phase or when planning/revising testing before coding and you need explicit `TD-*` scenarios, unit/integration/contract/e2e-smoke obligations, traceability to invariants and reliability fail-paths, fail-before expectations, quality-gate expectations, and an implementation-ready test strategy. Skip when the task is writing test code, reviewing a diff, fixing a local implementation bug, or making architecture/API/data/security decisions as the primary domain."
 ---
 
 # Go QA Tester Spec
 
 ## Purpose
-Turn changed behavior into explicit, risk-based test obligations before coding so that implementation and review do not need to invent coverage later.
+Turn changed behavior into explicit, risk-based test obligations before coding so that planning, implementation, and review do not need to invent coverage later.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -20,7 +20,7 @@ Turn changed behavior into explicit, risk-based test obligations before coding s
 ## Specialist Stance
 - Treat test strategy as risk selection and proof design, not a coverage checklist.
 - Choose the smallest level that can honestly prove each invariant, contract, failure mode, or regression risk.
-- Make scenarios executable, deterministic, and traceable to approved behavior.
+- Make scenarios executable, deterministic, ID-stable, and traceable to approved behavior.
 - Hand off domain, API, data, reliability, security, or performance decisions when test obligations depend on unresolved semantics.
 - If another domain is only affected, record the consequence as `proof_only`, `follow_up_only`, or explicit `no new decision required` instead of widening the design.
 
@@ -30,6 +30,7 @@ Use this skill to define or review risk-based test strategy: level selection, sc
 ## Boundaries
 Do not:
 - write test code or review implementation details as the primary output
+- write `tasks.md` or turn scenario design into implementation sequencing
 - default to broad test coverage when a smaller level can prove the behavior
 - allow happy-path-only planning or untestable acceptance criteria
 - define obligations that repository tooling or CI cannot actually run
@@ -43,6 +44,8 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Treat missing fail-path coverage as a blocker.
 - Treat untestable requirements as design defects that must be escalated.
 - Keep validation realistic: use repository commands and CI-compatible environments.
+- In this repository's workflow, the test-design phase uses this skill to produce or repair `test-plan.md`; planning then maps approved `TD-*` scenarios into `tasks.md`.
+- Scenario IDs are stable planning anchors: use `TD-001`, `TD-002`, and so on for triggered scenario matrices.
 
 ## Source And Reference Policy
 - Prefer approved task artifacts, repository docs, nearby tests, `docs/build-test-and-development-commands.md`, `Makefile`, and CI workflows as the local source of truth for executable checks.
@@ -79,6 +82,7 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Add abuse/negative scenarios when trust boundaries or misuse risk exist.
 - Add idempotency/retry/concurrency scenarios whenever side effects or parallelism exist.
 - Every scenario should define preconditions, data shape, expected observable outcome, and pass/fail rule.
+- Every scenario should define a fail-before expectation, or an explicit waiver when fail-first proof would be misleading, too expensive, or impossible in the current repository proof surface.
 - Outcomes must be externally meaningful: response, persisted effect, emitted message, or visible state transition.
 
 ### Invariant And Acceptance Traceability
@@ -114,6 +118,7 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 ## Decision Quality Bar
 For every major testing recommendation, include:
 - the risk, invariant, or contract under test
+- stable scenario ID when the strategy is feeding `test-plan.md`
 - whether a real `live fork` exists
 - when a `live fork` exists, the viable levels or approaches, the selected option, and at least one explicit rejection reason
 - scenario classes and pass/fail observables
@@ -133,6 +138,18 @@ When writing the test strategy or review, cover:
 - quality checks and execution expectations
 - downstream decision blockers only when another domain must still decide before the strategy is honest; otherwise use `no new decision required in <domain>`
 - residual risks and reopen criteria
+
+When writing `test-plan.md` for the repository test-design phase, use a compact scenario matrix with:
+- stable `TD-*` ID
+- source anchor to approved spec, review, design, or technical design review obligation
+- behavior/risk under test
+- scenario class: happy, fail, edge, abuse, retry/concurrency, reliability, contract, data/cache/security, or distributed
+- proof level: unit, integration, contract, e2e-smoke, or repo-specific named level
+- setup/input shape and determinism constraint
+- pass/fail observable
+- fail-before expectation or waiver
+- expected proof command or command family
+- reopen target if the scenario cannot be designed without changing behavior, design, rollout, ownership, or tooling
 
 ## Escalate Or Reject
 - happy-path-only planning

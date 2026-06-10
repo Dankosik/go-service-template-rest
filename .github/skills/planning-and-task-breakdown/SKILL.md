@@ -1,12 +1,12 @@
 ---
 name: planning-and-task-breakdown
-description: "Turn specification-review-approved `spec.md` plus required compact or split design context into a dependency-ordered, verifiable draft or repaired `tasks.md` ledger for this repository, then prepare the handoff to the separate task-review/readiness gate. Use after `spec.md` is stable, mandatory specification review is reconciled for non-trivial work, lean compact design or triggered system/integration and Go code ownership artifacts are approved or explicitly skipped, mandatory technical design review is reconciled when separate design depth exists, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability/package-ownership decisions and skip actual coding."
+description: "Turn specification-review-approved `spec.md` plus required compact or split design context and triggered test-design context into a dependency-ordered, verifiable draft or repaired `tasks.md` ledger for this repository, then prepare the handoff to the separate task-review/readiness gate. Use after `spec.md` is stable, mandatory specification review is reconciled for non-trivial work, lean compact design or triggered system/integration and Go code ownership artifacts are approved or explicitly skipped, mandatory technical design review is reconciled when separate design depth exists, triggered test design is approved or explicitly not expected, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability/package-ownership/test-design decisions and skip actual coding."
 ---
 
 # Planning And Task Breakdown
 
 ## Purpose
-Turn stable reviewed decisions plus approved compact or split technical design context into a `tasks.md` executable task ledger that reaches the accepted target state, stays honest about dependencies, names only the checkpoints and proof obligations the work actually needs, and is ready for the separate task-review/readiness gate.
+Turn stable reviewed decisions plus approved compact or split technical design and test-design context into a `tasks.md` executable task ledger that reaches the accepted target state, stays honest about dependencies, names only the checkpoints and proof obligations the work actually needs, and is ready for the separate task-review/readiness gate.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -22,13 +22,13 @@ Turn stable reviewed decisions plus approved compact or split technical design c
 - make `tasks.md` explicit by default for non-trivial implementation work
 - attach acceptance criteria, planned verification, checkpoints, and change-surface hints
 - close or route blockers and decision gates before coding starts; a ready `tasks.md` must not contain unresolved open questions
-- self-check the completed ledger against reviewed `spec.md`, specification-review obligations, required design context, technical-design-review obligations, and triggered validation or rollout obligations before handing it to task-review/readiness
+- self-check the completed ledger against reviewed `spec.md`, specification-review obligations, required design context, technical-design-review obligations, approved test-design scenarios, and triggered validation or rollout obligations before handing it to task-review/readiness
 - preserve coder freedom on local code shape while removing ambiguity about execution order
 
 ## Boundaries
 Do not:
 - make new architecture, API, data, security, reliability, or rollout decisions
-- reconstruct missing architecture, system behavior, package/file ownership, data, sequence, cleanup, or test-ownership context from `spec.md` alone when compact or split design context should supply it
+- reconstruct missing architecture, system behavior, package/file ownership, data, sequence, cleanup, test-ownership, or scenario/proof-level context from `spec.md` alone when compact design, split design, or test-design context should supply it
 - write production code, tests, or migrations as the main deliverable
 - dump raw research or repeat the whole spec in planning form
 - treat `spec.md` as the place for full task breakdown by default
@@ -42,23 +42,25 @@ Escalate if:
 - mandatory specification review is missing, `FAIL`, stale after repair, or has unresolved findings
 - non-trivial work is missing lean compact design answers, `design/overview.md`, triggered system/integration design, triggered Go code ownership design, triggered split design artifacts, or an explicit design-skip/merge rationale
 - separate design depth was triggered but mandatory technical design review is missing, `FAIL`, or has unresolved findings
+- triggered test design is missing, stale, blocked, or needed but only implied by generic proof prose
 - a conditional design artifact is clearly triggered but missing
 - core behavior is still undecided across architecture, API, data, security, reliability, or domain semantics
-- the right implementation order depends on a missing migration, compatibility, system ownership, package/file ownership, cleanup, or test-ownership decision
+- the right implementation order depends on a missing migration, compatibility, system ownership, package/file ownership, cleanup, test-ownership, scenario, or proof-level decision
 - the change cannot be decomposed without inventing detail the spec does not actually approve
 
 ## Core Defaults
-- `spec.md` is for decisions, lean `Compact Design` or triggered `design/` is for technical context, and `tasks.md` is for the executable task ledger and final implementation handoff.
+- `spec.md` is for decisions, lean `Compact Design` or triggered `design/` is for technical context, `test-plan.md` is for triggered scenario design, and `tasks.md` is for the executable task ledger and final implementation handoff.
 - For lean-local work, plan from reviewed `spec.md` with explicit compact design answers; for full-orchestrated or design-triggered work, plan from reviewed `spec.md` plus triggered `design/` and a reconciled technical design review gate.
 - For lean-local and full-orchestrated implementation, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
 - Keep `tasks.md` task-local to the active spec-first bundle. Do not use a repository-root or unrelated ledger as the current implementation handoff unless workflow control explicitly reopens it and records the resume route.
 - Planning is the last artifact-producing phase before code, but the completed ledger must still pass the separate post-ledger task-review/readiness gate before implementation starts. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
 - Planning leaves task-ledger review and implementation-readiness fields as `pending_task_review`. The `docs/spec-first-workflow/phases/task-review-readiness.md` phase assigns final `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`.
 - Planning may suggest likely task-review lenses, but task-review/readiness owns fan-out, local-only rationale, final readiness status, and implementation handoff approval.
-- A draft ledger must not need implementation to choose architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, or test ownership. If the planning self-check finds that gap, repair planning or reopen the owning earlier phase before task-review handoff.
+- A draft ledger must not need implementation to choose architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, test ownership, scenario class, proof level, or fail-before expectation. If the planning self-check finds that gap, repair planning or reopen the owning earlier phase before task-review handoff.
 - For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one successful completion condition, a separate blocked-stop condition, read-before-coding context, task-specific read context when useful, preserved constraints, checkpoint/progress rules, resume rules, and evidence fields that let Codex audit completion without relying on chat memory. A recorded blocker is a valid stop, not a successful completion claim.
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - Planning must not treat a spec author's handoff as review. Non-trivial `spec.md` requires a distinct specification-review gate before task breakdown can be approved.
+- Planning must not treat generic validation prose as test design. Triggered test design requires approved scenario IDs before task breakdown can be approved; when not triggered, the no-test-plan rationale must be explicit.
 - If specification review passed with `CONCERNS`, carry each accepted spec risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the task-review handoff; do not leave it only in the review record.
 - If technical design review passed with `CONCERNS`, carry each accepted design risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the task-review handoff; do not leave it only in the review record.
 - When the planning pass generates or materially changes workflow-control files for full-orchestrated, high-risk, complex, or agent-backed work, expect a read-only `workflow-plan-adequacy-challenge` before handoff; lean-local work without workflow-control artifacts uses the recorded inline/local check instead.
@@ -99,12 +101,14 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - For lean-local work, require explicit `Compact Design` answers or one `design/overview.md`; for split-design work, require `design/overview.md`, triggered `design/system-integration.md`, triggered `design/go-code-ownership.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` unless there is an explicit design-skip/merge rationale.
 - When Go code ownership design was triggered, confirm the design packet has a source responsibility audit, rejected owner locations, owner package/file or approved placement rule, cleanup owner, and test owner before planning.
 - If one `design/overview.md` or split `design/` exists, require technical design review `PASS` or `CONCERNS` with named accepted risks and proof obligations before planning.
+- Confirm triggered test design is either approved with `test-plan.md` scenario IDs, proof levels, pass/fail observables, fail-before expectations, and reopen targets, or explicitly recorded as `not expected` with trigger rationale and proof carrier.
 - Treat review findings classified as `blocks_planning`, `reopens_design`, or `reopens_spec` as planning blockers until the owning phase resolves or explicitly reroutes them.
 - If the design or spec is not stable enough, stop and escalate instead of guessing.
 
 ### 2. Load Execution-Critical Design Context
 - Use lean `Compact Design`, `design/overview.md`, triggered `design/system-integration.md`, triggered `design/go-code-ownership.md`, or split `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` to understand what must land first and what may move in parallel.
-- Load triggered conditional artifacts such as `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, `test-plan.md`, or `rollout.md` when they affect sequencing.
+- Load triggered conditional artifacts such as `design/data-model.md`, `design/dependency-graph.md`, `design/contracts/`, approved `test-plan.md`, or `rollout.md` when they affect sequencing.
+- When approved `test-plan.md` exists, identify which scenario IDs must become proof-first tasks, implementation tasks, or checkpoint gates before slicing work.
 - Identify what must exist first: schema or config changes, generated artifacts, interfaces, handlers, background workers, tests, docs, or migration controls.
 - Make the ordering explicit when one task truly depends on another.
 - Do not confuse implementation taste with real dependency.
@@ -129,6 +133,7 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Include structured evidence fields for each task or checkpoint when the implementer is expected to update progress during execution. Prefer `Command/read`, `Result`, `Key output/ref`, `Changed proof files`, and `Residual blocker/narrower claim` unless a one-line evidence field is enough for tiny/direct-path work.
 - Do not let the evidence shape imply that skipped, unavailable, failing, stale, or too-narrow proof can satisfy a task. The affected task must stay unchecked with `Blocked:` or a narrower claim.
 - Include `Source:` anchors for tasks whose requirements come from non-obvious spec decisions, review findings, design sections, `test-plan.md`, or `rollout.md`, so task-ledger review can trace material work back to approved artifacts.
+- When `test-plan.md` exists, bind proof-first, test-first, and test implementation tasks to the relevant `TD-*` scenario IDs instead of using generic "add tests" wording.
 - For behavior changes and bug fixes, include proof-first or test-first tasking by default. If a failing proof is not useful, add `Proof-first waiver: <reason>` to the relevant task or checkpoint.
 - Include a compact task-local implementation quality bar when the work is broad enough that clean code, package ownership, generated-source discipline, dependency/custom-helper discipline, concurrency/lifecycle behavior, observability, or test-layer choices could otherwise be implicit.
 - Include dependency tasks when relevant: module change, license/security check, transitive dependency review, generated or config updates, integration tests, and any proof obligations from the approved dependency/OSS due diligence.
@@ -160,7 +165,8 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Confirm each task has one reviewable diff story, or records why coupled changes cannot be split safely.
 - Confirm read context is split into required start context and task-specific context when the artifact list is long or domain-specific; implementation should not have to read every companion artifact before the first safe edit.
 - Confirm checkpoint gates identify the proof/currentness required before dependent later tasks proceed.
-- Confirm material task requirements have `Source:` anchors or equivalent traceability to approved spec, review, design, test-plan, or rollout artifacts.
+- Confirm material task requirements have `Source:` anchors or equivalent traceability to approved spec, review, design, `test-plan.md` scenario IDs, or rollout artifacts.
+- Confirm proof-first, test-first, and test implementation tasks reference approved `TD-*` scenario IDs when `test-plan.md` exists, or explicitly cite the no-test-plan rationale.
 - Confirm behavior-change and bug-fix tasks include proof-first/test-first tasking, or an explicit task-level `Proof-first waiver:` with rationale.
 - Confirm evidence fields are structured enough for closeout to distinguish passed proof, unavailable proof, blocked proof, and narrower claims.
 - Confirm skipped, unavailable, stale, failing, or too-narrow proof cannot satisfy a task checkbox, checkpoint, or completion claim.
@@ -280,7 +286,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 ## Planning Rules
 - For direct-path work, a short inline plan may still be enough; do not force `tasks.md` for a tiny change just to satisfy ceremony.
 - For lean-local and full-orchestrated non-trivial work, default to `tasks.md` and consume reviewed `spec.md` plus required design context.
-- Create or repair `test-plan.md` or `rollout.md` during planning only when the approved design already contains the needed validation or rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen `system-integration-design` or `go-code-ownership-design` according to the missing decision owner instead of filling the gap inside the plan.
+- Do not create or repair `test-plan.md` during planning. If scenario classes, proof levels, pass/fail observables, fail-before expectations, quality gates, or scenario IDs are missing or stale, reopen `test-design`.
+- Create or repair `rollout.md` during planning only when the approved design already contains the needed rollout context. If the companion artifact would require a missing design, compatibility, migration, or rollout decision, reopen `system-integration-design` or `go-code-ownership-design` according to the missing decision owner instead of filling the gap inside the plan.
 - If a required specification review gate is missing or blocking, reopen specification review instead of filling the gap inside the plan.
 - If a required technical design review gate is missing or blocking, reopen technical design review instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
@@ -290,6 +297,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - If required compact or split design context is missing or inconsistent, reopen specification, `system-integration-design`, or `go-code-ownership-design` instead of inferring the missing context locally.
 - If required specification review is missing or inconsistent, reopen specification review instead of inferring approval locally.
 - If required technical design review is missing or inconsistent, reopen technical design review instead of inferring approval locally.
+- If required test design is missing or inconsistent, reopen `test-design` instead of inventing scenario classes, proof levels, fail-before expectations, or quality gates inside `tasks.md`.
 - Keep planning aligned with repository realities: OpenAPI drift checks, `sqlc` regeneration, migrations, race tests, integration checks, or other real verification surfaces when they actually apply.
 - Keep dependency decisions aligned with repository realities: prefer existing repo patterns and current stdlib where sufficient, and include module, license/security, transitive dependency, and drift checks when introducing OSS.
 - Keep Pattern Fit decisions aligned with repository realities: prefer established patterns only when their forces match the task, translate them into idiomatic Go and explicit package ownership, and include proof that validates the selected pattern's guarantee rather than only its vocabulary.
@@ -309,7 +317,8 @@ The planning pass is complete when:
 - any mandatory specification review gate is reconciled before planning handoff
 - any mandatory design fan-out gate is reconciled before planning handoff
 - any mandatory technical design review gate is reconciled before planning handoff
-- `tasks.md` is ready for task-ledger review to compare it with reviewed `spec.md`, specification-review obligations, required design context, design fan-out obligations, technical-design-review obligations, and triggered validation or rollout obligations
+- any mandatory test-design gate is reconciled before planning handoff, or test design is explicitly recorded as `not expected`
+- `tasks.md` is ready for task-ledger review to compare it with reviewed `spec.md`, specification-review obligations, required design context, design fan-out obligations, technical-design-review obligations, test-design scenario IDs when present, and triggered validation or rollout obligations
 - task-ledger review and implementation-readiness status are explicit as `pending_task_review`, unless planning is honestly blocked, reopened, or an eligible waiver is recorded
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
 - required read-only fan-out was run, validly scoped down, or explicitly blocked; Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`
@@ -317,14 +326,17 @@ The planning pass is complete when:
 - out-of-scope implications are visible as non-goals, accepted risks, or proof-only follow-ups rather than hidden target-state cleanup
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
 - owner package/file, placement evidence, cleanup owner, and test owner are concrete enough that `go-coder` does not need to make a design choice
+- scenario IDs, proof levels, and fail-before expectations are concrete enough that `go-coder` and `go-qa-tester` do not need to design test coverage during implementation
 - selected pattern constraints and proof obligations are clear enough that `go-coder` does not need to reinterpret or choose a design/system pattern
 - no unresolved decision gate, `TBD`, or implementation-blocking open question remains in `tasks.md`
 
 ## Escalate Or Reject
 - task breakdown derived from an unstable spec
 - task breakdown that assumes missing compact or split design context instead of escalating
+- task breakdown that assumes missing or stale test-design context instead of reopening `test-design`
 - a phase list with no acceptance criteria or verification
 - a `tasks.md` ledger with open questions, unresolved gates, or implementation-time design decisions
+- a `tasks.md` ledger that invents scenario classes, proof levels, fail-before expectations, or quality gates instead of consuming approved `test-plan.md` scenario IDs
 - a `tasks.md` ledger that hides owner/file choice behind vague wording such as `choose appropriate file`, `place where it fits`, `split if necessary`, or `implementation decides`
 - a generic task like `implement the feature`
 - horizontal slicing that hides risk and postpones integration until the end

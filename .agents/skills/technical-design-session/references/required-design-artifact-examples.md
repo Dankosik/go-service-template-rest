@@ -24,7 +24,7 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
   - `design/ownership-map.md`: approved; job state source-of-truth, generated-code authority, and adapter responsibilities are named.
   - `design/data-model.md`: expected because persisted job state changes.
   - `design/contracts/`: expected because the OpenAPI shape changes.
-  - `test-plan.md`: not expected; validation obligations fit in `tasks.md`.
+  - `test-design`: not expected; validation obligations fit in `tasks.md`.
   - `rollout.md`: not expected; no mixed-version choreography is in scope.
 - Readiness: technical design review can start after `design/contracts/` is approved.
 ```

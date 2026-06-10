@@ -539,7 +539,7 @@ Bootstrap shortcuts:
 
 - `make guardrails-check`
   - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce required repository files including root `SOUL.md`, tool-version alignment, required branch-protection context alignment, the AGENTS/SOUL lower-precedence boundary, subagent-gate/read-only instruction anchors, and core architecture import boundaries.
+  - Purpose: enforce required repository files including root `SOUL.md`, tool-version alignment, required branch-protection context alignment, the AGENTS/SOUL lower-precedence boundary, subagent-gate/read-only instruction anchors, test-design phase anchors, and core architecture import boundaries.
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
