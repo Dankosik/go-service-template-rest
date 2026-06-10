@@ -19,7 +19,7 @@ The simplification is about artifact depth, not decision quality or specialist c
 
 Subagent-first means non-trivial decisions are normally synthesized from narrow read-only lane summaries. Artifact depth may stay lean, but the decision basis should not be single-threaded when independent evidence, challenge, or specialist review can improve correctness.
 
-Default decision-quality rules live in [Artifact Model](spec-first-workflow/shared/artifact-model.md). The router keeps only the loading path; phase files own detailed mechanics.
+Hard decision-quality rules live in [AGENTS.md](../AGENTS.md). [Artifact Model](spec-first-workflow/shared/artifact-model.md) owns where those rules are recorded in task-local artifacts. The router keeps only the loading path; phase and shared files own detailed mechanics.
 
 ## 2. Runtime Loading Model
 
@@ -39,7 +39,7 @@ Use this file as the stable workflow entrypoint. Do not load every detailed work
 | `lean local` | Bounded non-trivial single-domain work with stable ownership and limited research. | [Artifact Model](spec-first-workflow/shared/artifact-model.md), [Specification](spec-first-workflow/phases/specification.md), [Specification Review](spec-first-workflow/phases/specification-review.md), triggered [System / Integration Design](spec-first-workflow/phases/system-integration-design.md), triggered [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md), [Planning](spec-first-workflow/phases/planning.md), [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) |
 | `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) plus the active phase file below |
 
-Escalation triggers, artifact depth, status vocabulary, lean `spec.md`, lean `tasks.md`, and workflow-control artifact rules live in [Artifact Model](spec-first-workflow/shared/artifact-model.md).
+`AGENTS.md` owns escalation triggers and hard boundaries. [Artifact Model](spec-first-workflow/shared/artifact-model.md) owns artifact-depth implications, status vocabulary, lean `spec.md`, lean `tasks.md`, and workflow-control artifact rules.
 
 ## 4. Phase Read Matrix
 

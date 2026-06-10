@@ -32,6 +32,8 @@ Task-ledger review is a distinct post-planning, pre-implementation gate. It chec
 
 `tasks.md` is a draft until this gate checks it against the approved artifact chain. This gate must run after the ledger is written or materially repaired and before implementation starts.
 
+This file is the canonical home for task-ledger review and implementation-readiness approval. Planning docs and planning skills may describe how to prepare a ledger for this gate, but they must not assign the final readiness verdict.
+
 The reviewer answers one question: can a context-blind implementation session execute this ledger from the recorded start point through its named proof without making an unapproved decision? The answer is `PASS`, `CONCERNS`, `FAIL`, or eligible `WAIVED`; it is not a rewritten task list.
 
 Use the 90-second implementation start test before approval: could a fresh implementation agent set the Codex Goal, read only the listed artifacts, start the first executable task, and know the completion proof without chat history? If not, the result is `FAIL` to planning unless the missing context belongs to specification, specification review, system/integration design, Go code ownership design, technical design, or technical design review.

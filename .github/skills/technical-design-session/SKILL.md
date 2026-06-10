@@ -137,7 +137,7 @@ Do not:
 
 ## Core Defaults
 - this is an orchestrator-facing wrapper, not a replacement for specialist design skills
-- `AGENTS.md` owns the workflow contract and `docs/spec-first-workflow.md` owns artifact mechanics
+- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` is the router; design phase docs own artifact mechanics
 - `spec.md` owns final decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` comes later in a different session
 - separate design depth proceeds through `system-integration-design` before `go-code-ownership-design`; the latter consumes the system decision and must reopen system design or specification if code placement would change observable behavior
 - use `go-design-spec` as the deeper design-integrity method when you need integration, contradiction cleanup, or simplification beyond simple artifact upkeep
@@ -163,37 +163,14 @@ Do not:
 - do not copy the full `go-design-spec` discipline into this wrapper; link to it and reuse it
 - do not let `go-design-spec` blur the session boundary into `tasks.md` or implementation
 
-## Required Design Artifacts
-For full-orchestrated or otherwise triggered split-design work, the design session should leave these artifacts approved or explicitly blocked with reasons:
-- `design/overview.md` for chosen approach, artifact index with review-bound artifact status and conditional trigger rationale, unresolved seams, and readiness summary
-- `design/system-integration.md` for service behavior, contracts, external calls, queues, data/cache/source-of-truth, runtime sequence, failure behavior, validation, and rollout when these are too dense for `overview.md`
-- `design/go-code-ownership.md` for package/file ownership, focused responsibility boundaries, dependency direction, local abstraction choices, cleanup/removal, and test ownership when these are too dense for `overview.md`
-- `design/component-map.md` for affected packages, modules, generated surfaces, adapters, and components; what changes; what remains stable; and which plausible surfaces are intentionally not touched
-- `design/sequence.md` for call order, sync or async boundaries, failure points, side effects, recovery or retry boundaries when relevant, and parallel versus sequential behavior
-- `design/ownership-map.md` for source-of-truth ownership, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior
+## Design Artifact Ownership
+Design artifact shapes and trigger rules live in the phase docs:
 
-These are required as durable answers to design questions only when split design is triggered, not as matched prose quotas. If a narrow change leaves one seam largely stable, the corresponding artifact may stay short and explicitly say so.
+- `docs/spec-first-workflow/phases/system-integration-design.md` owns system behavior, source-of-truth, runtime sequence, failure behavior, validation, rollout, and system-facing conditional artifacts.
+- `docs/spec-first-workflow/phases/go-code-ownership-design.md` owns package/file responsibility, dependency direction, focused local abstractions, cleanup/removal, and test ownership.
+- `docs/spec-first-workflow/phases/technical-design-review.md` owns the pre-planning review verdict after triggered separate design depth.
 
-Minimum context-first answers:
-- `design/component-map.md`: affected packages, generated surfaces, adapters, responsibility changes, stable surfaces, and intentional non-touches
-- `design/sequence.md`: runtime order, sync or async boundaries, side effects, failure points, retry or recovery behavior, and parallel versus sequential behavior
-- `design/ownership-map.md`: source-of-truth owners, allowed dependency direction, generated-code authority, adapter responsibility, and explicit non-owners
-
-Do not move split-design technical context back into `spec.md`. Lean-local compact design answers may remain in `spec.md` when no split-design trigger is present.
-
-## Conditional Design Artifacts
-Create these only when their trigger is real:
-- `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
-- `design/dependency-graph.md` when package or module dependency shape changes, generated-code flow changes, or coupling risk must be made explicit
-- `design/pattern-fit.md` when selected and rejected design or system-design patterns, source examples, task applicability, Go-fit, and repository-fit are too dense for `design/overview.md`
-- `design/contracts/` when API contracts, event contracts, generated contracts, or material internal interfaces change
-  - keep this folder design-only; authoritative runtime contracts stay in canonical repository-owned sources such as `api/openapi/service.yaml`, generation inputs, or other contract authorities
-- `test-plan.md` when validation obligations are too large or multi-layered to fit cleanly inside `tasks.md`
-- `rollout.md` when the task needs migration sequencing, backfill/verify choreography, mixed-version compatibility, or deploy/failback notes
-
-If a trigger is not real, record the artifact as `not expected` with trigger rationale instead of creating filler.
-
-Technical design owns the trigger decision for `test-plan.md` and `rollout.md` when validation or rollout shape affects later planning readiness. Create them here only when the specification-review-approved `spec.md` and current design context are enough to write the artifact honestly. If the trigger is plausible but planning must decide from execution detail, record it as `conditional` with the decision point instead of creating a placeholder.
+This wrapper may choose the writable surface and enforce the one-checkpoint session boundary, but it does not redefine design artifact templates. If a trigger is not real, record the artifact as `not expected` with trigger rationale instead of creating filler.
 
 ## Workflow
 
@@ -310,7 +287,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase or reopen route exactly
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
-- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
+- for any non-trivial next phase or reopen target that may use read-only lanes, include the exact `Subagent authorization:` line from `docs/spec-first-workflow/shared/subagents-and-handoff.md`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Phase-Local Stop Condition

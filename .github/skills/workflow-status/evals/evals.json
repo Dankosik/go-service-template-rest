@@ -3,8 +3,8 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `planning`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: T001`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, and expected `tasks.md` are approved, and no blockers are recorded. Report the status only.",
-      "expected_output": "A compact read-only status report that identifies the task path, reports planning complete with the session boundary reached, summarizes approved artifacts and readiness `PASS`, and says implementation may start in the recorded next session.",
+      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `task-review/readiness`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: T001`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, expected `tasks.md`, and task-ledger review are approved, and no blockers are recorded. Report the status only.",
+      "expected_output": "A compact read-only status report that identifies the task path, reports task-review/readiness complete with the session boundary reached, summarizes approved artifacts and readiness `PASS`, and says implementation may start in the recorded next session.",
       "files": [],
       "expectations": [
         "The output does not edit or propose editing artifacts, code, git state, task ledgers, or implementation handoffs.",
@@ -70,7 +70,7 @@
     },
     {
       "id": 6,
-      "prompt": "Use workflow-status for `specs/export-rollout`. The artifacts say planning is complete, `Session boundary reached: yes`, `Next session starts with: T001`, and `Implementation readiness: CONCERNS` with accepted risk `legacy clients may see old retry headers for one deploy` plus proof obligation `run contract tests and mixed-version smoke notes`. Report status only.",
+      "prompt": "Use workflow-status for `specs/export-rollout`. The artifacts say task-review/readiness is complete, `Session boundary reached: yes`, `Next session starts with: T001`, and `Implementation readiness: CONCERNS` with accepted risk `legacy clients may see old retry headers for one deploy` plus proof obligation `run contract tests and mixed-version smoke notes`. Report status only.",
       "expected_output": "A compact read-only status report that says implementation may start only with recorded concerns and names the accepted risk and proof obligation.",
       "files": [],
       "expectations": [

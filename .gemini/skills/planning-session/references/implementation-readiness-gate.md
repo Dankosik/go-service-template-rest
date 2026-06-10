@@ -1,68 +1,68 @@
-# Implementation Readiness Gate
+# Task-Review Handoff Check
 
 ## Behavior Change Thesis
-When loaded for a handoff that feels almost ready, this file makes the model review the completed `tasks.md` against the approved artifact chain and choose `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` from concrete blockers and proof obligations instead of using optimistic `PASS`, vague `CONCERNS`, or convenience `WAIVED`.
+When loaded for a planning handoff that feels almost ready, this file makes the model self-check the completed `tasks.md` against the approved artifact chain and route gaps before task-review/readiness. It does not assign the final `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` verdict; `docs/spec-first-workflow/phases/task-review-readiness.md` owns that gate.
 
 ## When To Load
-Load when reviewing completed `tasks.md` or assigning/auditing implementation-readiness status.
+Load when preparing completed `tasks.md` for the separate task-review/readiness phase.
 
 ## Decision Rubric
-- First compare `tasks.md` to reviewed `spec.md`, specification-review obligations, compact or split design context, technical-design-review obligations, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path. A written ledger is still draft until this review passes.
-- `PASS`: the accepted target-state implementation ledger matches that artifact chain and can start without inventing hidden architecture, ownership, contract, sequencing, or rollout decisions.
-- `CONCERNS`: implementation may start only with named accepted risks and proof obligations that the implementation ledger can satisfy without re-planning.
-- `FAIL`: implementation must not start; name `planning` for ledger repair, `technical design review` for missing or unresolved review gates, `technical design` for missing ownership/sequence/rollout/validation context, or `specification` for scope/behavior/contract contradictions.
-- `WAIVED`: use only for tiny, direct-path, or prototype-scoped work with explicit rationale and scope; never use it to bypass normal non-trivial planning.
-- Record the task-ledger review and readiness status in `workflow-plan.md`, gate result and stop/handoff in `workflow-plans/planning.md`, and short reference in `tasks.md` when useful.
+- Compare `tasks.md` to reviewed `spec.md`, specification-review obligations, compact or split design context, technical-design-review obligations, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path.
+- Leave `Task ledger review`, `Implementation readiness`, `Ledger-review fan-out`, and `Ledger-review fan-out rationale` as `pending_task_review`.
+- If the ledger needs task coverage, ordering, proof, evidence, or handoff repair, keep planning open or blocked.
+- If the gap belongs to an earlier phase, route to that phase instead of hiding it in task wording.
+- Record the task-review/readiness handoff in `workflow-plan.md`, stop/handoff in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful.
 - Do not turn out-of-scope implications into blockers; record those as explicit concerns, proof obligations, or follow-up notes. In-scope target-state work belongs in the ledger or in a reopened earlier phase.
 
 ## Imitate
 ```markdown
-Task ledger review: PASS.
-Implementation readiness: PASS.
-Gate result: implementation may start with T001 in a later session.
+Task ledger review: pending_task_review.
+Implementation readiness: pending_task_review.
+Next phase: task-review/readiness.
+Handoff note: completed draft ledger is ready for coverage, ordering, proof, and handoff review.
 Proof path: task-level proof is listed in `tasks.md`.
 ```
 
-Copy this shape: PASS is tied to named artifacts and a later-session entry point.
+Copy this shape: planning names the review packet without approving it.
 
 ```markdown
-Task ledger review: CONCERNS.
-Implementation readiness: CONCERNS.
-Accepted risk: cache invalidation proof depends on first-phase integration evidence.
-Proof obligation: task T003 must add and pass the named integration test before validation.
-Gate result: implementation may start in the next session with this obligation visible.
+Task ledger review: pending_task_review.
+Implementation readiness: pending_task_review.
+Task-review handoff concern: cache invalidation proof depends on first checkpoint integration evidence.
+Carrying row: task T003 names the integration test and checkpoint gate.
+Next phase: task-review/readiness.
 ```
 
-Copy this shape: concerns are specific, accepted, and testable in the next phase.
+Copy this shape: likely concerns are visible for the reviewer, but not accepted by planning.
 
 ```markdown
-Task ledger review: FAIL.
-Implementation readiness: FAIL.
+Task ledger review: pending_task_review.
+Implementation readiness: pending_task_review.
 Reopen target: system-integration-design.
 Reason: task order depends on an unsettled backfill source-of-truth decision.
-Gate result: implementation must not start.
+Gate result: planning blocked; do not start task-review or implementation.
 ```
 
-Copy this shape: FAIL routes upstream instead of pretending uncertainty is an implementation task.
+Copy this shape: upstream blockers stop planning before review.
 
 ## Reject
 ```markdown
-Implementation readiness: CONCERNS.
+Implementation readiness: <non-pending verdict>.
 Risk: some validation risk remains.
 ```
 
-Failure: it has no named accepted risk and no proof obligation.
+Failure: planning is assigning readiness and the risk has no named carrying row.
 
 ```markdown
-Implementation readiness: WAIVED.
+Implementation readiness: <non-pending verdict>.
 Rationale: planning files are probably enough and the change is routine.
 ```
 
-Failure: waiver is not for routine non-trivial work.
+Failure: planning is assigning a waiver and the rationale is not eligible.
 
 ## Agent Traps
-- Passing readiness while `tasks.md` is missing for non-trivial work.
-- Passing readiness from a freshly written `tasks.md` without checking it against `spec.md`, required design context, and review obligations.
+- Assigning readiness while `tasks.md` is missing for non-trivial work.
+- Assigning readiness from a freshly written `tasks.md` instead of routing to task-review/readiness.
 - Downgrading a missing required design artifact from `FAIL` to `CONCERNS`.
 - Recording the gate only in chat.
 - Letting `CONCERNS` carry unnamed risk that the implementation agent must rediscover.

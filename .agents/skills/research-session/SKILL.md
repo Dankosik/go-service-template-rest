@@ -84,7 +84,7 @@ Do not:
 
 ## Core Defaults
 - this is an orchestrator-facing wrapper, not a domain specialist
-- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the detailed artifact mechanics
+- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` is the router; phase and shared workflow docs own detailed artifact mechanics
 - this wrapper owns research-session protocol only and must not redefine later artifact ownership
 - use `research-session` only when a dedicated research session is the intended control shape for the task
 - lean local may keep research local and cite the relevant evidence in `spec.md`; create `research/*.md` only when evidence must persist for resume, audit, or later synthesis
@@ -256,7 +256,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase or reopen route exactly, including targeted re-research when that is the next step
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
-- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
+- for any non-trivial next phase or reopen target that may use read-only lanes, include the exact `Subagent authorization:` line from `docs/spec-first-workflow/shared/subagents-and-handoff.md`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Stop Condition

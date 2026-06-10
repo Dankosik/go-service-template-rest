@@ -1,12 +1,12 @@
 ---
 name: planning-and-task-breakdown
-description: "Turn specification-review-approved `spec.md` plus required compact or split design context into a dependency-ordered, verifiable `tasks.md` ledger for this repository, then run the post-ledger task review/readiness check before implementation handoff. Use after `spec.md` is stable, mandatory specification review is reconciled for non-trivial work, lean compact design or triggered system/integration and Go code ownership artifacts are approved or explicitly skipped, mandatory technical design review is reconciled when separate design depth exists, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability/package-ownership decisions and skip actual coding."
+description: "Turn specification-review-approved `spec.md` plus required compact or split design context into a dependency-ordered, verifiable draft or repaired `tasks.md` ledger for this repository, then prepare the handoff to the separate task-review/readiness gate. Use after `spec.md` is stable, mandatory specification review is reconciled for non-trivial work, lean compact design or triggered system/integration and Go code ownership artifacts are approved or explicitly skipped, mandatory technical design review is reconciled when separate design depth exists, and required challenge gates are reconciled, whenever implementation should be driven from planning artifacts rather than improvised from the decision/design record. Reach for this when executable task order, checkpoints, or parallelism are not obvious. Skip unresolved architecture/API/data/security/reliability/package-ownership decisions and skip actual coding."
 ---
 
 # Planning And Task Breakdown
 
 ## Purpose
-Turn stable reviewed decisions plus approved compact or split technical design context into a `tasks.md` executable task ledger that reaches the accepted target state, stays honest about dependencies, names only the checkpoints and proof obligations the work actually needs, and passes a post-ledger review before implementation handoff.
+Turn stable reviewed decisions plus approved compact or split technical design context into a `tasks.md` executable task ledger that reaches the accepted target state, stays honest about dependencies, names only the checkpoints and proof obligations the work actually needs, and is ready for the separate task-review/readiness gate.
 
 ## Outcome-First Operating Rules
 - Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
@@ -22,7 +22,7 @@ Turn stable reviewed decisions plus approved compact or split technical design c
 - make `tasks.md` explicit by default for non-trivial implementation work
 - attach acceptance criteria, planned verification, checkpoints, and change-surface hints
 - close or route blockers and decision gates before coding starts; a ready `tasks.md` must not contain unresolved open questions
-- review the completed ledger against reviewed `spec.md`, specification-review obligations, required design context, technical-design-review obligations, and triggered validation or rollout obligations before marking implementation readiness
+- self-check the completed ledger against reviewed `spec.md`, specification-review obligations, required design context, technical-design-review obligations, and triggered validation or rollout obligations before handing it to task-review/readiness
 - preserve coder freedom on local code shape while removing ambiguity about execution order
 
 ## Boundaries
@@ -34,7 +34,7 @@ Do not:
 - treat `spec.md` as the place for full task breakdown by default
 - let `tasks.md` become a second spec, second design bundle, or bloated strategy memo
 - hide blocked work behind optimistic task wording
-- leave open questions, `TBD` decisions, or unresolved decision gates in a `tasks.md` marked ready for implementation
+- leave open questions, `TBD` decisions, or unresolved decision gates in a `tasks.md` marked ready for task review
 
 ## Escalate When
 Escalate if:
@@ -52,19 +52,15 @@ Escalate if:
 - For lean-local work, plan from reviewed `spec.md` with explicit compact design answers; for full-orchestrated or design-triggered work, plan from reviewed `spec.md` plus triggered `design/` and a reconciled technical design review gate.
 - For lean-local and full-orchestrated implementation, default to creating `tasks.md`; direct-path or tiny work may skip a separate ledger only with an explicit waiver.
 - Keep `tasks.md` task-local to the active spec-first bundle. Do not use a repository-root or unrelated ledger as the current implementation handoff unless workflow control explicitly reopens it and records the resume route.
-- Planning is the last artifact-producing phase before code, but the completed ledger must still pass the post-ledger task review/readiness gate before implementation starts. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
-- Planning must leave a task-ledger review and implementation-readiness result for the handoff: `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`. `CONCERNS` needs named accepted risks and proof obligations, not open questions; `FAIL` names the earlier phase to reopen; `WAIVED` stays limited to explicit tiny/direct-path/prototype scope.
-- Before marking `tasks.md` approved for non-trivial work, default to a read-only task-ledger review fan-out when implementation readiness depends on independent lenses. Typical lanes are coverage/traceability, dependency ordering, proof/QA, and any triggered API, data, security, reliability, delivery, performance, observability, or rollout lens.
-- Each ledger-review lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md` or makes final readiness decisions. The orchestrator repairs planning or reopens from fan-in.
-- Skipping or scoping down ledger-review fan-out requires `Ledger-review fan-out rationale:` that explicitly evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens, then explains why each omitted lane cannot change readiness.
-- Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record implementation readiness as `FAIL` or blocked and return a next-session prompt with `Subagent authorization:`.
-- Implementation readiness remains `FAIL` or blocked unless task-ledger review fan-out status is recorded or `Ledger-review fan-out rationale:` explains why local review covers every readiness risk.
-- A `PASS`, `CONCERNS`, or `WAIVED` handoff must be closed for implementation. Do not approve a ledger that still needs implementation to choose architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, or test ownership.
+- Planning is the last artifact-producing phase before code, but the completed ledger must still pass the separate post-ledger task-review/readiness gate before implementation starts. If later `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` are truly needed for named multi-session routing, create only those files before implementation starts instead of inventing them later. Do not create a coding phase-control file.
+- Planning leaves task-ledger review and implementation-readiness fields as `pending_task_review`. The `docs/spec-first-workflow/phases/task-review-readiness.md` phase assigns final `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`.
+- Planning may suggest likely task-review lenses, but task-review/readiness owns fan-out, local-only rationale, final readiness status, and implementation handoff approval.
+- A draft ledger must not need implementation to choose architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, or test ownership. If the planning self-check finds that gap, repair planning or reopen the owning earlier phase before task-review handoff.
 - For long-running, multi-slice, or resumable implementation, make the ledger Goal-ready: one objective, one successful completion condition, a separate blocked-stop condition, read-before-coding context, task-specific read context when useful, preserved constraints, checkpoint/progress rules, resume rules, and evidence fields that let Codex audit completion without relying on chat memory. A recorded blocker is a valid stop, not a successful completion claim.
 - Planning must not treat a design author's handoff as review. Separate design depth requires a distinct technical design review gate before task breakdown can be approved.
 - Planning must not treat a spec author's handoff as review. Non-trivial `spec.md` requires a distinct specification-review gate before task breakdown can be approved.
-- If specification review passed with `CONCERNS`, carry each accepted spec risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the implementation-readiness handoff; do not leave it only in the review record.
-- If technical design review passed with `CONCERNS`, carry each accepted design risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the implementation-readiness handoff; do not leave it only in the review record.
+- If specification review passed with `CONCERNS`, carry each accepted spec risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the task-review handoff; do not leave it only in the review record.
+- If technical design review passed with `CONCERNS`, carry each accepted design risk and proof obligation into `tasks.md`, `test-plan.md`, `rollout.md`, or the task-review handoff; do not leave it only in the review record.
 - When the planning pass generates or materially changes workflow-control files for full-orchestrated, high-risk, complex, or agent-backed work, expect a read-only `workflow-plan-adequacy-challenge` before handoff; lean-local work without workflow-control artifacts uses the recorded inline/local check instead.
 - Prefer a single target-state implementation ledger over phased delivery. Use phase or checkpoint labels only for dependency ordering, reviewability, or proof boundaries, not to defer known in-scope work.
 - Prefer dependency-ordered vertical slices over horizontal subsystem dumps when possible.
@@ -73,13 +69,13 @@ Escalate if:
 - If the approved artifact chain selects a new dependency, OSS integration, or custom implementation after due diligence, carry the required integration, license/security, generation, configuration, drift, and proof tasks into the ledger. If due diligence is missing for custom infrastructure, a new runtime dependency, or a meaningful helper/abstraction, reopen specification or technical design instead of asking implementation to decide.
 - If the approved artifact chain selects a design or system-design pattern, carry the pattern-preserving implementation constraints and proof obligations into the ledger. If Pattern Fit Diligence is missing for an invented architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape, reopen research, specification, or technical design instead of asking implementation to choose the pattern.
 - For replacement work, missing in-scope legacy cleanup is a planning-readiness failure: the ledger must task removal/refactor work, retained-surface owner/reason/proof/exit-condition recording, or explicit not-applicable proof instead of leaving the old surface for implementation to interpret.
-- For dedicated planning sessions, this pass ends at approved `tasks.md`; implementation begins in a new session unless an upfront direct/lean waiver was already recorded.
+- For dedicated planning sessions, this pass ends at draft or repaired `tasks.md` ready for task-review/readiness; implementation begins only after that separate gate passes unless an upfront direct/lean waiver was already recorded.
 - Put risky or dependency-establishing work early.
 - Use checkpoints to create real stop points, not ritual paperwork.
 - Do not let `tasks.md` absorb phase strategy, design decisions, or speculative tasking that should reopen design.
 
 ## Lazily Loaded References
-Keep this file as the operating contract. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the task clearly spans independent decision pressures, such as dependency ordering plus implementation-readiness proof. Treat repository-local `AGENTS.md`, `docs/spec-first-workflow.md`, stable `spec.md`, approved `design/`, and existing task artifacts as higher authority than any example.
+Keep this file as the operating contract. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the task clearly spans independent decision pressures, such as dependency ordering plus task-review handoff proof. Treat repository-local `AGENTS.md`, `docs/spec-first-workflow.md`, stable `spec.md`, approved `design/`, and existing task artifacts as higher authority than any example.
 
 | Reference | Load For Symptom | Behavior Change |
 | --- | --- | --- |
@@ -87,7 +83,7 @@ Keep this file as the operating contract. References are compact rubrics and exa
 | `references/dependency-ordered-task-ledgers.md` | task order, `[P]` markers, generated artifacts, migrations, or source-of-truth-first sequencing is unclear | derives dependencies from approved design artifacts and source-of-truth flow instead of marking everything parallel or starting with derived files |
 | `references/task-sizing-and-slicing.md` | tasks are too large, too horizontal, too vague, hard to review, or hard to verify in one focused session | splits work into reviewable, proof-bound slices instead of hiding independent surfaces behind one broad task |
 | `references/acceptance-criteria-and-proof-obligations.md` | acceptance criteria, proof commands, manual checks, or `CONCERNS` obligations are vague | states task-specific truths and matching proof commands instead of "looks good", "run tests", or optimistic readiness language |
-| `references/checkpoints-and-reopen-conditions.md` | stop points, implementation-readiness handoff, blockers, reopen targets, or validation/reconciliation triggers need wording | names executable checkpoints and exact reopen targets instead of asking implementation to improvise or create missing workflow artifacts after coding starts |
+| `references/checkpoints-and-reopen-conditions.md` | stop points, task-review handoff, blockers, reopen targets, or validation/reconciliation triggers need wording | names executable checkpoints and exact reopen targets instead of asking implementation to improvise or create missing workflow artifacts after coding starts |
 | `references/planning-anti-patterns.md` | reviewing a draft plan or ledger for drift, invented decisions, duplicate authority, false parallelism, vague proof, or artifact misuse | challenges smell patterns as triage instead of treating a plausible-looking plan as ready by checklist momentum |
 
 Reference snippets are patterns, not decisions. If an example would require an architecture, API, data, security, reliability, migration, rollout, or ownership choice not already approved in `spec.md` plus required design context, stop and reopen the right earlier phase instead of copying the snippet.
@@ -126,8 +122,8 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Treat non-trivial `tasks.md` as Goal-ready by default in this repository: start the ledger with a compact Goal contract unless the work is explicitly tiny/direct and not meant to become a Goal handoff.
 - The Goal contract includes objective, completion condition, separate blocked-stop condition, read-before-coding artifacts, task-specific read context when useful, preserved constraints, progress-log rule, resume rule, and blocked-stop rule.
 - Keep the Goal contract derivative of approved artifacts. It must not introduce new scope, new design decisions, or permission to create missing pre-code workflow artifacts during implementation.
-- Write the Goal contract so the planning handoff can reuse it directly as a concise Codex Goal objective for the next implementation session, covering every executable task in the approved ledger through final validation.
-- When rendering the final chat implementation handoff from that Goal contract, use `.agents/skills/codex-goal-prompt-composer/SKILL.md`.
+- Write the Goal contract so the later task-review/readiness phase can reuse it directly when rendering a Codex Goal objective after readiness approval, covering every executable task in the approved ledger through final validation.
+- When the later readiness phase renders the final chat implementation handoff from that Goal contract, it uses `.agents/skills/codex-goal-prompt-composer/SKILL.md` and `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 - Keep detailed artifact lists, constraints, accepted concerns, proof commands, and progress rules in the Goal contract fields and handoff metadata, not inside the objective sentence itself.
 - For each executable task, make the action, dependency marker when nontrivial, change surface, and planned verification explicit.
 - Include structured evidence fields for each task or checkpoint when the implementer is expected to update progress during execution. Prefer `Command/read`, `Result`, `Key output/ref`, `Changed proof files`, and `Residual blocker/narrower claim` unless a one-line evidence field is enough for tiny/direct-path work.
@@ -152,16 +148,15 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - When checkpoints exist, add a compact `Checkpoint Gates` table or equivalent wording that maps checkpoint names to task ranges and required proof/currentness before later tasks rely on the checkpoint.
 - Keep checkpoints proportional; tiny work may need one final checkpoint only.
 
-### 6. Review The Draft Ledger Before Handoff
+### 6. Self-Check The Draft Ledger Before Task-Review Handoff
 - Compare the completed `tasks.md` against the reviewed `spec.md`, specification-review result, required compact or split design context including triggered system/integration and Go code ownership decisions, design fan-out result when separate technical design depth was triggered, technical-design-review result, and triggered `test-plan.md` or `rollout.md`.
-- Run read-only task-ledger review fan-out by default; otherwise record `Ledger-review fan-out rationale:` that evaluates coverage/traceability, dependency ordering, proof/QA, and every triggered domain lens.
-- If subagent spawning is expected but no spawn tool is visible, use tool discovery for subagent or multi-agent tooling before declaring fan-out unavailable.
-- Keep ledger-review lanes read-only and advisory; they return findings and proof obligations for orchestrator fan-in, not edits or final readiness decisions.
+- Leave `Task ledger review`, `Implementation readiness`, `Ledger-review fan-out`, and `Ledger-review fan-out rationale` as `pending_task_review`; the separate task-review/readiness phase owns those fields.
+- Record likely task-review lenses or risk notes only as handoff context. Do not run review lanes, assign readiness, or render an implementation prompt from this method.
 - Confirm every in-scope behavior and preserved constraint is represented in tasking, proof, or explicit non-task rationale.
 - Confirm every approved dependency/OSS due-diligence outcome is represented in tasking or explicit non-task rationale, and that missing due diligence for custom code or a new dependency reopens specification or technical design rather than passing to implementation.
 - Confirm every approved Pattern Fit outcome is represented in tasking, proof, or explicit non-task rationale, and that missing Pattern Fit Diligence for an invented design shape reopens research, specification, or technical design rather than passing to implementation.
 - Confirm design fan-out is `complete`, valid `scoped_down`, or eligible `local_only` for every triggered design checkpoint when separate technical design depth was triggered; missing, `blocked`, or ineligible `local_only` design fan-out reopens the owning design checkpoint instead of passing to implementation.
-- Confirm the Goal Contract separates successful completion from blocked-stop behavior; if "recorded blocker" can be read as successful completion, repair planning before readiness can pass.
+- Confirm the Goal Contract separates successful completion from blocked-stop behavior; if "recorded blocker" can be read as successful completion, repair planning before task-review handoff.
 - Confirm each task has one reviewable diff story, or records why coupled changes cannot be split safely.
 - Confirm read context is split into required start context and task-specific context when the artifact list is long or domain-specific; implementation should not have to read every companion artifact before the first safe edit.
 - Confirm checkpoint gates identify the proof/currentness required before dependent later tasks proceed.
@@ -176,8 +171,8 @@ Reference snippets are patterns, not decisions. If an example would require an a
 - Confirm task order matches ownership, sequence, dependency, migration, validation, and rollout constraints from the design context.
 - Confirm accepted specification-review and design-review `CONCERNS` are carried as named risks and proof obligations, and that no unresolved `FAIL`, spec-review blocker, `blocks_planning`, `reopens_design`, or `reopens_spec` finding remains.
 - Confirm subagent gates consumed by planning are listed, no lane blocker or material severity conflict remains unresolved, and subagent-derived proof obligations are mapped into `tasks.md`, `test-plan.md`, or `rollout.md`.
-- Confirm non-trivial implementation readiness stays `FAIL` or blocked when ledger-review fan-out status and a valid `Ledger-review fan-out rationale:` are both missing.
-- If the ledger has only execution-quality gaps, repair planning and review it again; if the gap changes accepted behavior or design, reopen `specification`, `specification review`, `technical design`, or `technical design review`.
+- Confirm non-trivial implementation readiness remains `pending_task_review` until the separate gate runs.
+- If the ledger has only execution-quality gaps, repair planning and self-check it again; if the gap changes accepted behavior or design, reopen `specification`, `specification review`, `technical design`, or `technical design review`.
 
 ## Task Sizing
 - `XS`: one tiny local step; prefer keeping it inline unless the surrounding work is already non-trivial
@@ -202,8 +197,8 @@ Write tasks as outcome slices, not process scripts:
 
 Use markdown checkboxes. Each task should include:
 - a compact `Goal Contract` header for long-running or resumable work, limited to objective, completion condition, separate blocked-stop condition, read-before-coding artifacts, task-specific read context when useful, preserved constraints, task-local implementation quality bar when needed, progress-log rule, resume rule, and blocked-stop rule;
-- an optional compact `Implementation Handoff` header when it helps the next implementation session, limited to consumed artifacts, task-ledger review/readiness status, first task or checkpoint, named `CONCERNS` proof obligations, and reopen target;
-- `Subagent gates consumed`, task-ledger review fan-out status or `Ledger-review fan-out rationale:`, and `Subagent-derived proof obligations` lines for non-trivial implementation readiness;
+- an optional compact `Task-Review Handoff` header when it helps the next phase, limited to consumed artifacts, pending task-ledger review/readiness fields, likely review lenses, accepted proof obligations, and reopen target;
+- `Subagent gates consumed`, `Task ledger review: pending_task_review`, `Implementation readiness: pending_task_review`, and task-review handoff notes for non-trivial ledgers;
 - stable task ID such as `T001`
 - checkpoint label, or phase label only when the approved design/user request explicitly uses phases
 - optional `[P]` marker only when safe to parallelize
@@ -237,12 +232,13 @@ Task-local implementation quality bar:
 Resume rule: on resume, read git status and this ledger first, then continue at the first unchecked task whose dependencies are satisfied.
 Progress log: update each task's `Evidence` line after running its proof; if blocked, stop and record `Blocked:` under the task.
 
-## Implementation Handoff
+## Task-Review Handoff
 
 Consumes: reviewed `spec.md`, specification-review result, `design/`, and this task ledger.
-Task ledger review: PASS.
-Implementation readiness: PASS.
-First task: T001.
+Task ledger review: pending_task_review.
+Implementation readiness: pending_task_review.
+Next phase: task-review/readiness.
+Suggested first implementation task after readiness approval: T001.
 Accepted concerns: none.
 Reopen target: planning if required artifact context is missing.
 
@@ -289,8 +285,8 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - If a required technical design review gate is missing or blocking, reopen technical design review instead of filling the gap inside the plan.
 - When later review or validation phase-control files are genuinely needed for named multi-session routing, planning should leave them ready to be created or linked before implementation begins; post-code work should not need to invent new workflow/process artifacts.
 - The workflow-control handoff must be challenge-ready: master and phase-local plans should make phase status, blockers, stop rules, next-session start, the next-session context bundle, `tasks.md` status, artifact expectations with trigger rationale, and any named review or validation phase files clear enough for an adequacy challenger to review without reconstructing intent from chat. It must not store the full ready-to-paste next-session prompt; render that prompt only in the final chat response.
-- The task-ledger review and implementation-readiness handoff must be explicit: `PASS` may proceed only when the accepted target-state ledger matches the approved artifact chain and needs no hidden architecture, ownership, contract, sequencing, or rollout decisions; `CONCERNS` may proceed only with named risks and proof obligations the implementation can satisfy without replanning; `FAIL` must route to the named earlier phase; and `WAIVED` must remain a narrow tiny/direct-path/prototype exception.
-- The task-ledger review must also record consumed subagent gates, lane-derived proof obligations, accepted risks or waivers, and whether unresolved lane blockers or severity conflicts remain.
+- The task-review handoff must be explicit: leave review and readiness fields as `pending_task_review`, name the consumed artifact chain, and identify likely review lenses or proof obligations for the separate gate.
+- The task-review/readiness phase records consumed subagent gates, lane-derived proof obligations, accepted risks or waivers, and whether unresolved lane blockers or severity conflicts remain.
 - If required compact or split design context is missing or inconsistent, reopen specification, `system-integration-design`, or `go-code-ownership-design` instead of inferring the missing context locally.
 - If required specification review is missing or inconsistent, reopen specification review instead of inferring approval locally.
 - If required technical design review is missing or inconsistent, reopen technical design review instead of inferring approval locally.
@@ -300,7 +296,7 @@ Prefer vertical, reviewable slices. Avoid generic tasks like `implement feature`
 - Keep generated and mirrored cleanup source-of-truth order explicit: update owning sources first, regenerate or sync derived artifacts, and add drift proof instead of hand-editing mirrors or generated output as primary cleanup.
 - If a phase is not independently mergeable or testable, name the coupling explicitly.
 - Prefer sequential phases unless change surfaces are truly disjoint.
-- Make the handoff explicit: the planning session stops at approved `tasks.md`, and the first implementation task starts in a new session unless a recorded waiver says otherwise.
+- Make the handoff explicit: the planning session stops at draft or repaired `tasks.md`, and the first implementation task starts only after task-review/readiness passes unless a recorded waiver says otherwise.
 - State what should trigger a reopen back into specification or technical design instead of letting coding discover it silently.
 
 ## Definition Of Done
@@ -309,15 +305,15 @@ The planning pass is complete when:
 - each meaningful task in `tasks.md` has concrete action, dependency/proof context, and planned verification
 - checkpoints exist where the risk actually changes
 - blocked work is routed to the owning earlier phase instead of left as an open question in ready work
-- the next implementation or validation session can start without creating new workflow/process artifacts or missing `tasks.md` to compensate for incomplete planning output
-- any mandatory specification review gate is reconciled before implementation-readiness is marked ready
-- any mandatory design fan-out gate is reconciled before implementation-readiness is marked ready
-- any mandatory technical design review gate is reconciled before implementation-readiness is marked ready
-- task-ledger review confirms `tasks.md` matches reviewed `spec.md`, specification-review obligations, required design context, design fan-out obligations, technical-design-review obligations, and triggered validation or rollout obligations before implementation-readiness is marked ready
-- implementation-readiness status is explicit and is not `FAIL` unless the planning result is honestly blocked or reopened
+- the separate task-review/readiness phase can start without creating new workflow/process artifacts or missing `tasks.md` to compensate for incomplete planning output
+- any mandatory specification review gate is reconciled before planning handoff
+- any mandatory design fan-out gate is reconciled before planning handoff
+- any mandatory technical design review gate is reconciled before planning handoff
+- `tasks.md` is ready for task-ledger review to compare it with reviewed `spec.md`, specification-review obligations, required design context, design fan-out obligations, technical-design-review obligations, and triggered validation or rollout obligations
+- task-ledger review and implementation-readiness status are explicit as `pending_task_review`, unless planning is honestly blocked, reopened, or an eligible waiver is recorded
 - the workflow-control artifacts are ready for the read-only adequacy challenge, or the direct-path skip rationale is explicit
-- required read-only fan-out was run, validly scoped down, or explicitly blocked; missing explicit subagent authorization is never treated as local review adequacy
-- the next session can start implementation without re-planning or guessing where this planning pass was supposed to stop
+- required read-only fan-out was run, validly scoped down, or explicitly blocked; Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`
+- the next session can start task-review/readiness without re-planning or guessing where this planning pass was supposed to stop
 - out-of-scope implications are visible as non-goals, accepted risks, or proof-only follow-ups rather than hidden target-state cleanup
 - the task ledger is specific enough for `go-coder` to execute without recreating strategy or reverse-engineering missing design context
 - owner package/file, placement evidence, cleanup owner, and test owner are concrete enough that `go-coder` does not need to make a design choice

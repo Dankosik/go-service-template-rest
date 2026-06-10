@@ -24,24 +24,23 @@ Detailed shared companion for `docs/spec-first-workflow.md`. Read this when choo
 
 Use this shared file to choose shape and artifact ownership, then continue in the one phase file that owns the current work. Do not use this file as a substitute for phase-specific gates or implementation authority.
 
-## Default Decision Quality
+## Default Decision Quality Recording
 
-- Unless the user explicitly asks for prototype, quick, simple, temporary, or intentionally staged delivery, choose the production-ready architecture and system-design answer for the accepted scope.
-- Default to a target-state plan: decide the final architecture now, and make the implementation ledger include the work needed to reach that state without remembered-later cleanup.
-- Before approving non-trivial custom implementation, a new runtime dependency, or a meaningful new helper/abstraction, compare the current Go standard library, established repository patterns, and mature open-source options. Prefer a maintained open-source library over custom code when it fits the accepted contract and has compatible license, healthy maintenance/release/security signals, sufficient adoption for its domain, and lower ownership cost than local implementation.
-- Dependency/OSS due diligence must use current evidence when freshness matters. Useful signals include recent releases or commits, issue and maintainer activity, documented compatibility, license, security advisories or `govulncheck` relevance, transitive dependency cost, API stability, stars or other domain-appropriate adoption signals, and how naturally the library fits repository ownership boundaries.
-- Record the selected option, rejected options, evidence date or source, and reason for custom code when no suitable dependency is chosen. Missing due diligence blocks approval or readiness for work that would otherwise build custom infrastructure or add a dependency.
-- A material decision is not complete unless it records the selected answer, rationale or evidence, bounded assumptions, rejected alternatives when real, downstream consequence, and reopen trigger. `TBD`, open alternatives, or implementation-time product choices in required decision fields keep the artifact `draft` or `blocked`.
-- Before approving a non-trivial architecture, system-design, workflow, integration, data-flow, resilience, or abstraction decision, run Pattern Fit Diligence. Search for known design or system-design patterns that plausibly solve the task, read concrete pattern descriptions and real-use examples, compare candidates against the accepted scope, repository boundaries, operational proof path, and idiomatic Go constraints, then record the selected pattern, rejected patterns, evidence, applicability, and Go-fit. Prefer a proven pattern when it fits; justify custom design only when the known candidates fail a concrete task force.
-- Pattern Fit Diligence is not cargo-culting. Do not force Gang-of-Four, enterprise, cloud, or distributed-systems vocabulary onto a simple Go change. The comparison should explain why a pattern fits this task now, or why the straightforward repo-native design is better.
-- Code-level pattern fit is a coding and review concern below architecture/system-design. When local implementation is becoming verbose, duplicated, branch-heavy, or helper-heavy, prefer current Go stdlib and established repo idioms first, then small Go-idiomatic code patterns that reduce code and clarify ownership. Do not import class-oriented design-pattern scaffolding into Go unless a concrete local force justifies it and simpler explicit code was rejected.
-- Maintainable implementation shape is part of decision quality. Planning and coding must preserve focused file and package responsibilities instead of growing hand-written source files into catch-all modules. Line count is a smoke signal, not the only rule: mixed abstraction levels, unrelated concerns, and hard-to-review growth require a focused same-package seam file, a correct owner package, or a recorded rationale for keeping the code together.
-- When a change replaces an old path, replaced or unused legacy code must be removed, refactored into the active path, or explicitly retained with current owner, reason, proof of continued need, and exit condition. This applies to source code and adjacent tests, fixtures, generated output, config, scripts, examples, docs, skills, agents, and mirrors.
-- Do not create an MVP-now/future-hardening split when the production-ready decision is knowable and in scope.
-- Temporary bridges, compatibility shims, feature flags, canaries, or staged rollout are not default recommendations. Use them only when the user requests staging or a live external constraint makes a one-step target-state change unsafe or impossible.
-- When staging is unavoidable, record the target state, exit criteria, removal/proof tasks, and owner in the owning artifact as part of the accepted scope. Do not leave the cleanup as a follow-up or future-hardening note.
-- Scope cuts are allowed only as clear non-goals, constraints, or accepted risks. They are not a license to defer required architecture, ownership, contract, reliability, security, or validation decisions.
-- When design or code calls another microservice, verify the provider's current contract from its sibling repository, generated contract, published spec, or live contract endpoint before approval or completion, and record the source used in the owning artifact or proof.
+`AGENTS.md` owns hard decision-quality policy: target-state delivery, dependency/OSS due diligence, Pattern Fit Diligence, focused file and package responsibility, provider-contract verification, and legacy cleanup. This shared artifact model owns where those rules are represented in task-local artifacts.
+
+Code-level pattern fit is a coding and review concern. Record it in `tasks.md`, implementation proof, or review findings only when it affects local code placement, simplification, cleanup, or verification; do not treat it as a separate architecture Pattern Fit Diligence gate.
+
+Maintainable implementation shape is part of decision quality. When focused file, package, or responsibility placement matters, record the owner, rejected owner locations, cleanup consequence, and test owner in the artifact that carries implementation context.
+
+When any of those hard rules is relevant, the owning artifact records:
+
+- the selected decision and rejected alternatives when real;
+- the evidence source or bounded assumption that supports the decision;
+- the downstream artifact that must carry the consequence, such as `spec.md`, `design/`, `tasks.md`, `test-plan.md`, or `rollout.md`;
+- the proof obligation, freshness or negative-proof rule, and reopen target when proof fails;
+- the trigger or waiver rationale when an artifact is `not expected`, `conditional`, or `waived`.
+
+A material decision is not complete when its owning artifact leaves `TBD`, open alternatives, or implementation-time product choices, unowned cleanup, or unstated proof paths. In that case, keep the artifact `draft` or `blocked` and reopen the phase that owns the missing decision.
 
 ## Execution Shapes
 
@@ -51,23 +50,11 @@ Use this shared file to choose shape and artifact ownership, then continue in th
 | `lean local` | Bounded non-trivial single-domain work, stable ownership, limited research, and enough clarity to keep artifact depth lean. | `spec.md` plus `tasks.md` by default; optional preserved research, one `design/overview.md`, or `workflow-plan.md` only when triggered. Compact system/integration and Go code ownership answers may live together when concise and uncontested. | Subagent gate decision; inline `Risk Challenge`; mandatory specification review before design or planning; mandatory technical design review checkpoint when separate design depth is triggered; post-ledger task review/readiness gate. |
 | `full orchestrated` | Cross-domain, ambiguous, hard-to-reverse, high-impact, long-running, user-requested agent-backed, or protected-domain work. | `workflow-plan.md`, triggered `workflow-plans/<phase>.md`, preserved research when useful, reviewed `spec.md`, triggered system/integration design, triggered Go code ownership design, mandatory technical design review record, `tasks.md`, optional companion artifacts. | Planned read-only fan-out and fan-in as the default decision basis, mandatory specification review, ordered design checkpoints when separate design depth is triggered, mandatory technical design review, post-ledger task review/readiness gate, and strict phase boundaries. |
 
-Use `lean local` for bounded non-trivial single-domain work. This changes the amount of workflow ceremony, not the expected production readiness, expert coverage, or evidence quality of the chosen solution.
+Use `lean local` for bounded non-trivial single-domain work. This changes the amount of workflow ceremony, not the expected production readiness, expert coverage, or evidence quality of the chosen solution. `AGENTS.md` remains the hard authority for classification and escalation; this table explains the artifact implications.
 
 ### Escalation Triggers
 
-Escalate from direct or lean local to full orchestrated when the task touches:
-
-- public API, generated contracts, SDK behavior, or compatibility promises;
-- persisted data, migrations, backfills, cache semantics, retention, or deletion behavior;
-- auth, authorization, tenant isolation, secrets, browser session, CORS/CSRF, or abuse risk;
-- money, billing, quotas, credits, reserves, or entitlements;
-- concurrency, background workers, retry policy, lifecycle, shutdown, or shared state;
-- deployment, rollout, rollback, failback, mixed-version behavior, or migration order;
-- multiple independent owners or ambiguous source-of-truth;
-- unclear validation path;
-- broad audits, user-requested subagents, or explicit strict phase boundaries.
-
-If a trigger appears after work starts, record the reopen target and move to the fuller path instead of stretching the current shortcut.
+`AGENTS.md` owns the escalation trigger list. When a trigger appears after work starts, this artifact model owns the recording behavior: mark the current artifact `blocked` or `conditional`, name the fuller shape or reopen target, and move to the fuller path instead of stretching the current shortcut.
 
 ### Default Session Boundary Policy
 

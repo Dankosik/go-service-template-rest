@@ -7,9 +7,9 @@ When loaded for planning closeout, this file makes the model stop with a named n
 Load when closing a planning session or resolving whether the phase is complete, blocked, reopened, or still in progress.
 
 ## Decision Rubric
-- Mark `Session boundary reached: yes` only after planning artifacts, workflow-control artifacts, readiness status, and required adequacy challenge findings agree.
-- Set `Ready for next session: yes` only when readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`.
-- If readiness is `FAIL`, the boundary is not reached for implementation; next session starts with the named reopen target.
+- Mark `Session boundary reached: yes` only after planning artifacts, workflow-control artifacts, pending task-review/readiness handoff, and required adequacy challenge packet or skip rationale agree.
+- Set `Ready for next session: yes` when planning is complete enough for `task-review/readiness`, or when an eligible direct-path waiver explicitly removes that gate.
+- If planning is blocked, the boundary is not reached for task review; next session starts with the named reopen target.
 - The final planning action is a handoff update, not a code, review, validation, rollout, closeout, `spec.md`, or `design/` action.
 - If the user asks to keep going into implementation, repeat the recorded handoff and stop unless an eligible upfront direct/lean waiver already exists.
 
@@ -18,7 +18,7 @@ Load when closing a planning session or resolving whether the phase is complete,
 Planning phase complete.
 Session boundary reached: yes.
 Ready for next session: yes.
-Next session starts with: T001.
+Next session starts with: task-review/readiness.
 Stop rule: do not perform code, test, migration, review, validation, rollout execution, or closeout work in this planning session.
 ```
 
@@ -35,14 +35,14 @@ Stop rule: do not create implementation tasks that depend on the missing ownersh
 Copy this shape: a blocked stop names the reopen target and the forbidden shortcut.
 
 ```markdown
-Planning phase complete with CONCERNS.
+Planning phase complete with proof obligations.
 Session boundary reached: yes.
-Ready for next session: yes, with named proof obligations.
-Next session starts with: T001.
-Stop rule: the next session must satisfy the proof obligations before widening scope.
+Ready for next session: yes.
+Next session starts with: task-review/readiness.
+Stop rule: the next session reviews whether the proof obligations are mapped well enough for implementation.
 ```
 
-Copy this shape: `CONCERNS` can still cross the boundary only because the risk and proof are visible.
+Copy this shape: planning can cross the boundary only because the risk and proof mapping is visible for review.
 
 ## Reject
 ```markdown
@@ -53,11 +53,11 @@ Failure: it crosses into implementation after the planning boundary.
 
 ```markdown
 Session boundary reached: yes.
-Implementation readiness: FAIL.
+Implementation readiness: <non-pending verdict>.
 Next session starts with: T001.
 ```
 
-Failure: FAIL routes to a reopen target, not implementation.
+Failure: planning should not assign readiness, and implementation cannot start from a failed gate.
 
 ## Agent Traps
 - Leaving `Next session starts with` blank because the chat already says what to do.

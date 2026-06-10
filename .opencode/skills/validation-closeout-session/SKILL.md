@@ -118,7 +118,7 @@ Do not:
 
 ## Core Defaults
 - this is an orchestrator-facing wrapper, not a replacement for `go-verification-before-completion`
-- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the artifact mechanics
+- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` routes to the phase and shared docs that own artifact mechanics
 - `go-verification-before-completion` owns claim-to-proof discipline, command sizing, and evidence wording
 - validation is artifact-consuming: consume existing approved artifacts and fresh proof rather than authoring new workflow/process artifacts here
 - this wrapper owns when a dedicated closeout session may run, what files may change, what `done` means for the session, how reopen conditions are recorded, and why the session must stop

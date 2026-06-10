@@ -7,7 +7,7 @@ When loaded for symptom workflow-control files duplicate canonical artifact cont
 Load this as smell triage only when `workflow-plan.md`, `workflow-plans/<phase>.md`, or a finding would copy or summarize too much from canonical artifacts. Do not load it as the default reference when a narrower status, lane, stop-rule, or readiness gap matches.
 
 ## Decision Rubric
-- `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, next-session context bundle, and implementation-readiness status. It does not own the full ready-to-paste next-session prompt; that prompt is rendered in final chat only.
+- `workflow-plan.md` owns cross-phase routing, artifact status, blockers, adequacy challenge status, next-session routing, next-session context bundle, and task-review/readiness status. It does not own the full ready-to-paste next-session prompt; that prompt is rendered in final chat only.
 - `workflow-plans/<phase>.md` owns phase-local orchestration: lanes, order/parallelism, fan-in/challenge path, completion marker, stop rule, next action, blockers, and local adequacy challenge resolution.
 - `spec.md` owns final decisions; lean `Compact Design` or triggered `design/` owns technical design context; `tasks.md` owns executable task state and implementation handoff.
 - If workflow control contains canonical artifact content, recommend trimming it to a status, link/path, blocker, or next action. Do not ask for a larger duplicate summary.
@@ -31,7 +31,7 @@ Why to copy: the master should support resume routing, not become executable tas
 Use:
 - `Classification`: `non_blocking_but_record` if `tasks.md` exists and routing is clear; `blocks_phase_handoff` if the duplicate checklist is the only task ledger for non-trivial work
 - `Recommended Action`: `trim_duplicate_authority`
-- `Exact Orchestrator Addition`: Replace the checklist with `tasks.md: approved at tasks.md; Next session starts with: T001`.
+- `Exact Orchestrator Addition`: Replace the checklist with `tasks.md: draft_review_ready at tasks.md; Next session starts with: task-review/readiness`.
 
 ### Finding asks for copied artifact content
 `Gap`: Proposed finding says to copy all accepted risks and validation cases from `tasks.md` into `workflow-plans/planning.md`.

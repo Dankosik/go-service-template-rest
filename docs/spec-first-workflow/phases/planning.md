@@ -35,7 +35,7 @@ Planning must not invent missing design context. If exact tasking requires a mis
 
 Planning invention test: if `tasks.md` would need to decide source of truth, runtime sequence, failure policy, rollout mechanism, owner package/file, cleanup owner, proof owner, or test owner before it can name task source, order, proof, evidence, checkpoint, or stop/reopen condition, planning is blocked. Do not convert that gap into an implementation task; reopen specification, system/integration design, Go code ownership design, or technical design review according to the missing owner.
 
-`tasks.md` is a draft until the task-ledger review/readiness phase checks it against the approved artifact chain. A planning session may make the draft easy to review, but it must not treat its own authoring pass as the read-only readiness gate.
+`tasks.md` is a draft until the task-ledger review/readiness phase checks it against the approved artifact chain. A planning session may make the draft easy to review, but it must not treat its own authoring pass as the read-only readiness gate. `task-review-readiness.md` owns the readiness verdict.
 
 Planning consumes the specification review result for all non-trivial work. Missing review, blocking review, or repaired spec after `FAIL` without a follow-up verdict is a planning-entry failure, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted spec risks and proof obligations into the task-review handoff and the relevant ledger or companion artifacts.
 

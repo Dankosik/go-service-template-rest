@@ -114,17 +114,9 @@ Before declaring read-only lane execution unavailable, use tool discovery for su
 
 Subagent fan-out is a planned coverage map, not a delegation tree. Each lane is a narrow expert pass that returns compact evidence and recommendations for orchestrator fan-in. Broad, generic "review everything" lanes are weaker than several focused lanes with explicit lenses.
 
-When formal `spec-clarification-challenge` is triggered for broad or multi-domain full-orchestrated, protected-domain, high-impact, hard-to-reverse, cross-domain, or user-requested deep challenge work, prefer multi-challenger fan-out over a single generic challenger. The default broad clarification shape is five read-only challenger lanes with distinct lenses:
+When formal `spec-clarification-challenge` is triggered for broad or multi-domain full-orchestrated, protected-domain, high-impact, hard-to-reverse, cross-domain, or user-requested deep challenge work, use multi-challenger fan-out over a single generic challenger unless the approval risk is narrowly concentrated and a recorded scoped-down rationale proves omitted lenses cannot change approval. The specification phase owns the default lens set and scoped-down record shape.
 
-- scope and spec coherence;
-- domain invariants and edge cases;
-- architecture ownership and dependency boundaries;
-- API, data, compatibility, and source-of-truth consequences;
-- security, reliability, delivery, and validation proof.
-
-Use more lanes when additional independent approval-risk domains are real, including when one default lens bundles domains that are independently approval-critical for the task. Use fewer lanes only with a recorded scoped-down rationale; a single challenger lane is appropriate only for a narrow formal gate whose approval risk is concentrated in one question. A scoped-down rationale must list every default lens, the approval-critical question considered for that lens, the retained lane or lanes, and the evidence-backed reason each omitted lens cannot change approval. If any omitted lens has an unresolved approval-critical question, that lane must run.
-
-Before spawning multi-challenger lanes, turn each lens into one concrete approval-critical question. If the orchestrator cannot name the question, merge or drop that lane instead of sending a generic "review this area" brief. Include sibling lens names in each brief so the lane can avoid duplicating adjacent coverage.
+Before spawning multi-challenger lanes, turn each lens into one concrete approval-critical question. If the orchestrator cannot name the question, merge or drop that lane instead of sending a generic "review this area" brief. The phase file owns any phase-specific lens examples.
 
 A local-only rationale is valid only when it lists the decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out. Generic "bounded" or "single-domain" rationale is invalid for non-trivial phase approval.
 
@@ -193,10 +185,10 @@ Rules:
 - At every non-implementation phase boundary with a next session or reopen target, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded workflow state. Do this by default; do not wait for the user to ask for the handoff. If the workflow is honestly done, say there is no next session.
 - The recommended prompt is a chat-rendered handoff, not a durable artifact. Do not write the full prompt into `workflow-plan.md`, `workflow-plans/*`, `spec.md`, `tasks.md`, ad hoc prompt files, or generated notes. Those files may record only the routing state, next-session start point, context bundle, blockers, accepted risks, and proof obligations needed to regenerate the chat prompt.
 - The recommended prompt must name exactly one next phase or reopen target, list the artifacts to read first, state the expected output for that phase, and include the stop rule: complete that phase only, then stop with updated workflow state and the next prompt. Only an implementation prompt for an approved, reviewed `tasks.md` may say to execute the ledger through its named proof without stopping between task IDs.
-- When the next phase or reopen target is non-trivial and may depend on subagent fan-out, include this line in the recommended prompt: `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
-- A design-checkpoint next-session prompt must name exactly one design checkpoint, usually `system-integration-design` first or `go-code-ownership-design` after system design is complete, and must explicitly instruct the next agent to first record or run the checkpoint-scoped `Design fan-out` before writing design artifacts.
-- The implementation prompt for an approved, reviewed `tasks.md` must be composed with `codex-goal-prompt-composer`, start with `First, set a Codex Goal for this session:` followed by a short goal objective, then say `After the goal is set, execute every required task in tasks.md from start to finish`. Put task-local context, artifact read order, constraints, proof obligations, progress-update rule, and blocked-stop rule in a separate implementation brief.
-- The recommended prompt must be self-contained for a fresh session but selective: include only task-specific context needed to understand the next phase, read the right artifacts, and start correctly; do not dump unrelated history, generic repo rules, or full artifact text.
+- When the next phase or reopen target is non-trivial and may depend on subagent fan-out, include the exact `Subagent authorization:` line owned by `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
+- A design-checkpoint next-session prompt must name exactly one design checkpoint, usually `system-integration-design` first or `go-code-ownership-design` after system design is complete, and must tell the next agent to record or run checkpoint-scoped `Design fan-out` before writing design artifacts.
+- The implementation prompt for an approved, reviewed `tasks.md` must be composed with `codex-goal-prompt-composer`, set a Codex Goal first, and then execute the approved ledger through its named proof. Detailed prompt shape is owned by `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
+- The recommended prompt must be self-contained for a fresh session but selective: include only task-specific context needed to understand the next phase, read the right artifacts, and start correctly.
 
 ## 10. Anti-Patterns
 
@@ -222,7 +214,7 @@ Rules:
 
 ## 11. Maintenance Note
 
-Keep this file short, stable, and high-signal. Put detailed artifact shapes, examples, and expanded gate mechanics in `docs/spec-first-workflow.md`, its linked phase docs, or the relevant skill, not here.
+Keep this file short, stable, and high-signal. Put detailed artifact shapes, examples, and expanded gate mechanics in `docs/spec-first-workflow.md` and its linked phase or shared docs. Skills may provide reusable method and role support, but they do not own repository policy.
 
 @SOUL.md
 

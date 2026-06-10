@@ -27,8 +27,8 @@ Copy this shape: it records both the positive write set and the surfaces deliber
 
 ```markdown
 Planning is ready, but coding T001 is outside this session.
-Recorded handoff: `Next session starts with: T001`.
-Stop rule: implementation begins in a later session.
+Recorded handoff: `Next session starts with: task-review/readiness`.
+Stop rule: implementation begins only after the separate readiness gate passes.
 ```
 
 Copy this shape: it answers a bundled planning-and-coding request without starting implementation.

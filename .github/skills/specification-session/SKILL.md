@@ -123,10 +123,9 @@ Do not:
 - `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` owns the artifact mechanics
 - this wrapper owns specification-session protocol only and must not redefine spec shape, design rules, or planning behavior
 - use `spec-document-designer` as the deeper method for writing or normalizing `spec.md`
-- for lean-local work, record inline `Risk Challenge`; for full-orchestrated, high-risk, protected-domain, or otherwise triggered work, run formal clarification with read-only challenger lane(s), preferably `challenger-agent` using `spec-clarification-challenge`; broad formal clarification uses distinct lenses rather than one generic challenger
-- do not collapse broad formal clarification into one generic challenger merely because one agent could inspect all domains; use the default lens set as separate read-only lanes
+- for lean-local work, record inline `Risk Challenge`; for full-orchestrated, high-risk, protected-domain, or otherwise triggered work, run formal clarification according to `docs/spec-first-workflow/phases/specification.md`, preferably with `challenger-agent` using `spec-clarification-challenge`
+- broad formal clarification uses distinct lenses rather than one generic challenger; the specification phase owns the default lens set and scoped-down rationale shape
 - formal clarification is not waivable while the work remains full-orchestrated, protected-domain, high-risk, hard-to-reverse, cross-domain, or user-requested deep challenge; if the trigger no longer applies, record shape reclassification with trigger-matrix evidence before marking the formal gate not expected
-- fewer formal clarification lanes require `Scoped-down rationale:` listing every default lens, the approval-critical question considered for that lens, retained lane or lanes, and why omitted lenses cannot change spec review-readiness
 - Missing explicit subagent authorization is not a valid scoped-down or local-only clarification rationale. If required clarification lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, leave the specification gate blocked and return a next-session prompt with `Subagent authorization:`.
 - the clarification subagent returns questions for orchestrator reconciliation; it never edits files or makes final decisions
 - keep the wrapper focused on session readiness, allowed writes, handoff, and stop rules
@@ -166,7 +165,7 @@ Do not:
 - for lean local with no escalation trigger, record inline `Risk Challenge` in `spec.md` and classify it as `PASS`, `CONCERNS`, or `FULL_REQUIRED`
 - `Risk Challenge=CONCERNS` alone does not trigger formal multi-challenger clarification; inspect whether the concern exposes unresolved scope, ownership, proof, or escalation gaps that cannot be honestly closed inline
 - for full-orchestrated, high-risk, protected-domain, or otherwise triggered work, prepare a compact input bundle: problem frame, scope and non-goals, candidate decisions, constraints, validation expectations, known assumptions or open questions, and relevant research links
-- invoke the appropriate read-only challenger lane set, preferably `challenger-agent` with `spec-clarification-challenge`; use five distinct lenses by default for broad formal clarification, and use one lane only when the approval risk is narrowly concentrated and the scoped-down rationale is recorded
+- invoke the appropriate read-only challenger lane set, preferably `challenger-agent` with `spec-clarification-challenge`; use the default lens and scoped-down rules from `docs/spec-first-workflow/phases/specification.md`
 - do not collapse the default broad lens set into one generic challenger; each lane must have one concrete approval-critical question, assigned lens, sibling-lens context, and inspect-first list
 - answer each returned question from existing evidence when possible
 - if an answer requires expert work, reopen targeted research or fan-out with one read-only lane per expert question and one skill per lane; in a dedicated specification session, record the reopen and stop
@@ -255,7 +254,7 @@ Rules:
 - keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
 - target the recorded next phase or reopen route exactly, including targeted research or user-decision reopens
 - tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
-- for any non-trivial next phase or reopen target that may use read-only lanes, include `Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.`
+- for any non-trivial next phase or reopen target that may use read-only lanes, include the exact `Subagent authorization:` line from `docs/spec-first-workflow/shared/subagents-and-handoff.md`
 - if there is no next session or `Ready for next session: no`, do not invent a prompt
 
 ## Stop Condition

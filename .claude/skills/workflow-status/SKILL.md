@@ -105,22 +105,14 @@ Answer `Implementation may start` conservatively:
 For direct-path, lean-local, compatibility `lightweight-local`, or prototype work, `WAIVED` allows implementation only if the waiver, rationale, scope, and inline tasking are explicit in the current task record. Do not infer a waiver from task size alone.
 
 ## Allowed Writes Reference
-Report the phase's allowed write surface using the repository contract, while making clear that this helper writes nothing:
+Report the phase's allowed write surface by reading the owning phase file under `docs/spec-first-workflow/phases/` and the shared artifact model. This helper writes nothing and does not define write permissions.
 
-- `workflow planning`: `workflow-plan.md` and `workflow-plans/workflow-planning.md`
-- `research`: `research/*.md`, task-local `workflow-plan.md`, and the active research phase-control file when the session owns research
-- `specification`: `spec.md`, task-local `workflow-plan.md`, and `workflow-plans/specification.md`
-- `specification review`: read-only review output plus task-local `workflow-plan.md` and `workflow-plans/specification-review.md`; review agents do not edit `spec.md`, `design/`, `tasks.md`, or implementation handoffs, and the orchestrator records `PASS`, `CONCERNS`, or `FAIL`
-- `system/integration design`: compact system design in `spec.md`, task-local `design/overview.md`, triggered `design/system-integration.md` or split system artifacts as applicable, task-local `workflow-plan.md`, and triggered `workflow-plans/system-integration-design.md`
-- `Go code ownership design`: compact code ownership design in `spec.md` or `design/overview.md`, triggered `design/go-code-ownership.md` or split code ownership artifacts as applicable, task-local `workflow-plan.md`, and triggered `workflow-plans/go-code-ownership-design.md`
-- `technical design review`: read-only review output and workflow-control updates only; review agents do not edit design artifacts, `tasks.md`, or implementation handoffs, and the orchestrator records `PASS`, `CONCERNS`, or `FAIL`
-- `planning`: `tasks.md` when expected, triggered `test-plan.md` or `rollout.md`, named review/validation phase-control files when needed, task-ledger review/readiness status in task-local `workflow-plan.md`, and `workflow-plans/planning.md`
-- `implementation`: code, tests, migrations, configs, generation inputs, generated outputs required by the approved task ledger, plus existing `tasks.md` progress only
-- `review`: read-only review output only; no code or artifact mutation by review agents
-- `reconciliation`: approved code/test/runtime fixes required by the task ledger plus existing control/checkpoint artifacts only
-- `validation`: fresh verification plus ledger-owned closeout surfaces only, such as `spec.md` `Validation`/`Outcome`, existing `tasks.md` progress when used, and an existing validation phase-control file only when approved `tasks.md` explicitly names it
-- `done`: no writes unless a new task or explicit reopen starts
-- `unknown`: no writes until the task path and phase are clarified
+Use a compact summary in the status report:
+
+- `planning`: draft or repair `tasks.md` and route to `task-review/readiness`; readiness fields stay `pending_task_review`.
+- `task-review/readiness`: record the read-only task-ledger review and implementation-readiness verdict; do not repair the ledger inline.
+- `implementation` or later: follow the approved ledger and update only ledger-owned progress, proof, and closeout surfaces.
+- any other phase: summarize the owning phase doc's outputs and stop rule instead of carrying a local copy of its write list.
 
 ## Report Shape
 Keep the answer compact and use this shape unless the user asked for a narrower answer:

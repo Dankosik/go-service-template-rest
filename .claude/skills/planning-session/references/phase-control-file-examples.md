@@ -7,7 +7,7 @@ When loaded for phase-control file work, this file makes the model create only r
 Load when writing or repairing `workflow-plans/planning.md`, or when planning must create future review or validation phase-control files for named multi-session routing.
 
 ## Decision Rubric
-- `workflow-plans/planning.md` records phase-local orchestration: status, outputs, blockers, readiness, adequacy challenge, stop rule, next action.
+- `workflow-plans/planning.md` records phase-local orchestration: status, outputs, blockers, pending task-review/readiness handoff, adequacy challenge packet, stop rule, and next action.
 - Future review or validation phase-control files are allowed only when named multi-session routing requires them before implementation starts.
 - Future files start as pending routing skeletons; after the named phase starts, they remain compact routing and progress surfaces, not full execution logs or new decision records.
 - Review phase-control files should name review scope, read-only lanes, finding status, compact finding disposition, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule.
@@ -19,12 +19,13 @@ Load when writing or repairing `workflow-plans/planning.md`, or when planning mu
 ```markdown
 Phase: planning
 Phase status: complete
-Completion marker: `tasks.md` approved; readiness gate recorded.
+Completion marker: `tasks.md` draft_review_ready; task-review/readiness handoff recorded.
 Allowed writes used: `tasks.md`, `workflow-plan.md`, `workflow-plans/planning.md`.
-Implementation readiness: PASS.
-Workflow plan adequacy challenge: completed; blocking findings reconciled.
+Task ledger review: pending_task_review.
+Implementation readiness: pending_task_review.
+Workflow plan adequacy challenge packet: ready for review, or not expected with rationale.
 Stop rule: do not begin implementation in this session.
-Next action: start T001 in a later session.
+Next action: run task-review/readiness in a later session.
 ```
 
 Copy this shape: the planning file stays phase-local and handoff oriented.

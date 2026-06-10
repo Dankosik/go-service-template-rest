@@ -65,6 +65,8 @@ Use `docs/subagent-contract.md` and `docs/subagent-brief-template.md` for reusab
 
 If the active tool surface exposes subagent spawning only after an explicit user request for subagents, delegation, or parallel agent work, the repository workflow must carry that request in next-session prompts instead of requiring the user to remember it manually. Before declaring spawning unavailable, use tool discovery for subagent or multi-agent spawn tools when none are visible. If a required lane cannot run solely because the current prompt lacks explicit authorization, record `Subagent gate: blocked: missing explicit subagent authorization`; do not downgrade the gate to `local_only`, `scoped_down`, `waived`, or `not_expected`.
 
+This file is the canonical source for the exact authorization line. Phase files and skills should reference this section instead of restating the full prompt text.
+
 Use this exact line in any non-trivial next-session or reopen prompt whose next phase may depend on research fan-out, specification review lanes, clarification challenge lanes, design fan-out, technical design review, task-ledger review, workflow-plan adequacy challenge, review fan-out, or validation fan-out:
 
 ```text
