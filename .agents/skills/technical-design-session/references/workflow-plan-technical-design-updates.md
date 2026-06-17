@@ -7,7 +7,7 @@ When loaded for workflow-control updates after a design pass, this file makes th
 Load after writing or repairing design artifacts, or whenever technical design is blocked and workflow control must record the reopen target.
 
 ## Decision Rubric
-- Update `workflow-plan.md` with current design checkpoint, phase status, design artifact statuses, conditional artifact statuses, blockers, reopen conditions, `Session boundary reached`, `Ready for next session`, and `Next session starts with`.
+- Update `workflow-plan.md` with current design checkpoint, phase status, design artifact statuses, contract-design checkpoint status when plausible, conditional artifact statuses, blockers, reopen conditions, `Session boundary reached`, `Ready for next session`, and `Next session starts with`.
 - Update the active design phase-control file, either `workflow-plans/system-integration-design.md` or `workflow-plans/go-code-ownership-design.md`, with pass type, local status, completion marker, artifact statuses, local stop rule, blockers, parallelizable follow-up if any, and next-checkpoint or technical-design-review handoff state.
 - Negative artifact statuses such as `not expected`, `conditional`, or `waived` need a short trigger rationale; a bare label is not enough for resume.
 - Keep workflow files routing-only; link to design artifacts rather than copying component maps, sequence detail, or ownership tables into them.
@@ -21,7 +21,7 @@ Load after writing or repairing design artifacts, or whenever technical design i
 Current phase: go-code-ownership-design
 Phase status: complete
 Required design artifacts: approved
-Conditional artifacts: `design/data-model.md` approved; `design/contracts/` approved; `rollout.md` not expected
+Conditional artifacts: `design/data-model.md` approved; `design/contracts/` approved with OpenAPI source-of-truth handoff; `rollout.md` not expected
 Negative status rationale: `rollout.md` not expected because no migration, mixed-version, deploy-order, or failback choreography is in scope.
 Blockers: none
 Session boundary reached: yes

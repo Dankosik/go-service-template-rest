@@ -172,10 +172,10 @@ Bootstrap shortcuts:
 
 - `make init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
   - Runs: `bash ./scripts/init-module.sh [module-path]`
-  - Purpose: manual fallback/override for module bootstrap after clone; updates `go.mod`, internal Go imports, proto `go_package` module prefix, and optionally replaces CODEOWNERS placeholder.
+  - Purpose: manual fallback/override for module bootstrap after clone; updates `go.mod`, internal Go imports, and optionally replaces CODEOWNERS placeholder.
   - If `MODULE` is omitted, script auto-detects module path from `git remote origin`.
   - Includes: `go mod tidy` at the end.
-  - Module-path invariant: keep `go.mod`, Go import prefixes, and `api/proto/**` `go_package` values aligned to the same module path. Do not manually point runtime code or proto contracts at another service module.
+  - Module-path invariant: keep `go.mod` and Go import prefixes aligned to the same module path. Do not manually point runtime code at another service module.
   - Note: script no longer requires Perl.
 
 - `make docker-init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
@@ -224,7 +224,7 @@ Bootstrap shortcuts:
 - `make fmt`
   - Runs:
     - `go tool goimports -w` on Go files outside `vendor/` and local tool caches under `.cache/`;
-    - `go tool gofumpt -w` on hand-written Go files, excluding known generated OpenAPI, sqlc, mockgen, and stringer outputs.
+    - `go tool gofumpt -w` on hand-written Go files, excluding known generated OpenAPI and sqlc outputs.
 
 - `make docker-fmt`
   - Docker equivalent of `make fmt`.
@@ -296,7 +296,7 @@ Bootstrap shortcuts:
     - `GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...`
     - `go tool cover -func=coverage.out`
 
-- `make test-report [COVERAGE_MIN=65.0]`
+- `make test-report [COVERAGE_MIN=80.0]`
   - Runs `gotestsum` over `go test` with:
     - coverage profile output (`coverage.out`),
     - JUnit XML artifact (`.artifacts/test/junit.xml`),
@@ -309,7 +309,8 @@ Bootstrap shortcuts:
   - Fails if coverage from `coverage.out` is below the configured threshold.
   - Coverage threshold excludes:
     - generated OpenAPI artifact (`internal/api/openapi.gen.go`),
-    - service composition root entrypoint (`cmd/service/main.go`).
+    - generated SQLC artifacts (`internal/infra/postgres/sqlcgen/`),
+    - binary composition root entrypoints (`cmd/service/main.go`, `cmd/migrate/main.go`).
 
 - `make test-fuzz-smoke [FUZZ_TIME=45s]`
   - Runs a short fuzzing pass (`go test -fuzz`) when fuzz targets exist.
@@ -349,26 +350,6 @@ Bootstrap shortcuts:
 - `make docker-test-integration`
   - Docker tooling equivalent of integration tests.
   - Uses Docker socket passthrough when available.
-
-### Mock generation workflow
-
-- `make mocks-generate`
-  - Runs: `go generate -run "mockgen" ./...`
-  - Purpose: execute only `//go:generate` directives that use `mockgen`.
-
-- `make mocks-drift-check`
-  - Runs `mocks-generate`, then verifies tracked and untracked `*_mock_test.go` artifacts.
-  - Fails when generated mock artifacts are stale or missing from git.
-
-### Enum string generation workflow
-
-- `make stringer-generate`
-  - Runs: `go generate -run "stringer" ./...`
-  - Purpose: execute only `//go:generate` directives that use `stringer`.
-
-- `make stringer-drift-check`
-  - Runs `stringer-generate`, then verifies tracked and untracked `*_string.go` artifacts.
-  - Fails when enum `stringer` artifacts are stale or missing from git.
 
 ### SQL query generation workflow
 
@@ -467,8 +448,6 @@ Bootstrap shortcuts:
     - `vet`
     - `test-race`
     - `test-report`
-    - `mocks-drift-check`
-    - `stringer-drift-check`
     - `sqlc-check`
     - `openapi-check`
     - `go-security`
@@ -523,8 +502,6 @@ Bootstrap shortcuts:
     - `vet`
     - `test-race`
     - `test-report`
-    - `mocks-drift-check`
-    - `stringer-drift-check`
     - `sqlc-check`
     - `test-integration` (`REQUIRE_DOCKER=1`)
     - `openapi-check`
@@ -669,7 +646,7 @@ Targeted parity checks:
 - Native full-check OpenAPI lint failure with missing Node/npm: install Node/npm for native mode, or run `make docker-ci` with Docker for pinned Node tooling.
 - Docker unavailable: start Docker Desktop/Engine and rerun the Docker target. Use `make doctor-docker` when Docker commands fail before tests start.
 - Coverage tooling mismatch in native mode: use `make test-cover-local` for a warning-only local diagnosis, or use `make docker-test-report` for pinned coverage tooling.
-- Generated drift failure: run the matching generate target (`make openapi-generate`, `make sqlc-generate`, `make mocks-generate`, or `make stringer-generate`), review the diff, then rerun the matching drift check.
+- Generated drift failure: run the matching generate target (`make openapi-generate` or `make sqlc-generate`), review the diff, then rerun the matching drift check.
 - GitHub CLI auth or permission failure: run `gh auth status`, then `gh auth login` if needed. `make gh-protect-check` also needs repository permissions that can read branch-protection settings.
 
 ### Feature implementation (native)
@@ -684,8 +661,6 @@ Choose the package and test location from [Project Structure & Module Organizati
 6. If integration behavior changed: `make test-integration`
 7. If SQL queries/migrations changed: `make sqlc-check`
 8. If migrations changed: `make migration-validate`
-9. If mockgen directives or generated mocks changed: `make mocks-drift-check`
-10. If stringer directives or generated enum strings changed: `make stringer-drift-check`
 
 ### Feature implementation (zero-setup)
 
@@ -700,15 +675,13 @@ For the usual quick fmt/lint/test loop, run `make docker-check`; use the stepwis
 6. If integration behavior changed: `make docker-test-integration`
 7. If SQL queries/migrations changed: `make docker-sqlc-check`
 8. If migrations changed: `make docker-migration-validate`
-9. If mockgen directives or generated mocks changed: run `make mocks-drift-check` in native mode, or `make docker-ci` for the full zero-setup validation bundle.
-10. If stringer directives or generated enum strings changed: run `make stringer-drift-check` in native mode, or `make docker-ci` for the full zero-setup validation bundle.
 
 ## CI Mapping
 
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make mocks-drift-check` + `make stringer-drift-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)

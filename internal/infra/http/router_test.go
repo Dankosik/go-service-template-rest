@@ -924,7 +924,7 @@ func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubro
 func TestStrictMetricsHandlerIsNotRuntimeOwned(t *testing.T) {
 	t.Parallel()
 
-	strict := strictHandlers{metrics: telemetry.New()}
+	strict := strictHandlers{}
 	resp, err := strict.Metrics(context.Background(), api.MetricsRequestObject{})
 	if err == nil {
 		t.Fatal("strict Metrics() error = nil, want non-nil")

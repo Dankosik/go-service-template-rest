@@ -139,12 +139,6 @@ const (
 	// StartupDependencyPostgres is the bounded dependency label for Postgres.
 	StartupDependencyPostgres = "postgres"
 
-	// StartupDependencyRedis is the bounded dependency label for Redis.
-	StartupDependencyRedis = "redis"
-
-	// StartupDependencyMongo is the bounded dependency label for MongoDB.
-	StartupDependencyMongo = "mongo"
-
 	// StartupDependencyTelemetry is the bounded dependency label for telemetry.
 	StartupDependencyTelemetry = "telemetry"
 
@@ -171,17 +165,11 @@ const (
 	// StartupDependencyModeCriticalFailClosed is the bounded mode label for critical fail-closed dependencies.
 	StartupDependencyModeCriticalFailClosed = "critical_fail_closed"
 
-	// StartupDependencyModeCriticalFailDegraded is the bounded mode label for critical degraded dependencies.
-	StartupDependencyModeCriticalFailDegraded = "critical_fail_degraded"
-
 	// StartupDependencyModeOptionalFailOpen is the bounded mode label for optional fail-open dependencies.
 	StartupDependencyModeOptionalFailOpen = "optional_fail_open"
 
 	// StartupDependencyModeFeatureOff is the bounded mode label for admitted feature-off dependencies.
 	StartupDependencyModeFeatureOff = "feature_off"
-
-	// StartupDependencyModeDegradedReadOnlyOrStale is the bounded mode label for degraded read-only or stale dependencies.
-	StartupDependencyModeDegradedReadOnlyOrStale = "degraded_read_only_or_stale"
 
 	// StartupDependencyModeOther is the bounded fallback label for unknown dependency modes.
 	StartupDependencyModeOther = "other"
@@ -466,8 +454,6 @@ func normalizeStartupDependency(dep string) string {
 	normalized := strings.TrimSpace(strings.ToLower(dep))
 	switch normalized {
 	case StartupDependencyPostgres,
-		StartupDependencyRedis,
-		StartupDependencyMongo,
 		StartupDependencyTelemetry,
 		StartupDependencyNetworkPolicy,
 		StartupDependencyIngressPolicy,
@@ -484,10 +470,8 @@ func normalizeStartupDependencyMode(mode string) string {
 	switch normalized {
 	case StartupDependencyModeDisabled,
 		StartupDependencyModeCriticalFailClosed,
-		StartupDependencyModeCriticalFailDegraded,
 		StartupDependencyModeOptionalFailOpen,
-		StartupDependencyModeFeatureOff,
-		StartupDependencyModeDegradedReadOnlyOrStale:
+		StartupDependencyModeFeatureOff:
 		return normalized
 	default:
 		return StartupDependencyModeOther

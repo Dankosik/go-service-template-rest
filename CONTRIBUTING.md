@@ -85,10 +85,6 @@ make guardrails-check
 - Do not merge generated drift:
   - run `make openapi-generate`
   - verify with `make openapi-drift-check`
-  - when interface seams change, run `make mocks-generate`
-  - verify with `make mocks-drift-check`
-  - when internal integer enums change, run `make stringer-generate`
-  - verify with `make stringer-drift-check`
   - when SQL queries or migrations change, run `make sqlc-generate`
   - verify with `make sqlc-check`
 

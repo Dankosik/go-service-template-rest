@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
@@ -48,19 +47,6 @@ func (s *dependencyCleanupStack) run() {
 	s.cleanups = nil
 }
 
-type startupNamedProbe struct {
-	name  string
-	check func(context.Context) error
-}
-
-func (p startupNamedProbe) Name() string {
-	return p.name
-}
-
-func (p startupNamedProbe) Check(ctx context.Context) error {
-	return p.check(ctx)
-}
-
 type postgresReadinessProbe struct {
 	probe  health.Probe
 	budget time.Duration
@@ -89,15 +75,9 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 type dependencyProbeSpec struct {
 	stage        string
 	dep          string
-	mode         string
 	budget       time.Duration
 	minRemaining time.Duration
 	probe        func(context.Context) error
-}
-
-type degradedDependencyProbeFailurePolicy struct {
-	rejectionMode string
-	degradedMode  string
 }
 
 type probeExecutionResult struct {
@@ -128,22 +108,6 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 		if runtime.cfg.PostgresReadinessProbeRequired() {
 			outcome.probes = append(outcome.probes, newPostgresReadinessProbe(pg, runtime.cfg.Postgres.HealthcheckTimeout))
 		}
-	}
-
-	redisProbe, err := initRedisDependency(bootstrapCtx, dependencyProbeCtx, runtime)
-	if err != nil {
-		return outcome, err
-	}
-	if redisProbe != nil {
-		outcome.probes = append(outcome.probes, redisProbe)
-	}
-
-	mongoProbe, err := initMongoDependency(bootstrapCtx, dependencyProbeCtx, runtime)
-	if err != nil {
-		return outcome, err
-	}
-	if mongoProbe != nil {
-		outcome.probes = append(outcome.probes, mongoProbe)
 	}
 
 	return outcome, nil
@@ -229,160 +193,6 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 	return pg, nil
 }
 
-func initRedisDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (health.Probe, error) {
-	labels := startupRedisDependencyLabels
-	if !runtime.cfg.Redis.Enabled {
-		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
-		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no readiness probe and no startup error.
-	}
-
-	redisMode := runtime.cfg.Redis.ModeValue()
-	redisCriticality := startupDependencyModeOptionalFailOpen
-	if redisMode == config.RedisModeStore {
-		redisCriticality = startupDependencyModeCriticalFailClosed
-	}
-	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, redisCriticality)
-	if redisMode == config.RedisModeCache {
-		runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeFeatureOff)
-	}
-
-	redisProbeAddress, addressErr := redisStartupProbeAddress(runtime.cfg.Redis)
-	if addressErr != nil {
-		return nil, rejectStartupForDependencyInit(
-			bootstrapCtx,
-			runtime.bootstrapSpan,
-			runtime.metrics,
-			runtime.log,
-			labels.dependency,
-			labels.resolveStage,
-			addressErr,
-		)
-	}
-	if err := runtime.networkPolicy.EnforceEgressTarget(redisProbeAddress, "tcp"); err != nil {
-		return nil, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			runtime.bootstrapSpan,
-			runtime.metrics,
-			runtime.log,
-			labels.dependency,
-			err,
-		)
-	}
-
-	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        labels.probeStage,
-		dep:          labels.dependency,
-		mode:         redisMode,
-		budget:       redisProbeBudget,
-		minRemaining: startupFailFastThreshold,
-		probe: func(probeCtx context.Context) error {
-			if redisMode == config.RedisModeStore {
-				return probeRedisAddressWithRetry(probeCtx, redisProbeAddress, runtime.cfg.Redis.DialTimeout)
-			}
-			return probeRedisAddressWithContext(probeCtx, redisProbeAddress, runtime.cfg.Redis.DialTimeout)
-		},
-	})
-	if probeResult.err != nil {
-		if err := handleDegradedDependencyProbeFailure(
-			bootstrapCtx,
-			runtime,
-			labels,
-			probeResult,
-			runtime.cfg.RedisReadinessProbeRequired(),
-			degradedDependencyProbeFailurePolicy{
-				rejectionMode: redisMode,
-				degradedMode:  startupDependencyModeFeatureOff,
-			},
-		); err != nil {
-			return nil, err
-		}
-		return nil, nil //nolint:nilnil // Fail-open dependency degradation intentionally has no readiness probe and no startup error.
-	}
-
-	runtime.metrics.MarkStartupDependencyReady(labels.dependency, redisCriticality)
-	if redisMode == config.RedisModeCache {
-		runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeFeatureOff)
-	}
-	if runtime.cfg.RedisReadinessProbeRequired() {
-		return startupNamedProbe{
-			name: labels.dependency,
-			check: func(ctx context.Context) error {
-				return probeRedisAddressWithContext(ctx, redisProbeAddress, runtime.cfg.Redis.DialTimeout)
-			},
-		}, nil
-	}
-	return nil, nil //nolint:nilnil // Healthy fail-open dependency may intentionally skip readiness probe registration.
-}
-
-func initMongoDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (health.Probe, error) {
-	labels := startupMongoDependencyLabels
-	if !runtime.cfg.Mongo.Enabled {
-		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
-		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no readiness probe and no startup error.
-	}
-
-	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailDegraded)
-	mongoProbeAddress, addressErr := mongoStartupProbeAddress(runtime.cfg.Mongo)
-	if addressErr != nil {
-		return nil, rejectStartupForDependencyInit(
-			bootstrapCtx,
-			runtime.bootstrapSpan,
-			runtime.metrics,
-			runtime.log,
-			labels.dependency,
-			labels.resolveStage,
-			addressErr,
-		)
-	}
-	if err := runtime.networkPolicy.EnforceEgressTarget(mongoProbeAddress, "tcp"); err != nil {
-		return nil, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			runtime.bootstrapSpan,
-			runtime.metrics,
-			runtime.log,
-			labels.dependency,
-			err,
-		)
-	}
-
-	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        labels.probeStage,
-		dep:          labels.dependency,
-		budget:       mongoProbeBudget,
-		minRemaining: startupFailFastThreshold,
-		probe: func(probeCtx context.Context) error {
-			return probeMongoAddressWithRetry(probeCtx, mongoProbeAddress, runtime.cfg.Mongo.ConnectTimeout)
-		},
-	})
-	if probeResult.err != nil {
-		if err := handleDegradedDependencyProbeFailure(
-			bootstrapCtx,
-			runtime,
-			labels,
-			probeResult,
-			runtime.cfg.MongoReadinessProbeRequired(),
-			degradedDependencyProbeFailurePolicy{
-				rejectionMode: startupDependencyModeDegradedReadOnlyOrStale,
-				degradedMode:  startupDependencyModeDegradedReadOnlyOrStale,
-			},
-		); err != nil {
-			return nil, err
-		}
-		return nil, nil //nolint:nilnil // Fail-open dependency degradation intentionally has no readiness probe and no startup error.
-	}
-
-	runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeCriticalFailDegraded)
-	if runtime.cfg.MongoReadinessProbeRequired() {
-		return startupNamedProbe{
-			name: labels.dependency,
-			check: func(ctx context.Context) error {
-				return probeMongoAddressWithContext(ctx, mongoProbeAddress, runtime.cfg.Mongo.ConnectTimeout)
-			},
-		}, nil
-	}
-	return nil, nil //nolint:nilnil // Healthy fail-open dependency may intentionally skip readiness probe registration.
-}
-
 func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer, spec dependencyProbeSpec) probeExecutionResult {
 	if err := ensureRemainingStartupBudget(dependencyProbeCtx, spec.minRemaining, spec.stage); err != nil {
 		return probeExecutionResult{budgetBlocked: true, parentErr: dependencyProbeCtx.Err(), err: err}
@@ -403,9 +213,6 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeCancel()
 
 	attrs := []attribute.KeyValue{attribute.String("dep", spec.dep)}
-	if mode := strings.TrimSpace(spec.mode); mode != "" {
-		attrs = append(attrs, attribute.String("mode", mode))
-	}
 	if err != nil {
 		probeSpan.RecordError(err)
 		attrs = append(attrs, attribute.String("result", "error"))
@@ -416,51 +223,6 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeSpan.End()
 
 	return probeExecutionResult{budgetBlocked: false, parentErr: parentErr, err: err}
-}
-
-func shouldAbortDegradedDependencyStartup(result probeExecutionResult) bool {
-	if result.budgetBlocked {
-		return true
-	}
-	return result.parentErr != nil
-}
-
-func handleDegradedDependencyProbeFailure(
-	ctx context.Context,
-	runtime dependencyProbeRuntime,
-	labels startupDependencyProbeLabels,
-	result probeExecutionResult,
-	readinessRequired bool,
-	policy degradedDependencyProbeFailurePolicy,
-) error {
-	if shouldAbortDegradedDependencyStartup(result) {
-		rejectErr := dependencyInitAbortFailure(labels.dependency, result)
-		recordDependencyProbeRejection(ctx, runtime, labels, policy.rejectionMode, rejectErr)
-		return rejectErr
-	}
-	if readinessRequired {
-		rejectErr := dependencyInitFailure(labels.dependency, result.err)
-		recordDependencyProbeRejection(ctx, runtime, labels, policy.rejectionMode, rejectErr)
-		return rejectErr
-	}
-
-	recordDegradedDependencyStartup(ctx, runtime, labels.dependency, labels.operation, policy.degradedMode)
-	return nil
-}
-
-func recordDegradedDependencyStartup(ctx context.Context, runtime dependencyProbeRuntime, dependency, operation, mode string) {
-	runtime.metrics.MarkStartupDependencyReady(dependency, mode)
-	runtime.log.Warn(
-		"startup_dependency_degraded",
-		startupLogArgs(
-			ctx,
-			startupLogComponentStartupProbes,
-			operation,
-			"degraded",
-			"dependency", dependency,
-			"mode", mode,
-		)...,
-	)
 }
 
 func dependencyInitFailure(dep string, err error) error {

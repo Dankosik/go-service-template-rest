@@ -22,7 +22,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	go.uber.org/goleak v1.3.0
-	go.uber.org/mock v0.6.0
 )
 
 require (
@@ -511,9 +510,7 @@ tool (
 	github.com/securego/gosec/v2/cmd/gosec
 	github.com/sqlc-dev/sqlc/cmd/sqlc
 	github.com/zricethezav/gitleaks/v8
-	go.uber.org/mock/mockgen
 	golang.org/x/tools/cmd/goimports
-	golang.org/x/tools/cmd/stringer
 	golang.org/x/vuln/cmd/govulncheck
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt

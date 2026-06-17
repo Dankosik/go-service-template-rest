@@ -9,10 +9,3 @@ log:
 
 postgres:
   enabled: false
-
-redis:
-  enabled: false
-  mode: cache
-
-mongo:
-  enabled: false

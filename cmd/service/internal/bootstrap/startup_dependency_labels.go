@@ -18,11 +18,7 @@ func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLa
 	}
 }
 
-var (
-	startupPostgresDependencyLabels = newStartupDependencyProbeLabels(telemetry.StartupDependencyPostgres)
-	startupRedisDependencyLabels    = newStartupDependencyProbeLabels(telemetry.StartupDependencyRedis)
-	startupMongoDependencyLabels    = newStartupDependencyProbeLabels(telemetry.StartupDependencyMongo)
-)
+var startupPostgresDependencyLabels = newStartupDependencyProbeLabels(telemetry.StartupDependencyPostgres)
 
 const (
 	startupDependencyTelemetry       = telemetry.StartupDependencyTelemetry
@@ -33,12 +29,10 @@ const (
 )
 
 const (
-	startupDependencyModeDisabled                = telemetry.StartupDependencyModeDisabled
-	startupDependencyModeCriticalFailClosed      = telemetry.StartupDependencyModeCriticalFailClosed
-	startupDependencyModeCriticalFailDegraded    = telemetry.StartupDependencyModeCriticalFailDegraded
-	startupDependencyModeOptionalFailOpen        = telemetry.StartupDependencyModeOptionalFailOpen
-	startupDependencyModeFeatureOff              = telemetry.StartupDependencyModeFeatureOff
-	startupDependencyModeDegradedReadOnlyOrStale = telemetry.StartupDependencyModeDegradedReadOnlyOrStale
+	startupDependencyModeDisabled           = telemetry.StartupDependencyModeDisabled
+	startupDependencyModeCriticalFailClosed = telemetry.StartupDependencyModeCriticalFailClosed
+	startupDependencyModeOptionalFailOpen   = telemetry.StartupDependencyModeOptionalFailOpen
+	startupDependencyModeFeatureOff         = telemetry.StartupDependencyModeFeatureOff
 )
 
 const (

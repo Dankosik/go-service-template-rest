@@ -214,7 +214,7 @@ If the input contains conflicting asks, keep the conflict visible unless a safe 
 ## Repository Context Rules
 - Start from the map in `references/context-selection.md`; do not bulk-read the repo.
 - Prefer stable repo facts over template trivia.
-- Mention generated-artifact rules only when the task touches OpenAPI, sqlc, mockgen, or stringer surfaces.
+- Mention generated-artifact rules only when the task touches OpenAPI or sqlc surfaces.
 - Mention the spec-first orchestration model only when it materially shapes the downstream task.
 - Do not overfit to the sample `ping` service unless the request actually touches those files.
 

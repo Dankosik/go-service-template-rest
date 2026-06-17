@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -31,16 +32,12 @@ const (
 	startupTelemetryBudget      = 2 * time.Second
 
 	postgresProbeBudget = 5 * time.Second
-	redisProbeBudget    = 3 * time.Second
-	mongoProbeBudget    = 5 * time.Second
 
 	startupReadinessHeadroom = startupFailFastThreshold
 
 	startupRetryBaseDelay   = 50 * time.Millisecond
 	startupRetryMaxDelay    = 250 * time.Millisecond
 	postgresStartupAttempts = 2
-	redisStoreProbeAttempts = 2
-	mongoProbeAttempts      = 2
 )
 
 type overlayPathsFlag []string
@@ -164,13 +161,14 @@ func Run(args []string) (runErr error) {
 		return fmt.Errorf("build http router: %w", err)
 	}
 
-	srv := httpx.New(httpx.Config{
+	srv := &http.Server{
+		Handler:           handler,
 		ReadHeaderTimeout: bootstrap.cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       bootstrap.cfg.HTTP.ReadTimeout,
 		WriteTimeout:      bootstrap.cfg.HTTP.WriteTimeout,
 		IdleTimeout:       bootstrap.cfg.HTTP.IdleTimeout,
 		MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
-	}, handler)
+	}
 
 	return serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
 		bootstrapSpan:  bootstrap.bootstrapSpan,

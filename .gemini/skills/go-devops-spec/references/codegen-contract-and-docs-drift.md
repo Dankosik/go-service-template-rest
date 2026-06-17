@@ -4,10 +4,10 @@
 When loaded for symptom "generated artifacts, contracts, or docs may drift," this file makes the model choose generator-backed drift gates and docs-trigger policy instead of likely mistake "regenerate if needed" or relying on reviewer memory.
 
 ## When To Load
-Load for OpenAPI/codegen verification, sqlc/stringer/mock drift, docs drift, local/CI parity for generated artifacts, or compatibility-check blocking behavior.
+Load for OpenAPI/codegen verification, sqlc drift, docs drift, local/CI parity for generated artifacts, or compatibility-check blocking behavior.
 
 ## Local Source Of Truth
-- `Makefile` exposes `openapi-generate`, `openapi-drift-check`, `openapi-runtime-contract-check`, `openapi-lint`, `openapi-validate`, `openapi-breaking`, `openapi-check`, `sqlc-check`, `mocks-drift-check`, `stringer-drift-check`, and `docs-drift-check`.
+- `Makefile` exposes `openapi-generate`, `openapi-drift-check`, `openapi-runtime-contract-check`, `openapi-lint`, `openapi-validate`, `openapi-breaking`, `openapi-check`, `sqlc-check`, and `docs-drift-check`.
 - `.github/workflows/ci.yml` runs OpenAPI generation/drift checks, runtime contract checks, schema validation, linting, PR breaking-change checks, SQLC checks through `repo-integrity`, and docs drift.
 - `scripts/ci/docs-drift-check.sh` maps behavior, contract, CI, Docker, migration, Makefile, and script changes to documentation-update obligations.
 - `scripts/dev/docker-tooling.sh` mirrors drift checks for zero-setup Docker execution.
@@ -35,7 +35,7 @@ Load for OpenAPI/codegen verification, sqlc/stringer/mock drift, docs drift, loc
 - Do not invent drift targets absent from `Makefile` unless the spec also creates the repository enforcement surface.
 
 ## Validation Shape
-Use CI logs from `openapi-contract`, `openapi-breaking`, and `repo-integrity`; local output from `make openapi-check`, `make sqlc-check`, `make mocks-drift-check`, `make stringer-drift-check`, or `make docs-drift-check BASE_REF=... HEAD_REF=...`; and clean generated-output diffs.
+Use CI logs from `openapi-contract`, `openapi-breaking`, and `repo-integrity`; local output from `make openapi-check`, `make sqlc-check`, or `make docs-drift-check BASE_REF=... HEAD_REF=...`; and clean generated-output diffs.
 
 ## Hand-Off Boundary
 Do not define API semantics, request/response compatibility rules, SQL query ownership, or schema design here. Record the delivery check and hand those decisions to API, data, or architecture specs.

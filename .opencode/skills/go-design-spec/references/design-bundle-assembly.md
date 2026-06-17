@@ -11,7 +11,7 @@ Do not load this when the question is only a domain-specific decision. Use the s
 ## Decision Rubric
 - Core artifacts are expected for non-trivial design: `overview.md`, `component-map.md`, `sequence.md`, and `ownership-map.md`.
 - Core artifacts must be context-first enough for technical design review and planning: component maps name changed and stable or intentionally untouched surfaces; sequence notes include failure points, side effects, and recovery or retry boundaries when relevant; ownership maps name source-of-truth, dependency direction, generated-code authority, adapter responsibility, and explicit non-owners for critical behavior.
-- Conditional artifacts need behavior-changing triggers: persisted state, dependency shape, contracts, layered validation, migration choreography, or release safety.
+- Conditional artifacts need behavior-changing triggers: persisted state, dependency shape, contract checkpoint pressure, layered validation, migration choreography, or release safety.
 - `design/overview.md` is the entrypoint and artifact index. It should point to details, not repeat every artifact. When the bundle is review-bound, each required artifact entry should show status, and each plausible conditional artifact should include trigger rationale for `expected`, `not expected`, `conditional`, or `waived`.
 - `spec.md` owns final behavior, scope, invariants, and accepted risk. Design consumes those decisions.
 - `tasks.md` owns sequencing, task IDs, checkpoints, and implementation ordering. Design may name planning constraints, not write the task ledger.
@@ -33,7 +33,7 @@ The feature follows the existing HTTP request path: OpenAPI contract -> generate
 - `design/ownership-map.md`: approved; OpenAPI, app behavior, migration, and adapter ownership.
 - `design/data-model.md`: expected because persisted order state changes.
 - `design/dependency-graph.md`: not expected; dependency direction stays inside existing app -> infra boundaries.
-- `design/contracts/`: not expected; the public REST shape is unchanged and `api/openapi/service.yaml` remains the runtime contract authority.
+- `design/contracts/`: not expected; trigger test found no REST/API, event, generated-contract, status/error/idempotency/retry/async/freshness/compatibility, or material internal-interface change, and `api/openapi/service.yaml` remains the runtime contract authority.
 - `rollout.md`: expected because migration compatibility and backfill order affect release safety.
 - `test-plan.md`: not expected; validation fits in `tasks.md`.
 
@@ -44,7 +44,7 @@ Technical design review may start after the persistence failure policy is confir
 Conditional-artifact note with a real non-trigger:
 
 ```markdown
-`design/contracts/` is not expected. The public REST shape is unchanged and `api/openapi/service.yaml` remains the only runtime contract authority.
+`design/contracts/` is not expected. Trigger test: the public REST shape, status/error semantics, idempotency/retry behavior, event payloads, generated contracts, and material internal interfaces are unchanged. `api/openapi/service.yaml` remains the only runtime contract authority.
 ```
 
 Design-to-planning boundary:
@@ -83,6 +83,7 @@ Why it is bad: conditional artifacts need real triggers. Filler artifacts make p
 
 ## Agent Traps
 - `spec.md` says no public contract change, but `design/contracts/` declares a new REST payload authority.
+- `design/contracts/` is skipped while tasks will still need to invent resource, status, error, retry, async, freshness, compatibility, or generated/manual authority semantics.
 - `design/overview.md` says no persisted-state change, but `design/data-model.md` defines schema evolution.
 - `design/sequence.md` introduces async work, but `design/ownership-map.md` has no owner for durable retries, DLQ, or reconciliation.
 - `workflow-plan.md` says technical design review or planning can start, but `design/overview.md` still lists planning-critical blockers.

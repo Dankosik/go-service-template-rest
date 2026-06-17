@@ -12,8 +12,6 @@ type Service struct {
 	draining atomic.Bool
 }
 
-//go:generate -command mockgen go tool mockgen
-//go:generate mockgen -source=service.go -destination=zz_probe_mock_test.go -package=health
 type Probe interface {
 	Name() string
 	Check(ctx context.Context) error

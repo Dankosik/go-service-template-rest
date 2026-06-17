@@ -49,7 +49,7 @@ Use this file as the stable workflow entrypoint. Do not load every detailed work
 | Research, evidence fan-out, dependency/OSS diligence, or Pattern Fit research. | [Research](spec-first-workflow/phases/research.md) |
 | Write or repair `spec.md`, reconcile clarification challenge, or run lean `Risk Challenge`. | [Specification](spec-first-workflow/phases/specification.md) |
 | Review a completed non-trivial `spec.md` before design, test design, planning, or implementation. | [Specification Review](spec-first-workflow/phases/specification-review.md) |
-| Decide service behavior as a system participant: REST/API, external calls, queues, database/cache/source-of-truth, sequence, failure behavior, validation, or rollout. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
+| Decide service behavior as a system participant: REST/API, triggered contract design, external calls, queues, database/cache/source-of-truth, sequence, failure behavior, validation, or rollout. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
 | Decide Go package/file ownership, focused responsibilities, dependency direction, local abstractions, cleanup/removal, and test ownership. | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) |
 | Review triggered system/integration and Go code ownership design before planning. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) |
 | Design test scenarios, proof levels, pass/fail observables, fail-before expectations, and quality gates before task breakdown. | [Test Design](spec-first-workflow/phases/test-design.md) |
@@ -95,6 +95,7 @@ Avoid:
 - importing class-oriented design-pattern scaffolding into Go or adding pattern-shaped helpers when direct stdlib/repo-native code is shorter and clearer;
 - growing large hand-written source files as an implementation shortcut instead of placing new code in the focused owner file, same-package seam file, or correct package boundary;
 - treating system/integration design as enough for planning when package/file responsibility, dependency direction, cleanup/removal, or test ownership still need design;
+- treating REST/OpenAPI, event payload, generated-contract, or material internal-interface shape as implementation detail instead of a triggered system/integration contract-design checkpoint;
 - creating `test-plan.md`, `rollout.md`, split design files, or review/validation phase files for completeness;
 - treating a generic "add tests" task as equivalent to approved test design for behavior-risky work;
 - creating new process artifacts after coding starts;

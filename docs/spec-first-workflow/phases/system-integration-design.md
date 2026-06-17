@@ -21,6 +21,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when separ
 
 - A system/integration design record in `design/overview.md`, `design/system-integration.md`, or triggered split design artifacts.
 - Trigger decisions for `design/contracts/`, `design/data-model.md`, `design/sequence.md`, `design/dependency-graph.md`, `design/pattern-fit.md`, `test-design`, and `rollout.md` when those surfaces are plausible.
+- A contract-design checkpoint result when REST resources, OpenAPI or generated contracts, event payloads, client-visible status/error/idempotency/retry/async/freshness/compatibility semantics, or material internal interfaces are changed: `created`, `compact_sufficient`, `not_expected`, or `blocked` with evidence and readiness consequence.
 - Recorded `Design fan-out (system/integration): complete | scoped_down | local_only | blocked` with candidate seams, lane table or rationale, fan-in result, and readiness consequence.
 - Workflow-control updates that route next to `go-code-ownership-design`, or to the smallest reopen target when system/integration design is blocked.
 
@@ -35,6 +36,7 @@ System/integration design owns the behavior of the service as a system participa
 It owns:
 
 - REST/API, event, queue, generated-contract, or external-call shape inside the reviewed spec boundary.
+- Contract-design trigger decisions and the selected contract shape that implementation must preserve before OpenAPI, generated sources, handlers, clients, events, or internal interfaces are edited.
 - Source-of-truth ownership, derived surfaces, generated versus handwritten authority, and explicit non-owners.
 - Database, migration, cache, projection, retention, replay, consistency, and transaction-boundary decisions.
 - Runtime sequence, sync/async boundaries, side effects, idempotency, retries, deadlines, cancellation, cleanup, recovery, and degraded-mode decisions.
@@ -67,6 +69,50 @@ Use the smallest durable artifact shape that lets Go code ownership design proce
 
 The design artifact inventory must list each plausible conditional artifact or phase as `created`, `not expected`, `conditional`, or `blocked`. For `test-design`, use `triggered`, `not expected`, `conditional`, or `blocked` instead of creating `test-plan.md` inside system/integration design. `not expected` requires a concrete trigger test and evidence anchor showing the artifact or phase cannot change Go code ownership design, planning, proof, rollout, or review readiness. `conditional` is valid only when a later phase owns the trigger decision from execution detail; it cannot defer a knowable production-readiness decision. When the trigger is real but undecided, this phase is blocked.
 
+## Triggered Contract Design Checkpoint
+
+Contract design is not a universal phase. It is a mandatory checkpoint inside system/integration design when the approved scope changes any of these surfaces:
+
+- REST resource model, URI shape, method semantics, request or response body, Problem Details/error profile, status mapping, pagination/filter/sort semantics, rate-limit behavior, auth-visible behavior, idempotency, preconditions, retries, async acknowledgement, operation resources, webhooks, freshness/consistency disclosure, compatibility, deprecation, or versioning.
+- `api/openapi/service.yaml`, generated OpenAPI bindings, SDK-facing schema, or generated/manual route authority.
+- Event payloads, queue messages, webhooks, callbacks, protobuf or other generated contracts.
+- Material internal interfaces whose shape affects more than local package placement, test ownership, or private implementation detail.
+
+Checkpoint results are quality gates, not labels:
+
+- `created`: write `design/contracts/` because contract semantics are planning-critical or too dense for compact design.
+- `compact_sufficient`: keep the contract in reviewed `spec.md` `Behavior / Contract Delta`, `Compact Design`, or `design/overview.md` because the changed contract is concise, uncontested, and explicit enough for Go code ownership, planning, OpenAPI/source updates, generated drift proof, and tests.
+- `not_expected`: record the trigger test and evidence proving the approved scope does not change REST/API, event, generated, or material internal contract shape.
+- `blocked`: stop and reopen specification, research, user/specialist decision, or system/integration design when resource ownership, client audience, security context, consistency, retry/idempotency, async behavior, compatibility, provider contract, or source-of-truth authority is unknown.
+
+A `created` or `compact_sufficient` result is closed only when it states the caller or audience, selected resource or message shape, request/response/error/status semantics, retry/idempotency/concurrency rules, async/freshness/consistency rules when relevant, compatibility class, runtime source of truth, generated outputs, proof carrier, and reopen trigger.
+
+For client-visible REST or OpenAPI behavior, run or record an API/contracts lane using `api-contract-designer-spec` unless a valid local-only rationale proves no independent contract lens can change the selected system mechanism, test-design readiness, planning readiness, or implementation safety. The lane question must be concrete, such as "Should this write be synchronous 201, asynchronous 202 with operation resource, or retry-safe replay through Idempotency-Key?", not a generic "review the API."
+
+`design/contracts/` is design-only task context. Runtime authorities remain canonical, such as `api/openapi/service.yaml` for the REST wire contract, event/proto sources for non-HTTP contracts, and generated outputs derived from those sources. Technical design may approve the target contract and required source-of-truth updates, but implementation performs the canonical source edit, regeneration, and drift proof only from an approved `tasks.md`.
+
+Use this closure row when a separate `design/contracts/` file is needed or compact design might otherwise be ambiguous. Omit a field only with a short non-applicable rationale:
+
+```text
+Contract surface | Trigger result | Selected shape or preserved contract | Runtime source of truth | Generated or derived outputs | Client/internal compatibility class | Retry/idempotency/concurrency rule | Async/freshness/consistency rule | Error/status model | Proof carrier | Reopen trigger
+```
+
+For REST contracts that need `design/contracts/`, include enough of the API-contract decision for planning to task OpenAPI and tests without inventing semantics:
+
+- affected clients or callers, trust boundary, and resource ownership;
+- endpoint/resource matrix with methods, statuses, and authoritative read/write semantics;
+- request, response, error, validation, and limit shape at the boundary;
+- retry, idempotency, precondition, and timeout-recovery behavior;
+- async, operation-resource, webhook, freshness, and consistency behavior when applicable;
+- compatibility class, coexistence/deprecation/removal rule, source-of-truth update, generated-output update, and proof obligation.
+
+Invalid contract checkpoint outcomes:
+
+- `design/contracts/: not expected` without checking changed REST/API, event, generated, and material internal interface surfaces;
+- leaving resource model, status/error semantics, idempotency/retry, async/freshness, compatibility, or generated/manual authority to OpenAPI writing, handler implementation, SDK generation, or tests;
+- treating `api/openapi/service.yaml` as a place to invent the design instead of the canonical runtime source updated from approved design and tasking;
+- running an API/contracts lane that returns only style advice, route naming preference, or broad "looks fine" approval without evidence tied to a contract surface and reopen condition.
+
 ## Required Design Questions
 
 Every completed system/integration design should answer these questions or mark them not applicable with evidence. Each applicable row must classify the answer as `selected mechanism`, `preserved existing mechanism`, or `not applicable`; preserved and not-applicable answers need an evidence pointer and reviewer falsification handle, not only "unchanged" prose.
@@ -86,6 +132,7 @@ Artifact inventory, workflow agreement, or conditional-artifact status alone is 
 Required questions:
 
 - What is the authoritative behavior or contract, and which surfaces are derived or non-authoritative?
+- If a contract surface changes, what is the contract-design checkpoint result, selected shape, runtime source of truth, generated or derived outputs, compatibility class, proof carrier, and reopen trigger?
 - Which services, adapters, queues, databases, caches, generated artifacts, config sources, and operators participate?
 - What is the happy-path runtime sequence and every material failure branch?
 - What are the timeout, cancellation, retry/no-retry, cleanup, idempotency, replay, and partial-work rules?
@@ -112,7 +159,7 @@ Before marking the checkpoint complete, identify system seams that could change 
 
 Typical lanes:
 
-- API/contracts and generated-source authority.
+- API/contracts and generated-source authority, using `api-contract-designer-spec` for client-visible REST/OpenAPI behavior unless a valid local-only rationale closes the contract lens.
 - Data/source-of-truth, cache, migration, retention, or consistency.
 - External service, queue, async lifecycle, idempotency, or distributed recovery.
 - Security, tenant isolation, secrets, CORS/CSRF, abuse, or privacy.
@@ -145,7 +192,7 @@ The handoff must include:
 
 - reviewed `spec.md` and specification-review result;
 - system design artifact inventory and trigger decisions;
-- selected contracts, source-of-truth owners, runtime sequence, failure behavior, data/cache shape, rollout or validation obligations, and accepted risks;
+- contract-design checkpoint result, selected contracts, source-of-truth owners, generated or derived outputs, runtime sequence, failure behavior, data/cache shape, rollout or validation obligations, and accepted risks;
 - rejected live alternatives with `closed for this scope` or `reopen only if <specific missing or contradictory evidence>` so Go code design does not reopen them casually;
 - explicit reopen conditions if code ownership design finds that the selected package/file shape would change system behavior.
 

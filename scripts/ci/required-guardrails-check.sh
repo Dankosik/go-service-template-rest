@@ -314,8 +314,8 @@ for context in "dependency-review" "repository-security" "govulncheck" "gosec"; 
 done
 
 require_no_forbidden_go_imports \
-  "internal/app and internal/domain must not import infra adapters, generated sqlc, or concrete DB drivers" \
+  "internal/app must not import infra adapters, generated sqlc, or concrete DB drivers" \
   'github\.com/example/go-service-template-rest/internal/infra(/|$)|github\.com/jackc/pgx(/|$)' \
-  ./internal/app/... ./internal/domain/...
+  ./internal/app/...
 
 echo "required repository guardrails check passed"

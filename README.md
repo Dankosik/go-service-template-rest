@@ -422,7 +422,6 @@ Start feature work with the placement guide in [Project Structure & Module Organ
 
 - `cmd/service` - service entrypoint and bootstrap lifecycle orchestration
 - `internal/app` - use-case layer
-- `internal/domain` - domain contracts and types
 - `internal/infra` - HTTP, Postgres, telemetry, and other infrastructure adapters
 - `api/openapi/service.yaml` - REST API source of truth
 - `internal/api` - generated OpenAPI artifacts
@@ -443,7 +442,7 @@ Workflow comes first, but this is still a serious Go backend template.
 - PostgreSQL `17`, `pgx/v5`, and `sqlc` for SQL-first data access
 - `koanf` for configuration
 - Prometheus and OpenTelemetry for observability
-- `testcontainers-go`, `go.uber.org/mock`, and `goleak` for testing
+- `testcontainers-go` and `goleak` for testing
 - Docker multi-stage builds and distroless runtime images
 - GitHub Actions for CI, nightly checks, and CD
 

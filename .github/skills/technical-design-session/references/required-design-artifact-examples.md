@@ -23,10 +23,10 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
   - `design/sequence.md`: approved; async request flow, worker failure points, and retry boundaries are covered.
   - `design/ownership-map.md`: approved; job state source-of-truth, generated-code authority, and adapter responsibilities are named.
   - `design/data-model.md`: expected because persisted job state changes.
-  - `design/contracts/`: expected because the OpenAPI shape changes.
+  - `design/contracts/`: expected because the OpenAPI shape and client-visible status/error/idempotency/freshness semantics change.
   - `test-design`: not expected; validation obligations fit in `tasks.md`.
   - `rollout.md`: not expected; no mixed-version choreography is in scope.
-- Readiness: technical design review can start after `design/contracts/` is approved.
+- Readiness: technical design review can start after `design/contracts/` is approved, or after the system/integration checkpoint records compact contract design as sufficient with evidence.
 ```
 
 Copy this shape: overview points to the bundle, makes required artifact status scannable, gives trigger rationale for plausible conditional artifacts, and keeps readiness honest.
@@ -47,6 +47,7 @@ Copy this shape: sequence includes side effects and failure points, not only a h
 - Business transition rules: app orchestration.
 - HTTP response mapping: infra/http.
 - Generated contract authority: `api/openapi/service.yaml`; generated output is not hand-edited.
+- Contract-design authority: approved `design/contracts/` or compact system/integration design; runtime source-of-truth updates still happen later through `api/openapi/service.yaml` plus regeneration.
 ```
 
 Copy this shape: ownership names who owns each decision and who does not.

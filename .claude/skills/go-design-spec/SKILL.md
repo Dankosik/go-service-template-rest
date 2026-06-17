@@ -56,6 +56,7 @@ References are compact rubrics and example banks, not exhaustive checklists or d
 - `spec.md` owns decisions, lean `Compact Design` or triggered `design/` owns task-local technical context, and `tasks.md` consumes approved decisions plus required design context for the implementation handoff.
 - Separate design depth must pass technical design review before planning; this skill may prepare the design for that gate or support a read-only review lane, but it does not make final approval decisions.
 - Separate design depth is ordered by default: system/integration design decides service behavior first, then Go code ownership design decides package/file responsibility, dependency direction, local abstractions, cleanup/removal, and test ownership without changing observable behavior.
+- Contract design is a triggered checkpoint inside system/integration design. When REST resources, OpenAPI/generated contracts, event payloads, client-visible status/error/idempotency/retry/async/freshness/compatibility semantics, or material internal interfaces change, integrate an approved `design/contracts/` artifact, record compact contract design as sufficient with evidence, or block/reopen; do not leave contract shape to OpenAPI editing, handler implementation, generated clients, or tests.
 - When supporting a technical-design-review lane, classify each finding as `blocks_planning`, `reopens_design`, `reopens_spec`, `accepted_risk_candidate`, `proof_obligation`, or `record_only`, then recommend `PASS`, `CONCERNS`, or `FAIL` with status rationale.
 - In technical-design-review mode, judge whether planning can produce implementation-ready tasks without inventing architecture, system behavior, package/file ownership, contract, sequencing, rollout, validation policy, cleanup, or test ownership. If planning would need to make a design choice, the review should reopen the owning design checkpoint or specification instead of passing with a proof-only concern.
 - Before selecting custom infrastructure, a new runtime dependency, or a meaningful helper/abstraction, compare the current Go standard library, established repository patterns, and mature open-source options. Design may proceed only when the selected option and rejected alternatives have current evidence for maintenance, adoption, license, security, transitive dependency cost, API stability, and repository-boundary fit.
@@ -97,7 +98,7 @@ This is a technical-design integrator, not a workflow owner:
 - Add conditional artifacts only when their trigger is real:
   - `design/data-model.md` when persisted state, schema, cache contract, projections, replay behavior, or migration shape changes
   - `design/dependency-graph.md` when dependency shape or generated-code flow changes or a coupling risk must be made explicit
-  - `design/contracts/` when API, event, generated, or material internal interface contracts change
+  - `design/contracts/` when API, event, generated, client-visible status/error/idempotency/retry/async/freshness/compatibility semantics, or material internal interface contracts change and planning must preserve more than a compact design note
 - Call out when technical design review, `test-plan.md`, or `rollout.md` must exist before planning can start, but do not turn this skill into execution planning.
 - For lean-local work, prefer `spec.md` `Compact Design` or one `design/overview.md` when that honestly answers affected surfaces, ownership/source-of-truth, and sequence/failure behavior.
 
@@ -130,6 +131,7 @@ This is a technical-design integrator, not a workflow owner:
 - For sync seams, require explicit deadline budgets, retry or no-retry classes, side-effect idempotency policy, and error model; add pagination behavior only for collection or list semantics.
 - Guard against action-RPC drift hiding inside nominally resource-oriented APIs.
 - Make eventual-consistency disclosure explicit when sync read behavior depends on async convergence.
+- For client-visible REST/OpenAPI design, use or consume `api-contract-designer-spec` lane output when resource model, method/status matrix, error profile, retry/idempotency, async, freshness, or compatibility semantics are live forks; a local integrated pass is enough only with a recorded rationale proving the API/contracts lane cannot change readiness.
 
 ### Async And Distributed Seams
 - Require explicit event vs command intent and a justified choice of pub/sub vs queue.
@@ -190,6 +192,7 @@ When writing or reviewing the integrated technical-design bundle, cover:
 - for technical-design-review mode, the reviewed packet, classified findings, required reopen targets or planning proof obligations, and recommended gate result
 - what changes versus what remains stable
 - runtime sequence, ownership boundaries, and any data, contract, or dependency edges that planning must respect
+- contract-design checkpoint result when contract surfaces are plausible, including selected contract shape, runtime source of truth, generated or derived outputs, compatibility class, proof carrier, and reopen trigger
 - package/file owner map, responsibility boundaries, dependency direction, local abstraction choices, cleanup/removal, and test ownership that planning must respect
 - source responsibility evidence and rejected owner locations for non-trivial package/file placement decisions
 - dependency/OSS due-diligence outcome when relevant: selected and rejected stdlib, repository-pattern, OSS, and custom options with current evidence and planning consequences

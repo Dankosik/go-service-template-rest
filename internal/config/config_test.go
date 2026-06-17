@@ -48,12 +48,6 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.ReadinessPropagationDelay != 15*time.Second {
 		t.Fatalf("HTTP.ReadinessPropagationDelay = %s, want 15s", cfg.HTTP.ReadinessPropagationDelay)
 	}
-	if cfg.Redis.Mode != "cache" {
-		t.Fatalf("Redis.Mode = %q, want cache", cfg.Redis.Mode)
-	}
-	if cfg.Redis.AllowStoreMode {
-		t.Fatalf("Redis.AllowStoreMode = true, want false")
-	}
 	if cfg.Postgres.Enabled {
 		t.Fatalf("Postgres.Enabled = true, want false")
 	}
@@ -174,14 +168,8 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	resetConfigEnv(t)
 
 	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
-	username := " redis user with surrounding whitespace "
-	password := " redis password with surrounding whitespace "
-	mongoURI := " mongodb://user:pass@localhost:27017/app "
 	headers := " authorization=Bearer token, x-trace= spaced value "
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
-	t.Setenv("APP__REDIS__USERNAME", username)
-	t.Setenv("APP__REDIS__PASSWORD", password)
-	t.Setenv("APP__MONGO__URI", mongoURI)
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", headers)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
@@ -191,15 +179,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	if cfg.Postgres.DSN != postgresDSN {
 		t.Fatalf("Postgres.DSN = %q, want exact env value %q", cfg.Postgres.DSN, postgresDSN)
 	}
-	if cfg.Redis.Username != username {
-		t.Fatalf("Redis.Username = %q, want exact env value %q", cfg.Redis.Username, username)
-	}
-	if cfg.Redis.Password != password {
-		t.Fatalf("Redis.Password = %q, want exact env value %q", cfg.Redis.Password, password)
-	}
-	if cfg.Mongo.URI != mongoURI {
-		t.Fatalf("Mongo.URI = %q, want exact env value %q", cfg.Mongo.URI, mongoURI)
-	}
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
 	}
@@ -208,24 +187,18 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
 	resetConfigEnv(t)
 
-	t.Setenv("APP__REDIS__MODE", " STORE ")
-	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
-	t.Setenv("APP__REDIS__STALE_WINDOW", "0s")
-	t.Setenv("APP__REDIS__ADDR", " 127.0.0.1:6379 ")
-	t.Setenv("APP__MONGO__DATABASE", " app ")
+	t.Setenv("APP__APP__ENV", " local ")
+	t.Setenv("APP__OBSERVABILITY__OTEL__SERVICE_NAME", " service ")
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
-	if cfg.Redis.Mode != "store" {
-		t.Fatalf("Redis.Mode = %q, want store", cfg.Redis.Mode)
+	if cfg.App.Env != "local" {
+		t.Fatalf("App.Env = %q, want local", cfg.App.Env)
 	}
-	if cfg.Redis.Addr != "127.0.0.1:6379" {
-		t.Fatalf("Redis.Addr = %q, want trimmed address", cfg.Redis.Addr)
-	}
-	if cfg.Mongo.Database != "app" {
-		t.Fatalf("Mongo.Database = %q, want trimmed database", cfg.Mongo.Database)
+	if cfg.Observability.OTel.ServiceName != "service" {
+		t.Fatalf("Observability.OTel.ServiceName = %q, want service", cfg.Observability.OTel.ServiceName)
 	}
 }
 
@@ -495,147 +468,6 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 			t.Fatalf("Postgres.DSN = %q, want %q", cfg.Postgres.DSN, dsn)
 		}
 	})
-
-	t.Run("mongo_enabled_without_uri_rejected", func(t *testing.T) {
-		resetConfigEnv(t)
-		t.Setenv("APP__MONGO__ENABLED", "true")
-
-		_, _, err := LoadDetailed(LoadOptions{})
-		if err == nil {
-			t.Fatalf("LoadDetailed() expected secret policy error")
-		}
-		if !errors.Is(err, ErrSecretPolicy) {
-			t.Fatalf("error = %v, want ErrSecretPolicy", err)
-		}
-	})
-
-	t.Run("mongo_enabled_without_database_rejected", func(t *testing.T) {
-		resetConfigEnv(t)
-		t.Setenv("APP__MONGO__URI", "mongodb://localhost:27017")
-		configPath := writeTempConfig(t, `
-mongo:
-  enabled: true
-  database: ""
-`)
-
-		_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
-		if err == nil {
-			t.Fatalf("LoadDetailed() expected validation error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-	})
-
-	//nolint:paralleltest // Subtests reset process-wide configuration environment.
-	t.Run("mongo_disabled_without_uri_allowed", func(t *testing.T) {
-		resetConfigEnv(t)
-
-		cfg, _, err := LoadDetailed(LoadOptions{})
-		if err != nil {
-			t.Fatalf("LoadDetailed() error = %v", err)
-		}
-		if cfg.Mongo.Enabled {
-			t.Fatalf("Mongo.Enabled = true, want false")
-		}
-		if cfg.Mongo.URI != "" {
-			t.Fatalf("Mongo.URI = %q, want empty", cfg.Mongo.URI)
-		}
-	})
-
-	//nolint:paralleltest // Subtests reset process-wide configuration environment.
-	t.Run("redis_enabled_with_empty_addr_rejected", func(t *testing.T) {
-		resetConfigEnv(t)
-		configPath := writeTempConfig(t, `
-redis:
-  enabled: true
-  addr: ""
-`)
-
-		_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
-		if err == nil {
-			t.Fatalf("LoadDetailed() expected validation error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-	})
-}
-
-func TestRedisStoreGuardRejectsWithoutAllowFlag(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__REDIS__ENABLED", "true")
-	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
-	t.Setenv("APP__REDIS__MODE", "store")
-	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "false")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected redis store guard rejection")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "redis.allow_store_mode=true") {
-		t.Fatalf("error = %v, want allow_store_mode hint", err)
-	}
-}
-
-func TestRedisStoreGuardRequiresZeroStaleWindow(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__REDIS__ENABLED", "true")
-	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
-	t.Setenv("APP__REDIS__MODE", " STORE ")
-	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
-	t.Setenv("APP__REDIS__STALE_WINDOW", "1s")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected stale-window validation error")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-}
-
-func TestRedisStoreGuardAllowsConfiguredModeForV1GuardPath(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__REDIS__ENABLED", "true")
-	t.Setenv("APP__REDIS__ADDR", "127.0.0.1:6379")
-	t.Setenv("APP__REDIS__MODE", " STORE ")
-	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
-	t.Setenv("APP__REDIS__STALE_WINDOW", "0s")
-
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if cfg.Redis.Mode != "store" {
-		t.Fatalf("Redis.Mode = %q, want store", cfg.Redis.Mode)
-	}
-	if !cfg.Redis.AllowStoreMode {
-		t.Fatalf("Redis.AllowStoreMode = false, want true")
-	}
-	if cfg.Redis.StaleWindow != 0 {
-		t.Fatalf("Redis.StaleWindow = %s, want 0", cfg.Redis.StaleWindow)
-	}
-}
-
-func TestRedisModePolicyHelpers(t *testing.T) {
-	t.Parallel()
-
-	if got := (RedisConfig{Mode: " STORE "}).ModeValue(); got != RedisModeStore {
-		t.Fatalf("ModeValue(STORE) = %q, want %q", got, RedisModeStore)
-	}
-	if !(RedisConfig{Mode: "store"}).StoreMode() {
-		t.Fatal("StoreMode(store) = false, want true")
-	}
-	if got := (RedisConfig{Mode: "unexpected"}).ModeValue(); got != "unexpected" {
-		t.Fatalf("ModeValue(unexpected) = %q, want unexpected", got)
-	}
 }
 
 func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
@@ -645,55 +477,30 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 		name         string
 		cfg          Config
 		wantPostgres bool
-		wantMongo    bool
-		wantRedis    bool
 	}{
 		{
 			name: "disabled dependencies ignore readiness flags",
 			cfg: Config{
 				FeatureFlags: FeatureFlagsConfig{
 					PostgresReadinessProbe: true,
-					MongoReadinessProbe:    true,
-					RedisReadinessProbe:    true,
 				},
 			},
 		},
 		{
-			name: "disabled redis store mode does not require readiness",
+			name: "enabled postgres without readiness flag",
 			cfg: Config{
-				Redis: RedisConfig{Mode: RedisModeStore},
+				Postgres: PostgresConfig{Enabled: true},
 			},
 		},
 		{
-			name: "enabled dependencies without readiness flags",
+			name: "enabled postgres with readiness flag",
 			cfg: Config{
 				Postgres: PostgresConfig{Enabled: true},
-				Mongo:    MongoConfig{Enabled: true},
-				Redis:    RedisConfig{Enabled: true, Mode: RedisModeCache},
-			},
-		},
-		{
-			name: "enabled dependencies with readiness flags",
-			cfg: Config{
-				Postgres: PostgresConfig{Enabled: true},
-				Mongo:    MongoConfig{Enabled: true},
-				Redis:    RedisConfig{Enabled: true, Mode: RedisModeCache},
 				FeatureFlags: FeatureFlagsConfig{
 					PostgresReadinessProbe: true,
-					MongoReadinessProbe:    true,
-					RedisReadinessProbe:    true,
 				},
 			},
 			wantPostgres: true,
-			wantMongo:    true,
-			wantRedis:    true,
-		},
-		{
-			name: "enabled redis store mode requires readiness without flag",
-			cfg: Config{
-				Redis: RedisConfig{Enabled: true, Mode: RedisModeStore},
-			},
-			wantRedis: true,
 		},
 	}
 
@@ -703,12 +510,6 @@ func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
 
 			if got := tc.cfg.PostgresReadinessProbeRequired(); got != tc.wantPostgres {
 				t.Fatalf("PostgresReadinessProbeRequired() = %v, want %v", got, tc.wantPostgres)
-			}
-			if got := tc.cfg.MongoReadinessProbeRequired(); got != tc.wantMongo {
-				t.Fatalf("MongoReadinessProbeRequired() = %v, want %v", got, tc.wantMongo)
-			}
-			if got := tc.cfg.RedisReadinessProbeRequired(); got != tc.wantRedis {
-				t.Fatalf("RedisReadinessProbeRequired() = %v, want %v", got, tc.wantRedis)
 			}
 		})
 	}
@@ -725,26 +526,14 @@ func TestConfigReadinessProbeBudgetsUseRequiredRuntimeProbes(t *testing.T) {
 			Enabled:            true,
 			HealthcheckTimeout: 2 * time.Second,
 		},
-		Redis: RedisConfig{
-			Enabled:     true,
-			Mode:        RedisModeStore,
-			DialTimeout: 3 * time.Second,
-		},
-		Mongo: MongoConfig{
-			Enabled:        true,
-			ConnectTimeout: 4 * time.Second,
-		},
 		FeatureFlags: FeatureFlagsConfig{
 			PostgresReadinessProbe: true,
-			MongoReadinessProbe:    true,
 		},
 	}
 
 	budgets := cfg.ReadinessProbeBudgets()
 	want := []ReadinessProbeBudget{
 		{ConfigKey: "postgres.healthcheck_timeout", Budget: 2 * time.Second},
-		{ConfigKey: "redis.dial_timeout", Budget: 3 * time.Second},
-		{ConfigKey: "mongo.connect_timeout", Budget: 4 * time.Second},
 	}
 	if len(budgets) != len(want) {
 		t.Fatalf("ReadinessProbeBudgets() len = %d, want %d", len(budgets), len(want))
@@ -889,7 +678,7 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 		},
 		{
 			name:       "bool format",
-			envKey:     "APP__FEATURE_FLAGS__REDIS_READINESS_PROBE",
+			envKey:     "APP__FEATURE_FLAGS__POSTGRES_READINESS_PROBE",
 			envValue:   "maybe",
 			wantDetail: "invalid boolean format",
 		},
@@ -1182,10 +971,6 @@ func TestConfigFileAllowsEmptySecretLikePlaceholders(t *testing.T) {
 	path := writeTempConfig(t, `
 postgres:
   dsn: ""
-mongo:
-  uri: ""
-redis:
-  password: ""
 observability:
   otel:
     exporter:
@@ -1270,8 +1055,6 @@ func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
 
 	keys := []string{
 		"http.addr",
-		"redis.key_prefix",
-		"feature_flags.redis_readiness_probe",
 		"metadata.public_key",
 	}
 
@@ -1809,32 +1592,6 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.max_idle_conns":      11,
 		"postgres.conn_max_lifetime":   "45m",
 
-		"redis.enabled":                  true,
-		"redis.mode":                     "cache",
-		"redis.allow_store_mode":         true,
-		"redis.addr":                     "127.0.0.1:6380",
-		"redis.username":                 "redis-user",
-		"redis.password":                 "redis-secret",
-		"redis.db":                       2,
-		"redis.dial_timeout":             "8s",
-		"redis.read_timeout":             "9s",
-		"redis.write_timeout":            "10s",
-		"redis.pool_size":                21,
-		"redis.key_prefix":               "snapshot",
-		"redis.fresh_ttl":                "70s",
-		"redis.stale_window":             "71s",
-		"redis.negative_ttl":             "72s",
-		"redis.ttl_jitter_percent":       12,
-		"redis.enable_singleflight":      false,
-		"redis.max_fallback_concurrency": 33,
-
-		"mongo.enabled":                  true,
-		"mongo.uri":                      "mongodb://localhost:27017",
-		"mongo.database":                 "snapshot_app",
-		"mongo.connect_timeout":          "73s",
-		"mongo.server_selection_timeout": "74s",
-		"mongo.max_pool_size":            101,
-
 		"observability.otel.service_name":                  "snapshot-service",
 		"observability.otel.traces_sampler":                "always_on",
 		"observability.otel.traces_sampler_arg":            0.25,
@@ -1844,8 +1601,6 @@ func sentinelConfigSourceValues() map[string]any {
 		"observability.otel.exporter.otlp_protocol":        "grpc",
 
 		"feature_flags.postgres_readiness_probe": false,
-		"feature_flags.mongo_readiness_probe":    true,
-		"feature_flags.redis_readiness_probe":    true,
 	}
 }
 
@@ -1875,32 +1630,6 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.max_idle_conns":      11,
 		"postgres.conn_max_lifetime":   45 * time.Minute,
 
-		"redis.enabled":                  true,
-		"redis.mode":                     "cache",
-		"redis.allow_store_mode":         true,
-		"redis.addr":                     "127.0.0.1:6380",
-		"redis.username":                 "redis-user",
-		"redis.password":                 "redis-secret",
-		"redis.db":                       2,
-		"redis.dial_timeout":             8 * time.Second,
-		"redis.read_timeout":             9 * time.Second,
-		"redis.write_timeout":            10 * time.Second,
-		"redis.pool_size":                21,
-		"redis.key_prefix":               "snapshot",
-		"redis.fresh_ttl":                70 * time.Second,
-		"redis.stale_window":             71 * time.Second,
-		"redis.negative_ttl":             72 * time.Second,
-		"redis.ttl_jitter_percent":       12,
-		"redis.enable_singleflight":      false,
-		"redis.max_fallback_concurrency": 33,
-
-		"mongo.enabled":                  true,
-		"mongo.uri":                      "mongodb://localhost:27017",
-		"mongo.database":                 "snapshot_app",
-		"mongo.connect_timeout":          73 * time.Second,
-		"mongo.server_selection_timeout": 74 * time.Second,
-		"mongo.max_pool_size":            101,
-
 		"observability.otel.service_name":                  "snapshot-service",
 		"observability.otel.traces_sampler":                "always_on",
 		"observability.otel.traces_sampler_arg":            0.25,
@@ -1910,8 +1639,6 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"observability.otel.exporter.otlp_protocol":        "grpc",
 
 		"feature_flags.postgres_readiness_probe": false,
-		"feature_flags.mongo_readiness_probe":    true,
-		"feature_flags.redis_readiness_probe":    true,
 	}
 }
 
@@ -2036,15 +1763,7 @@ func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
 	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
-	t.Setenv("APP__POSTGRES__HEALTHCHECK_TIMEOUT", "3s")
-	t.Setenv("APP__REDIS__ENABLED", "true")
-	t.Setenv("APP__REDIS__MODE", "store")
-	t.Setenv("APP__REDIS__ALLOW_STORE_MODE", "true")
-	t.Setenv("APP__REDIS__DIAL_TIMEOUT", "2s")
-	t.Setenv("APP__MONGO__ENABLED", "true")
-	t.Setenv("APP__MONGO__URI", "mongodb://localhost:27017/app")
-	t.Setenv("APP__MONGO__CONNECT_TIMEOUT", "2s")
-	t.Setenv("APP__FEATURE_FLAGS__MONGO_READINESS_PROBE", "true")
+	t.Setenv("APP__POSTGRES__HEALTHCHECK_TIMEOUT", "7s")
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
@@ -2056,7 +1775,7 @@ func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
 	if !strings.Contains(err.Error(), "aggregate sequential readiness probe budget") {
 		t.Fatalf("error = %v, want aggregate readiness dependency budget policy", err)
 	}
-	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout + redis.dial_timeout + mongo.connect_timeout") {
+	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
 		t.Fatalf("error = %v, want enabled readiness probe names", err)
 	}
 }
@@ -2074,351 +1793,6 @@ func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
 	if cfg.Postgres.DSN != "postgres://%zz" {
 		t.Fatalf("Postgres.DSN = %q, want raw invalid DSN preserved for adapter-owned parsing", cfg.Postgres.DSN)
 	}
-}
-
-func TestRedisEnabledRequiresHostPortAddress(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__REDIS__ENABLED", "true")
-	t.Setenv("APP__REDIS__ADDR", "redis-without-port")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for redis addr without port")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-}
-
-func TestRedisEnabledRejectsEmptyHostAddress(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__REDIS__ENABLED", "true")
-	t.Setenv("APP__REDIS__ADDR", ":6379")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for redis addr with empty host")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "redis.addr must include non-empty host") {
-		t.Fatalf("error = %v, want empty redis host policy", err)
-	}
-}
-
-func TestRedisEnabledRequiresNumericTCPPort(t *testing.T) {
-	for _, addr := range []string{"127.0.0.1:notaport", "127.0.0.1:0", "127.0.0.1:65536"} {
-		t.Run(addr, func(t *testing.T) {
-			resetConfigEnv(t)
-			t.Setenv("APP__REDIS__ENABLED", "true")
-			t.Setenv("APP__REDIS__ADDR", addr)
-
-			_, _, err := LoadDetailed(LoadOptions{})
-			if err == nil {
-				t.Fatal("LoadDetailed() error = nil, want validation error")
-			}
-			if !errors.Is(err, ErrValidate) {
-				t.Fatalf("error = %v, want ErrValidate", err)
-			}
-		})
-	}
-}
-
-func TestMongoURIMustContainValidProbeTarget(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__MONGO__ENABLED", "true")
-	t.Setenv("APP__MONGO__URI", "mongo://bad-uri")
-	t.Setenv("APP__MONGO__DATABASE", "app")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for mongo uri without a valid probe target")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "mongo.uri must contain a valid probe target") {
-		t.Fatalf("error = %v, want mongo probe-target detail", err)
-	}
-}
-
-func TestMongoURIRejectsSeedlists(t *testing.T) {
-	resetConfigEnv(t)
-
-	rawURI := "mongodb://user:secret@mongo-a.example.com:27017,mongo-b.example.com:27017/app"
-	t.Setenv("APP__MONGO__ENABLED", "true")
-	t.Setenv("APP__MONGO__URI", rawURI)
-	t.Setenv("APP__MONGO__DATABASE", "app")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for mongo seedlist")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "mongo seedlists are not supported by guard-only probe path") {
-		t.Fatalf("error = %v, want seedlist policy", err)
-	}
-	for _, leaked := range []string{rawURI, "user", "secret", "mongo-a.example.com", "mongo-b.example.com"} {
-		if strings.Contains(err.Error(), leaked) {
-			t.Fatalf("error = %v, leaked %q", err, leaked)
-		}
-	}
-}
-
-func TestMongoURIWithSurroundingWhitespaceRejected(t *testing.T) {
-	resetConfigEnv(t)
-
-	rawURI := " mongodb://user:secret@localhost:27017/app "
-	t.Setenv("APP__MONGO__ENABLED", "true")
-	t.Setenv("APP__MONGO__URI", rawURI)
-	t.Setenv("APP__MONGO__DATABASE", "app")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for whitespace-padded mongo uri")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	for _, leaked := range []string{rawURI, "user", "secret"} {
-		if strings.Contains(err.Error(), leaked) {
-			t.Fatalf("error = %v, leaked %q", err, leaked)
-		}
-	}
-}
-
-func TestMongoURIMustUseNumericTCPPort(t *testing.T) {
-	for _, uri := range []string{
-		"mongodb://localhost:notaport/app",
-		"mongodb://localhost:0/app",
-		"mongodb://localhost:65536/app",
-	} {
-		t.Run(uri, func(t *testing.T) {
-			resetConfigEnv(t)
-			t.Setenv("APP__MONGO__ENABLED", "true")
-			t.Setenv("APP__MONGO__URI", uri)
-			t.Setenv("APP__MONGO__DATABASE", "app")
-
-			_, _, err := LoadDetailed(LoadOptions{})
-			if err == nil {
-				t.Fatal("LoadDetailed() error = nil, want validation error")
-			}
-			if !errors.Is(err, ErrValidate) {
-				t.Fatalf("error = %v, want ErrValidate", err)
-			}
-		})
-	}
-}
-
-func TestMongoURIRejectsColonRichNonIPHost(t *testing.T) {
-	resetConfigEnv(t)
-
-	rawURI := "mongodb://user:secret@foo:bar:baz/app"
-	t.Setenv("APP__MONGO__ENABLED", "true")
-	t.Setenv("APP__MONGO__URI", rawURI)
-	t.Setenv("APP__MONGO__DATABASE", "app")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for colon-rich non-IP mongo host")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "mongo.uri must contain a valid probe target") {
-		t.Fatalf("error = %v, want mongo probe-target detail", err)
-	}
-	if !strings.Contains(err.Error(), "invalid mongo host") {
-		t.Fatalf("error = %v, want invalid mongo host detail", err)
-	}
-	for _, leaked := range []string{rawURI, "user", "secret", "foo:bar:baz"} {
-		if strings.Contains(err.Error(), leaked) {
-			t.Fatalf("error = %v, leaked %q", err, leaked)
-		}
-	}
-}
-
-func TestMongoDisabledAllowsInvalidURI(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__MONGO__ENABLED", "false")
-	t.Setenv("APP__MONGO__URI", "mongo://bad-uri")
-
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v, want nil when mongo is disabled", err)
-	}
-	if cfg.Mongo.Enabled {
-		t.Fatalf("Mongo.Enabled = true, want false")
-	}
-}
-
-func TestMongoProbeAddress(t *testing.T) {
-	t.Parallel()
-
-	t.Run("mongodb scheme", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := MongoProbeAddress("mongodb://user:pass@localhost:27017/app?replicaSet=rs0")
-		if err != nil {
-			t.Fatalf("MongoProbeAddress() error = %v", err)
-		}
-		if address != "localhost:27017" {
-			t.Fatalf("MongoProbeAddress() = %q, want localhost:27017", address)
-		}
-	})
-
-	t.Run("mongodb srv scheme defaults port", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := MongoProbeAddress("mongodb+srv://cluster.example.com/app")
-		if err != nil {
-			t.Fatalf("MongoProbeAddress() error = %v", err)
-		}
-		if address != "cluster.example.com:27017" {
-			t.Fatalf("MongoProbeAddress() = %q, want cluster.example.com:27017", address)
-		}
-	})
-
-	t.Run("bare host defaults port", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := MongoProbeAddress("mongodb://cluster.example.com/app")
-		if err != nil {
-			t.Fatalf("MongoProbeAddress() error = %v", err)
-		}
-		if address != "cluster.example.com:27017" {
-			t.Fatalf("MongoProbeAddress() = %q, want cluster.example.com:27017", address)
-		}
-	})
-
-	t.Run("bare ipv6 host defaults port", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := MongoProbeAddress("mongodb://2001:db8::1/app")
-		if err != nil {
-			t.Fatalf("MongoProbeAddress() error = %v", err)
-		}
-		if address != "[2001:db8::1]:27017" {
-			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27017", address)
-		}
-	})
-
-	t.Run("bracketed ipv6 host defaults port", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := MongoProbeAddress("mongodb://[2001:db8::1]/app")
-		if err != nil {
-			t.Fatalf("MongoProbeAddress() error = %v", err)
-		}
-		if address != "[2001:db8::1]:27017" {
-			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27017", address)
-		}
-	})
-
-	t.Run("bracketed ipv6 host keeps explicit port", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := MongoProbeAddress("mongodb://[2001:db8::1]:27018/app")
-		if err != nil {
-			t.Fatalf("MongoProbeAddress() error = %v", err)
-		}
-		if address != "[2001:db8::1]:27018" {
-			t.Fatalf("MongoProbeAddress() = %q, want [2001:db8::1]:27018", address)
-		}
-	})
-
-	t.Run("rejects empty and malformed bracket hosts", func(t *testing.T) {
-		t.Parallel()
-
-		for _, uri := range []string{
-			"mongodb://:27017/app",
-			"mongodb://[]/app",
-			"mongodb://[]:27017/app",
-			"mongodb://[2001:db8::1/app",
-			"mongodb://2001:db8::1]/app",
-			"mongodb://[2001:db8::1]]/app",
-			"mongodb://local[host]/app",
-			"mongodb://foo:bar:baz/app",
-			"mongodb://[localhost]/app",
-			"mongodb://[127.0.0.1]/app",
-			"mongodb://[localhost]:27017/app",
-			"mongodb://[foo:bar:baz]:27017/app",
-		} {
-			t.Run(uri, func(t *testing.T) {
-				t.Parallel()
-
-				if _, err := MongoProbeAddress(uri); err == nil {
-					t.Fatal("MongoProbeAddress() error = nil, want malformed host error")
-				} else if !errors.Is(err, ErrValidate) {
-					t.Fatalf("error = %v, want ErrValidate", err)
-				}
-			})
-		}
-	})
-
-	t.Run("rejects seedlists without leaking uri parts", func(t *testing.T) {
-		t.Parallel()
-
-		rawURI := "mongodb://leaky-user:top-secret@mongo-a.example.com:27017,mongo-b.example.com:27017/app"
-
-		_, err := MongoProbeAddress(rawURI)
-		if err == nil {
-			t.Fatal("MongoProbeAddress() error = nil, want seedlist error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		for _, leaked := range []string{rawURI, "leaky-user", "top-secret", "mongo-a.example.com", "mongo-b.example.com"} {
-			if strings.Contains(err.Error(), leaked) {
-				t.Fatalf("error = %v, leaked %q", err, leaked)
-			}
-		}
-	})
-
-	t.Run("rejects surrounding whitespace", func(t *testing.T) {
-		t.Parallel()
-
-		rawURI := " mongodb://user:top-secret@localhost:27017/app "
-
-		_, err := MongoProbeAddress(rawURI)
-		if err == nil {
-			t.Fatal("MongoProbeAddress() error = nil, want whitespace error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		for _, leaked := range []string{rawURI, "user", "top-secret"} {
-			if strings.Contains(err.Error(), leaked) {
-				t.Fatalf("error = %v, leaked %q", err, leaked)
-			}
-		}
-	})
-
-	t.Run("redacts malformed credential uri", func(t *testing.T) {
-		t.Parallel()
-
-		rawURI := "mongodb://leaky-user:top-secret@local[host]/app"
-
-		_, err := MongoProbeAddress(rawURI)
-		if err == nil {
-			t.Fatal("MongoProbeAddress() error = nil, want malformed host error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		for _, leaked := range []string{rawURI, "leaky-user", "top-secret", "local[host]"} {
-			if strings.Contains(err.Error(), leaked) {
-				t.Fatalf("error = %v, leaked %q", err, leaked)
-			}
-		}
-	})
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
@@ -2600,10 +1974,10 @@ func TestValidateRangeHelpers(t *testing.T) {
 	t.Run("int range is inclusive", func(t *testing.T) {
 		t.Parallel()
 
-		if err := validateIntRange("redis.pool_size", 1, 1, 100); err != nil {
+		if err := validateIntRange("postgres.max_open_conns", 1, 1, 100); err != nil {
 			t.Fatalf("validateIntRange(min) error = %v", err)
 		}
-		if err := validateIntRange("redis.pool_size", 100, 1, 100); err != nil {
+		if err := validateIntRange("postgres.max_open_conns", 100, 1, 100); err != nil {
 			t.Fatalf("validateIntRange(max) error = %v", err)
 		}
 	})
@@ -2611,14 +1985,14 @@ func TestValidateRangeHelpers(t *testing.T) {
 	t.Run("int range out of bounds returns ErrValidate", func(t *testing.T) {
 		t.Parallel()
 
-		err := validateIntRange("redis.pool_size", 101, 1, 100)
+		err := validateIntRange("postgres.max_open_conns", 101, 1, 100)
 		if err == nil {
 			t.Fatalf("validateIntRange() expected error")
 		}
 		if !errors.Is(err, ErrValidate) {
 			t.Fatalf("error = %v, want ErrValidate", err)
 		}
-		if !strings.Contains(err.Error(), "redis.pool_size") {
+		if !strings.Contains(err.Error(), "postgres.max_open_conns") {
 			t.Fatalf("error = %v, want field name in message", err)
 		}
 	})

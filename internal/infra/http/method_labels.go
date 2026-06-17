@@ -8,21 +8,8 @@ import (
 
 const otherHTTPMethodLabel = "OTHER"
 
-// routePolicyHTTPMethods bounds path probing for client-visible Allow behavior.
-var routePolicyHTTPMethods = []string{
-	http.MethodConnect,
-	http.MethodGet,
-	http.MethodHead,
-	http.MethodDelete,
-	http.MethodOptions,
-	http.MethodPatch,
-	http.MethodPost,
-	http.MethodPut,
-	http.MethodTrace,
-}
-
-// metricHTTPMethodLabels bounds observability label cardinality.
-var metricHTTPMethodLabels = []string{
+// boundedHTTPMethods bounds client-visible Allow probing and observability label cardinality.
+var boundedHTTPMethods = []string{
 	http.MethodConnect,
 	http.MethodGet,
 	http.MethodHead,
@@ -36,7 +23,7 @@ var metricHTTPMethodLabels = []string{
 
 func normalizeHTTPMethodLabel(method string) string {
 	method = strings.TrimSpace(method)
-	if slices.Contains(metricHTTPMethodLabels, method) {
+	if slices.Contains(boundedHTTPMethods, method) {
 		return method
 	}
 	return otherHTTPMethodLabel

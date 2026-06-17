@@ -197,8 +197,6 @@ func TestNormalizeStartupDependency(t *testing.T) {
 		want  string
 	}{
 		{name: "postgres", input: StartupDependencyPostgres, want: StartupDependencyPostgres},
-		{name: "redis", input: StartupDependencyRedis, want: StartupDependencyRedis},
-		{name: "mongo", input: StartupDependencyMongo, want: StartupDependencyMongo},
 		{name: "telemetry", input: StartupDependencyTelemetry, want: StartupDependencyTelemetry},
 		{name: "network policy", input: StartupDependencyNetworkPolicy, want: StartupDependencyNetworkPolicy},
 		{name: "ingress policy", input: StartupDependencyIngressPolicy, want: StartupDependencyIngressPolicy},
@@ -233,10 +231,8 @@ func TestNormalizeStartupDependencyMode(t *testing.T) {
 	}{
 		{name: "disabled", input: StartupDependencyModeDisabled, want: StartupDependencyModeDisabled},
 		{name: "critical fail closed", input: StartupDependencyModeCriticalFailClosed, want: StartupDependencyModeCriticalFailClosed},
-		{name: "critical fail degraded", input: StartupDependencyModeCriticalFailDegraded, want: StartupDependencyModeCriticalFailDegraded},
 		{name: "optional fail open", input: StartupDependencyModeOptionalFailOpen, want: StartupDependencyModeOptionalFailOpen},
 		{name: "feature off", input: StartupDependencyModeFeatureOff, want: StartupDependencyModeFeatureOff},
-		{name: "degraded read only or stale", input: StartupDependencyModeDegradedReadOnlyOrStale, want: StartupDependencyModeDegradedReadOnlyOrStale},
 		{name: "other", input: StartupDependencyModeOther, want: StartupDependencyModeOther},
 		{name: "mode upper", input: "FEATURE_OFF", want: StartupDependencyModeFeatureOff},
 		{name: "mode with whitespace", input: " " + StartupDependencyModeDisabled + " ", want: StartupDependencyModeDisabled},

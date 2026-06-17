@@ -4,20 +4,13 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"go.uber.org/mock/gomock"
 )
 
 func TestServiceReadySuccess(t *testing.T) {
 	t.Parallel()
 
-	ctrl := gomock.NewController(t)
-
-	db := NewMockProbe(ctrl)
-	db.EXPECT().Check(gomock.Any()).Return(nil)
-
-	cache := NewMockProbe(ctrl)
-	cache.EXPECT().Check(gomock.Any()).Return(nil)
+	db := fakeProbe{name: "db"}
+	cache := fakeProbe{name: "cache"}
 
 	svc := New(db, cache)
 
@@ -29,12 +22,8 @@ func TestServiceReadySuccess(t *testing.T) {
 func TestServiceReadyFail(t *testing.T) {
 	t.Parallel()
 
-	ctrl := gomock.NewController(t)
 	downErr := errors.New("down")
-
-	db := NewMockProbe(ctrl)
-	db.EXPECT().Name().Return("db")
-	db.EXPECT().Check(gomock.Any()).Return(downErr)
+	db := fakeProbe{name: "db", err: downErr}
 
 	svc := New(db)
 
@@ -51,8 +40,7 @@ func TestServiceReadyFail(t *testing.T) {
 func TestServiceReadyDraining(t *testing.T) {
 	t.Parallel()
 
-	ctrl := gomock.NewController(t)
-	probe := NewMockProbe(ctrl)
+	probe := fakeProbe{name: "db"}
 
 	svc := New(probe)
 	svc.StartDrain()
@@ -61,4 +49,17 @@ func TestServiceReadyDraining(t *testing.T) {
 	if !errors.Is(err, ErrDraining) {
 		t.Fatalf("Ready() error = %v, want ErrDraining", err)
 	}
+}
+
+type fakeProbe struct {
+	name string
+	err  error
+}
+
+func (p fakeProbe) Name() string {
+	return p.name
+}
+
+func (p fakeProbe) Check(context.Context) error {
+	return p.err
 }

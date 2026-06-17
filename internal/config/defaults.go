@@ -28,32 +28,6 @@ func defaultValues() map[string]any {
 		"postgres.max_idle_conns":      10,
 		"postgres.conn_max_lifetime":   "30m",
 
-		"redis.enabled":                  false,
-		"redis.mode":                     "cache",
-		"redis.allow_store_mode":         false,
-		"redis.addr":                     "127.0.0.1:6379",
-		"redis.username":                 "",
-		"redis.password":                 "",
-		"redis.db":                       0,
-		"redis.dial_timeout":             "2s",
-		"redis.read_timeout":             "1s",
-		"redis.write_timeout":            "1s",
-		"redis.pool_size":                20,
-		"redis.key_prefix":               "service",
-		"redis.fresh_ttl":                "60s",
-		"redis.stale_window":             "0s",
-		"redis.negative_ttl":             "10s",
-		"redis.ttl_jitter_percent":       10,
-		"redis.enable_singleflight":      true,
-		"redis.max_fallback_concurrency": 32,
-
-		"mongo.enabled":                  false,
-		"mongo.uri":                      "",
-		"mongo.database":                 "app",
-		"mongo.connect_timeout":          "5s",
-		"mongo.server_selection_timeout": "3s",
-		"mongo.max_pool_size":            100,
-
 		"observability.otel.service_name":                  "service",
 		"observability.otel.traces_sampler":                otelconfig.DefaultTracesSampler,
 		"observability.otel.traces_sampler_arg":            otelconfig.DefaultTracesSamplerArg,
@@ -63,7 +37,5 @@ func defaultValues() map[string]any {
 		"observability.otel.exporter.otlp_protocol":        otelconfig.DefaultOTLPProtocol,
 
 		"feature_flags.postgres_readiness_probe": true,
-		"feature_flags.mongo_readiness_probe":    false,
-		"feature_flags.redis_readiness_probe":    false,
 	}
 }

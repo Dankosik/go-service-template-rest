@@ -848,6 +848,10 @@ func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
 			name: "unsafe empty-value key",
 			raw:  "secret-value.=",
 		},
+		{
+			name: "invalid header key",
+			raw:  "bad key=secret-value",
+		},
 	}
 
 	for _, tt := range tests {

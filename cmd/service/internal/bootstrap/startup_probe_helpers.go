@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"net"
-	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -104,100 +102,6 @@ func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duratio
 			minRemaining,
 		)
 	}
-	return nil
-}
-
-func probeRedisWithContext(ctx context.Context, cfg config.RedisConfig) error {
-	return probeRedisAddressWithContext(ctx, cfg.Addr, cfg.DialTimeout)
-}
-
-func probeRedisAddressWithContext(ctx context.Context, address string, dialTimeout time.Duration) error {
-	timeout := dialTimeout
-	if timeout <= 0 {
-		timeout = redisProbeBudget
-	}
-	return probeTCPDependency(ctx, address, timeout)
-}
-
-func probeRedisAddressWithRetry(ctx context.Context, address string, dialTimeout time.Duration) error {
-	return probeWithRetry(ctx, redisStoreProbeAttempts, func(probeCtx context.Context) error {
-		return probeRedisAddressWithContext(probeCtx, address, dialTimeout)
-	})
-}
-
-func probeMongoWithContext(ctx context.Context, cfg config.MongoConfig) error {
-	addr, err := config.MongoProbeAddress(cfg.URI)
-	if err != nil {
-		return fmt.Errorf("%w: resolve mongo probe address: %w", errDependencyInit, err)
-	}
-	return probeMongoAddressWithContext(ctx, addr, cfg.ConnectTimeout)
-}
-
-func probeMongoAddressWithContext(ctx context.Context, address string, connectTimeout time.Duration) error {
-	timeout := connectTimeout
-	if timeout <= 0 {
-		timeout = mongoProbeBudget
-	}
-	return probeTCPDependency(ctx, address, timeout)
-}
-
-func probeMongoAddressWithRetry(ctx context.Context, address string, connectTimeout time.Duration) error {
-	return probeWithRetry(ctx, mongoProbeAttempts, func(probeCtx context.Context) error {
-		return probeMongoAddressWithContext(probeCtx, address, connectTimeout)
-	})
-}
-
-func probeWithRetry(ctx context.Context, maxAttempts int, probe func(context.Context) error) error {
-	if maxAttempts < 1 {
-		maxAttempts = 1
-	}
-
-	var lastErr error
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("probe retry canceled: %w", err)
-		}
-
-		err := probe(ctx)
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-		if !shouldRetryStartupProbe(err, attempt, maxAttempts) {
-			break
-		}
-
-		delay := fullJitterDelay(attempt)
-		if waitErr := sleepWithContext(ctx, delay); waitErr != nil {
-			return fmt.Errorf("probe retry wait: %w", waitErr)
-		}
-	}
-
-	return lastErr
-}
-
-func shouldRetryStartupProbe(err error, attempt int, maxAttempts int) bool {
-	if attempt >= maxAttempts {
-		return false
-	}
-	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
-}
-
-func probeTCPDependency(ctx context.Context, address string, timeout time.Duration) error {
-	trimmedAddress := strings.TrimSpace(address)
-	if trimmedAddress == "" {
-		return fmt.Errorf("%w: empty probe address", errDependencyInit)
-	}
-
-	dialCtx, dialCancel := withStageBudget(ctx, timeout)
-	defer dialCancel()
-
-	var dialer net.Dialer
-	conn, err := dialer.DialContext(dialCtx, "tcp", trimmedAddress)
-	if err != nil {
-		return fmt.Errorf("%w: dial %s: %w", errDependencyInit, trimmedAddress, err)
-	}
-	_ = conn.Close()
 	return nil
 }
 

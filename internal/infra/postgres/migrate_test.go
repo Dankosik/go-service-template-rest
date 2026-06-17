@@ -73,6 +73,31 @@ func TestMigrateUpRejectsInvalidInputsBeforeConnecting(t *testing.T) {
 	}
 }
 
+func TestMigrateUpReportsRunFailureWithReadableSource(t *testing.T) {
+	t.Parallel()
+
+	sourceFS := fstest.MapFS{
+		"migrations/000001_init.up.sql": {
+			Data: []byte("CREATE TABLE migrate_smoke (id integer);"),
+		},
+		"migrations/000001_init.down.sql": {
+			Data: []byte("DROP TABLE migrate_smoke;"),
+		},
+	}
+
+	_, err := MigrateUp(context.Background(), MigrationOptions{
+		DSN:        "postgres://user:pass@127.0.0.1:1/app?sslmode=disable",
+		SourceFS:   sourceFS,
+		SourcePath: "migrations",
+	})
+	if err == nil {
+		t.Fatal("MigrateUp() error = nil, want run failure")
+	}
+	if !strings.Contains(err.Error(), "open postgres migration driver") {
+		t.Fatalf("MigrateUp() error = %q, want postgres driver context", err.Error())
+	}
+}
+
 func TestNormalizeMigrationSourcePath(t *testing.T) {
 	t.Parallel()
 

@@ -40,7 +40,7 @@ Do not:
 ## Review Checklist
 - Required CI jobs and branch-protection contexts still align.
 - Local Make targets and CI commands prove the same contract or document the intentional difference.
-- Docs, OpenAPI, sqlc, mocks, stringer, and other generated-artifact drift checks trigger on the right source changes.
+- Docs, OpenAPI, sqlc, and other generated-artifact drift checks trigger on the right source changes.
 - Migration and deployment changes remain compatible across mixed-version windows and rollback.
 - Runtime images keep least-privilege, minimal-surface, deterministic build, and scan expectations when touched.
 - Release-trust artifacts such as provenance, SBOM, signatures, digests, and publish permissions remain verifiable when in scope.

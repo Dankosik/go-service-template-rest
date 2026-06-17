@@ -26,34 +26,6 @@ postgres:
   max_idle_conns: 10
   conn_max_lifetime: 30m
 
-redis:
-  enabled: false
-  mode: cache
-  allow_store_mode: false
-  addr: "127.0.0.1:6379"
-  username: ""
-  password: ""
-  db: 0
-  dial_timeout: 2s
-  read_timeout: 1s
-  write_timeout: 1s
-  pool_size: 20
-  key_prefix: service
-  fresh_ttl: 60s
-  stale_window: 0s
-  negative_ttl: 10s
-  ttl_jitter_percent: 10
-  enable_singleflight: true
-  max_fallback_concurrency: 32
-
-mongo:
-  enabled: false
-  uri: ""
-  database: app
-  connect_timeout: 5s
-  server_selection_timeout: 3s
-  max_pool_size: 100
-
 observability:
   otel:
     service_name: service
@@ -67,5 +39,3 @@ observability:
 
 feature_flags:
   postgres_readiness_probe: true
-  mongo_readiness_probe: false
-  redis_readiness_probe: false

@@ -9,6 +9,7 @@ Load this when a non-trivial spec is about to hand off to `system-integration-de
 ## Decision Rubric
 - `spec.md` decides behavior, scope, constraints, accepted risk, and proof consequences.
 - `design/overview.md`, `design/system-integration.md`, `design/go-code-ownership.md`, `design/component-map.md`, `design/sequence.md`, and `design/ownership-map.md` decide task-local technical shape.
+- Triggered `design/contracts/` or compact system/integration contract design decides planning-critical REST/API, generated, event, or material internal-interface shape after the spec names the behavior/contract delta and trigger.
 - `tasks.md` decides execution order and implementation steps.
 - A handoff note should name what design must derive, not pre-answer design with package or call-order decisions.
 - Add `[reopen_spec_if_false]` when a downstream design discovery would invalidate a spec-level decision.
@@ -24,6 +25,7 @@ Load this when a non-trivial spec is about to hand off to `system-integration-de
 
 ## Task Breakdown / Handoff Link
 - System/integration design must derive service behavior, sequence, and observability consequences from these decisions; Go code ownership design must derive package/file responsibility before planning starts.
+- Contract-design checkpoint: not expected because this scope preserves the existing authentication API, generated contract, status/error profile, retry behavior, and material internal interfaces.
 ```
 
 Copy this: the spec fixes behavior and boundary, then points the next phase at design-owned work.
@@ -51,6 +53,7 @@ Failure: package ownership and runtime sequence belong in `design/`; task breakd
 
 ## Agent Traps
 - Treating "handoff-ready" as "design already written."
-- Putting canonical API contract detail in `spec.md` when a repo-owned contract source or `design/contracts/` belongs downstream.
+- Putting detailed OpenAPI, status/error matrix, idempotency/retry policy, async/freshness semantics, compatibility migration, or generated/manual authority in `spec.md` when triggered `design/contracts/` or compact system/integration contract design belongs downstream.
+- Failing to name the contract-design trigger when the spec changes REST/API, event, generated, or material internal-interface behavior.
 - Loading `decision-placement-and-artifact-ownership.md` for every handoff question; use this narrower reference when approval/handoff readiness is the real pressure.
 - Letting design silently rewrite a spec decision instead of reopening specification.

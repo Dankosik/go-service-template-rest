@@ -8,7 +8,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/app/ping"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
 type Handlers struct {
@@ -20,14 +19,13 @@ type Handlers struct {
 type strictHandlers struct {
 	health           *health.Service
 	ping             *ping.Service
-	metrics          *telemetry.Metrics
 	readinessGate    func(context.Context) error
 	readinessTimeout time.Duration
 }
 
 var _ api.StrictServerInterface = (*strictHandlers)(nil)
 
-func newStrictHandlers(h Handlers, metrics *telemetry.Metrics, readinessTimeout time.Duration) (strictHandlers, error) {
+func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandlers, error) {
 	if h.Health == nil {
 		return strictHandlers{}, fmt.Errorf("http router: health service is required")
 	}
@@ -37,9 +35,6 @@ func newStrictHandlers(h Handlers, metrics *telemetry.Metrics, readinessTimeout 
 	if h.ReadinessGate == nil {
 		return strictHandlers{}, fmt.Errorf("http router: readiness gate is required")
 	}
-	if metrics == nil {
-		return strictHandlers{}, fmt.Errorf("http router: metrics is required")
-	}
 	if readinessTimeout <= 0 {
 		return strictHandlers{}, fmt.Errorf("http router: readiness timeout must be > 0")
 	}
@@ -47,7 +42,6 @@ func newStrictHandlers(h Handlers, metrics *telemetry.Metrics, readinessTimeout 
 	return strictHandlers{
 		health:           h.Health,
 		ping:             h.Ping,
-		metrics:          metrics,
 		readinessGate:    h.ReadinessGate,
 		readinessTimeout: readinessTimeout,
 	}, nil

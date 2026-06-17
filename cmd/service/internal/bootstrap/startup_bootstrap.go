@@ -355,9 +355,6 @@ func bootstrapReportStage(
 			"app.env", cfg.App.Env,
 			"http.addr", cfg.HTTP.Addr,
 			"postgres.enabled", cfg.Postgres.Enabled,
-			"redis.enabled", cfg.Redis.Enabled,
-			"redis.mode", cfg.Redis.Mode,
-			"mongo.enabled", cfg.Mongo.Enabled,
 		)...,
 	)
 }

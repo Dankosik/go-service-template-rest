@@ -21,8 +21,6 @@
 - [ ] `make test-integration` (when integration behavior changed)
 - [ ] `make sqlc-check` (when SQL queries or migrations changed)
 - [ ] `make migration-validate` (when migrations changed)
-- [ ] `make mocks-drift-check` (when mockgen directives or interfaces changed)
-- [ ] `make stringer-drift-check` (when stringer directives or enum values changed)
 
 Commands/output summary:
 

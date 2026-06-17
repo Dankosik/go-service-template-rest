@@ -10,11 +10,11 @@ Do not load this to write `tasks.md`. This reference only checks whether the des
 
 ## Decision Rubric
 - Review-ready means required core artifacts are present, consistent, and approved or explicitly waived by an eligible rationale.
-- Conditional artifacts must be either present with reasons or marked not expected with reasons.
+- Conditional artifacts must be either present with reasons or marked not expected with trigger evidence. For contract surfaces, this means `design/contracts/` is approved, compact contract design is explicitly sufficient, or a trigger test proves REST/API, event, generated, and material internal-interface shape is unchanged.
 - `design/overview.md` should make that status scannable in its artifact index when technical design review is the next session, instead of forcing review or planning to rediscover conditional triggers from separate files.
 - Accepted risks must have proof obligations and reopen conditions.
 - A planning-critical blocker cannot live only in chat.
-- If planning would need to choose package surfaces, owner files, source responsibility evidence, source-of-truth ownership, runtime ownership, rollout sequence, or validation strategy, design is not ready.
+- If planning would need to choose contract shape, package surfaces, owner files, source responsibility evidence, source-of-truth ownership, runtime ownership, rollout sequence, or validation strategy, design is not ready.
 - The handoff summary should tell the next session where to start and where not to drift.
 
 ## Imitate
@@ -34,7 +34,7 @@ Review must inspect:
 - `rollout.md` because migration compatibility is release-critical
 
 Not expected:
-- `design/contracts/`; public REST schema stays unchanged.
+- `design/contracts/`; trigger test found no REST/API, event, generated-contract, or material internal-interface change.
 - `design/dependency-graph.md`; dependency direction stays within existing package boundaries.
 - `test-plan.md`; validation obligations fit in `tasks.md`.
 
@@ -49,7 +49,7 @@ Workflow-control update summary:
 
 ```markdown
 Technical design status: complete.
-Design artifacts: required core approved; data-model and rollout approved; contracts, dependency-graph, and test-plan not expected.
+Design artifacts: required core approved; data-model and rollout approved; contracts not expected with trigger evidence; dependency-graph and test-plan not expected.
 Next session starts with: technical design review.
 Stop rule: do not begin review, `tasks.md`, or implementation in this session.
 ```
@@ -85,6 +85,7 @@ Why it is bad: the next session needs artifact status, blockers, accepted risks,
 - `workflow-plan.md` says current phase is technical design review or planning, but `workflow-plans/go-code-ownership-design.md` says design is blocked.
 - `tasks.md` exists before design readiness when no direct/lean waiver was recorded.
 - `tasks.md` is expected but design handoff leaves package surfaces, owner files, placement rules, source responsibility audit, or ownership unresolved.
+- `tasks.md` is expected but design handoff leaves REST/OpenAPI resource shape, status/error semantics, retry/idempotency, async/freshness, compatibility, or generated/manual authority unresolved.
 - `rollout.md` is not expected while a migration, backfill, mixed-version window, or failback rule is planning-critical.
 - `test-plan.md` is not expected while validation obligations are too layered for `tasks.md`.
 - A blocker is recorded only in chat, not in the design or workflow artifacts that the next session will read.

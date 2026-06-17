@@ -529,7 +529,7 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 		span,
 		metrics,
 		logger,
-		"redis",
+		"cache",
 		errors.New("blocked"),
 	)
 	span.End()
@@ -611,7 +611,7 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
-	rootCause := errors.New("redis probe connection refused")
+	rootCause := errors.New("cache probe connection refused")
 	ctx, span := otel.Tracer("test").Start(context.Background(), "dependency-probe-log")
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
@@ -624,9 +624,9 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 		ctx,
 		runtime,
 		startupDependencyProbeLabels{
-			dependency: " Redis ",
-			operation:  " redis_probe ",
-			probeStage: " startup.probe.redis ",
+			dependency: " Cache ",
+			operation:  " cache_probe ",
+			probeStage: " startup.probe.cache ",
 		},
 		" cache ",
 		rootCause,
@@ -637,13 +637,13 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	if !strings.Contains(logLine, `"msg":"startup_blocked"`) {
 		t.Fatalf("dependency probe rejection log = %q, want startup_blocked message", logLine)
 	}
-	if !strings.Contains(logLine, `"dependency":"redis"`) {
+	if !strings.Contains(logLine, `"dependency":"cache"`) {
 		t.Fatalf("dependency probe rejection log = %q, want normalized dependency", logLine)
 	}
 	if !strings.Contains(logLine, `"mode":"cache"`) {
 		t.Fatalf("dependency probe rejection log = %q, want mode", logLine)
 	}
-	if !strings.Contains(logLine, `"err":"redis probe connection refused"`) {
+	if !strings.Contains(logLine, `"err":"cache probe connection refused"`) {
 		t.Fatalf("dependency probe rejection log = %q, want root cause err", logLine)
 	}
 }

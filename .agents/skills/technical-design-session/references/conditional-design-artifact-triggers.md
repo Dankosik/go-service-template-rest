@@ -9,7 +9,8 @@ Load when deciding whether to add `design/data-model.md`, `design/dependency-gra
 ## Decision Rubric
 - Trigger `design/data-model.md` for persisted state, schema, migration shape, cache contract, projections, replay behavior, data retention, or correctness-sensitive backfill.
 - Trigger `design/dependency-graph.md` for package/module direction changes, generated-code dependency flow, new adapter boundaries, circular-coupling risk, or source-of-truth ambiguity across packages.
-- Trigger `design/contracts/` for changed REST resources, event payloads, generated contracts, or material internal interfaces that planning must preserve; runtime authorities remain canonical.
+- Trigger `design/contracts/` for changed REST resources, event payloads, generated contracts, client-visible status/error/idempotency/retry/async/freshness/compatibility semantics, or material internal interfaces that planning must preserve; runtime authorities remain canonical.
+- For client-visible REST/OpenAPI behavior, use or record an API/contracts lane with `api-contract-designer-spec` unless a valid local-only rationale proves that no independent contract lens can change system design, test-design readiness, planning readiness, or implementation safety.
 - Trigger `test-design` only when validation obligations need scenario IDs, proof levels, fail-before expectations, or quality gates before `tasks.md`, such as contract plus migration plus reliability fail-path plus e2e smoke proof.
 - Trigger `rollout.md` for mixed-version compatibility, expand/backfill/verify/contract sequencing, operational failback, or deploy ordering that affects correctness.
 - Do not create `test-plan.md` in technical design. Record `test-design` as `triggered`, `not expected`, `conditional`, or `blocked`; the later test-design phase owns `test-plan.md`.
@@ -31,7 +32,7 @@ Copy this shape: it names the trigger and why planning needs the artifact.
 
 ```markdown
 Triggered: `design/contracts/`.
-Reason: OpenAPI request and response shapes change.
+Reason: OpenAPI request and response shapes change, and the contract must choose status/error/idempotency/freshness semantics before tasks update the canonical OpenAPI source.
 Authority note: `design/contracts/` is design-only; `api/openapi/service.yaml` remains canonical.
 ```
 
@@ -81,6 +82,7 @@ Failure: generic headings do not prove a validation obligation that cannot fit i
 
 ## Agent Traps
 - Treating any API change as needing a large contract design when a small canonical-source note is enough.
+- Treating `api/openapi/service.yaml`, handlers, generated clients, or tests as the place to invent resource, status, error, retry, async, freshness, or compatibility semantics.
 - Forgetting `rollout.md` when mixed-version behavior or backfill order changes correctness.
 - Treating cache behavior as "just implementation" when staleness, invalidation, or fallback semantics drive correctness.
 - Creating conditional artifacts because another task had them, not because this spec triggers them.

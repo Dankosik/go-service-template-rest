@@ -31,7 +31,7 @@ PR-only Dependency Review and nightly Trivy repository filesystem/config scannin
 
 ## Ongoing Gate Expectations
 
-- Keep generated artifacts in sync (`openapi`, `sqlc`, `mockgen`, `stringer`).
+- Keep generated artifacts in sync (`openapi`, `sqlc`).
 - Keep agent mirrors and skill mirrors in sync (`make agents-check`, `make skills-check`).
 - Keep docs-drift gate green when behavior/contract/CI-sensitive files change.
 - Keep required security gates green (`govulncheck`, `gosec`, `gitleaks`, Trivy image scanning).

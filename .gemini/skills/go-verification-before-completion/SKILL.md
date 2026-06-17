@@ -48,7 +48,7 @@ Before loading, name the behavior-change thesis you need: "When loaded for sympt
 | Reference | Symptom | Behavior change |
 |---|---|---|
 | `references/claim-to-proof-mapping.md` | ambiguous "fixed", "green", "ready", test, lint, build, race, package, or repo claim | choose the narrowest sufficient proof for the exact claim instead of either over-running unrelated checks or generalizing a focused pass to repo readiness |
-| `references/generated-api-and-migration-verification.md` | OpenAPI, generated API, mocks, stringer, sqlc, query, or migration surface changed | add drift or migration rehearsal proof instead of treating compile/tests as enough or accepting skipped migration output as validation |
+| `references/generated-api-and-migration-verification.md` | OpenAPI, generated API, sqlc, query, or migration surface changed | add drift or migration rehearsal proof instead of treating compile/tests as enough or accepting skipped migration output as validation |
 | `references/delegated-work-verification.md` | another agent, tool, CI snippet, or prior session says work is done | rebind the delegated claim to current workspace evidence instead of treating a report or stale log as proof |
 | `references/failure-and-gap-reporting.md` | proof failed, skipped, was missing, was cached unexpectedly, or is weaker than the requested claim | report "not verified" or "partially verified" with the blocking signal and next verification action instead of writing a positive closeout |
 

@@ -1,6 +1,6 @@
 # Railway Deployment Profile
 
-This document defines the repository-managed Railway deployment policy baseline for `privacy-sanitization-service`.
+This document defines the repository-managed Railway deployment policy baseline for this service template.
 
 ## Source Of Truth
 

@@ -17,16 +17,6 @@ func validateStartupBudgetCompatibility(cfg config.Config) error {
 			return err
 		}
 	}
-	if cfg.Redis.Enabled {
-		if err := validateStartupTimeoutBudget("redis.dial_timeout", cfg.Redis.DialTimeout, redisProbeBudget); err != nil {
-			return err
-		}
-	}
-	if cfg.Mongo.Enabled {
-		if err := validateStartupTimeoutBudget("mongo.connect_timeout", cfg.Mongo.ConnectTimeout, mongoProbeBudget); err != nil {
-			return err
-		}
-	}
 	if err := validateStartupReadinessHeadroom(cfg); err != nil {
 		return err
 	}

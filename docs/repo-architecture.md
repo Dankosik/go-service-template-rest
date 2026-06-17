@@ -21,7 +21,6 @@ It does not restate the full tree, every command, or task-local design choices.
 | `api/openapi/service.yaml` | Source of truth for the REST contract. | Hand-written runtime logic or transport implementation. |
 | `internal/api/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
 | `internal/app/` | Use-case behavior and service-level orchestration that should stay transport-agnostic. | HTTP details, driver details, process lifecycle. |
-| `internal/domain/` | Small stable contracts/types only after a consumer-owned app-local contract is genuinely shared or cross-adapter. | Framework code, transport code, concrete integration code, speculative future abstractions. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/postgres/` | Postgres connection/pool lifecycle and repository code. | Process lifecycle, HTTP behavior, config precedence rules. |
 | `internal/infra/telemetry/` | Prometheus metrics and OpenTelemetry tracing setup/adapters. | Feature semantics or request routing decisions. |
@@ -60,12 +59,8 @@ internal/infra/http
   -> internal/api
   -> internal/app/*
 
-internal/app/*
-  -> internal/domain/*   (only after a consumer-owned app-local contract becomes genuinely shared)
-
 internal/infra/postgres, internal/infra/telemetry
   -> external libraries
-  -> internal/domain/*   (only if an app-facing contract exists)
 
 internal/config, internal/infra/telemetry
   -> internal/observability/otelconfig
@@ -74,7 +69,7 @@ internal/config, internal/infra/telemetry
 Stable direction rules:
 - `internal/app` must not depend on `internal/infra/http` or other concrete transport packages.
 - Concrete integration packages belong under `internal/infra/*` and may depend on external libraries.
-- `internal/domain` should stay small and stable; start with a consumer-owned interface or type beside `internal/app/<feature>`, and promote only when a real shared stable contract exists.
+- Shared contracts start beside the consuming `internal/app/<feature>` package and should move only when real reuse exists.
 - `cmd/service/internal/bootstrap` is allowed to know concrete adapters because it is the composition root.
 - `internal/observability/otelconfig` is a vocabulary package only; it must not import config, infra adapters, or OpenTelemetry SDK packages.
 
@@ -122,9 +117,9 @@ Preferred rule: if the workload has a distinct lifecycle or scaling model, add a
 
 Use these seams when extending the repository:
 
-- New HTTP capability: update `api/openapi/service.yaml`, regenerate `internal/api`, add use-case logic in `internal/app`, then wire handlers/routes in `internal/infra/http`.
+- New HTTP capability: first consume the approved `spec.md` behavior/contract delta plus `system-integration-design` contract checkpoint when triggered; then update `api/openapi/service.yaml`, regenerate `internal/api`, add use-case logic in `internal/app`, and wire handlers/routes in `internal/infra/http`. Do not use OpenAPI edits, generated code, handlers, or tests to invent resource, status, error, retry, async, freshness, or compatibility semantics.
 - New persistence flow: add a deterministic migration under `env/migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into app-facing types, add an app-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
-- New integration adapter: add it under `internal/infra/<integration>`; add an app-owned or domain contract only if `internal/app` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, network egress admission, criticality/degraded-mode behavior, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
+- New integration adapter: add it under `internal/infra/<integration>`; add an app-owned contract only if `internal/app` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, network egress admission, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
 - New outbound target: fixed targets must declare source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before bootstrap wiring; dynamic or user-controlled URLs require a separate security design.
 - New durable schema behavior: evolve `env/migrations/` first, then keep adapter or generated access code derived from that schema.
 - New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse shared app/infra packages instead of duplicating logic.

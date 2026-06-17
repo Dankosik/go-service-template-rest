@@ -108,6 +108,7 @@ Conditional artifacts:
 - `research/*.md`: when evidence must survive resume, audit, or later synthesis.
 - `design/overview.md`: when compact design answers are too dense for `spec.md` but do not need split design files.
 - `design/system-integration.md`: when service behavior, contracts, external calls, queues, data/cache/source-of-truth, runtime sequence, failure behavior, validation, or rollout need a dedicated design artifact.
+- `design/contracts/`: when changed REST resources, event payloads, generated contracts, client-visible status/error/idempotency/retry/async/freshness/compatibility semantics, or material internal interfaces need contract context that planning must preserve. It is design context, not runtime authority.
 - `design/go-code-ownership.md`: when package/file ownership, focused responsibilities, dependency direction, local abstractions, cleanup/removal, or test ownership need a dedicated design artifact.
 - `workflow-plan.md`: when multi-session state or reopen routing needs a durable control file.
 

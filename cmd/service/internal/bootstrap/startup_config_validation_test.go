@@ -41,27 +41,6 @@ func TestValidateStartupBudgetCompatibilityRejectsDependencyTimeoutsAboveProbeBu
 			},
 			wantKey: "postgres.healthcheck_timeout",
 		},
-		{
-			name: "redis dial timeout",
-			cfg: config.Config{
-				Redis: config.RedisConfig{
-					Enabled:     true,
-					Mode:        config.RedisModeCache,
-					DialTimeout: redisProbeBudget + time.Nanosecond,
-				},
-			},
-			wantKey: "redis.dial_timeout",
-		},
-		{
-			name: "mongo connect timeout",
-			cfg: config.Config{
-				Mongo: config.MongoConfig{
-					Enabled:        true,
-					ConnectTimeout: mongoProbeBudget + time.Nanosecond,
-				},
-			},
-			wantKey: "mongo.connect_timeout",
-		},
 	}
 
 	for _, tc := range testCases {
@@ -90,13 +69,6 @@ func TestValidateStartupBudgetCompatibilityIgnoresDisabledDependencies(t *testin
 		Postgres: config.PostgresConfig{
 			ConnectTimeout:     postgresProbeBudget + time.Second,
 			HealthcheckTimeout: postgresProbeBudget + time.Second,
-		},
-		Redis: config.RedisConfig{
-			Mode:        config.RedisModeCache,
-			DialTimeout: redisProbeBudget + time.Second,
-		},
-		Mongo: config.MongoConfig{
-			ConnectTimeout: mongoProbeBudget + time.Second,
 		},
 	})
 	if err != nil {

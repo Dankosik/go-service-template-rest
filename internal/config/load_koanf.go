@@ -426,7 +426,7 @@ func isSecretLikeConfigKey(key string) bool {
 	}
 
 	switch lower {
-	case "postgres.dsn", "mongo.uri", "redis.password", "observability.otel.exporter.otlp_headers":
+	case "postgres.dsn", "observability.otel.exporter.otlp_headers":
 		return true
 	}
 

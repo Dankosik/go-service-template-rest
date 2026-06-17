@@ -7,7 +7,7 @@ When loaded for closing a design checkpoint session, this file makes the model h
 Load before claiming technical design is review-ready, setting `Session boundary reached: yes`, or responding to a user request to keep going into review, planning, or implementation.
 
 ## Decision Rubric
-- A technical-design-review handoff may be ready only when required compact or split design context is approved, triggered system/integration design and Go code ownership design are approved or explicitly not expected, triggered conditional artifacts are approved or explicitly not expected, and workflow files agree on blockers and next session.
+- A technical-design-review handoff may be ready only when required compact or split design context is approved, triggered system/integration design and Go code ownership design are approved or explicitly not expected, triggered conditional artifacts are approved or explicitly not expected, contract-design checkpoint status is eligible when contract surfaces are plausible, and workflow files agree on blockers and next session.
 - The handoff names what review must inspect and later planning may consume: specification-review-approved `spec.md`, compact design or split design artifacts, triggered conditional artifacts, accepted assumptions, unresolved trade-offs, and reopen conditions.
 - The final action is a handoff or blocker update, not `tasks.md`, implementation, tests, migrations, generation, or technical design review output.
 - If a planning-critical question remains, route to `specification`, `system-integration-design`, or `go-code-ownership-design`, or keep the active design checkpoint blocked; do not pass a TODO to review or planning.
@@ -16,7 +16,7 @@ Load before claiming technical design is review-ready, setting `Session boundary
 ## Imitate
 ```markdown
 Technical design review handoff: ready.
-Review must inspect: specification-review-approved `spec.md`; approved overview, system/integration design, Go code ownership design, component map, sequence, and ownership map; approved `design/data-model.md`; approved `design/contracts/`; `rollout.md` not expected.
+Review must inspect: specification-review-approved `spec.md`; approved overview, system/integration design, Go code ownership design, component map, sequence, and ownership map; approved `design/data-model.md`; approved `design/contracts/` with OpenAPI source-of-truth handoff; `rollout.md` not expected.
 Accepted assumptions: existing persisted state remains unchanged outside the new job table.
 Next session starts with: technical design review.
 Stop rule: do not run review, write `tasks.md`, code, tests, migrations, generated files, or review output in this session.
@@ -61,8 +61,15 @@ Add TODO placeholders for contract generation and migration order, then mark the
 
 Failure: placeholders hide missing triggered artifacts or upstream decisions.
 
+```markdown
+Skip `design/contracts/`; implementation can define the OpenAPI request and status codes while wiring handlers.
+```
+
+Failure: changed REST/OpenAPI semantics are a triggered system/integration contract-design checkpoint, not handler work.
+
 ## Agent Traps
 - Treating "review-ready" as "planning-ready" or "implementation-ready."
 - Leaving `Next session starts with` implicit because the handoff paragraph is clear.
 - Using `CONCERNS` language at design closeout to pass an unresolved spec contradiction downstream.
 - Beginning contract generation because `design/contracts/` was approved.
+- Treating compact contract design as sufficient without recording the trigger evidence and exact runtime source-of-truth update that planning must task.

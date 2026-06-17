@@ -59,11 +59,11 @@ REDOCLY_CLI_VERSION="${REDOCLY_CLI_VERSION:-2.20.3}"
 TEST_REPORT_DIR="${TEST_REPORT_DIR:-.artifacts/test}"
 TEST_JUNIT_FILE="${TEST_JUNIT_FILE:-${TEST_REPORT_DIR}/junit.xml}"
 TEST_JSON_FILE="${TEST_JSON_FILE:-${TEST_REPORT_DIR}/test2json.json}"
-COVERAGE_MIN="${COVERAGE_MIN:-65.0}"
-COVERAGE_EXCLUDE_REGEX="${COVERAGE_EXCLUDE_REGEX:-(^|/)internal/api/openapi\\.gen\\.go:|(^|/)cmd/service/main\\.go:}"
+COVERAGE_MIN="${COVERAGE_MIN:-80.0}"
+COVERAGE_EXCLUDE_REGEX="${COVERAGE_EXCLUDE_REGEX:-(^|/)internal/api/openapi\\.gen\\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)cmd/service/main\\.go:|(^|/)cmd/migrate/main\\.go:}"
 FUZZ_TIME="${FUZZ_TIME:-45s}"
 GO_FILES_FIND="find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*'"
-GOFUMPT_FILES_FIND="${GO_FILES_FIND} -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*' -not -name '*_mock_test.go' -not -name '*_string.go'"
+GOFUMPT_FILES_FIND="${GO_FILES_FIND} -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*'"
 
 host_uid="$(id -u 2>/dev/null || echo 0)"
 host_gid="$(id -g 2>/dev/null || echo 0)"
@@ -86,12 +86,8 @@ usage() {
 	echo "  test-fuzz-smoke"
 	echo "  test-flake-smoke"
 	echo "  test-integration"
-	echo "  stringer-generate"
-	echo "  stringer-drift-check"
 	echo "  sqlc-generate"
 	echo "  sqlc-check"
-	echo "  mocks-generate"
-	echo "  mocks-drift-check"
 	echo "  lint"
 	echo "  modernize-check"
 	echo "  test-parallelism-check"
@@ -199,38 +195,6 @@ openapi_drift_check() {
 	fi
 }
 
-mocks_drift_check() {
-	if ! git -C "${ROOT_DIR}" diff --quiet -- ':(glob)**/*_mock_test.go'; then
-		echo "tracked mockgen drift detected in *_mock_test.go files"
-		git -C "${ROOT_DIR}" diff -- ':(glob)**/*_mock_test.go'
-		exit 1
-	fi
-
-	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- ':(glob)**/*_mock_test.go')"
-	if [[ -n "${untracked}" ]]; then
-		echo "untracked mockgen artifacts detected"
-		echo "${untracked}"
-		echo "run 'make mocks-generate' and commit updated mock files"
-		exit 1
-	fi
-}
-
-stringer_drift_check() {
-	if ! git -C "${ROOT_DIR}" diff --quiet -- ':(glob)**/*_string.go'; then
-		echo "tracked stringer drift detected in *_string.go files"
-		git -C "${ROOT_DIR}" diff -- ':(glob)**/*_string.go'
-		exit 1
-	fi
-
-	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- ':(glob)**/*_string.go')"
-	if [[ -n "${untracked}" ]]; then
-		echo "untracked stringer artifacts detected"
-		echo "${untracked}"
-		echo "run 'make stringer-generate' and commit updated enum string files"
-		exit 1
-	fi
-}
-
 sqlc_drift_check() {
 	if ! git -C "${ROOT_DIR}" diff --quiet -- internal/infra/postgres/sqlcgen; then
 		echo "tracked sqlc drift detected in internal/infra/postgres/sqlcgen"
@@ -286,10 +250,15 @@ run_test_fuzz_smoke() {
 
 wait_for_postgres() {
 	local container_name="$1"
+	local container_network="$2"
 	local attempts=60
 
 	for _ in $(seq 1 "${attempts}"); do
-		if docker exec "${container_name}" pg_isready -U app -d app >/dev/null 2>&1; then
+		if docker run \
+			--rm \
+			--network "${container_network}" \
+			"${POSTGRES_IMAGE}" \
+			pg_isready -h "${container_name}" -U app -d app >/dev/null 2>&1; then
 			return 0
 		fi
 		sleep 1
@@ -305,15 +274,18 @@ run_migration_validate() {
 	local network_name="go-service-template-migration-${host_uid}-$$"
 	local postgres_container="go-service-template-postgres-${host_uid}-$$"
 	local migration_dsn="postgres://app:app@${postgres_container}:5432/app?sslmode=disable"
+	local runtime_image="go-service-template-rest:migration-smoke-${host_uid}-$$"
 
 	cleanup_migration() {
 		local container_name="$1"
 		local container_network="$2"
+		local image_name="$3"
 
 		docker rm -f "${container_name}" >/dev/null 2>&1 || true
 		docker network rm "${container_network}" >/dev/null 2>&1 || true
+		docker image rm -f "${image_name}" >/dev/null 2>&1 || true
 	}
-	trap "cleanup_migration '${postgres_container}' '${network_name}'" EXIT
+	trap "cleanup_migration '${postgres_container}' '${network_name}' '${runtime_image}'" EXIT
 
 	docker network create "${network_name}" >/dev/null
 	docker run \
@@ -325,7 +297,7 @@ run_migration_validate() {
 		-e POSTGRES_PASSWORD=app \
 		"${POSTGRES_IMAGE}" >/dev/null
 
-	wait_for_postgres "${postgres_container}"
+	wait_for_postgres "${postgres_container}" "${network_name}"
 
 	docker run \
 		--rm \
@@ -350,6 +322,15 @@ run_migration_validate() {
 		"${MIGRATE_IMAGE}" \
 		-path /migrations \
 		-database "${migration_dsn}" up 1
+
+	docker build -f "${ROOT_DIR}/build/docker/Dockerfile" -t "${runtime_image}" "${ROOT_DIR}"
+	docker run \
+		--rm \
+		--network "${network_name}" \
+		-e APP__POSTGRES__ENABLED=true \
+		-e APP__POSTGRES__DSN="${migration_dsn}" \
+		--entrypoint /migrate \
+		"${runtime_image}"
 }
 
 run_container_security_scan() {
@@ -461,26 +442,12 @@ test-flake-smoke)
 test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."
 	;;
-stringer-generate)
-	run_go "go generate -run \"stringer\" ./..."
-	;;
-stringer-drift-check)
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-generate
-	stringer_drift_check
-	;;
 sqlc-generate)
 	run_go "go tool sqlc generate -f internal/infra/postgres/sqlc.yaml"
 	;;
 sqlc-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" sqlc-generate
 	sqlc_drift_check
-	;;
-mocks-generate)
-	run_go "go generate -run \"mockgen\" ./..."
-	;;
-mocks-drift-check)
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-generate
-	mocks_drift_check
 	;;
 lint)
 	run_lint "config verify && GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint run --timeout=3m"
@@ -551,7 +518,7 @@ guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"
 	;;
 skills-check)
-	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --check
+	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --check --strict
 	;;
 agents-check)
 	bash "${ROOT_DIR}/scripts/dev/sync-agents.sh" --check
@@ -582,8 +549,6 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" vet
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-race
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-report
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mocks-drift-check
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" stringer-drift-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" sqlc-check
 	REQUIRE_DOCKER=1 bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test-integration
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" openapi-check

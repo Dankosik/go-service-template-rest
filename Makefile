@@ -3,7 +3,7 @@ BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
 OPENAPI_GENERATED_FILES := internal/api/openapi.gen.go
 GO_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*')
-GOFUMPT_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*' -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*' -not -name '*_mock_test.go' -not -name '*_string.go')
+GOFUMPT_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './.cache/*' -not -path './internal/api/openapi.gen.go' -not -path './internal/infra/postgres/sqlcgen/*')
 REDOCLY_CLI_VERSION := 2.20.3
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
@@ -11,7 +11,7 @@ TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
-COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)cmd/service/main\.go:
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 FUZZ_TIME ?= 45s
 DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
 GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
@@ -30,7 +30,7 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
-	mocks-generate mocks-drift-check stringer-generate stringer-drift-check sqlc-generate sqlc-check
+	sqlc-generate sqlc-check
 
 help:
 	@echo "Quick onboarding commands:"
@@ -65,8 +65,6 @@ help:
 	@echo "  make secret-scan             # gitleaks secret scan"
 	@echo "  make modernize-check         # informational modern Go suggestions"
 	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
-	@echo "  make mocks-drift-check       # mockgen drift checks"
-	@echo "  make stringer-drift-check    # stringer drift checks"
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
 	@echo "  make skills-check            # skill mirror drift check"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
@@ -334,7 +332,7 @@ docker-test-cover:
 	$(DOCKER_TOOLING_SCRIPT) test-cover
 
 docker-test-report:
-	$(DOCKER_TOOLING_SCRIPT) test-report
+	COVERAGE_MIN="$(COVERAGE_MIN)" $(DOCKER_TOOLING_SCRIPT) test-report
 
 docker-test-fuzz-smoke:
 	FUZZ_TIME="$(FUZZ_TIME)" $(DOCKER_TOOLING_SCRIPT) test-fuzz-smoke
@@ -374,7 +372,7 @@ secret-scan:
 secrets-scan: secret-scan
 
 ci-local:
-	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report mocks-drift-check stringer-drift-check sqlc-check openapi-check go-security secret-scan
+	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report sqlc-check openapi-check go-security secret-scan
 	@if [ -n "$(BASE_REF)" ] && [ -n "$(HEAD_REF)" ]; then \
 		$(MAKE) docs-drift-check BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	else \
@@ -399,19 +397,6 @@ docker-modernize-check:
 docker-test-parallelism-check:
 	$(DOCKER_TOOLING_SCRIPT) test-parallelism-check
 
-stringer-generate:
-	go generate -run "stringer" ./...
-
-stringer-drift-check: stringer-generate
-	@git diff --quiet -- ':(glob)**/*_string.go' || (echo "tracked stringer drift detected in *_string.go files"; git diff -- ':(glob)**/*_string.go'; exit 1)
-	@untracked="$$(git ls-files --others --exclude-standard -- ':(glob)**/*_string.go')"; \
-	if [ -n "$$untracked" ]; then \
-		echo "untracked stringer artifacts detected"; \
-		echo "$$untracked"; \
-		echo "run 'make stringer-generate' and commit updated enum string files"; \
-		exit 1; \
-	fi
-
 sqlc-generate:
 	go tool sqlc generate -f internal/infra/postgres/sqlc.yaml
 
@@ -433,19 +418,6 @@ sqlc-check: sqlc-generate
 		echo "actual generated query stems:"; \
 		printf '%s\n' "$$actual"; \
 		echo "remove stale generated files and run 'make sqlc-generate'"; \
-		exit 1; \
-	fi
-
-mocks-generate:
-	go generate -run "mockgen" ./...
-
-mocks-drift-check: mocks-generate
-	@git diff --quiet -- ':(glob)**/*_mock_test.go' || (echo "tracked mockgen drift detected in *_mock_test.go files"; git diff -- ':(glob)**/*_mock_test.go'; exit 1)
-	@untracked="$$(git ls-files --others --exclude-standard -- ':(glob)**/*_mock_test.go')"; \
-	if [ -n "$$untracked" ]; then \
-		echo "untracked mockgen artifacts detected"; \
-		echo "$$untracked"; \
-		echo "run 'make mocks-generate' and commit updated mock files"; \
 		exit 1; \
 	fi
 
@@ -501,7 +473,7 @@ skills-sync:
 	$(SKILLS_SYNC_SCRIPT)
 
 skills-check:
-	$(SKILLS_SYNC_SCRIPT) --check
+	$(SKILLS_SYNC_SCRIPT) --check --strict
 
 agents-sync:
 	$(AGENTS_SYNC_SCRIPT)

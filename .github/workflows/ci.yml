@@ -51,12 +51,6 @@ jobs:
       - name: Verify sqlc generation drift
         run: make sqlc-check
 
-      - name: Verify mock generation drift
-        run: make mocks-drift-check
-
-      - name: Verify stringer generation drift
-        run: make stringer-drift-check
-
       - name: Verify docs drift policy
         run: |
           case "${{ github.event_name }}" in

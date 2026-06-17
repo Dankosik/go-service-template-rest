@@ -24,12 +24,15 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		return nil, fmt.Errorf("http router: logger is required")
 	}
 
-	strict, err := newStrictHandlers(h, metrics, cfg.ReadinessTimeout)
-	if err != nil {
-		return nil, err
+	if metrics == nil {
+		return nil, fmt.Errorf("http router: metrics is required")
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		return nil, fmt.Errorf("http router: max body bytes must be > 0")
+	}
+	strict, err := newStrictHandlers(h, cfg.ReadinessTimeout)
+	if err != nil {
+		return nil, err
 	}
 
 	server := api.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
@@ -50,14 +53,14 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware))
 
 	// Serve /metrics directly on the root router to avoid full payload buffering in strict handler path.
-	metricsHandler := captureRouteLabelMiddleware(strict.metrics.Handler())
+	metricsHandler := captureRouteLabelMiddleware(metrics.Handler())
 	rootRouter := newRootRouter(apiSubrouter, metricsHandler)
 
 	var handler http.Handler = rootRouter
 	handler = Recover(log, handler)
 	handler = RequestFramingGuard(handler)
 	handler = RequestBodyLimit(cfg.MaxBodyBytes, handler)
-	handler = AccessLog(log, strict.metrics, handler)
+	handler = AccessLog(log, metrics, handler)
 	handler = SecurityHeaders(handler)
 	handler = otelMiddleware(handler)
 	handler = RequestCorrelation(handler)
@@ -186,8 +189,8 @@ func allowedMethodsForPath(root chi.Router, path string) []string {
 		path = "/"
 	}
 
-	allowMethods := make([]string, 0, len(routePolicyHTTPMethods))
-	for _, method := range routePolicyHTTPMethods {
+	allowMethods := make([]string, 0, len(boundedHTTPMethods))
+	for _, method := range boundedHTTPMethods {
 		routeContext := chi.NewRouteContext()
 		if root.Match(routeContext, method, path) {
 			allowMethods = append(allowMethods, method)

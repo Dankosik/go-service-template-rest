@@ -43,6 +43,7 @@ Every handoff should include:
 - relevant diff, source files, source-of-truth documents, or specialist outputs to inspect,
 - lens or specialist domain when part of a multi-lane fan-out,
 - constraints, risk hotspots, non-goals, and known blockers,
+- contract-design scope when REST/API, OpenAPI/generated, event/webhook, or material internal-interface shape is plausible, including the exact resource/status/error/retry/async/freshness/compatibility question if known,
 - dependency/OSS due-diligence scope when a new dependency, custom infrastructure, or material abstraction is plausible,
 - Pattern Fit Diligence scope when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction patterns could change the design,
 - known old surfaces, retired identifiers, generated/mirror sources, or retained compatibility surfaces when cleanup is in scope,
@@ -97,6 +98,7 @@ When the chosen skill does not define a stricter shape, return:
 - `Legacy cleanup status`: when cleanup is in scope, list unexplained surviving old surfaces and whether each is removed, refactored, retained with owner/reason/proof/exit condition, not applicable, or requires reopen.
 - `Dependency/OSS status`: when dependency choice or custom implementation is in scope, list selected and rejected stdlib, repository-pattern, and OSS options with evidence and any missing due-diligence blocker.
 - `Pattern Fit status`: when design/system patterns are in scope, list selected and rejected patterns, source descriptions or examples, task applicability, Go/repository fit, and any missing due-diligence blocker.
+- `Contract-design status`: when contract design is in scope, state whether `design/contracts/`, compact contract design, `not_expected`, or `blocked` is recommended, plus runtime source of truth, generated outputs, compatibility class, proof carrier, and reopen trigger.
 - `Open risks/gaps`: unresolved assumptions, compatibility, ownership, test, validation, or rollout risks.
 - `Recommended handoff`: one smallest next action with target owner or artifact.
 - `Confidence`: high, medium, or low with the key uncertainty.

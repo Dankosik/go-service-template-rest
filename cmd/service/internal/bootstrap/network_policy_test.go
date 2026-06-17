@@ -577,7 +577,7 @@ func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testi
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	err = policy.EnforceEgressTarget("redis:6379", "tcp")
+	err = policy.EnforceEgressTarget("cache:6379", "tcp")
 	if err == nil {
 		t.Fatal("EnforceEgressTarget(single label) error = nil, want non-nil")
 	}

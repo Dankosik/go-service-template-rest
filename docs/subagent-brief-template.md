@@ -22,6 +22,7 @@ Context:
 - Known blockers or assumptions: <short list>
 - Dependency/OSS scope: <new dependency, custom infrastructure, material abstraction, or "not in scope"; include expected stdlib/repo-pattern/OSS comparison when relevant>
 - Pattern fit scope: <architecture/workflow/integration/resilience/consistency/data-flow/abstraction pattern choice, or "not in scope"; include expected known-pattern comparison when relevant>
+- Contract-design scope: <REST/API, OpenAPI/generated, event/webhook, material internal interface, or "not in scope"; include expected resource/status/error/retry/async/freshness/compatibility question when relevant>
 - Legacy cleanup scope: <known old surfaces or "not in scope"; include expected remove/refactor/retain proof when relevant>
 - Fan-in owner: orchestrator reconciles lane outputs; this lane does not approve final decisions.
 
@@ -36,6 +37,7 @@ Evidence requirement:
 - Separate facts from assumptions and inferences.
 - When dependency choice or custom implementation is in scope, compare current Go stdlib, established repo patterns, and mature OSS options; cite maintenance/release activity, adoption such as stars or domain-equivalent signals, license, security posture, transitive dependency cost, API stability, fit, selected option, rejected options, and custom-code justification when applicable.
 - When design/system patterns are in scope, compare known applicable patterns; cite concrete pattern descriptions and real-use examples, task applicability, Go/repository fit, selected pattern, rejected patterns, and custom-design justification when no pattern fits.
+- When contract design is in scope, return whether `design/contracts/`, compact contract design, `not_expected`, or `blocked` is the right checkpoint result; cite source-of-truth authority and the resource/status/error/retry/async/freshness/compatibility decision that planning must preserve.
 - When cleanup is in scope, report unexplained surviving replaced or unused surfaces and classify each as removed, refactored, retained with owner/reason/proof/exit condition, not applicable, or reopen risk.
 - Do not invent missing artifacts or validation results.
 
@@ -56,7 +58,7 @@ Use <agent-name> in <mode> with <skill-name | no-skill>.
 Read-only enforcement: <read-only execution choice>; no edits, no git mutation, no task-ledger or handoff changes.
 Question: <exact question>.
 Inspect first: <paths>.
-Evidence: cite concrete files/artifacts/commands; label assumptions; when dependency/custom-code choice is in scope, include stdlib/repo-pattern/OSS comparison with current maintenance, adoption, license, security, and fit signals; when pattern choice is in scope, include known-pattern comparison with source descriptions, examples, task applicability, Go fit, and rejected alternatives.
+Evidence: cite concrete files/artifacts/commands; label assumptions; when dependency/custom-code choice is in scope, include stdlib/repo-pattern/OSS comparison with current maintenance, adoption, license, security, and fit signals; when pattern choice is in scope, include known-pattern comparison with source descriptions, examples, task applicability, Go fit, and rejected alternatives; when contract design is in scope, include checkpoint result, runtime source of truth, generated outputs, compatibility class, proof carrier, and reopen trigger.
 Legacy cleanup: if in scope, report any unexplained surviving old surfaces and retained-surface proof.
 Return: skill output shape, or docs/subagent-contract.md envelope with one handoff classification.
 Prefer `must_decide_now` / `constraint_only` / `proof_only` / `follow_up_only` for adjacent-domain effects when relevant.
@@ -113,7 +115,7 @@ Inspect first:
 - <task>/workflow-plan.md and <task>/workflow-plans/system-integration-design.md, <task>/workflow-plans/go-code-ownership-design.md, <task>/workflow-plans/technical-design-review.md when present
 - docs/repo-architecture.md when boundaries, ownership, dependency direction, or runtime flow matter
 Evidence: cite concrete artifact sections and source facts; label assumptions.
-Planning-safety check: name the first task-planning decision that would still require architecture, system behavior, package/file ownership, sequencing, rollout, validation, cleanup, or test-ownership judgment. If any exists, classify it as a planning blocker and name the owning reopen target.
+Planning-safety check: name the first task-planning decision that would still require architecture, system behavior, contract shape, package/file ownership, sequencing, rollout, validation, cleanup, or test-ownership judgment. If any exists, classify it as a planning blocker and name the owning reopen target.
 Planning blocker test: what would `tasks.md` have to invent before it could name task sources, owner files/packages, order, proof, checkpoint, cleanup/test obligations, or stop/reopen conditions?
 System-handoff falsification: when system/integration design is triggered, verify each planning-critical mechanism has selected or preserved behavior, source-of-truth owner, affected runtime or failure branch, code-carrying constraint, rejected live alternative and closure rule, proof carrier, and reopen trigger; missing or contradictory fields are `blocks_planning` unless not-applicable is evidenced.
 Decision quality: for each material finding, state the planning decision at risk, the strongest counterargument or simpler alternative considered, and why the severity/gate result is not stronger or weaker.

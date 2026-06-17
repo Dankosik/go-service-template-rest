@@ -3,11 +3,9 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"net"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 )
 
@@ -70,193 +68,17 @@ func TestStartupProbeHelperBasics(t *testing.T) {
 			t.Fatal("ensureRemainingStartupBudget() error = nil, want non-nil")
 		}
 	})
-
-	t.Run("shouldRetryStartupProbe", func(t *testing.T) {
-		t.Parallel()
-
-		if shouldRetryStartupProbe(nil, 3, 3) {
-			t.Fatal("shouldRetryStartupProbe() = true at max attempts, want false")
-		}
-		if shouldRetryStartupProbe(context.Canceled, 1, 3) {
-			t.Fatal("shouldRetryStartupProbe() = true for canceled, want false")
-		}
-		if !shouldRetryStartupProbe(errors.New("boom"), 1, 3) {
-			t.Fatal("shouldRetryStartupProbe() = false for retryable error, want true")
-		}
-	})
 }
 
-func TestProbeWithRetry(t *testing.T) {
+func TestSleepWithContext(t *testing.T) {
 	t.Parallel()
 
-	t.Run("single attempt", func(t *testing.T) {
-		t.Parallel()
-
-		calls := 0
-		err := probeWithRetry(context.Background(), 1, func(context.Context) error {
-			calls++
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("probeWithRetry() error = %v, want nil", err)
-		}
-		if calls != 1 {
-			t.Fatalf("calls = %d, want 1", calls)
-		}
-	})
-
-	t.Run("retry then success", func(t *testing.T) {
-		t.Parallel()
-
-		calls := 0
-		err := probeWithRetry(context.Background(), 3, func(context.Context) error {
-			calls++
-			if calls < 2 {
-				return errors.New("transient")
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("probeWithRetry() error = %v, want nil", err)
-		}
-		if calls != 2 {
-			t.Fatalf("calls = %d, want 2", calls)
-		}
-	})
-
-	t.Run("ctx canceled", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		err := probeWithRetry(ctx, 3, func(context.Context) error { return nil })
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("probeWithRetry() err = %v, want %v", err, context.Canceled)
-		}
-	})
-
-	t.Run("canceled before single attempt", func(t *testing.T) {
-		t.Parallel()
-
-		tests := []struct {
-			name        string
-			maxAttempts int
-		}{
-			{name: "one attempt", maxAttempts: 1},
-			{name: "zero normalizes to one attempt", maxAttempts: 0},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-
-				called := false
-				err := probeWithRetry(ctx, tt.maxAttempts, func(context.Context) error {
-					called = true
-					return nil
-				})
-				if !errors.Is(err, context.Canceled) {
-					t.Fatalf("probeWithRetry() err = %v, want %v", err, context.Canceled)
-				}
-				if called {
-					t.Fatal("probeWithRetry() called probe after context cancellation")
-				}
-			})
-		}
-	})
-}
-
-func TestProbeTCPAndDependencyWrappers(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty address", func(t *testing.T) {
-		t.Parallel()
-
-		err := probeTCPDependency(context.Background(), "  ", 10*time.Millisecond)
-		if err == nil {
-			t.Fatal("probeTCPDependency() error = nil, want non-nil")
-		}
-		if !errors.Is(err, errDependencyInit) {
-			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
-		}
-	})
-
-	t.Run("tcp success", func(t *testing.T) {
-		t.Parallel()
-
-		var listenConfig net.ListenConfig
-		ln, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Listen() error = %v", err)
-		}
-		defer func() {
-			if closeErr := ln.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
-				t.Errorf("ln.Close() error = %v", closeErr)
-			}
-		}()
-		go func() {
-			conn, acceptErr := ln.Accept()
-			if acceptErr == nil {
-				_ = conn.Close()
-			}
-		}()
-
-		err = probeTCPDependency(context.Background(), ln.Addr().String(), 100*time.Millisecond)
-		if err != nil {
-			t.Fatalf("probeTCPDependency() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("redis wrapper", func(t *testing.T) {
-		t.Parallel()
-
-		var listenConfig net.ListenConfig
-		ln, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Listen() error = %v", err)
-		}
-		defer func() {
-			if closeErr := ln.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
-				t.Errorf("ln.Close() error = %v", closeErr)
-			}
-		}()
-		go func() {
-			conn, acceptErr := ln.Accept()
-			if acceptErr == nil {
-				_ = conn.Close()
-			}
-		}()
-		err = probeRedisWithContext(context.Background(), config.RedisConfig{Addr: ln.Addr().String(), DialTimeout: 100 * time.Millisecond})
-		if err != nil {
-			t.Fatalf("probeRedisWithContext() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("mongo invalid uri", func(t *testing.T) {
-		t.Parallel()
-
-		err := probeMongoWithContext(context.Background(), config.MongoConfig{URI: "::bad-uri"})
-		if err == nil {
-			t.Fatal("probeMongoWithContext() error = nil, want non-nil")
-		}
-		if !errors.Is(err, errDependencyInit) {
-			t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
-		}
-	})
-
-	t.Run("sleepWithContext", func(t *testing.T) {
-		t.Parallel()
-
-		if err := sleepWithContext(context.Background(), 0); err != nil {
-			t.Fatalf("sleepWithContext(0) err = %v, want nil", err)
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		if !errors.Is(sleepWithContext(ctx, time.Second), context.Canceled) {
-			t.Fatal("sleepWithContext(canceled) did not return context.Canceled")
-		}
-	})
+	if err := sleepWithContext(context.Background(), 0); err != nil {
+		t.Fatalf("sleepWithContext(0) err = %v, want nil", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !errors.Is(sleepWithContext(ctx, time.Second), context.Canceled) {
+		t.Fatal("sleepWithContext(canceled) did not return context.Canceled")
+	}
 }

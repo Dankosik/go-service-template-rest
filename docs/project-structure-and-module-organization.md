@@ -39,7 +39,7 @@ This document explains the `go-service-template-rest` repository layout: what is
 └── go.sum
 ```
 
-Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*`, mock/stringer artifacts, coverage files, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
+Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*`, coverage files, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
 
 ## 2) Layer and Folder Responsibilities
 
@@ -58,12 +58,6 @@ Why: Go `internal` enforces import boundaries and keeps the service contract con
 ### `internal/app/`
 Use-case layer: business scenarios and orchestration without transport or storage details.  
 Why: this behavior can be reused by HTTP handlers, background jobs, CLI commands, and tests.
-
-### `internal/domain/`
-Minimal shared domain contracts and types only when more than one app package needs the same abstraction.
-Why: consumer-owned interfaces stay beside their app consumer by default; readiness probes are owned by `internal/app/health.Probe`.
-
-Domain type decision rule: keep feature-local request/result/value types in `internal/app/<feature>` until two app packages need the same abstraction or the type represents a stable cross-adapter contract. Do not promote a type into `internal/domain` just because a future repository, handler, or worker might use it later.
 
 ### `internal/infra/`
 Infrastructure adapters: HTTP, Postgres, telemetry.  
@@ -161,11 +155,9 @@ Why: quality and security checks are codified, reviewable, and reproducible on e
 - call bootstrap runner with CLI flags/context;
 - return process exit status based on bootstrap result.
 
-`internal/app/*` and `internal/domain/*` should not import `internal/infra/*`, `internal/infra/postgres/sqlcgen`, or concrete database drivers.
+`internal/app/*` should not import `internal/infra/*`, `internal/infra/postgres/sqlcgen`, or concrete database drivers.
 
 `internal/infra/*` can import external libraries (`pgx`, Prometheus, and similar), because these packages are adapters.
-
-`internal/domain/*` should remain small and stable: only shared contracts/types. Prefer a consumer-owned interface beside the `internal/app/<feature>` package first; for readiness, implement `internal/app/health.Probe`.
 
 `/metrics` is operational telemetry, not a normal public business endpoint. If the service HTTP listener is internet-facing, expose `/metrics` only through a private scrape path/network or add a real auth/internal-listener design first. Browser CORS remains fail-closed until a dedicated security decision covers origins, credentials, headers, and protected endpoints. Fail-closed CORS is not CSRF protection.
 
@@ -213,7 +205,7 @@ Before coding the first real business feature, write down the feature owner and 
 Existing examples to inspect before adding new surfaces:
 - `internal/app/ping` for small app-owned behavior.
 - `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
-- `internal/infra/postgres/ping_history_repository.go` for the temporary replaceable SQLC fixture shape, not production business ownership.
+- `internal/infra/postgres` and `test/postgres_sqlc_integration_test.go` for SQLC fixture behavior, not production business ownership.
 - `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
 
 Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
@@ -233,8 +225,8 @@ New Postgres persistence:
 2. Add a deterministic migration under `env/migrations`.
 3. Add SQLC query sources under `internal/infra/postgres/queries/*.sql`.
 4. Regenerate `internal/infra/postgres/sqlcgen` with `make sqlc-generate`; do not hand-edit generated files.
-5. Add a hand-written repository under `internal/infra/postgres` that maps generated rows/types into app-facing records.
-6. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter; use `internal/domain` only for a genuinely shared stable contract.
+5. Add a hand-written repository under `internal/infra/postgres` only when a real feature needs an app-facing mapping layer over generated rows/types.
+6. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter.
 7. Wire the concrete repository in `cmd/service/internal/bootstrap`.
 8. Clamp bounded list limits before values reach SQL `LIMIT`; the API/app contract or repository must define the upper bound instead of trusting caller input.
 9. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
@@ -267,11 +259,9 @@ type Store interface {
 
 The port belongs beside the app feature that consumes it. The Postgres implementation belongs under `internal/infra/postgres`, and bootstrap wires the concrete adapter into the app service. Do not add a generic runtime port package just to prepare for future repositories.
 
-Redis and Mongo extension note: current Redis and Mongo config/probe keys are guard-only extension stubs unless a real feature owns adapter behavior. The enabled flags, probe addresses, readiness flags, probe timeouts, and Redis store-mode admission guard are active bootstrap controls. Redis cache/store knobs and Mongo database/pool/server-selection knobs are reserved future adapter API: they may remain in the config contract for compatibility, but they are not full cache, store, or database runtime behavior in the baseline template. Add `internal/infra/redis` or `internal/infra/mongo` only when an app feature needs real runtime behavior, and do not grow cache/store semantics in `internal/config` or bootstrap alone.
-
-New integration (Redis, Kafka, S3, external API):
+New integration (cache, queue, object store, external API):
 1. Add adapter in `internal/infra/<integration>`.
-2. Add an app-owned or domain interface only if `app` needs inversion over the concrete adapter.
+2. Add an app-owned interface only if `app` needs inversion over the concrete adapter.
 3. Wire the concrete adapter in `cmd/service/internal/bootstrap`; keep `cmd/service/main.go` thin.
 4. For outbound calls, declare the target source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before wiring. Fixed outbound targets are validated by bootstrap policy. Dynamic or user-controlled URLs require a separate security design and review before implementation.
 5. Add the runtime dependency admission checklist before enabling it in startup:
@@ -297,7 +287,7 @@ Test placement matrix:
 
 | Behavior under test | Owning test location |
 | --- | --- |
-| App/domain use-case rules, feature-local types, and app-owned ports | Beside the package under `internal/app/<feature>` or `internal/domain` when a stable shared contract exists. |
+| App use-case rules, feature-local types, and app-owned ports | Beside the package under `internal/app/<feature>`. |
 | HTTP mapping, generated-route ownership, manual route exceptions, CORS, Problem responses, route labels, metrics, and span naming | `internal/infra/http`. |
 | Bootstrap lifecycle, config wiring, dependency admission, disabled/ready/cleanup paths, and shutdown | `cmd/service/internal/bootstrap`. |
 | Runtime config key defaults, snapshot construction, validation, and secret-source policy | `internal/config`. |

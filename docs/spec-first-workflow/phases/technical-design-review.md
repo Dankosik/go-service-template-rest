@@ -48,6 +48,7 @@ The review must be read-only and risk-driven:
 - verify that checkpoint-scoped `Design fan-out` is present and eligible before treating the design as review-ready;
 - check source-of-truth ownership, dependency direction, runtime sequence, failure behavior, conditional artifact triggers, validation/rollout handoff, package/file ownership, source responsibility audit, focused responsibilities, cleanup/removal, test ownership, dependency/OSS due diligence, Pattern Fit Diligence, and accidental complexity;
 - when system/integration design is triggered, falsify the system mechanism closure for each planning-critical mechanism: selected or preserved behavior, source-of-truth owner, affected runtime or failure branch, code-carrying constraint, rejected live alternative and closure rule, proof carrier, and reopen trigger must be present or explicitly not applicable with evidence;
+- when REST/API, OpenAPI/generated, event, webhook, or material internal contract shape is touched, verify the contract-design checkpoint result is present and eligible: `design/contracts/` created, compact contract design sufficient with evidence, `not expected` with trigger test, or `blocked` with reopen target. Missing resource/status/error/retry/idempotency/async/freshness/compatibility/source-of-truth decisions are design defects, not planning details.
 - separate design defects from implementation preferences;
 - identify any live fork where two plausible design options would materially change ownership, interfaces, data shape, async or sync semantics, operability, rollout, or validation, and verify the design has selected one with a rejection reason for the other;
 - challenge the design from the first safe implementation slice: ask whether test design and planning can create scenario obligations and executable tasks without adding architecture, system behavior, ownership, package/file boundaries, contract, sequencing, failure behavior, rollout, validation policy, cleanup policy, or test ownership;
@@ -65,6 +66,7 @@ Test-design and planning readiness are the core falsification tests. Reviewers s
 - the authoritative owner, generated or hand-written source, package boundary, owner file, adapter, composition root, or source-of-truth surface;
 - the selected runtime sequence, sync or async boundary, failure behavior, cleanup, retry/no-retry, degraded-mode, or rollback semantics;
 - the selected data, contract, dependency, Pattern Fit, code ownership, local abstraction, cleanup/removal, test ownership, or conditional-artifact shape;
+- the contract-design checkpoint trigger result, selected contract shape, runtime source of truth, generated outputs, compatibility class, proof carrier, or reopen trigger when a contract surface changes;
 - the rejected alternative for a live fork that still has material planning consequences;
 - the proof claim, carrying artifact, freshness or negative-proof rule, and reopen condition for an accepted design risk.
 
@@ -98,6 +100,7 @@ Invalid shallow-review passes include:
 - accepting `not affected`, `covered by tests`, `use existing mechanism`, or `not expected` without a source evidence pointer and falsification handle;
 - treating a rejected live alternative as closed without a closure rule or reopen trigger;
 - accepting generic validation or rollout proof without a carrying artifact, owner phase, pass/fail signal, and reopen target;
+- accepting `design/contracts/: not expected` without a trigger test covering REST/API, event, generated, and material internal-interface surfaces, or accepting an API/OpenAPI design that leaves resource model, status/error semantics, retry/idempotency, async/freshness, compatibility, or generated/manual authority to implementation;
 - allowing test design or planning to decide source of truth, runtime sequence, failure policy, rollout mechanism, owner package/file, cleanup owner, proof owner, or test owner.
 
 Separate design defects from implementation preferences:

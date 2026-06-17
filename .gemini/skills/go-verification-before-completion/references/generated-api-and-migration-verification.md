@@ -4,7 +4,7 @@
 When loaded for generated-code, API-contract, sqlc, or migration symptoms, this file makes the model add drift or rehearsal proof instead of treating ordinary tests or a successful compile as evidence that generated artifacts and schema transitions are current.
 
 ## When To Load
-Load this when changes touch OpenAPI specs, generated API code, generated mocks, enum stringer output, sqlc output, SQL queries, migration files, migration-backed schema behavior, or runtime API contract tests.
+Load this when changes touch OpenAPI specs, generated API code, sqlc output, SQL queries, migration files, migration-backed schema behavior, or runtime API contract tests.
 
 ## Decision Rubric
 - Generated artifacts require drift proof because stale generated files can still compile and tests can still pass.
@@ -22,8 +22,6 @@ Load this when changes touch OpenAPI specs, generated API code, generated mocks,
 | "Runtime API contract is green" | `make openapi-runtime-contract-check` or `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1` | Use the narrow runtime contract target when only runtime contract wiring is claimed. |
 | "API change is ready" | focused API/handler tests plus `make openapi-check`; add `make openapi-breaking` only when compatibility is in scope | Combine behavior proof with generated-contract proof. |
 | "sqlc output is current" | `make sqlc-check` | Check generated query drift and stale generated query stems. |
-| "Generated mocks are current" | `make mocks-drift-check` | Match the generator surface actually touched. |
-| "Stringer output is current" | `make stringer-drift-check` | Keep enum string artifacts tied to the generator, not to unrelated tests. |
 | "Migration rehearsal passed" | `MIGRATION_DSN=... make migration-validate`, `make docker-migration-validate`, or `make migration-validate` only when it actually falls through to Docker | Verify that the command rehearsed up/down/up instead of skipping. |
 
 ## Reject

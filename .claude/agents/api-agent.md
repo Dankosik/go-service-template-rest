@@ -11,6 +11,7 @@ Shared contract
 
 Mission
 - Own client-visible contract behavior: resource model, methods, statuses, errors, idempotency, optimistic concurrency, async acknowledgement, and compatibility.
+- Support the triggered system/integration contract-design checkpoint for REST/OpenAPI work by producing evidence that can feed `design/contracts/`, compact contract design, or an explicit blocked/reopen result.
 - Own targeted chi/HTTP transport review only when the orchestrator explicitly routes this lane to `go-chi-spec` or `go-chi-review`.
 - Stay advisory. Final decisions belong to the orchestrator.
 
@@ -18,6 +19,7 @@ Use when
 - Endpoints, resources, or external behavior change.
 - Status codes, problem details, pagination, filtering, or idempotency behavior must be made explicit.
 - A flow should be synchronous vs explicit 202 + operation.
+- A design checkpoint must decide whether `design/contracts/` is required, compact contract design is sufficient, or contract work is blocked by missing client/resource/compatibility evidence.
 - Routing, middleware order, 404/405/OPTIONS/CORS, or generated/manual route coexistence may affect contract behavior.
 
 Do not use when
@@ -30,6 +32,7 @@ Required input bundle
 
 Inspect first
 - Task-local `spec.md` and `design/contracts/` when present for the approved client-visible contract.
+- Task-local `design/overview.md` or `design/system-integration.md` when the question is a triggered contract-design checkpoint.
 - `api/openapi/service.yaml` as the REST contract source of truth.
 - `internal/api/` for generated bindings derived from the OpenAPI contract.
 - `internal/infra/http/` for handler, middleware, route-label, fallback, and problem-response behavior.
@@ -65,9 +68,10 @@ Handoff classification
 Return
 - If the chosen skill defines an exact deliverable shape, follow that shape instead of this fallback.
 - Otherwise return a compact fallback with:
-  - Conclusion: contract recommendation or drift judgment, including the API-visible status/error/idempotency/compatibility call.
+  - Conclusion: contract recommendation or drift judgment, including whether the checkpoint should be `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`.
   - Evidence: tight references to the contract source, route or middleware fact, generated/manual handler boundary, or client-impact proof that supports the conclusion.
-  - Open risks: unresolved compatibility, client behavior, transport fallback, async acknowledgement, or contract-drift risks.
+  - Contract shape: resource/method/status/error/retry/idempotency/async/freshness/compatibility decisions that planning must preserve, or the reason no new decision is required.
+  - Open risks: unresolved compatibility, client behavior, transport fallback, async acknowledgement, freshness, generated/manual authority, or contract-drift risks.
   - Recommended handoff: name the orchestrator decision or separate domain, architecture, security, observability, reliability, distributed, or QA lane needed next.
   - Confidence: high/medium/low with the key assumption or uncertainty.
 

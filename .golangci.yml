@@ -66,8 +66,6 @@ linters:
     paths:
       - internal/api/openapi\.gen\.go
       - internal/infra/postgres/sqlcgen/.*
-      - .*_mock_test\.go
-      - .*_string\.go
     rules:
       # Complexity gates are production-focused for now; table-heavy tests stay review-visible
       # without forcing artificial helper extraction.
@@ -85,12 +83,11 @@ linters:
           list-mode: lax
           files:
             - "**/internal/app/**/*.go"
-            - "**/internal/domain/**/*.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/api
-              desc: app and domain packages must stay transport-contract agnostic; map generated API types in internal/infra/http.
+              desc: app packages must stay transport-contract agnostic; map generated API types in internal/infra/http.
             - pkg: github.com/example/go-service-template-rest/internal/infra
-              desc: app and domain packages must not import concrete infra adapters; wire adapters in bootstrap.
+              desc: app packages must not import concrete infra adapters; wire adapters in bootstrap.
             - pkg: github.com/jackc/pgx/v5
               desc: direct Postgres driver usage belongs in internal/infra/postgres.
         postgres_driver_boundary:
@@ -156,7 +153,7 @@ linters:
       allow-empty-returns: true
       include:
         - '^github\.com/example/go-service-template-rest/internal/api\.Problem$'
-        - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig|RedisConfig|MongoConfig|FeatureFlagsConfig)$'
+        - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig|FeatureFlagsConfig)$'
     forbidigo:
       analyze-types: true
       forbid:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -78,7 +79,7 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	runErrCh := make(chan error, 1)
 	go func() {
 		args.log.Info("http server started", "addr", listener.Addr().String(), "env", args.cfg.App.Env)
-		runErrCh <- args.srv.Serve(listener)
+		runErrCh <- normalizeServeError(args.srv.Serve(listener))
 	}()
 
 	admissionCtx, cancelAdmission := context.WithCancel(bootstrapCtx)
@@ -112,6 +113,13 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 
 	args.log.Info("shutdown complete")
 	return nil
+}
+
+func normalizeServeError(err error) error {
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func waitForHTTPRuntimePreReady(

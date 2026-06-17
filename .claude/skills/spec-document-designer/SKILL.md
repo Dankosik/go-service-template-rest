@@ -25,6 +25,7 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 - keep blockers, assumptions, inline `Risk Challenge` or clarification outcomes, validation hooks, and handoff links visible before specification review
 - keep the handoff focused on the current decision frontier: record downstream consequences that matter, but do not promote every visible consequence into a new design decision inside `spec.md`
 - for replacement or cleanup-discipline work, name known legacy surfaces and the expected remove/refactor/retain semantics before tasking begins
+- for REST/API, generated contract, event payload, or material internal-interface work, record the behavior/contract delta and whether later system/integration design must run the triggered contract-design checkpoint
 - for non-trivial custom implementation, new runtime dependencies, or meaningful helper/abstraction choices, record dependency/OSS due diligence before tasking begins
 - for non-trivial architecture, system-design, workflow, integration, resilience, consistency, data-flow, or abstraction choices, record Pattern Fit Diligence before tasking begins or route to research/technical design when the pattern comparison is not ready
 
@@ -56,6 +57,7 @@ Escalate if:
 - Use the repository's default section set unless merging sections makes the file clearer.
 - Treat external frameworks as coverage prompts, not as headings to copy.
 - Put stable decisions in `spec.md`, lean compact design answers in `spec.md` or one `design/overview.md`, split task-local technical context in `design/` when triggered, execution order and task detail in `tasks.md`, and preserved evidence in `research/*.md`.
+- Keep client-visible contract meaning explicit enough for review: `spec.md` owns the behavior/contract delta and final scope constraints, while triggered `system-integration-design` owns detailed contract shape in `design/contracts/` or a compact-sufficient rationale before OpenAPI, handlers, generated clients, or tests are tasked.
 - For replacement specs, record known old identifiers, routes, configs, commands, generated outputs, fixtures, docs, skills, agents, or mirrors and decide whether each is removed, refactored into the active path, or retained with owner, reason, proof, and exit condition.
 - For dependency-sensitive specs, record selected and rejected stdlib, established repository-pattern, mature OSS, and custom-code options with current evidence. Missing dependency/OSS due diligence blocks review-readiness when the task would otherwise add a dependency, build custom infrastructure, or introduce a meaningful helper/abstraction.
 - For pattern-sensitive specs, record selected and rejected design or system-design patterns with current source descriptions, real-use examples, task applicability, Go/repository fit, and custom-design justification when no known pattern fits. Missing Pattern Fit Diligence blocks review-readiness when the task would otherwise invent architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape.
@@ -162,6 +164,7 @@ Make `spec.md` stable enough for mandatory specification review while preserving
 
 ### Technical-Design Handoff Competency
 - A full-orchestrated or design-triggered spec must let `go-design-spec` derive the task-local `design/` bundle without silently reopening core problem framing.
+- A spec with REST/API, generated contract, event payload, or material internal-interface changes must name the contract-design trigger or compact-sufficient rationale so `system-integration-design` can decide `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked` without rediscovering scope.
 - A lean-local spec must let `tasks.md` be written from explicit `Compact Design` answers without forcing hidden design recovery during planning.
 - A dependency-sensitive spec must let technical design or planning consume the chosen dependency/custom-code approach without rerunning open-ended library selection.
 - A pattern-sensitive spec must let technical design or planning consume the selected design/system pattern without rerunning open-ended pattern selection; when the comparison is too dense, link to preserved `research/pattern-fit.md` and route detailed application to `design/`.

@@ -26,14 +26,6 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	redisCfg, err := readRedisSnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
-	mongoCfg, err := readMongoSnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
 	featureFlagsCfg, err := readFeatureFlagsSnapshot(k)
 	if err != nil {
 		return Config{}, err
@@ -45,8 +37,6 @@ func buildSnapshot(k *koanf.Koanf) (Config, error) {
 		Log:           logCfg,
 		Observability: observabilityCfg,
 		Postgres:      postgresCfg,
-		Redis:         redisCfg,
-		Mongo:         mongoCfg,
 		FeatureFlags:  featureFlagsCfg,
 	}, nil
 }
@@ -175,132 +165,13 @@ func readPostgresSnapshot(k *koanf.Koanf) (PostgresConfig, error) {
 	}, nil
 }
 
-func readRedisSnapshot(k *koanf.Koanf) (RedisConfig, error) {
-	var enabled bool
-	if err := readBoolInto(k, "redis.enabled", &enabled); err != nil {
-		return RedisConfig{}, err
-	}
-	mode := normalizeRedisMode(readTrimmedConfigString(k, "redis.mode"))
-	var allowStoreMode bool
-	if err := readBoolInto(k, "redis.allow_store_mode", &allowStoreMode); err != nil {
-		return RedisConfig{}, err
-	}
-	addr := readTrimmedConfigString(k, "redis.addr")
-	username := readRawConfigString(k, "redis.username")
-	password := readRawConfigString(k, "redis.password")
-	var db int
-	if err := readIntInto(k, "redis.db", &db); err != nil {
-		return RedisConfig{}, err
-	}
-	var dialTimeout time.Duration
-	if err := readDurationInto(k, "redis.dial_timeout", &dialTimeout); err != nil {
-		return RedisConfig{}, err
-	}
-	var readTimeout time.Duration
-	if err := readDurationInto(k, "redis.read_timeout", &readTimeout); err != nil {
-		return RedisConfig{}, err
-	}
-	var writeTimeout time.Duration
-	if err := readDurationInto(k, "redis.write_timeout", &writeTimeout); err != nil {
-		return RedisConfig{}, err
-	}
-	var poolSize int
-	if err := readIntInto(k, "redis.pool_size", &poolSize); err != nil {
-		return RedisConfig{}, err
-	}
-	keyPrefix := readTrimmedConfigString(k, "redis.key_prefix")
-	var freshTTL time.Duration
-	if err := readDurationInto(k, "redis.fresh_ttl", &freshTTL); err != nil {
-		return RedisConfig{}, err
-	}
-	var staleWindow time.Duration
-	if err := readDurationInto(k, "redis.stale_window", &staleWindow); err != nil {
-		return RedisConfig{}, err
-	}
-	var negativeTTL time.Duration
-	if err := readDurationInto(k, "redis.negative_ttl", &negativeTTL); err != nil {
-		return RedisConfig{}, err
-	}
-	var ttlJitterPercent int
-	if err := readIntInto(k, "redis.ttl_jitter_percent", &ttlJitterPercent); err != nil {
-		return RedisConfig{}, err
-	}
-	var enableSingleflight bool
-	if err := readBoolInto(k, "redis.enable_singleflight", &enableSingleflight); err != nil {
-		return RedisConfig{}, err
-	}
-	var maxFallbackConcurrency int
-	if err := readIntInto(k, "redis.max_fallback_concurrency", &maxFallbackConcurrency); err != nil {
-		return RedisConfig{}, err
-	}
-	return RedisConfig{
-		Enabled:                enabled,
-		Mode:                   mode,
-		AllowStoreMode:         allowStoreMode,
-		Addr:                   addr,
-		Username:               username,
-		Password:               password,
-		DB:                     db,
-		DialTimeout:            dialTimeout,
-		ReadTimeout:            readTimeout,
-		WriteTimeout:           writeTimeout,
-		PoolSize:               poolSize,
-		KeyPrefix:              keyPrefix,
-		FreshTTL:               freshTTL,
-		StaleWindow:            staleWindow,
-		NegativeTTL:            negativeTTL,
-		TTLJitterPercent:       ttlJitterPercent,
-		EnableSingleflight:     enableSingleflight,
-		MaxFallbackConcurrency: maxFallbackConcurrency,
-	}, nil
-}
-
-func readMongoSnapshot(k *koanf.Koanf) (MongoConfig, error) {
-	var enabled bool
-	if err := readBoolInto(k, "mongo.enabled", &enabled); err != nil {
-		return MongoConfig{}, err
-	}
-	uri := readRawConfigString(k, "mongo.uri")
-	database := readTrimmedConfigString(k, "mongo.database")
-	var connectTimeout time.Duration
-	if err := readDurationInto(k, "mongo.connect_timeout", &connectTimeout); err != nil {
-		return MongoConfig{}, err
-	}
-	var serverSelectionTimeout time.Duration
-	if err := readDurationInto(k, "mongo.server_selection_timeout", &serverSelectionTimeout); err != nil {
-		return MongoConfig{}, err
-	}
-	var maxPoolSize int
-	if err := readIntInto(k, "mongo.max_pool_size", &maxPoolSize); err != nil {
-		return MongoConfig{}, err
-	}
-	return MongoConfig{
-		Enabled:                enabled,
-		URI:                    uri,
-		Database:               database,
-		ConnectTimeout:         connectTimeout,
-		ServerSelectionTimeout: serverSelectionTimeout,
-		MaxPoolSize:            maxPoolSize,
-	}, nil
-}
-
 func readFeatureFlagsSnapshot(k *koanf.Koanf) (FeatureFlagsConfig, error) {
 	var postgresReadinessProbe bool
 	if err := readBoolInto(k, "feature_flags.postgres_readiness_probe", &postgresReadinessProbe); err != nil {
 		return FeatureFlagsConfig{}, err
 	}
-	var mongoReadinessProbe bool
-	if err := readBoolInto(k, "feature_flags.mongo_readiness_probe", &mongoReadinessProbe); err != nil {
-		return FeatureFlagsConfig{}, err
-	}
-	var redisReadinessProbe bool
-	if err := readBoolInto(k, "feature_flags.redis_readiness_probe", &redisReadinessProbe); err != nil {
-		return FeatureFlagsConfig{}, err
-	}
 	return FeatureFlagsConfig{
 		PostgresReadinessProbe: postgresReadinessProbe,
-		MongoReadinessProbe:    mongoReadinessProbe,
-		RedisReadinessProbe:    redisReadinessProbe,
 	}, nil
 }
 

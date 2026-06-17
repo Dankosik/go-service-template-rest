@@ -12,8 +12,6 @@ type Config struct {
 	Log           LogConfig           `koanf:"log"`
 	Observability ObservabilityConfig `koanf:"observability"`
 	Postgres      PostgresConfig      `koanf:"postgres"`
-	Redis         RedisConfig         `koanf:"redis"`
-	Mongo         MongoConfig         `koanf:"mongo"`
 	FeatureFlags  FeatureFlagsConfig  `koanf:"feature_flags"`
 }
 
@@ -67,38 +65,6 @@ type PostgresConfig struct {
 	ConnMaxLifetime    time.Duration `koanf:"conn_max_lifetime"`
 }
 
-type RedisConfig struct {
-	Enabled                bool          `koanf:"enabled"`
-	Mode                   string        `koanf:"mode"`
-	AllowStoreMode         bool          `koanf:"allow_store_mode"`
-	Addr                   string        `koanf:"addr"`
-	Username               string        `koanf:"username"`
-	Password               string        `koanf:"password"`
-	DB                     int           `koanf:"db"`
-	DialTimeout            time.Duration `koanf:"dial_timeout"`
-	ReadTimeout            time.Duration `koanf:"read_timeout"`
-	WriteTimeout           time.Duration `koanf:"write_timeout"`
-	PoolSize               int           `koanf:"pool_size"`
-	KeyPrefix              string        `koanf:"key_prefix"`
-	FreshTTL               time.Duration `koanf:"fresh_ttl"`
-	StaleWindow            time.Duration `koanf:"stale_window"`
-	NegativeTTL            time.Duration `koanf:"negative_ttl"`
-	TTLJitterPercent       int           `koanf:"ttl_jitter_percent"`
-	EnableSingleflight     bool          `koanf:"enable_singleflight"`
-	MaxFallbackConcurrency int           `koanf:"max_fallback_concurrency"`
-}
-
-type MongoConfig struct {
-	Enabled                bool          `koanf:"enabled"`
-	URI                    string        `koanf:"uri"`
-	Database               string        `koanf:"database"`
-	ConnectTimeout         time.Duration `koanf:"connect_timeout"`
-	ServerSelectionTimeout time.Duration `koanf:"server_selection_timeout"`
-	MaxPoolSize            int           `koanf:"max_pool_size"`
-}
-
 type FeatureFlagsConfig struct {
 	PostgresReadinessProbe bool `koanf:"postgres_readiness_probe"`
-	MongoReadinessProbe    bool `koanf:"mongo_readiness_probe"`
-	RedisReadinessProbe    bool `koanf:"redis_readiness_probe"`
 }

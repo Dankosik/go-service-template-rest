@@ -1,9 +1,10 @@
 package main
 
 import (
-	"io"
+	"bytes"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -13,28 +14,13 @@ func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) {
 
 	t.Chdir(t.TempDir())
 
-	stdout, err := os.CreateTemp(t.TempDir(), "migrate-stdout-*")
-	if err != nil {
-		t.Fatalf("create stdout temp file: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := stdout.Close(); err != nil {
-			t.Errorf("close stdout temp file: %v", err)
-		}
-	})
+	var stdout bytes.Buffer
 
-	if err := run(stdout); err != nil {
+	if err := run(&stdout); err != nil {
 		t.Fatalf("run() error = %v, want nil", err)
 	}
 
-	if _, err := stdout.Seek(0, io.SeekStart); err != nil {
-		t.Fatalf("seek stdout: %v", err)
-	}
-	output, err := io.ReadAll(stdout)
-	if err != nil {
-		t.Fatalf("read stdout: %v", err)
-	}
-	if got := string(output); got != "postgres is disabled; skipping migrations\n" {
+	if got := stdout.String(); got != "postgres is disabled; skipping migrations\n" {
 		t.Fatalf("run() stdout = %q, want disabled migration message", got)
 	}
 }
@@ -45,22 +31,32 @@ func TestRunReturnsConfigLoadError(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("APP__HTTP__ADDR", "")
 
-	stdout, err := os.CreateTemp(t.TempDir(), "migrate-stdout-*")
-	if err != nil {
-		t.Fatalf("create stdout temp file: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := stdout.Close(); err != nil {
-			t.Errorf("close stdout temp file: %v", err)
-		}
-	})
+	var stdout bytes.Buffer
 
-	err = run(stdout)
+	err := run(&stdout)
 	if err == nil {
 		t.Fatal("run() error = nil, want config load error")
 	}
 	if !strings.Contains(err.Error(), "load config") {
 		t.Fatalf("run() error = %q, want load config context", err.Error())
+	}
+}
+
+func TestRunReturnsMigrationApplyError(t *testing.T) {
+	clearPrefixedEnvForTest(t, "APP__")
+
+	t.Chdir(t.TempDir())
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "not-a-postgres-dsn")
+
+	var stdout bytes.Buffer
+
+	err := run(&stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want migration apply error")
+	}
+	if !strings.Contains(err.Error(), "apply postgres migrations") {
+		t.Fatalf("run() error = %q, want migration apply context", err.Error())
 	}
 }
 
@@ -70,15 +66,29 @@ func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) {
 		t.Fatalf("create local migrations dir: %v", err)
 	}
 
-	sourceFS, sourcePath := resolveMigrationSource()
-	if sourcePath != "env/migrations" {
-		t.Fatalf("resolveMigrationSource() path = %q, want env/migrations", sourcePath)
+	imagePath := filepath.Join(t.TempDir(), "image-migrations")
+	sourceFS, sourcePath := resolveMigrationSourceFrom(imagePath, localMigrationSourcePath)
+	if sourcePath != localMigrationSourcePath {
+		t.Fatalf("resolveMigrationSourceFrom() path = %q, want %q", sourcePath, localMigrationSourcePath)
 	}
 	if sourceFS == nil {
-		t.Fatal("resolveMigrationSource() fs = nil, want local fs")
+		t.Fatal("resolveMigrationSourceFrom() fs = nil, want local fs")
 	}
 	if _, err := fs.Stat(sourceFS, sourcePath); err != nil {
 		t.Fatalf("resolved local source is not readable: %v", err)
+	}
+}
+
+func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	imagePath := filepath.Join(t.TempDir(), "image-migrations")
+	sourceFS, sourcePath := resolveMigrationSourceFrom(imagePath, localMigrationSourcePath)
+	if sourcePath != imagePath {
+		t.Fatalf("resolveMigrationSourceFrom() path = %q, want %q", sourcePath, imagePath)
+	}
+	if sourceFS != nil {
+		t.Fatalf("resolveMigrationSourceFrom() fs = %T, want nil image fs", sourceFS)
 	}
 }
 

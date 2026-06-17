@@ -196,6 +196,7 @@ If several symptoms apply, read the smallest set of references that covers the c
 ### Boundaries And Handoffs
 - Own client-visible API semantics; do not turn this into chi routing, SQL schema, worker runtime, or service-decomposition design.
 - When used inside a repository workflow, hand final API decisions back to the orchestrator's chosen decision artifact; this skill does not own artifact propagation.
+- In this repository's system/integration design workflow, map the result to the contract-design checkpoint: recommend `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`, and name the runtime source of truth such as `api/openapi/service.yaml` plus generated outputs that implementation must update from approved tasking.
 - Recommend OpenAPI or generated-surface updates only when they follow from the contract decision, and do not claim they were updated without tool evidence.
 - Hand off when routing, domain invariants, security, data/cache ownership, or distributed completion semantics become primary. Adjacent skills inform the contract; they do not replace ownership of client-visible API semantics.
 - When another domain is only affected, record the contract consequence, proof obligation, or explicit `no new decision required` note instead of widening the API decision set.
@@ -228,10 +229,12 @@ For every major API recommendation, include:
 - if old and new surfaces must coexist, a short comparison of which semantics are shared versus divergent, plus the same-scope exit and removal criteria
 - any invented status, media type, or companion surface only when it has an explicit client-facing reason
 - adjacent-skill handoffs when the contract depends on another seam
+- runtime source of truth, generated or derived outputs, proof carrier, and reopen trigger
 - compatibility class, assumptions, risks, and reopen conditions
 
 ## Deliverable Shape
 Return API work in a compact, reviewable form:
+- `Checkpoint Recommendation`: `created` in `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`, with runtime source of truth, generated outputs, proof carrier, and reopen trigger
 - `Contract Framing And Assumptions`
 - `Resource And Endpoint Matrix`
 - `Request, Response, And Error Model`

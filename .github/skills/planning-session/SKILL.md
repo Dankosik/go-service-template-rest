@@ -49,6 +49,7 @@ Planning may begin only when the minimum planning-entry inputs exist:
   - `design/dependency-graph.md`
   - `design/pattern-fit.md`
   - `design/contracts/`
+- contract-design checkpoint result when REST/API, OpenAPI/generated, event, webhook, or material internal-interface surfaces are plausible: approved `design/contracts/`, compact contract design sufficient with evidence, `not expected` with trigger test, or blocked/reopen target
 - approved dependency/OSS due-diligence outcome when implementation adds a dependency, integrates OSS, builds custom infrastructure, or introduces a material helper/abstraction
 - approved Pattern Fit Diligence outcome when implementation relies on a non-trivial architecture, workflow, integration, resilience, consistency, data-flow, or abstraction pattern
 - existing task-local `workflow-plan.md`
@@ -80,6 +81,7 @@ Rules:
 - do not treat `spec.md` alone as sufficient for non-trivial planning unless it explicitly records lean-local compact design answers and the design-skip/merge rationale
 - do not treat `spec.md` alone as sufficient for non-trivial planning unless specification review is `PASS` or `CONCERNS` with named obligations
 - do not treat separate design artifacts as sufficient for planning unless the mandatory technical design review gate is recorded and reconciled
+- do not let planning invent REST/OpenAPI resource shape, status/error semantics, idempotency/retry behavior, async/freshness disclosure, compatibility policy, or generated/manual contract authority; reopen system/integration design when those are missing
 - do not broad-read unrelated repository surfaces when the design bundle already defines the sequencing and ownership constraints
 
 ## Lazily Loaded References
@@ -137,6 +139,7 @@ Do not:
 - skipped, unavailable, stale, failing, or too-narrow proof cannot satisfy a task checkbox, checkpoint, or completion claim
 - dependency/OSS due-diligence decisions from `spec.md` or design must be carried into `tasks.md` as dependency, integration, license/security, drift, and proof tasks when relevant; missing due diligence blocks planning handoff and routes back to specification or technical design
 - Pattern Fit Diligence decisions from `spec.md` or design must be carried into `tasks.md` as design-preserving constraints, proof tasks, and reopen conditions when relevant; missing pattern comparison blocks planning handoff when implementation would otherwise choose or invent the pattern
+- contract-design decisions from `spec.md`, `design/overview.md`, or `design/contracts/` must be carried into `tasks.md` as canonical source updates, generated-output updates, compatibility checks, contract tests, drift proof, and reopen conditions when relevant; missing contract design blocks planning handoff and routes back to `system-integration-design` or `specification`
 - this wrapper owns the planning-session boundary: required inputs, allowed outputs, workflow handoff updates, and the stop point before implementation
 - planning consumes the design authoring fan-out gate when separate technical design depth was triggered; missing, blocked, or ineligible `local_only` design fan-out reopens technical design
 - technical design review is the required pre-planning gate for separate design depth; planning must not downgrade it into an optional note or infer it from the design author's own handoff

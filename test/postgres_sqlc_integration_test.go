@@ -4,39 +4,30 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 )
 
-const migrationGlobUp = "../env/migrations/*.up.sql"
+func TestPingHistorySQLCReadWrite(t *testing.T) {
+	pool := setupMigratedPGXPool(t)
+	queries := sqlcgen.New(pool)
 
-func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
-	pool := setupPostgresPoolWithMigrations(t)
-
-	repo, err := postgres.NewPingHistoryRepository(pool)
-	if err != nil {
-		t.Fatalf("create ping history repository: %v", err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	first, err := repo.Create(ctx, "first")
+	first, err := queries.CreatePingHistory(ctx, "first")
 	if err != nil {
-		t.Fatalf("Create(first) error: %v", err)
+		t.Fatalf("CreatePingHistory(first) error: %v", err)
 	}
-	second, err := repo.Create(ctx, "second")
+	second, err := queries.CreatePingHistory(ctx, "second")
 	if err != nil {
-		t.Fatalf("Create(second) error: %v", err)
+		t.Fatalf("CreatePingHistory(second) error: %v", err)
 	}
 
 	if second.ID <= first.ID {
@@ -45,29 +36,29 @@ func TestPingHistoryRepositorySQLCReadWrite(t *testing.T) {
 	if first.Payload != "first" || second.Payload != "second" {
 		t.Fatalf("created payloads = [%q %q], want [first second]", first.Payload, second.Payload)
 	}
-	if first.CreatedAt.IsZero() || second.CreatedAt.IsZero() {
+	if !first.CreatedAt.Valid || !second.CreatedAt.Valid || first.CreatedAt.Time.IsZero() || second.CreatedAt.Time.IsZero() {
 		t.Fatalf("created timestamps must be non-zero: first=%v second=%v", first.CreatedAt, second.CreatedAt)
 	}
 
-	recent, err := repo.ListRecent(ctx, 2)
+	recent, err := queries.ListRecentPingHistory(ctx, 2)
 	if err != nil {
-		t.Fatalf("ListRecent(2) error: %v", err)
+		t.Fatalf("ListRecentPingHistory(2) error: %v", err)
 	}
 	if len(recent) != 2 {
-		t.Fatalf("ListRecent(2) len = %d, want 2", len(recent))
+		t.Fatalf("ListRecentPingHistory(2) len = %d, want 2", len(recent))
 	}
 	if recent[0].ID != second.ID || recent[1].ID != first.ID {
-		t.Fatalf("ListRecent order mismatch: got [%d %d], want [%d %d]", recent[0].ID, recent[1].ID, second.ID, first.ID)
+		t.Fatalf("ListRecentPingHistory order mismatch: got [%d %d], want [%d %d]", recent[0].ID, recent[1].ID, second.ID, first.ID)
 	}
 	if recent[0].Payload != second.Payload || recent[1].Payload != first.Payload {
-		t.Fatalf("ListRecent payloads = [%q %q], want [%q %q]", recent[0].Payload, recent[1].Payload, second.Payload, first.Payload)
+		t.Fatalf("ListRecentPingHistory payloads = [%q %q], want [%q %q]", recent[0].Payload, recent[1].Payload, second.Payload, first.Payload)
 	}
-	if !recent[0].CreatedAt.Equal(second.CreatedAt) || !recent[1].CreatedAt.Equal(first.CreatedAt) {
-		t.Fatalf("ListRecent timestamps = [%v %v], want [%v %v]", recent[0].CreatedAt, recent[1].CreatedAt, second.CreatedAt, first.CreatedAt)
+	if !recent[0].CreatedAt.Time.Equal(second.CreatedAt.Time) || !recent[1].CreatedAt.Time.Equal(first.CreatedAt.Time) {
+		t.Fatalf("ListRecentPingHistory timestamps = [%v %v], want [%v %v]", recent[0].CreatedAt, recent[1].CreatedAt, second.CreatedAt, first.CreatedAt)
 	}
 }
 
-func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
+func setupMigratedPGXPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -95,67 +86,19 @@ func setupPostgresPoolWithMigrations(t *testing.T) *postgres.Pool {
 		t.Fatalf("build postgres dsn: %v", err)
 	}
 
-	migrationPool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("create postgres migration pool: %v", err)
-	}
-	defer migrationPool.Close()
-	if err := applyMigrationFiles(ctx, migrationPool, migrationGlobUp); err != nil {
+	if _, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+		DSN:        dsn,
+		SourceFS:   os.DirFS(".."),
+		SourcePath: "env/migrations",
+	}); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
 
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       10,
-		MaxIdleConns:       5,
-		ConnMaxLifetime:    time.Hour,
-	})
+	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		t.Fatalf("create postgres pool: %v", err)
+		t.Fatalf("create pgx pool: %v", err)
 	}
 	t.Cleanup(pool.Close)
 
 	return pool
-}
-
-type pgExec interface {
-	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
-}
-
-func applyMigrationFiles(ctx context.Context, db pgExec, migrationGlob string) error {
-	paths, err := filepath.Glob(migrationGlob)
-	if err != nil {
-		return fmt.Errorf("glob migration files %q: %w", migrationGlob, err)
-	}
-	if len(paths) == 0 {
-		return fmt.Errorf("no migration files match %q", migrationGlob)
-	}
-
-	sort.Strings(paths)
-	for _, path := range paths {
-		if err := applyMigrationFile(ctx, db, path); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func applyMigrationFile(ctx context.Context, db pgExec, migrationPath string) error {
-	contents, err := os.ReadFile(filepath.Clean(migrationPath))
-	if err != nil {
-		return fmt.Errorf("read migration file %q: %w", migrationPath, err)
-	}
-
-	sql := strings.TrimSpace(string(contents))
-	if sql == "" {
-		return fmt.Errorf("migration file %q is empty", migrationPath)
-	}
-
-	if _, err := db.Exec(ctx, sql); err != nil {
-		return fmt.Errorf("execute migration %q: %w", migrationPath, err)
-	}
-
-	return nil
 }

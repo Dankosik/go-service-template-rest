@@ -29,7 +29,7 @@ Feature-author placement:
 | Feature bootstrap wiring for a real adapter | Beside `cmd/service/internal/bootstrap`; prove disabled, ready, policy-denied, and partial-initialization cleanup paths before adding broad integration coverage. |
 | Telemetry instruments and lifecycle/bootstrap behavior | Beside `internal/infra/telemetry` or `cmd/service/internal/bootstrap`, matching the owner. |
 | Endpoint plus real persistence plus bootstrap composition | Target the owning packages first, then use `test/` with the `integration` tag when a real database-backed flow is required to prove the combined contract. |
-| Generated drift for OpenAPI, SQLC, mocks, and stringer | Use the owning make targets instead of integration tests. |
+| Generated drift for OpenAPI and SQLC | Use the owning make targets instead of integration tests. |
 
 Docker behavior:
 - Local `make test-integration` skips when Docker is unavailable.

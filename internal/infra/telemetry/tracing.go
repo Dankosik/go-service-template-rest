@@ -357,11 +357,11 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 		if key == "" {
 			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header key", i+1)
 		}
+		if !validOTLPHeaderKey(key) {
+			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: invalid header key", i+1)
+		}
 		if value == "" {
-			if !canEchoOTLPHeaderKeyInError(key) {
-				return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header value", i+1)
-			}
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d for header %q: empty header value", i+1, key)
+			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header value", i+1)
 		}
 		headers[key] = value
 	}
@@ -372,13 +372,16 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 	return headers, nil
 }
 
-func canEchoOTLPHeaderKeyInError(key string) bool {
+func validOTLPHeaderKey(key string) bool {
 	if key == "" {
 		return false
 	}
 	for i := 0; i < len(key); i++ {
 		b := key[i]
-		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-' || b == '_' {
+		if (b >= 'a' && b <= 'z') ||
+			(b >= 'A' && b <= 'Z') ||
+			(b >= '0' && b <= '9') ||
+			strings.ContainsRune("!#$%&'*+-.^_`|~", rune(b)) {
 			continue
 		}
 		return false
