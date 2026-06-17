@@ -1,4 +1,0 @@
-- Assumed the profile is a singleton resource for the authenticated customer, so `/v1/profile` is preferable to a customer-ID path.
-- Assumed profile edits are normally synchronous. If writes can complete asynchronously, this contract should switch to `202 Accepted` plus an operation resource.
-- Assumed the service can expose a strong `ETag` for the profile resource. If only eventual read models exist, freshness disclosure must be added and the strong-read wording in `final.md` should be revised.
-- The exact editable field list, nullable-field list, and legacy sunset date are still product decisions and should be locked before OpenAPI is finalized.

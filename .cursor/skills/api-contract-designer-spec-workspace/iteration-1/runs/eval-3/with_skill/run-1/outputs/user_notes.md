@@ -1,5 +1,0 @@
-- Assumed partner identity is derived from authentication, so no partner ID appears in paths or request bodies.
-- Assumed webhook delivery uses a pre-registered partner endpoint referenced by `endpoint_id`; arbitrary callback URLs were intentionally excluded from `v1`.
-- Assumed the CSV schema, row-level business rules, and import side effects are defined elsewhere; this deliverable only fixes the client-visible API contract.
-- Uncertain whether the promised freshness budget should be `30s`; that value is concrete here for review and may need adjustment if the cache-backed view cannot support it.
-- Uncertain whether a public webhook registration API, cancel operation, or downloadable error report belongs in the same release; they are left out of this contract on purpose.
