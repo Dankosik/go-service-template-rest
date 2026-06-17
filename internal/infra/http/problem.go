@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 
 	"github.com/example/go-service-template-rest/internal/api"
@@ -13,12 +12,19 @@ const (
 	malformedRequestProblemDetail = "request is malformed or invalid"
 )
 
-func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, detail string) {
+type problemResponse struct {
+	status int
+	title  string
+	detail string
+}
+
+func writeProblem(w http.ResponseWriter, r *http.Request, problem problemResponse) {
+	status := problemHTTPStatus(problem.status)
 	p := api.Problem{
-		Detail:    optionalProblemString(detail),
+		Detail:    optionalProblemString(problem.detail),
 		RequestId: nil,
-		Status:    problemHTTPStatus(status),
-		Title:     title,
+		Status:    int32(status),
+		Title:     problem.title,
 		Type:      "about:blank",
 	}
 	if r != nil {
@@ -34,7 +40,11 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 }
 
 func writeMalformedRequestProblem(w http.ResponseWriter, r *http.Request) {
-	writeProblem(w, r, http.StatusBadRequest, "bad request", malformedRequestProblemDetail)
+	writeProblem(w, r, problemResponse{
+		status: http.StatusBadRequest,
+		title:  "bad request",
+		detail: malformedRequestProblemDetail,
+	})
 }
 
 func optionalProblemString(value string) *string {
@@ -44,9 +54,9 @@ func optionalProblemString(value string) *string {
 	return &value
 }
 
-func problemHTTPStatus(status int) int32 {
-	if status < 0 || status > math.MaxInt32 {
-		return int32(http.StatusInternalServerError)
+func problemHTTPStatus(status int) int {
+	if status < 100 || status > 999 {
+		return http.StatusInternalServerError
 	}
-	return int32(status)
+	return status
 }

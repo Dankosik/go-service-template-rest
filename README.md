@@ -426,7 +426,7 @@ Start feature work with the placement guide in [Project Structure & Module Organ
 - `api/openapi/service.yaml` - REST API source of truth
 - `internal/api` - generated OpenAPI artifacts
 - `env/migrations` - SQL migrations for the local PostgreSQL environment
-- `internal/infra/postgres/sqlcgen` - generated `sqlc` artifacts
+- `internal/infra/postgres/sqlcgen` - generated `sqlc` artifacts when SQL query sources exist
 - `specs/` - spec-first decision records and implementation history
 - `.agents/skills` - canonical skill definitions
 

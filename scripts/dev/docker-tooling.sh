@@ -179,60 +179,12 @@ run_gosec() {
 	run_go "GOCACHE=\$(mktemp -d) go tool gosec -exclude-generated -exclude-dir=.cache ./..."
 }
 
-openapi_drift_check() {
-	if ! git -C "${ROOT_DIR}" diff --quiet -- internal/api; then
-		echo "tracked openapi codegen drift detected in internal/api"
-		git -C "${ROOT_DIR}" diff -- internal/api
-		exit 1
-	fi
-
-	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- internal/api)"
-	if [[ -n "${untracked}" ]]; then
-		echo "untracked openapi artifacts detected in internal/api"
-		echo "${untracked}"
-		echo "run 'make openapi-generate' and commit updated generated files"
-		exit 1
-	fi
+generated_drift_check() {
+	bash "${ROOT_DIR}/scripts/ci/generated-drift-check.sh" "$1"
 }
 
-sqlc_drift_check() {
-	if ! git -C "${ROOT_DIR}" diff --quiet -- internal/infra/postgres/sqlcgen; then
-		echo "tracked sqlc drift detected in internal/infra/postgres/sqlcgen"
-		git -C "${ROOT_DIR}" diff -- internal/infra/postgres/sqlcgen
-		exit 1
-	fi
-
-	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- internal/infra/postgres/sqlcgen)"
-	if [[ -n "${untracked}" ]]; then
-		echo "untracked sqlc artifacts detected in internal/infra/postgres/sqlcgen"
-		echo "${untracked}"
-		echo "run 'make sqlc-generate' and commit updated sqlc generated files"
-		exit 1
-	fi
-
-	expected_stems="$(
-		for file in "${ROOT_DIR}"/internal/infra/postgres/queries/*.sql; do
-			[[ -e "${file}" ]] || continue
-			basename "${file}" .sql
-		done | sort
-	)"
-
-	actual_stems="$(
-		for file in "${ROOT_DIR}"/internal/infra/postgres/sqlcgen/*.sql.go; do
-			[[ -e "${file}" ]] || continue
-			basename "${file}" .sql.go
-		done | sort
-	)"
-
-	if [[ "${expected_stems}" != "${actual_stems}" ]]; then
-		echo "sqlc query/source mismatch detected"
-		echo "expected generated query stems:"
-		printf '%s\n' "${expected_stems}"
-		echo "actual generated query stems:"
-		printf '%s\n' "${actual_stems}"
-		echo "remove stale generated files and run 'make sqlc-generate'"
-		exit 1
-	fi
+has_sqlc_queries() {
+	find "${ROOT_DIR}/internal/infra/postgres/queries" -type f -name '*.sql' -print -quit | grep -q .
 }
 
 run_coverage_check() {
@@ -443,11 +395,15 @@ test-integration)
 	run_go_with_docker_socket "REQUIRE_DOCKER=${REQUIRE_DOCKER:-0} go test -tags=integration ./test/..."
 	;;
 sqlc-generate)
-	run_go "go tool sqlc generate -f internal/infra/postgres/sqlc.yaml"
+	if has_sqlc_queries; then
+		run_go "go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml"
+	else
+		echo "no sqlc query sources; skipping sqlc generation"
+	fi
 	;;
 sqlc-check)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" sqlc-generate
-	sqlc_drift_check
+	generated_drift_check sqlc
 	;;
 lint)
 	run_lint "config verify && GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint run --timeout=3m"
@@ -462,7 +418,7 @@ openapi-generate)
 	run_go "go generate ./internal/api"
 	;;
 openapi-drift-check)
-	openapi_drift_check
+	generated_drift_check openapi
 	;;
 openapi-runtime-contract-check)
 	run_go "go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1"

@@ -90,6 +90,7 @@ func isDockerUnavailable(err error) bool {
 		strings.Contains(msg, "is the docker daemon running") ||
 		strings.Contains(msg, "error during connect") ||
 		strings.Contains(msg, "docker socket") ||
+		strings.Contains(msg, "rootless docker not found") ||
 		strings.Contains(msg, "no such host")
 }
 

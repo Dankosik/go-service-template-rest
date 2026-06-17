@@ -14,6 +14,7 @@ COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
 COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 FUZZ_TIME ?= 45s
 DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
+GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
 BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
 DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
@@ -398,41 +399,20 @@ docker-test-parallelism-check:
 	$(DOCKER_TOOLING_SCRIPT) test-parallelism-check
 
 sqlc-generate:
-	go tool sqlc generate -f internal/infra/postgres/sqlc.yaml
+	@if [ -z "$$(find internal/infra/postgres/queries -type f -name '*.sql' -print -quit)" ]; then \
+		echo "no sqlc query sources; skipping sqlc generation"; \
+	else \
+		go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml; \
+	fi
 
 sqlc-check: sqlc-generate
-	@git diff --quiet -- internal/infra/postgres/sqlcgen || (echo "tracked sqlc drift detected in internal/infra/postgres/sqlcgen"; git diff -- internal/infra/postgres/sqlcgen; exit 1)
-	@untracked="$$(git ls-files --others --exclude-standard -- internal/infra/postgres/sqlcgen)"; \
-	if [ -n "$$untracked" ]; then \
-		echo "untracked sqlc artifacts detected in internal/infra/postgres/sqlcgen"; \
-		echo "$$untracked"; \
-		echo "run 'make sqlc-generate' and commit updated sqlc generated files"; \
-		exit 1; \
-	fi
-	@expected="$$(for f in internal/infra/postgres/queries/*.sql; do [ -e "$$f" ] || continue; basename "$$f" .sql; done | sort)"; \
-	actual="$$(for f in internal/infra/postgres/sqlcgen/*.sql.go; do [ -e "$$f" ] || continue; basename "$$f" .sql.go; done | sort)"; \
-	if [ "$$expected" != "$$actual" ]; then \
-		echo "sqlc query/source mismatch detected"; \
-		echo "expected generated query stems:"; \
-		printf '%s\n' "$$expected"; \
-		echo "actual generated query stems:"; \
-		printf '%s\n' "$$actual"; \
-		echo "remove stale generated files and run 'make sqlc-generate'"; \
-		exit 1; \
-	fi
+	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
 
 openapi-generate:
 	go generate ./internal/api
 
 openapi-drift-check:
-	@git diff --quiet -- $(OPENAPI_GENERATED_FILES) || (echo "tracked openapi codegen drift detected in $(OPENAPI_GENERATED_FILES)"; git diff -- $(OPENAPI_GENERATED_FILES); exit 1)
-	@untracked="$$(git ls-files --others --exclude-standard -- $(OPENAPI_GENERATED_FILES))"; \
-	if [ -n "$$untracked" ]; then \
-		echo "untracked openapi artifacts detected in $(OPENAPI_GENERATED_FILES)"; \
-		echo "$$untracked"; \
-		echo "run 'make openapi-generate' and commit updated generated files"; \
-		exit 1; \
-	fi
+	$(GENERATED_DRIFT_CHECK_SCRIPT) openapi
 
 openapi-runtime-contract-check:
 	go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1

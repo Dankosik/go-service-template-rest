@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
-	"github.com/example/go-service-template-rest/internal/app/ping"
 	"github.com/example/go-service-template-rest/internal/config"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -128,7 +127,6 @@ func Run(args []string) (runErr error) {
 	}
 
 	healthSvc := health.New(probeOutcome.probes...)
-	pingSvc := ping.New()
 	startupAdmission := newStartupAdmissionController(bootstrapSpan, metrics)
 	ingressGuard := newRuntimeIngressAdmissionGuard(bootstrap.networkPolicy)
 	readinessCheck := func(ctx context.Context) error {
@@ -148,7 +146,6 @@ func Run(args []string) (runErr error) {
 		bootstrap.log,
 		httpx.Handlers{
 			Health:        healthSvc,
-			Ping:          pingSvc,
 			ReadinessGate: externalReadinessGate,
 		},
 		metrics,

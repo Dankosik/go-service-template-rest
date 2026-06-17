@@ -63,15 +63,15 @@ func configLoadStageMetricLabel(stage string) string {
 
 func startupRejectionReasonForConfigErrorType(errorType string) string {
 	switch strings.TrimSpace(strings.ToLower(errorType)) {
-	case "load":
+	case config.ErrorTypeLoad:
 		return telemetry.StartupRejectionReasonConfigLoad
-	case "parse":
+	case config.ErrorTypeParse:
 		return telemetry.StartupRejectionReasonConfigParse
-	case "validate":
+	case config.ErrorTypeValidate:
 		return telemetry.StartupRejectionReasonConfigValidate
-	case "strict_unknown_key":
+	case config.ErrorTypeStrictUnknownKey:
 		return telemetry.StartupRejectionReasonConfigStrictUnknownKey
-	case "secret_policy":
+	case config.ErrorTypeSecretPolicy:
 		return telemetry.StartupRejectionReasonConfigSecretPolicy
 	default:
 		return telemetry.StartupRejectionReasonOther

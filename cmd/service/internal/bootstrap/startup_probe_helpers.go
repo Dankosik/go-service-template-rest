@@ -12,7 +12,23 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 )
 
+type (
+	postgresConnectFunc func(context.Context, postgres.Options) (*postgres.Pool, error)
+	startupDelayFunc    func(int) time.Duration
+	startupSleepFunc    func(context.Context, time.Duration) error
+)
+
 func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
+	return initPostgresWithRetryFunc(ctx, cfg, postgres.New, fullJitterDelay, sleepWithContext)
+}
+
+func initPostgresWithRetryFunc(
+	ctx context.Context,
+	cfg config.PostgresConfig,
+	connect postgresConnectFunc,
+	delayFor startupDelayFunc,
+	sleep startupSleepFunc,
+) (*postgres.Pool, error) {
 	options := postgres.Options{
 		DSN:                cfg.DSN,
 		ConnectTimeout:     cfg.ConnectTimeout,
@@ -28,7 +44,7 @@ func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*pos
 			return nil, fmt.Errorf("%w: postgres init canceled: %w", errDependencyInit, err)
 		}
 
-		pg, err := postgres.New(ctx, options)
+		pg, err := connect(ctx, options)
 		if err == nil {
 			return pg, nil
 		}
@@ -38,8 +54,8 @@ func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*pos
 			break
 		}
 
-		delay := fullJitterDelay(attempt)
-		if err := sleepWithContext(ctx, delay); err != nil {
+		delay := delayFor(attempt)
+		if err := sleep(ctx, delay); err != nil {
 			return nil, fmt.Errorf("%w: postgres retry wait canceled: %w", errDependencyInit, err)
 		}
 	}

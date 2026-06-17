@@ -15,7 +15,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
-	"github.com/example/go-service-template-rest/internal/app/ping"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel"
@@ -32,9 +31,6 @@ func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetr
 
 	if h.Health == nil {
 		h.Health = health.New()
-	}
-	if h.Ping == nil {
-		h.Ping = ping.New()
 	}
 	if h.ReadinessGate == nil {
 		h.ReadinessGate = func(context.Context) error { return nil }
@@ -62,7 +58,6 @@ func TestRouterEndpoints(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("ping", func(t *testing.T) {
@@ -127,7 +122,6 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("not found uses problem envelope", func(t *testing.T) {
@@ -400,7 +394,6 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("generates request id when header is absent", func(t *testing.T) {
@@ -439,7 +432,6 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 		log := slog.New(slog.NewJSONHandler(&out, nil))
 		h := mustNewRouter(t, log, Handlers{
 			Health: health.New(),
-			Ping:   ping.New(),
 		}, telemetry.New(), RouterConfig{})
 		const invalidRequestID = "user@example.com"
 
@@ -505,7 +497,6 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -524,7 +515,6 @@ func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -555,7 +545,6 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", strings.NewReader("ab"))
@@ -697,7 +686,6 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, nil, RouterConfig{})
 
 	const (
@@ -802,7 +790,6 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -1057,7 +1044,6 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-		Ping:   ping.New(),
 	}, telemetry.New(), RouterConfig{})
 
 	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -1155,5 +1141,13 @@ func assertProblemContentType(t *testing.T, header http.Header) {
 	}
 	if gotMediaType != wantMediaType {
 		t.Fatalf("Content-Type media type = %q, want %q", gotMediaType, wantMediaType)
+	}
+}
+
+func TestProblemHTTPStatusFallsBackForInvalidStatus(t *testing.T) {
+	t.Parallel()
+
+	if got := problemHTTPStatus(0); got != http.StatusInternalServerError {
+		t.Fatalf("problemHTTPStatus(0) = %d, want %d", got, http.StatusInternalServerError)
 	}
 }

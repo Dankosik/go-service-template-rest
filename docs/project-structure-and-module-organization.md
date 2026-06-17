@@ -39,7 +39,7 @@ This document explains the `go-service-template-rest` repository layout: what is
 └── go.sum
 ```
 
-Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*`, coverage files, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
+Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*` when SQLC queries exist, coverage files, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
 
 ## 2) Layer and Folder Responsibilities
 
@@ -65,11 +65,11 @@ Why: framework and integration details are isolated from business code; replacin
 
 HTTP route ownership: normal API endpoints are added through `api/openapi/service.yaml` and generated bindings first. Manual root-router routes are only for documented operational exceptions such as `/metrics`; do not add manual `/api/...` routes.
 
-Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/infra/postgres/queries/*.sql` owns query sources, and `internal/infra/postgres/sqlcgen` is generated output. Hand-written repositories under `internal/infra/postgres` translate generated rows into app-facing types instead of leaking `sqlcgen` into `internal/app`.
+Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/infra/postgres/queries/*.sql` owns query sources, and `internal/infra/postgres/sqlcgen` is generated output when query sources exist. Hand-written repositories under `internal/infra/postgres` translate generated rows into app-facing types instead of leaking `sqlcgen` into `internal/app`.
 
 Postgres pool lifecycle behavior, including `pgxpool` hook composition for connection preparation, release, and close paths, belongs in `internal/infra/postgres`. Keep adapter-specific connection guards there and cover hook changes with repository-local tests before broad integration checks.
 
-`ping_history` is retained as a replaceable SQLC fixture because the current generator setup requires at least one query to prove drift checks. It is not production business state and must not be wired into `ping` as a side effect. New services should replace the fixture with real feature-owned migrations, queries, repositories, and app ports.
+The baseline template has no feature-owned SQLC queries. Keep `env/migrations` and `internal/infra/postgres/queries` empty of sample business state until a real feature owns the schema and query contract.
 
 Feature telemetry placement: HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`, using shared instruments from `internal/infra/telemetry` where appropriate. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
 
@@ -197,15 +197,14 @@ Before coding the first real business feature, write down the feature owner and 
 
 1. Start in `internal/app/<feature>` with use-case behavior, feature-local request/result/value types, and app-owned ports only when the app must invert a concrete adapter.
 2. For HTTP behavior, update `api/openapi/service.yaml`, regenerate `internal/api`, and map generated request/response and Problem shapes in `internal/infra/http`; never add manual `/api/...` routes.
-3. For Postgres behavior, replace the `ping_history` SQLC fixture with feature-owned migrations and queries, regenerate `sqlcgen`, map rows in `internal/infra/postgres`, and keep generated types out of `internal/app`.
+3. For Postgres behavior, add feature-owned migrations and queries, regenerate `sqlcgen`, map rows in `internal/infra/postgres`, and keep generated types out of `internal/app`.
 4. Wire concrete adapters in `cmd/service/internal/bootstrap` after config and dependency admission are defined; prove disabled, ready, and partial-initialization cleanup paths in bootstrap tests.
 5. Keep feature-specific telemetry beside the feature or adapter that owns the event; move an instrument into shared telemetry only after it is genuinely reused and low-cardinality.
 6. Put tests at the owning layer first: app tests beside `internal/app/<feature>`, HTTP mapping tests beside `internal/infra/http`, repository tests beside `internal/infra/postgres`, config tests beside `internal/config`, bootstrap wiring tests beside `cmd/service/internal/bootstrap`, and integration tests under `test/` only when a real dependency or cross-package scenario is part of the claim.
 
 Existing examples to inspect before adding new surfaces:
-- `internal/app/ping` for small app-owned behavior.
 - `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
-- `internal/infra/postgres` and `test/postgres_sqlc_integration_test.go` for SQLC fixture behavior, not production business ownership.
+- `internal/infra/postgres` for pool lifecycle, adapter config parsing, migration running, and generated SQLC ownership.
 - `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
 
 Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
@@ -221,10 +220,10 @@ New HTTP endpoint:
 8. Validate with `make openapi-check`, plus targeted handler/app tests for the changed behavior.
 
 New Postgres persistence:
-1. Replace the template `ping_history` sample with real feature-owned schema and queries instead of wiring the sample into app behavior.
+1. Start with real feature-owned schema and queries; do not add sample tables or query fixtures to runtime migrations.
 2. Add a deterministic migration under `env/migrations`.
 3. Add SQLC query sources under `internal/infra/postgres/queries/*.sql`.
-4. Regenerate `internal/infra/postgres/sqlcgen` with `make sqlc-generate`; do not hand-edit generated files.
+4. Regenerate `internal/infra/postgres/sqlcgen` with `make sqlc-generate`; do not hand-edit generated files. With no query sources, `sqlc-generate` intentionally skips generation.
 5. Add a hand-written repository under `internal/infra/postgres` only when a real feature needs an app-facing mapping layer over generated rows/types.
 6. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter.
 7. Wire the concrete repository in `cmd/service/internal/bootstrap`.

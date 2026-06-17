@@ -74,7 +74,7 @@ func generatedStrictServerOptions(log *slog.Logger) api.StrictHTTPServerOptions 
 			handleMalformedGeneratedRequest(log, w, r, err)
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
-			writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
+			writeProblem(w, r, problemResponse{status: http.StatusInternalServerError, title: "internal server error", detail: "request failed"})
 		},
 	}
 }
@@ -156,13 +156,13 @@ func strictRequestErrorClass(err error) string {
 
 func applyHTTPPolicy(root chi.Router) {
 	root.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, http.StatusNotFound, "not found", "resource not found")
+		writeProblem(w, r, problemResponse{status: http.StatusNotFound, title: "not found", detail: "resource not found"})
 	})
 
 	root.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		allowMethods := allowedMethodsForPath(root, r.URL.Path)
 		if len(allowMethods) == 0 {
-			writeProblem(w, r, http.StatusNotFound, "not found", "resource not found")
+			writeProblem(w, r, problemResponse{status: http.StatusNotFound, title: "not found", detail: "resource not found"})
 			return
 		}
 		allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
@@ -171,7 +171,7 @@ func applyHTTPPolicy(root chi.Router) {
 			setAllowHeader(w, allowMethods)
 
 			if isCORSPreflightRequest(r) {
-				writeProblem(w, r, http.StatusMethodNotAllowed, "method not allowed", "cors preflight is not enabled")
+				writeProblem(w, r, problemResponse{status: http.StatusMethodNotAllowed, title: "method not allowed", detail: "cors preflight is not enabled"})
 				return
 			}
 
@@ -180,7 +180,7 @@ func applyHTTPPolicy(root chi.Router) {
 		}
 
 		setAllowHeader(w, allowMethods)
-		writeProblem(w, r, http.StatusMethodNotAllowed, "method not allowed", "method is not allowed for this resource")
+		writeProblem(w, r, problemResponse{status: http.StatusMethodNotAllowed, title: "method not allowed", detail: "method is not allowed for this resource"})
 	})
 }
 

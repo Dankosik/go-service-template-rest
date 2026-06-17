@@ -60,7 +60,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				if committed {
 					return
 				}
-				writeProblem(w, r, http.StatusInternalServerError, "internal server error", "request failed")
+				writeProblem(w, r, problemResponse{status: http.StatusInternalServerError, title: "internal server error", detail: "request failed"})
 			}
 		}(r.Context(), r.Method, r.URL.Path)
 		next.ServeHTTP(trackedWriter, r)

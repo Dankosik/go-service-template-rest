@@ -25,23 +25,21 @@ func clearPostgresEnvForTests() func() {
 	type envState struct {
 		name  string
 		value string
-		set   bool
 	}
 
-	states := make([]envState, 0, len(recognizedPostgresEnvVars))
-	for _, name := range recognizedPostgresEnvVars {
-		value, set := os.LookupEnv(name)
-		states = append(states, envState{name: name, value: value, set: set})
+	var states []envState
+	for _, env := range os.Environ() {
+		name, value, ok := strings.Cut(env, "=")
+		if !ok || !strings.HasPrefix(name, "PG") {
+			continue
+		}
+		states = append(states, envState{name: name, value: value})
 		_ = os.Unsetenv(name)
 	}
 
 	return func() {
 		for _, state := range states {
-			if state.set {
-				_ = os.Setenv(state.name, state.value)
-				continue
-			}
-			_ = os.Unsetenv(state.name)
+			_ = os.Setenv(state.name, state.value)
 		}
 	}
 }
@@ -221,7 +219,14 @@ func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 	validDSN := "postgres://user:pass@localhost:5432/app?sslmode=disable"
 
-	for _, envName := range recognizedPostgresEnvVars {
+	for _, envName := range []string{
+		"PGHOST",
+		"PGOPTIONS",
+		"PGTZ",
+		"PGMINPROTOCOLVERSION",
+		"PGMAXPROTOCOLVERSION",
+		"PGSSLSNI",
+	} {
 		t.Run(envName, func(t *testing.T) {
 			t.Setenv(envName, "ambient-value")
 

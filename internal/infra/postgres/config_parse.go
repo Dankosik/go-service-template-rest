@@ -13,26 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var recognizedPostgresEnvVars = []string{
-	"PGHOST",
-	"PGPORT",
-	"PGDATABASE",
-	"PGUSER",
-	"PGPASSWORD",
-	"PGPASSFILE",
-	"PGSERVICE",
-	"PGSERVICEFILE",
-	"PGSSLMODE",
-	"PGSSLCERT",
-	"PGSSLKEY",
-	"PGSSLROOTCERT",
-	"PGSSLPASSWORD",
-	"PGSSLSNI",
-	"PGAPPNAME",
-	"PGCONNECT_TIMEOUT",
-	"PGTARGETSESSIONATTRS",
-}
-
 var requiredPostgresDSNSettings = []string{
 	"host",
 	"port",
@@ -106,8 +86,9 @@ func preflightPostgresDSN(rawDSN string) (string, error) {
 	if dsn == "" {
 		return "", fmt.Errorf("%w: postgres dsn is empty", ErrConfig)
 	}
-	for _, name := range recognizedPostgresEnvVars {
-		if os.Getenv(name) != "" {
+	for _, env := range os.Environ() {
+		name, value, ok := strings.Cut(env, "=")
+		if ok && strings.HasPrefix(name, "PG") && value != "" {
 			return "", fmt.Errorf("%w: postgres dsn uses unsupported ambient PG environment", ErrConfig)
 		}
 	}

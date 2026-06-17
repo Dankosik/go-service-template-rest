@@ -39,11 +39,6 @@ func Load() (Config, error) {
 	return cfg, err
 }
 
-func LoadWithOptions(opts LoadOptions) (Config, error) {
-	cfg, _, err := LoadDetailed(opts)
-	return cfg, err
-}
-
 func LoadDetailed(opts LoadOptions) (Config, LoadReport, error) {
 	return LoadDetailedWithContext(context.Background(), opts)
 }

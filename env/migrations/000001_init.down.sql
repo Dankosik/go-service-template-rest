@@ -1,1 +1,1 @@
-DROP TABLE ping_history;
+-- Empty baseline migration.

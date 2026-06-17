@@ -10,21 +10,30 @@ var (
 	ErrSecretPolicy     = errors.New("config secret policy")
 )
 
+const (
+	ErrorTypeLoad             = "load"
+	ErrorTypeParse            = "parse"
+	ErrorTypeValidate         = "validate"
+	ErrorTypeStrictUnknownKey = "strict_unknown_key"
+	ErrorTypeSecretPolicy     = "secret_policy"
+	ErrorTypeUnknown          = "unknown"
+)
+
 func ErrorType(err error) string {
 	switch {
 	case err == nil:
 		return ""
 	case errors.Is(err, ErrStrictUnknownKey):
-		return "strict_unknown_key"
+		return ErrorTypeStrictUnknownKey
 	case errors.Is(err, ErrSecretPolicy):
-		return "secret_policy"
+		return ErrorTypeSecretPolicy
 	case errors.Is(err, ErrValidate):
-		return "validate"
+		return ErrorTypeValidate
 	case errors.Is(err, ErrParse):
-		return "parse"
+		return ErrorTypeParse
 	case errors.Is(err, ErrLoad):
-		return "load"
+		return ErrorTypeLoad
 	default:
-		return "unknown"
+		return ErrorTypeUnknown
 	}
 }

@@ -309,7 +309,7 @@ Bootstrap shortcuts:
   - Fails if coverage from `coverage.out` is below the configured threshold.
   - Coverage threshold excludes:
     - generated OpenAPI artifact (`internal/api/openapi.gen.go`),
-    - generated SQLC artifacts (`internal/infra/postgres/sqlcgen/`),
+    - generated SQLC artifacts (`internal/infra/postgres/sqlcgen/`) when SQL query sources exist,
     - binary composition root entrypoints (`cmd/service/main.go`, `cmd/migrate/main.go`).
 
 - `make test-fuzz-smoke [FUZZ_TIME=45s]`
@@ -354,15 +354,15 @@ Bootstrap shortcuts:
 ### SQL query generation workflow
 
 - `make sqlc-generate`
-  - Runs: `go tool sqlc generate -f internal/infra/postgres/sqlc.yaml`
-  - Purpose: regenerate sqlc query code from migration-backed schema and infra-local SQL query files.
+  - Runs: `go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml`
+  - Purpose: regenerate sqlc query code from migration-backed schema and infra-local SQL query files. Skips when no `queries/*.sql` files exist.
 
 - `make sqlc-check`
   - Runs `sqlc-generate`, then verifies:
-    - tracked/untracked drift in `internal/infra/postgres/sqlcgen`,
+    - tracked/untracked drift in `internal/infra/postgres/sqlcgen` when SQL query sources exist,
     - one-to-one mapping between `queries/*.sql` and generated `sqlcgen/*.sql.go` stems.
   - Fails when generated artifacts are stale or when stale generated query files remain after query removal/rename.
-  - Operational rule: when `env/migrations/*.up.sql` or `internal/infra/postgres/queries/*.sql` changes, run `make sqlc-generate` and commit `internal/infra/postgres/sqlcgen/*` changes in the same PR.
+  - Operational rule: when `env/migrations/*.up.sql` or `internal/infra/postgres/queries/*.sql` changes, run `make sqlc-generate` and commit any `internal/infra/postgres/sqlcgen/*` changes in the same PR.
 
 ### OpenAPI and API contract workflow
 

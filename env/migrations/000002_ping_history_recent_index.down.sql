@@ -1,1 +1,0 @@
-DROP INDEX idx_ping_history_created_at_id;

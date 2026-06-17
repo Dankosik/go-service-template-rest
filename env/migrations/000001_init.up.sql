@@ -1,5 +1,1 @@
-CREATE TABLE ping_history (
-    id BIGSERIAL PRIMARY KEY,
-    payload TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Empty baseline migration. Add feature-owned schema in later migrations.

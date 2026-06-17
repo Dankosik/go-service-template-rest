@@ -57,12 +57,13 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	}
 	defer pool.Close()
 
-	var tableName string
-	if err := pool.QueryRow(ctx, "select coalesce(to_regclass('public.ping_history')::text, '')").Scan(&tableName); err != nil {
-		t.Fatalf("query ping_history table: %v", err)
+	var version int
+	var dirty bool
+	if err := pool.QueryRow(ctx, "select version, dirty from schema_migrations").Scan(&version, &dirty); err != nil {
+		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if tableName != "ping_history" {
-		t.Fatalf("ping_history table = %q, want ping_history", tableName)
+	if version != 1 || dirty {
+		t.Fatalf("schema_migrations = version %d dirty %t, want version 1 dirty false", version, dirty)
 	}
 
 	secondRun, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{

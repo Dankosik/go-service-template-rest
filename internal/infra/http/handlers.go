@@ -7,18 +7,17 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
-	"github.com/example/go-service-template-rest/internal/app/ping"
 )
+
+const pingResponseBody = "pong"
 
 type Handlers struct {
 	Health        *health.Service
-	Ping          *ping.Service
 	ReadinessGate func(context.Context) error
 }
 
 type strictHandlers struct {
 	health           *health.Service
-	ping             *ping.Service
 	readinessGate    func(context.Context) error
 	readinessTimeout time.Duration
 }
@@ -29,9 +28,6 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
 	if h.Health == nil {
 		return strictHandlers{}, fmt.Errorf("http router: health service is required")
 	}
-	if h.Ping == nil {
-		return strictHandlers{}, fmt.Errorf("http router: ping service is required")
-	}
 	if h.ReadinessGate == nil {
 		return strictHandlers{}, fmt.Errorf("http router: readiness gate is required")
 	}
@@ -41,14 +37,13 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
 
 	return strictHandlers{
 		health:           h.Health,
-		ping:             h.Ping,
 		readinessGate:    h.ReadinessGate,
 		readinessTimeout: readinessTimeout,
 	}, nil
 }
 
 func (h strictHandlers) Ping(_ context.Context, _ api.PingRequestObject) (api.PingResponseObject, error) {
-	return api.Ping200TextResponse(h.ping.Pong()), nil
+	return api.Ping200TextResponse(pingResponseBody), nil
 }
 
 func (h strictHandlers) HealthLive(_ context.Context, _ api.HealthLiveRequestObject) (api.HealthLiveResponseObject, error) {
