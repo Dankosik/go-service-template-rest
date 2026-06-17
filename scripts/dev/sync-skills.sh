@@ -23,7 +23,7 @@ usage: sync-skills.sh [--sync|--check] [--strict]
 
   --sync   copy source skills to all targets (default)
   --check  validate targets against source
-  --strict mirror mode: target must exactly match source
+  --strict mirror mode: present targets must exactly match source; --sync recreates targets
 
 Default mode is non-destructive:
 - sync keeps target-only files and updates/creates source-managed files
@@ -31,6 +31,7 @@ Default mode is non-destructive:
 
 Canonical source: .agents/skills
 Runtime mirrors: .claude/skills, .gemini/skills, .github/skills, .cursor/skills, .opencode/skills
+Mirrors are generated local artifacts; clean checkouts may not have them until --sync is run.
 EOF
 }
 
@@ -87,8 +88,7 @@ check_target() {
   local target_abs="$REPO_ROOT/$target_rel"
 
   if [[ ! -d "$target_abs" ]]; then
-    echo "missing skill directory: $target_rel" >&2
-    return 1
+    return 0
   fi
 
   local diff_output
@@ -130,7 +130,15 @@ if [[ "$mode" == "sync" ]]; then
 fi
 
 failed=0
+checked=0
+missing=0
 for target in "${TARGET_DIRS[@]}"; do
+  if [[ -d "$REPO_ROOT/$target" ]]; then
+    checked=$((checked + 1))
+  else
+    missing=$((missing + 1))
+  fi
+
   if ! check_target "$target"; then
     failed=1
   fi
@@ -141,7 +149,7 @@ if [[ "$failed" -ne 0 ]]; then
 fi
 
 if [[ "$strict" -eq 1 ]]; then
-  echo "skills ${mode} complete (strict)"
+  echo "skills ${mode} complete (strict; ${checked} present, ${missing} absent)"
 else
-  echo "skills ${mode} complete (non-destructive)"
+  echo "skills ${mode} complete (non-destructive; ${checked} present, ${missing} absent)"
 fi

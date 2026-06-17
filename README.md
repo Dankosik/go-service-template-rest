@@ -8,7 +8,7 @@ This repository is for people who code with Codex, Claude Code, Cursor, Gemini C
 
 - **Orchestrator-first**: frame, delegate, synthesize, plan, implement, verify.
 - **Go-native guidance**: the repository does not stop at language-agnostic workflow advice.
-- **Project-scoped agents**: Codex agents live in `.codex/agents/`, Claude Code agents live in `.claude/agents/`.
+- **Project-scoped agents**: Codex agents live in `.codex/agents/`; Claude Code agents are generated locally into `.claude/agents/` when needed.
 - **Portable skills**: reusable workflow expertise lives in `.agents/skills` and is mirrored to compatibility/runtime directories.
 - **Artifact-driven for non-trivial work**: master `workflow-plan.md` plus `workflow-plans/<phase>.md` separate cross-phase control from phase-local orchestration, while `spec.md`, `design/`, and `tasks.md` keep decisions, technical design, and executable task state distinct. Pre-code phases produce that bundle; implementation and validation consume it and do not create new workflow/process artifacts.
 - **First production feature path**: before adding business code, use the [first production feature checklist](docs/project-structure-and-module-organization.md#first-production-feature-checklist) to place app types and ports, HTTP mapping, Postgres adapters, bootstrap wiring, telemetry, and tests.
@@ -110,7 +110,7 @@ This repository distinguishes between two different things:
 - **Skills** are portable workflow playbooks loaded on demand by the orchestrator or a subagent.
 
 The repository ships with project-scoped, read-only subagents for focused reasoning and review.
-Codex agent instructions live in `.codex/agents/*.toml` and are loaded through `.codex/config.toml`; this registry layer uses Codex-supported `agents.<name>.config_file` entries while keeping each agent as a standalone custom-agent file. Claude Code mirrors live in `.claude/agents/` and are generated from the Codex source with `make agents-sync`; verify them with `make agents-check`.
+Codex agent instructions live in `.codex/agents/*.toml` and are loaded through `.codex/config.toml`; this registry layer uses Codex-supported `agents.<name>.config_file` entries while keeping each agent as a standalone custom-agent file. Claude Code mirrors are generated locally into `.claude/agents/` from the Codex source with `make agents-sync`; verify them with `make agents-check`.
 Shared subagent invariants live in [docs/subagent-contract.md](docs/subagent-contract.md), and reusable lane prompts start from [docs/subagent-brief-template.md](docs/subagent-brief-template.md).
 Click an agent name to open its Codex instruction file.
 
@@ -150,7 +150,7 @@ Do not start coding until the `tasks.md` handoff and implementation readiness ar
 
 **Claude Code**
 
-Claude Code project agents live in [.claude/agents](.claude/agents). You can select them directly with `--agent`:
+After `make agents-sync`, Claude Code project agents are available in `.claude/agents`. You can select them directly with `--agent`:
 
 ```bash
 claude -p --agent architecture-agent -- "Review boundary ownership for adding async webhook retries in this repository."
@@ -255,7 +255,7 @@ The catalog has two layers:
 
 ### Skill Locations Across Runtimes
 
-These repository-native skill locations keep the workflow portable:
+`.agents/skills` is the repository-native skill source. Other runtime skill directories are generated locally when needed:
 
 - `.agents/skills`
 - `.claude/skills`
@@ -265,9 +265,9 @@ These repository-native skill locations keep the workflow portable:
 - `.opencode/skills`
 
 The source of truth stays in `.agents/skills`, so you do not have to hand-maintain separate skill instructions per tool.
-Refresh the runtime mirrors with `bash ./scripts/dev/sync-skills.sh` or `make skills-sync`, and verify them with `bash ./scripts/dev/sync-skills.sh --check` or `make skills-check`.
+Runtime mirrors are ignored generated artifacts. Materialize them with `bash ./scripts/dev/sync-skills.sh` or `make skills-sync`, and verify any present mirrors with `bash ./scripts/dev/sync-skills.sh --check` or `make skills-check`.
 
-Agent mirrors follow the same hygiene: `.codex/agents` is canonical for project subagents, `.claude/agents` is generated, `make agents-sync` refreshes it, and `make agents-check` is a CI-backed drift check.
+Agent mirrors follow the same hygiene: `.codex/agents` is canonical for project subagents, `.claude/agents` is generated and ignored, `make agents-sync` refreshes it, and `make agents-check` verifies it when present.
 
 ## This Is An Orchestrator Project
 

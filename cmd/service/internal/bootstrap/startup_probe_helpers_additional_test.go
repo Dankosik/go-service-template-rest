@@ -95,7 +95,6 @@ func TestInitPostgresWithRetryRetriesThenSucceeds(t *testing.T) {
 		ConnectTimeout:     time.Second,
 		HealthcheckTimeout: time.Second,
 		MaxOpenConns:       4,
-		MaxIdleConns:       2,
 		ConnMaxLifetime:    time.Minute,
 	}
 
@@ -104,7 +103,7 @@ func TestInitPostgresWithRetryRetriesThenSucceeds(t *testing.T) {
 		cfg,
 		func(_ context.Context, opts postgres.Options) (*postgres.Pool, error) {
 			attempts++
-			if opts.DSN != cfg.DSN || opts.MaxOpenConns != cfg.MaxOpenConns || opts.MaxIdleConns != cfg.MaxIdleConns {
+			if opts.DSN != cfg.DSN || opts.MaxOpenConns != cfg.MaxOpenConns {
 				t.Fatalf("postgres options = %+v, want cfg-derived values", opts)
 			}
 			if attempts == 1 {

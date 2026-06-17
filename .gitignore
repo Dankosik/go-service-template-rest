@@ -6,3 +6,9 @@ coverage.out
 .idea/
 .vscode/
 .DS_Store
+.claude/agents/
+.claude/skills/
+.cursor/skills/
+.gemini/skills/
+.github/skills/
+.opencode/skills/

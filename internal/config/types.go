@@ -61,7 +61,6 @@ type PostgresConfig struct {
 	ConnectTimeout     time.Duration `koanf:"connect_timeout"`
 	HealthcheckTimeout time.Duration `koanf:"healthcheck_timeout"`
 	MaxOpenConns       int           `koanf:"max_open_conns"`
-	MaxIdleConns       int           `koanf:"max_idle_conns"`
 	ConnMaxLifetime    time.Duration `koanf:"conn_max_lifetime"`
 }
 

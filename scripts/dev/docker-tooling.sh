@@ -44,14 +44,12 @@ require_catalog_image() {
 
 GO_IMAGE_DEFAULT="$(require_catalog_image go_toolchain)"
 NODE_IMAGE_DEFAULT="$(require_catalog_image node_toolchain)"
-GOLANGCI_LINT_IMAGE_DEFAULT="$(require_catalog_image golangci_lint_tool)"
 POSTGRES_IMAGE_DEFAULT="$(require_catalog_image postgres_tool)"
 MIGRATE_IMAGE_DEFAULT="$(require_catalog_image migrate_tool)"
 TRIVY_IMAGE_DEFAULT="$(require_catalog_image trivy_tool)"
 
 GO_IMAGE="${GO_IMAGE:-${GO_IMAGE_DEFAULT}}"
 NODE_IMAGE="${NODE_IMAGE:-${NODE_IMAGE_DEFAULT}}"
-GOLANGCI_LINT_IMAGE="${GOLANGCI_LINT_IMAGE:-${GOLANGCI_LINT_IMAGE_DEFAULT}}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-${POSTGRES_IMAGE_DEFAULT}}"
 MIGRATE_IMAGE="${MIGRATE_IMAGE:-${MIGRATE_IMAGE_DEFAULT}}"
 TRIVY_IMAGE="${TRIVY_IMAGE:-${TRIVY_IMAGE_DEFAULT}}"
@@ -320,7 +318,6 @@ pull-images)
 	ensure_docker
 	docker pull "${GO_IMAGE}"
 	docker pull "${NODE_IMAGE}"
-	docker pull "${GOLANGCI_LINT_IMAGE}"
 	docker pull "${POSTGRES_IMAGE}"
 	docker pull "${MIGRATE_IMAGE}"
 	docker pull "${TRIVY_IMAGE}"

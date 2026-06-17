@@ -18,6 +18,7 @@ usage: sync-agents.sh [--sync|--check]
 
 Canonical source: .codex/agents/*.toml
 Runtime mirror: .claude/agents/*.md
+The mirror is a generated local artifact; clean checkouts may not have it until --sync is run.
 EOF
 }
 
@@ -117,6 +118,9 @@ render_all() {
 
 if [[ "$mode" == "sync" ]]; then
   render_all "$TARGET_DIR"
+elif [[ ! -d "$TARGET_DIR" ]]; then
+  echo "agents check complete (mirror absent)"
+  exit 0
 fi
 
 expected_dir="$(mktemp -d)"

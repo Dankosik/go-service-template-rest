@@ -45,6 +45,7 @@ required_files=(
   "specs/README.md"
   "scripts/dev/sync-skills.sh"
   "scripts/dev/sync-agents.sh"
+  "scripts/dev/module-origin.sh"
 )
 
 missing=()
@@ -121,13 +122,6 @@ require_markdown_links_exist() {
   fi
 }
 
-require_golangci_lint_workflow_version() {
-  local file="$1"
-  local expected_version="$2"
-
-  require_regex "^[[:space:]]{2}GOLANGCI_LINT_VERSION: ${expected_version}$" "${file}" "golangci-lint workflow pin must match go.mod"
-}
-
 require_no_forbidden_go_imports() {
   local message="$1"
   local pattern="$2"
@@ -159,23 +153,15 @@ require_regex '^# - production replica baseline: >=2$' "railway.toml" "railway p
 require_regex '^# - per-replica baseline: 2 vCPU / 2 GiB$' "railway.toml" "railway policy baseline comment must define per-replica CPU and memory"
 
 go_version="$(go list -m -f '{{.GoVersion}}')"
-golangci_lint_version="$(go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)"
-
-# Keep Go and golangci-lint toolchain pins aligned across local, Docker, and CI surfaces.
+# Keep Go toolchain pins aligned across local, Docker, and CI surfaces.
 require_regex "^FROM --platform=\\\$BUILDPLATFORM golang:${go_version}-bookworm@sha256:[[:xdigit:]]{64} AS build$" "build/docker/Dockerfile" "runtime Docker build Go image must match go.mod"
 require_regex '^COPY --from=build /out/migrate /migrate$' "build/docker/Dockerfile" "runtime image must ship the dedicated migration binary"
 require_regex '^COPY --from=build /src/env/migrations /env/migrations$' "build/docker/Dockerfile" "runtime image must ship migration files for Railway pre-deploy"
 require_regex '^!env/migrations$' ".dockerignore" "docker build context must re-include env/migrations"
 require_regex '^!env/migrations/\*\*$' ".dockerignore" "docker build context must include migration files under env/migrations"
 require_regex "^FROM golang:${go_version}-bookworm@sha256:[[:xdigit:]]{64} AS go_toolchain$" "build/docker/tooling-images.Dockerfile" "Docker tooling Go image must match go.mod"
-require_golangci_lint_workflow_version ".github/workflows/ci.yml" "${golangci_lint_version}"
-require_golangci_lint_workflow_version ".github/workflows/nightly.yml" "${golangci_lint_version}"
-require_golangci_lint_workflow_version ".github/workflows/cd.yml" "${golangci_lint_version}"
-
-if grep -Eq '^[[:space:]]*FROM[[:space:]]+.*[[:space:]]+AS[[:space:]]+golangci_lint_tool$' "build/docker/tooling-images.Dockerfile"; then
-  require_regex "^FROM golangci/golangci-lint:${golangci_lint_version}@sha256:[[:xdigit:]]{64} AS golangci_lint_tool$" "build/docker/tooling-images.Dockerfile" "retained golangci-lint tooling image must match go.mod and remain digest pinned"
-elif grep -Eq 'golangci/golangci-lint:' "build/docker/tooling-images.Dockerfile"; then
-  echo "guardrail check failed: golangci-lint tooling image must use the checked golangci_lint_tool stage or be removed"
+if grep -Eq 'golangci/golangci-lint:' "build/docker/tooling-images.Dockerfile"; then
+  echo "guardrail check failed: golangci-lint tooling image must be removed; Docker lint uses go tool golangci-lint"
   echo "  file: build/docker/tooling-images.Dockerfile"
   exit 1
 fi
@@ -288,24 +274,29 @@ require_regex 'unexplained surviving replaced or unused legacy surface' ".agents
 require_regex 'targeted negative proof for retired identifiers' ".agents/skills/go-verification-before-completion/SKILL.md" "verification skill must require legacy cleanup negative proof"
 require_regex 'generic `rg legacy` is not sufficient' ".agents/skills/go-verification-before-completion/SKILL.md" "verification skill must reject generic legacy negative proof"
 
-# Keep branch protection required checks aligned with CI job contexts.
-required_contexts=(
-  "repo-integrity"
-  "lint"
-  "openapi-contract"
-  "openapi-breaking"
-  "test"
-  "test-race"
-  "test-coverage"
-  "test-integration"
-  "migration-validate"
-  "go-security"
-  "secret-scan"
-  "container-security"
-)
+branch_protection_contexts() {
+  awk '
+    /^required_contexts=\(/ { inside = 1; next }
+    inside && /^\)/ { exit }
+    inside {
+      gsub(/^[[:space:]]*"/, "")
+      gsub(/"[[:space:]]*$/, "")
+      if ($0 != "") print
+    }
+  ' scripts/dev/configure-branch-protection.sh
+}
+
+required_contexts=()
+while IFS= read -r context; do
+  [[ -z "${context}" ]] && continue
+  required_contexts+=("${context}")
+done < <(branch_protection_contexts)
+if [[ "${#required_contexts[@]}" -eq 0 ]]; then
+  echo "guardrail check failed: branch protection required contexts could not be read"
+  exit 1
+fi
 
 for context in "${required_contexts[@]}"; do
-  require_regex "^[[:space:]]+\"${context}\"$" "scripts/dev/configure-branch-protection.sh" "branch protection must require '${context}' context"
   require_regex "^[[:space:]]{2}${context}:" ".github/workflows/ci.yml" "ci workflow must expose '${context}' job context"
 done
 

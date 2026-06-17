@@ -146,10 +146,6 @@ func readPostgresSnapshot(k *koanf.Koanf) (PostgresConfig, error) {
 	if err := readIntInto(k, "postgres.max_open_conns", &maxOpenConns); err != nil {
 		return PostgresConfig{}, err
 	}
-	var maxIdleConns int
-	if err := readIntInto(k, "postgres.max_idle_conns", &maxIdleConns); err != nil {
-		return PostgresConfig{}, err
-	}
 	var connMaxLifetime time.Duration
 	if err := readDurationInto(k, "postgres.conn_max_lifetime", &connMaxLifetime); err != nil {
 		return PostgresConfig{}, err
@@ -160,7 +156,6 @@ func readPostgresSnapshot(k *koanf.Koanf) (PostgresConfig, error) {
 		ConnectTimeout:     connectTimeout,
 		HealthcheckTimeout: healthcheckTimeout,
 		MaxOpenConns:       maxOpenConns,
-		MaxIdleConns:       maxIdleConns,
 		ConnMaxLifetime:    connMaxLifetime,
 	}, nil
 }

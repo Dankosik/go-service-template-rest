@@ -120,6 +120,7 @@ Why: standard commands for local work and CI without repeating long command line
 Key scripts:
 - `scripts/dev/setup.sh`: onboarding bootstrap (native or docker mode), `.env` creation, skills and agent mirror sync, module auto-initialization from `git remote origin`, CODEOWNER inference from origin, and optional strict native coverage sanity (`--strict`).
 - `scripts/dev/doctor.sh`: readiness checks for native/docker prerequisites and template placeholders.
+- `scripts/dev/module-origin.sh`: shared parser for deriving a Go module path from `git remote origin`.
 - `scripts/init-module.sh`: manual fallback for module path and CODEOWNERS initialization after clone.
 - `scripts/dev/docker-tooling.sh`: zero-setup wrappers for test/lint/OpenAPI/security/CI flows without host Go/Node toolchain; tooling image references are read from `build/docker/tooling-images.Dockerfile`.
 
@@ -137,11 +138,11 @@ Why: these standalone TOML files are loaded through `.codex/config.toml` and mir
 
 ### `.claude/agents`
 Claude Code project-agent mirror directory.
-Why: Claude Code uses Markdown agent files, so this directory is generated from `.codex/agents` rather than hand-maintained.
+Why: Claude Code uses Markdown agent files, so this ignored local directory is generated from `.codex/agents` rather than hand-maintained.
 
 ### `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`, `.opencode/skills`
-Provider runtime skill directories (`SKILL.md` files are stored here).  
-Why: these are the locations where agent tools actually load and execute mirrored skills.
+Provider runtime skill directories (`SKILL.md` files are generated here when needed).
+Why: these ignored local mirrors let runtime-specific tools load skills without making generated copies part of the source tree.
 
 ### `.github/`
 CI workflow and dependency update automation (Dependabot).  

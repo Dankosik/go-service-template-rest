@@ -6,12 +6,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestMain(m *testing.M) {
@@ -52,7 +48,6 @@ func TestNewRejectsEmptyDSN(t *testing.T) {
 		ConnectTimeout:     time.Second,
 		HealthcheckTimeout: time.Second,
 		MaxOpenConns:       10,
-		MaxIdleConns:       5,
 		ConnMaxLifetime:    time.Minute,
 	})
 	if err == nil {
@@ -79,7 +74,6 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				DSN:                "postgres://user:pass@localhost:5432/db?sslmode=disable",
 				HealthcheckTimeout: time.Second,
 				MaxOpenConns:       10,
-				MaxIdleConns:       5,
 				ConnMaxLifetime:    time.Minute,
 			},
 		},
@@ -89,7 +83,6 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				DSN:             "postgres://user:pass@localhost:5432/db?sslmode=disable",
 				ConnectTimeout:  time.Second,
 				MaxOpenConns:    10,
-				MaxIdleConns:    5,
 				ConnMaxLifetime: time.Minute,
 			},
 		},
@@ -99,18 +92,6 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				DSN:                "postgres://user:pass@localhost:5432/db?sslmode=disable",
 				ConnectTimeout:     time.Second,
 				HealthcheckTimeout: time.Second,
-				MaxIdleConns:       5,
-				ConnMaxLifetime:    time.Minute,
-			},
-		},
-		{
-			name: "max idle conns",
-			opts: Options{
-				DSN:                "postgres://user:pass@localhost:5432/db?sslmode=disable",
-				ConnectTimeout:     time.Second,
-				HealthcheckTimeout: time.Second,
-				MaxOpenConns:       10,
-				MaxIdleConns:       11,
 				ConnMaxLifetime:    time.Minute,
 			},
 		},
@@ -121,7 +102,6 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				ConnectTimeout:     time.Second,
 				HealthcheckTimeout: time.Second,
 				MaxOpenConns:       10,
-				MaxIdleConns:       5,
 			},
 		},
 	}
@@ -150,7 +130,6 @@ func TestNewInvalidDSNIsRedacted(t *testing.T) {
 		ConnectTimeout:     time.Second,
 		HealthcheckTimeout: time.Second,
 		MaxOpenConns:       10,
-		MaxIdleConns:       5,
 		ConnMaxLifetime:    time.Minute,
 	})
 	if err == nil {
@@ -554,123 +533,5 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 		t.Fatal("Check() error = nil, want non-nil for nil internal pool")
 	} else if !errors.Is(err, ErrHealthcheck) {
 		t.Fatalf("Check() error = %v, want ErrHealthcheck", err)
-	}
-}
-
-func TestMaxIdleConnLimiter(t *testing.T) {
-	t.Parallel()
-
-	limiter := newMaxIdleConnLimiter(2)
-	first := &pgx.Conn{}
-	second := &pgx.Conn{}
-	third := &pgx.Conn{}
-
-	if !limiter.afterRelease(first) {
-		t.Fatal("afterRelease(first) = false, want true")
-	}
-	if !limiter.afterRelease(second) {
-		t.Fatal("afterRelease(second) = false, want true")
-	}
-	if limiter.afterRelease(third) {
-		t.Fatal("afterRelease(third) = true, want false when max idle is full")
-	}
-
-	limiter.beforeAcquire(first)
-	if !limiter.afterRelease(third) {
-		t.Fatal("afterRelease(third) after first acquire = false, want true")
-	}
-
-	limiter.beforeClose(second)
-	if !limiter.afterRelease(first) {
-		t.Fatal("afterRelease(first) after second close = false, want true")
-	}
-
-	disabled := newMaxIdleConnLimiter(0)
-	if disabled.afterRelease(&pgx.Conn{}) {
-		t.Fatal("afterRelease() with max idle 0 = true, want false")
-	}
-}
-
-func TestMaxIdleConnLimiterConcurrentReleases(t *testing.T) {
-	t.Parallel()
-
-	limiter := newMaxIdleConnLimiter(2)
-	conns := make([]*pgx.Conn, 10)
-	for i := range conns {
-		conns[i] = &pgx.Conn{}
-	}
-
-	var wg sync.WaitGroup
-	kept := make(chan bool, len(conns))
-	for _, conn := range conns {
-		wg.Go(func() {
-			kept <- limiter.afterRelease(conn)
-		})
-	}
-	wg.Wait()
-	close(kept)
-
-	var keepCount int
-	for keep := range kept {
-		if keep {
-			keepCount++
-		}
-	}
-	if keepCount != 2 {
-		t.Fatalf("kept releases = %d, want 2", keepCount)
-	}
-}
-
-func TestInstallMaxIdleConnLimiterComposesPoolHooks(t *testing.T) {
-	t.Parallel()
-
-	var prepareConnCalled bool
-	var afterReleaseCalled bool
-	var beforeCloseCalled bool
-	poolConfig := &pgxpool.Config{
-		PrepareConn: func(context.Context, *pgx.Conn) (bool, error) {
-			prepareConnCalled = true
-			return true, nil
-		},
-		AfterRelease: func(*pgx.Conn) bool {
-			afterReleaseCalled = true
-			return true
-		},
-		BeforeClose: func(*pgx.Conn) {
-			beforeCloseCalled = true
-		},
-	}
-	first := &pgx.Conn{}
-	second := &pgx.Conn{}
-
-	installMaxIdleConnLimiter(poolConfig, 1)
-
-	if !poolConfig.AfterRelease(first) {
-		t.Fatal("AfterRelease(first) = false, want true")
-	}
-	if !afterReleaseCalled {
-		t.Fatal("original AfterRelease was not called")
-	}
-	if poolConfig.AfterRelease(second) {
-		t.Fatal("AfterRelease(second) = true, want false when max idle is full")
-	}
-
-	ok, err := poolConfig.PrepareConn(context.Background(), first)
-	if err != nil {
-		t.Fatalf("PrepareConn(first) error = %v, want nil", err)
-	}
-	if !ok {
-		t.Fatal("PrepareConn(first) = false, want true")
-	}
-	if !prepareConnCalled {
-		t.Fatal("original PrepareConn was not called")
-	}
-	if !poolConfig.AfterRelease(second) {
-		t.Fatal("AfterRelease(second) after first acquire = false, want true")
-	}
-
-	poolConfig.BeforeClose(second)
-	if !beforeCloseCalled {
-		t.Fatal("original BeforeClose was not called")
 	}
 }

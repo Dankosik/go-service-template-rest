@@ -279,18 +279,16 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
-	startedAt := time.Now()
+	shutdownCalled := false
 
 	srv.onShutdown = func(context.Context) error {
-		if elapsed := time.Since(startedAt); elapsed >= 100*time.Millisecond {
-			t.Fatalf("shutdown started too late before admission-ready: %s", elapsed)
-		}
+		shutdownCalled = true
 		return nil
 	}
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
 		log:           logger,
 		metrics:       metrics,
 		healthSvc:     svc,
@@ -299,11 +297,14 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 			return errors.New("readiness failed")
 		},
 		admission:     newTestStartupAdmissionController(metrics),
-		shutdownDelay: 150 * time.Millisecond,
+		shutdownDelay: time.Hour,
 	})
 
 	if err == nil {
 		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+	}
+	if !shutdownCalled {
+		t.Fatal("server shutdown was not called before admission-ready")
 	}
 	if !strings.Contains(err.Error(), "startup readiness check failed") {
 		t.Fatalf("serveHTTPRuntime() err = %v, want startup readiness context", err)

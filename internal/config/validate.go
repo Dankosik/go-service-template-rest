@@ -187,9 +187,6 @@ func validatePostgres(cfg PostgresConfig) error {
 	if err := validateIntRange("postgres.max_open_conns", cfg.MaxOpenConns, 1, 500); err != nil {
 		return err
 	}
-	if err := validateIntRange("postgres.max_idle_conns", cfg.MaxIdleConns, 0, cfg.MaxOpenConns); err != nil {
-		return err
-	}
 	if err := validateDurationRange("postgres.conn_max_lifetime", cfg.ConnMaxLifetime, time.Minute, 24*time.Hour); err != nil {
 		return err
 	}

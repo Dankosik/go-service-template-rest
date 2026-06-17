@@ -415,6 +415,8 @@ openapi-drift-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) openapi
 
 openapi-runtime-contract-check:
+	@tests="$$(go test ./internal/infra/http -list '^TestOpenAPIRuntimeContract')" || { status=$$?; printf '%s\n' "$$tests"; exit $$status; }; \
+	printf '%s\n' "$$tests" | grep -q '^TestOpenAPIRuntimeContract' || { echo "no OpenAPI runtime contract tests matched"; exit 1; }
 	go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1
 
 openapi-lint:

@@ -46,7 +46,6 @@ func TestPostgresReadinessProbe(t *testing.T) {
 		ConnectTimeout:     3 * time.Second,
 		HealthcheckTimeout: 3 * time.Second,
 		MaxOpenConns:       10,
-		MaxIdleConns:       5,
 		ConnMaxLifetime:    time.Hour,
 	})
 	if err != nil {

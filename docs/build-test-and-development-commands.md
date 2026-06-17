@@ -533,7 +533,7 @@ Bootstrap shortcuts:
 
 - `make agents-sync`
   - Runs: `scripts/dev/sync-agents.sh`
-  - Purpose: render Claude Code agent mirrors from canonical Codex agent sources.
+  - Purpose: render ignored local Claude Code agent mirrors from canonical Codex agent sources.
   - Source:
     - `.codex/agents/*.toml`
   - Mirror:
@@ -541,12 +541,12 @@ Bootstrap shortcuts:
 
 - `make agents-check`
   - Runs: `scripts/dev/sync-agents.sh --check`
-  - Purpose: validate `.claude/agents` against canonical `.codex/agents`.
-  - Note: blocking CI gate in `repo-integrity`.
+  - Purpose: validate `.claude/agents` against canonical `.codex/agents` when the generated mirror exists.
+  - Note: clean checkouts may not have generated mirrors.
 
 - `make skills-sync`
   - Runs: `scripts/dev/sync-skills.sh`
-  - Purpose: sync runtime skill directories from canonical source `.agents/skills`.
+  - Purpose: sync ignored local runtime skill directories from canonical source `.agents/skills`.
   - Mirrors:
     - `.claude/skills/`
     - `.gemini/skills/`
@@ -557,8 +557,8 @@ Bootstrap shortcuts:
 
 - `make skills-check`
   - Runs: `scripts/dev/sync-skills.sh --check`
-  - Purpose: validate mirrors against canonical source `.agents/skills`.
-  - Note: blocking CI gate in `repo-integrity`.
+  - Purpose: validate present mirrors against canonical source `.agents/skills`.
+  - Note: clean checkouts may not have generated mirrors.
 
 ### Run and build
 

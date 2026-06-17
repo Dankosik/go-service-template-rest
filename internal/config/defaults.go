@@ -25,7 +25,6 @@ func defaultValues() map[string]any {
 		"postgres.connect_timeout":     "3s",
 		"postgres.healthcheck_timeout": "3s",
 		"postgres.max_open_conns":      25,
-		"postgres.max_idle_conns":      10,
 		"postgres.conn_max_lifetime":   "30m",
 
 		"observability.otel.service_name":                  "service",

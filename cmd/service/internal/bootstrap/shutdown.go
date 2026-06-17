@@ -61,7 +61,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 		}
 	}
 
-	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			log.Error(
 				"shutdown_timeout",

@@ -34,7 +34,6 @@ func initPostgresWithRetryFunc(
 		ConnectTimeout:     cfg.ConnectTimeout,
 		HealthcheckTimeout: cfg.HealthcheckTimeout,
 		MaxOpenConns:       cfg.MaxOpenConns,
-		MaxIdleConns:       cfg.MaxIdleConns,
 		ConnMaxLifetime:    cfg.ConnMaxLifetime,
 	}
 
