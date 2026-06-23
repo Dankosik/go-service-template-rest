@@ -11,7 +11,7 @@ Detailed shared companion for `docs/spec-first-workflow.md`. Read this when choo
 ## Inputs
 
 - `AGENTS.md` for hard invariants and trigger rules.
-- The user request, current task-local artifacts, and current phase state.
+- The accepted Phase 0 intake brief or direct-path clarity rationale, plus current task-local artifacts and current phase state.
 - The router in `docs/spec-first-workflow.md` for phase-specific follow-up reading.
 
 ## Outputs
@@ -62,10 +62,11 @@ Phase arrows describe order, not a default license to collapse multiple phases i
 
 Default rule: one session owns one workflow phase, then stops. When the phase has a next phase or reopen target, update the relevant workflow state and end the final chat response with a copy-pastable `Recommended next-session prompt` derived from the recorded artifacts. The ready-to-paste prompt is rendered in chat only; workflow files keep the state needed to render it, not the full prompt text.
 
-A broad user request such as "do the full workflow", "implement the PRD and architecture fully", or "create all necessary documents" advances the overall workflow, but it does not override the one-phase session boundary. Start with the next valid phase, finish that phase honestly, then stop with the next-session prompt.
+A broad user request such as "do the full workflow", "implement the PRD and architecture fully", or "create all necessary documents" advances the overall workflow, but it does not override the one-phase session boundary. Start with Phase 0 intake when the task is not yet an accepted brief; otherwise start with the next valid phase, finish that phase honestly, then stop with the next-session prompt.
 
 This boundary rule applies to:
 
+- Phase 0 intake when user answers or durable routing are needed;
 - workflow planning;
 - research and fan-in;
 - specification and clarification-gate reconciliation;
@@ -88,7 +89,7 @@ Direct path work has no durable phase boundary by default, so it may still compl
 
 Direct path may skip durable workflow artifacts. It still needs:
 
-- a bounded local understanding of the requested change;
+- a bounded local understanding of the requested change from Phase 0 intake or an explicit clarity rationale;
 - no protected-domain trigger;
 - an explicit proof command or manual proof before claiming completion.
 
@@ -177,6 +178,7 @@ Do not point agents at a specific task-local `specs/...` bundle as required prec
 Use `workflow-plan.md` when cross-phase or multi-session state is real. It owns:
 
 - execution shape and rationale;
+- accepted intake brief summary or pointer when the task did not stay in one chat;
 - current phase and phase status;
 - session boundary state;
 - next-session routing, meaning the next phase or reopen target and start point, not the full chat prompt;

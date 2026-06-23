@@ -1,6 +1,6 @@
 ---
 name: spec-document-designer
-description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has a framed change or synthesized research and needs to turn it into a stable direct/lean/full-shaped review-ready `spec.md` with the right section depth, decision placement, inline `Risk Challenge` or formal clarification-gate reconciliation, audit trail, and handoff before mandatory specification review. Skip raw ideation, triggered design-bundle assembly, full task breakdown, and implementation coding."
+description: "Design and normalize repository-native `spec.md` documents for this workflow. Use when the orchestrator has an accepted Phase 0 task brief or synthesized research and needs to turn it into a stable direct/lean/full-shaped review-ready `spec.md` with the right section depth, decision placement, inline `Risk Challenge` or formal clarification-gate reconciliation, audit trail, and handoff before mandatory specification review. Skip raw ideation, raw intake, triggered design-bundle assembly, full task breakdown, and implementation coding."
 ---
 
 # Spec Document Designer
@@ -32,7 +32,7 @@ Turn a framed request or synthesized research into a repository-native `spec.md`
 ## Boundaries
 Do not:
 - refine a raw product idea; use `idea-refine`
-- perform engineering framing on an under-shaped request; use `spec-first-brainstorming`
+- perform engineering framing on an under-shaped request; use Phase 0 intake or `spec-first-brainstorming`
 - absorb unresolved cross-domain design contradictions that belong in `go-design-spec` or specialist `*-spec` skills
 - assemble a triggered split `design/` bundle; that belongs to `go-design-spec`
 - produce task breakdown, execution sequencing, or coder instructions; that belongs to `planning-and-task-breakdown`
@@ -42,7 +42,7 @@ Do not:
 
 ## Escalate When
 Escalate if:
-- the request is still idea-shaped, solution-led, or missing its behavior delta
+- the request is still idea-shaped, solution-led, missing its behavior delta, or lacks an accepted Phase 0 intake brief
 - current external guidance materially affects the design and has not been researched yet
 - the draft still contains unresolved domain contradictions that would make `spec.md` dishonest
 - the clarification challenge returns `blocks_spec_approval`, `blocks_specific_domain`, or `requires_user_decision` items that the orchestrator has not reconciled
@@ -202,7 +202,7 @@ Make `spec.md` stable enough for mandatory specification review while preserving
 ## Workflow
 
 ### 1. Confirm The Handoff Boundary
-- Check whether the task is mature enough for spec design.
+- Check whether the task has an accepted Phase 0 intake brief or equivalent confirmed framing and is mature enough for spec design.
 - If the real problem is still framing, send it back upstream instead of pretending a spec exists.
 
 ### 2. Load The Minimum Authoritative Context

@@ -1,6 +1,6 @@
 ---
 name: research-session
-description: "Own a session dedicated only to research for this repository when research needs a durable checkpoint. Use when the orchestrator already has task framing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update triggered workflow-control artifacts without drifting into `spec.md`, design, `tasks.md`, or implementation. Skip direct-path work, lean-local research that fits inside the compact spec/task handoff, and tasks that have already moved into `specification` or later."
+description: "Own a session dedicated only to research for this repository when research needs a durable checkpoint. Use when the orchestrator already has an accepted Phase 0 task brief plus workflow routing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update triggered workflow-control artifacts without drifting into `spec.md`, design, `tasks.md`, or implementation. Skip raw-intake work, direct-path work, lean-local research that fits inside the compact spec/task handoff, and tasks that have already moved into `specification` or later."
 ---
 
 # Research Session
@@ -19,7 +19,7 @@ This wrapper makes evidence gathering and handoff explicit; it does not finalize
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Use When
-- the task already has minimum viable framing and workflow routing, and now needs one research-only session
+- the task already has an accepted Phase 0 intake brief and workflow routing, and now needs one research-only session
 - the orchestrator must choose between `local` research and read-only subagent `fan-out` for this session
 - repository evidence, external references, comparisons, or specialist reads must be gathered before specification
 - preserved `research/*.md` notes would reduce later guesswork, make fan-in easier, or support a future resume
@@ -28,12 +28,13 @@ This wrapper makes evidence gathering and handoff explicit; it does not finalize
 ## Skip When
 - the work is tiny enough that inline local reasoning plus a short note is sufficient and a dedicated research session would be ceremony
 - lean-local research can be summarized directly in `spec.md` with source references and no reusable evidence note or phase routing value
-- the task is still at workflow planning; use `workflow-planning-session`
+- the task is still at Phase 0 intake or workflow planning; use the owning upstream phase
 - the task has already moved into `specification` or later, or `workflow-plans/specification.md` is already the active phase-control file
 - the request tries to combine research with final `spec.md`, `design/`, `tasks.md`, or implementation output in one session
 
 ## Required Inputs
 Need only the minimum phase-ready inputs:
+- accepted Phase 0 intake brief or equivalent confirmed framing
 - framed task goal plus scope and non-goals
 - known constraints, risk hotspots, and success checks
 - current workflow routing and task-local artifact location
@@ -123,7 +124,7 @@ Treat every reference as non-authoritative support under `AGENTS.md` and `docs/s
 
 ### 1. Confirm This Session Owns Research Only
 - check the master workflow plan and active phase context first
-- if the task is still at workflow planning, send it back to `workflow-planning-session`
+- if the task is still at Phase 0 intake or workflow planning, send it back to the owning upstream phase
 - if the task is already at specification or later, stop and point to the correct reopen point instead of reopening research casually
 - if the work is direct path or lean local with no durable research value, say so directly and stop rather than forcing this wrapper
 
@@ -270,7 +271,7 @@ The session is complete when:
 
 ## Escalate When
 Escalate instead of forcing output when:
-- minimum framing or workflow routing is missing and research scope cannot be chosen honestly
+- accepted intake framing or workflow routing is missing and research scope cannot be chosen honestly
 - the request tries to combine research with spec authoring, technical design, planning, or implementation
 - the task already advanced to `specification` or later
 - the task is so small that a dedicated research session would be ceremony

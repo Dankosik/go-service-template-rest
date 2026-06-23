@@ -10,7 +10,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when writi
 
 ## Inputs
 
-- Accepted scope and non-goals from the user request or workflow-control state.
+- Accepted scope and non-goals from the Phase 0 intake brief, user request, or workflow-control state.
 - Research outputs, provider contracts, or source-of-truth evidence needed for spec decisions.
 - Subagent lane summaries or a valid local-only rationale when the spec is non-trivial.
 
@@ -172,7 +172,7 @@ Pending until fresh validation evidence exists.
 
 Rules:
 
-- `Intent` states the decision outcome, not a research question. If the reason for the work is still unknown or disputed, keep the spec draft and reopen intake, research, or user decision.
+- `Intent` states the decision outcome, not a research question. If the reason for the work, desired outcome, or accepted scope is still unknown or disputed, keep the spec draft and reopen Phase 0 intake, research, or user decision.
 - `Status` in the specification phase is limited to `draft`, `review_ready`, or `blocked`. Later approval, implementation, verification, and outcome updates belong to the owning review, planning, implementation, validation, or closeout phase.
 - `Scope / Non-goals` cuts the accepted problem. It must not hide required target-state work as future hardening when the production-ready decision is knowable and in scope.
 - `Behavior / Contract Delta` describes added, modified, removed, and important unchanged observable behavior instead of restating the whole system. Include caller, operator, or maintainer-visible effects such as routes, payload fields, errors, status mapping, config, metrics, generated artifacts, docs promises, and source-of-truth ownership when they matter.

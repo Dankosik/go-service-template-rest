@@ -1,6 +1,6 @@
 ---
 name: workflow-planning-session
-description: "Own a session dedicated only to workflow planning for this repository when routing itself needs a durable artifact. Use when the orchestrator needs to choose direct path, lean local, or full orchestrated shape, research mode, subagent lanes, current-phase routing, and later artifact expectations before research begins, and must write or update triggered task-local workflow-control artifacts without drifting into research, `spec.md`, design, `tasks.md`, or implementation. Skip direct-path work and lean-local work whose routing can be recorded inside `spec.md`/`tasks.md` without separate control files."
+description: "Own a session dedicated only to workflow planning for this repository after Phase 0 intake has produced an accepted task brief and routing itself needs a durable artifact. Use when the orchestrator needs to choose direct path, lean local, or full orchestrated shape, research mode, subagent lanes, current-phase routing, and later artifact expectations before research begins, and must write or update triggered task-local workflow-control artifacts without drifting into research, `spec.md`, design, `tasks.md`, or implementation. Skip raw-intake work, direct-path work, and lean-local work whose routing can be recorded inside `spec.md`/`tasks.md` without separate control files."
 ---
 
 # Workflow Planning Session
@@ -26,12 +26,14 @@ This wrapper makes the pre-research control pass explicit and stoppable; it does
 
 ## Skip When
 - the work is tiny enough that `AGENTS.md` allows a short inline workflow-planning note and explicit skip rationale instead of dedicated workflow artifacts
+- the request is still raw, dictated, vague, mixed, or missing an accepted intake brief; run Phase 0 intake first
 - lean-local routing fits in the compact `spec.md` plus `tasks.md`, with inline `Risk Challenge` and no durable cross-phase state needed
 - the task is already in research or a later phase and the current session should not reopen routing
 - the active task already has an approved pre-research control artifact under another phase file and creating `workflow-plans/workflow-planning.md` would create a competing source of truth
 
 ## Required Inputs
 Need only the minimum framing required to route the work:
+- accepted Phase 0 intake brief, or explicit rationale that the request is already clear enough to route
 - task goal or requested change
 - known scope and non-goals
 - known constraints, risks, and success checks
@@ -44,6 +46,7 @@ If a routing fact is missing, record it as an assumption or blocker instead of i
 Always read:
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
+- `docs/spec-first-workflow/phases/intake.md` when the accepted task brief is missing or disputed
 
 Then load only the smallest task-local context that affects workflow control:
 - existing `workflow-plan.md`, if present
@@ -103,12 +106,13 @@ If any reference example conflicts with `AGENTS.md` or `docs/spec-first-workflow
 ## Workflow
 
 ### 1. Confirm This Session Owns Workflow Planning Only
+- Confirm Phase 0 intake is complete enough to route. If not, stop and ask the smallest set of intake questions instead of creating workflow-control artifacts.
 - Check whether the task is still at the routing stage.
 - If the task is already in research or later, stop and hand back the correct reopen point instead of rewriting phase control.
 - If the work is tiny enough for inline workflow planning only, say so directly and stop instead of forcing this wrapper.
 
 ### 2. Normalize Minimum Framing
-- Capture what must change, scope cuts, constraints, risk hotspots, success checks, blockers, and visible assumptions.
+- Carry forward the accepted intake brief: what must change, scope cuts, constraints, risk hotspots, success checks, blockers, and visible assumptions.
 - Keep missing facts visible instead of filling them in.
 
 ### 3. Choose Execution Shape And Lane Plan
@@ -217,6 +221,7 @@ Escalate instead of forcing output when:
 ## Anti-Patterns
 - using this wrapper as a substitute for domain research or `spec.md` authoring
 - turning workflow planning into hidden task breakdown
+- treating workflow planning as a substitute for Phase 0 intent reconstruction
 - creating `workflow-plans/workflow-planning.md` plus another active pre-research control file for the same checkpoint
 - inventing artifact status or blocker resolution for completeness theater
 - selecting fan-out lanes without naming the question each lane owns

@@ -1,6 +1,6 @@
 ---
 name: specification-session
-description: "Own a session dedicated only to specification for this repository when a distinct specification checkpoint is triggered. Use when the orchestrator already has framing plus enough researched or explicitly bounded input to make `spec.md` review-ready, must run inline lean `Risk Challenge` or formal spec-clarification challenge as triggered before review handoff, and must update any triggered workflow-control artifacts without drifting into specification review, design, `tasks.md`, or implementation. Skip direct-path work and lean-local work whose compact spec can be safely handled without a dedicated specification session."
+description: "Own a session dedicated only to specification for this repository when a distinct specification checkpoint is triggered. Use when the orchestrator already has an accepted Phase 0 task brief plus enough researched or explicitly bounded input to make `spec.md` review-ready, must run inline lean `Risk Challenge` or formal spec-clarification challenge as triggered before review handoff, and must update any triggered workflow-control artifacts without drifting into specification review, design, `tasks.md`, or implementation. Skip raw-intake work, direct-path work, and lean-local work whose compact spec can be safely handled without a dedicated specification session."
 ---
 
 # Specification Session
@@ -19,7 +19,7 @@ This wrapper makes spec-ready input, the autonomous clarification gate, allowed 
 - Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
 
 ## Use When
-- the task already has minimum viable framing and enough evidence or bounded assumptions to support an honest `spec.md`
+- the task already has an accepted Phase 0 intake brief and enough evidence or bounded assumptions to support an honest `spec.md`
 - prior workflow routing says the next session starts with `specification`
 - research, challenge, or direct local analysis already narrowed the open questions enough that stable `Decisions` can now be written
 - candidate decisions are ready for either inline lean `Risk Challenge` or required formal `spec-clarification-challenge` before specification-review handoff
@@ -28,12 +28,13 @@ This wrapper makes spec-ready input, the autonomous clarification gate, allowed 
 ## Skip When
 - the work is tiny enough that `AGENTS.md` allows an inline local path and a dedicated specification session would be ceremony
 - lean-local specification can be completed in the same local pass with compact `spec.md`, inline `Risk Challenge`, and no separate phase-control value
-- the task is still at workflow planning or research, or the current evidence is not yet spec-ready
+- the task is still at Phase 0 intake, workflow planning, or research, or the current evidence is not yet spec-ready
 - the task has already moved into `technical design` or later and the current session should not reopen specification casually
 - the request tries to combine specification with `design/`, `tasks.md`, or implementation output in one session
 
 ## Required Inputs
 Need only the minimum phase-ready inputs from earlier work:
+- accepted Phase 0 intake brief or equivalent confirmed framing
 - framed task goal, scope, non-goals, constraints, risk hotspots, and success checks
 - current workflow routing and task-local artifact location
 - the latest upstream phase output that made specification the next checkpoint
@@ -73,6 +74,7 @@ Then read current phase context in this order:
 3. the smallest upstream artifact that explains why specification is next:
    - `workflow-plans/research.md`
    - `workflow-plans/workflow-planning.md`
+   - accepted Phase 0 intake brief when preserved in workflow-control
    - approved framing notes or equivalent task-local context
 4. relevant `research/*.md`, when present
 5. existing `spec.md`, only to continue or normalize it in this session
@@ -141,7 +143,7 @@ Do not:
 
 ### 1. Confirm This Session Owns Specification Only
 - check the master workflow plan and current phase context first
-- if the task is still at workflow planning or research, hand it back to the correct upstream phase instead of spec-writing by momentum
+- if the task is still at Phase 0 intake, workflow planning, or research, hand it back to the correct upstream phase instead of spec-writing by momentum
 - if the task is already at `technical design` or later, stop and point to the correct reopen point
 - if the work is tiny enough for an inline local path, say so directly and stop rather than forcing this wrapper
 

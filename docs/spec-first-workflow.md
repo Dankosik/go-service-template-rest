@@ -8,6 +8,7 @@ Runtime entrypoint and router to [AGENTS.md](../AGENTS.md) for subagent-first sp
 
 The workflow keeps the same quality concerns:
 
+- confirmed understanding of the user's raw intent before routing;
 - clear framing and scope cuts;
 - final decision ownership by the orchestrator;
 - read-only advisory subagents as the normal evidence surface for non-trivial decisions;
@@ -26,10 +27,11 @@ Hard decision-quality rules live in [AGENTS.md](../AGENTS.md). [Artifact Model](
 Use this file as the stable workflow entrypoint. Do not load every detailed workflow file by default.
 
 1. Read `AGENTS.md` first for the compact authority and hard invariants.
-2. Use the execution shape summary and phase read matrix below to identify the current phase.
-3. Read `spec-first-workflow/shared/artifact-model.md` when choosing shape, artifact depth, task-local artifact ownership, status vocabulary, or layout rules.
-4. Read exactly the phase file that owns the current work, plus `spec-first-workflow/shared/subagents-and-handoff.md` when subagent gates, resume order, or next-session prompts matter.
-5. If a phase exposes a missing decision, proof path, or required artifact, reopen the owning earlier phase instead of solving it in a later phase.
+2. If the raw request is not yet an accepted task brief, read [Intake / Phase 0](spec-first-workflow/phases/intake.md) before choosing execution shape.
+3. Use the execution shape summary and phase read matrix below to identify the current phase.
+4. Read `spec-first-workflow/shared/artifact-model.md` when choosing shape, artifact depth, task-local artifact ownership, status vocabulary, or layout rules.
+5. Read exactly the phase file that owns the current work, plus `spec-first-workflow/shared/subagents-and-handoff.md` when subagent gates, resume order, or next-session prompts matter.
+6. If a phase exposes a missing decision, proof path, or required artifact, reopen the owning earlier phase instead of solving it in a later phase.
 
 ## 3. Execution Shape Summary
 
@@ -41,10 +43,13 @@ Use this file as the stable workflow entrypoint. Do not load every detailed work
 
 `AGENTS.md` owns escalation triggers and hard boundaries. [Artifact Model](spec-first-workflow/shared/artifact-model.md) owns artifact-depth implications, status vocabulary, lean `spec.md`, lean `tasks.md`, and workflow-control artifact rules.
 
+Phase 0 intake precedes shape selection. It usually stays in chat as an accepted task brief; preserve it in workflow-control only when multi-session resume or later routing needs durable state.
+
 ## 4. Phase Read Matrix
 
 | Current Need | Read |
 | --- | --- |
+| Understand a raw, dictated, vague, or mixed request before choosing workflow shape or writing artifacts. | [Intake / Phase 0](spec-first-workflow/phases/intake.md) |
 | Choose execution shape, artifact depth, task-local layout, or workflow-control ownership. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) |
 | Research, evidence fan-out, dependency/OSS diligence, or Pattern Fit research. | [Research](spec-first-workflow/phases/research.md) |
 | Write or repair `spec.md`, reconcile clarification challenge, or run lean `Risk Challenge`. | [Specification](spec-first-workflow/phases/specification.md) |
@@ -61,6 +66,7 @@ Use this file as the stable workflow entrypoint. Do not load every detailed work
 ## 5. Global Resume And Handoff Rules
 
 - Resume from artifacts, not chat memory.
+- For a new task without accepted framing, start with Phase 0 intake before artifact-first resume rules apply.
 - If approved `tasks.md` exists and implementation, review, validation, or closeout is next, read `tasks.md` first and treat it as the execution authority.
 - If no approved `tasks.md` exists and `workflow-plan.md` exists, read `workflow-plan.md`, then the current `workflow-plans/<phase>.md` when used, then the files named in the next-session context bundle.
 - If no approved `tasks.md` and no `workflow-plan.md` exist because the task is direct or lean, read `spec.md` when present, then the specification-review record when moving beyond specification, then `test-plan.md` when test design is triggered, then `tasks.md` when implementation or validation is next.
@@ -75,12 +81,15 @@ Detailed subagent, resume, and handoff mechanics live in [Subagents And Handoff]
 - Keep `docs/spec-first-workflow.md` as the stable entrypoint path. Do not point skills or agents directly at every phase file unless the current phase requires that detail.
 - Do not duplicate authority across the router and phase files. Keep summaries here, and keep expanded mechanics in exactly one owning phase or shared file.
 - Do not create task-local workflow artifacts for ceremony. Use the shape and trigger rules in [Artifact Model](spec-first-workflow/shared/artifact-model.md).
+- Do not skip Phase 0 intake when the request is rough enough that routing would depend on interpretation.
 
 ## 7. Anti-Patterns
 
 Avoid:
 
 - treating full orchestrated as the default for every non-trivial task;
+- treating raw dictation as an accepted task brief without interview or bounded assumptions;
+- asking a generic intake questionnaire instead of task-specific, routing-changing questions;
 - using direct path for risky, ambiguous, public, data, security, money, reliability, concurrency, or rollout work;
 - using lean local without `spec.md`, `tasks.md`, inline `Risk Challenge`, and proof;
 - using lean local as a local-only decision path without a recorded subagent gate decision;

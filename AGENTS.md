@@ -14,6 +14,7 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 
 ## 2. Non-Negotiable Invariants
 
+0. New workflow work starts with Phase 0 intake when the user's request is raw, dictated, vague, mixed, or otherwise not yet an accepted task brief. Do not classify execution shape, write workflow artifacts, or start later phases from rough input until the orchestrator has an accepted intake brief, bounded assumptions with reopen triggers, or an explicit direct-path rationale for why the request is already clear.
 1. Final decisions always belong to the orchestrator.
 2. Subagents are advisory and read-only: no code writes, file edits, git-state mutation, task-ledger mutation, or implementation-handoff changes.
 3. Read-only is enforced by execution choice, not prompt wording alone. If a lane cannot reliably stay read-only, keep it in the main flow.
@@ -74,6 +75,7 @@ When the public/API/generated-contract trigger is present, `system-integration-d
 ## 4. Artifact-Depth Rules
 
 - Direct path is the only routine no-bundle path.
+- Phase 0 intake normally stays in chat. Record the accepted intake brief in task-local workflow-control only when multi-session routing or later resume needs durable state.
 - Lean local still needs durable decisions and executable work when implementation is non-trivial:
   - `spec.md` records intent, scope, `Behavior / Contract Delta`, decisions, dependency/OSS and Pattern Fit Diligence when relevant, compact design answers, inline `Risk Challenge`, handoff, and validation obligations.
   - Simple contract deltas may stay in `spec.md` only when the contract shape is concise, uncontested, and explicit enough for system/integration design, Go code ownership, planning, OpenAPI/source-of-truth updates, generated drift proof, and tests to proceed without inventing resource, status, error, retry, async, freshness, or compatibility semantics.
@@ -109,6 +111,7 @@ When the public/API/generated-contract trigger is present, `system-integration-d
 ## 6. Loading Rules
 
 - Open `docs/spec-first-workflow.md` before workflow planning, artifact repair, or subagent fan-out for non-trivial or agent-backed work.
+- Open `docs/spec-first-workflow/phases/intake.md` before workflow planning when the request is not yet an accepted task brief.
 - Open `docs/repo-architecture.md` before system/integration design or Go code ownership design when stable repository boundaries, ownership, dependency direction, package layout, generated-source authority, or runtime flows matter.
 - For subagent-internal skills, the orchestrator usually routes by skill name only; let the lane load the skill body inside its own read-only pass.
 - Do not read large skill docs in the main flow unless a direct-use exception is justified.
@@ -161,17 +164,17 @@ Subagents must not:
 
 Default concern order:
 
-`intake -> classify shape -> frame decisions -> risk challenge -> specification review -> triggered technical design/review -> triggered test design -> executable tasks -> task review/readiness -> build/proof -> fresh validation`
+`phase 0 intake brief -> classify shape -> frame decisions -> risk challenge -> specification review -> triggered technical design/review -> triggered test design -> executable tasks -> task review/readiness -> build/proof -> fresh validation`
 
 How this expands:
 
-- `direct path`: first read -> inline plan when useful -> edit -> proof -> done.
-- `lean local`: compact review-ready `spec.md` with subagent gate decision, dependency/OSS and Pattern Fit Diligence when relevant, and inline `Risk Challenge` -> specification review/reconciliation -> triggered compact system/integration and Go code ownership design when separate depth is needed -> technical design review when separate design exists -> triggered test design when scenarios do not fit cleanly in the ledger -> draft `tasks.md` -> task review/readiness -> implementation -> proof -> closeout.
-- `full orchestrated`: workflow planning -> research/fan-out -> synthesis -> specification with formal clarification -> specification review/reconciliation -> system-integration-design authoring fan-out/fan-in -> go-code-ownership-design authoring fan-out/fan-in -> technical design review/reconciliation -> triggered test-design fan-out/fan-in -> planning with task-ledger review fan-out as needed -> task review/readiness -> implementation -> review/reconciliation when triggered -> validation -> done.
+- `direct path`: Phase 0 sanity check -> first read -> inline plan when useful -> edit -> proof -> done.
+- `lean local`: Phase 0 intake brief -> compact review-ready `spec.md` with subagent gate decision, dependency/OSS and Pattern Fit Diligence when relevant, and inline `Risk Challenge` -> specification review/reconciliation -> triggered compact system/integration and Go code ownership design when separate depth is needed -> technical design review when separate design exists -> triggered test design when scenarios do not fit cleanly in the ledger -> draft `tasks.md` -> task review/readiness -> implementation -> proof -> closeout.
+- `full orchestrated`: Phase 0 intake brief -> workflow planning -> research/fan-out -> synthesis -> specification with formal clarification -> specification review/reconciliation -> system-integration-design authoring fan-out/fan-in -> go-code-ownership-design authoring fan-out/fan-in -> technical design review/reconciliation -> triggered test-design fan-out/fan-in -> planning with task-ledger review fan-out as needed -> task review/readiness -> implementation -> review/reconciliation when triggered -> validation -> done.
 
 Rules:
 
-- Refine idea-shaped requests before deeper design.
+- Refine raw or idea-shaped requests through Phase 0 intake before workflow planning, research, specification, design, or planning.
 - Decide shape and artifact expectations before subagent calls.
 - The arrows above describe phase order, not permission to run multiple non-implementation phases in one session by default. Workflow planning, research, specification, specification review, system/integration design, Go code ownership design, technical design review, test design, task planning, task review/readiness, review, reconciliation, and validation/closeout stop at their own boundary and hand off the next phase.
 - Implementation is the normal exception: after `tasks.md` passes task review with eligible readiness, an implementation session may work through the approved ledger and run the proof named there unless `tasks.md` explicitly defines a separate stop. A stale or still-present `workflow-plan.md` does not add implementation or closeout obligations by itself.
@@ -202,6 +205,7 @@ Rules:
 ## 10. Anti-Patterns
 
 - treating full orchestrated as the default for every non-trivial task;
+- skipping Phase 0 intake when the user's raw request is still ambiguous enough to change scope, constraints, success, ownership, validation, or workflow route;
 - using `direct path` for risky or unclear work;
 - using `lean local` as an unstructured shortcut without `spec.md`, `tasks.md`, inline `Risk Challenge`, and proof;
 - treating lean-local artifact depth as permission for local-only decision making without a recorded subagent gate decision;
