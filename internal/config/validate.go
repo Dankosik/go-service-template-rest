@@ -184,8 +184,8 @@ func validatePostgres(cfg PostgresConfig) error {
 	if err := validateDurationRange("postgres.healthcheck_timeout", cfg.HealthcheckTimeout, 100*time.Millisecond, 10*time.Second); err != nil {
 		return err
 	}
-	if err := validateIntRange("postgres.max_open_conns", cfg.MaxOpenConns, 1, 500); err != nil {
-		return err
+	if cfg.MaxOpenConns < 1 || cfg.MaxOpenConns > 500 {
+		return fmt.Errorf("%w: postgres.max_open_conns must be in range [1,500]", ErrValidate)
 	}
 	if err := validateDurationRange("postgres.conn_max_lifetime", cfg.ConnMaxLifetime, time.Minute, 24*time.Hour); err != nil {
 		return err
@@ -264,13 +264,6 @@ func validateOTLPExporter(cfg OTelExporterConfig) error {
 func validateDurationRange(name string, value time.Duration, lowerBound time.Duration, upperBound time.Duration) error {
 	if value < lowerBound || value > upperBound {
 		return fmt.Errorf("%w: %s must be in range [%s,%s]", ErrValidate, name, lowerBound, upperBound)
-	}
-	return nil
-}
-
-func validateIntRange(name string, value int, lowerBound int, upperBound int) error {
-	if value < lowerBound || value > upperBound {
-		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, lowerBound, upperBound)
 	}
 	return nil
 }

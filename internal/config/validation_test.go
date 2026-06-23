@@ -21,6 +21,23 @@ func TestPostgresDurationBounds(t *testing.T) {
 	}
 }
 
+func TestPostgresMaxOpenConnsMustStayWithinRange(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "501")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected validation error for postgres max open conns")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "postgres.max_open_conns must be in range") {
+		t.Fatalf("error = %v, want postgres max open conns range policy", err)
+	}
+}
+
 func TestShutdownTimeoutCanBeTunedWhenDrainBudgetIsValid(t *testing.T) {
 	resetConfigEnv(t)
 

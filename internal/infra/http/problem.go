@@ -23,7 +23,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, problem problemRespons
 	p := api.Problem{
 		Detail:    optionalProblemString(problem.detail),
 		RequestId: nil,
-		Status:    int32(status),
+		Status:    int32(status), // #nosec G115 -- problemHTTPStatus bounds status to [100,999].
 		Title:     problem.title,
 		Type:      "about:blank",
 	}

@@ -205,7 +205,6 @@ Bootstrap shortcuts:
   - Runs:
     - `go mod tidy -diff`
     - `go mod verify`
-    - `git diff --exit-code -- go.mod go.sum`
 
 - `make docker-mod-check`
   - Docker equivalent of `make mod-check`.

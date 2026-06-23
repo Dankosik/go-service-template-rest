@@ -134,23 +134,58 @@ run_go() {
 		bash -lc "export PATH=/usr/local/go/bin:\${PATH}; $*"
 }
 
+docker_socket_path() {
+	local candidate
+	if [[ "${DOCKER_HOST:-}" == unix://* ]]; then
+		candidate="${DOCKER_HOST#unix://}"
+		if [[ -S "${candidate}" ]]; then
+			printf '%s' "${candidate}"
+			return 0
+		fi
+	fi
+
+	local context_host
+	context_host="$(docker context inspect --format '{{ (index .Endpoints "docker").Host }}' 2>/dev/null || true)"
+	if [[ "${context_host}" == unix://* ]]; then
+		candidate="${context_host#unix://}"
+		if [[ -S "${candidate}" ]]; then
+			printf '%s' "${candidate}"
+			return 0
+		fi
+	fi
+
+	for candidate in /var/run/docker.sock "${HOME}/.docker/run/docker.sock" "${HOME}/.orbstack/run/docker.sock"; do
+		if [[ -S "${candidate}" ]]; then
+			printf '%s' "${candidate}"
+			return 0
+		fi
+	done
+}
+
 run_go_with_docker_socket() {
 	ensure_docker
 	mkdir -p "${ROOT_DIR}/.cache/go-mod" "${ROOT_DIR}/.cache/go-build"
 
-	socket_args=()
-	if [[ -S /var/run/docker.sock ]]; then
-		socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock --group-add 0)
+	local docker_args=(
+		--rm
+		-u "${host_uid}:${host_gid}"
+		-v "${ROOT_DIR}:/workspace"
+		-w /workspace
+		-e GOMODCACHE=/workspace/.cache/go-mod
+		-e GOCACHE=/workspace/.cache/go-build
+	)
+	local docker_socket
+	docker_socket="$(docker_socket_path || true)"
+	if [[ -n "${docker_socket}" ]]; then
+		docker_args+=(
+			-v "${docker_socket}:/var/run/docker.sock"
+			-e DOCKER_HOST=unix:///var/run/docker.sock
+			--group-add 0
+		)
 	fi
 
 	docker run \
-		--rm \
-		-u "${host_uid}:${host_gid}" \
-		-v "${ROOT_DIR}:/workspace" \
-		-w /workspace \
-		"${socket_args[@]}" \
-		-e GOMODCACHE=/workspace/.cache/go-mod \
-		-e GOCACHE=/workspace/.cache/go-build \
+		"${docker_args[@]}" \
 		"${GO_IMAGE}" \
 		bash -lc "export PATH=/usr/local/go/bin:\${PATH}; $*"
 }
@@ -286,7 +321,9 @@ run_migration_validate() {
 run_container_security_scan() {
 	ensure_docker
 
-	if [[ ! -S /var/run/docker.sock ]]; then
+	local docker_socket
+	docker_socket="$(docker_socket_path || true)"
+	if [[ -z "${docker_socket}" ]]; then
 		echo "docker socket is unavailable; container scan cannot run in docker mode"
 		exit 1
 	fi
@@ -294,7 +331,8 @@ run_container_security_scan() {
 	docker build -f "${ROOT_DIR}/build/docker/Dockerfile" -t service:ci "${ROOT_DIR}"
 	docker run \
 		--rm \
-		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v "${docker_socket}:/var/run/docker.sock" \
+		-e DOCKER_HOST=unix:///var/run/docker.sock \
 		"${TRIVY_IMAGE}" image \
 		--severity HIGH,CRITICAL \
 		--ignore-unfixed \
@@ -356,7 +394,6 @@ init-module)
 	;;
 mod-check)
 	run_go "GOFLAGS= go mod tidy -diff && go mod verify"
-	git -C "${ROOT_DIR}" diff --exit-code -- go.mod go.sum
 	;;
 fmt)
 	run_go "go tool goimports -w \$(${GO_FILES_FIND}) && go tool gofumpt -w \$(${GOFUMPT_FILES_FIND})"

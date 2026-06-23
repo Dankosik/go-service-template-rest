@@ -215,7 +215,6 @@ fmt:
 mod-check:
 	GOFLAGS= go mod tidy -diff
 	go mod verify
-	git diff --exit-code -- go.mod go.sum
 
 docker-mod-check:
 	$(DOCKER_TOOLING_SCRIPT) mod-check

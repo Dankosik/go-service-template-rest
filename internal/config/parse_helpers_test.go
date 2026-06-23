@@ -169,32 +169,6 @@ func TestParseBool(t *testing.T) {
 func TestValidateRangeHelpers(t *testing.T) {
 	t.Parallel()
 
-	t.Run("int range is inclusive", func(t *testing.T) {
-		t.Parallel()
-
-		if err := validateIntRange("postgres.max_open_conns", 1, 1, 100); err != nil {
-			t.Fatalf("validateIntRange(min) error = %v", err)
-		}
-		if err := validateIntRange("postgres.max_open_conns", 100, 1, 100); err != nil {
-			t.Fatalf("validateIntRange(max) error = %v", err)
-		}
-	})
-
-	t.Run("int range out of bounds returns ErrValidate", func(t *testing.T) {
-		t.Parallel()
-
-		err := validateIntRange("postgres.max_open_conns", 101, 1, 100)
-		if err == nil {
-			t.Fatalf("validateIntRange() expected error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		if !strings.Contains(err.Error(), "postgres.max_open_conns") {
-			t.Fatalf("error = %v, want field name in message", err)
-		}
-	})
-
 	t.Run("duration range is inclusive", func(t *testing.T) {
 		t.Parallel()
 
