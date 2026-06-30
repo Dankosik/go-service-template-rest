@@ -246,6 +246,7 @@ The catalog has two layers:
 | [`go-domain-invariant-review`](.agents/skills/go-domain-invariant-review/SKILL.md) | business-invariant preservation and side-effect safety | behavior changes carry semantic risk |
 | [`go-idiomatic-review`](.agents/skills/go-idiomatic-review/SKILL.md) | idiomatic Go, error handling, context flow, naming | you want merge-risk review on Go code quality |
 | [`go-language-simplifier-review`](.agents/skills/go-language-simplifier-review/SKILL.md) | lower cognitive complexity and cleaner control flow | the code works but feels noisy or over-abstracted |
+| [`go-structural-quality-review`](.agents/skills/go-structural-quality-review/SKILL.md) | harsh structural maintainability, abstraction cost, spaghetti growth, file sprawl | thermonuclear or strict code quality review is needed |
 | [`go-observability-review`](.agents/skills/go-observability-review/SKILL.md) | logs, metrics, traces, SLOs, alerts, telemetry privacy and cardinality | observability behavior changed |
 | [`go-concurrency-review`](.agents/skills/go-concurrency-review/SKILL.md) | goroutines, channels, cancellation, shutdown safety | concurrent behavior changed or races are suspected |
 | [`go-performance-review`](.agents/skills/go-performance-review/SKILL.md) | hot-path regression, allocation and contention risk | performance is a review concern |
