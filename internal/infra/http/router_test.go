@@ -1007,9 +1007,9 @@ func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRou
 func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 	t.Helper()
 
-	swagger, err := api.GetSwagger()
+	swagger, err := api.GetSpec()
 	if err != nil {
-		t.Fatalf("GetSwagger() error = %v", err)
+		t.Fatalf("GetSpec() error = %v", err)
 	}
 
 	routes := make(map[manualRootRouteKey]struct{})

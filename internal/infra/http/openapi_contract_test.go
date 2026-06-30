@@ -403,9 +403,9 @@ func resolveResponseRef(swagger *openapi3.T, responseRef *openapi3.ResponseRef) 
 func mustOpenAPISwagger(t *testing.T) *openapi3.T {
 	t.Helper()
 
-	swagger, err := api.GetSwagger()
+	swagger, err := api.GetSpec()
 	if err != nil {
-		t.Fatalf("GetSwagger() error = %v", err)
+		t.Fatalf("GetSpec() error = %v", err)
 	}
 	return swagger
 }
