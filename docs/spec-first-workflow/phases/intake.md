@@ -18,6 +18,8 @@ Skip only when the user request is already agent-ready enough to choose a direct
 
 Do not run research, design, task breakdown, or implementation during intake.
 
+Use the repo-local `grilling` skill as the interview method whenever Phase 0 needs user answers before routing. Keep repository-factual lookup bounded to the named surfaces needed for the interview.
+
 ## Outputs
 
 Phase 0 produces an accepted intake brief, normally in chat. Preserve it in `workflow-plan.md` only when multi-session routing or later resume needs durable state.
@@ -54,7 +56,7 @@ Use this prompt when starting Phase 0 in any agent environment. It must stay too
 ```text
 Interview me to understand this task before you route or implement it.
 
-Use my raw request as evidence, not as final scope. First restate the likely objective and the uncertainty you see. Then ask only the smallest set of non-obvious questions whose answers can change scope, behavior, constraints, ownership, risk, validation, or workflow route. Do not ask generic checklist questions.
+Use my raw request as evidence, not as final scope. First restate the likely objective and the uncertainty you see. Use the repo-local `grilling` skill as the interview method, then ask only the smallest set of non-obvious questions whose answers can change scope, behavior, constraints, ownership, risk, validation, or workflow route. Do not ask generic checklist questions.
 
 Prefer questions that could prove your draft understanding wrong over questions that only add detail. Answer repo-factual questions from bounded lookup when a named artifact can answer them; ask me for intent, priority, scope, policy, or external constraints.
 

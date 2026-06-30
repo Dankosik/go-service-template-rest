@@ -55,7 +55,7 @@ This repository treats delivery as an explicit loop, not as a single long chat a
 intake -> idea refine? -> workflow planning -> research -> synthesis -> pre-spec challenge -> specification + clarification challenge -> specification review -> system/integration design -> Go code ownership design -> technical design review -> test design? -> planning -> task review/readiness -> coding from tasks.md -> review -> validation
 ```
 
-- `intake`: frame the change, scope it, and record assumptions.
+- `intake`: frame the change, scope it, and record assumptions; use `grilling` as the Phase 0 interview method when user-owned decisions remain.
 - `idea refine`: when the request is still a raw concept, use `idea-refine` to make the user, problem, success criteria, MVP, and not-doing boundary explicit before engineering framing.
 - `workflow planning`: choose the execution shape, decide whether work stays local or fans out, set the current phase in master `workflow-plan.md`, write the phase-local orchestration in `workflow-plans/<phase>.md`, and state whether later `design/`, `test-design`, `tasks.md`, `test-plan.md`, or `rollout.md` artifacts will be required. Early checkpoints often use `workflow-plans/workflow-planning.md` or `workflow-plans/research.md`; later ones use files like `workflow-plans/specification.md`, `workflow-plans/system-integration-design.md`, `workflow-plans/go-code-ownership-design.md`, `workflow-plans/test-design.md`, or `workflow-plans/planning.md`. Do not optimize for a small lane count; optimize for coverage.
 - `research`: keep simple work local or fan out only to read-only subagents, with enough lanes to cover the materially affected domains. When in doubt on a complex task, prefer more lanes over fewer.
@@ -192,6 +192,7 @@ The catalog has two layers:
 
 | Skill | What it does | Load when |
 |---|---|---|
+| [`grilling`](.agents/skills/grilling/SKILL.md) | interviews the user through unresolved plan or design decisions | Phase 0 intake needs user answers before workflow routing |
 | [`idea-refine`](.agents/skills/idea-refine/SKILL.md) | turns a raw idea into one concrete direction with explicit user problem, assumptions, MVP boundary, and not-doing list | the request is still product- or solution-ambiguous and is not ready for engineering framing yet |
 | [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a refined idea or rough change request into an engineering-ready problem frame with scope, constraints, assumptions, and design-readiness | the task is close to spec work but still needs crisp framing before challenge or deeper design |
 | [`pre-spec-challenge`](.agents/skills/pre-spec-challenge/SKILL.md) | pressure-tests candidate decisions with discriminating questions before planning | research is done but hidden assumptions or edge cases could still change the spec |

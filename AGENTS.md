@@ -14,7 +14,7 @@ Repository-wide operating contract for orchestrator/subagent-first, spec-first e
 
 ## 2. Non-Negotiable Invariants
 
-0. New workflow work starts with Phase 0 intake when the user's request is raw, dictated, vague, mixed, or otherwise not yet an accepted task brief. Do not classify execution shape, write workflow artifacts, or start later phases from rough input until the orchestrator has an accepted intake brief, bounded assumptions with reopen triggers, or an explicit direct-path rationale for why the request is already clear.
+0. New workflow work starts with Phase 0 intake when the user's request is raw, dictated, vague, mixed, or otherwise not yet an accepted task brief. Do not classify execution shape, write workflow artifacts, or start later phases from rough input until the orchestrator has an accepted intake brief, bounded assumptions with reopen triggers, or an explicit direct-path rationale for why the request is already clear. Use the repo-local `grilling` skill as the Phase 0 interview method when user-owned decisions remain.
 1. Final decisions always belong to the orchestrator.
 2. Subagents are advisory and read-only: no code writes, file edits, git-state mutation, task-ledger mutation, or implementation-handoff changes.
 3. Read-only is enforced by execution choice, not prompt wording alone. If a lane cannot reliably stay read-only, keep it in the main flow.
