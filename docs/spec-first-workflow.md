@@ -71,7 +71,7 @@ Phase 0 intake precedes shape selection. It usually stays in chat as an accepted
 - If no approved `tasks.md` exists and `workflow-plan.md` exists, read `workflow-plan.md`, then the current `workflow-plans/<phase>.md` when used, then the files named in the next-session context bundle.
 - If no approved `tasks.md` and no `workflow-plan.md` exist because the task is direct or lean, read `spec.md` when present, then the specification-review record when moving beyond specification, then `test-plan.md` when test design is triggered, then `tasks.md` when implementation or validation is next.
 - At every non-implementation phase boundary with a next session or reopen target, the final chat response must include a copy-pastable recommended next-session prompt derived from recorded workflow state.
-- Implementation from approved, reviewed `tasks.md` is the normal exception: the next-session prompt must use `codex-goal-prompt-composer`, tell the next agent to set a Codex Goal first, and then execute the approved ledger through its named proof.
+- Implementation from approved, reviewed `tasks.md` is the normal exception: the next-session prompt must use `codex-goal-prompt-composer`, tell the next agent to set a Codex Goal first, and then orchestrate the approved ledger through its named proof. For non-trivial code-writing work, delegate named worker bundles when `tasks.md` marks isolated Codex CLI worker mode eligible or required; use workers only through the implementation phase's worker-boundary and patch-intake rules, with inline work reserved for explicit ledger choice or narrow fallback repair.
 
 Detailed subagent, resume, and handoff mechanics live in [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md).
 
@@ -108,5 +108,6 @@ Avoid:
 - creating `test-plan.md`, `rollout.md`, split design files, or review/validation phase files for completeness;
 - treating a generic "add tests" task as equivalent to approved test design for behavior-risky work;
 - creating new process artifacts after coding starts;
+- using isolated Codex CLI workers to bypass task-review/readiness, skip the approved launch contract, write outside isolated workspaces, mutate authoritative workflow artifacts, or treat worker-local proof as final closeout proof;
 - using subagents for broad ceremony rather than narrow unresolved questions;
 - claiming done without fresh, scope-matched evidence.

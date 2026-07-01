@@ -21,7 +21,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when revie
 
 ## Outputs
 
-- `test-plan.md` when triggered, with risk-based scenario IDs, selected proof levels, pass/fail observables, fail-before expectations, command or manual proof shape, residual risks, and reopen targets.
+- `test-plan.md` when triggered, with risk-based scenario IDs, selected proof levels, assertion atoms for broad protected-domain scenarios, pass/fail observables, fail-before expectations, command or manual proof shape, residual risks, and reopen targets.
 - Explicit `test-design: not expected` rationale when scenarios are small enough to live directly in `tasks.md`.
 - Recorded `Test-design fan-out: complete | scoped_down | local_only | blocked | not_expected` with lane table or local-only rationale when the phase is non-trivial.
 - Workflow-control updates that route next to `planning`, or to the smallest reopen target when behavior or design is not testable yet.
@@ -132,6 +132,8 @@ Reopen target:
 
 Use only sections that carry real obligations. Delete or mark irrelevant coverage categories `not_applicable` with one-line rationale; do not leave empty headings as proof of coverage.
 
+When a scenario covers multiple state-machine, money, security, lifecycle, retry, idempotency, duplicate, optional-identifier, or side-effect branches, split it or list assertion atoms before approval: source branch -> invariant -> forbidden regression or side effect -> proof signal. A broad scenario row is not planning-ready if `tasks.md` would need to decide which states, terminal groups, nullable identifiers, retry classes, duplicate/conflict cases, or no-side-effect branches actually require tests.
+
 ## Fan-Out
 
 Before approving non-trivial test design, identify independent proof-risk questions. Use read-only lanes when a specialist could change scenario selection, proof level, quality gate, or reopen target.
@@ -163,6 +165,7 @@ Planning may start when:
 
 - `test-plan.md` is `approved`, or test design is explicitly `not expected` with trigger rationale;
 - every material scenario has a stable ID, source anchor, selected proof level, pass/fail observable, proof command or manual proof shape, and reopen target;
+- broad protected-domain scenarios are split or carry assertion atoms granular enough for planning to map into `Implementation obligations` without inventing coverage;
 - fail-before expectations or waivers are explicit for proof-first behavior tasks;
 - quality gates are executable in repository-supported tooling or honestly marked as unavailable with residual risk;
 - no scenario requires planning or implementation to decide product semantics, source of truth, package/file ownership, rollout policy, or test ownership.

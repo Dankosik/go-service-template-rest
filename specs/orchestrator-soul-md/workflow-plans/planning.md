@@ -96,4 +96,4 @@ Planning is complete. Do not create `SOUL.md`, edit `AGENTS.md`, modify guardrai
 
 ## Recommended Next Action
 
-Start implementation from `specs/orchestrator-soul-md/tasks.md` at T001 in a new session. The next session may execute the approved ledger through its named proof without stopping between task IDs unless blocked by a reopen condition.
+Start implementation from `specs/orchestrator-soul-md/tasks.md` at T001 in a new session. The next session may orchestrate the approved ledger through its named proof without stopping between task IDs unless blocked by a reopen condition.
