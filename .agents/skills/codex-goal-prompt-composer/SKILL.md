@@ -158,7 +158,7 @@ Expected output:
 Stop after that phase and return the next-session prompt.
 ```
 
-When composing an implementation prompt from an approved ledger, include the exact `Subagent authorization:` line from `docs/spec-first-workflow/shared/subagents-and-handoff.md` in the implementation brief so any required read-only review, validation, or adequacy fan-out has explicit tool authorization without relying on the user to remember it.
+Do not include `Subagent authorization:` in routine implementation Goal prompts. Implementation uses the orchestrator and isolated CLI workers, not read-only subagents. Include the exact authorization line from `docs/spec-first-workflow/shared/subagents-and-handoff.md` only when the approved `tasks.md` explicitly requires same-session read-only review, validation, or adequacy fan-out; otherwise record subagent/readiness gate status without asking to spawn lanes.
 
 ## Source Notes
 OpenAI's Codex Goal guidance at `https://developers.openai.com/codex/use-cases/follow-goals` frames goals as long-running work toward a verifiable stopping condition, with one objective, read-first context, proof artifacts or commands, checkpoints, a short progress log, and explicit pause/stop behavior. If this product behavior appears stale or the user asks for current docs, refresh against the official Codex Goal page before changing this skill.

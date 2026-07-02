@@ -1,5 +1,15 @@
 # AGENTS.md
 
+<!-- codebase-memory-binding:start -->
+## Codebase Memory MCP
+
+This repository is indexed in codebase-memory-mcp as:
+
+- project: `Users-daniil-Projects-Opensource-go-service-template-rest`
+
+Use this project value directly for codebase-memory-mcp calls in this repository. Do not call `list_projects` first. Use `index_status` with this project when freshness matters. Fall back to `list_projects` only if the project is missing/not found, the current working directory is outside this repository, or the user explicitly asks to discover projects. If a codebase-memory-mcp call fails with `Transport closed`, treat the MCP as unavailable for that task: do not retry the same call or run `list_projects`; use CodeGraph or `rg`/direct file reads and note the fallback.
+<!-- codebase-memory-binding:end -->
+
 Repository-wide operating contract for orchestrator/subagent-first, spec-first execution.
 
 ## 1. What This File Is For

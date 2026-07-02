@@ -141,7 +141,7 @@ The recommended prompt should be operational, not just descriptive. Include:
 - the artifact read order, task-local paths, and short reasons for any non-obvious context files;
 - the immediate objective and expected output for that one phase;
 - important blockers, accepted assumptions, accepted risks, and proof obligations from recorded state;
-- `Subagent authorization:` with explicit permission for read-only subagents, delegation, and parallel agent work whenever the next phase is non-trivial or may run subagent/readiness gates;
+- `Subagent authorization:` with explicit permission for read-only subagents, delegation, and parallel agent work for non-implementation next phases that may run subagent/readiness gates, or for implementation only when the approved `tasks.md` explicitly requires same-session read-only review, validation, or adequacy fan-out;
 - a stop rule telling the next session to complete only that phase, update workflow state, and produce the following next-session prompt if another phase remains.
 
 When the next phase is a design authoring checkpoint, the prompt must name exactly one checkpoint, usually `system-integration-design` first or `go-code-ownership-design` after system design is complete. It must tell the next session to first record or run the checkpoint-scoped `Design fan-out` and only then write or repair design artifacts for that checkpoint.
@@ -178,7 +178,6 @@ After the goal is set, orchestrate implementation of every required task in `<ta
 Implementation brief:
 
 Work in `<absolute repo path>`.
-Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work for every repository workflow gate that requires or benefits from fan-out in this session. Spawn the required read-only lanes without asking again; the orchestrator retains final authority and reconciles results.
 Read before coding:
 - `<task-local>/tasks.md` because it is the approved implementation ledger and source of truth.
 - `<task-local>/spec.md` because it is the canonical decision record.
