@@ -44,12 +44,12 @@ During an implementation Goal, the orchestrator is the integration controller fo
 
 Orchestrator control must be strict and evidence-based:
 
-- Hold `tasks.md` as the acceptance contract. Every worker assignment, rejection, repair prompt, manual fix, and completion claim names the task ID, source anchor, implementation obligation, expected proof, and approved boundary it depends on.
+- Hold `tasks.md` as the acceptance contract. Every worker assignment, rejection, repair prompt, patch-intake action, and completion claim names the task ID, source anchor, implementation obligation, expected proof, and approved boundary it depends on.
 - Delegate only reviewable diff-story bundles already allowed by `Implementation execution mode`. Do not ask a worker to "figure out" missing scope, ownership, contract semantics, dependency choices, rollout shape, cleanup disposition, or validation policy.
 - Reject or send back incomplete worker patches when an approved obligation is missing, proof is skipped or too narrow, generated/manual authority is wrong, forbidden files changed, unrelated cleanup appears, ownership placement is unapproved, or the diff invents a decision.
 - Do not nitpick worker output on taste alone. Blocking quality findings must name a concrete task quality bar, repository pattern, owner responsibility, proof gap, or changed-surface maintainability risk. If behavior, ownership, proof, and maintainability constraints satisfy the ledger, accept the patch even when a different local style would also work.
 - Give no vague repair feedback. A repair prompt must cite the exact task ID, file or evidence anchor, failed obligation, observed gap, required patch/proof, and unchanged boundaries. "Make it better", "clean this up", or "finish properly" is not a valid worker instruction.
-- Use the shortest valid intake path: accept patch; resume same worker for narrow same-bundle repair; rerun/split worker when the patch is structurally off; manually repair only inside approved ledger; otherwise record blocker and reopen the owning phase.
+- Use the shortest valid intake path: accept patch; resume same worker for narrow same-bundle repair; rerun/split worker when the patch is structurally off; otherwise record blocker and reopen the owning phase. Do not manually author implementation patches.
 - Keep workers under pressure until the assigned bundle is done or honestly blocked. Do not mark a task complete because the worker reports success, because most code exists, or because remaining gaps look small.
 - Run required proof in the integration workspace before checking tasks or closeout surfaces. Worker-local proof is supporting evidence only.
 
@@ -60,12 +60,12 @@ Isolated Codex CLI workers are an implementation tactic for reducing context bia
 Use an isolated worker only when all are true:
 
 - `tasks.md` has passed task-review/readiness with `PASS`, eligible `CONCERNS`, or eligible `WAIVED`;
-- the approved ledger or implementation handoff marks `Implementation execution mode` as `isolated-cli-worker eligible` or `isolated-cli-worker required` and names worker boundaries;
+- the approved ledger or implementation handoff marks `Implementation execution mode` as `isolated-cli-worker required` and names worker boundaries;
 - the worker unit is one reviewable diff story or an explicitly coupled task bundle, not an arbitrary single checkbox split that would separate proof-first tests from the implementation they prove;
 - owner package/file, generated or mirrored source authority, proof, evidence fields, and stop/reopen condition are already approved for the worker unit;
 - a separate worktree, fresh checkout, container workspace, or equivalent isolated filesystem is used so the worker cannot mutate the orchestrator's integration workspace while producing the patch.
 
-Do not add isolated-worker mode during implementation. If the execution mode or worker boundaries are missing, stale, vague, or authority-confusing, reopen planning or task-review/readiness. Do not use isolated write workers when the next step needs a missing specification, design, test-design, planning, readiness, dependency/OSS, Pattern Fit, source-of-truth, or validation decision. Do not use parallel write workers for overlapping owner files, generated outputs, migrations, schemas, fixtures, package initialization, shared test helpers, global config, or checkpoint-dependent tasks. When overlap is possible, run workers serially or keep the work in the orchestrator.
+Do not add isolated-worker mode during implementation. If the execution mode or worker boundaries are missing, stale, vague, or authority-confusing, reopen planning or task-review/readiness. When worker launch or resume fails before a usable patch, stop hard: report the failed command, key output, task bundle, and smallest repair target to the user. Do not author the implementation yourself. Do not use isolated write workers when the next step needs a missing specification, design, test-design, planning, readiness, dependency/OSS, Pattern Fit, source-of-truth, or validation decision. Do not use parallel write workers for overlapping owner files, generated outputs, migrations, schemas, fixtures, package initialization, shared test helpers, global config, or checkpoint-dependent tasks. When overlap is possible, run workers serially or keep the work in the orchestrator.
 
 The orchestrator owns worker setup. Default launch shape:
 
@@ -158,7 +158,7 @@ This map is not a new workflow artifact and must not become a second task ledger
 
 ## Patching, Review, Reconciliation, And Validation
 
-Implementation patching consumes the approved task handoff. The normal non-trivial path is worker-produced patches plus orchestrator intake; inline orchestrator edits are allowed only when `tasks.md` chose `inline` or when doing narrow fallback repair inside the approved ledger. A worker or orchestrator patch may create or edit code, tests, migrations, configs, generation inputs, generated output, or docs required by the task ledger.
+Implementation patching consumes the approved task handoff. The implementation path is worker-produced patches plus orchestrator intake; orchestrator-authored implementation edits are not allowed. A worker patch may create or edit code, tests, migrations, configs, generation inputs, generated output, or docs required by the task ledger.
 
 Before adding substantial code to an existing hand-written source file, inspect its current responsibility, sibling files in the package, and package owner. Record or satisfy the ledger's owner-file/package placement decision before editing. If the new code is a distinct concern, abstraction level, mapping, validation, lifecycle, adapter, or test-helper policy, place it in a focused same-package seam file or the correct owner package instead of enlarging a catch-all file. If that split would change approved architecture, public contract, dependency direction, generated-source ownership, or another protected decision, stop and reopen the owning phase.
 

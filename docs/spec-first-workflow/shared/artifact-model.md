@@ -79,9 +79,9 @@ This boundary rule applies to:
 - validation and closeout;
 - targeted reopen phases.
 
-The normal exception is implementation from an approved `tasks.md` that has passed the post-ledger task-review/readiness gate. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation Goal session may orchestrate the approved ledger items and the proof named by the ledger without stopping between task IDs. Non-trivial code-writing ledgers should use isolated Codex CLI worker bundles when execution mode is eligible or required; inline work is an explicit ledger choice or narrow fallback repair. After that point, workflow-control files are pre-code routing history unless the approved ledger explicitly names a separate review, validation, or reopen phase file as part of the work.
+The normal exception is implementation from an approved `tasks.md` that has passed the post-ledger task-review/readiness gate. Once implementation readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, the implementation Goal session may orchestrate the approved ledger items and the proof named by the ledger without stopping between task IDs. Code-writing ledgers must use isolated Codex CLI worker bundles when execution mode is required; orchestrator-authored inline work is not allowed. After that point, workflow-control files are pre-code routing history unless the approved ledger explicitly names a separate review, validation, or reopen phase file as part of the work.
 
-Direct path work has no durable phase boundary by default, so it may still complete inline with fresh proof.
+Direct path no-code work may still complete with fresh proof. Direct-path code-writing still uses isolated CLI workers or stops blocked if workers cannot run.
 
 ## Artifact Model By Shape
 

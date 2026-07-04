@@ -67,7 +67,7 @@ For this repository's next-session handoffs, prefer this instruction form over a
 First, set a Codex Goal for this session:
 Complete <approved objective> by orchestrating every required task in `<task-local>/tasks.md` without stopping until <verifiable completion condition>.
 
-After the goal is set, orchestrate implementation of every required task in `<task-local>/tasks.md` from start to finish. Start at <first task or checkpoint>, delegate named worker bundles when execution mode is eligible or required, use inline edits only when approved by the ledger or as narrow fallback repair, continue through the ledger's final validation/proof, and do not redefine success around a smaller slice.
+After the goal is set, orchestrate implementation of every required task in `<task-local>/tasks.md` from start to finish. Start at <first task or checkpoint>, delegate every code-writing bundle to named worker bundles; do not make orchestrator-authored implementation edits; continue through the ledger's final validation/proof, and do not redefine success around a smaller slice.
 
 Implementation brief:
 
@@ -84,15 +84,15 @@ Current state:
 - Next phase: implementation.
 - Task-ledger review: <PASS | CONCERNS | WAIVED>.
 - Implementation readiness: <PASS | CONCERNS | WAIVED>.
-- Implementation execution mode: <inline | isolated-cli-worker eligible | isolated-cli-worker required | not_expected>.
+- Implementation execution mode: <isolated-cli-worker required | not_expected>.
 - Start at: <task ID or checkpoint>.
-- Isolated worker boundaries: <not_applicable | task bundles, launch contract, discovery hints plus explicitly marked hard boundaries, forbidden edits, parallelism rule, worker proof, orchestrator patch intake, integration proof>.
+- Isolated worker boundaries: <not_applicable | task bundles, launch contract, launch/resume failure blocker, discovery hints plus explicitly marked hard boundaries, forbidden edits, parallelism rule, worker proof, orchestrator patch intake, integration proof>.
 
 Orchestrator control posture:
-- Treat `tasks.md` as the acceptance contract. Every worker assignment, rejection, repair prompt, manual fix, and completion claim must name the task ID, source anchor, obligation, proof gap or proof result, and approved boundary.
+- Treat `tasks.md` as the acceptance contract. Every worker assignment, rejection, repair prompt, patch-intake action, and completion claim must name the task ID, source anchor, obligation, proof gap or proof result, and approved boundary.
 - Be strict about incomplete scope, missing proof, forbidden edits, unapproved ownership, generated/manual authority drift, hidden design decisions, invented validation policy, and code-quality issues with a concrete task quality bar, repository pattern, owner responsibility, proof gap, or changed-surface maintainability-risk anchor. Do not be strict about unsupported taste preferences when ledger obligations are satisfied.
 - Send worker patches back only with concrete repair instructions: exact failed obligation, evidence anchor, expected patch/proof, unchanged boundaries. No vague "clean up" or "finish properly" feedback.
-- Intake sequence: accept; resume same worker for narrow same-bundle repair; rerun or split worker when structure is off; manually repair only inside approved ledger; otherwise record blocker and reopen owning phase.
+- Intake sequence: accept; resume same worker for narrow same-bundle repair; rerun or split worker when structure is off; otherwise record blocker and reopen owning phase. Do not manually author implementation patches.
 
 Preserve:
 - <accepted non-goals, constraints, concerns, waivers, and risks that affect implementation>.
@@ -102,7 +102,7 @@ Proof:
 
 Quality and evidence:
 - Apply the task-local implementation quality bar and evidence format from `tasks.md`.
-- If `Implementation execution mode` allows isolated CLI workers, use them only for named reviewable diff-story bundles in isolated worktrees or fresh checkouts. Default launch is `codex exec --cd <isolated-worktree> --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema <schema> -o <final-output> - < <prompt-file>` with event output captured, strict schema used when available, user config/rules inherited, no required named profile, and no forced model/reasoning overrides unless the approved ledger names a task-specific rationale. Do not use `--full-auto`; use `--yolo` or `danger-full-access` only in a ledger-named externally hardened container/VM/CI runner. Treat worker output as patch evidence only and `ready_for_intake` as advisory: inspect the diff, reject forbidden edits or unapproved decisions, apply only accepted changes, rerun proof in the integration workspace, and update `tasks.md` only after integration proof passes.
+- For code-writing implementation, use isolated CLI workers only for named reviewable diff-story bundles in isolated worktrees or fresh checkouts. Default launch is `codex exec --cd <isolated-worktree> --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema <schema> -o <final-output> - < <prompt-file>` with event output captured, strict schema used when available, user config/rules inherited, no required named profile, and no forced model/reasoning overrides unless the approved ledger names a task-specific rationale. Do not use `--full-auto`; use `--yolo` or `danger-full-access` only in a ledger-named externally hardened container/VM/CI runner. If launch or resume fails before a usable worker patch exists, stop with the Goal blocked and report the failed command, key output, affected bundle, and repair target; do not author the implementation yourself. Treat worker output as patch evidence only and `ready_for_intake` as advisory: inspect the diff, reject forbidden edits or unapproved decisions, apply only accepted changes, rerun proof in the integration workspace, and update `tasks.md` only after integration proof passes.
 - For narrow same-bundle patch-intake defects, resume the same worker session with `codex exec resume` in the same isolated workspace before starting over. Repair prompts must name one failed obligation and request the smallest patch that fixes only that obligation while preserving accepted in-scope changes. Do not use resume to change scope, ownership, contract, design, dependency, rollout, cleanup disposition, or validation policy.
 - Treat worker discovery hints as starting points, not exhaustive edit permissions, unless the ledger explicitly marks them as hard boundaries. Workers may inspect callers, siblings, owners, generated/manual authorities, and adjacent files needed for the assigned task; edits still must stay inside assigned scope and avoid forbidden/protected surfaces. If completing a worker assignment requires changing approved scope, ownership, contract, validation policy, workflow artifacts, or forbidden surfaces, the worker must stop and return a blocker instead of broadening the patch.
 - Do not rely on current Codex App thread state, runtime-only tools, chat memory, or unsaved app context reaching CLI workers. Put task-critical context in the worker prompt or approved artifacts.

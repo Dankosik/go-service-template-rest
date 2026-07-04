@@ -143,4 +143,3 @@ Impact:
 Suggested fix:
 Reference:
 ```
-
