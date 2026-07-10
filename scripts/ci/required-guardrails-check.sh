@@ -108,6 +108,24 @@ require_absent_regex() {
   fi
 }
 
+require_only_current_child_models() {
+  local file="$1"
+  local model
+
+  while IFS= read -r model; do
+    case "${model}" in
+      gpt-5.6-sol|gpt-5.6-terra|gpt-5.6-luna)
+        ;;
+      *)
+        echo "guardrail check failed: child model routing surfaces may use only the current catalog"
+        echo "  file: ${file}"
+        echo "  forbidden model identifier: ${model}"
+        exit 1
+        ;;
+    esac
+  done < <(grep -Eo -- 'gpt-[0-9]+(\.[0-9]+)+(-[a-z0-9]+([.-][a-z0-9]+)*)?' "${file}" | sort -u || true)
+}
+
 require_markdown_links_exist() {
   local file="$1"
   local prefix="$2"
@@ -262,7 +280,26 @@ for agent_config in .codex/agents/*.toml; do
   require_absent_regex '^Shared contract$|^Required input bundle$|^Handoff classification$|^Input-gap behavior$' "${agent_config}" "Codex subagent configs must contain only domain deltas"
 done
 require_regex 'Before launching any subagent or subprocess, the root chooses the exact currently available model' "AGENTS.md" "root must choose every child model before launch"
-require_regex 'Before every launch, the root records the exact model identifier' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model routing must be explicit and task-shaped"
+require_regex 'Before every launch, the root records the exact catalog model identifier' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model routing must be explicit, catalog-bounded, and task-shaped"
+require_regex '^### Current Child Model Catalog$' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "shared subagent policy must own the current child model catalog"
+require_regex 'Catalog verified: `2026-07-10`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must retain its verification date"
+require_regex '`gpt-5\.6-sol`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must allow the current flagship model"
+require_regex '`gpt-5\.6-terra`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must allow the current balanced model"
+require_regex '`gpt-5\.6-luna`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must allow the current efficient model"
+require_regex 'Runtime availability narrows this allowlist; it never expands it' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "runtime model availability must not permit outdated child-model fallback"
+require_regex 'more than 30 days have passed since `Catalog verified`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must have a bounded freshness rule"
+child_model_routing_files=(
+  "AGENTS.md"
+  "docs/subagent-contract.md"
+  "docs/subagent-brief-template.md"
+  "docs/spec-first-workflow/shared/subagents-and-handoff.md"
+  "docs/spec-first-workflow/phases/implementation-validation-closeout.md"
+  ".codex/config.toml"
+  .codex/agents/*.toml
+)
+for child_model_routing_file in "${child_model_routing_files[@]}"; do
+  require_only_current_child_models "${child_model_routing_file}"
+done
 require_regex 'silent inheritance from the root session is invalid' "docs/spec-first-workflow/phases/implementation-validation-closeout.md" "worker launches must enforce the selected model route"
 require_regex 'make agents-check' ".github/workflows/ci.yml" "CI must check Codex/Claude agent mirror drift"
 require_regex 'AGENTS_SYNC_SCRIPT' "Makefile" "Makefile must expose agent mirror sync/check targets"
