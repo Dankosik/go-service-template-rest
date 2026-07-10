@@ -438,6 +438,7 @@ Bootstrap shortcuts:
 - `make ci-local`
   - Native composite check for CI-like local parity:
     - `mod-check`
+    - `workflow-routing-check`
     - `guardrails-check`
     - `agents-check`
     - `skills-check`
@@ -513,9 +514,22 @@ Bootstrap shortcuts:
 
 ### CI policy helper checks
 
+- `make workflow-routing-check`
+  - Runs the lean workflow-instruction structure, link, retired-vocabulary, and prompt-budget check, followed by the mirror integration harness.
+  - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or locks exact prose.
+
+- `make workflow-behavior-evals-check`
+  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E19, a prompt and pass condition for each case, and the required invariant set.
+  - Makes no model calls and is not behavioral proof.
+
+- `WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge make workflow-behavior-evals`
+  - Compares the `HEAD` instruction baseline with the current worktree using external model and judge adapters.
+  - Saves prompts, outputs, logs, judgments, and the acceptance summary under `.artifacts/workflow-evals/`.
+  - Adapter arguments and judgment output are defined in `docs/spec-first-workflow-evals.md`. Keep model, reasoning effort, repository assumptions, and tools equal across variants.
+
 - `make guardrails-check`
   - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce required repository files including root `SOUL.md`, tool-version alignment, required branch-protection context alignment, the AGENTS/SOUL lower-precedence boundary, subagent-gate/read-only instruction anchors, test-design phase anchors, and core architecture import boundaries.
+  - Purpose: enforce required repository files, deployment/toolchain alignment, instruction ownership links, read-only subagent configuration, mirror registries, branch-protection context alignment, and core architecture import boundaries.
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
@@ -680,7 +694,7 @@ For the usual quick fmt/lint/test loop, run `make docker-check`; use the stepwis
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make workflow-routing-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)

@@ -52,7 +52,7 @@
   - `docs/spec-first-workflow.md` — stable router and loading model.
   - `docs/spec-first-workflow/phases/specification-review.md` — owning review contract, verdict semantics, allowed writes, and stop rule.
   - `docs/spec-first-workflow/shared/subagents-and-handoff.md` — review fan-out, gate audit, authorization, and handoff contract.
-  - `.agents/skills/specification-review-session/SKILL.md` — next-session review procedure; it may record review evidence but must not author the candidate decisions.
+  - `.agents/skills/specification-review/SKILL.md` — independent review method; it may record review evidence but must not author the candidate decisions.
 
 ## B01 Finding Coverage
 

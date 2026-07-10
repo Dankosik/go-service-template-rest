@@ -506,7 +506,7 @@ secret-scan|secrets-scan)
 	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json ."
 	;;
 workflow-routing-check)
-	run_go "go test ./scripts/ci/workflow-routing-check && go run ./scripts/ci/workflow-routing-check && bash ./scripts/ci/sync-mirror-integration-check.sh"
+	run_go "bash ./scripts/ci/workflow-instructions-check.sh && bash ./scripts/ci/sync-mirror-integration-check.sh"
 	;;
 guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"

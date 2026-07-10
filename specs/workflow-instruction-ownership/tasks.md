@@ -106,7 +106,7 @@ Legacy cleanup audit:
   - Residual blocker/narrower claim: none.
 
 - [x] T004 Deduplicate workflow session skills.
-  Files: `.agents/skills/workflow-planning-session/SKILL.md`, `.agents/skills/research-session/SKILL.md`, `.agents/skills/specification-session/SKILL.md`, `.agents/skills/specification-review-session/SKILL.md`, `.agents/skills/technical-design-session/SKILL.md`, `.agents/skills/validation-closeout-session/SKILL.md`, `.agents/skills/workflow-status/SKILL.md`.
+  Files: `.agents/skills/workflow-planning-session/SKILL.md`, `.agents/skills/research-session/SKILL.md`, `.agents/skills/specification-session/SKILL.md`, `.agents/skills/specification-review/SKILL.md`, `.agents/skills/technical-design-session/SKILL.md`, `.agents/skills/validation-closeout-session/SKILL.md`, `.agents/skills/workflow-status/SKILL.md`.
   Source: `spec.md` D4-D6.
   Depends on: T001, T002.
   Proof-first waiver: skill text cleanup; grep proof is the relevant regression check.

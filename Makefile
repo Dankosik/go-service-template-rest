@@ -27,7 +27,7 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
 	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check docs-drift-check guardrails-check workflow-routing-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
+	mod-check fmt-check docs-drift-check guardrails-check workflow-routing-check workflow-behavior-evals-check workflow-behavior-evals migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
 	docker-guardrails-check docker-workflow-routing-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
@@ -68,7 +68,9 @@ help:
 	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
 	@echo "  make skills-check            # skill mirror drift check"
-	@echo "  make workflow-routing-check  # deterministic spec-first routing contract check"
+	@echo "  make workflow-routing-check  # workflow instruction structure, links, vocabulary, and prompt budget"
+	@echo "  make workflow-behavior-evals-check # validate the E01-E19 eval manifest (no model calls)"
+	@echo "  make workflow-behavior-evals # compare HEAD and worktree through external model adapters"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"
 	@echo "  make docker-sqlc-check       # Docker SQLC validation"
@@ -452,9 +454,14 @@ guardrails-check:
 	$(GUARDRAILS_CHECK_SCRIPT)
 
 workflow-routing-check:
-	go test ./scripts/ci/workflow-routing-check
-	go run ./scripts/ci/workflow-routing-check
+	bash scripts/ci/workflow-instructions-check.sh
 	bash scripts/ci/sync-mirror-integration-check.sh
+
+workflow-behavior-evals-check:
+	bash scripts/dev/workflow-behavior-evals.sh check
+
+workflow-behavior-evals:
+	bash scripts/dev/workflow-behavior-evals.sh run
 
 skills-sync:
 	$(SKILLS_SYNC_SCRIPT)

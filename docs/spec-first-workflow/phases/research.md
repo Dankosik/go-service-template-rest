@@ -1,83 +1,40 @@
-# Research Phase
+# Research
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this for research, evidence fan-out, dependency/OSS diligence, or Pattern Fit research.
+Resolve evidence gaps that can change a task decision. Research supports later decisions; it does not become a source dump or a mandatory phase.
 
 ## Read When
 
-- The active phase is research or evidence fan-out.
-- Dependency/OSS due diligence or Pattern Fit evidence could materially change specification readiness.
-- A local-only research rationale must be recorded or checked.
+- Current repository or external evidence can change scope, feasibility, ownership, dependency choice, contract interpretation, or proof.
+- Sources conflict or freshness matters.
+- A durable evidence note will be consumed by another phase or session.
 
 ## Inputs
 
-- Current `SHAPE-*` decision from `AGENTS.md`, plus `research_expectation=expected|conditional` and artifact consequences from `shared/artifact-model.md`.
-- Current `workflow-plan.md` or `workflow-plans/research.md` when a dedicated research phase exists.
-- The concrete evidence questions, candidate lanes, and source targets.
+- Accepted outcome and the exact decision each question can change.
+- Named repository, provider, standards, or official-document sources.
+- Current evidence limits and freshness needs.
 
 ## Outputs
 
-- Evidence questions with answer status, source limits, and specification impact.
-- Preserved `research/*.md` notes only when they help later synthesis, auditability, or resume.
-- Dependency/OSS and Pattern Fit evidence when they could change approval.
-- Conflict, weak-evidence, and assumption register with the owning reopen or proof path.
-- Fan-in implication for specification with destination classification, or a local-only rationale with reopen seams.
+- Findings with source pointers and dates/versions when relevant.
+- Facts, inferences, conflicts, and missing evidence kept distinct.
+- The decision implication: decide, constrain, assume, accept risk, require proof, or block.
+- A compact `research/*.md` note only when reuse or auditability justifies it.
+
+## Method
+
+For each question, state:
+
+- the decision it can change;
+- the most authoritative practical source;
+- the minimum evidence needed;
+- how absence, conflict, or staleness will be handled;
+- when to stop searching.
+
+Use independent read-only lanes only for separable questions where parallel context materially helps. For a dependency or custom mechanism, compare the relevant Go stdlib, established repository pattern, and mature maintained OSS; record rejected options only when they were genuinely viable.
+
+Prefer primary/current sources. A missing hit is not proof of absence unless the searched source is authoritative for absence. Stop when another source is unlikely to change the decision.
 
 ## Stop Rule
 
-Finish research with evidence, limits, conflicts, assumptions, and handoff implications. Do not write review-ready `spec.md`, design artifacts, `tasks.md`, or implementation output in this phase.
-
-Do not enter this phase when `research_expectation=not_expected`. Under `ROUTING-RESEARCH-SKIP`, workflow planning stops and hands a new session to specification; research omission never permits same-session specification.
-
-## Research
-
-Research is a concern, not always a dedicated phase.
-
-Start by turning the uncertainty into concrete evidence questions. Each question should name:
-
-- the decision it can change;
-- the source target or lane that can answer it;
-- the minimum evidence needed for a useful answer;
-- the freshness or authority requirement when source age matters;
-- the handoff if the answer is missing, conflicting, or only partly proven;
-- the expected `spec.md` destination: decision, constraint, assumption, risk, proof obligation, or blocker.
-
-`SHAPE-DIRECT` stays outside this phase: its bounded first-read repository lookup is part of direct eligibility and must not become durable research. For lean/full research that is expected, use local-only research only when a recorded rationale shows the evidence is trivial, single-source, and not improved by independent lanes.
-
-Dependency/OSS due diligence is a research concern even when it stays compact. Use local research for obvious stdlib or established-repo-pattern choices; use read-only research fan-out when the selected library or custom implementation decision depends on current external health, license/security posture, domain adoption, or integration trade-offs that could materially change approval.
-
-Good Dependency/OSS due diligence answers the contract first, then compares current Go stdlib, established repository patterns, and mature OSS candidates against that contract. Record selected and rejected options with source date or version, maintenance and release signal, license, security or vulnerability signal, API stability, transitive dependency cost, adoption signal appropriate to the domain, integration fit, and why custom code is lower or higher ownership cost. If the answer is custom code, explicitly say why stdlib, repository patterns, and mature OSS do not satisfy the accepted contract. Do not treat popularity, stale snippets, or a single blog post as enough evidence for approval. If current external evidence cannot be checked, record the limit and hand off a proof obligation instead of presenting the decision as ready.
-
-Pattern Fit Diligence is also a research concern when the task has a real design fork. Search for concrete descriptions and examples of relevant patterns, including architecture, integration, consistency, workflow, resilience, data-topology, and Go-friendly implementation patterns. Preserve `research/pattern-fit.md` when the pattern evidence, examples, or candidate comparison would otherwise be lost across sessions; final pattern decisions still belong in `spec.md` or the design bundle.
-
-Good Pattern Fit research names the task forces, compares viable patterns against repository boundaries, source-of-truth ownership, failure behavior, operational proof path, and idiomatic Go fit, then explains why the selected pattern fits now or why the straightforward repo-native design is better. A named pattern is incomplete without rejected-pattern comparison for viable alternatives. Reject pattern candidates explicitly when they add vocabulary, indirection, class-oriented scaffolding, or distributed-systems machinery without solving a current force.
-
-First identify distinct evidence questions. Use read-only fan-out only when they are concrete, independent, bounded, and separate context materially improves speed or quality. Domain, artifact, or risk-lens count alone does not require lanes.
-
-A local decision records why the work is small, sequential, dependent on one reasoning chain, or unsuitable for parallel access to shared mutable state, plus the seam that would reopen fan-out. Do not inventory hypothetical domain lanes.
-
-Preserve `research/*.md` only when it materially helps later synthesis, auditability, or resume. Preserve the note when evidence is multi-source, externally time-sensitive, conflict-bearing, too dense for `spec.md`, needed to justify dependency/OSS or Pattern Fit decisions, or likely to be re-read by specification, design, review, planning, or validation. Keep the result compact when a single stable repository read or obvious stdlib answer can be recorded directly in `spec.md`.
-
-A good research note includes:
-
-- question or scope;
-- findings with evidence, source date or version when relevant, and limits;
-- source notes that identify only the sources that changed or materially constrained the answer;
-- conflicts, weak evidence, or assumptions;
-- handoff implication for specification with destination classification.
-
-Do not use research notes as source dumps. For each source, keep the shortest useful pointer plus the fact, limit, or contradiction it contributes, and the decision or handoff implication it changes. A source note without that conclusion is not evidence. Stop adding sources when the next source cannot change the decision, and record the source limit when it affects confidence.
-
-When sources or lanes conflict, do not silently average them. Record the conflict, the strongest evidence on each side, the decision that remains blocked or risky, and the owner of the next action: more research, specification decision, specialist lane, accepted risk, or proof obligation. Classify unresolved points as `blocks_spec`, `proof_only`, `accepted_risk`, or `needs_specialist` so specification does not confuse decision blockers with later validation work.
-
-End research with a specification handoff, even when the result is local-only. The handoff should say:
-
-- which findings are ready to become `spec.md` decisions or constraints;
-- which findings are assumptions, accepted risks, or proof obligations;
-- which decisions remain blocked and the smallest reopen target;
-- which unresolved points are `blocks_spec`, `proof_only`, `accepted_risk`, or `needs_specialist`;
-- whether Dependency/OSS due diligence and Pattern Fit Diligence are complete, not applicable, scoped down, or blocked;
-- which preserved `research/*.md` files the specification phase must read, and why.
-
-For dense fan-in, use compact rows that carry the question, evidence summary, limits or conflicts, specification destination, next owner or action, and preserved note path when one exists.
-
-Research notes support decisions but do not own them. Final decisions belong in `spec.md`.
+Finish when every decision-changing question is answered, honestly bounded, or assigned a blocker/reopen owner. Hand the implications to specification or design; do not write their final decisions inside research.

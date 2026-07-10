@@ -1,302 +1,126 @@
 # Go Service Template REST
 
-AI-native Go REST template for solo developers who want coding agents that can work inside real Go constraints.
+AI-native Go REST template for solo developers who want coding agents to work inside real Go, API, data, and operational constraints without carrying a heavyweight process prompt.
 
-Generic AI-native repos are good at teaching agents how to spec, plan, and delegate. They are usually much weaker at teaching them how to operate inside idiomatic Go boundaries, preserve invariants, work with `context`, respect generated artifacts, reason about `chi` and `sqlc`, and ship code that survives review. `go-service-template-rest` is built around that exact gap.
+The repository combines:
 
-This repository is for people who code with Codex, Claude Code, Cursor, Gemini CLI, and other LLM-assisted workflows, but do not want a generic process layer floating above the language. The workflow is agent-native. The instructions, skills, review surfaces, and validation loop are Go-native.
+- outcome-first workflow guidance with risk-proportional artifacts;
+- project-scoped read-only specialist agents;
+- portable Go design, implementation, review, and verification skills;
+- OpenAPI-first HTTP, PostgreSQL, `sqlc`, telemetry, tests, and CI gates;
+- explicit repository ownership and generated-source discipline.
 
-- **Orchestrator-first**: frame, delegate, synthesize, plan, implement, verify.
-- **Go-native guidance**: the repository does not stop at language-agnostic workflow advice.
-- **Project-scoped agents**: Codex agents live in `.codex/agents/`; Claude Code agents are generated locally into `.claude/agents/` when needed.
-- **Portable skills**: reusable workflow expertise lives in `.agents/skills` and is mirrored to compatibility/runtime directories.
-- **Artifact-driven at the selected depth**: `spec.md` and `tasks.md` carry non-trivial lean decisions and execution; `workflow-plan.md` exists when durable cross-phase or multi-session state is real, and `workflow-plans/<phase>.md` exists only for durable local orchestration. Triggered design/test/rollout artifacts stay distinct. Implementation and validation consume the approved bundle and do not invent new workflow/process artifacts.
-- **First production feature path**: before adding business code, use the [first production feature checklist](docs/project-structure-and-module-organization.md#first-production-feature-checklist) to place app types and ports, HTTP mapping, Postgres adapters, bootstrap wiring, telemetry, and tests.
-- **Production stack underneath**: OpenAPI-first HTTP, PostgreSQL, `sqlc`, observability, tests, and CI gates are already wired.
+Before adding production feature code, use the [first production feature checklist](docs/project-structure-and-module-organization.md#first-production-feature-checklist).
 
 ## Why This Template Exists
 
-Most AI-native coding today is solo. Most generic AI-native repos intentionally stay technology-independent. Most Go templates still stop at folder layout, Docker files, and a `Makefile`. That combination leaves a real hole:
+Generic agent workflows know how to produce plans but often miss Go-specific ownership, `context`, error identity, generated sources, `chi`, `sqlc`, migrations, and operational proof. Traditional Go templates provide code and commands but little guidance for agents making non-trivial changes.
 
-- the workflow knows how to spec and delegate, but not how to reason in Go;
-- the stack knows how to compile, but not how to guide an agent through non-trivial changes;
-- the repo has commands, but no explicit ownership model for research, planning, implementation, review, and validation.
+This template connects the two while keeping the prompt surface lean:
 
-This template is built from the opposite assumption: if you want agents to be useful in a Go backend, the workflow and the language need to be wired together on purpose.
+- global invariants live once in [AGENTS.md](AGENTS.md);
+- the stable router is [docs/spec-first-workflow.md](docs/spec-first-workflow.md);
+- phase files contain only their unique decisions;
+- task artifacts exist only when another phase, actor, or session needs them;
+- fresh evidence, not process completion, supports “done.”
 
-That is why this repository is opinionated in four places:
-
-1. **The workflow is explicit.**
-   Non-trivial work starts with Phase 0 framing, then the orchestrator applies the `SHAPE-*` classifier. Dedicated workflow planning and research run only when their independent triggers apply; specification, mandatory specification review, triggered design/test-design, task breakdown, ledger-backed implementation, review, and validation then follow their owning gates. The loop is visible, not implied, one session normally owns one phase before coding, and session wrappers keep triggered handoffs explicit.
-2. **The specialists are real.**
-   Subagents have narrow ownership areas like API, domain, data, reliability, performance, and security. They are not generic “helper” personas.
-3. **The skills are Go-native.**
-   The skill library does not stop at abstract design advice. It covers Go architecture, routing, DB/cache contracts, invariants, reliability, security, review, debugging, testing, and verification.
-4. **The backend substrate is real.**
-   OpenAPI, `chi`, PostgreSQL, `sqlc`, observability, tests, and CI gates are already in the template, so the workflow lands on an actual service baseline.
-
-If you want a Go backend template that feels natural inside Codex or Claude Code and still respects how Go services are actually built, this repository is designed for that use case.
-
-## How This Template Solves The Problem
-
-The fix is not a single block of text. It shapes the whole repository:
-
-- **Artifacts with clear jobs**: `specs/<feature-id>/workflow-plan.md` keeps master control only for full-orchestrated or otherwise durable cross-phase/multi-session routing; `specs/<feature-id>/workflow-plans/<phase>.md` holds phase-local orchestration only under `ROUTING-PHASE-CONTROL`; `specs/<feature-id>/spec.md` keeps final decisions, `specs/<feature-id>/design/` carries triggered task-local technical design, `specs/<feature-id>/test-plan.md` carries triggered scenario design, and `specs/<feature-id>/tasks.md` owns the executable ledger when non-trivial implementation tasking is expected.
-- **Go-aware subagents**: the agent portfolio is organized around real backend concerns instead of generic brainstorming personas.
-- **Go-native skills**: the skill library gives the orchestrator and subagents concrete playbooks for Go design, implementation, review, and verification.
-- **Verification as a first-class rule**: “done” is tied to fresh command evidence, not to confident prose from an LLM.
-- **A serious service template underneath**: once the workflow moves into implementation, the repo already has OpenAPI-first HTTP, PostgreSQL, `sqlc`, telemetry, and CI guardrails.
-
-## Workflow First
-
-This repository treats delivery as an explicit loop, not as a single long chat and not as process theater:
+## Workflow
 
 ```text
-intake -> idea refine? -> SHAPE-* classification -> workflow planning? -> research? -> synthesis/pre-spec challenge? -> specification + triggered clarification -> specification review -> system/integration design? -> Go code ownership design? -> technical design review? -> test design? -> planning -> task review/readiness -> coding from tasks.md -> review? -> validation
+intake -> research? -> specification? -> design? -> test design? -> planning? -> implementation and verification
 ```
 
-- `intake`: reconstruct the likely brief, inspect bounded repository facts, and ask one decision-changing question at a time only when no safe assumption can preserve the route; reserve `grilling` for an explicit exhaustive stress-test request.
-- `idea refine`: when the request is still a raw concept, use `idea-refine` to make the user, problem, success criteria, MVP, and not-doing boundary explicit before engineering framing.
-- `workflow planning`: when durable routing is triggered, consume and record the orchestrator's existing `SHAPE-*` classification, decide whether later work stays local or fans out, set the current phase in master `workflow-plan.md`, create phase-local control only under `ROUTING-PHASE-CONTROL`, and state whether later `design/`, `test-design`, `tasks.md`, `test-plan.md`, or `rollout.md` artifacts are expected. Early checkpoints may use `workflow-plans/workflow-planning.md` or `workflow-plans/research.md`; later phase files remain conditional on durable local orchestration. Do not optimize for a small lane count; optimize for coverage.
-- `research`: when research is expected, keep a bounded single-source question local or fan out to read-only lanes by materially independent evidence domain. `SHAPE-DIRECT` performs only its bounded first-read lookup and never enters this phase.
-- `synthesis`: compare specialist output and produce candidate decisions.
-- `pre-spec challenge`: pressure-test candidate decisions before they harden into `spec.md`, and loop back to research if needed.
-- `specification`: stabilize final decisions, constraints, and open questions in `spec.md`; lean work uses inline `Risk Challenge`, while the formal read-only `spec-clarification-challenge` runs only under its canonical trigger before review-ready handoff.
-- `specification review`: run a distinct read-only gate after non-trivial `spec.md` is review-ready and before technical design, planning, or implementation; reconcile findings as `PASS`, `CONCERNS`, or `FAIL`, with `FAIL` reopening specification, research, or a user/specialist decision.
-- `system/integration design`: when separate design depth is triggered, decide service behavior, contracts, external calls, queues, database/cache/source-of-truth, runtime sequence, failure behavior, validation, and rollout shape.
-- `Go code ownership design`: when separate design depth is triggered, consume approved system behavior and decide package/file ownership, focused responsibilities, dependency direction, local abstractions, cleanup/removal, and test ownership.
-- `technical design review`: run the mandatory pre-test-design/pre-planning review gate when separate design depth is triggered. Load [`docs/repo-architecture.md`](docs/repo-architecture.md) when stable repository boundaries or runtime flows matter.
-- `test design`: when triggered, use `test-design-session` plus `go-qa-tester-spec` to turn approved behavior and design context into `test-plan.md` scenario IDs, proof levels, pass/fail observables, fail-before expectations, quality gates, and reopen targets before planning writes tasks.
-- `planning`: use `planning-and-task-breakdown` or equivalent discipline to turn reviewed `spec.md + design/` plus approved or not-expected test design into small, verifiable execution slices in `tasks.md`; any later review or validation phase workflow files are created here before code starts only when named multi-session routing needs them, while task-ledger review and implementation readiness remain pending for the separate task-review/readiness gate.
-- `task review/readiness`: review `tasks.md` against the approved artifact chain, including `test-plan.md` scenario IDs when present, and only then record implementation readiness as `PASS`, eligible `CONCERNS`, eligible prototype-scoped `WAIVED`, or `FAIL`. Current `SHAPE-DIRECT` never enters this gate.
-- `implementation`: the orchestrator delegates approved-ledger code-writing bundles to isolated CLI workers and integrates their patches; research subagents remain read-only. The pre-ledger `SHAPE-DIRECT` exception stays orchestrator-owned. New workflow/process artifacts are not invented mid-code; missing required tasking, scenario mapping, or current readiness routes back to the owning phase.
-- `review`: run targeted review agents only where the risk justifies them.
-- `validation`: do not claim "done" without fresh command evidence, and do not create new planning/process artifacts during closeout. Existing `tasks.md` may be progress-updated only when it already belongs to the task.
+Question marks are intentional. The workflow chooses among three paths:
 
-For non-trivial work, `one session = one phase` by default before coding. When durable cross-phase or multi-session routing is triggered, master `workflow-plan.md` tracks the current phase, typed artifact state, next session, blockers, and links to only the phase plans required by `ROUTING-PHASE-CONTROL`; otherwise the owning `spec.md`, review record, and `tasks.md` carry the compact route without inventing master control. Finish the phase, update only its owning artifacts and triggered control state, then stop. Distinct non-implementation phases always start in a new session under `ROUTING-NO-COLLAPSE`; direct routing may omit untriggered concerns and lean routing may stay compact, but neither grants a phase-collapse waiver. If later review or validation phase files are needed, create them before implementation begins and let post-code sessions update them rather than inventing them mid-execution.
+- `direct`: clear, small, reversible work with obvious ownership and proof;
+- `structured`: the normal non-trivial case, using only the useful subset of spec/design/test/tasks artifacts;
+- `orchestrated`: broad, hard-to-reverse, multi-owner, evidence-heavy, explicitly multi-agent, or multi-session work.
 
-When a task benefits from explicit session boundaries, use the phase/session wrappers that match the current checkpoint:
+Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every phase or artifact.
 
-- `workflow-planning-session`: own the pre-research routing pass only.
-- `research-session`: own evidence gathering and optional preserved `research/*.md` only.
-- `specification-session`: own `spec.md` review-readiness and the clarification gate; update `workflow-plans/specification.md` only when phase-local control is triggered.
-- `specification-review-session`: own the post-spec read-only review gate; update `workflow-plans/specification-review.md` only under `ROUTING-PHASE-CONTROL`.
-- `technical-design-session`: own exactly one active design checkpoint plus the relevant task-local `design/` artifacts; use a checkpoint phase file only when durable local orchestration is triggered.
-- `test-design-session`: own `test-plan.md` or `artifact_expectation=not_expected` with rationale, without writing `tasks.md` or tests; its phase file is conditional.
-- `planning-session`: own `tasks.md`, optional `rollout.md`, and only triggered planning/review/validation phase files; it consumes `test-plan.md` from test design when triggered.
-- `validation-closeout-session`: own fresh proof, `spec.md` closeout updates, and existing validation-phase routing only.
+One authorized request may cross several phases. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Review belongs to the artifact being evaluated and is independent when the user requires it or when impact, reversibility, ambiguity, or weak self-falsification justifies it. Review, in-scope repair, fresh re-review, validation, and closeout stay inside the owning macro phase; a next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
 
-Think of the workflow-control artifacts as complementary, not competing:
+### Artifacts
 
-- `workflow-plan.md`: master cross-phase routing, typed artifact/gate state, blockers, and next-session handoff only for a full/durable route.
-- `workflow-plans/<phase>.md`: one phase only, created only when `ROUTING-PHASE-CONTROL` resolves `phase_control=required`, with local orchestration, completion marker, stop rule, and next action.
-- `tasks.md`: executable task ledger with markdown checkboxes, stable IDs such as `T001`, phase labels, optional `[P]` only for safe parallel work, dependency markers when needed, concrete file/package surfaces, and proof expectations.
-- Implementation readiness: the distinct task-review/readiness gate records `procedural_gate_state`, `review_verdict`, and `record_validity`. Current `PASS` allows implementation, `CONCERNS` requires named accepted risks and proof obligations, `FAIL` routes earlier, and eligible prototype-scoped `WAIVED` remains a separate disposition. Current `SHAPE-DIRECT` uses its current-session envelope instead of this ledger gate.
+| Artifact | Use when | Owns |
+| --- | --- | --- |
+| `spec.md` | Behavior/scope decisions must survive implementation. | Outcome, behavior, invariants, constraints, risks, proof expectations. |
+| `design/` | Implementation would otherwise choose mechanism or ownership. | Contracts, source of truth, sequence/failures, data, rollout, Go package/file ownership. |
+| `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations and observables. |
+| `tasks.md` | Work has dependent steps, actors, or checkpoints. | Executable order, owners, proof, progress, completion condition. |
+| `research/` | Evidence must be reused, refreshed, or audited. | Findings, limits, conflicts, decision impact. |
+| `rollout.md` | Deployment/migration/backfill has a real sequence. | Operational gates, rollback/failback, observables. |
+| `workflow-plan.md` | Cross-session or multi-lane resume needs a control point. | Goal, current phase, active artifacts, blocker, next action. |
 
-Use `workflow-status` when you only need a compact read-only status or next-action check from existing artifacts. It reports state; it does not repair artifacts, approve readiness, or replace the workflow-control files.
+Use `status: draft | ready | blocked | done` when durable status is useful. Do not create `workflow-plans/<phase>.md` or parallel state fields unless a concrete external consumer requires them.
 
-`pre-spec challenge` is a risk-driven checkpoint inside the synthesis boundary, not a separate approval authority.
-`spec-clarification-challenge` is a formal read-only gate inside `specification` when the canonical trigger applies; it surfaces approval-changing questions for the orchestrator to answer from evidence, route to targeted research, accept as risk, or mark `requires_user_decision` without inventing an answer.
-Tiny work may match `SHAPE-DIRECT` and omit every untriggered workflow concern; it does not collapse distinct phases that were actually entered.
-Subagents remain read-only. Ledger-backed code-writing implementation uses isolated write-capable CLI workers under the approved task handoff; before any ledger exists, current `SHAPE-DIRECT` code may be authored only by the current orchestrator while all direct predicates remain proven.
+## Agents And Skills
 
-The full contract lives in [AGENTS.md](AGENTS.md) and the supporting workflow doc lives in [docs/spec-first-workflow.md](docs/spec-first-workflow.md).
+`.codex/agents/*.toml` contains project-scoped read-only specialist roles. `.agents/skills` is the canonical portable skill set. Claude, Cursor, Gemini, GitHub, and OpenCode mirrors are generated; do not hand-maintain them.
 
-## Agent Portfolio
-
-This repository distinguishes between two different things:
-
-- **Subagents** are read-only specialists used only for concrete, independent, bounded research or review questions.
-- **Skills** are portable workflow playbooks loaded on demand by the orchestrator or a subagent.
-
-The repository ships with project-scoped, read-only subagents for focused reasoning and review.
-Codex agent instructions live in `.codex/agents/*.toml` and are loaded through `.codex/config.toml`; this registry layer uses Codex-supported `agents.<name>.config_file` entries while keeping each agent as a standalone custom-agent file. Claude Code mirrors are generated locally into `.claude/agents/` from the Codex source with `make agents-sync`; verify them with `make agents-check`.
-`AGENTS.md` owns the fan-out decision and root authority. Shared lane invariants live in [docs/subagent-contract.md](docs/subagent-contract.md), compact briefs start from [docs/subagent-brief-template.md](docs/subagent-brief-template.md), and each agent TOML contains only its domain delta.
-Click an agent name to open its Codex instruction file.
-
-| Agent | Owns | Use when | Returns |
-|---|---|---|---|
-| [`architecture-agent`](.codex/agents/architecture-agent.toml) | boundaries, ownership, interaction style, failure-domain shape | a feature or refactor may change module or service shape | boundary call, interaction recommendation, handoffs |
-| [`api-agent`](.codex/agents/api-agent.toml) | client-visible contract behavior and targeted transport semantics | endpoints, statuses, errors, idempotency, async acknowledgment, or chi HTTP semantics change | contract recommendation, compatibility notes |
-| [`concurrency-agent`](.codex/agents/concurrency-agent.toml) | goroutine, channel, cancellation, and shutdown correctness | a diff touches worker pools, goroutines, shared state, or race-prone code | concurrency findings, validation gaps |
-| [`challenger-agent`](.codex/agents/challenger-agent.toml) | workflow-plan adequacy, pre-spec challenge, spec clarification challenge, hidden assumptions, corner cases, and planning-risk pressure tests | workflow control, candidate decisions, `spec.md` review-readiness, or specification review need an independent challenger | discriminating questions, blocker calls, next actions |
-| [`data-agent`](.codex/agents/data-agent.toml) | source of truth, schema evolution, transaction and cache rules | schema, query, migration, or cache behavior changes | data contract, rollout implications |
-| [`delivery-agent`](.codex/agents/delivery-agent.toml) | CI/CD gates, rollout policy, runtime hardening, release trust | release controls, deployment policy, or platform constraints change | delivery policy, gating recommendations |
-| [`design-integrator-agent`](.codex/agents/design-integrator-agent.toml) | cross-domain reconciliation and simplification | multiple specialist outputs conflict or the design feels over-layered | integrated path, contradictions, reopen conditions |
-| [`distributed-agent`](.codex/agents/distributed-agent.toml) | cross-service consistency, outbox/inbox, replay, reconciliation | the workflow crosses service boundaries or depends on eventual consistency | flow model, recovery stance |
-| [`domain-agent`](.codex/agents/domain-agent.toml) | business invariants, state transitions, acceptance semantics | behavior changes touch lifecycle, rules, duplicates, or forbidden paths | invariant set, corner cases, handoffs |
-| [`observability-agent`](.codex/agents/observability-agent.toml) | logs, metrics, traces, SLOs, alerts, telemetry cost | signal contracts, operator response, or telemetry privacy/cardinality rules change | signal contract, observability risks, handoffs |
-| [`performance-agent`](.codex/agents/performance-agent.toml) | performance budgets, bottleneck hypotheses, proof strategy | the change is hot-path sensitive or justified mainly by speed | performance stance, proof obligations |
-| [`qa-agent`](.codex/agents/qa-agent.toml) | test obligations, proving levels, validation readiness | a non-trivial behavior change needs a real regression plan | scenario matrix, validation strategy |
-| [`quality-agent`](.codex/agents/quality-agent.toml) | idiomatic Go review and simplification | the diff feels noisy, over-abstracted, or hard to maintain | maintainability findings, cleanup guidance |
-| [`reliability-agent`](.codex/agents/reliability-agent.toml) | timeouts, retries, overload, startup, shutdown, degradation | failure behavior, degraded mode, or lifecycle semantics change | reliability contract, residual risks |
-| [`security-agent`](.codex/agents/security-agent.toml) | trust boundaries, auth, tenant isolation, abuse resistance | changed paths handle untrusted input or cross security boundaries | threat/control map, verification expectations |
-
-All of these agents stay advisory and read-only. Write-capable delegates are not part of this subagent model. The root orchestrator owns synthesis and final decisions. Agent files own domain scope, inspect-first surfaces, skill routing, output fields, and escalation seams; the shared contract owns everything common.
-`delivery-agent`, `distributed-agent`, and `observability-agent` now have dedicated review skills (`go-devops-review`, `go-distributed-review`, and `go-observability-review`) for targeted review of their owned surfaces; routine application-code diff review still belongs to the matching code-domain reviewer.
-
-### How They Are Called
-
-**Codex**
-
-Codex loads the project agent registry from [.codex/config.toml](.codex/config.toml). In practice, you ask the orchestrator to fan out by agent name:
-
-```text
-Use `architecture-agent` and `api-agent` to evaluate the new async export flow.
-Synthesize the result into `specs/export-flow/spec.md`.
-Do not start ledger-backed coding until the `tasks.md` handoff and current task-review/readiness are explicit. Artifactless coding is legal only inside the current orchestrator's proven `SHAPE-DIRECT` envelope.
-```
-
-**Claude Code**
-
-After `make agents-sync`, Claude Code project agents are available in `.claude/agents`. You can select them directly with `--agent`:
+Useful commands:
 
 ```bash
-claude -p --agent architecture-agent -- "Review boundary ownership for adding async webhook retries in this repository."
-claude -p --agent qa-agent -- "List the minimum regression obligations for changing the order status flow."
+make agents-sync
+make agents-check
+make skills-sync
+make skills-check
+make workflow-behavior-evals-check
 ```
 
-### Fan-Out Decision
+The behavior-eval check validates the E01–E19 manifest only. Actual baseline/candidate model comparison uses `make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
-Use subagents only when the work divides into concrete, independent, bounded questions and separate context materially improves speed or quality. Keep work in the root flow when it is small, sequential, dependent on one reasoning chain, or would contend over shared mutable state.
+Use subagents only for concrete, independent, bounded questions where separate context or review independence improves the result. Keep sequential and tightly coupled work local. The root owns synthesis, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
 
-Default to no more than three concurrently active subagent lanes for one root task. Exceed three only with a task-specific reason why the extra independent question cannot wait, merge, or run sequentially. The runtime supplies capacity; repository policy controls normal use.
+Representative agents:
 
-Mandatory independent review and challenge gates still run when triggered. They require a focused reviewer or challenger, not an automatic bundle of broad domain lanes. Add another specialist only when it owns a separate question that can change the gate result.
+| Agent | Focus |
+| --- | --- |
+| `architecture-agent` | boundaries, ownership, interaction style |
+| `api-agent` | client-visible contracts and HTTP semantics |
+| `data-agent` | source of truth, schema, transactions, cache |
+| `domain-agent` | invariants and state transitions |
+| `security-agent` | trust boundaries, auth, tenant isolation, abuse |
+| `reliability-agent` | timeouts, retries, overload, lifecycle |
+| `qa-agent` | test obligations and validation readiness |
+| `quality-agent` | idiomatic Go and structural simplification |
+| `challenger-agent` | one focused plan/spec assumption challenge |
 
-## Skill Library
+Representative workflow skills:
 
-`.agents/skills` is the canonical repository skill set. These skills are procedural building blocks, not autonomous owners of the workflow.
-Click a skill name to open its canonical instruction file.
+| Skill | Use when |
+| --- | --- |
+| `idea-refine` / `spec-first-brainstorming` | the outcome still needs product or engineering framing |
+| `research-session` | evidence can change a decision |
+| `specification-session` / `spec-document-designer` | behavior decisions need a durable record |
+| `technical-design-session` / `go-design-spec` | mechanism or Go ownership is not obvious |
+| `test-design-session` | proof needs a real scenario matrix |
+| `planning-session` / `planning-and-task-breakdown` | implementation needs a durable ledger |
+| `go-coder` / `go-qa-tester` | implement accepted Go behavior and tests |
+| `go-systematic-debugging` | diagnose a bug, flake, hang, or build failure |
+| `go-verification-before-completion` | map completion claims to fresh evidence |
+| `workflow-status` | report status and next action from one task path |
 
-The catalog has two layers:
+Domain spec and review skills cover API/chi, data/cache, distributed consistency, domain invariants, security, reliability, concurrency, observability, performance, delivery, QA, and Go maintainability. Load only the skill that maps to the current decision or symptom.
 
-- phase/session wrappers that keep one session bounded to one checkpoint and update only an existing triggered `workflow-plan.md` and any phase file required by `ROUTING-PHASE-CONTROL`
-- deeper skills that do framing, design, planning, implementation, review, or validation work inside those boundaries when needed
+## Orchestrator Model
 
-### Session-Bounded Phase Skills
+The root agent owns framing, route selection, synthesis, implementation, and validation. Subagent and worker output is evidence, not authority.
 
-| Skill | What it does | Load when |
-|---|---|---|
-| [`workflow-planning-session`](.agents/skills/workflow-planning-session/SKILL.md) | owns the dedicated workflow-planning checkpoint, writes or repairs `workflow-plan.md`, and writes `workflow-plans/workflow-planning.md` only when `ROUTING-PHASE-CONTROL` resolves `phase_control=required` | `ROUTING-DEDICATED-PLANNING` is satisfied because durable cross-phase or multi-session routing must record the existing `SHAPE-*` decision before the next phase |
-| [`research-session`](.agents/skills/research-session/SKILL.md) | owns the research checkpoint only and keeps evidence gathering, optional `research/*.md`, and routing updates separate from spec writing | the task already has framing and workflow routing, but one bounded research session is needed before specification |
-| [`specification-session`](.agents/skills/specification-session/SKILL.md) | owns the specification checkpoint only, runs inline or formal clarification under canonical triggers, and updates review-ready `spec.md` plus only triggered workflow control | researched or bounded local evidence is strong enough to finalize the decision record for review |
-| [`specification-review-session`](.agents/skills/specification-review-session/SKILL.md) | owns the mandatory post-spec read-only review checkpoint, reconciles `PASS`, `CONCERNS`, or `FAIL`, and writes a phase file only under `ROUTING-PHASE-CONTROL` | a non-trivial `spec.md` is review-ready and must be checked before design, planning, or implementation can start |
-| [`technical-design-session`](.agents/skills/technical-design-session/SKILL.md) | owns one active design checkpoint only and turns reviewed `spec.md` plus prior checkpoint context into planning-ready `design/` artifacts, updating its phase file only under `ROUTING-PHASE-CONTROL` | non-trivial work needs task-local system/integration or Go code ownership design before task breakdown |
-| [`planning-session`](.agents/skills/planning-session/SKILL.md) | owns the planning checkpoint only, consumes approved `test-plan.md` when test design was triggered, produces `tasks.md`, optional `rollout.md`, and only already-triggered later review/validation control files; `workflow-plans/planning.md` remains conditional on `ROUTING-PHASE-CONTROL` | reviewed `spec.md + design/` plus approved or not-expected test design are ready to turn into ordered, coder-facing execution work |
-| [`validation-closeout-session`](.agents/skills/validation-closeout-session/SKILL.md) | owns final validation and closeout only, refreshes `spec.md` `Validation` and `Outcome`, and updates existing validation-phase routing honestly | implementation is finished and you need fresh proof before saying a phase or task is complete |
-
-### Core Workflow, Implementation, And Verification Skills
-
-| Skill | What it does | Load when |
-|---|---|---|
-| [`grilling`](.agents/skills/grilling/SKILL.md) | exhaustively stress-tests material plan or design branches, one question at a time, until no plan-changing decision remains | the user explicitly asks to grill, stress-test, challenge every branch, or conduct an exhaustive design interview |
-| [`idea-refine`](.agents/skills/idea-refine/SKILL.md) | turns a raw idea into one concrete direction with explicit user problem, assumptions, MVP boundary, and not-doing list | the request is still product- or solution-ambiguous and is not ready for engineering framing yet |
-| [`spec-first-brainstorming`](.agents/skills/spec-first-brainstorming/SKILL.md) | turns a refined idea or rough change request into an engineering-ready problem frame with scope, constraints, assumptions, and design-readiness | the task is close to spec work but still needs crisp framing before challenge or deeper design |
-| [`pre-spec-challenge`](.agents/skills/pre-spec-challenge/SKILL.md) | pressure-tests candidate decisions with discriminating questions before planning | research is done but hidden assumptions or edge cases could still change the spec |
-| [`spec-clarification-challenge`](.agents/skills/spec-clarification-challenge/SKILL.md) | surfaces non-obvious specification questions for orchestrator reconciliation before non-trivial `spec.md` is marked review-ready | candidate decisions exist inside `specification` and the orchestrator needs a read-only clarification gate before specification review |
-| [`spec-document-designer`](.agents/skills/spec-document-designer/SKILL.md) | designs and normalizes repository-native `spec.md` decision records with the right section depth, decision placement, and handoff into specification review | framing or research is already in place and the orchestrator needs a clean decision record instead of a PRD, research dump, or task list |
-| [`planning-and-task-breakdown`](.agents/skills/planning-and-task-breakdown/SKILL.md) | turns reviewed `spec.md + design/` into a `tasks.md` checkbox ledger with checkpoints, acceptance criteria, and verification steps | the decisions and task-local technical design are stable and implementation needs executable tasks instead of ad hoc execution |
-| [`go-coder`](.agents/skills/go-coder/SKILL.md) | implements approved Go changes without semantic drift or new workflow-artifact sprawl | either current `SHAPE-DIRECT` evidence authorizes the orchestrator in this session, or an approved `tasks.md` handoff authorizes isolated-worker execution |
-| [`go-qa-tester`](.agents/skills/go-qa-tester/SKILL.md) | writes deterministic Go tests from approved test obligations as implementation work, not new planning | test code itself needs to be added or upgraded |
-| [`go-systematic-debugging`](.agents/skills/go-systematic-debugging/SKILL.md) | drives root-cause-first debugging with reproducible evidence | a bug, flaky test, build failure, or incident needs diagnosis |
-| [`go-verification-before-completion`](.agents/skills/go-verification-before-completion/SKILL.md) | maps completion claims to fresh command evidence without inventing missing process artifacts | you are about to say “fixed”, “ready”, or “done” |
-| [`workflow-status`](.agents/skills/workflow-status/SKILL.md) | reports the current task path, phase, blockers, allowed writes, next action, stop rule, and implementation-start status from existing artifacts only | you need a compact read-only workflow status or next-action check without creating a new source of truth |
-
-### Prompt Composition And Tooling
-
-| Skill | What it does | Load when |
-|---|---|---|
-| [`agent-prompt-composer`](.agents/skills/agent-prompt-composer/SKILL.md) | turns messy, incomplete, repetitive, or multilingual task input into a compact outcome-first English handoff | rough notes need intent reconstruction, exact-signal preservation, selective repo grounding, and labeled uncertainty instead of translation or a fixed prompt template |
-
-### System Design And Control Surfaces
-
-| Skill | Focus | Load when |
-|---|---|---|
-| [`go-architect-spec`](.agents/skills/go-architect-spec/SKILL.md) | service boundaries, ownership, sync vs async interaction style | system shape or module ownership may change |
-| [`go-design-spec`](.agents/skills/go-design-spec/SKILL.md) | integrated technical-design-bundle assembly and reconciliation across domains | approved decisions exist, but the task-local `design/` bundle still feels contradictory, layered, or not yet stable enough for task breakdown |
-| [`go-devops-spec`](.agents/skills/go-devops-spec/SKILL.md) | CI/CD policy, rollout controls, runtime hardening, release trust | delivery or release behavior is part of the change |
-| [`go-observability-engineer-spec`](.agents/skills/go-observability-engineer-spec/SKILL.md) | logs, metrics, traces, correlation, telemetry cost | observability behavior needs an explicit contract |
-| [`go-performance-spec`](.agents/skills/go-performance-spec/SKILL.md) | latency, throughput, contention, benchmark strategy | performance budgets or hot paths drive the design |
-| [`go-reliability-spec`](.agents/skills/go-reliability-spec/SKILL.md) | timeouts, retries, degradation, lifecycle behavior | failure handling or operational resilience changes |
-| [`go-security-spec`](.agents/skills/go-security-spec/SKILL.md) | trust boundaries, auth, tenant isolation, abuse resistance | the change touches security-critical surfaces |
-| [`go-qa-tester-spec`](.agents/skills/go-qa-tester-spec/SKILL.md) | test levels, scenario coverage, proof strategy | you need an explicit verification plan before coding |
-
-### API, Routing, Domain, Data, And Distributed Semantics
-
-| Skill | Focus | Load when |
-|---|---|---|
-| [`api-contract-designer-spec`](.agents/skills/api-contract-designer-spec/SKILL.md) | resources, methods, statuses, errors, idempotency, async contracts | client-visible API behavior is changing |
-| [`go-chi-spec`](.agents/skills/go-chi-spec/SKILL.md) | chi router topology, middleware ordering, fallback and CORS semantics | routing shape or HTTP middleware policy changes |
-| [`go-data-architect-spec`](.agents/skills/go-data-architect-spec/SKILL.md) | source of truth, schema ownership, migration and rollback shape | schema or persistence model changes |
-| [`go-db-cache-spec`](.agents/skills/go-db-cache-spec/SKILL.md) | query discipline, transaction rules, cache strategy and staleness | runtime DB or cache behavior needs an explicit contract |
-| [`go-domain-invariant-spec`](.agents/skills/go-domain-invariant-spec/SKILL.md) | business invariants, state transitions, acceptance rules | lifecycle or core domain behavior changes |
-| [`go-distributed-architect-spec`](.agents/skills/go-distributed-architect-spec/SKILL.md) | saga shape, outbox/inbox, replay safety, reconciliation | a flow crosses service boundaries or depends on eventual consistency |
-
-### Review Skills
-
-| Skill | Focus | Load when |
-|---|---|---|
-| [`go-design-review`](.agents/skills/go-design-review/SKILL.md) | architecture alignment, boundary integrity, accidental complexity | a diff may hide broader design drift |
-| [`go-chi-review`](.agents/skills/go-chi-review/SKILL.md) | router ownership, middleware order, HTTP fallback semantics | chi routing or transport behavior changed |
-| [`go-db-cache-review`](.agents/skills/go-db-cache-review/SKILL.md) | SQL safety, transaction scope, cache correctness, fallback risk | DB or cache code changed |
-| [`go-devops-review`](.agents/skills/go-devops-review/SKILL.md) | CI/CD gates, release policy, runtime hardening, deployment trust | delivery or platform policy changed |
-| [`go-distributed-review`](.agents/skills/go-distributed-review/SKILL.md) | async workflow, outbox/inbox, replay, recovery | cross-service or durable async behavior changed |
-| [`go-domain-invariant-review`](.agents/skills/go-domain-invariant-review/SKILL.md) | business-invariant preservation and side-effect safety | behavior changes carry semantic risk |
-| [`go-idiomatic-review`](.agents/skills/go-idiomatic-review/SKILL.md) | idiomatic Go, error handling, context flow, naming | you want merge-risk review on Go code quality |
-| [`go-language-simplifier-review`](.agents/skills/go-language-simplifier-review/SKILL.md) | lower cognitive complexity and cleaner control flow | the code works but feels noisy or over-abstracted |
-| [`go-structural-quality-review`](.agents/skills/go-structural-quality-review/SKILL.md) | harsh structural maintainability, abstraction cost, spaghetti growth, file sprawl | thermonuclear or strict code quality review is needed |
-| [`go-observability-review`](.agents/skills/go-observability-review/SKILL.md) | logs, metrics, traces, SLOs, alerts, telemetry privacy and cardinality | observability behavior changed |
-| [`go-concurrency-review`](.agents/skills/go-concurrency-review/SKILL.md) | goroutines, channels, cancellation, shutdown safety | concurrent behavior changed or races are suspected |
-| [`go-performance-review`](.agents/skills/go-performance-review/SKILL.md) | hot-path regression, allocation and contention risk | performance is a review concern |
-| [`go-qa-review`](.agents/skills/go-qa-review/SKILL.md) | coverage quality, assertion strength, determinism | review depends on test quality and proof strength |
-| [`go-reliability-review`](.agents/skills/go-reliability-review/SKILL.md) | retries, backpressure, startup, shutdown, degraded mode | failure-path behavior changed |
-| [`go-security-review`](.agents/skills/go-security-review/SKILL.md) | authz, isolation, injection/SSRF, secret handling | changed paths accept untrusted input or cross trust boundaries |
-
-### Skill Locations Across Runtimes
-
-`.agents/skills` is the repository-native skill source. Other runtime skill directories are generated locally when needed:
-
-- `.agents/skills`
-- `.claude/skills`
-- `.cursor/skills`
-- `.gemini/skills`
-- `.github/skills`
-- `.opencode/skills`
-
-The source of truth stays in `.agents/skills`, so you do not have to hand-maintain separate skill instructions per tool.
-Runtime mirrors are ignored generated artifacts. Materialize them with `bash ./scripts/dev/sync-skills.sh` or `make skills-sync`, and verify any present mirrors with `bash ./scripts/dev/sync-skills.sh --check` or `make skills-check`.
-
-Agent mirrors follow the same hygiene: `.codex/agents` is canonical for project subagents, `.claude/agents` is generated and ignored, `make agents-sync` refreshes it, and `make agents-check` verifies it when present.
-
-## This Is An Orchestrator Project
-
-The repository is designed so the main agent acts like an orchestrator, not like a single monolithic coder.
-
-- The orchestrator owns framing, scope, synthesis, planning, implementation, reconciliation, and validation.
-- Subagents own narrow research or review tracks only.
-- Skills are tools, not the workflow itself.
-- `spec.md` is the canonical decisions artifact.
-- `workflow-plan.md` is master control only when full-orchestrated or otherwise durable cross-phase/multi-session routing is triggered.
-- `workflow-plans/<phase>.md` is phase-local control only when `ROUTING-PHASE-CONTROL` resolves `phase_control=required`.
-- `design/` is the task-local technical design bundle for non-trivial work.
-- `tasks.md` is the executable task ledger and final pre-code handoff, not a second spec or second design bundle.
-- Task review/readiness is the planning exit gate. It is recorded in the active readiness carrier after `tasks.md` is reviewed; update `workflow-plan.md` or a phase-control file only when that control already belongs to the route.
-- `research/*.md` is optional supporting evidence, not a competing source of truth.
-
-For full-orchestrated or otherwise durable non-trivial implementation work, the artifact shape remains trigger-scoped:
+For multi-session work, a compact task bundle may look like:
 
 ```text
 specs/<feature-id>/
-  workflow-plan.md
-  workflow-plans/                # only phase files required by ROUTING-PHASE-CONTROL
-  spec.md
-  design/                        # only when separate design depth is triggered
-  tasks.md
-  research/                      # only when evidence must persist
+  workflow-plan.md   # only when resume/coordination needs it
+  spec.md            # when decisions need to persist
+  design/            # only when mechanism/ownership is non-obvious
+  test-plan.md       # only when scenario design adds value
+  tasks.md           # when execution needs a ledger
+  research/          # only durable evidence
+  rollout.md         # only non-trivial operational sequence
 ```
 
-If you want the short version: frame first, create `workflow-plan.md` only for a full/durable route, create `workflow-plans/<phase>.md` only when `ROUTING-PHASE-CONTROL` requires it, keep approved decisions in `spec.md`, write triggered task-local technical design in `design/`, track non-trivial executable work in `tasks.md`, and move into coding only from a reviewed ledger. For current `SHAPE-DIRECT`, omitted workflow artifacts use `artifact_expectation=not_expected`; absence is not a waiver.
+The short version: frame the outcome, persist only decisions another actor needs, implement from accepted behavior, and prove the changed surface.
 
 ## Quickstart
 
@@ -304,21 +128,14 @@ If you want the short version: frame first, create `workflow-plan.md` only for a
 
 ```bash
 make bootstrap
-make template-init   # run this when you create a new repo from the template
+make template-init   # run when creating a new repository from the template
 make check
 make run
 ```
 
-Before adding production feature code, start with the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code). It gives the short path for app-only behavior, strict-server endpoints, Postgres-backed features, workers, bootstrap wiring, and test placement.
+### Create Your Own Repository
 
-### Create Your Own Repository From This Template
-
-Recommended flow:
-
-1. Create a new empty GitHub repository under your account or organization. It may be `private` or `public`, but do not initialize it with `README`, `.gitignore`, or `LICENSE`.
-2. Clone this template into the directory you want to use for the new service.
-3. Rename the template remote to `upstream` and point `origin` to your repository.
-4. Run template initialization before the first push.
+Create an empty GitHub repository, then:
 
 ```bash
 git clone https://github.com/Dankosik/go-service-template-rest.git my-service
@@ -327,8 +144,6 @@ cd my-service
 git remote rename origin upstream
 git remote add origin git@github.com:<your-user>/<your-repo>.git
 # or: git remote add origin https://github.com/<your-user>/<your-repo>.git
-
-git remote -v
 
 make bootstrap
 make template-init
@@ -339,45 +154,7 @@ git commit -m "chore: initialize service from template"
 git push -u origin main
 ```
 
-What this does:
-
-- `origin` becomes your repository, so normal `git push` goes to your project.
-- `upstream` keeps a reference to the original template repository in case you want to compare or pull template updates later.
-- `make template-init` rewires the Go module path, `CODEOWNERS`, and skill mirrors for the new repository.
-- `git push -u origin main` publishes the first `main` branch to your repository and makes future plain `git push` / `git pull` work against `origin/main`.
-
-If `git push` says `Everything up-to-date` but your GitHub repository is still empty, your local branch is probably still tracking the template branch instead of your own repository. Check:
-
-```bash
-git remote -v
-git branch -vv
-```
-
-Expected state:
-
-- `origin` points to your repository.
-- `upstream` points to `go-service-template-rest`.
-- `main` tracks `origin/main`, not `upstream/main`.
-
-If needed, publish the branch explicitly:
-
-```bash
-git push -u origin main
-```
-
-If SSH push fails with `Permission denied (publickey)`, either configure your GitHub SSH key or switch `origin` to HTTPS:
-
-```bash
-git remote set-url origin https://github.com/<your-user>/<your-repo>.git
-git push -u origin main
-```
-
-If you use GitHub's **Use this template** button instead of the manual clone flow, clone your generated repository normally and still run:
-
-```bash
-make bootstrap
-make template-init
-```
+`origin` should point to your repository and `upstream` to this template. If SSH fails, switch `origin` to HTTPS. Repositories created with GitHub's “Use this template” should still run `make bootstrap` and `make template-init`.
 
 For production-style GitHub setup after the first push:
 
@@ -386,97 +163,67 @@ gh auth login
 make gh-protect BRANCH=main
 ```
 
-Typical next steps:
-
-1. Copy `env/.env.example` to `.env` if `make bootstrap` did not already do it.
-2. Run `make template-init` after cloning into a new service repository to rewire module path, `CODEOWNERS`, and skill mirrors.
-3. Use `make check-full` before larger changes or before opening a PR.
-
 ### Agent Quickstart
 
-1. Open the repository in Codex or Claude Code.
-2. Read [AGENTS.md](AGENTS.md). Claude-facing compatibility is mirrored in [CLAUDE.md](CLAUDE.md).
-3. Open [docs/spec-first-workflow.md](docs/spec-first-workflow.md) before non-trivial workflow planning, workflow-artifact repair, subagent fan-out, or whenever agent participation affects the accepted result.
-4. If the task reaches technical design, load [docs/repo-architecture.md](docs/repo-architecture.md) before writing task-local `design/`.
-5. For feature code, use the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code) before choosing packages or tests.
-6. Start with an artifact-driven, phase-bounded prompt, not with direct code generation.
+1. Read [AGENTS.md](AGENTS.md).
+2. For non-trivial work, open [docs/spec-first-workflow.md](docs/spec-first-workflow.md) and only the current phase file.
+3. Read [docs/repo-architecture.md](docs/repo-architecture.md) when design affects repository boundaries or generated-source ownership.
+4. Use the [placement guide](docs/project-structure-and-module-organization.md#4-where-to-put-new-code) before choosing packages or tests.
 
-Example kickoff prompt:
+Example:
 
 ```text
-Use `workflow-planning-session` only if `ROUTING-DEDICATED-PLANNING` is satisfied by durable cross-phase or multi-session control after the orchestrator has recorded `SHAPE-*`.
-Use `idea-refine` only if the request is still too raw.
-Frame a change to add tenant-aware export jobs.
-Fan out to `architecture-agent`, `data-agent`, and `qa-agent` only if needed.
-Run `challenger-agent` before `specification-session` if material assumptions remain.
-During `specification-session`, run `challenger-agent` with `spec-clarification-challenge` before approving non-trivial `spec.md`.
-Load `docs/repo-architecture.md` before `technical-design-session` if repository boundaries matter.
-Because this persisted async export example triggers a full/durable route, write master control to `specs/tenant-export-jobs/workflow-plan.md`.
-Use `specs/tenant-export-jobs/workflow-plans/workflow-planning.md` only if `ROUTING-PHASE-CONTROL` requires it. At each later session-bounded phase, compute `phase_control=required|not_required` independently and create only the phase files needed for durable local orchestration; a phase or mandatory gate does not require its own file by itself.
-Write decisions to `specs/tenant-export-jobs/spec.md`, task-local technical design to `specs/tenant-export-jobs/design/`, and the executable task ledger to `specs/tenant-export-jobs/tasks.md` before coding.
+Add tenant-aware export jobs end to end.
+
+Success means the API contract, durable job state, worker lifecycle, failure behavior,
+tests, and relevant validation are complete. Preserve current tenant isolation and
+generated-source ownership. Use research, design, a test plan, or subagents only where
+they resolve a concrete uncertainty. Stop for a user decision or external action that
+cannot be safely inferred; otherwise continue through implementation and proof.
 ```
 
 ## Repository Layout
 
-Start feature work with the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code); it covers the short path for HTTP endpoints, Postgres-backed features, and workers without duplicating the workflow rules here.
+- `cmd/service` — entrypoint and bootstrap lifecycle
+- `internal/app` — use-case layer
+- `internal/infra` — HTTP, PostgreSQL, telemetry, and other adapters
+- `api/openapi/service.yaml` — REST API source of truth
+- `internal/api` — generated OpenAPI artifacts
+- `env/migrations` — SQL migrations
+- `internal/infra/postgres/sqlcgen` — generated `sqlc` artifacts
+- `specs/` — task decision and execution history
+- `.agents/skills` — canonical skills
+- `.codex/agents` — canonical project subagents
 
-- `cmd/service` - service entrypoint and bootstrap lifecycle orchestration
-- `internal/app` - use-case layer
-- `internal/infra` - HTTP, Postgres, telemetry, and other infrastructure adapters
-- `api/openapi/service.yaml` - REST API source of truth
-- `internal/api` - generated OpenAPI artifacts
-- `env/migrations` - SQL migrations for the local PostgreSQL environment
-- `internal/infra/postgres/sqlcgen` - generated `sqlc` artifacts when SQL query sources exist
-- `specs/` - spec-first decision records and implementation history
-- `.agents/skills` - canonical skill definitions
-
-More detail: [docs/project-structure-and-module-organization.md](docs/project-structure-and-module-organization.md), plus the stable architecture baseline in [docs/repo-architecture.md](docs/repo-architecture.md)
+See [Project Structure & Module Organization](docs/project-structure-and-module-organization.md) and [Repository Architecture](docs/repo-architecture.md).
 
 ## Technology Stack
 
-Workflow comes first, but this is still a serious Go backend template.
-
 - Go `1.26`
-- `chi` for HTTP routing
-- `kin-openapi` and `oapi-codegen` for contract-first API work
-- PostgreSQL `17`, `pgx/v5`, and `sqlc` for SQL-first data access
-- `koanf` for configuration
-- Prometheus and OpenTelemetry for observability
-- `testcontainers-go` and `goleak` for testing
+- `chi`
+- `kin-openapi` and `oapi-codegen`
+- PostgreSQL `17`, `pgx/v5`, and `sqlc`
+- `koanf`
+- Prometheus and OpenTelemetry
+- `testcontainers-go` and `goleak`
 - Docker multi-stage builds and distroless runtime images
-- GitHub Actions for CI, nightly checks, and CD
+- GitHub Actions
 
-For the full dependency graph, see [`go.mod`](go.mod) and [`go.sum`](go.sum).
+See [`go.mod`](go.mod) and [`go.sum`](go.sum) for the full dependency graph.
 
 ## Quality Gates And Verification
 
-Local entry points:
+Useful entry points:
 
-- `make check` - quick local checks
-- `make docker-check` - quick checks through pinned Docker tooling
-- `BASE_REF=origin/main HEAD_REF=HEAD make check-full` - full local pre-push baseline with docs-drift comparison
-- `make ci-local` - native CI-style flow
-- `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` - closest Docker-based CI parity flow with pinned tooling images
-- `make openapi-check` - OpenAPI generation, drift, runtime contract, lint, and schema validation checks
-- `BASE_OPENAPI=<base> make openapi-breaking` - OpenAPI breaking-change compatibility check
-- `make sqlc-check` - generated SQL artifact drift checks
-- `make migration-validate` / `make docker-migration-validate` - migration rehearsal for changed migrations
-- `make test-integration` - integration tests
-- `make gh-protect BRANCH=main` - branch protection setup helper
+- `make check` — quick local checks
+- `make docker-check` — quick checks through pinned Docker tooling
+- `BASE_REF=origin/main HEAD_REF=HEAD make check-full` — full pre-push baseline
+- `make ci-local` — native CI-style flow
+- `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` — Docker CI parity flow
+- `make openapi-check` — OpenAPI generation, drift, runtime, lint, and schema checks
+- `BASE_OPENAPI=<base> make openapi-breaking` — compatibility check
+- `make sqlc-check` — SQL generation drift
+- `make migration-validate` — migration rehearsal
+- `make test-integration` — integration tests
 
-Migration rehearsal targets may skip when no `MIGRATION_DSN` is provided and Docker is unavailable; skip output is not migration proof.
-For the full local-vs-GitHub parity matrix and CD caveats, see [Build, Test, and Development Commands](docs/build-test-and-development-commands.md#everyday-pre-push-and-pr-parity).
-
-Repository and CI guardrails include:
-
-- formatting and module integrity checks
-- `golangci-lint`
-- unit tests, race tests, and coverage thresholds
-- OpenAPI generation drift, validation, lint, and breaking-change checks
-- `sqlc` generation drift checks
-- docs, agent mirror, and skills mirror drift checks
-- `govulncheck`, `gosec`, and `gitleaks`
-- container image scanning with Trivy
-- GHCR publishing, CycloneDX SBOM generation, and Cosign signing in release flows
-
-See `.github/workflows/` and `Makefile` for the exact pipeline steps.
+Migration targets may skip when no `MIGRATION_DSN` is provided and Docker is unavailable; skip output is not migration proof. See [Build, Test, and Development Commands](docs/build-test-and-development-commands.md#everyday-pre-push-and-pr-parity) and `.github/workflows/` for exact gates.

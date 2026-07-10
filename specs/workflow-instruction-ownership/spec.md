@@ -77,7 +77,7 @@ Affected surfaces:
 - `.agents/skills/workflow-planning-session/SKILL.md`
 - `.agents/skills/research-session/SKILL.md`
 - `.agents/skills/specification-session/SKILL.md`
-- `.agents/skills/specification-review-session/SKILL.md`
+- `.agents/skills/specification-review/SKILL.md`
 - `.agents/skills/technical-design-session/SKILL.md`
 - `.agents/skills/planning-session/SKILL.md`
 - `.agents/skills/planning-and-task-breakdown/SKILL.md`
