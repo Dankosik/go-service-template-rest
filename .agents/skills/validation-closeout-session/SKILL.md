@@ -9,7 +9,7 @@ Use inside implementation or for an explicitly requested validation pass. Follow
 
 Bind each claim to changed files, accepted task/spec, and the smallest fresh proof that covers it. Include relevant tests, build/lint/race/integration checks, generated or migration drift checks, smoke proof, and targeted negative searches.
 
-Skipped, cached, failing, unavailable, worker-only, or too-narrow evidence cannot prove the full claim. Record the narrower proven result and remaining owner.
+Skipped, cached, failing, unavailable, worker output alone, or too-narrow evidence cannot prove the full claim. Record the narrower proven result and remaining owner.
 
 Update task progress only after proof passes. Return complete only when the accepted completion condition is met; otherwise report partial or blocked with exact evidence and reopen target.
 

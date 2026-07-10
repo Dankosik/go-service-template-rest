@@ -5,6 +5,7 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 ## Read When
 
 - The user requests independent plan/readiness review.
+- Structured or orchestrated work has a completed implementation ledger.
 - Implementation is high-impact, broad, delegated, hard to reverse, or otherwise difficult for the planner to falsify.
 - A repaired ledger needs confirmation that a prior blocker is closed.
 

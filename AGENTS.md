@@ -37,10 +37,10 @@ Repository-wide contract for producing reliable Go-service changes with the leas
 2. Choose the smallest execution path that preserves correctness. Process is proportional to uncertainty, blast radius, reversibility, and proof difficulty—not task size labels or the number of domains mentioned.
 3. Describe outcomes, constraints, success criteria, and stop conditions. Do not prescribe steps the model can choose reliably, repeat the same rule across files, or create artifacts solely to prove that a phase happened.
 4. `spec.md`, when present, is the decision record. `tasks.md`, when present and ready, is the implementation ledger. Later phases consume those decisions; they do not silently invent missing product, contract, ownership, or proof policy.
-5. Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every workflow phase or artifact.
-6. Research, design, test design, and planning are conditional. Use them when they reduce a real uncertainty or make implementation/proof executable. Keep the result inline when it stays compact; persist it only when another session or actor must consume it.
-7. Review is risk-based. Use an independent read-only reviewer for hard-to-reverse, high-impact, ambiguous, or explicitly review-required work. Otherwise a focused self-review plus fresh validation is sufficient. A reviewer never edits the artifact it judges. When review belongs to an active macro phase, the root runs review, repair, and any fresh re-review in the same session; an internal checkpoint never emits a next-session prompt. The exact handoff gate and standalone-review exception live in [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md#handoff).
-8. Use subagents only for concrete, independent, bounded questions where separate context improves speed or quality. Keep sequential or tightly coupled work local. The root owns scope, synthesis, decisions, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
+5. Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require full-depth work or a durable artifact in every phase.
+6. Structured and orchestrated work evaluates every phase boundary in dependency order. Specification and planning are required. Research, design, and test design may be scoped down only when their decision is already closed; state the reason in the current artifact or handoff, but do not create a file solely to record the skip.
+7. Structured and orchestrated work requires independent read-only review of the specification, any triggered technical design or test design, and the implementation ledger before coding. Direct work uses risk-based review. A reviewer never edits or approves its own repair. The owning root runs review, repair, and fresh affected-surface re-review in the same macro phase; an internal checkpoint never emits a next-session prompt. The exact contract lives in [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md#review-independence).
+8. At each active macro phase, decide whether concrete, independent, bounded subagent lanes improve evidence or review independence. Use only useful lanes; keep sequential or tightly coupled work local. When no lane helps, proceed locally and record that reason only in an existing phase artifact or handoff. The root owns scope, synthesis, decisions, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
 9. Delegated output is evidence. The root verifies it against the current repository and accepted task before using it. Implementation may be local or delegated; isolation is required only when it materially reduces contention or risk.
 10. Prefer current Go stdlib and established repository patterns. Add dependencies, helpers, interfaces, or architectural patterns only when they solve a present requirement better than the simpler option.
 11. Keep ownership explicit. Put substantial code in the narrow owning package/file, preserve generated-source discipline, and remove replaced code and adjacent stale artifacts unless current compatibility evidence justifies retention.
@@ -51,7 +51,7 @@ Repository-wide contract for producing reliable Go-service changes with the leas
 | Path | Use when | Durable artifacts |
 | --- | --- | --- |
 | `direct` | The request is clear, the change is small and reversible, ownership is obvious, and proof is bounded. | None required. A short inline plan is enough. |
-| `structured` | The work is non-trivial but bounded; one or more decisions or steps must survive implementation. | Create only the useful subset of `spec.md`, `design/`, `test-plan.md`, and `tasks.md`. |
+| `structured` | The work is non-trivial but bounded; one or more decisions or steps must survive implementation. | `spec.md` and `tasks.md`; add design or test artifacts only when their decisions need to survive. |
 | `orchestrated` | The work is broad, hard to reverse, multi-owner, evidence-heavy, explicitly multi-agent, or likely to span sessions. | Add `workflow-plan.md` and durable research only when coordination or resume requires them. |
 
 Escalate the path when new evidence invalidates an assumption, reveals an owner conflict, or makes proof materially harder. Do not backfill ceremony for completed safe work; record only the decision or blocker the remaining work needs.
@@ -60,9 +60,9 @@ Escalate the path when new evidence invalidates an assumption, reveals an owner 
 
 The normal dependency order is:
 
-`intake -> research? -> specification? -> design? -> test design? -> planning? -> implementation and verification`
+`intake -> research -> specification -> system/integration design -> Go ownership design -> test design -> planning -> implementation and verification`
 
-Question marks mean conditional. Review belongs to the artifact it evaluates, not to a mandatory user-started session. A single user request may cross several phases when it authorizes end-to-end work and no explicit boundary says to stop. When the user names a phase, stay inside it and complete its internal review/repair loop before offering a next macro phase.
+Direct work may take the shorter path defined above. Structured and orchestrated work walks every boundary in order; a scoped-down research, design, or test-design phase still records why its question is already closed. Review belongs to the artifact it evaluates, not to a separate user-started session. One end-to-end request may cross several phases, but it does not collapse their ownership or gates. When the user names a phase, stay inside it and complete its internal review/repair loop before offering the next macro phase.
 
 Use the phase files for their unique questions:
 

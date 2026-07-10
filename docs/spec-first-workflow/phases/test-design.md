@@ -27,7 +27,7 @@ Choose the smallest convincing level: unit, integration, contract, or e2e smoke.
 
 ## Review
 
-Use an independent QA review when scenario completeness or proof feasibility is high-impact or difficult to falsify locally. The reviewer checks traceability, observables, determinism, fail-before expectations, command feasibility, and residual gaps; it does not write tests or change behavior.
+When structured or orchestrated work triggers test design, run an independent QA review before planning. Direct work uses one only when the user or risk requires it. The reviewer checks traceability, observables, determinism, fail-before expectations, command feasibility, and residual gaps; it does not write tests or change behavior.
 
 When test design owns that review, findings return to the owning root for same-session repair and fresh re-review. An explicitly user-requested standalone QA review returns findings only and stops read-only.
 

@@ -18,7 +18,7 @@ Direct work may skip a durable spec when the accepted outcome and proof are obvi
 
 ## Outputs
 
-A compact `spec.md` or inline decision record containing only applicable sections:
+For structured/orchestrated work, a compact `spec.md`; direct work may keep the same decisions inline. Use only applicable sections:
 
 ```markdown
 # <Outcome>
@@ -49,7 +49,7 @@ Choose production-ready behavior for the accepted scope unless the user asked fo
 
 ## Review
 
-Perform a focused self-review for ordinary bounded work. Use the independent [Specification Review](specification-review.md) when required by the user or when the spec is high-impact, hard to reverse, ambiguous, cross-owner, or difficult for the author to falsify.
+For structured or orchestrated work, run the independent [Specification Review](specification-review.md) before leaving this phase. Direct work uses focused self-review unless the user or risk requires independent review.
 
 After actionable findings, repair the spec and recheck the changed decision surface. Preserve accepted concerns only when they are bounded risks or downstream proof obligations, not missing spec decisions.
 

@@ -11,4 +11,4 @@ Write only the sections needed to preserve scope/non-goals, behavior and contrac
 
 Keep runtime mechanism in design unless it is necessary to make the behavior decision. Keep task order in `tasks.md` and raw evidence in research notes. Name runtime/generated sources of truth where relevant. For a replaced surface, require removal/refactor or justified temporary retention with owner and exit condition.
 
-Return `status: ready` only when downstream work can proceed without a material `TBD`, live product alternative, or hidden proof/ownership decision.
+For structured/orchestrated work, authoring leaves `status: draft`; the owning root may mark it `ready` only after independent specification review has no blocker. Direct work may use the same readiness bar without a durable spec.

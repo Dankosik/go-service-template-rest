@@ -26,6 +26,8 @@ Do not delegate work that is sequential, tightly coupled to the root's reasoning
 
 ## Delegation Decision
 
+At the start of each active macro phase, the root evaluates whether separate evidence, specialist, challenge, or review lanes would improve the result. If none would, keep the work local and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record.
+
 Use a subagent when all are true:
 
 - the question is concrete and bounded;
@@ -58,7 +60,7 @@ Do not copy the repository workflow, generic strictness language, or unrelated a
 
 ## Review Independence
 
-Use an independent reviewer when required by the user or when the decision is hard to reverse, materially high-impact, ambiguous, or poorly falsified by the author alone.
+Structured and orchestrated work requires an independent reviewer for the completed specification, any triggered technical design or test design, and the completed implementation ledger. Direct work uses an independent reviewer when required by the user or when the decision is hard to reverse, materially high-impact, ambiguous, or poorly falsified by the author alone.
 
 The reviewer:
 

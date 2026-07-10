@@ -14,7 +14,7 @@ Protect approved design intent in code so boundaries, ownership, maintainability
 - Treat an unexplained surviving replaced or unused legacy surface as source-of-truth drift when the approved artifact chain does not retain it with owner, reason, proof, and exit condition.
 - Prefer one explicit same-package seam for stable local policy over both scattered copies and vague helper buckets.
 - Treat unapproved custom infrastructure, new runtime dependencies, and meaningful helper/abstraction choices as design drift when the approved artifact chain lacks stdlib, repository-pattern, mature-OSS, and custom-code due diligence.
-- Treat invented or cargo-culted design/system patterns as design drift when the approved artifact chain lacks Pattern Fit Diligence or when implementation violates the selected pattern's real guarantee.
+- Treat invented or cargo-culted design/system patterns as design drift when no present requirement and live-alternative evidence justify them, or when implementation violates the selected pattern's real guarantee.
 - Treat code-level pattern choices as design drift only when they become ownership, dependency, or maintainability problems: useful local patterns reduce code and clarify seams; pattern-shaped mini-frameworks create accidental complexity.
 - Hand off deep API, data, security, reliability, performance, or QA issues when design review only detects the seam.
 - Keep output review-shaped: findings, handoffs, design escalations, residual risks, and validation notes. Do not redesign the system from scratch inside the review.
@@ -53,14 +53,14 @@ Do not:
 - Source-of-truth integrity: generated, config, migration, contract, and stable local policy ownership stays singular.
 - Legacy cleanup integrity: replaced or unused code, tests, fixtures, generated artifacts, configs, docs, skills, agents, or mirrors are removed/refactored, or retained with approved owner/reason/proof/exit condition.
 - Dependency/OSS integrity: new dependencies, custom infrastructure, and material abstractions match approved due diligence, including selected and rejected stdlib, repository-pattern, OSS, and custom-code options.
-- Pattern fit integrity: architecture, workflow, integration, resilience, data-flow, or abstraction shapes match the approved selected pattern or recorded straightforward design, and missing Pattern Fit Diligence is routed back to research, specification, or technical design.
+- Design-choice integrity: architecture, workflow, integration, resilience, data-flow, or abstraction shapes match the approved design, and an unsupported material choice is routed back to research, specification, or technical design.
 - Code-level pattern integrity: local patterns such as same-package seams, map dispatch, narrow interfaces, functional options, middleware, or table-driven tests reduce code, clarify ownership, or improve proof instead of turning into unapproved mini-frameworks.
 - Hidden decisions: new fallback, async, lifecycle, contract, or data-shape behavior is approved rather than smuggled through code.
 - Complexity control: abstractions, helpers, wrappers, and interfaces reduce real change risk instead of becoming ownership buckets.
 - Cross-domain seams: flag design-shape risk and hand off deep specialist correctness to the owner review.
 
 ## Evidence And Shared Finding Envelope
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete design drift, change/regression/operability risk, contract or decision, smallest safe correction, and whether the problem is source-of-truth scattering, over-broad abstraction, an unexplained surviving replaced or unused legacy surface, missing dependency/OSS or Pattern Fit diligence, or a code-level pattern that increases rather than removes complexity. `critical` is a merge-unsafe boundary/ownership violation; `high` includes an executable/importable/generated/validated replaced path or major design drift with material regression risk.
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete design drift, change/regression/operability risk, contract or decision, smallest safe correction, and whether the problem is source-of-truth scattering, over-broad abstraction, an unexplained surviving replaced or unused legacy surface, unsupported dependency/design choice, or a code-level pattern that increases rather than removes complexity. `critical` is a merge-unsafe boundary/ownership violation; `high` includes an executable/importable/generated/validated replaced path or major design drift with material regression risk.
 
 ## Escalate When
 Escalate when:

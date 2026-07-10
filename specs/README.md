@@ -1,10 +1,11 @@
 # Specs
 
-This directory stores task-local spec-first records for real repository work.
+This directory stores active task-local spec-first records for real repository work.
 
-Use `specs/<feature-id>/` only when a task needs persistent workflow, decision,
-design, planning, or validation artifacts. Historical bundles can be useful
-reference points, but they are not templates or mandatory precedent.
+Use `specs/<feature-id>/` only while a task needs persistent workflow, decision,
+design, planning, or validation artifacts. After completion, move durable
+decisions into canonical docs/code and delete the completed bundle; Git keeps
+the history.
 
-Do not create synthetic bundles as examples. Prefer the current artifact shapes
-in `docs/spec-first-workflow.md` and keep any new bundle tied to an actual task.
+Do not create synthetic or archival bundles as examples. Follow the current
+artifact shapes in `docs/spec-first-workflow.md`.

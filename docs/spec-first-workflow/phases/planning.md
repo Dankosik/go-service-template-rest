@@ -47,7 +47,7 @@ Planning must make these explicit where relevant:
 
 ## Readiness Review
 
-Perform a focused ledger self-check. Use independent [Task Review / Readiness](task-review-readiness.md) when the implementation is high-impact, broad, delegated, hard to reverse, or explicitly gated.
+For structured or orchestrated work, run independent [Task Review / Readiness](task-review-readiness.md) before implementation. Direct work needs only its inline plan and focused self-check unless the user or risk requires independent review.
 
 Repair planning-owned findings directly. Reopen an earlier owner when a task would need to choose product behavior, source of truth, runtime mechanism, package ownership, test strategy, or rollout policy.
 

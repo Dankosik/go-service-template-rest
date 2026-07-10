@@ -15,7 +15,7 @@ Own wire-visible semantics, not chi topology, handler/repository code, SQL schem
 
 Inspect the client problem, affected callers and trust boundary, current public contract and OpenAPI/generator authority, compatibility commitments, consistency and retry expectations, owning resource/service, and any approved architecture/data/security decisions. Treat missing client-visible facts as labeled assumptions or blockers, never handler guesses.
 
-When used in system/integration design, close the contract checkpoint as `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`; name the runtime source of truth and generated consumers. This skill recommends the contract decision and proof carrier but does not propagate artifacts or claim generated files were changed.
+When used in system/integration design, decide whether contract detail belongs in the compact design or needs a focused `design/contracts/` artifact; if required client or compatibility evidence is missing, return the blocker and reopen owner. Name the runtime source of truth and generated consumers. This skill recommends the contract decision and proof carrier but does not propagate artifacts or claim generated files were changed.
 
 ## Contract Invariants And Defaults
 

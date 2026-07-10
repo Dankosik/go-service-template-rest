@@ -15,7 +15,7 @@ Own system boundary and interaction choices, not endpoint payload catalogs, SQL/
 
 Inspect the approved problem frame, current repository/service boundaries, invariant and write authority, real workload evidence, critical path, team/runtime ownership, external dependencies, failure and degradation expectations, data/read topology, and rollout/mixed-version constraints. Mark invented latency, scale, growth, freshness, RPO/RTO, or cost numbers as assumptions.
 
-Architecture may choose among real live forks; it must not manufacture options for completeness. Before selecting a named or custom architecture/system pattern, perform Pattern Fit Diligence using concrete descriptions and real-use examples, repository and operational fit, proof path, and idiomatic Go fit. Record rejected patterns and justify custom shape when known patterns fail.
+Architecture may choose among real live forks; it must not manufacture options for completeness. When a real choice exists, compare the viable stdlib, repository, mature-OSS, and custom options against repository, operational, proof, and idiomatic-Go fit. Record only rejections that explain the selected design.
 
 ## Architecture Invariants And Defaults
 
@@ -54,11 +54,11 @@ Return a compact architecture packet with:
 - workload, request/background topology, critical path, and sync/async interaction;
 - command/query authority, projection/cache/provider anti-corruption rules;
 - invariant, pivot, state, idempotency, recovery, degradation, lifecycle, and operability model;
-- Pattern Fit evidence and bounded rollout/migration consequences;
+- live-alternative rationale and bounded rollout/migration consequences;
 - only downstream API/data/security/operability/delivery decisions or proof obligations that must act now; otherwise state `no new decision required`.
 
 ## Success, Escalation, And Stop Conditions
 
 Success means technical design can assign concrete package/file ownership and planning can order implementation without rediscovering service ownership, runtime topology, write truth, completion semantics, failure recovery, projection authority, or rollout constraints.
 
-Stop or escalate when ownership, invariant, pivot, workload, failure/degradation, consistency, provider normalization, migration compatibility, or operational readiness is unresolved; when a public API, data, security, reliability, delivery, or domain owner must make the decisive choice; or when a named/custom pattern lacks fit evidence. Reject new services without the all-conditions case, sync chains without budgets/retry/idempotency, correctness-bearing async without durable linkage/recovery, projections as truth, indefinite dual writes/shims, and architecture left for coding to discover.
+Stop or escalate when ownership, invariant, pivot, workload, failure/degradation, consistency, provider normalization, migration compatibility, or operational readiness is unresolved; when a public API, data, security, reliability, delivery, or domain owner must make the decisive choice; or when a material design choice lacks evidence. Reject new services without the all-conditions case, sync chains without budgets/retry/idempotency, correctness-bearing async without durable linkage/recovery, projections as truth, indefinite dual writes/shims, and architecture left for coding to discover.

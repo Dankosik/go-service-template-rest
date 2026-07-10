@@ -30,7 +30,7 @@ Inspect the current owner before naming a new one. Prefer concrete types, explic
 
 ## Review
 
-Use [Technical Design Review](technical-design-review.md) with system design when the ownership decision is material. It is an internal checkpoint: the owning root repairs and re-reviews in the same root session. The smoke test is simple: can planning name files, owner, cleanup, tests, and proof without making another design choice?
+For structured or orchestrated work, use [Technical Design Review](technical-design-review.md) with system design before planning. It is an internal checkpoint: the owning root repairs and re-reviews in the same root session. Direct work uses it only when the user or risk requires it. The smoke test is simple: can planning name files, owner, cleanup, tests, and proof without making another design choice?
 
 ## Stop Rule
 

@@ -35,7 +35,7 @@ Escalate if critical invariants are not traceable to test obligations, side effe
 - Treat missing fail-path coverage as a blocker.
 - Treat untestable requirements as design defects that must be escalated.
 - Keep validation realistic: use repository commands and CI-compatible environments.
-- In this repository's workflow, the test-design phase uses this skill to produce or repair `test-plan.md`; planning then maps approved `TD-*` scenarios into `tasks.md`.
+- In this repository's workflow, the test-design phase uses this skill to produce or repair `test-plan.md`. Structured/orchestrated work obtains independent QA review before planning maps approved `TD-*` scenarios into `tasks.md`.
 - Scenario IDs are stable planning anchors: use `TD-001`, `TD-002`, and so on for triggered scenario matrices.
 
 ## Source And Reference Policy

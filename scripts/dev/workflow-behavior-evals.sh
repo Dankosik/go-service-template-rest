@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EVAL_FILE="${ROOT_DIR}/docs/spec-first-workflow-evals.md"
-EXPECTED_IDS="E01 E02 E03 E04 E05 E06 E07 E08 E09 E10 E11 E12 E13 E14 E15 E16 E17 E18 E19"
-INVARIANT_IDS="E04 E05 E06 E10 E11 E12 E13 E15 E16 E17 E18 E19"
+EXPECTED_IDS="E01 E02 E03 E04 E05 E06 E07 E08 E09 E10 E11 E12 E13 E14 E15 E16 E17 E18 E19 E20 E21"
+INVARIANT_IDS="E04 E05 E06 E10 E11 E12 E13 E15 E16 E17 E18 E19 E20 E21"
 TEMP_ROOT=""
 
 cleanup() {
@@ -83,7 +83,7 @@ check_manifest() {
     return 1
   fi
 
-  echo "workflow behavior eval manifest passed: 19 cases, 12 invariants"
+  echo "workflow behavior eval manifest passed: 21 cases, 14 invariants"
 }
 
 is_invariant() {

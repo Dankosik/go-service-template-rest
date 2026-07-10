@@ -30,7 +30,7 @@ Load this when candidate synthesis might be too thin to challenge, evidence is m
   - Fails when the fact should be researched from repo evidence or deployment docs instead of pushed to the user.
 
 ## Agent Traps
-- Confusing this synthesis checkpoint with the later `spec-clarification-challenge` approval gate.
+- Confusing this synthesis checkpoint or a focused `spec-clarification-challenge` with the independent specification review gate.
 - Treating missing links as automatic failure even when the challenged assumption is low-impact and reversible.
 - Filling missing architecture or product choices with plausible defaults instead of routing them.
 - Producing a full discovery questionnaire when the orchestrator only needs to know whether challenge can proceed.

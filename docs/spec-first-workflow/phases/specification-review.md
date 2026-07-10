@@ -5,6 +5,7 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 ## Read When
 
 - The user requests an independent spec review.
+- Structured or orchestrated work has a completed specification.
 - The spec is high-impact, hard to reverse, ambiguous, cross-owner, or otherwise difficult for its author to falsify credibly.
 - A repaired spec needs confirmation that a prior blocker is closed.
 

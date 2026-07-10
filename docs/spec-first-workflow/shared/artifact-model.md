@@ -40,10 +40,10 @@ Otherwise keep the result inline.
 
 | Artifact | Create when | Owns | Does not own |
 | --- | --- | --- | --- |
-| `spec.md` | Behavior or scope decisions must survive into design/planning. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
+| `spec.md` | Required for structured/orchestrated work; direct work uses it only when decisions must survive. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
 | `design/overview.md` or focused `design/*` | Implementation would otherwise choose architecture, contract, data, failure, rollout, or package ownership. | Selected mechanism and ownership decisions. | Task progress. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations, observables, proof levels, residual gaps. | Test implementation. |
-| `tasks.md` | Work has multiple dependent steps, actors, or proof checkpoints. | Executable order, owners, evidence, progress, completion condition. | New product or design decisions. |
+| `tasks.md` | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, owners, evidence, progress, completion condition. | New product or design decisions. |
 | `research/*.md` | Evidence must be reused, audited, or refreshed. | Findings, source limits, conflicts, decision impact. | Final task decisions. |
 | `rollout.md` | Deployment, migration, backfill, compatibility, or rollback has a non-trivial sequence. | Operational order, gates, rollback/failback, observables. | Product scope. |
 | `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action. | Duplicate spec/design/task content. |
@@ -111,4 +111,4 @@ Use additional fields only when they change an action or verdict.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
 
-Completed legacy bundles remain readable. Do not migrate their status vocabulary or structure unless active work needs a decision changed; rewriting history creates noise without improving the next action.
+Keep only active task bundles. After completion, move durable decisions into canonical docs/code and delete the completed bundle; Git remains the history.

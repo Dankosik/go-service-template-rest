@@ -136,6 +136,30 @@ require_text \
   '### E19 — Honest Blocker Handoff' \
   docs/spec-first-workflow-evals.md \
   'the honest-blocker handoff behavior case is missing'
+require_text \
+  '### E20 — Non-Trivial Phase Spine' \
+  docs/spec-first-workflow-evals.md \
+  'the strict phase-spine behavior case is missing'
+require_text \
+  '### E21 — Helper Skill Gate Bypass' \
+  docs/spec-first-workflow-evals.md \
+  'helper skills must not bypass required review gates'
+require_text \
+  'authoring leaves `status: draft`' \
+  .agents/skills/spec-document-designer/SKILL.md \
+  'spec authoring must not self-approve readiness'
+require_text \
+  'proceeds to planning only after independent technical-design review' \
+  .agents/skills/go-design-spec/SKILL.md \
+  'design authoring must route through independent review'
+require_text \
+  'runs independent task review/readiness' \
+  .agents/skills/planning-and-task-breakdown/SKILL.md \
+  'task authoring must route through readiness review'
+require_text \
+  'obtains independent QA review before planning' \
+  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'test design must route through independent QA review'
 
 forbidden_internal_target_pattern='next[_ -]?phase[=: ]+(specification[-_ ]?review|technical[-_ ]?design[-_ ]?review|test[-_ ]?design([-_ ]?qa)?[-_ ]?review|task[-_ ]?(review([/_ -]?readiness)?|readiness[-_ ]?review)|readiness[-_ ]?review|post[-_ ]?code[-_ ]?review|validation|closeout)'
 for forbidden_target in \
@@ -181,11 +205,21 @@ if [[ -n "${forbidden_prompts}" ]]; then
   exit 1
 fi
 
-stale_pattern='SHAPE-[A-Z]|FULL-[A-Z]|DIRECT-[A-Z]|LEAN-[A-Z]|routing_revision|procedural_gate_state|record_validity|artifact_expectation|ROUTING-PHASE-CONTROL|isolated-cli-worker'
+stale_pattern='SHAPE-[A-Z]|FULL-[A-Z]|DIRECT-[A-Z]|LEAN-[A-Z]|routing_revision|phase_state|procedural_gate_state|review_verdict|record_validity|handoff_readiness|artifact_expectation|ROUTING-PHASE-CONTROL|isolated-cli-worker|compact_sufficient|not_expected|review_ready|draft_review_ready|pending_task_review|Subagent gate|Design fan-out|Pattern Fit Diligence|worker-only|contract-design checkpoint|contract checkpoint|one user-started root session|cross-macro-phase collapse|worker delegation is mandatory|capability_only|workflow-plans/|lightweight local|lean local|full orchestrated'
+for stale_example in \
+  'Status: review_ready' \
+  'Subagent gate: local_only' \
+  'Pattern Fit Diligence' \
+  'workflow-plans/specification.md' \
+  'compact_sufficient' \
+  'full orchestrated'; do
+  if ! printf '%s\n' "${stale_example}" | grep -Eiq -- "${stale_pattern}"; then
+    echo "workflow instruction check failed: stale guard misses ${stale_example}"
+    exit 1
+  fi
+done
 stale_matches="$(grep -RInE -- "${stale_pattern}" \
-  "${workflow_files[@]}" "${skill_files[@]}" \
-  .codex/agents/challenger-agent.toml \
-  .codex/agents/design-integrator-agent.toml || true)"
+  AGENTS.md README.md SOUL.md docs .agents/skills .codex/agents specs || true)"
 
 if [[ -n "${stale_matches}" ]]; then
   echo "workflow instruction check failed: retired workflow-machine vocabulary remains"

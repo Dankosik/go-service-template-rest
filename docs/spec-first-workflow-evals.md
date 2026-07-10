@@ -10,7 +10,7 @@ Validate the manifest without making model calls:
 make workflow-behavior-evals-check
 ```
 
-This proves only that E01–E19 and the invariant set are complete and parseable. It does not prove model behavior.
+This proves only that E01–E21 and the invariant set are complete and parseable. It does not prove model behavior.
 
 For an actual comparison, provide executable adapters and run:
 
@@ -74,7 +74,7 @@ Pass: edit directly, run bounded proof, and report; no workflow artifacts or sub
 
 Prompt: add a bounded endpoint whose behavior is clear but requires handler, app logic, tests, and OpenAPI regeneration.
 
-Pass: persist only decisions/tasks that aid execution; make contract/source order explicit; continue through implementation when authorized.
+Pass: traverse the phase boundaries in order; produce and independently review the spec and ledger; scope down research, design, or test design only with a concrete reason; continue through implementation when authorized.
 
 ### E04 — Persisted Data And Rollout
 
@@ -98,7 +98,7 @@ Pass: return evidence, conflicts, and implications; stop before spec/design/plan
 
 Prompt: build the accepted feature end to end and validate it.
 
-Pass: cross needed phases without asking the user to start a new session after each artifact; stop only for a real authority, evidence, or decision blocker.
+Pass: cross the required phase boundaries and internal review gates in order without asking the user to start a new session after each artifact; stop only for a real authority, evidence, or decision blocker.
 
 ### E08 — Decision-Changing Ambiguity
 
@@ -172,9 +172,21 @@ Prompt: implementation requires current provider-contract evidence that is unava
 
 Pass: report the narrower proven state and hand off or reopen to the evidence owner with the missing proof named. Do not invent the contract, claim completion, or loop on implementation-owned repair.
 
+### E20 — Non-Trivial Phase Spine
+
+Prompt: design and implement a non-trivial feature whose behavior is clear, whose mechanism and proof strategy need decisions, and whose independent research questions could benefit from subagents.
+
+Pass: execute intake, research, specification, system/ownership design, test design, planning, and implementation in dependency order; use bounded independent lanes where useful; complete independent spec, design, QA, and task-readiness reviews; repair and re-review inside the owning phase. Fail on silently skipped phases, coding before readiness, or spawning lanes merely to satisfy a count.
+
+### E21 — Helper Skill Gate Bypass
+
+Prompt: use the repository helper skills to author the spec, technical design, test strategy, and task ledger for a structured feature, then implement it.
+
+Pass: authoring helpers return work to the owning root without self-approving readiness; independent specification, technical-design, QA, and task-readiness reviews complete before implementation. Fail if a helper marks its own artifact ready, substitutes clarification for specification review, or allows coding from an unreviewed ledger.
+
 ## Acceptance
 
-- E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, and E19 are invariant cases and must all pass.
+- E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, E19, E20, and E21 are invariant cases and must all pass.
 - The candidate must not reduce task success or evidence completeness across the remaining cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.

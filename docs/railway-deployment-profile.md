@@ -38,6 +38,8 @@ Migration baseline:
 - The runtime image must ship `/migrate` and `/env/migrations/`.
 - Normal app startup must not own migrations.
 - Same-deploy schema changes must remain mixed-version compatible while Railway overlap is enabled.
+- Destructive or contract-only schema changes require a staged expand/migrate/verify/contract rollout.
+- A failed pre-deploy migration blocks promotion; fix the migration or configuration and redeploy while the old release remains active. Do not move migration ownership into app startup as a workaround.
 
 Release evidence baseline (tracked in comments and rollout evidence):
 

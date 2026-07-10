@@ -11,4 +11,4 @@ Choose observable mechanism before package placement. Name source of truth, cont
 
 Prefer one `design/overview.md`; split a focused artifact only when it creates a real owner or review boundary. Compare stdlib, repository patterns, mature OSS, and custom machinery when the choice is live. Reject speculative interfaces, layers, and generic shared packages.
 
-Success means planning can name files, owners, dependencies, tests, cleanup, and proof without making design decisions. In review mode, return anchored `PASS`, `CONCERNS`, or `FAIL` findings without editing.
+Authoring is review-ready when planning could name files, owners, dependencies, tests, cleanup, and proof without making design decisions. Structured/orchestrated work proceeds to planning only after independent technical-design review has no blocker. In explicitly read-only review mode, return anchored `PASS`, `CONCERNS`, or `FAIL` findings without editing.

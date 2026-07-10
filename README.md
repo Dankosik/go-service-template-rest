@@ -27,32 +27,32 @@ This template connects the two while keeping the prompt surface lean:
 ## Workflow
 
 ```text
-intake -> research? -> specification? -> design? -> test design? -> planning? -> implementation and verification
+intake -> research -> specification -> system/integration design -> Go ownership design -> test design -> planning -> implementation and verification
 ```
 
-Question marks are intentional. The workflow chooses among three paths:
+The workflow chooses among three paths:
 
 - `direct`: clear, small, reversible work with obvious ownership and proof;
-- `structured`: the normal non-trivial case, using only the useful subset of spec/design/test/tasks artifacts;
+- `structured`: the normal non-trivial case, with reviewed `spec.md` and `tasks.md` plus only the design/test artifacts that carry live decisions;
 - `orchestrated`: broad, hard-to-reverse, multi-owner, evidence-heavy, explicitly multi-agent, or multi-session work.
 
-Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every phase or artifact.
+Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require full-depth work or a durable artifact in every phase.
 
-One authorized request may cross several phases. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Review belongs to the artifact being evaluated and is independent when the user requires it or when impact, reversibility, ambiguity, or weak self-falsification justifies it. Review, in-scope repair, fresh re-review, validation, and closeout stay inside the owning macro phase; a next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
+Structured and orchestrated work evaluates every phase boundary in order. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Review, in-scope repair, fresh re-review, validation, and closeout stay inside the owning macro phase; a next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
 
 ### Artifacts
 
 | Artifact | Use when | Owns |
 | --- | --- | --- |
-| `spec.md` | Behavior/scope decisions must survive implementation. | Outcome, behavior, invariants, constraints, risks, proof expectations. |
+| `spec.md` | Required for structured/orchestrated work; optional for direct work. | Outcome, behavior, invariants, constraints, risks, proof expectations. |
 | `design/` | Implementation would otherwise choose mechanism or ownership. | Contracts, source of truth, sequence/failures, data, rollout, Go package/file ownership. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations and observables. |
-| `tasks.md` | Work has dependent steps, actors, or checkpoints. | Executable order, owners, proof, progress, completion condition. |
+| `tasks.md` | Required for structured/orchestrated work; direct work may plan inline. | Executable order, owners, proof, progress, completion condition. |
 | `research/` | Evidence must be reused, refreshed, or audited. | Findings, limits, conflicts, decision impact. |
 | `rollout.md` | Deployment/migration/backfill has a real sequence. | Operational gates, rollback/failback, observables. |
 | `workflow-plan.md` | Cross-session or multi-lane resume needs a control point. | Goal, current phase, active artifacts, blocker, next action. |
 
-Use `status: draft | ready | blocked | done` when durable status is useful. Do not create `workflow-plans/<phase>.md` or parallel state fields unless a concrete external consumer requires them.
+Use `status: draft | ready | blocked | done` when durable status is useful. Do not create per-phase control files or parallel state fields.
 
 ## Agents And Skills
 
@@ -68,9 +68,9 @@ make skills-check
 make workflow-behavior-evals-check
 ```
 
-The behavior-eval check validates the E01–E19 manifest only. Actual baseline/candidate model comparison uses `make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The behavior-eval check validates the E01–E21 manifest only. Actual baseline/candidate model comparison uses `make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
-Use subagents only for concrete, independent, bounded questions where separate context or review independence improves the result. Keep sequential and tightly coupled work local. The root owns synthesis, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
+At each active macro phase, evaluate whether concrete, independent, bounded subagent lanes improve evidence or review independence. Use only useful lanes and keep sequential work local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. The root owns synthesis, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
 
 Representative agents:
 

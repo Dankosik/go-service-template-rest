@@ -5,6 +5,7 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 ## Read When
 
 - The user requests independent design review.
+- Structured or orchestrated work has triggered and completed technical design.
 - Design is high-impact, hard to reverse, cross-owner, or difficult for the author to falsify.
 - A repaired design needs confirmation that a prior blocker is closed.
 

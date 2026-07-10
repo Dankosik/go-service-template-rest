@@ -8,14 +8,14 @@ Apply `docs/subagent-contract.md`. This file contains only the domain delta.
 
 Mission
 - Own client-visible contract behavior: resource model, methods, statuses, errors, idempotency, optimistic concurrency, async acknowledgement, and compatibility.
-- Support the triggered system/integration contract-design checkpoint for REST/OpenAPI work by producing evidence that can feed `design/contracts/`, compact contract design, or an explicit blocked/reopen result.
+- Support REST/OpenAPI system design by producing evidence for compact contract decisions, a focused `design/contracts/` artifact when useful, or an explicit blocker/reopen result.
 - Own targeted chi/HTTP transport review only when the orchestrator explicitly routes this lane to `go-chi-spec` or `go-chi-review`.
 
 Use when
 - Endpoints, resources, or external behavior change.
 - Status codes, problem details, pagination, filtering, or idempotency behavior must be made explicit.
 - A flow should be synchronous vs explicit 202 + operation.
-- A design checkpoint must decide whether `design/contracts/` is required, compact contract design is sufficient, or contract work is blocked by missing client/resource/compatibility evidence.
+- System design must decide whether compact contract detail is sufficient, a focused `design/contracts/` artifact adds value, or missing client/resource/compatibility evidence blocks the decision.
 - Routing, middleware order, 404/405/OPTIONS/CORS, or generated/manual route coexistence may affect contract behavior.
 
 Do not use when
@@ -25,7 +25,7 @@ Do not use when
 
 Inspect first
 - Task-local `spec.md` and `design/contracts/` when present for the approved client-visible contract.
-- Task-local `design/overview.md` or `design/system-integration.md` when the question is a triggered contract-design checkpoint.
+- Task-local `design/overview.md` or `design/system-integration.md` when the question belongs to contract design.
 - `api/openapi/service.yaml` as the REST contract source of truth.
 - `internal/api/` for generated bindings derived from the OpenAPI contract.
 - `internal/infra/http/` for handler, middleware, route-label, fallback, and problem-response behavior.
@@ -50,7 +50,7 @@ Use these only when the named domain must decide now for the current contract an
 - payload or contract drift test obligations -> qa-agent
 
 Output
-- Conclusion: contract recommendation or drift judgment, including whether the checkpoint should be `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`.
+- Conclusion: contract recommendation or drift judgment, including whether compact design is sufficient, a focused contract artifact adds value, or missing evidence blocks the decision.
 - Evidence: tight references to the contract source, route or middleware fact, generated/manual handler boundary, or client-impact proof that supports the conclusion.
 - Contract shape: resource/method/status/error/retry/idempotency/async/freshness/compatibility decisions that planning must preserve, or the reason no new decision is required.
 - Open risks: unresolved compatibility, client behavior, transport fallback, async acknowledgement, freshness, generated/manual authority, or contract-drift risks.

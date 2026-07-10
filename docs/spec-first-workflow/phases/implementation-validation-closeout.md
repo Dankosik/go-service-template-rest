@@ -5,12 +5,12 @@ Make the requested change, review the resulting diff, and prove the accepted out
 ## Read When
 
 - The request authorizes change/build/fix and required decisions are ready.
-- Direct work has a clear inline outcome and proof, or structured/orchestrated work has a ready ledger.
+- Direct work has a clear inline outcome and proof, or structured/orchestrated work has a ready independently reviewed ledger.
 - Existing implementation needs repair, review, validation, or closeout.
 
 ## Inputs
 
-- Accepted direct outcome or current `tasks.md`.
+- Accepted direct outcome or current reviewed `tasks.md`.
 - Required spec, design, test, and rollout decisions named by the work.
 - Current repository state, including pre-existing user changes.
 - Repository-owned generation and validation commands.

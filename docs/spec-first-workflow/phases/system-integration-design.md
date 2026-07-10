@@ -45,7 +45,7 @@ Calls to another service require current provider-contract evidence. `design/con
 
 Use specialist lanes only for live independent forks that can change the mechanism. Examples: sync vs async, source A vs B, fail-closed vs degraded, or expand/backfill/contract vs one-step migration. Domain names alone do not justify lanes.
 
-Run [Technical Design Review](technical-design-review.md) as an internal checkpoint when the mechanism is high-impact, hard to reverse, cross-owner, or difficult to falsify locally. The owning root handles repair and fresh re-review in the same root session.
+For structured or orchestrated work, run [Technical Design Review](technical-design-review.md) after the system and Go-ownership decisions are complete. The owning root handles repair and fresh re-review in the same root session. Direct work uses independent design review only when the user or risk requires it.
 
 ## Stop Rule
 
