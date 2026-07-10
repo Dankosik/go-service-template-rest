@@ -34,7 +34,7 @@ It must not write or repair `spec.md`, design, `test-plan.md`, `tasks.md`, code,
 4. Preserve only evidence that aids synthesis, auditability, or resume. Record absence as a source limit unless the searched source is authoritative for absence.
 5. Reconcile conflicts and classify unresolved points as blocks_spec, proof_only, accepted_risk, or needs_specialist.
 
-Missing explicit subagent authorization is not a valid local research rationale. Record the blocked gate and obtain the exact authorization line from the canonical handoff owner.
+Repository-standing `capability_only` authorization covers required read-only research lanes. Missing runtime capability is not a valid local research rationale until the configured independent fallback also fails.
 
 ## Success, Blocked Stop, And Reopen
 

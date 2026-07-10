@@ -65,7 +65,7 @@ Default lane candidates:
 - ownership and implementation handoff: Goal Contract, implementation execution mode, isolated-worker boundaries when present, read-before-coding set, task-specific read set, owner package/file or placement rule, source responsibility audit, implementation quality bar, resume rule, and blocked-stop rule are usable by a new session;
 - triggered specialist lenses: API, data, security, reliability, observability, performance, delivery, rollout, dependency/OSS, Pattern Fit, generated-source, mirrored-source, or legacy-cleanup lanes when those surfaces are part of the approved artifact chain.
 
-A single-lane or scoped-down review records the independent questions considered and why any omitted question cannot change readiness. It does not inventory every domain touched by the task. Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:` for an actually required lane. Without recorded task-ledger review status or a valid rationale, implementation readiness remains `FAIL` or blocked.
+A single-lane or scoped-down review records the independent questions considered and why any omitted question cannot change readiness. It does not inventory every domain touched by the task. Repository-standing `capability_only` authorization covers an actually required read-only lane; missing runtime capability is not a valid `Ledger-review fan-out rationale:` until the configured independent fallback also fails. Without recorded task-ledger review status or a valid rationale, implementation readiness remains `FAIL` or blocked.
 
 Each material lane finding should be synthesis-ready:
 

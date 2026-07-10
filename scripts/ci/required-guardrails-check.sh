@@ -267,7 +267,7 @@ require_regex 'silent inheritance from the root session is invalid' "docs/spec-f
 require_regex 'make agents-check' ".github/workflows/ci.yml" "CI must check Codex/Claude agent mirror drift"
 require_regex 'AGENTS_SYNC_SCRIPT' "Makefile" "Makefile must expose agent mirror sync/check targets"
 require_regex 'Subagent gate: complete \| scoped_down \| local_only \| waived \| not_expected \| blocked' "AGENTS.md" "AGENTS.md must keep subagent gate readiness status explicit"
-require_regex 'missing explicit subagent authorization' "AGENTS.md" "AGENTS.md must block instead of local-only when subagent authorization is missing"
+require_regex 'standing `capability_only` authorization' "AGENTS.md" "AGENTS.md must provide standing read-only subagent authorization without changing execution shape"
 require_regex 'Direct-path code writing is the narrow exception' "AGENTS.md" "AGENTS.md must preserve the current-session direct writer exception"
 require_regex 'For approved ledgers with code-writing implementation, worker delegation is mandatory' "AGENTS.md" "AGENTS.md must preserve ledger-backed worker execution"
 require_regex 'Design fan-out: complete \| scoped_down \| local_only \| blocked' "AGENTS.md" "AGENTS.md must keep design-checkpoint authoring fan-out status explicit"
@@ -276,7 +276,7 @@ require_regex 'Default to no more than three concurrently active subagent lanes 
 require_regex 'FANOUT-INDEPENDENT' "AGENTS.md" "canonical fan-out decision must remain machine-visible"
 require_regex 'FANOUT-LOCAL' "AGENTS.md" "canonical local-work decision must remain machine-visible"
 require_regex 'FANOUT-CONCURRENCY' "AGENTS.md" "canonical fan-out concurrency policy must remain machine-visible"
-require_regex 'When the next phase is a design authoring checkpoint, the prompt must name exactly one checkpoint' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "design checkpoint handoff prompts must name one checkpoint and start with design fan-out"
+require_regex 'When the next macro phase is technical design, the prompt starts `technical-design-session`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "technical-design handoffs must start the owning macro session rather than expose internal checkpoints"
 require_regex '^## Compact Handoff Contract$' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "shared handoff doc must own the compact chat handoff contract"
 require_regex 'This file is the single owner of the chat handoff contract' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "shared handoff doc must remain the single prompt-contract owner"
 require_regex '^### Skill Wrapper Boundary$' "docs/spec-first-workflow.md" "workflow router must define the thin session-wrapper boundary"
@@ -335,8 +335,8 @@ for skill_file in .agents/skills/*/SKILL.md; do
 done
 
 require_regex 'Subagent Gate Decision' "docs/spec-first-workflow/phases/specification.md" "lean spec template must keep Subagent Gate Decision"
-require_regex 'System / Integration Design Phase' "docs/spec-first-workflow/phases/system-integration-design.md" "system/integration design phase doc must exist"
-require_regex 'Go Code / Ownership Design Phase' "docs/spec-first-workflow/phases/go-code-ownership-design.md" "go code ownership design phase doc must exist"
+require_regex 'System / Integration Design Checkpoint' "docs/spec-first-workflow/phases/system-integration-design.md" "system/integration design checkpoint doc must exist"
+require_regex 'Go Code / Ownership Design Checkpoint' "docs/spec-first-workflow/phases/go-code-ownership-design.md" "Go code ownership design checkpoint doc must exist"
 require_regex 'Test Design Phase' "docs/spec-first-workflow/phases/test-design.md" "test-design phase doc must exist"
 require_regex 'Design fan-out \(system/integration\): complete \| scoped_down \| local_only \| blocked' "docs/spec-first-workflow/phases/system-integration-design.md" "system/integration design must require checkpoint-scoped design fan-out"
 require_regex 'Design fan-out \(go-code/ownership\): complete \| scoped_down \| local_only \| blocked' "docs/spec-first-workflow/phases/go-code-ownership-design.md" "go code ownership design must require checkpoint-scoped design fan-out"
@@ -348,7 +348,7 @@ require_regex 'Test-design consumed' "docs/spec-first-workflow/phases/planning.m
 require_regex 'Test-design consumed' "docs/spec-first-workflow/phases/task-review-readiness.md" "task-review handoff must verify consumed test-design status"
 require_regex 'Subagent gates consumed' "docs/spec-first-workflow/phases/planning.md" "tasks template must record consumed subagent gates"
 require_regex 'Ledger-review fan-out rationale' "docs/spec-first-workflow/phases/task-review-readiness.md" "task-review handoff must record ledger-review fan-out rationale"
-require_regex 'Subagent authorization: I explicitly request and authorize read-only subagents, delegation, and parallel agent work' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "workflow handoff prompts must carry explicit subagent authorization"
+require_regex 'Do not ask the user to repeat an authorization line in a handoff' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "workflow handoffs must rely on repository-standing read-only authorization"
 require_regex 'Read-only enforcement' "docs/subagent-brief-template.md" "subagent brief template must require read-only enforcement, not prompt-only boundary"
 require_regex '^## Approval Or Review Gate Variant$' "docs/subagent-brief-template.md" "subagent brief template must keep one compact approval/review variant"
 require_regex 'Finding format: <artifact anchor; evidence; impact; classification; owner/reopen target; why not stronger/weaker>' "docs/subagent-brief-template.md" "approval/review briefs must require anchored findings"
@@ -356,7 +356,7 @@ require_regex 'lens coverage table' "docs/spec-first-workflow/phases/specificati
 require_regex '^## Gate Preservation$' "docs/subagent-contract.md" "subagent contract must preserve mandatory independent gates without broad fan-out"
 require_regex 'one concrete, independent, bounded question' "docs/subagent-contract.md" "subagent contract must keep one-question ownership"
 require_regex 'root orchestrator owns' "docs/subagent-contract.md" "subagent contract must keep root synthesis authoritative"
-require_regex 'missing explicit subagent authorization' "docs/subagent-contract.md" "subagent contract must block when authorization is missing instead of silently going local-only"
+require_regex 'standing `capability_only` authorization' "docs/subagent-contract.md" "subagent contract must preserve repository-standing read-only authorization"
 require_regex '^## Shared Review Finding Envelope$' "docs/subagent-contract.md" "subagent contract must own the shared review finding envelope"
 
 router_skills=(
@@ -400,10 +400,10 @@ require_regex '^# Specification Review Session$' ".agents/skills/specification-r
 require_regex 'docs/spec-first-workflow/phases/specification-review.md' ".agents/skills/specification-review-session/SKILL.md" "specification-review wrapper must delegate lens and finding rules to the canonical phase owner"
 require_regex 'mandatory specification review' ".agents/skills/planning-session/SKILL.md" "planning session must block on missing mandatory specification review"
 require_regex 'completed design fan-out result' ".agents/skills/planning-session/SKILL.md" "planning session must block on missing design fan-out"
-require_regex 'missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`' ".agents/skills/planning-session/SKILL.md" "planning session must not convert missing subagent authorization into local review"
+require_regex 'Repository-standing authorization covers read-only ledger review' ".agents/skills/planning-session/SKILL.md" "planning session must consume repository-standing read-only authorization"
 require_regex 'specification-review-approved `spec\.md`' ".agents/skills/technical-design-session/SKILL.md" "technical-design session must start only from specification-review-approved spec"
 require_regex 'specification-review-approved `spec\.md`' ".agents/skills/planning-and-task-breakdown/SKILL.md" "planning-and-task-breakdown must start only from specification-review-approved spec"
-require_regex 'Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`' ".agents/skills/planning-and-task-breakdown/SKILL.md" "planning-and-task-breakdown must not convert missing subagent authorization into local review"
+require_regex 'Missing runtime capability is not a valid `Ledger-review fan-out rationale:`' ".agents/skills/planning-and-task-breakdown/SKILL.md" "planning-and-task-breakdown must try the independent fallback before blocking"
 require_regex 'Execution shape: <canonical value, matched SHAPE-\* rule, decisive evidence>' ".agents/skills/workflow-status/SKILL.md" "workflow-status must report canonical shape and evidence"
 require_regex 'Adequacy: <required by ADEQUACY-\* yes/no; result, evidence, validity>' ".agents/skills/workflow-status/SKILL.md" "workflow-status must report adequacy state and evidence"
 require_regex 'Do not create or repair `test-plan\.md` during planning' ".agents/skills/planning-and-task-breakdown/SKILL.md" "planning-and-task-breakdown must not create or repair test-plan during planning"
@@ -523,6 +523,13 @@ require_regex 'skills non-strict target-only' "scripts/ci/sync-mirror-integratio
 require_regex 'repository state changed' "scripts/ci/sync-mirror-integration-check.sh" "mirror integration harness must prove repository state is unchanged"
 
 # New normative output must not regress to retired routing/status terms.
+stale_authorization_matches="$(grep -RInE --exclude-dir=specs --exclude='required-guardrails-check.sh' -- 'missing explicit subagent authorization|Subagent authorization: I explicitly request and authorize' AGENTS.md README.md docs .agents/skills .codex/agents scripts || true)"
+if [[ -n "${stale_authorization_matches}" ]]; then
+  echo "guardrail check failed: active workflow surfaces contain retired explicit-authorization instructions"
+  printf '%s\n' "${stale_authorization_matches}" | sed 's/^/  /'
+  exit 1
+fi
+
 stale_status_matches="$(grep -RInE --exclude-dir=specs --exclude='required-guardrails-check.sh' -- 'pending_task_review|draft_review_ready|eligible same-session collapse|same-session phase collapse|user-requested agent-backed|complex workflow-control|Ready for next session: maybe' AGENTS.md README.md docs .agents/skills .codex/agents scripts || true)"
 if [[ -n "${stale_status_matches}" ]]; then
   echo "guardrail check failed: active workflow surfaces contain retired routing/status terminology"

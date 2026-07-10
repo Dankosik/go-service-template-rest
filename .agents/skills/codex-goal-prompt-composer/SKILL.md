@@ -91,4 +91,4 @@ Expected output: repair the owning artifact so it supplies one durable objective
 Stop after that phase and return the next-session prompt.
 ```
 
-Do not include `Subagent authorization:` in routine implementation Goal prompts. Include the exact line from `docs/spec-first-workflow/shared/subagents-and-handoff.md` only when approved `tasks.md` explicitly requires same-session read-only review, validation, or adequacy fan-out.
+Do not include a `Subagent authorization:` line in implementation Goal prompts. Repository-standing `capability_only` authorization already covers required read-only review, validation, and adequacy lanes; preserve `agent_request=substantive` only when the accepted task intent makes multi-agent participation part of the result.

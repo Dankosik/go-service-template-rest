@@ -42,7 +42,7 @@ It must not write `spec.md`, research notes, design artifacts, `test-plan.md`, `
 4. Run workflow-plan-adequacy-challenge whenever a canonical ADEQUACY-* trigger applies. The challenger may falsify the recorded route but never classify, edit, approve, or reclassify state.
 5. Reconcile findings as the orchestrator and stop before the next phase.
 
-Missing explicit subagent authorization cannot justify local-only, scoped-down, waived, or not-expected treatment. Record the blocked gate and use the exact authorization line from the canonical handoff owner.
+Repository-standing `capability_only` authorization covers the required read-only adequacy check. Missing runtime capability cannot justify local-only, scoped-down, waived, or not-expected treatment until the configured independent fallback also fails.
 
 ## Success, Blocked Stop, And Reopen
 
