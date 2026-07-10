@@ -1,6 +1,6 @@
-# Task Review And Readiness Phase
+# Task Review And Readiness Checkpoint
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when reviewing a completed `tasks.md` draft and deciding whether implementation may start.
+Internal read-only checkpoint companion for the user-started planning macro phase. The planning root invokes it after a completed `tasks.md` draft and after every repair; an explicitly read-only user review may also invoke it directly.
 
 ## Read When
 
@@ -16,15 +16,15 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when revie
 
 ## Outputs
 
-- Task-ledger review/readiness status of `PASS`, `CONCERNS`, `FAIL`, or eligible `WAIVED`.
+- Advisory task-ledger review/readiness recommendation of `PASS`, `CONCERNS`, `FAIL`, or eligible `WAIVED`, anchored to the exact ledger revision.
 - Updated readiness handoff in the active workflow-control surface or short `tasks.md` reference when appropriate.
 - Implementation handoff when readiness allows coding, or the smallest owning reopen target.
 
 ## Stop Rule
 
-Keep task review read-only with respect to implementation and ledger authorship. Stop after task-ledger review/readiness is recorded. Do not start implementation unless a later implementation session is explicitly starting from an approved, reviewed ledger.
+Keep the reviewer read-only with respect to implementation and ledger authorship. Return findings to the planning root; do not edit `tasks.md`, end the user session, or render a next-session prompt. Do not start implementation until the planning macro phase closes with an approved, reviewed ledger.
 
-Do not repair `tasks.md` inline as the reviewer. If the ledger needs edits, record `FAIL` with the smallest owning reopen target, usually `planning`; the planning phase owns ledger changes. If review exposes a missing approved decision, missing test-design scenario source, or stale upstream review, route to specification, specification review, system/integration design, Go code ownership design, technical design, technical design review, or test design instead of filling the gap in task-review wording.
+Do not repair `tasks.md` inline as the reviewer. If the ledger needs edits, record `FAIL` with the smallest owning reopen target, usually the active planning root; it repairs the ledger in the same session and launches fresh re-review. If review exposes a missing approved decision, missing test-design scenario source, or stale upstream review, block with the owning specification, technical-design, or test-design macro-phase reopen target instead of filling the gap in task-review wording.
 
 ## Task-Ledger Review
 
@@ -55,7 +55,7 @@ If the packet cannot be named or contains stale, missing, or unresolved approval
 
 ## Fan-Out And Review Lenses
 
-Before marking non-trivial `tasks.md` approved, use read-only task-ledger review fan-out by default. Each lane reviews the draft ledger against approved artifacts only; no lane edits `tasks.md`, solves missing decisions, or makes the final readiness decision.
+Before marking non-trivial `tasks.md` approved, preserve the mandatory independent task-ledger review boundary with at least one focused read-only lane. Add lanes only for additional concrete, independent, bounded questions that can change readiness and materially benefit from separate context. No lane edits `tasks.md`, solves missing decisions, or makes the final readiness decision.
 
 Default lane candidates:
 
@@ -65,7 +65,7 @@ Default lane candidates:
 - ownership and implementation handoff: Goal Contract, implementation execution mode, isolated-worker boundaries when present, read-before-coding set, task-specific read set, owner package/file or placement rule, source responsibility audit, implementation quality bar, resume rule, and blocked-stop rule are usable by a new session;
 - triggered specialist lenses: API, data, security, reliability, observability, performance, delivery, rollout, dependency/OSS, Pattern Fit, generated-source, mirrored-source, or legacy-cleanup lanes when those surfaces are part of the approved artifact chain.
 
-A local-only or scoped-down review must explicitly list the default lane candidates considered, the evidence checked for each, why omitted lanes cannot change readiness, and the seam that would reopen fan-out. Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:`. Without recorded task-ledger review fan-out status or a valid rationale, implementation readiness remains `FAIL` or blocked.
+A single-lane or scoped-down review records the independent questions considered and why any omitted question cannot change readiness. It does not inventory every domain touched by the task. Missing explicit subagent authorization is not a valid `Ledger-review fan-out rationale:` for an actually required lane. Without recorded task-ledger review status or a valid rationale, implementation readiness remains `FAIL` or blocked.
 
 Each material lane finding should be synthesis-ready:
 
@@ -78,7 +78,7 @@ For `CONCERNS`, the disposition must name the accepted risk or proof obligation 
 Task-ledger review must verify:
 
 - specification review is `PASS` or `CONCERNS` with named accepted risks and proof obligations; a missing, `FAIL`, stale-after-repair, or unresolved specification-review gate blocks handoff;
-- the ledger status is not treated as approved merely because it says `draft_review_ready`; a material repair after a prior task review requires a fresh or explicitly updated task-review verdict;
+- `tasks.md` is not treated as approved merely because `artifact_state=review_ready`; a material repair after a prior task review changes `record_validity` and requires a fresh or explicitly updated task-review verdict for the active routing identity;
 - every in-scope behavior, non-goal, constraint, and accepted decision from reviewed `spec.md` is represented in executable tasking, preserved constraints, or explicit non-task rationale;
 - every accepted specification-review `CONCERNS` proof obligation is represented in executable tasking, design constraints, `test-plan.md`, `rollout.md`, or explicit non-task rationale;
 - every approved dependency/OSS due-diligence decision is represented in executable dependency, integration, license/security, generation, or proof tasks where relevant; if due diligence is missing for custom infrastructure or a new dependency, reopen specification or technical design instead of letting implementation decide;
@@ -86,17 +86,13 @@ Task-ledger review must verify:
 - when separate technical design depth was triggered, design fan-out is `complete`, valid `scoped_down`, or eligible `local_only` for every triggered design checkpoint; a missing, `blocked`, or ineligible `local_only` authoring gate reopens the owning design checkpoint before `tasks.md` can be approved;
 - when separate technical design depth was triggered, the implementation handoff includes `Technical-design-review consumed:` with `PASS` or `CONCERNS`, exact obligation mapping targets, and no unresolved hidden-design-work finding;
 - when `test-plan.md` is triggered, the implementation handoff includes `Test-design consumed:` with approved scenario IDs and each material task referencing those IDs has concrete implementation obligations that split broad scenario rows into source anchor, invariant, forbidden regression or side effect, owning code path, and required proof. No unresolved scenario, proof-level, pass/fail observable, fail-before, or quality-gate gap remains;
-- when `test-plan.md` is not triggered for behavior work, the ledger points to an explicit `test-design: not expected` rationale and keeps proof expectations small enough for direct task traceability;
+- when `test-plan.md` is not triggered for behavior work, the ledger points to a typed `test-plan.md artifact_expectation=not_expected`, `artifact_state=absent`, `record_validity=current`, `waiver_disposition=none` decision with rationale and keeps proof expectations small enough for direct task traceability;
 - when system/integration design was triggered, each planning-critical mechanism used by the ledger has selected or preserved behavior, source-of-truth owner, affected runtime or failure branch, code-carrying constraint, rejected live alternative closure rule, proof carrier, and reopen trigger; missing fields reopen `system-integration design`, not implementation;
 - when contract surfaces are plausible, the ledger consumes a contract-design checkpoint result from reviewed `spec.md`, `design/overview.md`, or `design/contracts/`; changed REST/API, OpenAPI/generated, event, webhook, or material internal interface tasks must name the selected contract shape, runtime source of truth, generated or derived outputs, compatibility class, proof carrier, and reopen target before implementation may start;
 - the Goal Contract names one durable objective, one successful completion condition, one completion-evidence set, and a separate blocked-stop condition; a ledger that treats "recorded blocker" as successful completion reopens planning;
 - the Goal Contract covers every executable task, checkpoint, accepted proof obligation, and ledger-owned closeout surface through final validation, not merely "start implementation", "continue work", "finish the next slice", or "attempt the ledger";
-- `Implementation execution mode` is explicit. For code-writing implementation, worker mode is mandatory and `Implementation execution mode` must be `isolated-cli-worker required`. Any other code-writing mode is `FAIL` to planning. When mode is `isolated-cli-worker required`, the ledger names worker bundle boundaries, launch contract, discovery hints plus any explicitly marked hard boundaries, forbidden edits, parallelism rule, worker proof, orchestrator patch-intake proof, integration proof, and launch/resume failure blocker rule. Discovery hints are not an exhaustive edit allowlist unless the ledger marks them as hard boundaries. Missing, vague, or authority-confusing worker boundaries are `FAIL` to planning;
-- isolated-worker launch contract defaults to `codex exec --cd <isolated-worktree> --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema <schema> -o <final-output> - < <prompt-file>` with event output captured, strict schema used when available, user config/rules inherited, no required named profile, and no forced model/reasoning overrides unless the approved ledger names a task-specific rationale. `--full-auto` is not allowed. `--yolo` or `danger-full-access` is allowed only when the ledger names an externally hardened container/VM/CI runner with no ambient secrets;
-- isolated-worker launch contract does not hard-code user-specific tools as template requirements. Required MCP servers, plugins, hooks, or local CLIs must be task-specific, ledger-named, and have a fallback or blocker rule; otherwise workers may opportunistically use whatever useful tools the inherited Codex environment exposes;
-- worker prompts do not rely on current Codex App thread state, runtime-only tools, chat memory, or unsaved app context. All task-critical context must be present in approved artifacts or the worker prompt;
-- worker prompt lifecycle is explicit: prompt files are temporary stdin inputs, deleted after worker completion or abandonment, and not treated as workflow artifacts or durable evidence;
-- isolated-worker boundaries keep final authority with the orchestrator: worker-local proof is supporting evidence only, `tasks.md` progress and closeout are updated only after integration-workspace proof, and workers cannot edit authoritative workflow artifacts or git state outside their isolated workspace;
+- `Implementation execution mode` is explicit. For code-writing implementation, worker mode is mandatory and `Implementation execution mode` must be `isolated-cli-worker required`. Any other code-writing mode is `FAIL` to planning. When mode is `isolated-cli-worker required`, approved `tasks.md` must carry task-specific worker bundles, constraints or deviations, proof boundaries, failure behavior, and final-authority ownership needed by implementation. Missing, vague, or authority-confusing boundaries are `FAIL` to planning;
+- task-specific worker boundaries conform to the launch, resume, sandbox, prompt-file lifecycle, patch-intake, and integration-proof contract owned by `implementation-validation-closeout.md`; readiness records and generated Goal prompts do not copy that manual or its commands;
 - each task has one reviewable diff story, or the ledger records why coupled changes cannot be split safely;
 - each material task carries enough fields for implementation to start without inventing ownership: intended surface, owner package/file, exact source anchor, dependency or checkpoint, proof, evidence fields, and reopen/stop condition;
 - task coupling rationale is explicit when one task spans multiple surfaces, generated output plus source edits, data plus API changes, or cleanup plus behavior changes; otherwise omnibus tasks reopen planning;
@@ -185,6 +181,7 @@ Minimum result shape:
 
 ```text
 Reviewed ledger: <path and status>
+Routing identity / validity: <routing_scope, routing_revision, record_validity>
 Reviewed artifact chain: <spec review status, design status/review status, test-design status, companion artifacts>
 Ledger-review fan-out: <complete | scoped_down | local_only | not_expected | blocked>
 Review lens coverage:
@@ -198,8 +195,13 @@ Review lens coverage:
 Findings: <none | finding table with owner/reopen target and why not stronger/weaker>
 Accepted concerns/proof obligations: <none | stable IDs with carrying artifact/task/checkpoint and evidence>
 Proof coverage/currentness: <task/checkpoint/final claims, command/read/manual proof, command-source anchor or narrower-proof rationale, freshness rule, negative proof when relevant, reopen target>
-Task ledger review: PASS | CONCERNS | FAIL | WAIVED
-Implementation readiness: PASS | CONCERNS | FAIL | WAIVED
+Task-ledger procedural gate: complete | blocked | waived
+Task-ledger review verdict: PASS | CONCERNS | FAIL | WAIVED
+Task-ledger verdict validity: current | stale | superseded
+Implementation-readiness procedural gate: complete | blocked | waived
+Implementation-readiness verdict: PASS | CONCERNS | FAIL | WAIVED
+Implementation-readiness validity: current | stale | superseded
+handoff_readiness: ready | blocked
 Implementation execution mode: isolated-cli-worker required | not_expected
 Readiness consequence: <implementation may start | implementation may start only with named obligations | implementation blocked>
 Reopen target: <none | planning | test-design | specification | specification-review | system-integration-design | go-code-ownership-design | technical-design-review | user/specialist decision>
@@ -207,7 +209,7 @@ Reopen target: <none | planning | test-design | specification | specification-re
 
 `PASS` requires `covered` or justified `not_applicable` status for coverage/traceability, ordering/checkpoints, proof/QA, handoff/ownership, and every triggered specialist lens. Unexamined plausible lenses are not `not_applicable`; omit a lens only through the recorded local-only or scoped-down rationale.
 
-For `PASS`, summarize the falsification checks that found no blocker. For `CONCERNS`, name each accepted risk or proof obligation and where implementation must close it. For `FAIL`, name the first blocking fact, the smallest owner that can repair it, and whether a follow-up task review is required after repair. For `WAIVED`, name the direct-path or prototype basis, why no protected-domain or non-trivial ledger trigger remains, the skipped gate, the narrower implementation claim, proof still required, and the reopen trigger.
+For `PASS`, summarize the falsification checks that found no blocker. For `CONCERNS`, name each accepted risk or proof obligation and where implementation must close it. For `FAIL`, name the first blocking fact, the smallest owner that can repair it, and whether a follow-up task review is required after repair. For `WAIVED`, name the explicit prototype basis, why the route remains eligible for a scoped ledger-review waiver, the skipped gate, the narrower implementation claim, proof still required, and the reopen trigger. Current `SHAPE-DIRECT` never enters task-ledger review and uses `artifact_expectation=not_expected`, not `WAIVED`, for the absent ledger and review artifacts.
 
 After any task-review `FAIL`, a repaired ledger never inherits the prior approval state. The follow-up review record must name:
 
@@ -224,7 +226,7 @@ Task-ledger review and implementation readiness use the same status vocabulary:
 - `PASS`: coding may start from the approved ledger. Use only when the whole ledger is implementation-ready from the approved start point through final validation, subject only to ledger-defined checkpoint gates; the review packet is current; fan-out status or rationale is eligible; every material task is traceable to approved artifacts; the Goal Contract is strong enough for a Codex Goal; and no hidden architecture, ownership, contract, sequencing, rollout, generated-source, cleanup, or validation decision remains.
 - `CONCERNS`: coding may start only with named accepted risks and explicit proof obligations carried into concrete tasks, checkpoints, `test-plan.md`, `rollout.md`, or explicit non-task rationale. Use only when the ledger is otherwise executable and the remaining concern does not ask implementation to choose a missing decision.
 - `FAIL`: coding must not start; route to the named earlier phase. Use when the ledger needs repair, an approval input is missing or stale, a material source/owner/proof/checkpoint/cleanup/generated-source/handoff field is vague or absent, a protected-domain or `test-plan.md`-referencing task lacks concrete implementation obligations, or implementation would need to make an unapproved decision.
-- `WAIVED`: allowed only for tiny direct-path or explicitly user-requested prototype scope with explicit rationale, no protected-domain or non-trivial ledger trigger remaining, a narrower implementation claim, skipped-gate disclosure, proof still required for that limited claim, and a reopen trigger. It is not available for non-trivial ledgers just because the reviewer is local-only or the change feels low risk.
+- `WAIVED`: allowed only for explicitly user-requested prototype scope whose recorded route remains eligible for a scoped ledger-review waiver, with explicit rationale, no protected-domain trigger, a narrower implementation claim, skipped-gate disclosure, proof still required for that limited claim, and a reopen trigger. It is not available just because the reviewer is local-only or the change feels low risk. Current `SHAPE-DIRECT` is outside this gate.
 
 Do not use `CONCERNS` for missing ledger structure, vague Goal Contract, missing owner package/file, absent proof path, unresolved checkpoint gate, hidden generated-source authority, missing, stale, or unowned generated/mirrored drift plan or proof, or unclassified legacy cleanup. Those are `FAIL` unless the task is eligible for `WAIVED` and the waiver names the exact rationale and narrower implementation claim.
 
@@ -235,7 +237,7 @@ Use this decision order:
 3. If `tasks.md` itself needs edits for coverage, ordering, owner-file/package, Goal Contract, evidence fields, proof mapping, generated/mirrored drift, cleanup audit, resume rule, or implementation handoff, the result is `FAIL` with `planning` as the owner unless the gap belongs to an earlier phase.
 4. If the ledger is executable and all residual items are bounded accepted risks or proof obligations with concrete carrying rows and reopen targets, the result is `CONCERNS`.
 5. If every readiness-critical check is covered or justified not applicable and no residual accepted risk is needed, the result is `PASS`.
-6. Use `WAIVED` only when the work is eligible for direct-path or prototype waiver and the review record names the exact scope reduction and proof boundary.
+6. Use `WAIVED` only when explicitly user-requested prototype work is eligible for a scoped ledger-review waiver and the review record names the exact scope reduction and proof boundary; direct-path work never reaches this decision order.
 
 CONCERNS carry-forward contract:
 
@@ -245,23 +247,30 @@ CONCERNS carry-forward contract:
 
 Weak implementation handoffs are `FAIL` when a later implementation prompt would have to invent the Codex Goal objective, completion condition, first task/checkpoint, proof obligations, accepted concerns, progress-update rule, allowed closeout surfaces, or blocked-stop rule. A strong handoff points to the approved ledger and lets `shared/subagents-and-handoff.md` render the implementation prompt without adding new decisions.
 
-Readiness belongs in the planning or task-review handoff when planning artifacts exist. `workflow-plan.md` and `workflow-plans/planning.md` record the gate status when those artifacts are used; `tasks.md` may carry a short reference. Implementation may start only after task-ledger review produces `PASS`, eligible `CONCERNS`, or eligible `WAIVED`.
+Readiness belongs in the planning or task-review handoff when planning artifacts exist. `workflow-plan.md` and `workflow-plans/planning.md` record `procedural_gate_state` and `review_verdict` separately when those artifacts are used; `tasks.md` may carry a short reference. Implementation may start only after task-ledger review produces `PASS`, eligible `CONCERNS`, or eligible prototype-scoped `WAIVED`.
 
 Use this handoff shape when recording the readiness result:
 
 ```text
-Task ledger review: PASS | CONCERNS | FAIL | WAIVED
-Implementation readiness: PASS | CONCERNS | FAIL | WAIVED
+Routing identity / validity: <routing_scope, routing_revision, record_validity>
+Task-ledger procedural gate: complete | blocked | waived
+Task-ledger review verdict: PASS | CONCERNS | FAIL | WAIVED
+Task-ledger verdict validity: current | stale | superseded
+Implementation-readiness procedural gate: complete | blocked | waived
+Implementation-readiness verdict: PASS | CONCERNS | FAIL | WAIVED
+Implementation-readiness validity: current | stale | superseded
+handoff_readiness: ready | blocked
 Implementation execution mode: isolated-cli-worker required | not_expected
 Consumes: reviewed `spec.md`, specification-review result, compact design or `design/`, technical-design-review result when present
-Technical-design-review consumed: <not expected with rationale | PASS | CONCERNS; obligations mapped to tasks.md/test-plan.md/rollout.md with finding IDs>
-Test-design consumed: <not expected with rationale | approved `test-plan.md` with scenario IDs | blocked with reopen target>
-Design fan-out status: <complete | scoped_down | local_only | blocked | not expected with rationale>
-Subagent gates consumed: <gate status and artifact/evidence pointer, or not expected with rationale>
+Technical-design-review consumed: <PASS | CONCERNS with obligations mapped to tasks.md/test-plan.md/rollout.md and finding IDs; or separate_design_depth=not_expected with owner-trigger rationale>
+Test-design consumed: <test-plan.md artifact_expectation=not_expected, artifact_state=absent, waiver_disposition=none with rationale | approved `test-plan.md` with scenario IDs | blocked with reopen target>
+Separate design depth: <expected with approved artifact pointers | not_expected with owner-trigger rationale>
+Design fan-out status when separate design depth is expected: <complete | scoped_down | local_only | blocked>
+Subagent gates consumed: <typed subagent_gate and artifact/evidence pointer, or not_expected with rationale>
 Ledger-review fan-out: <complete | scoped_down | local_only | not_expected | blocked>
 Ledger-review fan-out rationale: <required when local_only, scoped_down, or not_expected>
 Proof coverage/currentness: <task/checkpoint/final claims, command/read/manual proof, command-source anchor or narrower-proof rationale, freshness rule, negative proof when relevant, reopen target>
 Reopen target: <none | planning | test-design | specification | specification-review | system-integration-design | go-code-ownership-design | technical-design-review>
 ```
 
-When readiness allows coding, render the chat-only implementation prompt using `codex-goal-prompt-composer` and `shared/subagents-and-handoff.md`. If the Goal Contract or readiness record cannot support that prompt without inventing the Codex Goal objective, full-ledger completion condition, accepted concerns, proof obligations, progress-update rule, allowed closeout surfaces, or blocked-stop rule, the result is `FAIL` to planning instead of a weak implementation handoff.
+When readiness allows coding, return the current verdict to the planning root. After it closes planning state, it renders the chat-only implementation prompt using `codex-goal-prompt-composer` and `shared/subagents-and-handoff.md`. If the Goal Contract or readiness record cannot support that prompt without inventing the Codex Goal objective, full-ledger completion condition, accepted concerns, proof obligations, progress-update rule, allowed closeout surfaces, or blocked-stop rule, the result is `FAIL` to same-session planning repair instead of a weak implementation handoff.

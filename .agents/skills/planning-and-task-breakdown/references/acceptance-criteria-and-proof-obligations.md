@@ -44,3 +44,11 @@ This fails because it gives no task-specific condition, no command scope, and no
 - Generated artifact change: generator or drift command first, then targeted tests for consumers.
 - Runtime package change: narrow package test first, broader command only when cross-package behavior or repo policy requires it.
 - Accepted concern: name the residual risk, the proof owed during implementation or validation, and the condition that would reopen planning.
+
+## Evidence Fields And Scenario Binding
+
+- Bind behavior changes and bug fixes to proof-first or test-first tasking by default. If RED proof adds no value, record `Proof-first waiver: <reason>` on the task or checkpoint.
+- When `test-plan.md` exists, reference the exact `TD-*` IDs, proof levels, pass/fail observables, fail-before expectations, quality gates, and reopen targets. Planning consumes those decisions; it does not invent them.
+- Use `Command/read`, `Result`, `Key output/ref`, `Changed proof files`, and `Residual blocker/narrower claim` when the implementation session must update evidence. One narrow task may use a single evidence line.
+- A task stays unchecked when proof is skipped, unavailable, stale, failing, or narrower than its claim. Record `Blocked:` or the narrower verified result instead.
+- Generated and mirrored work needs owner-first change, regeneration/sync, and drift proof. Replacement work needs named negative proof for retired identifiers and retained-surface evidence when old artifacts remain intentionally.

@@ -1,7 +1,6 @@
 # Repo Profile
 
-Use this file as the always-on background layer for this skill.
-It captures only durable facts that materially improve downstream context and handoff prompts.
+Load this file only when a durable repository fact could change the handoff's owner, source-of-truth guidance, starting surface, or proof command. Skip it when the source task is already repository-grounded.
 
 ## What This Repository Is
 - This repo is an AI-native Go REST service template for coding-agent workflows.
@@ -68,6 +67,7 @@ It captures only durable facts that materially improve downstream context and ha
 - Skill mirrors: `make skills-sync`, `make skills-check`
 
 ## Context Rules For This Skill
+- Do not inject this profile as a standard project summary.
 - Inject only the repo facts that help the current task context.
 - Prefer exact paths and source-of-truth files over broad directory descriptions.
 - Mention template/bootstrap caveats only when the task is actually about repo initialization or module path setup.

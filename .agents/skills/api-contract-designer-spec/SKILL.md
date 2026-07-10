@@ -5,248 +5,61 @@ description: "Design API-contract-first specifications for Go services. Use when
 
 # API Contract Designer Spec
 
-## Purpose
-Turn product and behavior changes into one target-state client-visible API contract that is explicit enough for OpenAPI, implementation, tests, and any unavoidable compatibility work to converge without semantic drift.
+## Trigger And Scope
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+Use this skill before coding when a Go service needs a new or changed client-visible REST contract: resource/URI model, methods and statuses, representations and errors, collections, retries and preconditions, async/bulk/upload/webhook behavior, freshness, limits, or compatibility evolution.
 
-## Specialist Stance
-- Treat the API as a client-visible compatibility contract, not a handler sketch.
-- Trace every nontrivial recommendation through request parsing, response shape, error semantics, retry behavior, and client migration impact.
-- Prefer the smallest contract surface that solves the caller problem and keeps future compatibility honest.
-- Hand off routing, storage, security, distributed completion, and worker-runtime decisions when they become the primary owner of the hard question.
+Own wire-visible semantics, not chi topology, handler/repository code, SQL schema, service decomposition, worker runtime, distributed orchestration, or low-level security/observability operations. Hand those questions to their owners once the contract consequence is explicit.
 
-## Scope
-Use this skill to define or review REST API behavior before coding:
-- resource and URI model
-- HTTP methods, statuses, and mutation semantics
-- request, response, and error contracts
-- pagination, filtering, sorting, sparse-field, and bulk-result semantics
-- retry classification, idempotency, and optimistic-concurrency rules
-- async or long-running operation behavior
-- consistency and freshness disclosure at the API boundary
-- boundary-visible validation, limits, auth-context, correlation, and rate-limit semantics
-- compatibility-safe evolution and deprecation strategy
+## Approved Input And Decision Boundary
 
-## Boundaries
-Do not:
-- redesign service decomposition, storage topology, or distributed orchestration as the primary output
-- take ownership of chi router topology, SQL schema and migration design, or worker runtime wiring as the main result
-- prescribe low-level handler, middleware, repository, or client implementation as the deliverable
-- push client-visible behavior into “implementation details later”
+Inspect the client problem, affected callers and trust boundary, current public contract and OpenAPI/generator authority, compatibility commitments, consistency and retry expectations, owning resource/service, and any approved architecture/data/security decisions. Treat missing client-visible facts as labeled assumptions or blockers, never handler guesses.
 
-## Escalate When
-Escalate if resource ownership, client audience, consistency model, retry expectations, or rollout compatibility cannot be made explicit, or if API-visible behavior depends on unresolved routing, security, distributed, or data/cache decisions.
+When used in system/integration design, close the contract checkpoint as `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`; name the runtime source of truth and generated consumers. This skill recommends the contract decision and proof carrier but does not propagate artifacts or claim generated files were changed.
 
-## Core Defaults
-- REST over HTTP with JSON payloads; OpenAPI must mirror the approved wire contract rather than outrank it.
-- Keep API major version in the URI prefix as this skill's default; preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it.
-- Use `application/problem+json` as the default HTTP error model unless the API already has a stable error profile; if changing profiles, treat it as compatibility work.
-- Prefer resource or operation resources over action-RPC endpoints.
-- Prefer cursor pagination for mutable or large collections; use offset only when drift, bounded size, and jump-to-page UX are acceptable.
-- Prefer honest async acknowledgement over fake synchronous success.
-- Treat the prompt's stated client problem as the contract budget. Do not widen media types, enum values, flows, or control surfaces unless they remove a concrete ambiguity.
-- Missing contract facts become explicit assumptions or blockers, not implementation guesses.
+## Contract Invariants And Defaults
 
-## Reference Files
-Use reference files lazily as compact rubrics and example banks. Read only the file that matches the contract symptom in front of you, then synthesize the relevant decision rule or counterexample into the task's `spec.md` or API decision output. Do not treat references as exhaustive checklists, and do not paste examples wholesale into deliverables.
+1. **The API is a compatibility contract.** Define what clients send, observe, retry, reconcile, and migrate; do not let implementation or OpenAPI generation invent semantics.
+2. **Resources and lifecycle lead handler shape.** Prefer collection/item, sub-resource, or operation resources over action-RPC endpoints; expose accepted, persisted, observable, and terminal moments separately when they differ.
+3. **HTTP semantics stay precise.** Methods, success statuses, `Location`, validators, preconditions, content negotiation, and negative statuses must agree across endpoint matrices, schemas, examples, and retry behavior.
+4. **Representations are deterministic.** Define required/read-only/write-only fields, omitted versus `null` versus empty, identifiers, time, exact money/precision, enum evolution, normalization, unknown fields, and boundary limits.
+5. **Errors are stable and sanitized.** Default to one `application/problem+json` profile unless an established API profile wins; distinguish caller correction, auth/concealment, conflict/precondition, overload/dependency failure, and accepted-later-failed work.
+6. **Retries cannot duplicate business effects.** Classify every operation by retry safety; define idempotency key scope/TTL/replay/payload-mismatch behavior and optimistic concurrency where writes can race.
+7. **Async and eventual behavior is honest.** Use `202` only with durable recovery/reporting responsibility; define operation or bulk result lifecycle, webhook dedup/reordering, authoritative read path, freshness, and timeout-recovery behavior.
+8. **Evolution is explicit.** Preserve the existing versioning policy; otherwise default the major version to the URI. Classify breaking and non-breaking changes, coexistence, deprecation/sunset, and removal proof instead of hiding compatibility work.
 
-| Task symptom | Read |
-| --- | --- |
-| Error payloads, Problem Details, validation errors, auth/concealment status policy, field-level errors, sanitized negative paths | `references/problem-details-errors.md` |
-| HTTP method selection, `PUT` vs `PATCH`, create/update/delete status codes, `201`/`202`/`204`, `Location`, `ETag`, content negotiation status codes | `references/http-method-status-semantics.md` |
-| List endpoints, cursor or offset pagination, filters, sort syntax, sparse fields, `total_count`, collection links, multi-item result semantics | `references/pagination-filtering-sorting.md` |
-| Write retries, `Idempotency-Key`, timeout recovery, idempotency TTL/scope, `If-Match`, `If-None-Match`, `409` vs `412` vs `428` | `references/idempotency-preconditions-retries.md` |
-| Long-running work, `202 Accepted`, operation resources, polling, retention, bulk operations, callbacks, webhooks, event deduplication | `references/async-operations-and-webhooks.md` |
-| Compatibility class, status/error behavior changes, pagination changes, enum/nullability/default changes, URI versioning, Deprecation/Sunset, coexistence | `references/compatibility-and-versioning.md` |
+Default to JSON over HTTP, resource-oriented contracts, cursor pagination for mutable or large collections, and the smallest surface that solves the stated caller problem. Defaults yield to an established approved contract or concrete client need.
 
-If several symptoms apply, read the smallest set of references that covers the contract risk. Keep the final recommendation contract-first and hand off chi routing, SQL schema, worker runtime, distributed orchestration, and implementation details to their owners.
+## Symptom-Driven Reference Selector
 
-## Expertise
+Load at most one reference by default. Load more only when independent contract pressures exist. State the expected behavior change before loading; examples are rubrics, not copy-ready decisions.
 
-### Contract Framing And Consumer Model
-- Resolve affected clients, trust boundary, consistency expectations, retry behavior, and ownership assumptions first.
-- Separate immediate acceptance from eventual completion. If write acknowledgement and final business state differ, model them separately.
-- Distinguish actor identity, tenant scope, and business resource references. Auth-derived tenancy does not by itself remove legitimate business identifiers from the contract.
-- Choose between CRUD resource, sub-resource, and operation/job resource based on client semantics, not internal handler shape.
-- Do not introduce extra accepted media types, terminal statuses, or companion endpoints just for “completeness”; every addition needs a prompt-backed or repo-default-backed reason.
-- For nontrivial contract questions, compare multiple options only when a real `live fork` exists before selecting one.
+| Symptom or decision pressure | Load | Behavior change |
+| --- | --- | --- |
+| Resource versus operation shape, URI ownership, representation fields, lifecycle states, nullability, timestamps, money, or enum behavior is unclear. | [resource-representations-and-lifecycle.md](references/resource-representations-and-lifecycle.md) | Model the client-visible resource and observable lifecycle instead of mirroring handlers or database rows. |
+| `GET`/`POST`/`PUT`/`PATCH`/`DELETE`, `201`/`202`/`204`, `Location`, validators, or content-negotiation statuses are disputed. | [http-method-status-semantics.md](references/http-method-status-semantics.md) | Choose standards-consistent method/status semantics and make edge behavior explicit. |
+| Problem Details, validation errors, auth/concealment, field errors, sanitized negative paths, or status mapping is unclear. | [problem-details-errors.md](references/problem-details-errors.md) | Produce one stable caller-actionable error profile instead of ad hoc or leaked failures. |
+| Cursor/offset pagination, filters, sorting, sparse fields, counts, links, or multi-item collection results are changing. | [pagination-filtering-sorting.md](references/pagination-filtering-sorting.md) | Define deterministic bounded collection semantics instead of implementation-shaped querying. |
+| Write retries, `Idempotency-Key`, timeout recovery, `If-Match`, `If-None-Match`, `409`/`412`/`428`, or replay results are live questions. | [idempotency-preconditions-retries.md](references/idempotency-preconditions-retries.md) | Make acceptance and replay safe instead of treating network retries as transport-only behavior. |
+| Long-running work, `202`, operations, bulk work, uploads, callbacks, or webhooks are in scope. | [async-operations-and-webhooks.md](references/async-operations-and-webhooks.md) | Give clients a durable completion, failure, dedup, and recovery model instead of fake synchronous success. |
+| Strict decoding, limits, tenant/actor binding, correlation, rate limits, authoritative reads, or freshness/read-after-write is unclear. | [boundary-validation-and-freshness.md](references/boundary-validation-and-freshness.md) | Specify the boundary pipeline and reconciliation path instead of leaving correctness to middleware or cache behavior. |
+| Status/error/enum/pagination/nullability/default behavior changes, versioning, coexistence, deprecation, or sunset is involved. | [compatibility-and-versioning.md](references/compatibility-and-versioning.md) | Classify migration impact and removal conditions instead of calling a wire change “internal.” |
 
-### Resource Modeling And URI Semantics
-- Model business resources, not RPC verbs.
-- Use collection and item shape by default.
-- Use sub-collections only when ownership is real.
-- Keep URI depth small and stable.
-- Use lowercase kebab-case path segments and plural collection nouns.
-- Use opaque identifiers; do not leak DB, topology, or queue details into URIs.
-- When bulk or long-running behavior exists, prefer a job or operation resource instead of overloading an existing item endpoint.
+## Required Evidence And Deliverable
 
-### Representation And Lifecycle Semantics
-- Define the canonical read representation, write-only inputs, read-only outputs, server-assigned fields, and whether omitted versus explicit `null` have different meaning.
-- Distinguish accepted, persisted, externally observable, and terminal business state. If those moments differ, expose them separately instead of collapsing them into one ambiguous status.
-- Define lifecycle states and legal transitions at the API boundary; if a state cannot be reached or observed by clients, do not put it in the public contract.
-- Use stable encodings for identifiers, timestamps, money, percentages, and high-precision numbers. When rounding matters, do not default to floating-point JSON numbers unless the prompt or established API policy explicitly requires them.
-- Default timestamps to RFC 3339 UTC and state timestamp precision when concurrency, ordering, or webhook reconciliation depends on it.
-- Treat enum shape as contract surface. If future values are plausible, either state that clients must tolerate unknown values or avoid pretending the enum is closed.
+For each material contract decision, record the client problem, affected consumers, governing current contract/source, whether a real live fork exists, selected option, rejected viable options when applicable, observable request/success/error/retry/freshness behavior, compatibility class, generated-source impact, testable acceptance boundaries, assumptions, and reopen trigger.
 
-### HTTP Method, Status, And Mutation Semantics
-- `GET` is safe and idempotent.
-- `POST` asks the target resource to process the representation; default to subordinate-resource create or operation start, and allow other resource-specific processing only when the contract names the resource semantics and retry behavior.
-- `PUT` is full replacement and idempotent by contract.
-- `PATCH` is partial update and must define omitted versus `null` versus empty semantics, array replacement behavior, and whether writes to read-only fields fail or are ignored.
-- `DELETE` is idempotent by contract.
-- Use `201 Created` with `Location` for successful creates.
-- Use `202 Accepted` when the work is accepted but not complete.
-- Use `204 No Content` only when no response body is useful.
-- Keep `409 Conflict`, `412 Precondition Failed`, and `428 Precondition Required` distinct.
-- HTTP allows `PUT` to create a target resource, but this skill's default for a missing target is `404` unless client-chosen identity or upsert is explicit.
-- Default patch media type is `application/merge-patch+json` only when null-as-removal and whole-array replacement semantics fit; otherwise choose a more precise patch contract.
-- Unknown fields and writes to immutable or read-only fields should fail consistently unless an existing compatibility profile explicitly requires ignore-and-report behavior.
-- When multiple mutation surfaces can change the same resource during migration, define whether they share the same version source, `ETag` space, and stale-write behavior or are intentionally inconsistent during coexistence.
-- Endpoint matrices, examples, and detailed rules must agree. If idempotent replay, conditional success, or legacy coexistence changes the returned success status, surface it where clients scan first.
-- Do not hide partial failure behind a generic success flag.
+Return a compact contract packet with:
 
-### Query, Pagination, And Collection Semantics
-- Sorting must be deterministic and include a stable tie-breaker when needed.
-- Default `page_size` is `50`; default max is `200` unless a different contract is justified.
-- Filters are whitelist-based; unknown filters should fail.
-- Filter and sort field types must be validated at the contract level.
-- Sorting syntax uses `sort`, with descending order via `-field`.
-- Cursor contracts should state snapshot versus live-pagination behavior, duplicate or skip risk under concurrent writes, cursor expiry behavior, and the client recovery rule when a cursor is rejected.
-- Sparse field selection is whitelist-only; sensitive or internal fields are never selectable.
-- `total_count`, if exposed, must be identified as exact, approximate, delayed, or omitted by design rather than implied.
-- Multi-item outcomes must define whether they are all-or-nothing or per-item result shapes.
+- resource/operation and URI ownership;
+- method/status/request/response/error matrix;
+- retry, idempotency, precondition, and concurrency semantics;
+- collection, async, webhook, and freshness rules only when triggered;
+- compatibility/deprecation and source-of-truth/generated-output consequences;
+- domain handoffs only where another owner must decide now; otherwise state the constraint or `no new decision required`.
 
-### Error Model And Negative-Path Semantics
-- Use one stable Problem Details profile across the API surface.
-- Define profile-required Problem Details members explicitly. This skill's default profile includes `type`, `title`, `status`, and `detail`; include `instance` when available.
-- Stable extensions may include `code`, `request_id`, and field-level `errors`.
-- Choose the `400` vs `422` boundary once and keep it consistent.
-- Validation behavior should say whether unknown fields are rejected, whether one or all caller-fixable field errors are returned, and whether field-error ordering is deterministic.
-- Make auth, media-type, payload-size, precondition, rate-limit, and dependency-failure mappings explicit.
-- Surface `405`, `406`, `410`, and `415` explicitly when they are client-visible instead of collapsing them into generic `400` or `404` behavior.
-- Differentiate caller-fixable rejection, state conflict, missing precondition, overload or transient dependency failure, and accepted-but-later-failed work.
-- Choose a concealment policy for inaccessible resources once and keep it consistent. Cross-tenant or unauthorized lookups should not randomly alternate between `403` and `404`.
-- Error payloads must be sanitized: no stack traces, SQL text, secrets, or infrastructure topology.
-- Never return a success status with an embedded error payload.
+## Success, Escalation, And Stop Conditions
 
-### Retry Classification, Idempotency, And Preconditions
-- Classify every endpoint as retry-safe by protocol, retry-safe by contract, or retry-unsafe.
-- For every non-idempotent write, define the durable acceptance boundary: which outcomes mean no durable work exists, and which outcomes mean the client must poll, read, or replay a stored result.
-- Retry-unsafe operations that may be retried by clients should require `Idempotency-Key`.
-- Use `24h` as a provider-inspired starting heuristic for idempotency dedup TTL, not a standards default; change it when duplicate-work risk, operation duration, or product policy requires.
-- Key scope should include tenant or account, operation, and route or method.
-- Define payload comparison at the normalized contract level, not only at raw-byte level, when retries may differ in insignificant formatting.
-- Same key with same payload returns equivalent outcome.
-- Same key with different normalized payload should return a stable caller-fixable validation problem by default; reserve conflict semantics for in-progress same-key attempts or existing API policy.
-- When same-key replay hits a stored terminal result, define whether the contract returns `200 OK`, `201 Created`, or `202 Accepted`; do not leave terminal replay semantics implicit.
-- When replay returns a stored outcome, say whether `Location`, `ETag`, operation IDs, and advisory headers such as `Retry-After` are identical or merely equivalent.
-- Distinguish failures that do not reserve the idempotency key from accepted attempts that do reserve it and later fail during async processing.
-- Define post-TTL reuse behavior for expired idempotency keys when that choice affects duplicate-work risk.
-- Mutable resources should expose `ETag` on reads when lost updates matter.
-- Conditional reads with `If-None-Match` should support `304`.
-- High-contention writes should require `If-Match`.
-- Missing required preconditions should fail explicitly rather than collapsing into a generic conflict.
-- Successful writes should return the updated `ETag` when concurrency control is used, except successful `PUT` responses must not include a validator unless the saved representation matches the submitted representation and the validator reflects it.
+Success means OpenAPI, implementation, tests, callers, and unavoidable migration can converge on one explicit target-state wire contract without inventing method, status, error, retry, lifecycle, freshness, or compatibility semantics.
 
-### Async, Bulk, Upload, And Webhook Contracts
-- Async contract is mandatory when duration often exceeds the caller's request-timeout or UX budget, fan-out exists, or completion time is highly variable. Use `10s` as a rough trigger only when no repo or product policy exists.
-- HTTP `202 Accepted` is noncommittal about final outcome; this skill uses it only when the API also accepts durable recovery or reporting responsibility, not merely when it attempted to enqueue work.
-- Start endpoints should return `202 Accepted` plus an operation-status location and may include `Retry-After`.
-- Once the business request is accepted, keep one clear control-plane resource for the async lifecycle unless a second resource removes a concrete client ambiguity.
-- If returning both the operation resource and the authoritative business-resource reference reduces retry ambiguity, do that explicitly.
-- Operation resources should define `id`, `status`, `created_at`, `updated_at`, success result reference, and structured failure details.
-- Operation resources should define expiry or retention behavior and the fallback discovery path once the operation record ages out.
-- Use only operation or job statuses the contract can actually reach. `pending`, `running`, `succeeded`, and `failed` are a common baseline; add `canceled` only when cancellation is a real client-visible path.
-- For large uploads, prefer an upload-session or presigned flow rather than huge direct multipart requests.
-- Do not broaden accepted upload media types beyond the prompt or established API policy just to be generous.
-- Upload contracts should define media type, size limits, file-type rules, and publish-after-scan behavior when scanning is required.
-- Bulk write contracts must choose all-or-nothing or per-item partial-success semantics explicitly.
-- For partial-success bulk contracts, define request-level terminal status, accepted and rejected counters, per-item correlation keys, and how large failure sets are paged or downloaded.
-- Webhooks and callbacks should assume at-least-once delivery, duplicates, and possible reordering.
-- For partner-facing or cross-boundary callbacks, prefer pre-registered or ownership-verified callback targets over arbitrary per-request URLs unless the prompt explicitly makes caller-supplied URLs part of the contract.
-- When webhooks and eventual read models coexist, include a monotonic version, freshness token, or equivalent reconciliation aid so clients can compare push delivery with lagging reads.
-- Webhook contracts should define signature verification, replay window, retry schedule, dedup key, and sender timeout expectations.
-
-### Consistency And Freshness Disclosure
-- Each endpoint should declare observable freshness and read-after-write behavior; use `strong` or `eventual` labels only when they describe the actual guarantee.
-- Eventual endpoints should disclose expected propagation or freshness behavior.
-- Read models that converge asynchronously should expose freshness fields such as `as_of` or `last_updated_at` when feasible.
-- Cache-backed reads are contract-visible when freshness can lag or fail over.
-- If one read path is authoritative and another is a lagging projection, say which one clients should use for timeout recovery, reconciliation, and read-after-write expectations.
-- Do not claim read-after-write guarantees unless they are explicitly provided.
-- A consistency-model change inside the same major version is a behavior change and requires explicit treatment.
-
-### API Boundary Contracts
-- Keep validation, normalization, limits, auth context, tenant binding, idempotency, correlation, rate-limit behavior, and overload semantics explicit at the boundary.
-- Make boundary pipeline order explicit: transport limits, strict decode, normalization, semantic validation, then business logic.
-- Strict JSON defaults are reject unknown fields, reject trailing tokens, and fail malformed payloads consistently.
-- Tenant context should come from validated identity, not arbitrary caller headers.
-- Correlation should support trace context plus a stable request ID.
-- Rate-limit behavior should define `429` semantics and `Retry-After` guidance when throttling is temporary.
-- Admin, debug, or override controls should not piggyback on general client endpoints unless they are explicitly part of the public contract.
-
-### Boundaries And Handoffs
-- Own client-visible API semantics; do not turn this into chi routing, SQL schema, worker runtime, or service-decomposition design.
-- When used inside a repository workflow, hand final API decisions back to the orchestrator's chosen decision artifact; this skill does not own artifact propagation.
-- In this repository's system/integration design workflow, map the result to the contract-design checkpoint: recommend `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`, and name the runtime source of truth such as `api/openapi/service.yaml` plus generated outputs that implementation must update from approved tasking.
-- Recommend OpenAPI or generated-surface updates only when they follow from the contract decision, and do not claim they were updated without tool evidence.
-- Hand off when routing, domain invariants, security, data/cache ownership, or distributed completion semantics become primary. Adjacent skills inform the contract; they do not replace ownership of client-visible API semantics.
-- When another domain is only affected, record the contract consequence, proof obligation, or explicit `no new decision required` note instead of widening the API decision set.
-
-### Compatibility And Evolution
-- Preserve compatibility by default.
-- Choose the target contract first; add coexistence, deprecation, or migration behavior only when existing clients or compatibility policy require it.
-- Classify each change as `additive`, `behavior-change`, or `breaking`.
-- Give stronger scrutiny to status, error, retry, idempotency, precondition, async, and consistency changes than to payload growth alone.
-- Treat enum-value expansion, default-value changes, nullability tightening, cursor or sort-contract changes, and weaker freshness guarantees as compatibility decisions, not harmless cleanup.
-- “Additive” is not automatically safe if common clients use closed-world validation, exhaustive enum switches, or strict response decoders.
-- Keep contract changes rollout-safe for mixed-version deployments when such deployments are a real constraint.
-- Action-endpoint cleanup needs an explicit deprecation or coexistence strategy if clients already depend on it.
-- When legacy and replacement endpoints coexist, define whether they share idempotency space, ETag or precondition behavior, and status-code semantics.
-- When coexistence is unavoidable, define which surface is authoritative for validation rules, concurrency semantics, and deprecation milestones instead of letting old and new routes silently diverge. Include exit criteria, removal/proof tasks, and owner in the accepted scope.
-- Use explicit deprecation signaling when relevant, such as documented timelines and standard headers like `Deprecation` or `Sunset`, rather than burying migration in prose only.
-- Do not quietly change error mapping, consistency behavior, or retry semantics inside a supposedly stable contract.
-
-## Decision Quality Bar
-For every major API recommendation, include:
-- the client-facing problem and affected audience
-- whether a real `live fork` exists
-- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
-- endpoint, method, status, and error semantics
-- representation shape, lifecycle states, and any authoritative-versus-projection read split
-- retry, idempotency, and precondition behavior
-- durable acceptance boundary and timeout-recovery semantics for non-idempotent writes
-- async, consistency, and freshness behavior
-- deterministic validation semantics and any legacy-surface coexistence rules when they affect callers
-- if old and new surfaces must coexist, a short comparison of which semantics are shared versus divergent, plus the same-scope exit and removal criteria
-- any invented status, media type, or companion surface only when it has an explicit client-facing reason
-- adjacent-skill handoffs when the contract depends on another seam
-- runtime source of truth, generated or derived outputs, proof carrier, and reopen trigger
-- compatibility class, assumptions, risks, and reopen conditions
-
-## Deliverable Shape
-Return API work in a compact, reviewable form:
-- `Checkpoint Recommendation`: `created` in `design/contracts/`, `compact_sufficient`, `not_expected`, or `blocked`, with runtime source of truth, generated outputs, proof carrier, and reopen trigger
-- `Contract Framing And Assumptions`
-- `Resource And Endpoint Matrix`
-- `Request, Response, And Error Model`
-- `Retry, Idempotency, And Concurrency Rules`
-- `Async, Freshness, And Webhook Notes`
-- `Compatibility, Legacy Coexistence, Artifact Updates, And Handoffs`
-- `Open Questions, Risks, And Reopen Conditions`
-
-## Escalate Or Reject
-- action-like endpoints retained without a clear justification
-- mutating surfaces that still lack retry, idempotency, or precondition semantics
-- async or eventual-consistency behavior hidden behind synchronous-looking success
-- boundary behavior such as validation, auth context, limits, or rate limiting left implicit
-- compatibility impact or deprecation path omitted for an API-visible change
-- critical contract ambiguity deferred to coding
+Stop or escalate when client audience/resource ownership, trust boundary, consistency, retry policy, identity/tenant source, compatibility window, distributed completion, or data truth is unresolved; when several contract surfaces contradict each other; or when the smallest safe answer requires architecture, routing, security, data/cache, domain, or distributed decisions outside this lane. Reject success-with-error payloads, fake `202`, retry-unsafe writes without recovery semantics, generated-output authority drift, and compatibility changes mislabeled as implementation detail.

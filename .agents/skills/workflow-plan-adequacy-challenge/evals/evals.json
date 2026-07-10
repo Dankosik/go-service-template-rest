@@ -1,0 +1,101 @@
+{
+  "skill_name": "workflow-plan-adequacy-challenge",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Challenge a recorded SHAPE-DIRECT route. The accepted brief changes persisted deletion state and every DIRECT-* predicate is claimed true. FULL-DATA is omitted from the trigger audit. routing_scope=current_session,routing_revision=1. Return advisory adequacy findings only.",
+      "expected_output": "A handoff-blocking matrix-falsification finding: protected data evidence is true or unresolved, so the direct route does not survive and the orchestrator must perform an upward transition.",
+      "files": [],
+      "expectations": [
+        "The output evaluates the authoritative FULL-* matrix rather than accepting the recorded shape.",
+        "The output treats omitted approval-relevant FULL-DATA evidence as fail-closed.",
+        "The output recommends an orchestrator-owned TRANS-UPWARD/TRANS-DIRECT-ESCALATE target without reclassifying or editing itself.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Challenge a recorded SHAPE-LEAN route for an auth change. FULL-SECURITY=unknown, all LEAN-* are claimed true, routing_scope=durable,routing_revision=2. Return advisory findings only.",
+      "expected_output": "A blocking falsification because an approval-relevant unknown protected trigger establishes the full floor.",
+      "files": [],
+      "expectations": [
+        "The output treats FULL-SECURITY=unknown as a full-floor trigger.",
+        "The output does not accept lean merely because its positive predicates are true.",
+        "The output keeps final classification and state mutation with the orchestrator.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Challenge SHAPE-FALLBACK-FULL for a bounded single-domain task. All FULL-* are false, every LEAN-* predicate is proven true, direct is false only because the task is non-trivial, and no other fallback evidence is recorded. Formal adequacy applies because durable workflow planning exists.",
+      "expected_output": "An advisory finding that challenges an unsubstantiated full route under the smallest-correct-shape invariant and points to orchestrator-owned reclassification.",
+      "files": [],
+      "expectations": [
+        "The output can falsify over-heavy full routing, not only under-classified direct or lean routes.",
+        "The output identifies SHAPE-LEAN as the matrix result without approving or applying it.",
+        "The output names the required routing revision and stale-state disposition.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Challenge a lean route whose prompt includes the standard Subagent authorization line, but the accepted result does not require fan-out or independent agent evidence. agent_request=capability_only and all FULL-* are false.",
+      "expected_output": "A result that does not manufacture a full trigger from capability authorization and evaluates lean on its real predicates.",
+      "files": [],
+      "expectations": [
+        "The output distinguishes AGENT-CAPABILITY from AGENT-SUBSTANTIVE.",
+        "The output does not use bare agent-backed or user-requested-agent wording as an adequacy predicate.",
+        "The output remains advisory.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Challenge a route with agent_request=substantive because three independent lanes are part of the accepted deliverable, but the master records SHAPE-LEAN. No other protected trigger is present.",
+      "expected_output": "A blocking falsification tied specifically to FULL-AGENT-SUBSTANTIVE.",
+      "files": [],
+      "expectations": [
+        "The output establishes the full floor from substantive intent rather than capability authorization.",
+        "The output names the exact canonical rule IDs.",
+        "The output does not perform the reclassification transaction.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Challenge a proposed full-to-lean downgrade at durable routing_revision=5. The prior full floor came from FULL-DATA and FULL-OWNERSHIP, but the packet only says the task now seems simple and lacks trigger-clearing evidence.",
+      "expected_output": "A blocks_phase_handoff finding for an unsupported downgrade and missing stale/superseded disposition.",
+      "files": [],
+      "expectations": [
+        "The output requires explicit evidence clearing every trigger responsible for the prior floor.",
+        "The output rejects missing files, elapsed time, or perceived simplicity as downgrade proof.",
+        "The output requires an orchestrator-owned durable revision and dependent-state invalidation.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Challenge a packet whose master is durable revision 7 and phase control is durable revision 6. The shape evidence itself is otherwise sound, but both files claim handoff ready and prior adequacy PASS remains current.",
+      "expected_output": "A blocking freshness/conflict finding that invalidates the prior adequacy and handoff until revisions are reconciled.",
+      "files": [],
+      "expectations": [
+        "The output compares routing identities and identifies stale adequacy evidence.",
+        "The output blocks handoff despite sound shape predicates.",
+        "The output does not repair either artifact.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Challenge a complete full-orchestrated packet: SHAPE-FULL-FLOOR from FULL-CONCURRENCY=true, durable revision 3 matches all control artifacts, stale state is disposed, artifact expectations follow DEPTH-FULL, and next-session routing is explicit.",
+      "expected_output": "A concise advisory result with no surviving adequacy finding, while avoiding any claim that the challenger approved the route.",
+      "files": [],
+      "expectations": [
+        "The output confirms the recorded shape survived matrix falsification and names the evidence boundary.",
+        "The output says there are no blocking adequacy gaps rather than issuing an approval verdict.",
+        "The output makes no edits and leaves final handoff authority with the orchestrator.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    }
+  ]
+}

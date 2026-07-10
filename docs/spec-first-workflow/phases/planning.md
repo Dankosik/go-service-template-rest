@@ -1,6 +1,6 @@
 # Planning Phase
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when drafting or repairing `tasks.md` from reviewed specification and required design context.
+Detailed macro-phase companion for `docs/spec-first-workflow.md`. Read this when drafting or repairing `tasks.md`, running independent task-review/readiness, and closing implementation handoff from reviewed specification and required design context.
 
 ## Read When
 
@@ -16,12 +16,12 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when draft
 
 ## Outputs
 
-- Draft or repaired `tasks.md` with Goal Contract, checkpoint gates, traceable task sources, test-design scenario references when present, evidence fields, cleanup audit, proof obligations, and resume rule.
-- A planning handoff that identifies the completed draft, consumed artifacts, unresolved blockers if any, and the next phase: task review/readiness.
+- Approved or blocked `tasks.md` with Goal Contract, checkpoint gates, traceable task sources, test-design scenario references when present, evidence fields, cleanup audit, proof obligations, resume rule, and current task-review/readiness verdict.
+- An implementation handoff when readiness permits it, or the smallest owning reopen target.
 
 ## Stop Rule
 
-Stop when `tasks.md` is review-ready or blocked. During planning, `Task ledger review`, `Implementation readiness`, `Ledger-review fan-out`, and `Ledger-review fan-out rationale` remain `pending_task_review`; do not approve implementation readiness, run task-ledger review as author self-certification, render an implementation Goal prompt, or start implementation in this phase.
+Do not stop when `tasks.md` first reaches `artifact_state=review_ready`. Invoke the distinct read-only task-review/readiness checkpoint, repair every planning-owned finding, invalidate the prior verdict, and obtain fresh re-review. Stop only with current `PASS`, eligible `CONCERNS`, eligible `WAIVED`, or an honest blocker/reopen target. Do not start implementation inside this macro phase; when readiness permits it, render the next implementation-session Goal prompt.
 
 ## Planning Responsibility
 
@@ -35,7 +35,15 @@ Planning must not invent missing design context. If exact tasking requires a mis
 
 Planning invention test: if `tasks.md` would need to decide source of truth, contract shape, runtime sequence, failure policy, rollout mechanism, owner package/file, cleanup owner, proof owner, test scenario class, proof level, fail-before signal, or test owner before it can name task source, order, proof, evidence, checkpoint, or stop/reopen condition, planning is blocked. Do not convert that gap into an implementation task; reopen specification, system/integration design, Go code ownership design, technical design review, or test design according to the missing owner.
 
-`tasks.md` is a draft until the task-ledger review/readiness phase checks it against the approved artifact chain. A planning session may make the draft easy to review, but it must not treat its own authoring pass as the read-only readiness gate. `task-review-readiness.md` owns the readiness verdict.
+`tasks.md` is a draft until the internal task-ledger review/readiness checkpoint checks it against the approved artifact chain. The planning root may not treat its own authoring pass as the read-only readiness gate; `task-review-readiness.md` owns the reviewer method, while the planning root owns repair, fan-in, final state, and implementation handoff.
+
+## Internal Task Review, Repair, And Fresh Re-Review
+
+After authoring reaches `artifact_state=review_ready`, launch a fresh read-only semantic reviewer against the exact ledger revision and approved input chain. Use an evidence agent only to gather deterministic anchors; it cannot recommend readiness. The reviewer returns advisory `PASS`, `CONCERNS`, `FAIL`, or eligible `WAIVED` without editing `tasks.md`.
+
+The planning root reconciles the result and repairs every planning-local defect in the same session. Findings that change behavior, system mechanism, code ownership, or test strategy reopen their earlier macro-phase owner instead of being rewritten into tasks. After any ledger repair, mark prior task-review/readiness state stale and launch a fresh reviewer context at the same or stronger model tier. `CONCERNS` may close only with named accepted risks or proof obligations mapped to concrete carrying rows; it may not hide an actionable ledger repair.
+
+Record the exact reviewed revision, review-cycle attempt, reviewer/model route, prior finding closure anchors, current verdict, and implementation-readiness consequence. The user receives a handoff only after planning closes, never between ledger authoring, review, repair, and re-review.
 
 Planning consumes the specification review result for all non-trivial work. Missing review, blocking review, or repaired spec after `FAIL` without a follow-up verdict is a planning-entry failure, not a detail to infer inside `tasks.md`. When the review result is `CONCERNS`, planning must copy the accepted spec risks and proof obligations into the task-review handoff and the relevant ledger or companion artifacts.
 
@@ -70,7 +78,7 @@ If any row cannot be traced to an approved source, review finding, system/integr
 Draft `tasks.md` in this order:
 
 1. Write the `Goal Contract` from approved scope only: one durable objective, one successful completion condition, one blocked-stop condition, the start read set, task-specific read set, and resume rule.
-2. Add an implementation handoff that keeps `Task ledger review`, `Implementation readiness`, `Ledger-review fan-out`, and `Ledger-review fan-out rationale` at `pending_task_review`.
+2. Add the future implementation-handoff inputs while keeping task-ledger review and implementation readiness at `procedural_gate_state=pending` and `review_verdict=pending` until the draft is complete. Then invoke the internal task-review/readiness checkpoint; do not write `next_phase=task-review/readiness` or emit a user handoff for it.
 3. Set `Implementation execution mode` to `isolated-cli-worker required` for code-writing implementation or `not_expected` when there is no code-writing implementation. Worker tooling unavailable, unsafe worker boundaries, or inability to produce a usable worker patch is a blocker, not an inline mode rationale.
 4. Map every accepted concern, proof obligation, and approved test-design scenario to one task, checkpoint, `rollout.md`, or explicit non-task rationale. For protected-domain work or tasks referencing `test-plan.md`, write implementation obligations that split each referenced scenario/proof obligation into source anchor, invariant, forbidden regression or side effect, owning code path, and required proof. Include claim, evidence, freshness or negative proof, carrying artifact, and reopen target.
 5. Record checkpoint triggers before slicing: material risk boundaries such as public/API compatibility, contract source-of-truth updates, data/migration/cache changes, auth/security, concurrency/lifecycle, rollout, generated drift, mirrored sync, accepted-risk proof, and legacy cleanup need a checkpoint gate or a short rationale for why no material boundary exists.
@@ -78,12 +86,12 @@ Draft `tasks.md` in this order:
 7. Bind each task, checkpoint, cleanup row, generated-source row, mirrored-source row, test-design scenario, and proof-obligation row to exact `Source:` anchors. Use stable section headings, decision IDs, review finding IDs, design seam names, `test-plan.md` scenario IDs, conditional artifact rows, or proof-obligation IDs. A generic path such as `spec.md` is not enough for a material item.
 8. Bind each task to `Files:`, `Owner package/file:`, and `Placement evidence:`. When exact files are known, name them. When the final file choice depends on local inspection during coding, name the owning package or artifact surface plus the allowed placement rule from approved Go code ownership design, such as existing focused owner file, new focused same-package seam file, or approved package boundary, and include a first implementation task that performs that placement inspection inside approved boundaries. Unknown owner package, package boundary, generated/manual authority, cleanup owner, or test owner reopens Go code ownership design.
 9. Add proof and evidence slots before implementation starts. Each material task needs enough evidence fields that a later closeout can prove every implementation obligation and the checkbox without chat history. Proof commands should come from repository-owned command docs or an explicit narrower-proof rationale that names what final validation still covers.
-10. If `Implementation execution mode` is `isolated-cli-worker required`, add an `Isolated worker boundaries` table naming task bundle, launch contract, launch/resume failure blocker, discovery hints plus any explicitly marked hard boundaries, forbidden workflow artifacts, parallelism rule, worker proof, orchestrator patch-intake proof, and integration proof. Discovery hints are starting points, not exhaustive edit permissions. Do not make the worker responsible for ledger closeout.
+10. If `Implementation execution mode` is `isolated-cli-worker required`, add an `Isolated worker boundaries` table naming task bundle, model-selection criteria tied to task complexity/risk, launch contract, launch/resume failure blocker, discovery hints plus any explicitly marked hard boundaries, forbidden workflow artifacts, parallelism rule, worker proof, orchestrator patch-intake proof, and integration proof. The exact model/reasoning pair is intentionally not planned or hard-coded; the orchestrator selects and records it immediately before launch. Discovery hints are starting points, not exhaustive edit permissions. Do not make the worker responsible for ledger closeout.
 11. Add checkpoint gates wherever later tasks rely on earlier behavior, generated drift, migration order, cleanup, rollout, or proof freshness. Each checkpoint names the blocking proof and reopen target.
 12. Add a legacy cleanup audit when replacement or retirement is in scope. Every known old surface must be removed, refactored, retained with owner/reason/proof/exit, or explicitly `not_applicable` with bounded search/read evidence.
 13. Run the planning self-check below, then stop at review-ready draft status or blocked status. Planning may state why the draft is ready for task review, but it must not mark implementation readiness as approved or render an implementation Goal prompt.
 
-Planning self-check before `draft_review_ready`: no material task, checkpoint, cleanup row, generated or mirrored source row, proof-obligation row, or isolated-worker boundary may be review-ready unless it has an exact `Source`, implementation obligations when protected-domain or `test-plan.md`-referencing, owner package/file or approved placement rule, proof, evidence slot, dependency/checkpoint relationship when relevant, and stop/reopen condition.
+Planning self-check before `artifact_state=review_ready`: no material task, checkpoint, cleanup row, generated or mirrored source row, proof-obligation row, or isolated-worker boundary may be review-ready unless it has an exact `Source`, implementation obligations when protected-domain or `test-plan.md`-referencing, owner package/file or approved placement rule, proof, evidence slot, dependency/checkpoint relationship when relevant, and stop/reopen condition.
 
 Do not write task wording that says or implies implementation will decide owner, architecture, contract shape, sequence, generated authority, rollout, validation policy, or an accepted-risk proof path. Red-flag phrases include `implementation decides`, `choose appropriate file`, `place where it fits`, `define the API while implementing`, `fill in OpenAPI as needed`, `refactor as needed`, `split if necessary`, and `cleanup later` when they carry owner, source, proof, order, cleanup, or completion semantics. If a ledger would need that phrase to be honest, planning is blocked and must reopen the owning phase.
 
@@ -96,7 +104,9 @@ Recommended shape:
 ```markdown
 # Tasks
 
-Ledger status: draft_review_ready | blocked
+artifact_expectation: expected
+artifact_state: review_ready | blocked
+record_validity: current
 
 ## Goal Contract
 
@@ -140,24 +150,32 @@ If a drift proof compares generated output against git state and is expected to 
 
 ## Implementation Handoff
 
-Ledger status: draft_review_ready | blocked
-Task ledger review: pending_task_review
-Implementation readiness: pending_task_review
+artifact_expectation: expected
+artifact_state: review_ready | blocked
+record_validity: current
+Task-ledger procedural gate: pending
+Task-ledger review verdict: pending
+Implementation-readiness procedural gate: pending
+Implementation-readiness verdict: pending
+handoff_readiness: ready
+Next phase: task-review/readiness
+Implementation authorized: false
 Implementation execution mode: isolated-cli-worker required | not_expected
 Consumes: reviewed `spec.md`, specification-review result, compact design or `design/`, technical-design-review result when present
-Technical-design-review consumed: <not expected with rationale | PASS | CONCERNS; obligations mapped to tasks.md/test-plan.md/rollout.md with finding IDs>
+Technical-design-review consumed: <PASS | CONCERNS with obligations mapped to tasks.md/test-plan.md/rollout.md and finding IDs; or separate_design_depth=not_expected with owner-trigger rationale>
 Test-design consumed: <not expected with rationale | approved `test-plan.md` with scenario IDs | blocked with reopen target>
-Design fan-out status: <complete | scoped_down | local_only | blocked | not expected with rationale>
-Subagent gates consumed: <gate status and artifact/evidence pointer, or not expected with rationale>
-Ledger-review fan-out: pending_task_review
-Ledger-review fan-out rationale: pending_task_review
+Design depth: <triggered | not_expected with trigger rationale>
+Design fan-out status when design depth was triggered: <complete | scoped_down | local_only | blocked>
+Subagent gates consumed: <typed subagent_gate and artifact/evidence pointer, or not_expected with rationale>
+Ledger-review procedural gate: pending
+Ledger-review lane plan/rationale: not evaluated until task-review/readiness
 Proof: <smallest sufficient proof command or manual proof>
 Reopen target: <none | planning | specification | specification-review | system-integration-design | go-code-ownership-design | technical-design-review>
 
 Isolated worker boundaries:
-| Worker bundle | Task IDs | Launch contract | Launch/resume failure blocker | Discovery hints / hard boundaries | Forbidden edits | Parallelism rule | Worker proof | Orchestrator patch intake | Integration proof |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| not_applicable | not_applicable | not_applicable | not_applicable | not_applicable | authoritative workflow artifacts, unrelated files, external git state | serial_or_inline | not_applicable | not_applicable | final ledger proof |
+| Worker bundle | Task IDs | Model-selection criteria | Launch contract | Launch/resume failure blocker | Discovery hints / hard boundaries | Forbidden edits | Parallelism rule | Worker proof | Orchestrator patch intake | Integration proof |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| not_applicable | not_applicable | not_applicable | not_applicable | not_applicable | not_applicable | authoritative workflow artifacts, unrelated files, external git state | serial_or_inline | not_applicable | not_applicable | final ledger proof |
 
 ## Checkpoint Gates
 
@@ -231,9 +249,9 @@ Rules:
 - A reviewable task names the intended surface, owner package/file, exact `Source:`, implementation obligations when protected-domain or `test-plan.md`-referencing, dependency or checkpoint, proof, evidence fields, and reopen/stop condition. Omnibus implementation tasks are not reviewable unless the approved design records why the diff must stay coupled.
 - Name one objective and one completion condition so the ledger can drive a long-running Codex Goal without extra chat context.
 - Set `Implementation execution mode` explicitly. `isolated-cli-worker required` means every code-writing implementation bundle is delegated to named Codex CLI workers and must include worker boundaries. `not_expected` is valid only with a short rationale, usually no code-writing implementation. Worker tooling unavailable, unsafe worker boundaries, or inability to get a usable worker patch blocks implementation instead of authorizing inline work.
-- Isolated worker boundaries must name task bundles, launch contract, launch/resume failure blocker rule, discovery hints plus any explicitly marked hard boundaries, forbidden workflow artifacts, parallelism rule, worker proof, orchestrator patch-intake proof, and integration proof. Discovery hints name likely starting points only; they are not an exhaustive edit allowlist unless the ledger explicitly marks them as hard boundaries. The default launch contract is `codex exec --cd <isolated-worktree> --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema <schema> -o <final-output> - < <prompt-file>` with event output captured, strict schema used when available, user config/rules inherited, no required named profile, and no forced model/reasoning overrides unless the approved ledger names a task-specific rationale. `--full-auto` is not allowed. `--yolo` or `danger-full-access` requires an externally hardened container/VM/CI runner and ledger-named rationale. A worker boundary that lets launch failure become orchestrator-authored implementation, lets the worker update `tasks.md`, choose missing decisions, or satisfy final proof from its own workspace is not review-ready.
+- Isolated worker boundaries in approved `tasks.md` must name task bundles, task-specific model-selection criteria, launch constraints or approved deviations, launch/resume failure blocker behavior, discovery hints plus any explicitly marked hard boundaries, forbidden workflow artifacts, parallelism, worker proof, orchestrator patch-intake proof, and integration proof. The ledger must not pin an exact child model or reasoning effort. The orchestrator selects and records the exact runtime-available pair in execution evidence immediately before launch. Discovery hints are not an exhaustive edit allowlist unless the ledger marks them as hard boundaries. Use `implementation-validation-closeout.md` as the sole repository-wide owner of launch, resume, sandbox, model override, prompt-file lifecycle, patch-intake, and integration-proof mechanics; do not copy its command into planning guidance or later chat prompts.
 - Inherited user config may expose MCP servers, plugins, hooks, feature flags, and local tooling, but it does not transfer current Codex App thread state, runtime-only tools, chat memory, or unsaved app context. Worker prompts must carry task-critical context explicitly.
-- Worker prompts are temporary files passed to `codex exec` through explicit stdin marker `- < "$WORKER_PROMPT"` and deleted after the worker finishes or is abandoned. They are not workflow artifacts; durable state belongs in approved artifacts, worker output, integration diff, and orchestrator-updated evidence.
+- Approved `tasks.md` records task-specific worker boundaries and proof, not a second generic worker manual.
 - The Goal scope must cover every executable task and checkpoint through final validation; do not scope a Goal-ready ledger to the first slice, first checkpoint, or "start implementation" unless the approved ledger is intentionally partial.
 - Keep completion and blocked-stop semantics separate. Passing proof is required for successful completion; recording a blocker is a valid stop that leaves the Goal blocked and the affected task unchecked.
 - Treat non-trivial `tasks.md` as Goal-ready by default in this repository. That means the ledger should contain the Goal Contract fields a later handoff needs; it does not mean a Goal prompt is rendered before the ledger passes review/readiness.
@@ -245,7 +263,7 @@ Rules:
 - Add a compact `Checkpoint Gates` table when checkpoints exist; each gate must state what proof/currentness is required before later tasks can safely rely on that checkpoint. Material public/API, data/migration/cache, auth/security, concurrency/lifecycle, rollout, generated drift, mirrored sync, accepted-risk proof, or cleanup boundaries need a checkpoint or an explicit no-checkpoint rationale.
 - Later tasks must not depend on a checkpoint until its gate evidence is current. If the gate fails, the ledger must name whether to reopen planning, test design, specification, specification review, system/integration design, Go code ownership design, technical design, or technical design review.
 - Name dependencies when task order matters.
-- Include `Subagent gates consumed` and leave task-ledger review fields as `pending_task_review` until the separate task-review/readiness phase runs.
+- Include `Subagent gates consumed`; leave task-ledger review/readiness as `procedural_gate_state=pending` and `review_verdict=pending`, while using `handoff_readiness=ready` only for the separate `task-review/readiness` session. Implementation remains unauthorized until that gate produces an eligible current verdict.
 - Name exact files when known, or narrow artifact/package surfaces when exact file choice is not knowable yet. For substantial hand-written code tasks, include placement evidence from current file responsibility, sibling/package reads, generated/manual authority, or an approved first-task placement-inspection rule; this is optional for tiny docs, config, or mechanical tasks.
 - Include exact `Source:` anchors for every material task, checkpoint, cleanup row, generated-source row, mirrored-source row, and proof-obligation row; task-ledger review should be able to trace each material item back to approved artifacts.
 - A generic artifact path is not a sufficient `Source:` anchor for a material item. Point to the exact spec decision, review finding, design seam, conditional artifact row, or proof obligation that the item preserves.

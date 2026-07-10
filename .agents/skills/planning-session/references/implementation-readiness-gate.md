@@ -8,16 +8,18 @@ Load when preparing completed `tasks.md` for the separate task-review/readiness 
 
 ## Decision Rubric
 - Compare `tasks.md` to reviewed `spec.md`, specification-review obligations, compact or split design context, technical-design-review obligations, triggered test or rollout artifacts, named phase-control files, blocker resolution, and proof path.
-- Leave `Task ledger review`, `Implementation readiness`, `Ledger-review fan-out`, and `Ledger-review fan-out rationale` as `pending_task_review`.
+- Leave task-review/readiness as `procedural_gate_state=pending`, `review_verdict=pending`, and `record_validity=current`; use `handoff_readiness=ready` only for the recorded task-review or actionable reopen session. Planning does not pre-decide the later lane disposition, verdict, or implementation authorization.
 - If the ledger needs task coverage, ordering, proof, evidence, or handoff repair, keep planning open or blocked.
 - If the gap belongs to an earlier phase, route to that phase instead of hiding it in task wording.
-- Record the task-review/readiness handoff in `workflow-plan.md`, stop/handoff in `workflow-plans/planning.md`, and a short reference in `tasks.md` when useful.
+- Record the task-review/readiness handoff in the existing durable `workflow-plan.md`, in `workflow-plans/planning.md` only when `ROUTING-PHASE-CONTROL` requires it, and as a short reference in `tasks.md` when useful.
 - Do not turn out-of-scope implications into blockers; record those as explicit concerns, proof obligations, or follow-up notes. In-scope target-state work belongs in the ledger or in a reopened earlier phase.
 
 ## Imitate
 ```markdown
-Task ledger review: pending_task_review.
-Implementation readiness: pending_task_review.
+Task-review/readiness procedural_gate_state: pending.
+Task-review/readiness review_verdict: pending.
+Task-review/readiness record_validity: current.
+handoff_readiness: ready.
 Next phase: task-review/readiness.
 Handoff note: completed draft ledger is ready for coverage, ordering, proof, and handoff review.
 Proof path: task-level proof is listed in `tasks.md`.
@@ -26,8 +28,10 @@ Proof path: task-level proof is listed in `tasks.md`.
 Copy this shape: planning names the review packet without approving it.
 
 ```markdown
-Task ledger review: pending_task_review.
-Implementation readiness: pending_task_review.
+Task-review/readiness procedural_gate_state: pending.
+Task-review/readiness review_verdict: pending.
+Task-review/readiness record_validity: current.
+handoff_readiness: ready.
 Task-review handoff concern: cache invalidation proof depends on first checkpoint integration evidence.
 Carrying row: task T003 names the integration test and checkpoint gate.
 Next phase: task-review/readiness.
@@ -36,25 +40,28 @@ Next phase: task-review/readiness.
 Copy this shape: likely concerns are visible for the reviewer, but not accepted by planning.
 
 ```markdown
-Task ledger review: pending_task_review.
-Implementation readiness: pending_task_review.
+Task-review/readiness procedural_gate_state: blocked.
+Task-review/readiness review_verdict: pending.
+Planning phase_state: blocked.
+session_boundary: reached.
+handoff_readiness: ready.
 Reopen target: system-integration-design.
 Reason: task order depends on an unsettled backfill source-of-truth decision.
-Gate result: planning blocked; do not start task-review or implementation.
+Readiness consequence: do not start task-review or implementation; start only the recorded system-integration-design repair session.
 ```
 
 Copy this shape: upstream blockers stop planning before review.
 
 ## Reject
 ```markdown
-Implementation readiness: <non-pending verdict>.
+Task-review/readiness review_verdict: <non-pending verdict assigned by planning>.
 Risk: some validation risk remains.
 ```
 
 Failure: planning is assigning readiness and the risk has no named carrying row.
 
 ```markdown
-Implementation readiness: <non-pending verdict>.
+Task-review/readiness review_verdict: <non-pending verdict assigned by planning>.
 Rationale: planning files are probably enough and the change is routine.
 ```
 

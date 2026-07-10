@@ -7,7 +7,7 @@ When loaded for symptom agent lanes or research mode are muddy, this file makes 
 Load this when a phase plan mentions local research, fan-out, challenger lanes, expert lanes, duplicate roles, or parallelism, but does not clearly state research mode, role, owned question, single skill, order/parallelism, or fan-in path.
 
 ## Decision Rubric
-- For non-trivial or agent-backed phases, research mode must be explicit: `local` or `fan-out`.
+- When research is expected, its execution mode must be explicit: `local` or `fan-out`. `agent_request=capability_only` does not select fan-out or change shape; substantive intent or independent evidence questions may require it.
 - For each lane, require role, owned question, one skill or `no-skill`, read-only evidence target, and order/parallelism when it changes execution.
 - Duplicate roles are fine when they answer different questions or use different evidence targets; they are a gap when they blur the same scope.
 - Classify a missing research mode or wholly vague fan-out plan as `blocks_phase_handoff`; classify one incomplete lane as `blocks_specific_lane` when the rest of the phase can proceed around it.

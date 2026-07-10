@@ -1,0 +1,1667 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "shape-intake-required",
+      "family": "shape",
+      "covers": ["SHAPE-INTAKE"],
+      "input": {"intake_accepted": false, "agent_request": "absent"},
+      "want": {"matched_rule": "SHAPE-INTAKE", "outcome": "intake_required"}
+    },
+    {
+      "id": "shape-full-public-contract",
+      "family": "shape",
+      "covers": ["SHAPE-FULL-FLOOR", "FULL-PUBLIC-CONTRACT"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "true",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-data",
+      "family": "shape",
+      "covers": ["FULL-DATA"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "true",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-security-unknown",
+      "family": "shape",
+      "covers": ["FULL-SECURITY"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "unknown",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-money",
+      "family": "shape",
+      "covers": ["FULL-MONEY"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "true",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-concurrency",
+      "family": "shape",
+      "covers": ["FULL-CONCURRENCY"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "true",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-delivery",
+      "family": "shape",
+      "covers": ["FULL-DELIVERY"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "true",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-ownership-unknown",
+      "family": "shape",
+      "covers": ["FULL-OWNERSHIP"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "unknown",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-broad-strict",
+      "family": "shape",
+      "covers": ["FULL-BROAD-STRICT"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "true",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-full-agent-substantive",
+      "family": "shape",
+      "covers": ["FULL-AGENT-SUBSTANTIVE"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "substantive",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "true"
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FULL-FLOOR", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-rejects-agent-trigger-contradiction",
+      "family": "shape",
+      "covers": [],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "true"}
+      },
+      "want_error": "agent_request=absent requires FULL-AGENT-SUBSTANTIVE=false"
+    },
+    {
+      "id": "shape-direct",
+      "family": "shape",
+      "covers": [
+        "SHAPE-DIRECT",
+        "DIRECT-TINY",
+        "DIRECT-REVERSIBLE",
+        "DIRECT-ONE-SURFACE",
+        "DIRECT-OBVIOUS-PROOF",
+        "DIRECT-NO-DURABLE-RESEARCH",
+        "DIRECT-NO-SUBAGENTS",
+        "DIRECT-NO-RESUME"
+      ],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        },
+        "direct_predicates": {
+          "DIRECT-TINY": true,
+          "DIRECT-REVERSIBLE": true,
+          "DIRECT-ONE-SURFACE": true,
+          "DIRECT-OBVIOUS-PROOF": true,
+          "DIRECT-NO-DURABLE-RESEARCH": true,
+          "DIRECT-NO-SUBAGENTS": true,
+          "DIRECT-NO-RESUME": true
+        }
+      },
+      "want": {"matched_rule": "SHAPE-DIRECT", "outcome": "direct_path"}
+    },
+    {
+      "id": "shape-lean",
+      "family": "shape",
+      "covers": [
+        "SHAPE-LEAN",
+        "LEAN-BOUNDED",
+        "LEAN-NONTRIVIAL",
+        "LEAN-SINGLE-DOMAIN",
+        "LEAN-STABLE-OWNER",
+        "LEAN-CLEAR-PROOF"
+      ],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        },
+        "direct_predicates": {
+          "DIRECT-TINY": false,
+          "DIRECT-REVERSIBLE": true,
+          "DIRECT-ONE-SURFACE": true,
+          "DIRECT-OBVIOUS-PROOF": true,
+          "DIRECT-NO-DURABLE-RESEARCH": true,
+          "DIRECT-NO-SUBAGENTS": true,
+          "DIRECT-NO-RESUME": true
+        },
+        "lean_predicates": {
+          "LEAN-BOUNDED": true,
+          "LEAN-NONTRIVIAL": true,
+          "LEAN-SINGLE-DOMAIN": true,
+          "LEAN-STABLE-OWNER": true,
+          "LEAN-CLEAR-PROOF": true
+        }
+      },
+      "want": {"matched_rule": "SHAPE-LEAN", "outcome": "lean_local"}
+    },
+    {
+      "id": "shape-fallback-full",
+      "family": "shape",
+      "covers": ["SHAPE-FALLBACK-FULL"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "false",
+          "FULL-DATA": "false",
+          "FULL-SECURITY": "false",
+          "FULL-MONEY": "false",
+          "FULL-CONCURRENCY": "false",
+          "FULL-DELIVERY": "false",
+          "FULL-OWNERSHIP": "false",
+          "FULL-BROAD-STRICT": "false",
+          "FULL-AGENT-SUBSTANTIVE": "false"
+        },
+        "direct_predicates": {
+          "DIRECT-TINY": false,
+          "DIRECT-REVERSIBLE": true,
+          "DIRECT-ONE-SURFACE": true,
+          "DIRECT-OBVIOUS-PROOF": true,
+          "DIRECT-NO-DURABLE-RESEARCH": true,
+          "DIRECT-NO-SUBAGENTS": true,
+          "DIRECT-NO-RESUME": true
+        },
+        "lean_predicates": {
+          "LEAN-BOUNDED": false,
+          "LEAN-NONTRIVIAL": true,
+          "LEAN-SINGLE-DOMAIN": true,
+          "LEAN-STABLE-OWNER": true,
+          "LEAN-CLEAR-PROOF": true
+        }
+      },
+      "want": {"matched_rule": "SHAPE-FALLBACK-FULL", "outcome": "full_orchestrated"}
+    },
+    {
+      "id": "shape-rejects-missing-full-trigger",
+      "family": "shape",
+      "covers": [],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {
+          "FULL-PUBLIC-CONTRACT": "true"
+        }
+      },
+      "want_error": "missing full trigger"
+    },
+    {
+      "id": "agent-request-absent",
+      "family": "agent_request",
+      "covers": ["AGENT-ABSENT"],
+      "input": {"authorized": false, "substantive": false, "required_lane": false},
+      "want": {"agent_request": "absent", "full_floor": false, "required_lane_gate": "not_applicable"}
+    },
+    {
+      "id": "agent-request-capability-only",
+      "family": "agent_request",
+      "covers": ["AGENT-CAPABILITY"],
+      "input": {"authorized": true, "substantive": false, "required_lane": false},
+      "want": {"agent_request": "capability_only", "full_floor": false, "required_lane_gate": "not_applicable"}
+    },
+    {
+      "id": "agent-request-substantive",
+      "family": "agent_request",
+      "covers": ["AGENT-SUBSTANTIVE"],
+      "input": {"authorized": true, "substantive": true, "required_lane": true},
+      "want": {"agent_request": "substantive", "full_floor": true, "required_lane_gate": "not_applicable"}
+    },
+    {
+      "id": "agent-request-missing-required-authorization",
+      "family": "agent_request",
+      "covers": ["AGENT-ABSENT"],
+      "input": {"authorized": false, "substantive": false, "required_lane": true},
+      "want": {"agent_request": "absent", "full_floor": false, "required_lane_gate": "blocked_missing_authorization"}
+    },
+    {
+      "id": "fanout-keeps-sequential-work-local",
+      "family": "fanout",
+      "covers": ["FANOUT-LOCAL"],
+      "input": {
+        "independent_questions": true,
+        "separate_context_benefit": true,
+        "small_or_sequential": true,
+        "shared_mutable_state": false,
+        "requested_concurrency": 2,
+        "excess_reason": ""
+      },
+      "want": {"mode": "local", "concurrent_lanes": 0, "excess_reason_required": false}
+    },
+    {
+      "id": "fanout-allows-three-independent-lanes",
+      "family": "fanout",
+      "covers": ["FANOUT-INDEPENDENT", "FANOUT-CONCURRENCY"],
+      "input": {
+        "independent_questions": true,
+        "separate_context_benefit": true,
+        "small_or_sequential": false,
+        "shared_mutable_state": false,
+        "requested_concurrency": 3,
+        "excess_reason": ""
+      },
+      "want": {"mode": "fan_out", "concurrent_lanes": 3, "excess_reason_required": false}
+    },
+    {
+      "id": "fanout-rejects-unjustified-fourth-lane",
+      "family": "fanout",
+      "covers": [],
+      "input": {
+        "independent_questions": true,
+        "separate_context_benefit": true,
+        "small_or_sequential": false,
+        "shared_mutable_state": false,
+        "requested_concurrency": 4,
+        "excess_reason": ""
+      },
+      "want_error": "concurrency above three requires a task-specific reason"
+    },
+    {
+      "id": "fanout-allows-justified-fourth-lane",
+      "family": "fanout",
+      "covers": ["FANOUT-INDEPENDENT", "FANOUT-CONCURRENCY"],
+      "input": {
+        "independent_questions": true,
+        "separate_context_benefit": true,
+        "small_or_sequential": false,
+        "shared_mutable_state": false,
+        "requested_concurrency": 4,
+        "excess_reason": "Four provider contracts must be checked against independent current sources before one fixed release window."
+      },
+      "want": {"mode": "fan_out", "concurrent_lanes": 4, "excess_reason_required": true}
+    },
+    {
+      "id": "artifact-depth-direct",
+      "family": "artifact_depth",
+      "covers": ["ARTIFACT-DIRECT", "DEPTH-DIRECT"],
+      "input": {"shape": "direct_path"},
+      "want": {"workflow_plan": "not_expected", "phase_control": "not_expected", "spec": "not_expected", "tasks": "not_expected", "companions_policy": "all_not_expected"}
+    },
+    {
+      "id": "artifact-depth-lean",
+      "family": "artifact_depth",
+      "covers": ["ARTIFACT-LEAN", "DEPTH-LEAN"],
+      "input": {"shape": "lean_local"},
+      "want": {"workflow_plan": "conditional", "phase_control": "conditional", "spec": "expected", "tasks": "expected", "companions_policy": "resolve_each_from_owner_trigger"}
+    },
+    {
+      "id": "artifact-depth-full",
+      "family": "artifact_depth",
+      "covers": ["ARTIFACT-FULL", "DEPTH-FULL"],
+      "input": {"shape": "full_orchestrated"},
+      "want": {"workflow_plan": "expected", "phase_control": "conditional", "spec": "expected", "tasks": "expected", "companions_policy": "resolve_each_from_owner_trigger"}
+    },
+    {
+      "id": "artifact-depth-invalid-shape",
+      "family": "artifact_depth",
+      "covers": [],
+      "input": {"shape": "lightweight_local"},
+      "want_error": "invalid artifact depth shape"
+    },
+    {
+      "id": "state-current-approved",
+      "family": "state",
+      "covers": [
+        "STATE-EXECUTION-SHAPE",
+        "STATE-ARTIFACT-EXPECTATION",
+        "STATE-ARTIFACT-LIFECYCLE",
+        "STATE-RECORD-VALIDITY",
+        "STATE-PHASE",
+        "STATE-PROCEDURAL-GATE",
+        "STATE-REVIEW-VERDICT",
+        "STATE-SUBAGENT-GATE",
+        "STATE-WAIVER",
+        "STATE-SESSION-BOUNDARY",
+        "STATE-HANDOFF",
+        "STATE-ROUTING-SCOPE",
+        "STATE-ROUTING-REVISION",
+        "STATE-COMPOSE-EXPECTED",
+        "STATE-COMPOSE-REVISION"
+      ],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "expected",
+        "artifact_state": "approved",
+        "record_validity": "current",
+        "phase_state": "complete",
+        "procedural_gate_state": "complete",
+        "review_verdict": "PASS",
+        "subagent_gate": "complete",
+        "waiver_disposition": "none",
+        "session_boundary": "reached",
+        "handoff_readiness": "ready",
+        "routing_scope": "durable",
+        "routing_revision": 3,
+        "observed_routing_scope": "durable",
+        "observed_routing_revision": 3
+      },
+      "want": {"authorizes": true, "valid": true}
+    },
+    {
+      "id": "state-stale-approved",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-FRESHNESS"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "expected",
+        "artifact_state": "approved",
+        "record_validity": "stale",
+        "phase_state": "complete",
+        "procedural_gate_state": "complete",
+        "review_verdict": "PASS",
+        "subagent_gate": "complete",
+        "waiver_disposition": "none",
+        "session_boundary": "reached",
+        "handoff_readiness": "blocked",
+        "routing_scope": "durable",
+        "routing_revision": 3,
+        "observed_routing_scope": "durable",
+        "observed_routing_revision": 3
+      },
+      "want": {"authorizes": false, "valid": true}
+    },
+    {
+      "id": "state-not-expected-absent",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-NOT-EXPECTED"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "direct_path",
+        "artifact_expectation": "not_expected",
+        "artifact_state": "absent",
+        "record_validity": "current",
+        "phase_state": "active",
+        "procedural_gate_state": "not_expected",
+        "review_verdict": "pending",
+        "subagent_gate": "not_expected",
+        "waiver_disposition": "none",
+        "session_boundary": "open",
+        "handoff_readiness": "not_ready",
+        "routing_scope": "current_session",
+        "routing_revision": 1
+      },
+      "want": {"authorizes": false, "valid": true}
+    },
+    {
+      "id": "state-conditional-absent",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-CONDITIONAL"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "conditional",
+        "artifact_state": "absent",
+        "record_validity": "current",
+        "phase_state": "not_started",
+        "procedural_gate_state": "pending",
+        "review_verdict": "pending",
+        "subagent_gate": "local_only",
+        "waiver_disposition": "none",
+        "session_boundary": "open",
+        "handoff_readiness": "not_ready",
+        "routing_scope": "durable",
+        "routing_revision": 1
+      },
+      "want": {"authorizes": false, "valid": true}
+    },
+    {
+      "id": "state-waived-absent",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-WAIVER"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "expected",
+        "artifact_state": "absent",
+        "record_validity": "current",
+        "phase_state": "complete",
+        "procedural_gate_state": "waived",
+        "review_verdict": "WAIVED",
+        "subagent_gate": "waived",
+        "waiver_disposition": "waived",
+        "waiver_eligible": true,
+        "waiver_rationale": "Explicit prototype scope permits omitting this artifact.",
+        "waiver_evidence": "Accepted brief and current route record.",
+        "waiver_reopen_trigger": "Prototype scope is removed or a protected trigger appears.",
+        "session_boundary": "reached",
+        "handoff_readiness": "ready",
+        "routing_scope": "durable",
+        "routing_revision": 2
+      },
+      "want": {"authorizes": false, "valid": true}
+    },
+    {
+      "id": "state-waived-missing-metadata",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-WAIVER"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "expected",
+        "artifact_state": "absent",
+        "record_validity": "current",
+        "phase_state": "complete",
+        "procedural_gate_state": "waived",
+        "review_verdict": "WAIVED",
+        "subagent_gate": "waived",
+        "waiver_disposition": "waived",
+        "session_boundary": "reached",
+        "handoff_readiness": "ready",
+        "routing_scope": "durable",
+        "routing_revision": 2
+      },
+      "want": {"authorizes": false, "valid": false}
+    },
+    {
+      "id": "state-approved-blocked-gates-do-not-authorize",
+      "family": "state",
+      "covers": ["STATE-PROCEDURAL-GATE", "STATE-REVIEW-VERDICT", "STATE-SUBAGENT-GATE", "STATE-HANDOFF"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "full_orchestrated",
+        "artifact_expectation": "expected",
+        "artifact_state": "approved",
+        "record_validity": "current",
+        "phase_state": "blocked",
+        "procedural_gate_state": "blocked",
+        "review_verdict": "FAIL",
+        "subagent_gate": "blocked",
+        "waiver_disposition": "none",
+        "session_boundary": "reached",
+        "handoff_readiness": "blocked",
+        "routing_scope": "durable",
+        "routing_revision": 2
+      },
+      "want": {"authorizes": false, "valid": true}
+    },
+    {
+      "id": "state-display-expected-absent",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-DISPLAY"],
+      "input": {"kind": "display", "phrase": "missing, expected later"},
+      "want": {"projection": "artifact_expectation=expected,artifact_state=absent"}
+    },
+    {
+      "id": "state-conflict-fails-closed",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-FAIL-CLOSED"],
+      "input": {"kind": "conflict"},
+      "want": {"authorizes": false, "status": "status_unclear", "valid": false}
+    },
+    {
+      "id": "state-illegal-conditional-draft",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-CONDITIONAL"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "conditional",
+        "artifact_state": "draft",
+        "record_validity": "current",
+        "phase_state": "active",
+        "procedural_gate_state": "pending",
+        "review_verdict": "pending",
+        "subagent_gate": "local_only",
+        "waiver_disposition": "none",
+        "session_boundary": "open",
+        "handoff_readiness": "not_ready",
+        "routing_scope": "durable",
+        "routing_revision": 1
+      },
+      "want": {"authorizes": false, "valid": false}
+    },
+    {
+      "id": "state-illegal-not-expected-waiver",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-NOT-EXPECTED", "STATE-COMPOSE-WAIVER"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "not_expected",
+        "artifact_state": "absent",
+        "record_validity": "current",
+        "phase_state": "complete",
+        "procedural_gate_state": "waived",
+        "review_verdict": "WAIVED",
+        "subagent_gate": "waived",
+        "waiver_disposition": "waived",
+        "session_boundary": "reached",
+        "handoff_readiness": "ready",
+        "routing_scope": "durable",
+        "routing_revision": 2
+      },
+      "want": {"authorizes": false, "valid": false}
+    },
+    {
+      "id": "state-routing-identity-mismatch",
+      "family": "state",
+      "covers": ["STATE-COMPOSE-REVISION"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "full_orchestrated",
+        "artifact_expectation": "expected",
+        "artifact_state": "complete",
+        "record_validity": "current",
+        "phase_state": "complete",
+        "procedural_gate_state": "complete",
+        "review_verdict": "PASS",
+        "subagent_gate": "complete",
+        "waiver_disposition": "none",
+        "session_boundary": "reached",
+        "handoff_readiness": "ready",
+        "routing_scope": "durable",
+        "routing_revision": 4,
+        "observed_routing_scope": "current_session",
+        "observed_routing_revision": 4
+      },
+      "want": {"authorizes": false, "valid": false}
+    },
+    {
+      "id": "state-invalid-routing-revision",
+      "family": "state",
+      "covers": ["STATE-ROUTING-REVISION"],
+      "input": {
+        "kind": "record",
+        "execution_shape": "lean_local",
+        "artifact_expectation": "expected",
+        "artifact_state": "draft",
+        "record_validity": "current",
+        "phase_state": "active",
+        "procedural_gate_state": "pending",
+        "review_verdict": "pending",
+        "subagent_gate": "local_only",
+        "waiver_disposition": "none",
+        "session_boundary": "open",
+        "handoff_readiness": "not_ready",
+        "routing_scope": "durable",
+        "routing_revision": 0
+      },
+      "want": {"authorizes": false, "valid": false}
+    },
+    {
+      "id": "legacy-shape-direct",
+      "family": "legacy",
+      "covers": ["LEGACY-SHAPE-DIRECT"],
+      "input": {"field": "shape", "value": "  `direct path`.  "},
+      "want": {"projection": "execution_shape=direct_path"}
+    },
+    {
+      "id": "legacy-shape-lean",
+      "family": "legacy",
+      "covers": ["LEGACY-SHAPE-LEAN"],
+      "input": {"field": "shape", "value": "lightweight local"},
+      "want": {"projection": "execution_shape=lean_local"}
+    },
+    {
+      "id": "legacy-shape-full",
+      "family": "legacy",
+      "covers": ["LEGACY-SHAPE-FULL"],
+      "input": {"field": "shape", "value": "full_orchestrated"},
+      "want": {"projection": "execution_shape=full_orchestrated"}
+    },
+    {
+      "id": "legacy-phase-not-started",
+      "family": "legacy",
+      "covers": ["LEGACY-PHASE-NOT-STARTED"],
+      "input": {"field": "phase", "value": "pending"},
+      "want": {"projection": "phase_state=not_started"}
+    },
+    {
+      "id": "legacy-phase-active",
+      "family": "legacy",
+      "covers": ["LEGACY-PHASE-ACTIVE"],
+      "input": {"field": "phase", "value": "in progress"},
+      "want": {"projection": "phase_state=active"}
+    },
+    {
+      "id": "legacy-phase-complete",
+      "family": "legacy",
+      "covers": ["LEGACY-PHASE-COMPLETE"],
+      "input": {"field": "phase", "value": "done"},
+      "want": {"projection": "phase_state=complete"}
+    },
+    {
+      "id": "legacy-phase-reopened",
+      "family": "legacy",
+      "covers": ["LEGACY-PHASE-BLOCKED-REOPENED"],
+      "input": {"field": "phase", "value": "reopened"},
+      "want": {"projection": "phase_state=reopened"}
+    },
+    {
+      "id": "legacy-artifact-lifecycle",
+      "family": "legacy",
+      "covers": ["LEGACY-ARTIFACT-LIFECYCLE"],
+      "input": {"field": "artifact", "value": "completed"},
+      "want": {"projection": "artifact_expectation=expected,artifact_state=complete,record_validity=current"}
+    },
+    {
+      "id": "legacy-artifact-missing",
+      "family": "legacy",
+      "covers": ["LEGACY-ARTIFACT-MISSING"],
+      "input": {"field": "artifact", "value": "missing, expected next"},
+      "want": {"projection": "artifact_expectation=expected,artifact_state=absent,record_validity=current"}
+    },
+    {
+      "id": "legacy-artifact-complete-evidence",
+      "family": "legacy",
+      "covers": ["LEGACY-ARTIFACT-COMPLETE-EVIDENCE"],
+      "input": {"field": "artifact", "value": "present, complete evidence"},
+      "want": {"projection": "artifact_expectation=expected,artifact_state=complete,record_validity=current"}
+    },
+    {
+      "id": "legacy-artifact-conditional",
+      "family": "legacy",
+      "covers": ["LEGACY-ARTIFACT-CONDITIONAL"],
+      "input": {"field": "artifact", "value": "conditional, trigger unknown"},
+      "want": {"projection": "artifact_expectation=conditional,artifact_state=absent,record_validity=current"}
+    },
+    {
+      "id": "legacy-artifact-not-expected",
+      "family": "legacy",
+      "covers": ["LEGACY-ARTIFACT-NOT-EXPECTED"],
+      "input": {"field": "artifact", "value": "not expected"},
+      "want": {"projection": "artifact_expectation=not_expected,artifact_state=absent,record_validity=current"}
+    },
+    {
+      "id": "legacy-artifact-waived",
+      "family": "legacy",
+      "covers": ["LEGACY-ARTIFACT-WAIVED"],
+      "input": {"field": "artifact", "value": "waived"},
+      "want": {"projection": "artifact_expectation=expected,artifact_state=absent,waiver_disposition=waived,record_validity=current"}
+    },
+    {
+      "id": "legacy-gate",
+      "family": "legacy",
+      "covers": ["LEGACY-GATE"],
+      "input": {"field": "gate", "value": "not_expected"},
+      "want": {"projection": "procedural_gate_state=not_expected"}
+    },
+    {
+      "id": "legacy-verdict",
+      "family": "legacy",
+      "covers": ["LEGACY-VERDICT"],
+      "input": {"field": "verdict", "value": "CONCERNS"},
+      "want": {"projection": "review_verdict=CONCERNS"}
+    },
+    {
+      "id": "legacy-session",
+      "family": "legacy",
+      "covers": ["LEGACY-SESSION"],
+      "input": {"field": "session", "value": "yes"},
+      "want": {"projection": "session_boundary=reached"}
+    },
+    {
+      "id": "legacy-handoff",
+      "family": "legacy",
+      "covers": ["LEGACY-HANDOFF"],
+      "input": {"field": "handoff", "value": "no"},
+      "want": {"projection": "handoff_readiness=not_ready"}
+    },
+    {
+      "id": "legacy-unmapped",
+      "family": "legacy",
+      "covers": ["LEGACY-UNMAPPED"],
+      "input": {"field": "phase", "value": "complete for research"},
+      "want": {"projection": "legacy_unmapped"}
+    },
+    {
+      "id": "transition-direct-initial",
+      "family": "transition",
+      "covers": ["TRANS-DIRECT-INITIAL"],
+      "input": {"kind": "direct_initial"},
+      "want": {"revision": 1, "scope": "current_session"}
+    },
+    {
+      "id": "transition-durable-initial",
+      "family": "transition",
+      "covers": ["TRANS-DURABLE-INITIAL"],
+      "input": {"kind": "durable_initial"},
+      "want": {"revision": 1, "scope": "durable"}
+    },
+    {
+      "id": "transition-direct-eligibility-loss",
+      "family": "transition",
+      "covers": ["TRANS-DIRECT-ELIGIBILITY-LOSS"],
+      "input": {"kind": "direct_eligibility_loss", "predicate_false_or_unknown": true},
+      "want": {"direct_writes_allowed": false}
+    },
+    {
+      "id": "transition-direct-remains-eligible",
+      "family": "transition",
+      "covers": ["TRANS-DIRECT-ELIGIBILITY-LOSS"],
+      "input": {"kind": "direct_eligibility_loss", "predicate_false_or_unknown": false},
+      "want": {"direct_writes_allowed": true}
+    },
+    {
+      "id": "transition-direct-eligibility-loss-requires-predicate",
+      "family": "transition",
+      "covers": [],
+      "input": {"kind": "direct_eligibility_loss"},
+      "want_error": "missing required input field"
+    },
+    {
+      "id": "transition-direct-escalate",
+      "family": "transition",
+      "covers": ["TRANS-DIRECT-ESCALATE"],
+      "input": {
+        "kind": "direct_escalate", "source_scope": "current_session", "source_revision": 3, "source_record_validity": "current", "active_scope": "current_session", "active_revision": 3, "prior_edits_unapproved": true, "target_shape": "full_orchestrated", "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "true", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true}
+      },
+      "want": {"allowed": true, "prior_validity": "stale", "revision": 1, "scope": "durable"}
+    },
+    {
+      "id": "transition-direct-escalate-rejects-unapproved-disposition-gap",
+      "family": "transition",
+      "covers": ["TRANS-DIRECT-ESCALATE"],
+      "input": {
+        "kind": "direct_escalate", "source_scope": "current_session", "source_revision": 3, "source_record_validity": "current", "active_scope": "current_session", "active_revision": 3, "prior_edits_unapproved": false, "target_shape": "lean_local", "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true}
+      },
+      "want": {"allowed": false, "source_preserved": true}
+    },
+    {
+      "id": "transition-upward-allowed",
+      "family": "transition",
+      "covers": ["TRANS-UPWARD"],
+      "input": {
+        "kind": "upward", "prior_shape": "lean_local", "target_shape": "full_orchestrated", "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "true", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true}
+      },
+      "want": {"allowed": true}
+    },
+    {
+      "id": "transition-upward-denied",
+      "family": "transition",
+      "covers": ["TRANS-UPWARD"],
+      "input": {
+        "kind": "upward", "prior_shape": "lean_local", "target_shape": "full_orchestrated", "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true}
+      },
+      "want": {"allowed": false}
+    },
+    {
+      "id": "transition-downgrade-allowed",
+      "family": "transition",
+      "covers": ["TRANS-DOWNGRADE"],
+      "input": {
+        "kind": "downgrade", "prior_shape": "full_orchestrated", "target_shape": "lean_local", "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true}
+      },
+      "want": {"allowed": true}
+    },
+    {
+      "id": "transition-downgrade-denied",
+      "family": "transition",
+      "covers": ["TRANS-DOWNGRADE"],
+      "input": {
+        "kind": "downgrade", "prior_shape": "full_orchestrated", "target_shape": "lean_local", "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "true", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true}
+      },
+      "want": {"allowed": false}
+    },
+    {
+      "id": "transition-refresh",
+      "family": "transition",
+      "covers": ["TRANS-REFRESH"],
+      "input": {"kind": "refresh", "revision": 4, "dependent_record_dispositions": {"prior_adequacy": "stale", "prior_handoff": "stale", "unaffected_spec": "preserved: inputs and decision dependencies are unchanged"}},
+      "want": {"adequacy_validity": "stale", "artifact_validity": "stale", "gate_state": "pending", "handoff": "blocked", "invalidated_records": 3, "revision": 5, "verdict_validity": "stale"}
+    },
+    {
+      "id": "transition-refresh-requires-dependent-dispositions",
+      "family": "transition",
+      "covers": [],
+      "input": {"kind": "refresh", "revision": 4, "dependent_record_dispositions": {}},
+      "want_error": "refresh requires explicit dependent record dispositions"
+    },
+    {
+      "id": "transition-durable-revision",
+      "family": "transition",
+      "covers": ["TRANS-DURABLE-REVISION"],
+      "input": {"kind": "durable_revision", "revision": 4},
+      "want": {"revision": 5, "scope": "durable"}
+    },
+    {
+      "id": "transition-durable-revision-rejects-zero",
+      "family": "transition",
+      "covers": [],
+      "input": {"kind": "durable_revision", "revision": 0},
+      "want_error": "positive prior revision"
+    },
+    {
+      "id": "transition-partial-control-matches",
+      "family": "transition",
+      "covers": ["TRANS-PARTIAL-CONFLICT"],
+      "input": {"kind": "partial_conflict", "master_scope": "durable", "phase_scope": "durable", "master_revision": 4, "phase_revision": 4},
+      "want": {"handoff": "ready"}
+    },
+    {
+      "id": "transition-partial-control-revision-conflict",
+      "family": "transition",
+      "covers": ["TRANS-PARTIAL-CONFLICT"],
+      "input": {"kind": "partial_conflict", "master_scope": "durable", "phase_scope": "durable", "master_revision": 4, "phase_revision": 3},
+      "want": {"handoff": "blocked"}
+    },
+    {
+      "id": "transition-partial-control-scope-conflict",
+      "family": "transition",
+      "covers": ["TRANS-PARTIAL-CONFLICT"],
+      "input": {"kind": "partial_conflict", "master_scope": "durable", "phase_scope": "current_session", "master_revision": 4, "phase_revision": 4},
+      "want": {"handoff": "blocked"}
+    },
+    {
+      "id": "transition-partial-control-requires-complete-identity",
+      "family": "transition",
+      "covers": [],
+      "input": {"kind": "partial_conflict", "master_scope": "durable", "master_revision": 4},
+      "want_error": "missing required input field"
+    },
+    {
+      "id": "transition-durable-history",
+      "family": "transition",
+      "covers": ["TRANS-DURABLE-HISTORY"],
+      "input": {"kind": "durable_history"},
+      "want": {"prior_validity": "superseded"}
+    },
+    {
+      "id": "transition-post-ledger-reopen-blocked",
+      "family": "transition",
+      "covers": ["TRANS-POST-LEDGER-REOPEN"],
+      "input": {"kind": "post_ledger_reopen", "fresh_task_review": false, "blocker_recorded_in_tasks": true, "readiness_stale": true, "active_scope": "durable", "active_revision": 3, "review_scope": "durable", "review_revision": 2, "review_record_validity": "stale"},
+      "want": {"tasks_authorizes": false, "tasks_is_state_source": true}
+    },
+    {
+      "id": "transition-post-ledger-reopen-authorized",
+      "family": "transition",
+      "covers": ["TRANS-POST-LEDGER-REOPEN"],
+      "input": {"kind": "post_ledger_reopen", "fresh_task_review": true, "blocker_recorded_in_tasks": true, "readiness_stale": true, "active_scope": "durable", "active_revision": 3, "review_scope": "durable", "review_revision": 3, "review_record_validity": "current"},
+      "want": {"tasks_authorizes": true, "tasks_is_state_source": true}
+    },
+    {
+      "id": "routing-research-expected",
+      "family": "routing",
+      "covers": ["ROUTING-RESEARCH", "ROUTING-NEXT-PHASE", "ROUTING-NO-COLLAPSE"],
+      "input": {"research_expectation": "expected", "next_targets": ["research"], "phase_control_reasons": [], "dedicated_planning_requested": false, "durable_routing": false},
+      "want": {"dedicated_planning": "not_required", "next_phase": "research", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": true}
+    },
+    {
+      "id": "routing-research-skip-new-session-specification",
+      "family": "routing",
+      "covers": ["ROUTING-RESEARCH-SKIP"],
+      "input": {"research_expectation": "not_expected", "next_targets": ["specification"], "phase_control_reasons": [], "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "specification", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": true}
+    },
+    {
+      "id": "routing-research-skip-conflict",
+      "family": "routing",
+      "covers": ["ROUTING-RESEARCH-SKIP"],
+      "input": {"research_expectation": "not_expected", "next_targets": ["research"], "phase_control_reasons": [], "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "research", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "routing-phase-control-required",
+      "family": "routing",
+      "covers": ["ROUTING-PHASE-CONTROL"],
+      "input": {"research_expectation": "conditional", "next_targets": ["research"], "phase_control_reasons": ["multi_lane"], "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "research", "phase_control": "required", "same_session_collapse": "prohibited", "valid": true}
+    },
+    {
+      "id": "routing-mandatory-gate-does-not-require-file",
+      "family": "routing",
+      "covers": ["ROUTING-GATE-NOT-FILE"],
+      "input": {"research_expectation": "expected", "next_targets": ["research"], "phase_control_reasons": [], "mandatory_gate": true, "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "research", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": true}
+    },
+    {
+      "id": "routing-dedicated-planning-consumes-shape",
+      "family": "routing",
+      "covers": ["ROUTING-DEDICATED-PLANNING"],
+      "input": {
+        "research_expectation": "expected", "next_targets": ["research"], "phase_control_reasons": ["multi_session_stop"], "dedicated_planning_requested": true, "durable_routing": true,
+        "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "recorded_shape": "lean_local", "matched_rule": "SHAPE-LEAN", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current"
+      },
+      "want": {"dedicated_planning": "consume_existing_shape", "next_phase": "research", "phase_control": "required", "same_session_collapse": "prohibited", "valid": true}
+    },
+    {
+      "id": "routing-dedicated-planning-rejected-without-trigger",
+      "family": "routing",
+      "covers": ["ROUTING-DEDICATED-PLANNING"],
+      "input": {"research_expectation": "not_expected", "next_targets": ["specification"], "phase_control_reasons": [], "dedicated_planning_requested": true, "durable_routing": false},
+      "want": {"dedicated_planning": "rejected_missing_durable_shape_route", "next_phase": "specification", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "routing-rejects-unknown-phase-control-reason",
+      "family": "routing",
+      "covers": [],
+      "input": {"research_expectation": "conditional", "next_targets": ["specification"], "phase_control_reasons": ["because_complex"], "dedicated_planning_requested": false, "durable_routing": true},
+      "want_error": "unknown phase-control reason"
+    },
+    {
+      "id": "routing-rejects-multiple-next-targets",
+      "family": "routing",
+      "covers": ["ROUTING-NEXT-PHASE"],
+      "input": {"research_expectation": "conditional", "next_targets": ["research", "specification"], "phase_control_reasons": [], "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "routing-rejects-unknown-next-target",
+      "family": "routing",
+      "covers": ["ROUTING-NEXT-PHASE"],
+      "input": {"research_expectation": "expected", "next_targets": ["banana"], "phase_control_reasons": [], "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "banana", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "routing-rejects-research-to-implementation-skip",
+      "family": "routing",
+      "covers": ["ROUTING-NEXT-PHASE"],
+      "input": {"research_expectation": "expected", "next_targets": ["implementation"], "phase_control_reasons": [], "dedicated_planning_requested": false, "durable_routing": true},
+      "want": {"dedicated_planning": "not_required", "next_phase": "implementation", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "routing-rejects-current-session-phase-control",
+      "family": "routing",
+      "covers": ["ROUTING-PHASE-CONTROL"],
+      "input": {"research_expectation": "conditional", "next_targets": ["research"], "phase_control_reasons": ["fan_in"], "dedicated_planning_requested": false, "durable_routing": false},
+      "want": {"dedicated_planning": "not_required", "next_phase": "research", "phase_control": "not_required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "routing-dedicated-planning-rejects-missing-shape-record",
+      "family": "routing",
+      "covers": ["ROUTING-DEDICATED-PLANNING"],
+      "input": {
+        "research_expectation": "expected", "next_targets": ["research"], "phase_control_reasons": ["multi_session_stop"], "dedicated_planning_requested": true, "durable_routing": true,
+        "intake_accepted": true, "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "recorded_shape": "full_orchestrated", "matched_rule": "SHAPE-FALLBACK-FULL", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current"
+      },
+      "want": {"dedicated_planning": "rejected_missing_durable_shape_route", "next_phase": "research", "phase_control": "required", "same_session_collapse": "prohibited", "valid": false}
+    },
+    {
+      "id": "adequacy-full-shape",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-FULL-SHAPE"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": false, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "full_orchestrated", "selected_rule": "SHAPE-FALLBACK-FULL", "durable_planning": false, "change_kind": "none", "active_scope": "durable", "active_revision": 1, "observed_scope": "durable", "observed_revision": 1, "record_validity": "current", "dependent_record_dispositions": {}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-FALLBACK-FULL", "authoritative_shape": "full_orchestrated", "may_mutate": false, "required": true, "route_valid": true}
+    },
+    {
+      "id": "adequacy-full-trigger-falsifies-lean",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-FULL-TRIGGER"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "true", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "lean_local", "selected_rule": "SHAPE-LEAN", "durable_planning": false, "change_kind": "none", "active_scope": "durable", "active_revision": 1, "observed_scope": "durable", "observed_revision": 1, "record_validity": "current", "dependent_record_dispositions": {}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-FULL-FLOOR", "authoritative_shape": "full_orchestrated", "may_mutate": false, "required": true, "route_valid": false}
+    },
+    {
+      "id": "adequacy-durable-planning",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-DURABLE-PLANNING"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "lean_local", "selected_rule": "SHAPE-LEAN", "durable_planning": true, "change_kind": "none", "active_scope": "durable", "active_revision": 2, "observed_scope": "durable", "observed_revision": 2, "record_validity": "current", "dependent_record_dispositions": {}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-LEAN", "authoritative_shape": "lean_local", "may_mutate": false, "required": true, "route_valid": true}
+    },
+    {
+      "id": "adequacy-reclassification",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-RECLASSIFICATION"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "lean_local", "selected_rule": "SHAPE-LEAN", "durable_planning": false, "change_kind": "reclassification", "active_scope": "durable", "active_revision": 3, "observed_scope": "durable", "observed_revision": 3, "record_validity": "current", "dependent_record_dispositions": {"prior_adequacy": "stale", "prior_handoff": "stale"}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-LEAN", "authoritative_shape": "lean_local", "may_mutate": false, "required": true, "route_valid": true}
+    },
+    {
+      "id": "adequacy-unsubstantiated-full",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-FULL-SHAPE"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "full_orchestrated", "selected_rule": "SHAPE-FALLBACK-FULL", "durable_planning": false, "change_kind": "none", "active_scope": "durable", "active_revision": 1, "observed_scope": "durable", "observed_revision": 1, "record_validity": "current", "dependent_record_dispositions": {}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-LEAN", "authoritative_shape": "lean_local", "may_mutate": false, "required": true, "route_valid": false}
+    },
+    {
+      "id": "adequacy-stale-state-undisposed",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-RECLASSIFICATION"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": false, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "full_orchestrated", "selected_rule": "SHAPE-FALLBACK-FULL", "durable_planning": false, "change_kind": "reclassification", "active_scope": "durable", "active_revision": 4, "observed_scope": "durable", "observed_revision": 4, "record_validity": "current", "dependent_record_dispositions": {}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-FALLBACK-FULL", "authoritative_shape": "full_orchestrated", "may_mutate": false, "required": true, "route_valid": false}
+    },
+    {
+      "id": "adequacy-invalid-downgrade",
+      "family": "adequacy",
+      "covers": ["ADEQUACY-RECLASSIFICATION"],
+      "input": {
+        "intake_accepted": true,
+        "agent_request": "absent",
+        "full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": false, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "lean_predicates": {"LEAN-BOUNDED": true, "LEAN-NONTRIVIAL": true, "LEAN-SINGLE-DOMAIN": true, "LEAN-STABLE-OWNER": true, "LEAN-CLEAR-PROOF": true},
+        "selected_shape": "lean_local", "selected_rule": "SHAPE-LEAN", "durable_planning": false, "change_kind": "downgrade", "active_scope": "durable", "active_revision": 5, "observed_scope": "durable", "observed_revision": 5, "record_validity": "current", "dependent_record_dispositions": {}
+      },
+      "want": {"advisory_only": true, "authoritative_rule": "SHAPE-LEAN", "authoritative_shape": "lean_local", "may_mutate": false, "required": true, "route_valid": false}
+    },
+    {
+      "id": "status-tasks-current",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 1, "active_execution_shape": "lean_local", "active_matched_rule": "SHAPE-LEAN", "tasks_scope": "durable", "tasks_revision": 1, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": true, "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "current routing trigger audit", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "complete", "report_review_verdict": "PASS", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "execute the approved ledger"},
+      "want": {"handoff_authorized": true, "implementation_authorized": true, "report_complete": true, "source": "STATUS-TASKS", "source_current": true}
+    },
+    {
+      "id": "status-stale-tasks-retain-precedence",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "lean_local", "active_matched_rule": "SHAPE-LEAN", "tasks_scope": "durable", "tasks_revision": 1, "tasks_record_validity": "stale", "tasks_blockers_clear": true, "tasks_concerns_complete": true, "durable_present": true, "master_scope": "durable", "phase_scope": "durable", "master_revision": 2, "phase_revision": 2, "master_record_validity": "current", "phase_record_validity": "current", "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "stale task routing trigger audit", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "stale", "report_gate_state": "complete", "report_review_verdict": "PASS", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "do not execute stale tasks"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": false}
+    },
+    {
+      "id": "status-tasks-fail-does-not-authorize",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "full_orchestrated", "active_matched_rule": "SHAPE-FALLBACK-FULL", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": false, "tasks_concerns_complete": false, "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "current routing trigger audit", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "blocked", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "blocked", "report_record_validity": "current", "report_gate_state": "blocked", "report_review_verdict": "FAIL", "report_handoff_readiness": "ready", "report_allowed_writes": "none", "report_next_phase": "planning", "report_next_action": "repair the failed task ledger"},
+      "want": {"handoff_authorized": true, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": true}
+    },
+    {
+      "id": "status-tasks-pending-readiness-does-not-authorize",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "full_orchestrated", "active_matched_rule": "SHAPE-FALLBACK-FULL", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": false, "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "current routing trigger audit", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "review_ready", "report_record_validity": "current", "report_gate_state": "pending", "report_review_verdict": "pending", "report_handoff_readiness": "ready", "report_allowed_writes": "none", "report_next_phase": "task-review/readiness", "report_next_action": "run task review and readiness"},
+      "want": {"handoff_authorized": true, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": true}
+    },
+    {
+      "id": "status-tasks-incomplete-concerns-do-not-authorize",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "full_orchestrated", "active_matched_rule": "SHAPE-FALLBACK-FULL", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": false, "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "current routing trigger audit", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "complete", "report_review_verdict": "CONCERNS", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "resolve named concerns during ledger execution"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": true}
+    },
+    {
+      "id": "status-tasks-route-mismatch-does-not-authorize",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 3, "active_execution_shape": "full_orchestrated", "active_matched_rule": "SHAPE-FALLBACK-FULL", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": true, "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "outdated routing trigger audit", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "complete", "report_review_verdict": "PASS", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "do not execute mismatched tasks"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": false}
+    },
+    {
+      "id": "status-tasks-eligible-waiver-authorizes",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "lean_local", "active_matched_rule": "SHAPE-LEAN", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": false, "tasks_waiver_eligible": true, "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "explicit prototype route and waiver evidence", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "waived", "report_review_verdict": "WAIVED", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "execute the explicitly waived prototype ledger"},
+      "want": {"handoff_authorized": true, "implementation_authorized": true, "report_complete": true, "source": "STATUS-TASKS", "source_current": true}
+    },
+    {
+      "id": "status-tasks-direct-route-never-authorizes",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "direct_path", "active_matched_rule": "SHAPE-DIRECT", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": false, "tasks_waiver_eligible": true, "report_execution_shape": "direct_path", "report_matched_rule": "SHAPE-DIRECT", "report_shape_evidence": "invalid durable direct ledger route", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "waived", "report_review_verdict": "WAIVED", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "must reject direct ledger review"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": false}
+    },
+    {
+      "id": "status-tasks-direct-origin-mislabelled-lean-never-authorizes",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "direct_path", "active_matched_rule": "SHAPE-DIRECT", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": true, "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "mislabelled direct-origin ledger", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "complete", "report_review_verdict": "PASS", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "must reject mislabelled direct-origin ledger"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": false}
+    },
+    {
+      "id": "status-tasks-ineligible-waiver-does-not-authorize",
+      "family": "status",
+      "covers": ["STATUS-TASKS"],
+      "input": {"tasks_present": true, "active_scope": "durable", "active_revision": 2, "active_execution_shape": "lean_local", "active_matched_rule": "SHAPE-LEAN", "tasks_scope": "durable", "tasks_revision": 2, "tasks_record_validity": "current", "tasks_blockers_clear": true, "tasks_concerns_complete": false, "tasks_waiver_eligible": false, "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "waiver lacks canonical eligibility", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "waived", "report_review_verdict": "WAIVED", "report_handoff_readiness": "ready", "report_allowed_writes": "implementation", "report_next_phase": "implementation", "report_next_action": "block implementation until waiver eligibility is proven"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-TASKS", "source_current": true}
+    },
+    {
+      "id": "status-durable-current",
+      "family": "status",
+      "covers": ["STATUS-DURABLE-CONTROL"],
+      "input": {"durable_present": true, "active_scope": "durable", "active_revision": 2, "master_scope": "durable", "phase_scope": "durable", "master_revision": 2, "phase_revision": 2, "master_record_validity": "current", "phase_record_validity": "current", "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "current workflow routing trigger audit", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "complete", "report_record_validity": "current", "report_gate_state": "complete", "report_review_verdict": "PASS", "report_handoff_readiness": "ready", "report_allowed_writes": "none", "report_next_phase": "research", "report_next_action": "start the recorded research phase"},
+      "want": {"conflict": false, "handoff_authorized": true, "implementation_authorized": false, "report_complete": true, "source": "STATUS-DURABLE-CONTROL", "source_current": true}
+    },
+    {
+      "id": "status-durable-revision-conflict",
+      "family": "status",
+      "covers": ["STATUS-DURABLE-CONTROL"],
+      "input": {"durable_present": true, "active_scope": "durable", "active_revision": 2, "master_scope": "durable", "phase_scope": "durable", "master_revision": 2, "phase_revision": 1, "master_record_validity": "current", "phase_record_validity": "stale", "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "current master and stale phase routing", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "blocked", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "blocked", "report_record_validity": "stale", "report_gate_state": "blocked", "report_review_verdict": "pending", "report_handoff_readiness": "blocked", "report_allowed_writes": "workflow-control", "report_next_phase": "workflow-planning", "report_next_action": "reconcile the routing revision conflict"},
+      "want": {"conflict": true, "handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-DURABLE-CONTROL", "source_current": false}
+    },
+    {
+      "id": "status-durable-scope-conflict",
+      "family": "status",
+      "covers": ["STATUS-DURABLE-CONTROL"],
+      "input": {"durable_present": true, "active_scope": "durable", "active_revision": 2, "master_scope": "durable", "phase_scope": "current_session", "master_revision": 2, "phase_revision": 2, "master_record_validity": "current", "phase_record_validity": "stale", "report_execution_shape": "full_orchestrated", "report_matched_rule": "SHAPE-FALLBACK-FULL", "report_shape_evidence": "conflicting master and phase routing scopes", "report_adequacy_required": true, "report_adequacy_result": "PASS", "report_phase_state": "blocked", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "blocked", "report_record_validity": "stale", "report_gate_state": "blocked", "report_review_verdict": "pending", "report_handoff_readiness": "blocked", "report_allowed_writes": "workflow-control", "report_next_phase": "workflow-planning", "report_next_action": "reconcile the routing scope conflict"},
+      "want": {"conflict": true, "handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-DURABLE-CONTROL", "source_current": false}
+    },
+    {
+      "id": "status-phase-artifact",
+      "family": "status",
+      "covers": ["STATUS-PHASE-ARTIFACTS"],
+      "input": {"phase_artifact_present": true, "active_scope": "durable", "active_revision": 1, "phase_artifact_scope": "durable", "phase_artifact_revision": 1, "phase_artifact_record_validity": "current", "phase_concerns_complete": true, "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "current phase routing trigger audit", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "complete", "report_session_boundary": "reached", "report_artifact_expectation": "expected", "report_artifact_state": "approved", "report_record_validity": "current", "report_gate_state": "complete", "report_review_verdict": "PASS", "report_handoff_readiness": "ready", "report_allowed_writes": "phase-artifacts", "report_next_phase": "planning", "report_next_action": "start planning from the approved artifact"},
+      "want": {"handoff_authorized": true, "implementation_authorized": false, "report_complete": true, "source": "STATUS-PHASE-ARTIFACTS", "source_current": true}
+    },
+    {
+      "id": "status-phase-artifact-draft-does-not-authorize",
+      "family": "status",
+      "covers": ["STATUS-PHASE-ARTIFACTS"],
+      "input": {"phase_artifact_present": true, "active_scope": "durable", "active_revision": 1, "phase_artifact_scope": "durable", "phase_artifact_revision": 1, "phase_artifact_record_validity": "current", "phase_concerns_complete": true, "report_execution_shape": "lean_local", "report_matched_rule": "SHAPE-LEAN", "report_shape_evidence": "current phase routing trigger audit", "report_adequacy_required": false, "report_adequacy_result": "not_required", "report_phase_state": "active", "report_session_boundary": "open", "report_artifact_expectation": "expected", "report_artifact_state": "draft", "report_record_validity": "current", "report_gate_state": "pending", "report_review_verdict": "pending", "report_handoff_readiness": "not_ready", "report_allowed_writes": "phase-artifacts", "report_next_phase": "planning", "report_next_action": "finish the draft before handoff"},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-PHASE-ARTIFACTS", "source_current": true}
+    },
+    {
+      "id": "status-direct-envelope-current-session",
+      "family": "status",
+      "covers": ["STATUS-DIRECT-ENVELOPE"],
+      "input": {
+        "direct_envelope_present": true,
+        "provenance": "orchestrator_current_session",
+        "same_session": true,
+        "direct_record_validity": "current",
+        "framing_accepted": true,
+        "trigger_audit_complete": true,
+        "direct_agent_request": "absent",
+        "direct_full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": true, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "direct_lean_predicates": {"LEAN-BOUNDED": false, "LEAN-NONTRIVIAL": false, "LEAN-SINGLE-DOMAIN": false, "LEAN-STABLE-OWNER": false, "LEAN-CLEAR-PROOF": false},
+        "matched_rule": "SHAPE-DIRECT",
+        "actor": "orchestrator",
+        "routing_scope": "current_session",
+        "routing_revision": 2,
+        "active_scope": "current_session",
+        "active_revision": 2,
+        "report_execution_shape": "direct_path",
+        "report_matched_rule": "SHAPE-DIRECT",
+        "report_shape_evidence": "current direct trigger audit",
+        "report_adequacy_required": false,
+        "report_adequacy_result": "not_required",
+        "report_phase_state": "active",
+        "report_session_boundary": "open",
+        "report_artifact_expectation": "not_expected",
+        "report_artifact_state": "absent",
+        "report_record_validity": "current",
+        "report_gate_state": "not_expected",
+        "report_review_verdict": "pending",
+        "report_handoff_readiness": "not_ready",
+        "report_allowed_writes": "implementation",
+        "report_next_phase": "implementation",
+        "report_next_action": "continue the bounded direct patch",
+        "proof_result": "PASS",
+        "reopen_seam_present": true
+      },
+      "want": {"handoff_authorized": false, "implementation_authorized": true, "report_complete": true, "source": "STATUS-DIRECT-ENVELOPE", "source_current": true}
+    },
+    {
+      "id": "status-direct-envelope-prior-session",
+      "family": "status",
+      "covers": ["STATUS-DIRECT-ENVELOPE"],
+      "input": {
+        "direct_envelope_present": true,
+        "provenance": "prior_session",
+        "same_session": false,
+        "direct_record_validity": "current",
+        "framing_accepted": true,
+        "trigger_audit_complete": true,
+        "direct_agent_request": "absent",
+        "direct_full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": true, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "direct_lean_predicates": {"LEAN-BOUNDED": false, "LEAN-NONTRIVIAL": false, "LEAN-SINGLE-DOMAIN": false, "LEAN-STABLE-OWNER": false, "LEAN-CLEAR-PROOF": false},
+        "matched_rule": "SHAPE-DIRECT",
+        "actor": "orchestrator",
+        "routing_scope": "current_session",
+        "routing_revision": 2,
+        "active_scope": "current_session",
+        "active_revision": 2,
+        "report_execution_shape": "direct_path",
+        "report_matched_rule": "SHAPE-DIRECT",
+        "report_shape_evidence": "quoted prior-session direct trigger audit",
+        "report_adequacy_required": false,
+        "report_adequacy_result": "not_required",
+        "report_phase_state": "active",
+        "report_session_boundary": "open",
+        "report_artifact_expectation": "not_expected",
+        "report_artifact_state": "absent",
+        "report_record_validity": "current",
+        "report_gate_state": "not_expected",
+        "report_review_verdict": "pending",
+        "report_handoff_readiness": "not_ready",
+        "report_allowed_writes": "implementation",
+        "report_next_phase": "implementation",
+        "report_next_action": "reject the prior-session envelope",
+        "proof_result": "PASS",
+        "reopen_seam_present": true
+      },
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": true, "source": "STATUS-DIRECT-ENVELOPE", "source_current": false}
+    },
+    {
+      "id": "status-direct-envelope-failed-proof",
+      "family": "status",
+      "covers": ["STATUS-DIRECT-ENVELOPE"],
+      "input": {
+        "direct_envelope_present": true,
+        "provenance": "orchestrator_current_session",
+        "same_session": true,
+        "direct_record_validity": "current",
+        "framing_accepted": true,
+        "trigger_audit_complete": true,
+        "direct_agent_request": "absent",
+        "direct_full_triggers": {"FULL-PUBLIC-CONTRACT": "false", "FULL-DATA": "false", "FULL-SECURITY": "false", "FULL-MONEY": "false", "FULL-CONCURRENCY": "false", "FULL-DELIVERY": "false", "FULL-OWNERSHIP": "false", "FULL-BROAD-STRICT": "false", "FULL-AGENT-SUBSTANTIVE": "false"},
+        "direct_predicates": {"DIRECT-TINY": true, "DIRECT-REVERSIBLE": true, "DIRECT-ONE-SURFACE": true, "DIRECT-OBVIOUS-PROOF": true, "DIRECT-NO-DURABLE-RESEARCH": true, "DIRECT-NO-SUBAGENTS": true, "DIRECT-NO-RESUME": true},
+        "direct_lean_predicates": {"LEAN-BOUNDED": false, "LEAN-NONTRIVIAL": false, "LEAN-SINGLE-DOMAIN": false, "LEAN-STABLE-OWNER": false, "LEAN-CLEAR-PROOF": false},
+        "matched_rule": "SHAPE-DIRECT",
+        "actor": "orchestrator",
+        "routing_scope": "current_session",
+        "routing_revision": 2,
+        "active_scope": "current_session",
+        "active_revision": 2,
+        "report_execution_shape": "direct_path",
+        "report_matched_rule": "SHAPE-DIRECT",
+        "report_shape_evidence": "current direct trigger audit",
+        "report_adequacy_required": false,
+        "report_adequacy_result": "not_required",
+        "report_phase_state": "blocked",
+        "report_session_boundary": "reached",
+        "report_artifact_expectation": "not_expected",
+        "report_artifact_state": "absent",
+        "report_record_validity": "current",
+        "report_gate_state": "blocked",
+        "report_review_verdict": "FAIL",
+        "report_handoff_readiness": "ready",
+        "report_allowed_writes": "none",
+        "report_next_phase": "workflow-planning",
+        "report_next_action": "reclassify after failed direct proof",
+        "proof_result": "FAIL",
+        "reopen_seam_present": true
+      },
+      "want": {"handoff_authorized": true, "implementation_authorized": false, "report_complete": true, "source": "STATUS-DIRECT-ENVELOPE", "source_current": true}
+    },
+    {
+      "id": "status-unsupported",
+      "family": "status",
+      "covers": ["STATUS-UNSUPPORTED"],
+      "input": {},
+      "want": {"handoff_authorized": false, "implementation_authorized": false, "report_complete": false, "source": "STATUS-UNSUPPORTED", "source_current": false}
+    },
+    {
+      "id": "risk-challenge-pass",
+      "family": "risk_challenge",
+      "covers": ["STATE-RISK-CHALLENGE"],
+      "input": {"field": "risk_challenge_outcome", "value": "PASS", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want": {"blocks_lean_handoff": false, "field": "risk_challenge_outcome", "next_action": "specification_review", "outcome": "PASS", "proof_obligations": [], "valid": true}
+    },
+    {
+      "id": "risk-challenge-concerns",
+      "family": "risk_challenge",
+      "covers": ["STATE-RISK-CHALLENGE"],
+      "input": {"field": "risk_challenge_outcome", "value": "CONCERNS", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": ["prove cache invalidation at task review"]},
+      "want": {"blocks_lean_handoff": false, "field": "risk_challenge_outcome", "next_action": "specification_review_with_obligations", "outcome": "CONCERNS", "proof_obligations": ["prove cache invalidation at task review"], "valid": true}
+    },
+    {
+      "id": "risk-challenge-reclassifies-full",
+      "family": "risk_challenge",
+      "covers": ["STATE-RISK-CHALLENGE"],
+      "input": {"field": "risk_challenge_outcome", "value": "RECLASSIFY_FULL", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want": {"blocks_lean_handoff": true, "field": "risk_challenge_outcome", "next_action": "guarded_reclassification", "outcome": "RECLASSIFY_FULL", "proof_obligations": [], "valid": true}
+    },
+    {
+      "id": "risk-challenge-rejects-full-required-alias",
+      "family": "risk_challenge",
+      "covers": [],
+      "input": {"field": "risk_challenge_outcome", "value": "FULL_REQUIRED", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want_error": "invalid risk challenge namespace or outcome"
+    },
+    {
+      "id": "risk-challenge-rejects-review-verdict-namespace",
+      "family": "risk_challenge",
+      "covers": [],
+      "input": {"field": "review_verdict", "value": "RECLASSIFY_FULL", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want_error": "invalid risk challenge namespace or outcome"
+    },
+    {
+      "id": "risk-challenge-rejects-procedural-gate-namespace",
+      "family": "risk_challenge",
+      "covers": [],
+      "input": {"field": "procedural_gate_state", "value": "PASS", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want_error": "invalid risk challenge namespace or outcome"
+    },
+    {
+      "id": "risk-challenge-rejects-direct-context",
+      "family": "risk_challenge",
+      "covers": [],
+      "input": {"field": "risk_challenge_outcome", "value": "PASS", "execution_shape": "direct_path", "routing_scope": "current_session", "routing_revision": 1, "record_validity": "current", "proof_obligations": []},
+      "want_error": "risk challenge requires current lean routing"
+    },
+    {
+      "id": "risk-challenge-rejects-full-context",
+      "family": "risk_challenge",
+      "covers": [],
+      "input": {"field": "risk_challenge_outcome", "value": "PASS", "execution_shape": "full_orchestrated", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want_error": "risk challenge requires current lean routing"
+    },
+    {
+      "id": "risk-challenge-concerns-require-obligations",
+      "family": "risk_challenge",
+      "covers": [],
+      "input": {"field": "risk_challenge_outcome", "value": "CONCERNS", "execution_shape": "lean_local", "routing_scope": "durable", "routing_revision": 2, "record_validity": "current", "proof_obligations": []},
+      "want_error": "risk challenge concerns require named proof obligations"
+    },
+    {
+      "id": "mirror-canonical-unavailable",
+      "family": "mirror",
+      "covers": ["MIRROR-CANONICAL-AVAILABLE"],
+      "input": {"canonical_available": false, "render_ok": false},
+      "want": {"pass": false, "state": "canonical_unavailable"}
+    },
+    {
+      "id": "mirror-render-failed",
+      "family": "mirror",
+      "covers": ["MIRROR-RENDER-FAILED"],
+      "input": {"canonical_available": true, "render_ok": false},
+      "want": {"pass": false, "state": "mirror_render_failed"}
+    },
+    {
+      "id": "mirror-optional-absent",
+      "family": "mirror",
+      "covers": ["MIRROR-OPTIONAL-ABSENT"],
+      "input": {"canonical_available": true, "render_ok": true, "present": false, "required": false},
+      "want": {"pass": true, "state": "mirror_optional_absent"}
+    },
+    {
+      "id": "mirror-present-in-sync",
+      "family": "mirror",
+      "covers": ["MIRROR-PRESENT-IN-SYNC"],
+      "input": {"canonical_available": true, "render_ok": true, "present": true, "required": false, "compare_ok": true, "in_sync": true, "strict": true, "target_only_files": false},
+      "want": {"pass": true, "state": "mirror_present_in_sync"}
+    },
+    {
+      "id": "mirror-present-stale",
+      "family": "mirror",
+      "covers": ["MIRROR-PRESENT-STALE"],
+      "input": {"canonical_available": true, "render_ok": true, "present": true, "required": false, "compare_ok": true, "in_sync": false},
+      "want": {"pass": false, "state": "mirror_present_stale"}
+    },
+    {
+      "id": "mirror-compare-failed",
+      "family": "mirror",
+      "covers": ["MIRROR-COMPARE-FAILED"],
+      "input": {"canonical_available": true, "render_ok": true, "present": true, "required": false, "compare_ok": false},
+      "want": {"pass": false, "state": "mirror_compare_failed"}
+    },
+    {
+      "id": "mirror-required-missing",
+      "family": "mirror",
+      "covers": ["MIRROR-REQUIRED-MISSING"],
+      "input": {"canonical_available": true, "render_ok": true, "present": false, "required": true},
+      "want": {"pass": false, "state": "mirror_required_missing"}
+    },
+    {
+      "id": "mirror-strict-target-only-is-stale",
+      "family": "mirror",
+      "covers": ["MIRROR-PRESENT-STALE"],
+      "input": {"canonical_available": true, "render_ok": true, "present": true, "required": false, "compare_ok": true, "in_sync": true, "strict": true, "target_only_files": true},
+      "want": {"pass": false, "state": "mirror_present_stale"}
+    },
+    {
+      "id": "mirror-non-strict-target-only-is-allowed",
+      "family": "mirror",
+      "covers": ["MIRROR-PRESENT-IN-SYNC"],
+      "input": {"canonical_available": true, "render_ok": true, "present": true, "required": false, "compare_ok": true, "in_sync": true, "strict": false, "target_only_files": true},
+      "want": {"pass": true, "state": "mirror_present_in_sync"}
+    },
+    {
+      "id": "mirror-mixed-target-aggregate",
+      "family": "mirror",
+      "covers": ["MIRROR-OPTIONAL-ABSENT", "MIRROR-PRESENT-IN-SYNC", "MIRROR-PRESENT-STALE"],
+      "input": {
+        "canonical_available": true,
+        "render_ok": true,
+        "strict": false,
+        "targets": [
+          {"present": false, "required": false},
+          {"present": true, "required": false, "compare_ok": true, "in_sync": true},
+          {"present": true, "required": false, "compare_ok": true, "in_sync": false}
+        ]
+      },
+      "want": {"pass": false, "states": ["mirror_optional_absent", "mirror_present_in_sync", "mirror_present_stale"]}
+    },
+    {
+      "id": "schema-rejects-unknown-family-field",
+      "family": "agent_request",
+      "covers": [],
+      "input": {"authorized": true, "substantive": false, "required_lane": false, "authorised": true},
+      "want_error": "unknown input field"
+    },
+    {
+      "id": "schema-rejects-wrong-boolean-type",
+      "family": "agent_request",
+      "covers": [],
+      "input": {"authorized": "yes", "substantive": false, "required_lane": false},
+      "want_error": "must be boolean"
+    },
+    {
+      "id": "schema-rejects-unknown-nested-mirror-field",
+      "family": "mirror",
+      "covers": [],
+      "input": {"canonical_available": true, "render_ok": true, "strict": false, "targets": [{"present": true, "required": false, "compare_ok": true, "in_sync": true, "surprise": true}]},
+      "want_error": "unknown mirror target field"
+    },
+    {
+      "id": "schema-rejects-nested-top-level-mirror-field",
+      "family": "mirror",
+      "covers": [],
+      "input": {"canonical_available": true, "render_ok": true, "strict": false, "targets": [{"present": true, "required": false, "compare_ok": true, "in_sync": true, "strict": true}]},
+      "want_error": "unknown mirror target field"
+    },
+    {
+      "id": "mirror-rejects-empty-target-list",
+      "family": "mirror",
+      "covers": [],
+      "input": {"canonical_available": true, "render_ok": true, "strict": false, "targets": []},
+      "want_error": "mirror targets must not be empty"
+    }
+  ]
+}

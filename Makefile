@@ -27,10 +27,10 @@ AGENTS_SYNC_SCRIPT := bash ./scripts/dev/sync-agents.sh
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
 	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check docs-drift-check guardrails-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
+	mod-check fmt-check docs-drift-check guardrails-check workflow-routing-check migration-validate gh-protect gh-protect-check skills-sync skills-check agents-sync agents-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
 	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
-	docker-guardrails-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
+	docker-guardrails-check docker-workflow-routing-check docker-skills-check docker-agents-check docker-docs-drift-check docker-migration-validate docker-container-security \
 	sqlc-generate sqlc-check
 
 help:
@@ -68,6 +68,7 @@ help:
 	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
 	@echo "  make skills-check            # skill mirror drift check"
+	@echo "  make workflow-routing-check  # deterministic spec-first routing contract check"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"
 	@echo "  make docker-sqlc-check       # Docker SQLC validation"
@@ -372,7 +373,7 @@ secret-scan:
 secrets-scan: secret-scan
 
 ci-local:
-	$(MAKE) mod-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report sqlc-check openapi-check go-security secret-scan
+	$(MAKE) mod-check workflow-routing-check guardrails-check agents-check skills-check fmt-check lint test vet test-race test-report sqlc-check openapi-check go-security secret-scan
 	@if [ -n "$(BASE_REF)" ] && [ -n "$(HEAD_REF)" ]; then \
 		$(MAKE) docs-drift-check BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
 	else \
@@ -450,6 +451,11 @@ docs-drift-check:
 guardrails-check:
 	$(GUARDRAILS_CHECK_SCRIPT)
 
+workflow-routing-check:
+	go test ./scripts/ci/workflow-routing-check
+	go run ./scripts/ci/workflow-routing-check
+	bash scripts/ci/sync-mirror-integration-check.sh
+
 skills-sync:
 	$(SKILLS_SYNC_SCRIPT)
 
@@ -478,6 +484,9 @@ docker-secrets-scan: docker-secret-scan
 
 docker-guardrails-check:
 	$(DOCKER_TOOLING_SCRIPT) guardrails-check
+
+docker-workflow-routing-check:
+	$(DOCKER_TOOLING_SCRIPT) workflow-routing-check
 
 docker-skills-check:
 	$(DOCKER_TOOLING_SCRIPT) skills-check

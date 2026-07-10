@@ -1,7 +1,8 @@
 # Context Selection Map
 
-Rule: load the smallest useful set of repo context.
-Do not bulk-read directories by default.
+Load this map only when the task mode or relevant repository surface is unclear, or a user-mentioned identifier needs mapping. Skip it when the source task already supplies a sufficient read set and proof path.
+
+Rule: load the smallest useful set of repo context. Do not bulk-read directories by default.
 
 ## Step 1: Classify The Task Mode
 

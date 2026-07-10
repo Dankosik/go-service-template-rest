@@ -1,12 +1,13 @@
-# Specification Review Phase
+# Specification Review Checkpoint
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when reviewing a completed non-trivial `spec.md` before technical design, planning, or implementation.
+Internal read-only checkpoint companion for `docs/spec-first-workflow.md`. The user-started specification session invokes it after `spec.md` is review-ready and again after every repair; an explicitly read-only user review may also invoke it directly.
 
 ## Read When
 
 - A completed non-trivial `spec.md` is marked review-ready.
 - Downstream technical design, compact tasking, planning, or implementation is waiting on a spec-review verdict.
 - A repaired spec after `FAIL` needs a fresh or explicitly updated follow-up verdict.
+- The active specification session needs independent evidence before it may close.
 
 ## Inputs
 
@@ -15,11 +16,11 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when revie
 
 ## Outputs
 
-- `PASS`, `CONCERNS`, or `FAIL` with lens coverage, findings, orchestrator resolution, accepted risks, proof obligations, readiness consequence, and reopen target.
+- Advisory `PASS`, `CONCERNS`, or `FAIL` recommendation with lens coverage, findings, accepted risks, proof obligations, readiness consequence, exact reviewed revision, and reopen target for root reconciliation.
 
 ## Stop Rule
 
-Keep specification review read-only. If findings require content changes, route to specification repair and require a follow-up review before downstream phases start.
+Keep the reviewer read-only. Return findings to the owning specification orchestrator; do not edit `spec.md`, end the user session, or render a next-session prompt. The root repairs in the same specification session, marks this verdict stale, and launches a fresh reviewer context against the changed revision before downstream phases start.
 
 ## Specification Review
 
@@ -51,11 +52,11 @@ Use the review to try to disprove downstream readiness, not to improve prose. As
 
 ## Lens Selection And Coverage
 
-For non-trivial work, use at least one distinct read-only specification-review lane. Use multiple lanes by default when independent review lenses could change approval, including product/scope coherence, domain invariants, API/data/source-of-truth, architecture ownership, security/reliability/delivery, validation/QA, dependency/OSS, Pattern Fit, and legacy cleanup.
+For non-trivial work, preserve the mandatory independent specification-review boundary with at least one focused read-only lane. Add lanes only for additional concrete, independent, bounded falsification questions that can change approval and materially benefit from separate context. A domain name or broad lens list is not a lane plan.
 
 Select lenses from the spec's actual approval risks, not from a fixed checklist. Start with every domain that appears in scope, non-goals, behavior delta, decisions, compact design constraints, diligence sections, accepted risks, or proof obligations. Add a lens when a missing fact in that domain could change `PASS`, `CONCERNS`, or `FAIL`. Merge lenses only when they share the same evidence, same owner, and same downstream-readiness question.
 
-A scoped-down review must list candidate lenses considered and why omitted lenses cannot change review readiness. Local-only specification review is valid only for explicit direct-path/prototype waiver or when read-only lane execution is unavailable and the workflow records the consequence as `scoped_down` or blocked.
+A single-lane review briefly records why the remaining readiness checks belong in that lane or root synthesis. Local-only specification review is valid only when the subagent gate has an eligible prototype-scoped waiver or read-only lane execution is unavailable and the workflow records the consequence as `scoped_down` or blocked; neither case removes the mandatory orchestrator review verdict for a non-trivial `spec.md`.
 
 Specification review must include a compact lens coverage table:
 
@@ -83,7 +84,7 @@ Why not stronger/weaker: <why this is not PASS-only context, CONCERNS-only carry
 Required disposition: <repair | user decision | accepted risk | proof obligation | record only>
 ```
 
-Specification review gate status:
+Specification review verdict:
 
 - `PASS`: technical design, compact lean tasking, or planning may start from the reviewed spec. Use only when every readiness-critical lens is `covered` or justified `not_applicable`, all material decisions are explicit, and no accepted risk or proof obligation is required beyond the spec's normal validation obligations.
 - `CONCERNS`: the next phase may start only with named accepted risks and proof obligations carried into design, planning, `tasks.md`, `test-plan.md`, or `rollout.md`. Use only when the spec is coherent and downstream-ready, and the remaining concern is a bounded risk or proof requirement that does not change the selected scope, behavior, owner, source of truth, dependency/OSS choice, Pattern Fit outcome, legacy-surface decision, or validation strategy.
@@ -111,7 +112,7 @@ Use a simple discriminator for ownership. If the answer defines what must be tru
 
 Proof obligations must name the claim, downstream artifact that must carry it, expected fresh evidence, freshness or negative-proof requirement when relevant, and the reopen condition if proof fails. Do not write the design answer, implementation task, or validation transcript inside specification review. Do not use `proof_obligation` to launder a missing spec decision into `CONCERNS`; if the decision itself is absent, the verdict is `FAIL`.
 
-Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/specification-review.md` when a dedicated review phase needs durable routing, or the lean-local `spec.md` when no workflow-control artifact exists. The record must name the reviewed `spec.md`, reviewer or lanes, scope, lens coverage table, findings in the required shape, orchestrator resolution, final gate status, accepted risks, proof obligations, readiness consequence, and reopen target. Review subagents do not edit `spec.md`; if findings require content changes, route to specification repair and run a follow-up review after the repair.
+Record the review result in the active workflow-control surface: `workflow-plan.md`, `workflow-plans/specification-review.md` only when `ROUTING-PHASE-CONTROL` requires durable review orchestration, or the lean-local `spec.md` when no workflow-control artifact exists. Record the routing identity observed by the review and `record_validity`; a mandatory review gate alone does not require a phase file under `ROUTING-GATE-NOT-FILE`. The record must name the reviewed `spec.md`, exact revision/content anchor, reviewer or lanes, model route, review-cycle attempt, scope, lens coverage table, findings in the required shape, orchestrator resolution, typed procedural gate and verdict, accepted risks, proof obligations, macro-phase readiness, and reopen target. Review subagents do not edit `spec.md`; findings requiring content changes return to the specification root for same-session repair and fresh follow-up review.
 
 Follow-up review after repair is a fresh read-only verdict, not a rubber stamp. It must identify the prior `FAIL` or blocking concerns, the repaired `spec.md` version or evidence anchor, the changed sections reviewed, any unchanged sections relied on, and whether the repair introduced new contradictions or stale proof obligations. Include a closure table:
 

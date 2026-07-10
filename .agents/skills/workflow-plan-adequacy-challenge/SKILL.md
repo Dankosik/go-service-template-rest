@@ -1,141 +1,70 @@
 ---
 name: workflow-plan-adequacy-challenge
-description: "Review generated workflow-control artifacts for task-specific handoff adequacy. Use inside a read-only challenger subagent after triggered workflow-control artifacts are generated or substantially repaired, before the orchestrator treats the phase plan as sufficient for full-orchestrated, high-risk, complex workflow-control, or agent-backed work. Lean-local work without workflow-control artifacts uses an inline/local self-check instead."
+description: "Read-only falsification of recorded workflow routing and handoff adequacy when a canonical ADEQUACY-* trigger is true. Test the existing route and control artifacts; never classify, reclassify, edit, or approve state."
 ---
 
 # Workflow Plan Adequacy Challenge
 
-## Purpose
-Surface the workflow-control gaps that would make phase handoff or the required chat-rendered next-session prompt dishonest or brittle.
+## Eligibility And Outcome
 
-This skill is a read-only challenge gate over triggered workflow-control artifacts, usually `workflow-plan.md` plus the active `workflow-plans/<phase>.md`. It gives the orchestrator compact findings to reconcile before handoff; it is not a workflow phase, an approval authority, or a replacement for `spec.md`, design context, or `tasks.md`.
+Use only when the canonical artifact model says formal adequacy is required: full shape, true or approval-relevant unknown FULL-* evidence, durable workflow-planning control, or a reclassification that could invalidate a prior challenged route.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+The outcome is an independent falsification report over the recorded route and handoff. It is advisory evidence for orchestrator reconciliation, not a workflow phase or approval.
 
-## Scope
-- inspect generated or substantially repaired workflow-control artifacts for the current task
-- check consistency between the master `workflow-plan.md` and active `workflow-plans/<phase>.md` when both are triggered
-- decide whether routing, stop rules, blockers, artifact expectations, lane ownership, completion criteria, and next-session handoff are sufficient for the task's risk and execution shape
-- when the active phase is specification review, check that the review gate scope, lane ownership, and `PASS`/`CONCERNS`/`FAIL` result path are explicit enough for technical design or planning
-- when the active phase is system/integration design or Go code ownership design, check that checkpoint scope, `Design fan-out`, artifact expectations, stop rule, and next-session route are explicit enough for the next checkpoint or review
-- when the active phase is technical design review, check that the review gate scope, lane ownership, and `PASS`/`CONCERNS`/`FAIL` result path are explicit enough for planning
-- when the active phase is planning, check that specification review status, technical design review status, task-ledger review status, and implementation-readiness status are explicit enough for the next session
-- identify missing or unclear control details that could cause bad execution, premature handoff, or later chat archaeology
-- keep findings actionable enough for the orchestrator to update the workflow-control artifacts directly
-- prefer concise, task-specific routing over generic completeness prose; short but explicit control artifacts are acceptable
+## Canonical Owners
 
-## Boundaries
-Do not:
-- edit files, create workflow artifacts, mutate git state, approve readiness, or change the task ledger or implementation handoff
-- make final product, architecture, API, data, security, reliability, rollout, planning, or validation decisions
-- turn `workflow-plans/<phase>.md` into a second `spec.md`, design artifact, or `tasks.md`
-- demand generic checklist fields that do not change task execution quality
-- reopen settled scope unless the workflow-control artifact cannot route the current task honestly
-- treat this pass as a substitute for `spec-clarification-challenge`, pre-spec challenge, technical design, or task breakdown
-- treat concise but explicit routing as inadequate just because it is brief
+- [AGENTS.md](../../../AGENTS.md) owns SHAPE-*, FULL-*, agent-request, direct-writer, and ADEQUACY-* policy.
+- [Artifact model](../../../docs/spec-first-workflow/shared/artifact-model.md) owns routing identity, transitions, typed state, artifact expectations, phase-control eligibility, and guarded reclassification.
+- [Subagents and handoff](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md) owns subagent gates, resume order, and handoff rendering.
+- The active phase file selected by the [workflow router](../../../docs/spec-first-workflow.md) owns phase-local entry, output, stop, and reopen behavior.
 
-## Required Input Bundle
-Expect a compact bundle from the orchestrator:
-- task goal, scope, non-goals, constraints, risk hotspots, and success checks
-- execution shape and current phase
-- current master `workflow-plan.md`, when triggered
-- active `workflow-plans/<phase>.md`, when triggered
-- any generated technical-design-review, review, or validation phase-control files whose adequacy affects handoff
-- relevant artifact status for `spec.md`, `design/`, `tasks.md`, `test-plan.md`, or `rollout.md`
-- specification-review status when non-trivial `spec.md` exists
-- system/integration design status, Go code ownership design status, and technical-design-review status when separate design depth was triggered
-- task-ledger review and implementation-readiness status, plus any recorded `CONCERNS`, `FAIL`, or `WAIVED` rationale when the current phase is planning
-- recorded direct/lean local self-check, waiver, or skip rationale, if the orchestrator claims the formal challenge is not required
+Load at most one bundled rubric by default, selected by the suspected gap: master/phase consistency, artifact status, lane ownership, stop boundary, planning readiness, finding severity, or duplicated authority. Load another only for a genuinely independent gap.
 
-If the bundle is too thin to review, return a blocking input-gap finding instead of guessing.
+## Side Effects And Boundaries
 
-## What To Check
-Keep only gaps whose absence could change execution quality, handoff safety, or resume reliability:
-- master and phase files agree on current phase, phase status, blockers, session boundary, next action, next-session start point, and the master file's always-present next-session context bundle
-- research or challenge mode is explicit when fan-out is expected; fan-out lanes name role, lens or specialist domain, owned question, and one skill or `no-skill`
-- non-trivial decision phases record a `Subagent Gate Audit` or equivalent lane/skip summary: trigger, gate type, required lane policy, lane table or local-only rationale, lane result summary, fan-in, gate result, readiness consequence, and reopen target when blocked
-- non-trivial phase approval records `Subagent gate: complete | scoped_down | local_only | waived | not_expected | blocked`; missing gate status is a readiness blocker, not a formatting issue
-- broad formal clarification records `Lanes:` and `Lenses:`; scoped-down formal clarification records the rationale for fewer lanes
-- phase-local file records order or parallelism, fan-in or challenge path when relevant, completion marker, stop rule, local blockers, and parallelizable work
-- phase-local file satisfies the documented minimum for its phase without becoming a second `spec.md`, `design/`, `tasks.md`, raw review transcript, or validation log
-- artifact expectations are explicit and proportional: `spec.md`, compact design context or split `design/`, expected `tasks.md`, triggered `test-plan.md`, `rollout.md`, and planned review/validation phase files are approved, draft, missing, blocked, waived, or not expected
-- when non-trivial `spec.md` exists, specification review is recorded as `PASS`, `CONCERNS`, `FAIL`, blocked, or pending; `CONCERNS` names accepted spec risks and proof obligations; `FAIL` names whether specification, research, specialist review, or user decision reopens
-- when separate design depth is triggered, system/integration design and Go code ownership design are recorded as complete, blocked, not expected, or pending before technical design review; technical design review is recorded as `PASS`, `CONCERNS`, `FAIL`, blocked, or pending; `CONCERNS` names accepted design risks and proof obligations; `FAIL` names whether system/integration design, Go code ownership design, technical design, or specification reopens
-- when the current phase is planning, task-ledger review and implementation readiness are recorded as `PASS`, `CONCERNS`, `FAIL`, or `WAIVED`; `CONCERNS` names accepted risks and proof obligations; `FAIL` names the earlier phase to reopen; `WAIVED` names rationale and scope
-- blockers, assumptions, accepted risks, reopen targets, and user-decision needs are visible instead of hidden in optimistic handoff text
-- the workflow-control artifacts contain enough task-specific routing for the next session to start, and for the orchestrator to render the required chat-only next-session prompt, without recreating workflow planning from chat
-- the phase-local plan stays routing-only and does not duplicate final decisions, technical design, optional strategy notes, or the executable `tasks.md` ledger
-- direct-path or lean-local skips include a real rationale, inline `Risk Challenge` or local self-check when applicable, instead of silently bypassing control artifacts
-- local-only decisions in non-trivial phases list the decision frontier, candidate lanes or lenses considered, evidence checked, why omitted lanes cannot change approval or readiness, and the seam that would reopen fan-out
+This skill is read-only. Do not edit files, classify or reclassify shape, run a transition, approve readiness, choose product/design/test/planning decisions, create artifacts, change the ledger, or mutate git.
 
-## Reference Routing
-References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the file that matches the suspected adequacy gap. Load multiple references only when the same bundle clearly spans independent decision pressures, such as both a lane-ownership gap and an implementation-readiness gap. Treat repository-local `AGENTS.md` plus `docs/spec-first-workflow.md` as authoritative.
+Do not demand more prose or artifacts merely because a valid route is compact. Do not turn phase control into a second spec, design bundle, test plan, or task ledger.
 
-| Symptom | Load | Behavior Change |
-| --- | --- | --- |
-| Master and active phase disagree about current phase, status, blockers, readiness, session boundary, or next-session start. | `references/master-phase-consistency-examples.md` | Makes the challenger require aligned routing fields in both workflow-control files instead of trusting the clearer artifact or chat intent. |
-| Artifact expectations or statuses are missing, stale, overbroad, or not proportional to the direct/lean/full execution shape. | `references/artifact-status-gap-examples.md` | Makes the challenger ask for status/rationale repair only, instead of demanding just-in-case artifacts or copying artifact content into workflow control. |
-| Research mode, lane role, owned question, single skill, order/parallelism, or fan-in path is missing or muddy. | `references/lane-ownership-and-research-mode.md` | Makes the challenger split vague agent work into lane-level routing instead of telling the orchestrator to "use more agents." |
-| Completion marker, stop rule, phase boundary, or "do not start next phase" handoff is weak. | `references/stop-rule-and-completion-marker.md` | Makes the challenger protect the phase boundary with a concrete stop/handoff rule instead of letting the session drift into the next phase. |
-| Planning-phase task-ledger review or implementation readiness is missing, misclassified, or lacks accepted risks, proof obligations, or reopen routing. | `references/planning-readiness-gap-examples.md` | Makes the challenger route readiness gaps to `PASS`, `CONCERNS`, `FAIL`, or `WAIVED` repair instead of treating "ready to code" prose as enough. |
-| Finding severity is unclear, especially `blocks_phase_handoff` versus `blocks_specific_lane` versus `non_blocking_but_record`. | `references/non-blocking-vs-blocking-findings.md` | Makes the challenger classify by execution impact instead of making every imperfection block the phase or every gap a nit. |
-| Workflow-control files duplicate `spec.md`, `design/`, or `tasks.md`, or a finding would ask them to do so. | `references/authority-boundary-and-duplication.md` | Makes the challenger recommend `trim_duplicate_authority` or a status-only repair instead of creating a second source of truth. |
+## Required Bundle
 
-## Classification
-Use exactly one per finding:
-- `blocks_phase_handoff` when the current phase cannot honestly be marked complete or ready for next session until repaired, explicitly waived, or accepted as risk
-- `blocks_specific_lane` when one lane, artifact, blocker, or generated phase-control file needs repair but the whole phase may continue around it
-- `non_blocking_but_record` when the concern should be recorded or accepted but does not block handoff
+Require only the recorded inputs needed to test the active ADEQUACY-* reason:
 
-## Recommended Action
-Use the smallest specific action that repairs the control gap:
-- `add_missing_routing`
-- `clarify_artifact_status`
-- `clarify_readiness_status`
-- `clarify_lane_ownership`
-- `clarify_stop_or_completion_rule`
-- `record_blocker_or_reopen`
-- `record_skip_or_accepted_risk`
-- `trim_duplicate_authority`
-- `no_action`
+- accepted brief and current route audit, including matched SHAPE-* rule, agent_request, actor, proof obligation, and decisive trigger evidence;
+- current routing identity, validity, transition/reclassification history, and applicable workflow-control files;
+- typed artifact/gate/verdict/handoff state consumed from canonical owners;
+- the active phase, stop rule, blocker/reopen state, next action, and context bundle;
+- lane/audit summaries when a required gate depends on them.
 
-## Deliverable Shape
+If a decisive input is missing, return an input-gap finding instead of reconstructing state.
+
+## Unique Method
+
+1. Re-evaluate the recorded route against the canonical first-match rules without writing a replacement classification.
+2. Test that routing identity and validity agree across current carriers and that any transition or reclassification used the owning guarded transaction.
+3. Test only the phase-local fields and gates required by the active canonical owner, including subagent disposition, proof obligations, stop boundary, and actionable reopen route.
+4. Reject duplicated authority, stale approvals, hidden blockers, unsupported local-only reasoning, and handoffs that require chat archaeology.
+5. Preserve concise valid control. Findings must identify the exact missing or contradictory evidence and the smallest orchestrator repair.
+
+## Deliverable
+
 Return:
-- `Adequacy Summary`
-- `Findings`
-- `Handoff Recommendation`
-- `Confidence`
 
-For each finding include:
-- `Gap`
-- `Why It Matters`
-- `What Could Fail`
-- `Classification`
-- `Recommended Action`
-- `Exact Orchestrator Addition`
-- `Evidence`
+- Adequacy Summary;
+- Matrix Falsification: recorded rule, decisive evidence, ADEQUACY-* reason, routing identity/validity, and whether the route survived;
+- Findings;
+- Handoff Recommendation;
+- Confidence and evidence boundary.
 
-If no finding survives the filter, say there are no blocking adequacy gaps and name the evidence boundary. Avoid saying the plan is approved; only the orchestrator can decide handoff.
+Each finding contains Gap, Why It Matters, What Could Fail, Evidence, one classification, one recommended action, and the exact orchestrator addition:
 
-## Stop Condition
-Stop when:
-- every handoff-blocking workflow-control gap has been surfaced or the input gap is clearly blocking
-- each finding has a classification, recommended action, and exact addition or clarification
-- low-value checklist items have been pruned
-- the output is short enough for the orchestrator to reconcile without reading a second workflow plan
+- classifications: `blocks_phase_handoff`, `blocks_specific_lane`, `non_blocking_but_record`;
+- actions: `add_missing_routing`, `clarify_artifact_status`, `clarify_readiness_status`, `clarify_lane_ownership`, `clarify_stop_or_completion_rule`, `record_blocker_or_reopen`, `record_skip_or_accepted_risk`, `trim_duplicate_authority`, `no_action`.
 
-## Anti-Patterns
-- approving or rejecting the workflow plan as an authority
-- padding findings with generic "add more detail" advice
-- asking for `spec.md` or `tasks.md` content to be copied into a phase workflow plan
-- treating all direct or lean-local tasks as if they need the full orchestrated artifact bundle
-- ignoring a master/phase mismatch because the intended next step seems obvious from chat
-- using the challenge to perform domain research, specification clarification, technical design, or task breakdown
-- treating compact, explicit workflow control as a problem solely because it is shorter than a previous task's artifact
+Never say the plan is approved. If no finding survives, say no blocking adequacy gap was found within the named evidence boundary.
+
+## Success, Blocked Stop, And Reopen
+
+Success means the recorded route survived or every material falsification has actionable evidence, impact classification, and the smallest repair/reopen owner.
+
+Stop blocked on a decisive input gap, stale/conflicting routing identity, unresolved required lane, or missing owner evidence. The orchestrator reopens workflow planning for route/control repair or the active phase for phase-local repair; this challenger never performs the repair.

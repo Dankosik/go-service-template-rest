@@ -1,6 +1,6 @@
 # Specification Phase
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when writing or repairing `spec.md`, reconciling clarification challenge, or running lean `Risk Challenge`.
+Detailed macro-phase companion for `docs/spec-first-workflow.md`. Read this when writing or repairing `spec.md`, reconciling clarification challenge, running lean `Risk Challenge`, and completing mandatory independent specification review through fresh verdict.
 
 ## Read When
 
@@ -16,13 +16,13 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when writi
 
 ## Outputs
 
-- Review-ready `spec.md` with final orchestrator-owned decisions, assumptions, accepted risks, and proof obligations.
+- Reviewed `spec.md` with final orchestrator-owned decisions, assumptions, accepted risks, proof obligations, and a current specification-review verdict.
 - Clarification challenge fan-in or lean `Risk Challenge` result.
-- Next route to specification review, or a reopen target when the spec cannot become review-ready.
+- Internal review/repair cycle record and next macro-phase route, or a reopen target when the spec cannot pass review.
 
 ## Stop Rule
 
-Stop when `spec.md` is review-ready or blocked. Do not start specification review, technical design, task planning, or implementation inside this phase.
+Do not stop merely because `spec.md` is review-ready. Invoke the distinct read-only specification-review checkpoint, repair every actionable specification-owned finding, invalidate the prior verdict, and obtain fresh re-review. Stop only when the current verdict is `PASS`, eligible `CONCERNS`, or the macro phase is honestly blocked. Do not start technical design, test design, planning, or implementation inside this phase.
 
 ## Lean `spec.md`
 
@@ -33,8 +33,10 @@ Recommended shape:
 ```markdown
 # <Feature / Change>
 
-Mode: lean local
-Status: draft | review_ready | blocked
+execution_shape: lean_local
+artifact_expectation: expected
+artifact_state: draft | review_ready | blocked
+record_validity: current
 Subagent gate: complete | scoped_down | local_only | waived | not_expected | blocked
 
 ## Intent
@@ -124,7 +126,7 @@ Spec/design boundary:
 
 ## Subagent Gate Decision
 Gate type: <research fan-out | spec-clarification | local-only rationale | not expected>
-Required lane policy: <default lens set | expanded lane set | scoped-down lane set | local-only rationale | not expected>
+Required lane policy: <local | focused independent lane set | scoped-down lane set | not expected>
 Consumed lane summaries or rationale:
 - <lane/fan-in evidence pointer, or local-only rationale with candidate lanes considered>
 Fan-in result:
@@ -149,7 +151,7 @@ Reopen target: <none | research | specification | system-integration-design | go
    Answer: ...
 6. What fresh proof will make the completion claim trustworthy?
    Answer: ...
-Gate: PASS | CONCERNS | FULL_REQUIRED
+risk_challenge_outcome: PASS | CONCERNS | RECLASSIFY_FULL
 
 ## Accepted Risks / Reopen Conditions
 Accepted risks:
@@ -158,9 +160,10 @@ Accepted risks:
 Reopen if:
 - <new evidence, failed proof, missing owner decision, or escalation trigger that invalidates this spec>
 
-## Task Handoff
-Next phase: specification review.
-Use `tasks.md` only after specification review is `PASS` or `CONCERNS` with named proof obligations.
+## Macro-Phase Handoff
+Internal checkpoint: specification review, repair, and fresh re-review before this phase closes.
+Next macro phase: technical design, test design, or planning according to triggered artifact depth.
+Use `tasks.md` only after the current specification-review verdict is `PASS` or eligible `CONCERNS` with named proof obligations.
 
 ## Validation
 Forward-looking proof obligations:
@@ -173,7 +176,7 @@ Pending until fresh validation evidence exists.
 Rules:
 
 - `Intent` states the decision outcome, not a research question. If the reason for the work, desired outcome, or accepted scope is still unknown or disputed, keep the spec draft and reopen Phase 0 intake, research, or user decision.
-- `Status` in the specification phase is limited to `draft`, `review_ready`, or `blocked`. Later approval, implementation, verification, and outcome updates belong to the owning review, planning, implementation, validation, or closeout phase.
+- Specification writes `artifact_expectation=expected`, phase-owned `artifact_state=draft|review_ready|blocked`, and `record_validity=current`. Later approval, implementation, verification, and outcome updates belong to the owning review, planning, implementation, validation, or closeout phase.
 - `Scope / Non-goals` cuts the accepted problem. It must not hide required target-state work as future hardening when the production-ready decision is knowable and in scope.
 - `Behavior / Contract Delta` describes added, modified, removed, and important unchanged observable behavior instead of restating the whole system. Include caller, operator, or maintainer-visible effects such as routes, payload fields, errors, status mapping, config, metrics, generated artifacts, docs promises, and source-of-truth ownership when they matter.
 - `Decisions` must be complete enough that design or planning can preserve the chosen outcome without rediscovering product meaning. A decision row should name the selected answer, rationale, evidence or bounded assumption, rejected alternatives, and downstream consequence. Do not mark `spec.md` review-ready with `TBD`, unresolved alternatives, or "decide during implementation" placeholders.
@@ -185,10 +188,10 @@ Rules:
 - When dependency/OSS or Pattern Fit evidence lives in `research/` or `design/`, `spec.md` still records the final selected option, rejected-options summary, and custom-code or custom-design justification when relevant.
 - `Compact Design` records only spec-level constraints: affected surfaces, ownership/source-of-truth, and sequence/failure behavior required to choose the production-ready outcome. If package layout, detailed algorithms, object lifecycles, task ordering, test matrices, rollout sequencing, or dense mechanism trade-offs become planning-critical, split into design artifacts or escalate.
 - `Subagent Gate Decision` is required for non-trivial lean specs. If workflow-control already records the same audit, link to it instead of duplicating raw lane output. A non-trivial lean `spec.md` without this section or link remains draft.
-- `Risk Challenge` is the lean replacement for a formal challenge lane only when no escalation trigger is present.
+- `Risk Challenge` is the lean replacement for a formal challenge lane only when no escalation trigger is present. Its result is recorded only as `risk_challenge_outcome=PASS|CONCERNS|RECLASSIFY_FULL`; it is neither `procedural_gate_state` nor `review_verdict`.
 - `Accepted Risks / Reopen Conditions` may carry bounded risks only after the orchestrator names the boundary, why it does not block review-ready status, and what evidence would reopen the spec. Do not use accepted risk to bypass a required user, domain, security, reliability, data, compatibility, dependency/OSS, Pattern Fit, legacy-cleanup, or validation decision.
 - `Validation` records forward-looking proof obligations, not a test plan. Each obligation should tie a claim to the fresh evidence later phases must produce; skipped, unavailable, stale, failing, or too-narrow proof cannot satisfy the claim.
-- `FULL_REQUIRED` blocks lean coding and routes to full orchestrated work.
+- `RECLASSIFY_FULL` blocks lean progress and invokes the guarded reclassification transaction; the challenge itself does not change `execution_shape`.
 - `Outcome` stays pending until fresh evidence exists.
 
 ## Review-Ready Bar
@@ -201,10 +204,10 @@ Mark `spec.md` `review_ready` only when all of the following are true:
 - dependency/OSS diligence and Pattern Fit Diligence are complete or not applicable with rationale;
 - known replacement and legacy surfaces are classified as remove, refactor into active path, retain with owner/reason/proof/exit condition, out of scope, or `No known replacement surface`;
 - subagent gate state is recorded, and formal clarification fan-in or valid local-only/scoped-down rationale is present where required;
-- lean `Risk Challenge` is `PASS` or `CONCERNS` with named proof obligations, or the spec routes to `FULL_REQUIRED`;
+- lean `risk_challenge_outcome` is `PASS` or `CONCERNS` with named proof obligations, or `RECLASSIFY_FULL` and blocks for orchestrator reclassification;
 - accepted risks and proof obligations are named with boundaries and reopen conditions, or explicitly recorded as none;
 - spec-owned constraints are separated from design mechanism choices and planning-owned task order;
-- the next route is specification review.
+- the internal next checkpoint is specification review; it is not a user handoff.
 
 If any item is missing, keep status `draft` or `blocked`; when blocked, name the smallest reopen target. Do not rely on the later specification-review phase to author the missing decision.
 
@@ -217,22 +220,22 @@ For direct path, no `spec.md` is usually needed.
 For lean local:
 
 - write a compact review-ready `spec.md`;
-- consume multiple narrow subagent summaries or record a local-only rationale;
+- consume focused subagent evidence only for concrete independent questions, or record a local decision;
 - run the inline `Risk Challenge`;
 - proceed to specification review only when the orchestrator has reconciled lane outputs or the local-only rationale, and the gate is `PASS` or `CONCERNS` with named proof obligations;
 - proceed to compact tasking or technical design only after specification review is `PASS` or `CONCERNS` with named proof obligations;
-- escalate when the gate is `FULL_REQUIRED`.
+- stop and reclassify when `risk_challenge_outcome=RECLASSIFY_FULL`.
 
-For full orchestrated or protected-domain work:
+For `execution_shape=full_orchestrated` or work with relevant current `FULL-*` evidence:
 
 - run formal `spec-clarification-challenge` before `spec.md` is marked review-ready;
-- for broad or multi-domain full-orchestrated, protected-domain, high-impact, hard-to-reverse, cross-domain, or user-requested deep challenge work, use multi-challenger lens fan-out rather than one generic challenger by default;
+- preserve one focused independent challenger lane for the formal gate; add challengers only for additional non-duplicative approval questions that materially benefit from separate context;
 - use read-only challenger output as questions for orchestrator reconciliation, not as authority;
 - store final reconciled outcomes in `spec.md`, not raw lane transcripts;
-- run a separate specification review after the completed `spec.md` exists and before technical design or planning;
-- record gate status in `workflow-plan.md` and the active phase file when those files are used.
+- run a separate read-only specification review checkpoint after the completed `spec.md` exists and before technical design or planning, while keeping control in the same specification session for repair and fresh re-review;
+- record formal clarification `procedural_gate_state` in `workflow-plan.md` and the active phase file when those files are used; record inline lean `risk_challenge_outcome` separately.
 
-Formal `spec-clarification-challenge` is not waivable while the work remains full-orchestrated, protected-domain, high-impact, hard-to-reverse, cross-domain, or user-requested deep challenge. If the trigger no longer applies, first record shape reclassification with trigger-matrix evidence, then record the required subagent gate decision or local-only rationale for the new shape. Otherwise, missing formal clarification blocks `spec.md` from becoming review-ready.
+Formal `spec-clarification-challenge` is not waivable while `execution_shape=full_orchestrated`, relevant `FULL-*` evidence remains true or unknown, the work remains hard-to-reverse or cross-domain, or `agent_request=substantive`. If the trigger no longer applies, first record a guarded reclassification with trigger evidence, then record the required subagent gate decision or local-only rationale for the new shape. Otherwise, missing formal clarification blocks `spec.md` from becoming review-ready.
 
 Formal clarification asks only review-readiness-changing questions. Ordinary downstream design detail should be recorded as a constraint, proof obligation, follow-up, or `defer_to_design`, not as a reason to inflate `spec.md`. Do not classify architecture, ownership, contract, reliability, security, rollout, or validation choices this way when they are required to choose a production-ready solution for the accepted scope.
 
@@ -257,18 +260,19 @@ Default broad clarification lenses:
 - API, data, compatibility, and source-of-truth consequences;
 - security, reliability, delivery, and validation proof.
 
-Each lens is a separate read-only lane, usually `challenger-agent` with `spec-clarification-challenge`. Lanes may run in parallel when their questions are independent. Add extra lanes for real independent review-readiness-risk domains, including when one default lens bundles domains that are independently review-readiness-critical for the task. Use fewer lanes only with a recorded scoped-down rationale; a single lane is appropriate only for a narrow formal gate whose review-readiness risk is concentrated in one question.
+Each lane is one concrete approval question, usually assigned to `challenger-agent` with `spec-clarification-challenge`. One focused challenger is the default for the formal gate. Add lanes only for real independent review-readiness questions that can change approval and materially benefit from separate context; never turn a default lens list into automatic fan-out.
 
-Before spawning, convert every lens into a concrete review-readiness-critical question and lens-specific inspect-first list. Do not send five challengers the same generic "challenge this spec" prompt. If two lenses produce the same question, merge them or split the real underlying owner question before fan-out.
+Before spawning, convert every retained lens into a concrete review-readiness-critical question and lens-specific inspect-first list. Merge duplicates. Default to no more than three concurrently active subagent lanes; exceeding three requires a task-specific reason why the extra question cannot wait, merge, or run sequentially.
 
-Do not collapse broad formal clarification into one generic challenger merely because one agent could inspect all domains. Use the default lens set as separate read-only lanes. Fewer lanes require `Scoped-down rationale:` listing every default lens, the review-readiness-critical question considered for that lens, retained lane or lanes, and evidence-backed reason each omitted lens cannot change `spec.md` review-readiness. If any omitted lens has an unresolved review-readiness-critical question, that lens must run.
+Do not ask one challenger to answer several unrelated approval questions. Start with one focused independent challenger for the mandatory formal gate, then add only non-duplicative questions that can change review-readiness and materially benefit from separate context. Keep root synthesis authoritative.
 
-`Risk Challenge=CONCERNS` in lean local does not by itself trigger formal multi-challenger clarification. It requires named proof obligations and a check for unresolved scope, ownership, validation, or escalation gaps. Route to formal clarification only when those gaps cannot be honestly closed inline or another escalation trigger appears.
+`risk_challenge_outcome=CONCERNS` in lean local does not by itself trigger formal multi-challenger clarification. It requires named proof obligations and a check for unresolved scope, ownership, validation, or escalation gaps. Route to formal clarification only when those gaps cannot be honestly closed inline or another escalation trigger appears.
 
 Multi-lane workflow-control records should use:
 
 ```text
-Clarification challenge: complete | blocked | not_expected
+Clarification challenge procedural_gate_state: complete | blocked | not_expected
+Clarification challenge record_validity: current | stale | superseded
 Lanes: <agent + skill summary>
 Lenses: <lens list>
 Scoped-down rationale: <why fewer than the broad default, when applicable>

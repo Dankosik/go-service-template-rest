@@ -13,6 +13,30 @@ Load this when task order, dependencies, `[P]` markers, generated artifacts, mig
 - Let the first dependency-establishing task say `Depends on: none` when it truly starts the chain.
 - If a downstream task exposes a missing ownership, compatibility, migration, or source-of-truth decision, stop planning that branch and reopen the right earlier phase.
 
+## Task Ledger Schema
+
+Use stable checkbox IDs such as `T001`. Each executable task names:
+
+- checkpoint or phase label and `[P]` only when safe after explicit prerequisites;
+- `Source:` anchors to the approved spec, design, review concern, `TD-*` scenario, or rollout obligation when the requirement is not obvious;
+- one reviewable action and the owning file/package or approved narrow placement rule;
+- `Depends on:` with stable task IDs when order is nontrivial;
+- implementation obligations, forbidden regressions, cleanup/test ownership, and proof-first waiver when a failing proof is not useful;
+- planned verification and structured evidence fields when implementation will update progress.
+
+Recommended task shape:
+
+```markdown
+- [ ] T020 [Checkpoint 2] [P] Implement <one reviewable action> in `<owner surface>`. Depends on: T010. Source: `<artifact#anchor>`; `TD-003`.
+  - Obligations: <invariants, side-effect order, cleanup, generated-source or compatibility constraints>
+  - Planned verification: `<focused command>` plus <manual/negative proof when needed>
+  - Evidence: Command/read | Result | Key output/ref | Changed proof files | Residual blocker/narrower claim
+```
+
+Keep known exact paths. When design intentionally leaves only a package or generated surface, name that boundary plus the approved placement rule and bounded first-task inspection. Never write `choose appropriate file`, `place where it fits`, `implementation decides`, `refactor as needed`, or `cleanup later` for owner, sequence, generated authority, cleanup, test ownership, or proof policy.
+
+For replacement work, include a `Legacy cleanup audit` with `Surface | Status | Evidence | Retention owner/reason/exit`; use only `removed`, `refactored`, `retained`, or `not_applicable`.
+
 ## Imitate
 ```markdown
 - [ ] T010 [Phase 1] Update the source-of-truth artifact identified in `design/ownership-map.md`. Depends on: none. Proof: targeted diff read against `spec.md` decisions.

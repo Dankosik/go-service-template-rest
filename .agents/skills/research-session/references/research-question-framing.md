@@ -16,7 +16,7 @@ Do not load just to run the research-session protocol. `SKILL.md`, `AGENTS.md`, 
 - Keep decisions out of the question. Research can surface candidates; it cannot approve API, data, design, planning, or implementation choices.
 
 ## Imitate
-Use this shape in `workflow-plans/research.md` or in a preserved `research/*.md` note when preservation is useful:
+Use this shape in a `ROUTING-PHASE-CONTROL`-triggered `workflow-plans/research.md` or in a preserved `research/*.md` note when preservation is useful:
 
 ```markdown
 ## Research Questions

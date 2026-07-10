@@ -8,15 +8,6 @@ description: "Review Go code changes for language-level correctness, toolchain-a
 ## Purpose
 Protect changed Go code from language-level, standard-library, and exported-surface mistakes that create correctness, diagnosability, compatibility, or long-term maintenance risk.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review Go semantics and standard-library contracts as correctness surfaces, not style trivia.
 - Prioritize error contracts, context lifetime, receiver and copy safety, nil behavior, exported API shape, and mutable ownership leaks.
@@ -70,46 +61,8 @@ If symptoms overlap, load the file whose thesis matches the concrete risk. Examp
 - Exported surface: keep exported API small, documented, compatible, and consumer-oriented. Prefer concrete return types unless an interface represents a real behavior boundary.
 - Resources and control flow: check cleanup and error probes such as `Body.Close`, `rows.Close`, `rows.Err`, `scanner.Err`, timer/ticker Stop or Reset behavior, and `defer` lifetime where they are part of the changed Go contract.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the concrete Go rule, semantic pitfall, or standard-library contract misuse
-- why it creates correctness, diagnosability, compatibility, ownership, or maintenance merge risk
-- the smallest safe correction
-- a validation command or test idea when useful
-- whether the issue is local Go drift, a specialist handoff, or needs design escalation
-- for version-sensitive stdlib or builtin recommendations, the relevant Go version or source anchor
-- for dependency/custom-code due-diligence findings, the missing approved evidence or the artifact that should carry it
-- for pattern Go-fit findings, the approved pattern guarantee that is weakened or the missing Pattern Fit artifact that should carry the decision
-- for code-level pattern fit findings, the local simplification that was missed or the concrete indirection that makes the Go code harder to maintain
-
-Severity is merge-risk based:
-- `critical`: confirmed Go-level defect with direct correctness, panic, data corruption, or operational risk
-- `high`: strong evidence of meaningful correctness, API-contract, ownership, or must-not-copy risk
-- `medium`: bounded but important idiomatic weakness with realistic maintenance, diagnosability, or compatibility cost
-- `low`: local cleanup that materially improves clarity or contract safety
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-If a section has no entries, write `None.` rather than filler.
-
-Use this format for each finding:
-
-```text
-[severity] [go-idiomatic-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
-
-Start `Issue` with the plain-language defect. Add an `Axis:` label only when it materially disambiguates why the issue belongs in idiomatic Go review.
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete Go/stdlib rule or semantic pitfall, correctness/diagnosability/compatibility/ownership/maintenance risk, smallest safe correction, Go-version/source anchor when version-sensitive, and any missing dependency/OSS or Pattern Fit evidence. For local code-level patterns, name the missed simplification or indirection cost. `critical` is a confirmed Go-level panic/corruption/operational defect; `high` is strong correctness, API-contract, ownership, or must-not-copy risk. Start `Issue` with the plain-language defect.
 
 ## Boundaries And Handoffs
 - Hand off deep goroutine lifecycle, channel, lock-order, `sync/atomic`, or shutdown analysis to `go-concurrency-review`.

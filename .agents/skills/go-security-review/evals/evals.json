@@ -12,7 +12,8 @@
       "expectations": [
         "Flags CSRF risk on the cookie-authenticated state-changing path",
         "Flags credentialed CORS with reflective or wildcard origins as unsafe",
-        "Flags missing or weak cookie hardening such as Secure, HttpOnly, or SameSite"
+        "Flags missing or weak cookie hardening such as Secure, HttpOnly, or SameSite",
+        "Material findings use exact file:line anchors and state concrete impact plus the smallest safe correction"
       ]
     },
     {
@@ -26,7 +27,8 @@
       "expectations": [
         "Flags X-User-ID or X-Tenant-ID as an untrusted identity source",
         "Flags incomplete JWT verification such as missing algorithm, issuer, audience, expiry, or parse-error handling",
-        "Flags tenant binding or object-level authorization drift on invoice access"
+        "Flags tenant binding or object-level authorization drift on invoice access",
+        "Material findings use exact file:line anchors and state realistic attacker preconditions"
       ]
     },
     {
@@ -39,7 +41,8 @@
       "expectations": [
         "Flags non-cryptographic randomness for reset-token generation",
         "Flags insecure password hashing for stored user passwords",
-        "Flags reset-token leakage or account-enumeration behavior"
+        "Flags reset-token leakage or account-enumeration behavior",
+        "Material findings use exact file:line anchors and state concrete exploit impact"
       ]
     }
   ]

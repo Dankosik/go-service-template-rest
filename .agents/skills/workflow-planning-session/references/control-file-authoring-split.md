@@ -7,12 +7,13 @@ When loaded for symptom "I am writing or repairing workflow-control files and co
 Load this when the active decision is where a workflow-control detail belongs. If the active uncertainty is execution shape, research lanes, artifact status, or adequacy challenge routing, load that narrower reference instead.
 
 ## Decision Rubric
-- `workflow-plan.md` owns cross-phase control: current phase, phase status, execution shape, research mode, session boundary, next-session start, blockers/assumptions, artifact status, phase-plan links, adequacy status, and later phase-file policy.
-- `workflow-plans/workflow-planning.md` owns only this workflow-planning session: order of work, lane table for the next research session, challenge path, parallelism, fan-in rule, completion marker, blockers local to routing, next action, and stop rule.
-- Master may summarize lanes by link or count; the phase file owns lane details.
-- Phase file may mention artifact expectations only to keep the local handoff consistent; the master owns the status table.
+- `workflow-plan.md` owns cross-phase control: matched `SHAPE-*` evidence, routing identity/validity, typed current phase/session/handoff state, research expectation/mode, next-session start, blockers/assumptions, typed artifact state, phase-plan links, adequacy state, and later phase-file policy.
+- When `ROUTING-PHASE-CONTROL` is satisfied, `workflow-plans/workflow-planning.md` owns only this session: the same routing identity, order of work, next-phase lane table, challenge path, parallelism, fan-in rule, completion marker, local blockers, next action, and stop rule. Otherwise no phase file is created and compact state stays in the master.
+- Master and phase control must carry the same current `(routing_scope,routing_revision)` before `handoff_readiness=ready`; mismatch or staleness blocks handoff.
+- Master may summarize lanes by link or count; a triggered phase file owns lane details.
+- A triggered phase file may mention artifact expectations only to keep the local handoff consistent; the master owns the status table.
 - Neither file owns final domain decisions, research notes, `spec.md`, `design/`, `tasks.md`, tests, migrations, or implementation status.
-- For tiny direct-path work, the best authoring split is often no files: record the inline waiver and stop.
+- For tiny direct-path work, the best authoring split is no files: record the current-session direct envelope and `artifact_expectation=not_expected` consequences, then stop.
 
 ## Imitate
 
@@ -21,18 +22,18 @@ Master-file handoff:
 ```markdown
 ## Routing
 Current phase: workflow-planning
-Phase status: complete
-Execution shape: full orchestrated
+phase_state: complete
+execution_shape: full_orchestrated
 Research mode: fan-out, next session
-Session boundary reached: yes
-Ready for next session: yes
+session_boundary: reached
+handoff_readiness: ready
 Next session starts with: research
 
 ## Phase Workflow Plans
 - `workflow-plans/workflow-planning.md`: complete; lane details and stop rule recorded there
 
 ## Adequacy Challenge
-Status: complete
+procedural_gate_state: complete
 Resolution: blocking findings reconciled
 ```
 
@@ -43,12 +44,13 @@ Phase-file handoff:
 ```markdown
 ## Local Orchestration
 - Order: repair master, repair this phase file, run adequacy challenge, reconcile findings.
-- Planned lanes for next session: L1 API, L2 data, L3 security, L4 reliability, L5 QA.
+- Planned concurrent lanes for next session: L1 API, L2 data, L3 security.
+- Deferred dependent checks: reliability and QA stay in root synthesis unless fan-in exposes a new independent question; any later lane runs sequentially.
 - Parallelizable work: L1-L5 are parallel in the next research session, not this one.
 - Fan-in rule: compare assumptions and evidence before candidate synthesis.
 
 ## Completion Marker
-Complete when master and phase file agree on execution shape, research mode, artifact expectations, blockers, adequacy status, and next-session start.
+Complete when the master and every triggered phase file agree on execution shape, research mode, artifact expectations, blockers, adequacy state, and next-session start.
 
 ## Stop Rule
 Stop before starting L1-L5 research.
@@ -69,7 +71,7 @@ Failure: turns workflow control into spec/design/planning output.
 
 ```markdown
 workflow-plans/workflow-planning.md:
-Artifact status: everything is approved except code.
+Artifact state: everything is approved except code.
 ```
 
 Failure: invents cross-phase status and bypasses the master control surface.

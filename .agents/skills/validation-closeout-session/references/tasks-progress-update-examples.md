@@ -28,7 +28,7 @@ Copy the item-by-item proof mapping: each checkbox follows a fresh command resul
 
 ```markdown
 Ledger update: skipped.
-Reason: this direct-path task explicitly waived `tasks.md` in the approved workflow; do not invent a task ledger during closeout.
+Reason: current `SHAPE-DIRECT` records `tasks.md` as `artifact_expectation=not_expected`; do not invent a task ledger during closeout.
 ```
 
 Copy the explicit skip when the approved workflow did not use a ledger.

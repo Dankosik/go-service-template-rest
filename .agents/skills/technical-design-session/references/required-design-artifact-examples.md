@@ -19,13 +19,13 @@ Load when creating or repairing `design/overview.md`, `design/component-map.md`,
 `design/overview.md`
 - Approach: add the async export capability behind app-owned job orchestration and infra-owned HTTP/download adapters.
 - Bundle index:
-  - `design/component-map.md`: approved; package surfaces and stable areas are mapped.
-  - `design/sequence.md`: approved; async request flow, worker failure points, and retry boundaries are covered.
-  - `design/ownership-map.md`: approved; job state source-of-truth, generated-code authority, and adapter responsibilities are named.
-  - `design/data-model.md`: expected because persisted job state changes.
-  - `design/contracts/`: expected because the OpenAPI shape and client-visible status/error/idempotency/freshness semantics change.
-  - `test-design`: not expected; validation obligations fit in `tasks.md`.
-  - `rollout.md`: not expected; no mixed-version choreography is in scope.
+  - `design/component-map.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; package surfaces and stable areas are mapped.
+  - `design/sequence.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; async request flow, worker failure points, and retry boundaries are covered.
+  - `design/ownership-map.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; job state source-of-truth, generated-code authority, and adapter responsibilities are named.
+  - `design/data-model.md`: artifact_expectation=expected, artifact_state=absent, record_validity=current; persisted job state changes, so the artifact must be completed before review.
+  - `design/contracts/`: artifact_expectation=expected, artifact_state=draft, record_validity=current; the OpenAPI shape and client-visible status/error/idempotency/freshness semantics change.
+  - `test-plan.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; validation obligations fit in `tasks.md`.
+  - `rollout.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; no mixed-version choreography is in scope.
 - Readiness: technical design review can start after `design/contracts/` is approved, or after the system/integration checkpoint records compact contract design as sufficient with evidence.
 ```
 

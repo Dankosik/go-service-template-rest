@@ -89,7 +89,7 @@
     },
     {
       "id": 6,
-      "prompt": "Use the go-coder skill for a non-trivial task whose `workflow-plan.md` records `Implementation readiness: FAIL` and says to reopen `system-integration-design` because rollout ownership is unresolved. Do not edit code. Return the correct handoff behavior.",
+      "prompt": "Use the go-coder skill for a non-trivial task whose current task-review/readiness record has procedural_gate_state=blocked, review_verdict=FAIL, record_validity=current, and reopen_target=system-integration-design because rollout ownership is unresolved. Do not edit code. Return the correct handoff behavior.",
       "expected_output": "A blocked implementation handoff that refuses to start code work, names the readiness `FAIL`, routes to the recorded earlier phase, and avoids implemented or ready language.",
       "files": [],
       "expectations": [
@@ -100,7 +100,7 @@
     },
     {
       "id": 7,
-      "prompt": "Use the go-coder skill for a non-trivial task whose `workflow-plan.md` records `Implementation readiness: CONCERNS` with named accepted risk `temporary duplicate telemetry during rollout` and proof obligation `run targeted telemetry assertions plus full package tests`. Explain the allowed implementation stance before editing.",
+      "prompt": "Use the go-coder skill for a non-trivial task whose current task-review/readiness record has procedural_gate_state=complete, review_verdict=CONCERNS, record_validity=current, handoff_readiness=ready, named accepted risk `temporary duplicate telemetry during rollout`, and proof obligation `run targeted telemetry assertions plus full package tests`. Explain the allowed implementation stance before editing.",
       "expected_output": "A go-coder handoff stance that may proceed only because the `CONCERNS` risks and proof obligations are named, and keeps verification tied to those obligations.",
       "files": [],
       "expectations": [

@@ -8,15 +8,6 @@ description: "Review Go code changes for observability correctness: structured l
 ## Purpose
 Review changed runtime paths so telemetry remains operator-useful, privacy-safe, bounded-cardinality, and tied to real response decisions.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review the operator question before the signal.
 - Prefer the cheapest sufficient signal: metrics for bounded aggregation and alerting, traces for causality, logs for forensic detail.
@@ -45,38 +36,8 @@ Do not:
 - Runtime diagnostics and debug endpoints have explicit access and exposure policy.
 - Shutdown and telemetry flush behavior remain bounded when touched.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`,
-- the violated observability expectation,
-- the operator failure mode, privacy leak, cardinality/cost risk, or diagnosability gap,
-- the smallest useful correction,
-- validation evidence or command that should prove the fix,
-- any handoff needed for non-observability ownership.
-
-Severity is merge-risk based:
-- `critical`: telemetry change can expose secrets/PII or break critical incident detection with high impact.
-- `high`: changed critical path loses essential success/failure visibility, pages unactionably, or creates unbounded cardinality.
-- `medium`: bounded but meaningful signal, runbook, privacy, or diagnostic weakness.
-- `low`: local telemetry clarity or cost-hardening issue.
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-Use this format for each finding:
-
-```text
-[severity] [go-observability-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the violated observability expectation, operator failure/privacy/cardinality/cost/diagnosability impact, smallest useful correction, proof, and any non-observability owner. `critical` includes secret/PII exposure or high-impact loss of critical detection; `high` includes missing critical-path success/failure visibility, unactionable paging, or unbounded cardinality.
 
 ## Escalate When
 - safe correction changes the signal contract or SLO/alert policy (`go-observability-engineer-spec`),

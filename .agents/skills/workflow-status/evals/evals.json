@@ -3,80 +3,146 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Use the workflow-status helper for `specs/tenant-export-jobs`. The task artifacts say `workflow-plan.md` current phase is `task-review/readiness`, phase status is `complete`, `Session boundary reached: yes`, `Ready for next session: yes`, `Next session starts with: T001`, and `Implementation readiness: PASS`. `spec.md`, required `design/`, expected `tasks.md`, and task-ledger review are approved, and no blockers are recorded. Report the status only.",
-      "expected_output": "A compact read-only status report that identifies the task path, reports task-review/readiness complete with the session boundary reached, summarizes approved artifacts and readiness `PASS`, and says implementation may start in the recorded next session.",
+      "prompt": "Use workflow-status for specs/tenant-export-jobs. Current tasks.md is the STATUS-TASKS source for routing_scope=durable,routing_revision=5. Task review is review_verdict=PASS, implementation readiness is current, session_boundary=reached, handoff_readiness=ready, and next_phase=implementation. All expected artifacts are approved and current. Report status only.",
+      "expected_output": "A compact read-only status report sourced from current tasks.md that reports full typed state and says implementation may start in the recorded next session.",
       "files": [],
       "expectations": [
-        "The output does not edit or propose editing artifacts, code, git state, task ledgers, or implementation handoffs.",
-        "The output lists allowed writes for the recorded implementation handoff while making clear the workflow-status helper itself writes nothing.",
-        "The output says implementation may start only because the approved artifact chain, including expected `tasks.md`, readiness `PASS`, and next-session routing point to implementation."
+        "The output names STATUS-TASKS, execution shape and matched rule evidence, routing identity/validity, adequacy, typed artifact and gate state, and the next action.",
+        "The output says implementation may start only because current task review/readiness and the full approved chain authorize it.",
+        "The output performs no writes or workflow repair.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 1,
-      "prompt": "Use workflow-status. I do not know the task path, but tell me what our current workflow phase and implementation readiness are from the previous chat.",
-      "expected_output": "A short refusal to guess from chat memory that asks for the task-local path before reporting workflow status.",
+      "prompt": "Use workflow-status. I do not know the task path and I have no current-session direct_state_envelope. Tell me where the previous chat left the workflow.",
+      "expected_output": "The exact fail-closed unsupported response requesting one task-local path or an eligible current-session envelope.",
       "files": [],
       "expectations": [
-        "The output asks for a task-local path such as `specs/<feature-id>` and stops.",
-        "The output does not infer the active task from conversation memory or repository recency.",
-        "The output does not invent artifact status, blockers, next action, or implementation readiness."
+        "The output begins with unsupported: no durable task state.",
+        "The output requests one task-local path or orchestrator-attested current-session direct_state_envelope and stops.",
+        "The output does not infer task state from chat memory, recency, file absence, or task size.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 2,
-      "prompt": "Use workflow-status for `specs/admin-soft-delete`. The master file says `spec.md` is approved and the current phase is `planning`, but `design/sequence.md` is missing and there is no direct-path or lightweight-local design-skip waiver. Tell me whether implementation can start.",
-      "expected_output": "A conservative read-only status report that treats the missing required design artifact as an incomplete gate and says implementation may not start.",
+      "prompt": "Use workflow-status for specs/admin-soft-delete. Durable routing is current, but design/sequence.md has artifact_expectation=expected and artifact_state=absent with no waiver. Tell me whether implementation can start.",
+      "expected_output": "A conservative read-only report that identifies the absent expected design artifact as the first blocker and denies implementation.",
       "files": [],
       "expectations": [
-        "The output identifies the missing required design artifact or design gate as the blocker.",
-        "The output does not waive the missing artifact merely because the user wants a status answer.",
-        "The output routes the next action toward repairing or reopening the appropriate earlier phase rather than starting implementation."
+        "The output distinguishes expected+absent from not_expected and waived.",
+        "The output does not create or waive the design artifact.",
+        "The output routes the next action to the owning earlier phase.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 3,
-      "prompt": "Use workflow-status for `specs/request-id-healthz`. The task record explicitly says this is direct-path work with an inline plan, design-skip rationale, `Implementation readiness: WAIVED` with scope `single healthz header echo`, and no separate `tasks.md`. `workflow-plan.md` and `workflow-plans/` are intentionally skipped by that waiver. Report status only and do not create artifacts.",
-      "expected_output": "A read-only status report that accepts the explicit direct-path waiver, reports skipped workflow-control artifacts as waived rather than missing, reports readiness `WAIVED`, and still avoids creating any files.",
+      "prompt": "Use workflow-status with this current orchestrator-attested direct_state_envelope and no durable task path: provenance=orchestrator_current_session; routing_scope=current_session; routing_revision=2; accepted clarity rationale present; every FULL-* is false; every DIRECT-* is true; matched_rule=SHAPE-DIRECT; actor=orchestrator; proof obligation and passing result present; session_boundary=open; reopen seam present. Report status only.",
+      "expected_output": "A direct current-session status report that accepts the complete envelope, reports SHAPE-DIRECT and says direct implementation may continue in this session.",
       "files": [],
       "expectations": [
-        "The output treats missing workflow-control artifacts and separate `tasks.md` as waived only because the prompt provides an explicit recorded direct-path waiver.",
-        "The output treats readiness `WAIVED` as valid only because rationale and scope are explicit.",
-        "The output still says workflow-status is read-only and does not create the missing artifacts.",
-        "The output keeps implementation readiness tied to the explicit inline plan and waiver instead of task size alone."
+        "The output identifies STATUS-DIRECT-ENVELOPE and provenance=orchestrator_current_session.",
+        "The output reports current-session routing identity, direct actor, trigger evidence, proof, adequacy disposition, and reopen seam.",
+        "The output says direct work is eligible only in this session and does not create durable artifacts.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 4,
-      "prompt": "Use workflow-status for `specs/account-summary-cache`. The master file says `tasks.md` is expected for this non-trivial task, but `tasks.md` is missing and no waiver is recorded. Tell me whether implementation can start.",
-      "expected_output": "A conservative read-only status report that treats missing expected `tasks.md` as a planning repair blocker and says implementation may not start.",
+      "prompt": "Use workflow-status with this quoted envelope and no task path: provenance=prior_session; routing_scope=current_session; routing_revision=2; matched_rule=SHAPE-DIRECT; actor=orchestrator; proof passed. Report status only.",
+      "expected_output": "A fail-closed unsupported result because prior-session or user-quoted direct envelopes are not status or resume authority.",
       "files": [],
       "expectations": [
-        "The output identifies missing expected `tasks.md` as the blocker.",
-        "The output does not create or repair `tasks.md` from the status helper.",
-        "The output routes next action toward planning repair rather than implementation."
+        "The output returns unsupported: no durable task state rather than trusting the quoted envelope.",
+        "The output does not infer current direct eligibility from SHAPE-DIRECT text alone.",
+        "The output requests a durable task path or current orchestrator-attested envelope.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 5,
-      "prompt": "Use workflow-status for `specs/admin-soft-delete`. The master file says planning is complete and implementation readiness is `FAIL` with reopen target `technical design` because rollout ownership can change validation. `tasks.md` is present. Tell me whether implementation can start.",
-      "expected_output": "A conservative read-only status report that reports readiness `FAIL`, says implementation may not start, and routes next action to the recorded earlier phase.",
+      "prompt": "Use workflow-status for specs/account-summary-cache. The current durable route records tasks.md with artifact_expectation=expected, artifact_state=absent, waiver_disposition=none. Tell me whether implementation can start.",
+      "expected_output": "A read-only status report that blocks implementation on missing expected tasks.md and routes to planning repair.",
       "files": [],
       "expectations": [
-        "The output treats readiness `FAIL` as blocking even though `tasks.md` is present.",
-        "The output names `technical design` as the reopen target.",
-        "The output does not repair artifacts or approve readiness from the status helper."
+        "The output identifies expected+absent tasks.md as the blocker.",
+        "The output does not create, repair, or waive tasks.md.",
+        "The output says implementation may not start.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 6,
-      "prompt": "Use workflow-status for `specs/export-rollout`. The artifacts say task-review/readiness is complete, `Session boundary reached: yes`, `Next session starts with: T001`, and `Implementation readiness: CONCERNS` with accepted risk `legacy clients may see old retry headers for one deploy` plus proof obligation `run contract tests and mixed-version smoke notes`. Report status only.",
-      "expected_output": "A compact read-only status report that says implementation may start only with recorded concerns and names the accepted risk and proof obligation.",
+      "prompt": "Use workflow-status for specs/admin-soft-delete. Current tasks.md records review_verdict=FAIL and reopen_target=system-integration-design because rollout ownership changes validation. Report status only.",
+      "expected_output": "A read-only FAIL report that blocks implementation and routes to the recorded design reopen target.",
       "files": [],
       "expectations": [
-        "The output reports readiness `CONCERNS` and does not collapse it into an unconditional yes.",
+        "The output treats current FAIL as blocking even though tasks.md exists.",
+        "The output names system-integration-design as the reopen target.",
+        "The output does not repair or approve anything.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Use workflow-status for specs/export-rollout. Current task review/readiness is CONCERNS, handoff_readiness=ready, next_phase=implementation, accepted risk is named, and proof obligation is mixed-version contract smoke evidence. Report status only.",
+      "expected_output": "A compact report that allows implementation only with the recorded concerns and repeats the named risk and proof obligation.",
+      "files": [],
+      "expectations": [
+        "The output does not collapse CONCERNS into an unconditional yes.",
         "The output names the accepted risk and proof obligation.",
-        "The output says implementation may start only because the concerns are explicitly recorded and routing points to implementation."
+        "The output keeps the status helper read-only.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Use workflow-status for specs/routing-repair. workflow-plan.md is routing_scope=durable,routing_revision=4, while the active phase file is routing_scope=current_session,routing_revision=4. Both claim current and handoff ready. Report status only.",
+      "expected_output": "A conflict report that compares the complete routing identity, blocks handoff, and denies implementation without repairing either file.",
+      "files": [],
+      "expectations": [
+        "The output treats equal revision numbers with different scopes as a conflict.",
+        "The output reports handoff_readiness=blocked and implementation may not start.",
+        "The output names the orchestrator-owned transition/reopen as the next action without performing it.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Use workflow-status for specs/post-ledger-reopen. tasks.md exists and is record_validity=stale after a blocker reopened specification; older workflow control claims PASS and ready. No fresh task review exists for the new durable revision. Report status only.",
+      "expected_output": "A STATUS-TASKS-precedence report that keeps stale tasks as the implementation-state source but denies authorization until fresh review matches the reopened route.",
+      "files": [],
+      "expectations": [
+        "The output does not fall through to older lower-precedence PASS state.",
+        "The output reports stale validity and the missing fresh task-review/readiness gate.",
+        "The output routes to the recorded reopen target and does not resume implementation.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Use workflow-status for specs/legacy-bundle. The only phase value is the historical descriptive phrase complete for research, which is not in the closed LEGACY-* mapping. Report status only.",
+      "expected_output": "A conservative legacy report that displays the phrase as legacy_unmapped and refuses to treat it as readiness authority.",
+      "files": [],
+      "expectations": [
+        "The output labels the value legacy_unmapped rather than guessing phase_state=complete.",
+        "The output does not authorize handoff or implementation from the descriptive phrase.",
+        "The output names the missing current typed evidence.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Use workflow-status for the final response of this same direct session. The current orchestrator-attested envelope is complete and current, matched_rule=SHAPE-DIRECT, routing_scope=current_session,routing_revision=3, proof passed, session_boundary=reached, and the reopen seam is recorded. No durable task state exists.",
+      "expected_output": "A same-session closeout status that still observes the eligible direct envelope for this final response, reports proof complete, and states that the envelope expires after the response and cannot resume later.",
+      "files": [],
+      "expectations": [
+        "The output accepts the envelope despite session_boundary=reached because this is the current session's final closeout response.",
+        "The output says the envelope expires after this response and is never a later resume source.",
+        "The output does not create durable workflow state merely to preserve status.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     }
   ]

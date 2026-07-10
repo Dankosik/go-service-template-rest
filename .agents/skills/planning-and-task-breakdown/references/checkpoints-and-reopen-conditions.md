@@ -13,6 +13,21 @@ Load this when writing review checkpoints, validation checkpoints, task-ledger r
 - Readiness `FAIL` is honest when it prevents unsafe implementation; do not soften it into optimistic handoff text.
 - Conditional reopen rules are not blockers when they clearly describe "if discovered later" stop conditions.
 
+## Goal Contract And Handoff Boundary
+
+For resumable or multi-slice implementation, make `tasks.md` Goal-ready with:
+
+- one objective derived from approved artifacts;
+- one successful completion condition covering the accepted ledger;
+- a separate blocked-stop condition that is not success;
+- read-before-coding artifacts and task-specific context where useful;
+- preserved constraints, accepted risks, proof obligations, and progress-log rule;
+- resume rule and exact stop/reopen behavior.
+
+Keep detailed artifacts and proof in fields, not in a bloated objective sentence. Planning leaves task-ledger review/readiness at `procedural_gate_state=pending`, `review_verdict=pending`, and `record_validity=current`; `handoff_readiness=ready` authorizes only the named task-review/readiness session, never implementation. The later readiness phase owns lane selection, final verdict, and rendering the implementation Goal handoff.
+
+When checkpoints exist, map each checkpoint to its task range, entry proof, exit proof, and reopen target. Add review or validation phase-control files only when approved multi-session routing truly requires them and always before implementation starts; never create a coding phase-control file.
+
 ## Imitate
 ```markdown
 ## Handoffs / Reopen Conditions

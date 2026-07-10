@@ -4,10 +4,10 @@
 When loaded for symptom master and active phase files disagree on routing state, this file makes the model require aligned control fields in both files instead of likely mistake trusting the clearer artifact or chat intent.
 
 ## When To Load
-Load this when `workflow-plan.md` and the active `workflow-plans/<phase>.md` disagree about current phase, phase status, blockers, readiness, session boundary, ready-for-next-session state, next action, or the next-session start point.
+Load this when `workflow-plan.md` and the active `workflow-plans/<phase>.md` disagree about routing identity/validity, current phase, typed phase/gate/handoff state, blockers, next action, or the next-session start point.
 
 ## Decision Rubric
-- Classify as `blocks_phase_handoff` when the mismatch could start, resume, or close the wrong phase.
+- Classify as `blocks_phase_handoff` when routing revisions differ, either record is stale, or the mismatch could start, resume, or close the wrong phase.
 - Classify as `blocks_specific_lane` when only one generated phase-control file or lane route is stale and the active phase can keep repairing around it.
 - Classify as `non_blocking_but_record` when wording differs but both files route to the same current phase, blocker, and next-session start.
 - Ask for the smallest routing repair in the owning file or both files. Do not ask to copy `spec.md`, `design/`, or `tasks.md` content into workflow control.
@@ -21,20 +21,20 @@ Why to copy: it ties the mismatch to a concrete failure, skipping design approva
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `add_missing_routing`
-- `Exact Orchestrator Addition`: In `workflow-plan.md`, set `Current phase: go-code-ownership-design`; set `Phase workflow plans: go-code-ownership-design active; planning pending`; in `workflow-plans/go-code-ownership-design.md`, set `Next action: finish and approve Go code ownership design; Stop rule: do not begin planning in this session`.
+- `Exact Orchestrator Addition`: In `workflow-plan.md`, set `Current phase: go-code-ownership-design`, `phase_state=active`, and typed current routing identity; record `workflow-plans/go-code-ownership-design.md` as the active phase file only when `ROUTING-PHASE-CONTROL` requires it. In that triggered file set `phase_state=active`, the same routing identity, `Next action: finish Go code ownership design`, and `Stop rule: do not begin planning in this session`.
 
 ### False handoff readiness
-`Gap`: Master says `Session boundary reached: yes`, but the phase file says `Phase status: in_progress` with unresolved blockers.
+`Gap`: Master says `session_boundary=reached` and `handoff_readiness=ready`, but the phase file says `phase_state=active` with unresolved blockers.
 
 Why to copy: it blocks the handoff because the master invites a later session forward while the phase-local file still says stop.
 
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `record_blocker_or_reopen`
-- `Exact Orchestrator Addition`: In `workflow-plan.md`, set `Session boundary reached: no`, `Ready for next session: no`, and add a routing-only blocker summary.
+- `Exact Orchestrator Addition`: In `workflow-plan.md`, set `session_boundary=reached`, add a routing-only blocker summary plus the reopen target, and use `handoff_readiness=ready` only when that one reconciliation session can start; otherwise keep `handoff_readiness=blocked` and state the missing prerequisite.
 
 ### Missing next-session start
-`Gap`: Master says `Ready for next session: yes` without naming where the next session starts.
+`Gap`: Master says `handoff_readiness=ready` without naming where the next session starts.
 
 Why to copy: resume should not require chat archaeology.
 
@@ -51,4 +51,4 @@ Use:
 ## Agent Traps
 - Do not ignore a master/phase mismatch because chat intent looks obvious.
 - Do not repair by inventing a new phase file path; ask the orchestrator to align the recorded route.
-- Do not treat status synonyms as a finding when the route, blocker, and next-session start are already unambiguous.
+- Treat noncanonical new-output synonyms as a typed-state gap; only exact closed legacy mapping is eligible for historical reads.

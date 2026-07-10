@@ -8,15 +8,6 @@ description: "Review Go code changes for test coverage quality, scenario traceab
 ## Purpose
 Protect merge confidence by making sure changed behavior is covered by meaningful, deterministic, reviewable tests.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review proof quality, not test volume.
 - Prioritize missing fail paths, weak assertions, nondeterminism, untraceable scenarios, and validation commands that do not prove the changed risk.
@@ -105,41 +96,8 @@ When you load a reference, translate the example into the current diff's concret
 - Hand off benchmark and hot-path proof to `go-performance-review`.
 - Hand off broader design drift to `go-design-review`.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the missing or weak test obligation
-- regression-leakage impact
-- missing retired-surface proof or retained-surface proof when cleanup is part of the approved task
-- the smallest safe correction
-- a validation command when useful
-- whether the issue is local test drift or needs design escalation
-
-Severity is merge-risk based:
-- `critical`: missing critical coverage or systemic nondeterminism that invalidates trust in the suite
-- `high`: significant required scenario gap, assertions too weak to prove required behavior, or surviving replaced path can still execute/import/generate/validate without approved retention proof
-- `medium`: missing retired-surface proof for tests, fixtures, docs, configs, skills, agents, or mirrors, or bounded but meaningful edge-path or maintainability weakness
-- `low`: clearly unreachable/non-authoritative old proof surface that could still mislead future work, or local readability or diagnostic improvement
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-If there are no findings, say `No QA findings.` and still note any residual risks or evidence gaps.
-
-Use this format for each finding:
-
-```text
-[severity] [go-qa-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the missing/weak test obligation, regression-leakage impact, retired/retained-surface proof gap when cleanup applies, smallest safe correction, and focused validation. `critical` is missing critical coverage or systemic nondeterminism that invalidates the suite; `high` includes a significant scenario/assertion gap or a replaced path that can still execute/import/generate/validate without approved retention proof. If none, say `No QA findings.` and still record residual evidence gaps.
 
 ## Escalate When
 Escalate when:

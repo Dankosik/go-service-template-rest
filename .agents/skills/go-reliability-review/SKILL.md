@@ -8,15 +8,6 @@ description: "Review Go code changes for timeout and deadline propagation, retry
 ## Purpose
 Protect changed failure paths from outage, cascading-failure, retry-amplification, overload, shutdown, and degraded-mode defects.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review failure behavior before happy-path success.
 - Prioritize unbounded waits, retries, queues, goroutines, degraded-mode correctness, and rollout/rollback traps.
@@ -121,38 +112,8 @@ Do not:
 - Hand off coverage completeness to `go-qa-review`.
 - Hand off broader structural drift to `go-design-review`.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the violated reliability expectation
-- the concrete failure mode and blast radius
-- the smallest safe correction
-- a validation command when useful
-- whether the issue is local code drift or needs design escalation
-
-Severity is merge-risk based:
-- `critical`: outage or cascading-failure risk that makes merge unsafe
-- `high`: strong evidence of significant reliability contract mismatch
-- `medium`: bounded but meaningful reliability weakness
-- `low`: local hardening improvement
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-Use this format for each finding:
-
-```text
-[severity] [go-reliability-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the violated reliability expectation, concrete failure mode/blast radius, smallest safe correction, and failure-path validation. `critical` is merge-unsafe outage or cascading-failure risk; `high` is strong evidence of a significant reliability-contract mismatch.
 
 ## Escalate When
 Escalate when:

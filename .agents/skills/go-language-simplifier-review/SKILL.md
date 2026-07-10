@@ -8,15 +8,6 @@ description: "Review Go code changes for lower cognitive complexity, false-simpl
 ## Purpose
 Protect local reasoning quality in changed Go code without endorsing refactors that only reduce line count while hiding policy, state transitions, ownership, cleanup, error contracts, or caller-visible semantics.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Treat simplicity as reduced reasoning load, not lower line count.
 - Flag false simplifications that merge distinct semantics, hide ownership, or push policy into generic helpers.
@@ -111,47 +102,8 @@ Stop-sign examples:
 - Hand off concurrency, reliability, security, DB/cache, and performance depth to the corresponding review skills.
 - Hand off test-strategy completeness to `go-qa-review`.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the concrete simplification defect
-- why it raises merge-risk, maintenance risk, or branch-misread risk
-- the smallest safe correction
-- a validation command when useful
-- whether the change is behavior-preserving, a specialist handoff, or needs design escalation
-- whether the issue is under-extraction of a same-package source-of-truth seam or over-extraction into a vague helper
-- whether a code-level pattern would reduce local complexity, or a pattern-shaped helper is the complexity
-- whether surviving old-path code is approved retention or unexplained legacy drift that can mislead future changes
-- the reference file used when one materially shaped the finding
-
-Severity is merge-risk based:
-- `critical`: the cleanup obscures critical behavior or contract semantics enough that safe change is unlikely
-- `high`: unexplained surviving replaced path can still execute, import, generate, or validate, or there is strong evidence of hidden state, false simplification, or API opacity with material maintenance risk
-- `medium`: unexplained surviving test, fixture, doc, config, skill, agent, or mirror drift, or bounded but meaningful readability debt with a realistic future-change cost
-- `low`: clearly unreachable/non-authoritative old surface that could still mislead future work, or local simplification opportunity that materially improves clarity
-- `low`: local simplification opportunity that still materially improves clarity
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-If a section has no entries, write `None.` rather than filler.
-
-Use this format for each finding:
-
-```text
-[severity] [go-language-simplifier-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
-
-Start `Issue` with the plain-language defect. Add an `Axis:` label only when it materially clarifies why the issue belongs in simplification review rather than design or idiomatic Go review.
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the simplification defect, merge/maintenance/branch-misread risk, smallest behavior-preserving correction, and whether the issue is under-extracted same-package policy, over-extracted vague helper, pattern-shaped complexity, or unexplained surviving legacy drift. Name the loaded reference when it shaped the judgment. `critical` means critical behavior is too obscured for safe change; `high` includes an executable/importable/generated/validated replaced path or material hidden-state/false-simplification/API-opacity risk. Start `Issue` with the plain-language defect.
 
 ## Escalate When
 Escalate when:

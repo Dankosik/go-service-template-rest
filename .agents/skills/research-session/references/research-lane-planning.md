@@ -4,7 +4,7 @@
 When loaded for a chosen or likely fan-out session whose lane plan is vague, this file makes the model assign one owned question, one role, one skill, one evidence target, and a fan-in path per lane instead of likely mistake: broad domain labels, multi-skill lanes, write-capable workers, or subagents asked to approve decisions.
 
 ## When To Load
-Load when `workflow-plans/research.md` needs clearer lane ownership, role choice, evidence targets, order, parallelism, or fan-in mechanics.
+Load when `ROUTING-PHASE-CONTROL` requires `workflow-plans/research.md` and that file needs clearer lane ownership, role choice, evidence targets, order, parallelism, or fan-in mechanics.
 
 Do not load to invent lanes for tiny local research. Use `local-vs-fanout-mode-selection.md` first if the mode itself is still undecided.
 

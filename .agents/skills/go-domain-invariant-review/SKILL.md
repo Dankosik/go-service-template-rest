@@ -8,15 +8,6 @@ description: "Review Go code changes for business-invariant preservation, state-
 ## Purpose
 Protect approved business rules in code so critical invariants, forbidden transitions, and acceptance behavior do not drift silently.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review behavior through business invariants and legal transitions, not through implementation shape alone.
 - Prioritize invalid state acceptance, side effects before preconditions, duplicate effects, and silent invariant drift.
@@ -115,40 +106,8 @@ The examples are not reusable business rules. Adapt only the review lens and fin
 - Hand off broader architecture drift to `go-design-review`.
 - Hand off coverage completeness and test-shape depth to `go-qa-review`.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the violated invariant, transition, or acceptance rule
-- concrete business impact
-- the smallest safe correction
-- a relevant contract or decision when one exists
-- whether the issue is local code drift or needs design escalation
-
-Keep findings local and review-shaped. Do not redesign the domain model unless the smallest safe correction cannot preserve the approved rule. If the only honest fix changes the invariant set, transition model, acceptance contract, or ownership boundary, escalate instead of smuggling a redesign into a review comment.
-
-Severity is merge-risk based:
-- `critical`: confirmed invariant violation or forbidden transition
-- `high`: high-likelihood fail-path or corner-case invariant break
-- `medium`: bounded but meaningful domain behavior risk
-- `low`: local traceability or hardening improvement
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-Use this format for each finding:
-
-```text
-[severity] [go-domain-invariant-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the violated invariant/transition/acceptance rule, concrete business impact, relevant approved or inferred contract, and smallest safe correction. `critical` is a confirmed invariant violation or forbidden transition; `high` is a high-likelihood fail-path or corner-case break. Keep correction local; if it changes the invariant set, transition model, acceptance contract, or ownership boundary, escalate rather than redesigning inside review.
 
 ## Escalate When
 Escalate when:

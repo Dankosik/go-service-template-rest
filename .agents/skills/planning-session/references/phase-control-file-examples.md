@@ -4,10 +4,10 @@
 When loaded for phase-control file work, this file makes the model create only routing-focused files for named phases instead of creating just-in-case controls or duplicating `tasks.md`, `spec.md`, or `design/`.
 
 ## When To Load
-Load when writing or repairing `workflow-plans/planning.md`, or when planning must create future review or validation phase-control files for named multi-session routing.
+Load when `ROUTING-PHASE-CONTROL` requires writing or repairing `workflow-plans/planning.md`, or when planning must create future review or validation phase-control files for named multi-session routing.
 
 ## Decision Rubric
-- `workflow-plans/planning.md` records phase-local orchestration: status, outputs, blockers, pending task-review/readiness handoff, adequacy challenge packet, stop rule, and next action.
+- A `ROUTING-PHASE-CONTROL`-triggered `workflow-plans/planning.md` records phase-local orchestration: canonical `phase_state`, typed outputs, blockers, pending task-review/readiness handoff, adequacy challenge packet, stop rule, and next action. When the trigger is false, do not create the file.
 - Future review or validation phase-control files are allowed only when named multi-session routing requires them before implementation starts.
 - Future files start as pending routing skeletons; after the named phase starts, they remain compact routing and progress surfaces, not full execution logs or new decision records.
 - Review phase-control files should name review scope, read-only lanes, finding status, compact finding disposition, orchestrator reconciliation status, accepted risks, blockers or reopen targets, validation implications, completion marker, and stop rule.
@@ -18,12 +18,13 @@ Load when writing or repairing `workflow-plans/planning.md`, or when planning mu
 ## Imitate
 ```markdown
 Phase: planning
-Phase status: complete
-Completion marker: `tasks.md` draft_review_ready; task-review/readiness handoff recorded.
-Allowed writes used: `tasks.md`, `workflow-plan.md`, `workflow-plans/planning.md`.
-Task ledger review: pending_task_review.
-Implementation readiness: pending_task_review.
-Workflow plan adequacy challenge packet: ready for review, or not expected with rationale.
+phase_state: complete
+Completion marker: `tasks.md` has artifact_expectation=expected, artifact_state=review_ready, record_validity=current; task-review/readiness handoff recorded.
+Allowed writes used: `tasks.md`, existing durable `workflow-plan.md`, and `workflow-plans/planning.md` because ROUTING-PHASE-CONTROL is satisfied.
+Task-review/readiness procedural_gate_state: pending.
+Task-review/readiness review_verdict: pending.
+handoff_readiness: ready for the recorded task-review/readiness session; implementation remains unauthorized until that distinct gate completes.
+Workflow plan adequacy procedural_gate_state: pending because an ADEQUACY-* condition is true; otherwise record the local deterministic matrix audit instead of a phase gate.
 Stop rule: do not begin implementation in this session.
 Next action: run task-review/readiness in a later session.
 ```
@@ -32,7 +33,7 @@ Copy this shape: the planning file stays phase-local and handoff oriented.
 
 ```markdown
 Phase: review-phase-1
-Phase status: pending
+phase_state: not_started
 Consumes: implemented scope from `tasks.md`, approved artifact bundle, and the diff for the named checkpoint.
 Entry condition: implementation checkpoint complete with fresh local proof recorded.
 Review scope: changed API, persistence, and reliability surfaces named in `tasks.md`.
@@ -47,7 +48,7 @@ Copy this shape: a review phase skeleton preserves what the next session must in
 
 ```markdown
 Phase: validation-phase-1
-Phase status: pending
+phase_state: not_started
 Consumes: approved artifact bundle, existing `tasks.md`, and review phase notes for the named checkpoint when present.
 Closeout claim: phase complete for T001-T006.
 Proof scope: commands and manual checks named in `tasks.md` plus approved `test-plan.md` if test design triggered it.
@@ -61,7 +62,7 @@ Copy this shape only when planning already justified a dedicated validation phas
 ## Reject
 ```markdown
 Phase: validation-phase-1
-Phase status: pending
+phase_state: not_started
 Created because validation is usually useful.
 ```
 

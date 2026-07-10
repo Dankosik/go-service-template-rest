@@ -1,6 +1,5 @@
 [agents]
 max_depth = 1
-max_threads = 20
 
 # Registry compatibility: agents.<name>.config_file entries are required by Codex.
 [agents.api-agent]
@@ -17,6 +16,9 @@ config_file = "agents/concurrency-agent.toml"
 
 [agents.data-agent]
 config_file = "agents/data-agent.toml"
+
+[agents.evidence-agent]
+config_file = "agents/evidence-agent.toml"
 
 [agents.delivery-agent]
 config_file = "agents/delivery-agent.toml"
@@ -48,13 +50,14 @@ config_file = "agents/reliability-agent.toml"
 [agents.security-agent]
 config_file = "agents/security-agent.toml"
 
+[agents.critical-reviewer-agent]
+config_file = "agents/critical-reviewer-agent.toml"
+
+[agents.critical-adjudicator-agent]
+config_file = "agents/critical-adjudicator-agent.toml"
+
 [shell_environment_policy]
 inherit = "core"
 
 [shell_environment_policy.set]
 ANTHROPIC_BASE_URL = "https://api.gonkagate.com"
-ANTHROPIC_DEFAULT_HAIKU_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
-ANTHROPIC_DEFAULT_OPUS_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
-ANTHROPIC_DEFAULT_SONNET_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
-ANTHROPIC_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"
-CLAUDE_CODE_SUBAGENT_MODEL = "qwen/qwen3-235b-a22b-instruct-2507-fp8"

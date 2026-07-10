@@ -5,191 +5,48 @@ description: "Review Go code changes for goroutine lifecycle, cancellation, chan
 
 # Go Concurrency Review
 
-## Purpose
-Protect changed concurrent paths from merge-risk race, deadlock, goroutine leak, send or receive stall, memory-visibility bug, timer leak, shutdown hang, and unbounded-work defects.
+## Trigger, Scope, And Boundary
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+Review changed goroutines, channels, mutexes, atomics, WaitGroups, `sync.Cond`, `errgroup`, worker pools, timers/tickers, shared state, backpressure, draining, and shutdown for merge-risk races, deadlocks, leaks, stalls, visibility defects, panics, and unbounded work.
 
-## Specialist Stance
-- Demand concrete happens-before, ownership, cancellation, and shutdown evidence instead of scheduler intuition.
-- Treat every goroutine, channel, timer, worker, and shared state path as needing an owner and exit story.
-- Prefer simple synchronization and bounded work over clever lock-free or timing-based fixes.
-- Hand off broader workflow, reliability, performance, or DB/cache design when concurrency is only a symptom surface.
+Use approved lifecycle/shutdown contracts as governing evidence without suppressing code-visible findings. Stay review-only: do not redesign architecture, retry/degradation policy, DB/cache semantics, benchmark strategy, or test strategy when another owner holds the decisive question.
 
-## Scope
-- review goroutines, channels, mutexes, `sync.RWMutex`, `sync.WaitGroup`, `sync.Cond`, `sync/atomic`, `errgroup`, worker pools, pipelines, fan-out or fan-in paths
-- review goroutine lifecycle, stop ownership, and explicit termination behavior
-- review cancellation, deadline propagation, and blocking-operation escape paths
-- review channel ownership, close semantics, queue bounds, and send or receive behavior
-- review synchronization and publication safety for shared mutable state
-- review bounded concurrency, backpressure, and queue growth behavior
-- review timer, ticker, and sleep-based coordination hazards
-- review concurrent error propagation, draining, and shutdown safety
-- review race and liveness evidence for significant concurrent changes
+## Concurrency Invariants
 
-## Boundaries
-Do not:
-- turn concurrency review into broad style cleanup or architecture redesign
-- take primary ownership of benchmark proof, DB/cache correctness, or resilience policy unless concurrency is the direct root cause
-- accept timing luck, sleep-based reasoning, or scheduler luck as proof of correctness
-- hide uncertain concurrent behavior behind vague `seems safe` language
-- overprescribe lock-free or `RWMutex` solutions when a simpler mutex or ownership transfer is safer
+1. Every shared-state read/write has a concrete happens-before edge or immutable ownership transfer; mixed synchronized and unsynchronized access is unsafe.
+2. Every goroutine, worker, timer, ticker, and queue has an owner, bounded lifetime, stop signal, and join/drain or explicitly accepted abandonment semantics.
+3. Channel send/receive/close ownership and progress policy are explicit; buffers do not substitute for cancellation, backpressure, or one closer.
+4. Sync primitives are identity-bearing and never copied after use; lock/condition/atomic choices protect a named invariant rather than a folklore optimization.
+5. Active and queued work are bounded; full-queue behavior, cancellation, early-return unblocking, and detached sender accumulation are deliberate.
+6. Request context reaches blocking work; shutdown is idempotent and promptly unblocks waits, sends, receives, timers, workers, and result paths.
+7. Race, liveness, leak, timer, and shutdown proof matches the failure mode; sleeps and scheduler luck are not correctness evidence.
 
-## Core Defaults
-- Prove concurrency safety through concrete synchronization edges, not through intuition about goroutine order.
-- Every goroutine, timer, ticker, worker, and queue needs explicit ownership and a stop or drain story.
-- Mixed synchronized and unsynchronized access to the same state is a bug until proven otherwise.
-- Prefer bounded work, explicit backpressure, and idempotent shutdown over eventual drains or polling luck.
-- If an approved spec, plan, or contract exists, use it as governing evidence for lifecycle and shutdown expectations without suppressing local findings.
-- Prefer the smallest safe correction that restores deterministic concurrent behavior.
+## Symptom-Driven Reference Selector
 
-## Reference Selection
-Keep this file focused on the review workflow. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load a second only when the diff clearly spans independent decision pressures, such as a channel close race plus weak validation evidence.
+Load at most one reference by default and a second only for an independent pressure. State how it changes the review judgment.
 
-Choose by symptom and behavior change:
-
-| Symptom in the diff | Load | Behavior change |
+| Symptom | Load | Behavior change |
 | --- | --- | --- |
-| shared state visibility, unsafe readiness flags, mixed atomic/non-atomic access, `atomic.Value`, immutable snapshots, or missing visibility edges | `references/happens-before-and-publication.md` | makes the review require a concrete happens-before edge or immutable snapshot instead of trusting goroutine order, `single writer`, or an atomic readiness flag |
-| fire-and-forget goroutines, context propagation, early return leaks, pipeline abandonment, `errgroup` cancellation, or shutdown joins | `references/goroutine-lifecycle-and-cancellation.md` | makes the review require owner, stop signal, and join or accepted abandonment semantics instead of vague "use context" advice |
-| channel close ownership, send-on-closed risk, blocked sends or receives, `select` default spin, nil-channel gating, or fragile buffer assumptions | `references/channels-select-and-close-ownership.md` | makes the review assign one channel owner and explicit progress/full-queue policy instead of trusting receiver close, buffers, or `default` branches |
-| `WaitGroup` ordering, copied sync values, lock scope, `sync.Cond` predicates, `RWMutex` misuse, or local lock-free claims | `references/sync-primitives-identity-and-locking.md` | makes the review treat sync primitives as identity-bearing state and review the protected invariant instead of filing style nits or defaulting to `RWMutex`/atomics |
-| per-item goroutine fan-out, worker pools, semaphores, `errgroup.SetLimit`, buffered job/result queues, async send wrappers, or producer/consumer backpressure | `references/bounded-work-and-backpressure.md` | makes the review prove active work and queued work are both bounded instead of accepting worker-pool or semaphore-shaped code as safe |
-| timer/ticker reset or stop behavior, `time.After` loops, sleep polling, `time.AfterFunc` or `context.AfterFunc` completion, fake-clock tests, or shutdown timing | `references/timers-tickers-and-shutdown.md` | makes the review focus on timer ownership and prompt unblock semantics instead of stale timer-leak folklore or sleep-as-synchronization |
-| evidence quality, `go test -race`, leak or liveness tests, deterministic coordination, `testing/synctest`, or residual risk wording | `references/concurrency-review-validation.md` | makes the review match proof to the failure mode instead of treating "tests passed" or race-clean output as blanket validation |
+| Visibility, readiness flags, atomics, immutable snapshots, or missing publication edge. | [happens-before-and-publication.md](references/happens-before-and-publication.md) | Require a real synchronization edge or immutable snapshot instead of goroutine-order intuition. |
+| Fire-and-forget work, lost context, early-return leaks, `errgroup`, or shutdown join. | [goroutine-lifecycle-and-cancellation.md](references/goroutine-lifecycle-and-cancellation.md) | Require owner, stop, propagation, and join/abandonment semantics instead of vague “use context.” |
+| Close ownership, send-on-closed, blocked send/receive, nil channels, `select default`, or buffer assumptions. | [channels-select-and-close-ownership.md](references/channels-select-and-close-ownership.md) | Assign one owner and progress/full-queue policy instead of trusting buffers or receiver close. |
+| WaitGroup ordering/copy, lock scope, `sync.Cond`, `RWMutex`, or lock-free claim. | [sync-primitives-identity-and-locking.md](references/sync-primitives-identity-and-locking.md) | Review the protected invariant and identity semantics instead of filing style nits or defaulting to atomics. |
+| Fan-out, pools, semaphores, `SetLimit`, queues, async send wrappers, or producer/consumer pressure. | [bounded-work-and-backpressure.md](references/bounded-work-and-backpressure.md) | Prove both execution width and queued work are bounded. |
+| Timer/ticker reset/stop, `time.After` loops, sleep polling, `AfterFunc`, fake clocks, or shutdown timing. | [timers-tickers-and-shutdown.md](references/timers-tickers-and-shutdown.md) | Review timer ownership and prompt unblock semantics with current Go behavior. |
+| Race/liveness/leak tests, deterministic coordination, `testing/synctest`, or residual proof gap. | [concurrency-review-validation.md](references/concurrency-review-validation.md) | Match proof to race, protocol, lifecycle, or timing failure instead of treating any green test as blanket safety. |
 
-When you load a reference, translate the example into the current diff's concrete `file:line`, failure mode, smallest safe correction, and validation command. Do not paste generic examples as final review output.
+## Evidence And Shared Finding Envelope
 
-## Expertise
+Inspect every changed launch, access, synchronization edge, close, cancellation, blocking operation, full-queue path, error return, and shutdown path. Demand an exact `file:line`, failed concurrency axis, broken invariant or missing happens-before assumption, concrete failure mode/blast radius, smallest safe correction, governing contract when present, and focused race/liveness/leak/shutdown command or evidence gap.
 
-### Happens-Before And State Publication
-- Require a concrete happens-before edge for shared state: matched channel send/receive, channel close observed by receive, mutex unlock/lock, `WaitGroup` or `errgroup` completion, or an atomic operation whose observed value protects the publication being claimed.
-- Flag mixed atomic and non-atomic access to the same variable.
-- Do not accept an atomic flag as proof that separately stored fields, slices, maps, or pointers are safely published unless later mutation is impossible or separately synchronized.
-- Treat `single writer` claims as incomplete if aliases escape or readers have no visibility guarantee.
-- When state spans more than one field or invariant, prefer a mutex or ownership transfer over ad hoc atomics.
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Specialist additions:
 
-### Goroutine Lifecycle And Ownership
-- Every started goroutine needs an owner, a stop signal, and join or abandonment semantics.
-- Flag fire-and-forget goroutines unless process-lifetime ownership and failure irrelevance are explicit.
-- Verify downstream early exit cannot strand upstream senders or worker goroutines.
-- Background watchers, retries, and select loops need a bounded exit path on cancellation or channel close.
-- Goroutines created per item must still prove bounded width or explicit drop or backpressure behavior.
+- start `Issue` with the concurrency axis when useful;
+- `critical` examples include confirmed race, deadlock, send-on-closed, negative WaitGroup path, leaked significant work, or shutdown hang;
+- use `No concurrency findings.` only when no merge-risk defect is supported, and still state residual evidence gaps.
 
-### Context, Cancellation, And `errgroup` Semantics
-- Require the derived context to reach all blocking downstream calls and sibling workers.
-- Flag request-path replacement of request context with `context.Background()` or `context.TODO()`.
-- `errgroup.WithContext` only helps if workers actually observe the derived context; otherwise leaked work remains.
-- Do not use an `errgroup`-derived context for post-`Wait` cleanup; it is canceled when the first worker returns an error or when `Wait` returns.
-- Distinguish fail-fast `errgroup` semantics from collect-all semantics; returning the first error may still require explicit result draining or cleanup.
-- Spawning new work after group-context cancellation is usually a lifecycle or rollback defect.
+## Success, Escalation, And Stop Conditions
 
-### Channel Ownership, `select` Behavior, And Blocking
-- Make close ownership explicit; most channels should have one closer and one clearly defined control point.
-- Flag send-on-closed risk, multiple closers, and receiver-side close unless the contract explicitly makes the receiver the owner.
-- Treat buffered channels as bounded queues with explicit full-queue policy: block, drop, fail, or shed.
-- Flag blocked sends or receives that have no cancellation, close, or bounded escape path.
-- `nil` channels should only appear as intentional select gating; accidental nil paths block forever.
-- `select { default: ... }` inside a loop often means busy-spin, starvation, or hidden loss of backpressure.
+Success means findings are merge-risk ordered, concurrency-specific, evidence-anchored, locally correctable or explicitly handed off, and proof recommendations match the defect class.
 
-### WaitGroups, Locks, `sync.Cond`, And Copy Safety
-- When `Add`/`Done` tracks a goroutine, positive `WaitGroup.Add` on a zero counter must happen before any possible `Wait` and normally before launch so `Done` cannot race ahead; if the counter is already non-zero, recursive adds still need a clear lifecycle story.
-- Flag copying of structs containing identity-bearing sync values after first use, including `sync.WaitGroup`, `sync.Mutex`, `sync.RWMutex`, `sync.Cond`, `sync.Once`, `sync.Map`, `sync.Pool`, value receivers, and by-value helper calls.
-- Keep lock scope clear; flag callbacks, channel sends, or blocking I/O under lock unless the lock is intentionally protecting that blocking contract.
-- Prefer `sync.Mutex` over `sync.RWMutex` unless read dominance and contention behavior are justified.
-- `sync.Cond` requires predicate-in-a-loop reasoning; signal or broadcast must correspond to a state change that waiters can actually observe.
-
-### Atomics And Lock-Free Claims
-- Use `sync/atomic` for single-word state, counters, or immutable snapshot publication, not for multi-field invariants.
-- Flag CAS or spin loops with no backoff, no cancellation, or no progress guarantee.
-- `atomic.Value` and atomic pointer publication require type consistency and immutable-or-separately-synchronized pointed-to data.
-- On portability-sensitive 32-bit targets, prefer typed 64-bit atomics; pointer-based `sync/atomic` 64-bit operations still put alignment responsibility on the caller.
-- If the reviewer cannot explain the invariant in one sentence, the code is probably not safely lock-free.
-
-### Timers, Tickers, And Time-Based Coordination
-- `time.After` in hot or long-lived loops creates timer churn and often hides cancellation or reset semantics; account for the effective timer mode before calling it a timer leak.
-- Owned tickers that can keep driving work after the owner exits need `Stop` on exit paths; do not frame unreferenced tickers as GC leaks when the effective timer mode is Go 1.23+.
-- `Ticker.Stop` does not close `Ticker.C`; loops waiting only on the ticker channel still need a separate stop, context, or owner-exit signal.
-- `Timer.Stop` or `Reset` flows need ownership and completion coordination; in Go 1.23+ timer mode, channel timers do not need the old stale-tick drain dance unless `GODEBUG=asynctimerchan=1` is in effect, while `time.AfterFunc`, `context.AfterFunc`, and concurrent receivers still need an explicit story.
-- Sleep-based polling is not an acceptable substitute for a real signal or bounded retry strategy.
-
-### Bounded Concurrency And Backpressure
-- Flag unbounded goroutine fan-out, unbounded worker pools, and queue growth without explicit limits.
-- Use `errgroup.SetLimit`, semaphores, or fixed worker pools when concurrency width must stay bounded.
-- Boundedness must cover both execution width and queued work; a bounded worker pool with an unbounded submission queue is still unbounded.
-- Detached sender goroutines against slow or abandoned consumers deserve their own finding when they can accumulate independently.
-
-### Shutdown, Draining, And Async Workers
-- Shutdown should be idempotent and should unblock sends, receives, waits, timers, and worker loops.
-- `Close` or `Stop` must define whether it drains in-flight work, cancels it, or hands it off; silent ambiguity is a bug.
-- Verify result channels, ack paths, or worker completion signals cannot deadlock during shutdown.
-- For async consumers, require ack or commit only after the relevant local side effect is durable when applicable.
-- Separate local merge blockers from broader lifecycle-policy questions; do not hide visible code defects behind architecture language.
-
-### Tests And Validation Evidence
-- Significant concurrency changes should carry race evidence, deterministic coordination, or an explicit evidence gap.
-- `go test -race` is useful but not sufficient for pure protocol deadlocks or shutdown hangs; say when race-clean code can still be wrong.
-- Prefer gates, fake clocks, leak detection, or explicit completion signals over `time.Sleep`.
-- Sleep-based tests are weak evidence unless they only supplement stronger coordination assertions.
-- Missing race or liveness evidence on meaningful concurrency changes should become a finding or residual risk, not a shrug.
-
-### Cross-Domain Handoffs
-- Hand off retry, overload, and degradation policy depth to `go-reliability-review`.
-- Hand off DB/query/cache contract defects to `go-db-cache-review`.
-- Hand off benchmark, pprof, or lock-contention proof to `go-performance-review`.
-- Hand off test-strategy depth to `go-qa-review`.
-- Hand off broader structural drift to `go-design-review`.
-
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the failed concurrency axis
-- the broken invariant or missing happens-before assumption
-- the concrete failure mode and blast radius
-- the smallest safe correction
-- a validation command when useful
-- the governing spec, plan, or contract reference when one exists
-- whether the issue is local code drift or needs design escalation
-
-Severity is merge-risk based:
-- `critical`: confirmed race, deadlock, send-on-closed, leaked background work, negative `WaitGroup` path, or shutdown hang in a significant path
-- `high`: high-probability concurrency defect or unbounded-work risk with meaningful blast radius
-- `medium`: bounded but important concurrency weakness or evidence gap on a risky path
-- `low`: local hardening or clarity improvement
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-If there are no findings, say `No concurrency findings.` and still note any residual risks or evidence gaps.
-
-Use this format for each finding:
-
-```text
-[severity] [go-concurrency-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
-
-In `Issue`, start with the axis context, for example `Axis: Happens-Before And State Publication; ...`.
-
-## Escalate When
-Escalate when:
-- the safe correction changes the concurrency model, bounded-work policy, or shutdown contract (`go-reliability-spec`)
-- the fix depends on a new async workflow, durable coordination model, or reconciliation design (`go-distributed-architect-spec`)
-- the issue reveals a caller-visible contract change around blocking, async, or lifecycle semantics (`api-contract-designer-spec` or `go-chi-spec`)
-- correctness depends on new DB/cache ownership or cache-coalescing contract (`go-db-cache-spec`)
-- the current package or ownership boundaries make local concurrency repair unsafe (`go-design-spec` or `go-architect-spec`)
+Escalate changes to concurrency model/bounds/shutdown policy to reliability design, durable workflow/reconciliation to distributed design, caller-visible blocking/async semantics to API/chi design, DB/cache ownership to DB/cache design, and unsafe package ownership to integrated design. Stop rather than prescribe a local lock when the missing decision belongs to those owners.

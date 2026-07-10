@@ -3,15 +3,16 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "We already have approved `spec.md + design/` for tenant-scoped async report exports with persisted job state, admin retry/cancel, signed download URLs, and audit events. Use only the planning-session wrapper to produce the planning outputs for this task. The work is non-trivial and will need small task slices, strong validation coverage, and explicit rollout notes for mixed-version deploys and backfill safety.",
-      "expected_output": "A planning-only result that turns approved `spec.md + design/` plus approved or not-expected test design into a `tasks.md` executable ledger, adds `rollout.md` only where triggered, leaves task-ledger review and implementation readiness as `pending_task_review`, updates `workflow-plan.md` plus `workflow-plans/planning.md`, and stops at the handoff into task-review/readiness.",
+      "prompt": "We already have specification-review-approved `spec.md` and technical-design-review-approved `design/` for tenant-scoped async report exports with persisted job state, admin retry/cancel, signed download URLs, and audit events. Use only the planning-session wrapper to produce the planning outputs for this task. The work is non-trivial and will need small task slices, strong validation coverage, explicit rollout notes for mixed-version deploys and backfill safety, two independent read-only ledger-review lanes, and a named multi-session task-review checkpoint; therefore `ROUTING-PHASE-CONTROL` resolves planning `phase_control=required`.",
+      "expected_output": "A planning-only result that turns approved `spec.md + design/` plus approved or not-expected test design into a `tasks.md` executable ledger, adds `rollout.md` only where triggered, leaves task-review/readiness as procedural_gate_state=pending and review_verdict=pending, updates `workflow-plan.md` plus `workflow-plans/planning.md`, and stops at the handoff into task-review/readiness.",
       "files": [],
       "expectations": [
         "The output stays inside the planning boundary and does not reopen spec or design or start implementation.",
         "The output treats `tasks.md` as the executable checkbox ledger and planning handoff, consumes approved `test-plan.md` only when test design triggered it, and creates `rollout.md` only because the prompt actually triggers it.",
         "The output records `tasks.md` status in both `workflow-plan.md` and `workflow-plans/planning.md`.",
-        "The output leaves task-ledger review and implementation readiness as `pending_task_review` for the separate readiness gate.",
-        "The output updates the planning handoff in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with` pointing at task-review/readiness."
+        "The output leaves task-review/readiness as procedural_gate_state=pending, review_verdict=pending, and record_validity=current; handoff_readiness=ready refers only to the next task-review/readiness session and does not authorize implementation.",
+        "The output updates the planning handoff in `workflow-plan.md` with canonical `session_boundary`, `handoff_readiness`, and `Next session starts with` pointing at task-review/readiness.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
@@ -23,44 +24,48 @@
         "The output calls out the missing required design input and the unresolved rollout or migration gap as blockers to planning readiness.",
         "The output does not silently reopen design by writing a pretend-complete `tasks.md` that guesses the missing sequencing or rollout behavior.",
         "The output names the earlier phase to reopen instead of assigning implementation readiness.",
-        "The output updates routing toward `technical design` or another earlier phase instead of handing off to implementation."
+        "The output updates routing toward `technical design` or another earlier phase instead of handing off to implementation.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 2,
-      "prompt": "Approved `spec.md + design/` already exist for a bounded feature. Use the planning-session wrapper to write the task breakdown, and then go ahead and start T001 in the same session so we do not lose momentum.",
+      "prompt": "Specification-review-approved `spec.md` and all required technical-design-review-approved design context already exist for a bounded feature. Use the planning-session wrapper to write the task breakdown, and then go ahead and start T001 in the same session so we do not lose momentum.",
       "expected_output": "A session-bounded planning result that writes or repairs expected `tasks.md`, records the task-review/readiness handoff, and refuses to start coding in the same session.",
       "files": [],
       "expectations": [
         "The output makes the planning-session stop boundary explicit and keeps implementation for the next session.",
         "The output leaves implementation readiness for the separate task-review/readiness gate instead of treating the user's momentum request as a bypass.",
         "The output records `Next session starts with` as task-review/readiness rather than beginning implementation inline.",
-        "The output does not produce code, test changes, migrations, or implementation execution output."
+        "The output does not produce code, test changes, migrations, or implementation execution output.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 3,
       "prompt": "The change is tiny: echo an incoming `X-Request-ID` header back on `/healthz` if present. I still asked for the planning-session wrapper. Give me the planning-session output that is appropriate now.",
-      "expected_output": "A boundary-aware response that recognizes a dedicated planning session would be ceremony for this tiny direct-path change and points to the lightweight inline-planning path instead of forcing heavyweight planning artifacts.",
+      "expected_output": "A boundary-aware response that recognizes a dedicated planning session is not entered for this tiny direct-path change and points back to the current-session `SHAPE-DIRECT` envelope instead of forcing planning artifacts.",
       "files": [],
       "expectations": [
         "The output recognizes that a dedicated planning session is not the right control shape for this tiny task.",
         "The output does not invent heavyweight `tasks.md`, `test-plan.md`, `rollout.md`, or planning-phase workflow artifacts for the header echo change.",
-        "If it mentions implementation readiness, it keeps `WAIVED` limited to an explicit direct-path rationale and scope.",
-        "The output still keeps the no-implementation boundary clear instead of drifting into code."
+        "If it mentions implementation readiness, it uses current `SHAPE-DIRECT` evidence and `artifact_expectation=not_expected`, not a planning or ledger waiver.",
+        "The output still keeps the no-implementation boundary clear instead of drifting into code.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 4,
-      "prompt": "Use only the planning-session wrapper. Approved `spec.md + design/` exist for adding tenant-aware account summaries across API, service, repository, and tests. Produce the planning artifacts. The work is non-trivial, has two independent test/documentation updates that may run in parallel after the repository contract lands, and exact handler and repository files are known from design.",
-      "expected_output": "A planning-only result that creates `tasks.md` as the task-review/readiness handoff checkbox ledger with stable task IDs, phase labels, safe `[P]` markers only for disjoint work, exact known file paths, dependency markers, proof expectations, and approved test-design traceability when present.",
+      "prompt": "Use only the planning-session wrapper. Specification-review-approved `spec.md` and technical-design-review-approved design context exist for adding tenant-aware account summaries across API, service, repository, and tests. Produce the planning artifacts. The work is non-trivial, has two independent test/documentation updates that may run in parallel after the repository contract lands, and exact handler and repository files are known from design.",
+      "expected_output": "A planning-only result that creates `tasks.md` as an artifact_state=review_ready task-review/readiness handoff ledger with stable task IDs, phase labels, safe `[P]` markers only for disjoint work, exact known file paths, dependency markers, proof expectations, and approved test-design traceability when present.",
       "files": [],
       "expectations": [
         "`tasks.md` uses markdown checkboxes with stable IDs such as `T001` and includes phase/checkpoint labels.",
         "`[P]` appears only on tasks that are safe to parallelize and dependencies such as `Depends on: T001` are explicit when nontrivial.",
         "Tasks include exact known file paths or narrow package/artifact surfaces plus proof expectations, and avoid generic wording like `implement feature`.",
         "`tasks.md` does not become a second spec or design bundle.",
-        "Task-ledger review and implementation readiness remain `pending_task_review` before the next-session handoff."
+        "Task-review/readiness remains procedural_gate_state=pending and review_verdict=pending before the next-session handoff.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     }
   ]

@@ -7,7 +7,7 @@ When loaded for a design-checkpoint request with uncertain phase or spec status,
 Load before starting or resuming technical design when `spec.md`, current phase, allowed writes, or user-requested phase mixing is unclear.
 
 ## Decision Rubric
-- Start only when `spec.md` is specification-review-approved or explicitly direct-path waived for design, and any required clarification and specification-review gate status is recorded.
+- Start only when `spec.md` is specification-review-approved with current routing validity. Design depth is incompatible with current `SHAPE-DIRECT`; reclassify before entering this checkpoint.
 - Confirm master `workflow-plan.md` and the active phase-control file agree that the current session owns `system-integration-design` or `go-code-ownership-design`, or that a reopen target intentionally points back here.
 - If workflow control says the next session starts with `technical design review` or `planning` and approved design already exists, stop and hand off instead of reworking design by momentum.
 - If the user asks for `tasks.md`, code, tests, migrations, generation, or review in the same request, keep this session to design writes and record the later phase as the next session.
@@ -17,7 +17,7 @@ Load before starting or resuming technical design when `spec.md`, current phase,
 ```markdown
 Entry readiness: pass.
 Evidence: `spec.md` review-ready and specification review `PASS`; clarification gate resolved; current phase is `system-integration-design`.
-Allowed writes: `design/`, `workflow-plan.md`, and `workflow-plans/system-integration-design.md` only.
+Allowed writes: triggered `design/`, the existing durable `workflow-plan.md`, and `workflow-plans/system-integration-design.md` only when `ROUTING-PHASE-CONTROL` requires that phase file.
 Next action: build or repair the system/integration design checkpoint, then stop at the Go code ownership handoff.
 ```
 

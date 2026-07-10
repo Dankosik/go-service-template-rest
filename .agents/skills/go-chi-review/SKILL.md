@@ -5,179 +5,43 @@ description: "Review Go chi routing changes for router ownership, chi-specific m
 
 # Go Chi Review
 
-## Purpose
-Protect changed `github.com/go-chi/chi/v5` transport code from routing, middleware, and HTTP-policy regressions, with emphasis on chi-specific runtime traps that can silently change behavior or panic at startup.
+## Trigger, Scope, And Boundary
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+Review changed `github.com/go-chi/chi/v5` router topology, registration, mounts, middleware scope/order, fallbacks, HTTP capability, route labels, generated/manual ownership, and transport startup/readiness behavior for concrete merge-risk runtime or contract regressions.
 
-## Specialist Stance
-- Review chi behavior as runtime semantics, not framework trivia.
-- Prioritize route ownership, middleware scope, fallback policy, and low-cardinality observability over style-only comments.
-- Treat startup panics, route-context mutation, and generated/manual route drift as merge-risk signals.
-- Hand off payload contracts, business invariants, DB/cache, and broad security or reliability design when they become primary.
+Stay chi-specific and review-only. Do not redesign service architecture, payload/business semantics, DB/cache, or deep security/reliability policy unless routing cannot be corrected locally; hand the decisive question to its owner.
 
-## Scope
-- review router topology, path ownership, and subrouter boundaries
-- review chi-specific registration semantics such as `Use`, `Group`, `Route`, `With`, and `Mount`
-- review route collision, shadowing, override, and registration-order risk
-- review middleware order, scope, and route-lifecycle assumptions
-- review `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, and CORS behavior on affected surfaces
-- review route observability semantics, including low-cardinality route labeling
-- review OpenAPI or generated-route integration with manual chi wiring
-- review transport lifecycle implications when routing changes affect startup, readiness, or fallback behavior
+## Chi Invariants
 
-## Boundaries
-Do not:
-- redesign the broader architecture unless routing correctness cannot be restored locally
-- take primary ownership of business invariants, payload semantics, DB/cache policy, or deep security and reliability analysis
-- block on style-only comments with no concrete transport or runtime impact
-- leave API-visible routing behavior to framework defaults when the change affects contract semantics
+1. Router construction is deterministic and startup-safe: global `Use` precedes routes on a mux; mounts/subtrees have one non-nil owner; static/param/wildcard/generated/manual overlaps are deliberate.
+2. `Use`, `With`, `Group`, `Route`, and `Mount` preserve intended middleware order and exact scope; route-dependent logic reads final route context only after routing.
+3. Alternate method/path probing uses fresh `chi.NewRouteContext()` state; custom `Match`/`Find`/`Allow`/`OPTIONS` logic never mutates the live request context.
+4. `404`, `405`, `Allow`, `HEAD`, `OPTIONS`, CORS, and preflight behavior advertise only capabilities the router actually serves; chi does not imply `HEAD` from `GET` without explicit support.
+5. Metrics, traces, logs, and spans share bounded route-template identity; raw paths, IDs, wildcard captures, and user input never become cardinality labels.
+6. OpenAPI/generated handlers and manual routes keep one source and path owner; generated files remain no-touch derived output and surrounding middleware/fallback policy stays consistent.
+7. Validation exercises router construction and concrete method/path behavior, including startup panic, fallback, route context, and bounded-label cases—not just happy-path handlers.
 
-## Core Defaults
-- Deterministic routing behavior beats framework convenience.
-- Treat chi runtime semantics as reviewable behavior, not implementation trivia.
-- Treat registration-order-dependent behavior as risky until proven deliberate.
-- Treat raw-path observability labels as unsafe because they create high-cardinality telemetry.
-- When multiple chi defects coexist, prioritize the one that corrupts live route state, startup safety, or advertised HTTP capability most directly.
-- Prefer the smallest safe routing fix that restores deterministic behavior.
+## Symptom-Driven Reference Selector
 
-## Reference Loading
-Load references lazily as compact rubrics and example banks, not as exhaustive checklists or documentation dumps. Load at most one reference by default. Load multiple references only when the diff clearly spans independent decision pressures, such as route probing plus generated/manual ownership.
+Load at most one reference by default; use more only for independent pressures. State which runtime judgment it changes.
 
-Pick the narrowest matching reference by symptom:
-
-| Reference | Load For Symptom | Behavior Change |
+| Symptom | Load | Behavior change |
 | --- | --- | --- |
-| [references/chi-router-registration-hazards.md](references/chi-router-registration-hazards.md) | router construction order, late `Use`, `Route`/`Mount`, wildcard ownership, duplicate subtree owners, nil mounted handlers | makes the model report startup safety and subtree ownership defects instead of treating the change as style, generic duplicate routing, or harmless registration order |
-| [references/middleware-order-and-scope.md](references/middleware-order-and-scope.md) | middleware stack order or scope changes across `Use`, `With`, `Group`, `Route`, or `Mount` | makes the model prove exact coverage and order instead of assuming nested middleware refactors preserve behavior |
-| [references/route-context-and-match-probing.md](references/route-context-and-match-probing.md) | `chi.RouteContext`, `RoutePattern`, `Match`, `Find`, custom `Allow`/`OPTIONS`, or alternate-method probing | makes the model choose post-routing route-pattern reads and fresh probe contexts instead of live request-context mutation or incomplete route identity |
-| [references/http-fallback-head-options-cors.md](references/http-fallback-head-options-cors.md) | `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, CORS, or fallback wrappers | makes the model verify actual router capability and fallback contracts instead of inferring method support from `GET` routes or hardcoded method lists |
-| [references/generated-and-manual-route-drift.md](references/generated-and-manual-route-drift.md) | OpenAPI/generated chi handlers, generated/manual route overlap, generated subtree wrappers, or no-touch generated files | makes the model preserve a single generated/manual route owner and policy parity instead of patching generated files or adding shadowing manual routes |
-| [references/route-observability-labels.md](references/route-observability-labels.md) | metrics, traces, logs, span names, `http.route`, route label extraction, or unmatched-route labels | makes the model demand bounded route-template labels shared across telemetry instead of raw URL paths or inconsistent route identities |
+| Late `Use`, construction order, `Route`/`Mount`, wildcard/subtree ownership, duplicate owner, nil mount. | [chi-router-registration-hazards.md](references/chi-router-registration-hazards.md) | Treat startup and subtree ownership as runtime defects instead of style or generic duplicates. |
+| Middleware order/scope changes across `Use`, `With`, `Group`, `Route`, or `Mount`. | [middleware-order-and-scope.md](references/middleware-order-and-scope.md) | Prove exact coverage/order instead of assuming nested refactors preserve behavior. |
+| `RouteContext`, `RoutePattern`, `Match`, `Find`, custom `Allow`/`OPTIONS`, or method probing. | [route-context-and-match-probing.md](references/route-context-and-match-probing.md) | Read route identity after resolution and probe with isolated contexts. |
+| `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, CORS, preflight, or fallback wrappers. | [http-fallback-head-options-cors.md](references/http-fallback-head-options-cors.md) | Verify actual router capability and contract instead of inferred/hardcoded method support. |
+| OpenAPI/generated chi handlers, generated/manual overlap, subtree wrappers, or generated no-touch files. | [generated-and-manual-route-drift.md](references/generated-and-manual-route-drift.md) | Preserve one source/route owner and policy parity instead of shadow routes or generated edits. |
+| Metrics/traces/logs/span names, `http.route`, route extraction, or unmatched labels. | [route-observability-labels.md](references/route-observability-labels.md) | Use shared bounded route-template labels instead of raw or inconsistent identities. |
 
-If a narrower positive reference matches, prefer it over broad smell triage. If a finding crosses references, name the primary behavior in the finding and use the second reference only to sharpen validation. Keep review output anchored to exact file/line, runtime impact, smallest safe fix, and validation command. Do not turn references into design-spec output.
+## Evidence And Shared Finding Envelope
 
-## Expertise
+Inspect router construction, registration sequence, subtree ownership, middleware stack, live/probe contexts, method capability, fallback handlers, generated authority, telemetry timing/labels, and constructor/request tests. Each finding adds the chi defect, runtime or contract-visible impact, smallest safe correction, governing chi/contract evidence, and focused constructor or `httptest` validation.
 
-### Chi Runtime Semantics
-- `Use(...)` middleware on a mux executes before route resolution. Flag route-dependent logic in global middleware unless it runs after `next.ServeHTTP(...)` or derives route identity safely.
-- `With(...)` and `Group(...)` create inline routers with copied middleware stacks. Verify scope widening or narrowing is intentional rather than an accidental side effect of refactoring.
-- `Route(pattern, fn)` creates a new router and mounts it. `Mount(pattern, h)` reserves `pattern`, `pattern/`, and `pattern/*`; review path ownership with that wildcard behavior in mind.
-- `NotFound` and `MethodNotAllowed` handlers can propagate into mounted or inline routers. Verify subrouters do not silently inherit or bypass policy.
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). `critical` is a confirmed merge-unsafe routing/startup failure; `high` is strong evidence of major route or HTTP-policy drift. Use `Reference` only for concrete contract, design, generated-source, or chi behavior evidence.
 
-### Registration And Startup Hazards
-- Flag `Use(...)` added after the first route registration on the same mux. In chi this panics at startup.
-- Flag `Mount(...)` conflicts with existing mounted or wildcard subtree ownership. Chi panics for nil handlers and duplicate mount-style paths, while exact-route overlaps can still silently change ownership and need review as route conflicts.
-- Flag diffs that rely on registration order to make one handler “win” ownership, especially when manual handlers and mounts overlap.
-- Treat startup panics from router construction as `high` or `critical` merge risk, even if the steady-state routing logic looks correct.
+## Success, Escalation, And Stop Conditions
 
-### Match And RouteContext Probing
-- `RoutePattern()` is only reliable after downstream handling has resolved the final route stack. Reading it before `next.ServeHTTP(...)` usually produces incomplete route identity.
-- `Match(...)` and `Find(...)` mutate the supplied `*chi.Context`. Flag helpers that probe alternate methods or paths using `chi.RouteContext(r.Context())` instead of a fresh `chi.NewRouteContext()`.
-- Treat live-request `RouteContext` mutation in custom `405`/`Allow` logic as a primary merge-risk finding, not a secondary cleanup note.
-- Review custom `Allow`, `OPTIONS`, or ownership-probing helpers for context corruption, stale route state, or incorrect method disclosure.
-- Prefer a fresh probe context per check. Do not present request-context reuse as an equal alternative to isolated probe contexts.
-- Require bounded fallback labels when route-template extraction fails; never fall back to raw unbounded request paths.
+Success means findings are chi-runtime-specific, exact-source anchored, merge-risk ordered, and prove route ownership, startup, middleware, HTTP fallback/capability, generated parity, or bounded observability behavior.
 
-### Router Topology And Ownership
-- Verify root router, mounted subrouter, grouped routes, and generated handlers keep one obvious owner per resource path.
-- Flag duplicate or ambiguous `method + pattern` registration.
-- Check for static, param, wildcard, and mount overlap that makes route ownership non-obvious or registration-order-sensitive.
-- Treat split ownership of the same resource path across generated and manual routers as a `404`/`405`/`Allow`/`OPTIONS` risk, not just a style issue.
-- Explain mount conflicts in subtree-ownership terms first; exact panic strings or internal chi checks are supporting evidence, not the main explanation.
-
-### Middleware Order And Scope
-- Validate middleware order for request IDs, auth context, body limits, logging, tracing, panic recovery, and response shaping.
-- Flag reorderings that change behavior without explicit reason.
-- Verify route-local middleware does not silently widen or narrow coverage after `Group`, `With`, `Route`, or `Mount`.
-- Flag middleware that depends on final route identity before the route is resolved.
-
-### HTTP Method And Fallback Semantics
-- Verify `NotFound`, `MethodNotAllowed`, `Allow`, `HEAD`, `OPTIONS`, and CORS behavior remain deliberate and contract-consistent.
-- Remember chi does not automatically route `HEAD` to `GET`; that requires an explicit `Head(...)` route or `middleware.GetHead`.
-- Flag custom `Allow` or fallback logic that claims `HEAD` support when the router cannot actually serve it.
-- When `middleware.GetHead` is the only HEAD support, verify `Allow` separately; serving `HEAD` through `GET` does not automatically prove the 405 `Allow` header advertises `HEAD`.
-- When a custom `405` helper both mutates probe state and overclaims supported methods, report both defects as first-class findings.
-- Check that preflight handling is complete for affected routes and scopes.
-- Treat inconsistent `404` vs `405` vs `204` behavior across related surfaces as a correctness risk.
-
-### Route Observability Semantics
-- Require route labels, spans, and logs to use template-level route semantics when available.
-- Flag use of raw request paths, wildcard captures, IDs, or other unbounded path fragments as metric or trace labels.
-- Verify logs, metrics, and traces describe the same route identity.
-- Require explicit bounded behavior for unmatched routes instead of user-controlled fallback labels.
-
-### OpenAPI And Generated Wiring
-- Verify generated handlers and manual chi routes coexist without collision or ownership ambiguity.
-- Preserve no-touch boundaries for generated artifacts.
-- Flag runtime drift between the intended contract and the actual chi wiring.
-- Check that middleware and fallback behavior around generated routes matches the surrounding transport policy.
-
-### Validation Strategy
-- Prefer concrete `httptest` or router-constructor validation over prose for `404`/`405`/`Allow`/`HEAD`/`OPTIONS` findings.
-- When startup panic risk exists, suggest constructor-level tests that exercise router assembly, not only happy-path requests.
-- When route ownership is ambiguous, suggest direct method-path cases that prove which router or fallback policy actually wins.
-- For observability-cardinality findings, validate that multiple concrete parameter values collapse to the same route-template label and unmatched paths collapse to one bounded fallback label.
-
-### Transport Lifecycle Signals
-- Review routing changes for startup registration safety, readiness expectations, and panic-recovery boundaries.
-- Flag transport changes that can make unmatched or disallowed requests behave unpredictably during shutdown or degraded startup.
-- Keep lifecycle concerns focused on the routing layer; hand off broader resilience policy when needed.
-
-### Cross-Domain Handoffs
-- Hand off trust-boundary and tenant-isolation root causes to `go-security-review`.
-- Hand off timeout, degradation, and fallback policy defects to `go-reliability-review`.
-- Hand off benchmark or hot-path evidence questions to `go-performance-review`.
-- Hand off goroutine, channel, and shutdown-coordination defects to `go-concurrency-review`.
-- Hand off broader architecture drift to `go-design-review`.
-
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the concrete chi routing or middleware defect
-- runtime or contract-visible impact
-- the smallest safe correction
-- a validation command when useful
-- whether the issue is local code drift or needs design escalation
-
-Severity is merge-risk based:
-- `critical`: confirmed routing defect or startup failure that makes behavior merge-unsafe
-- `high`: strong evidence of major routing or HTTP-policy drift
-- `medium`: bounded but meaningful transport-correctness risk
-- `low`: local hardening or clarity improvement
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-Use this format for each finding:
-
-```text
-[severity] [go-chi-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
-
-Use `Reference` for the relevant contract, design note, approved decision, or chi-specific behavior when one exists.
-Do not pad `Reference` with filler phrases; use it only for concrete supporting behavior or contract evidence.
-
-## Escalate When
-Escalate when:
-- safe correction changes route ownership, router topology, or middleware strategy in a non-local way (`go-chi-spec`)
-- API-visible behavior such as method/status/fallback/CORS semantics must change (`api-contract-designer-spec`)
-- route observability semantics need a new telemetry contract (`go-observability-engineer-spec`)
-- routing fix depends on new timeout, fallback, or startup/shutdown policy (`go-reliability-spec`)
-- transport correction exposes broader seam or architecture drift (`go-design-spec`)
+Escalate non-local router ownership/topology or middleware strategy to `go-chi-spec`; client-visible method/status/fallback/CORS semantics to API contract design; telemetry contract to observability design; startup/shutdown/fallback policy to reliability design; and broader seam drift to integrated design. Stop rather than smuggle those decisions into a local route fix.

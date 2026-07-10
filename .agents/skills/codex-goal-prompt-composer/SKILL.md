@@ -1,164 +1,94 @@
 ---
 name: codex-goal-prompt-composer
-description: "Compose high-signal Codex Goal prompts. Use in exactly two cases: when the user explicitly asks to write, improve, or review a prompt for a Codex Goal, or when the repo workflow must render an implementation handoff from an approved and reviewed tasks.md. This skill consumes a Goal Contract, task ledger, validation loop, constraints, completion and blocked-stop rules to produce one durable objective, one verifiable completion condition, read-before-coding context, checkpoint progress rules, and a separate execution brief. Skip ordinary next-session prompts and draft tasks.md work that is not yet approved for implementation."
+description: "Compose high-signal Codex Goal prompts. Use in exactly two cases: when the user explicitly asks to write, improve, or review a prompt for a Codex Goal, or when the repo workflow must render an implementation handoff from an approved and reviewed tasks.md. This skill renders the compact handoff contract owned by docs/spec-first-workflow/shared/subagents-and-handoff.md. Skip ordinary next-session prompts and draft tasks.md work that is not yet approved for implementation."
 ---
 
 # Codex Goal Prompt Composer
 
 ## Purpose
-Write the prompt that starts or hands off a Codex Goal.
 
-A good Codex Goal is a durable objective for long-running work with a clear validation loop and a verifiable completion condition. In this repository, Goal prompts are mainly used when implementation starts from an approved, reviewed `tasks.md` and should orchestrate the whole ledger through named proof without stopping between task IDs.
+Render the compact Codex Goal handoff contract owned by `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
-This skill owns the chat-rendered Goal prompt. It does not approve `tasks.md`, invent missing decisions, or turn a draft ledger into an implementation handoff.
+This skill is a renderer, not a second contract owner. It selects approved task-local signals, checks that a valid Goal can be formed, and returns the compact chat prompt. It does not approve `tasks.md`, invent decisions, duplicate workflow policy, or embed worker execution manuals.
 
 ## Trigger Policy
-Use this skill only in these trigger paths:
-- explicit user request: the user asks to write, improve, review, or compose a prompt for a Codex Goal;
-- automatic workflow handoff: `tasks.md` exists, has passed task-ledger review/readiness with `PASS`, eligible `CONCERNS`, or eligible `WAIVED`, and the next session is implementation.
 
-Do not trigger it merely because a draft `tasks.md` exists. In this repository, non-trivial `tasks.md` is normally written Goal-ready, but the Goal prompt is rendered only when the ledger is approved for implementation or the user explicitly asks for a Goal prompt.
+Use this skill only when:
 
-## When To Use
-Use this skill when:
-- the user explicitly asks for a Codex Goal prompt;
-- writing a recommended next-session implementation prompt that tells the next session to set a Codex Goal from an approved and reviewed `tasks.md`;
-- composing a `/goal` or Goal-first implementation handoff from an approved and reviewed `tasks.md`;
-- improving a Goal prompt so it uses the Goal feature correctly;
-- checking whether a proposed Goal prompt is too broad, too vague, or missing proof.
+- the user explicitly asks to write, improve, or review a Codex Goal prompt; or
+- a current approved `tasks.md` has an eligible task-review/readiness result and implementation is next.
 
-Skip this skill for ordinary phase handoffs that do not set a Goal.
+Do not trigger it for ordinary phase handoffs or merely because a draft ledger exists.
 
 ## Inputs
-Read only the smallest set needed:
-- the approved `tasks.md`, especially `Goal Contract`, `Implementation Handoff`, `Implementation execution mode`, isolated-worker boundaries when present, executable task IDs, proof obligations, progress rules, completion condition, and blocked-stop rule;
-- `spec.md` for the canonical objective, non-goals, accepted decisions, and validation obligations;
-- compact design or `design/` only when named by `tasks.md`;
-- technical-design-review or readiness records only when the ledger names concerns, waivers, or proof obligations that must be preserved.
 
-If the Goal prompt is not ledger-driven, use the user's explicit objective, constraints, proof commands, completion condition, and blocked-stop behavior. If these are missing, ask for or record the missing input instead of fabricating a Goal.
+Read the smallest sufficient set:
 
-## Hard Rules
-- One Goal prompt gets one objective and one successful completion condition.
-- The objective must be bigger than one normal turn but smaller than an open-ended backlog.
-- The objective must be durable: it says what to complete and when to stop, not every file, command, risk, or instruction.
-- Put artifact lists, constraints, accepted concerns, waiver rationale, proof commands, progress rules, and blocker handling in the execution brief, not in the Goal objective.
-- For approved-ledger implementation, scope the Goal to every required task in `tasks.md` through final validation, not just the first task ID.
-- If approved ledger allows or requires isolated CLI workers, keep worker instructions in the implementation brief, not the Goal objective. The prompt must say workers are patch-producing implementation delegates, name the launch contract, and state the orchestrator owns patch intake, integration proof, and ledger updates.
-- Do not compose a Goal prompt from a draft ledger, missing Goal Contract, `FAIL` readiness, unresolved decision gate, `TBD`, or implementation-blocking open question. Return a blocked planning/reopen prompt instead.
-- Do not treat "records a blocker" as a successful completion condition. A blocker is a valid stop with the Goal left blocked, not a done claim.
-- Do not let skipped, unavailable, stale, failing, or too-narrow proof satisfy a task checkbox, checkpoint, or completion claim. The prompt must tell implementation to leave affected tasks unchecked and record `Blocked:` or a narrower claim.
-- Do not create or approve missing workflow artifacts inside the Goal prompt.
-- Do not weaken repository stop rules. If a blocker requires a prior phase, tell Codex to stop, record the blocker in the ledger or closeout surface permitted by `tasks.md`, and return the exact reopen target.
-- Keep the final prompt self-contained for a context-blind next session, but selective. Do not paste artifact dumps or generic repo rules that `AGENTS.md` already covers.
+1. `docs/spec-first-workflow/shared/subagents-and-handoff.md` for the compact handoff contract.
+2. Approved `tasks.md` for the Goal Contract, minimal read order, current implementation mode, preserved constraints, proof, progress/closeout owner, blocked-stop behavior, and reopen target.
+3. Add `spec.md`, design, test, rollout, or review artifacts only when `tasks.md` names them and a non-obvious constraint cannot be rendered accurately without reading them.
 
-## Goal Line Quality Gate
-Before finalizing the first Goal line, rewrite it until:
-- it names one target outcome and one verifiable completion condition;
-- it remains understandable without the current chat and does not say `continue this`, `finish everything`, or similar context-dependent phrasing;
-- it excludes artifact lists, proof commands, risk notes, and execution rules that belong in `Implementation brief`;
-- it scopes to the approved ledger or explicit user objective, not an unrelated backlog;
-- it would still be a valid objective after compaction, resume, or several hours of independent work.
+For a user-authored Goal that is not ledger-driven, use only the explicit objective, completion condition, constraints, proof, and blocked-stop behavior supplied by the user. Do not manufacture missing workflow state.
 
-## Repository Goal-First Prompt Shape
-For this repository's next-session handoffs, prefer this instruction form over a raw slash command because the handoff may be pasted into the app or CLI:
+## Eligibility Gate
 
-```text
-First, set a Codex Goal for this session:
-Complete <approved objective> by orchestrating every required task in `<task-local>/tasks.md` without stopping until <verifiable completion condition>.
+Render a Goal only when all are true:
 
-After the goal is set, orchestrate implementation of every required task in `<task-local>/tasks.md` from start to finish. Start at <first task or checkpoint>, delegate every code-writing bundle to named worker bundles; do not make orchestrator-authored implementation edits; continue through the ledger's final validation/proof, and do not redefine success around a smaller slice.
+- there is one durable objective, larger than a normal turn and smaller than an open-ended backlog;
+- there is one successful, verifiable completion condition distinct from blocked stop;
+- an approved ledger is current for the active route when repository implementation is being handed off;
+- readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`;
+- required proof and the exact reopen behavior are known;
+- no unresolved decision, `TBD`, missing required artifact, or `FAIL` gate would force implementation to invent policy.
 
-Implementation brief:
+If any condition fails, return a short blocked reopen prompt instead of weakening the Goal.
 
-Work in `<absolute repo path>`.
-Read before coding:
-- `<task-local>/tasks.md` because it is the approved implementation ledger and source of truth.
-- `<task-local>/spec.md` because it is the canonical decision record.
-- <additional required start artifact, with one-line reason>.
+## Render Selectively
 
-Read before relevant tasks:
-- <task-specific artifacts named by `tasks.md`, with task IDs and one-line reasons>.
+Use the compact implementation shape from `docs/spec-first-workflow/shared/subagents-and-handoff.md`. The generated prompt contains only:
 
-Current state:
-- Next phase: implementation.
-- Task-ledger review: <PASS | CONCERNS | WAIVED>.
-- Implementation readiness: <PASS | CONCERNS | WAIVED>.
-- Implementation execution mode: <isolated-cli-worker required | not_expected>.
-- Start at: <task ID or checkpoint>.
-- Isolated worker boundaries: <not_applicable | task bundles, launch contract, launch/resume failure blocker, discovery hints plus explicitly marked hard boundaries, forbidden edits, parallelism rule, worker proof, orchestrator patch intake, integration proof>.
+- one durable objective covering every required `tasks.md` item through final validation;
+- one successful completion condition;
+- `tasks.md` first and only the minimal additional read order;
+- current implementation mode and preserved constraints, accepted concerns, or waivers that affect execution;
+- required proof or the exact ledger section that owns it;
+- blocked-stop behavior and exact reopen target.
 
-Orchestrator control posture:
-- Treat `tasks.md` as the acceptance contract. Every worker assignment, rejection, repair prompt, patch-intake action, and completion claim must name the task ID, source anchor, obligation, proof gap or proof result, and approved boundary.
-- Be strict about incomplete scope, missing proof, forbidden edits, unapproved ownership, generated/manual authority drift, hidden design decisions, invented validation policy, and code-quality issues with a concrete task quality bar, repository pattern, owner responsibility, proof gap, or changed-surface maintainability-risk anchor. Do not be strict about unsupported taste preferences when ledger obligations are satisfied.
-- Send worker patches back only with concrete repair instructions: exact failed obligation, evidence anchor, expected patch/proof, unchanged boundaries. No vague "clean up" or "finish properly" feedback.
-- Intake sequence: accept; resume same worker for narrow same-bundle repair; rerun or split worker when structure is off; otherwise record blocker and reopen owning phase. Do not manually author implementation patches.
+Do not copy into the prompt:
 
-Preserve:
-- <accepted non-goals, constraints, concerns, waivers, and risks that affect implementation>.
+- worker launch commands, resume procedure, sandbox flags, patch-intake steps, or integration-proof mechanics;
+- a generic orchestrator or workflow manual;
+- broad repository summaries or artifact inventories;
+- generic instructions such as `be strict`;
+- repeated prohibitions or constraints already carried by `AGENTS.md`, approved `tasks.md`, or the implementation phase owner.
 
-Proof:
-- <commands or manual proof required by the ledger>.
+Task-specific worker boundaries stay in approved `tasks.md`. Repository-wide worker mechanics stay in `docs/spec-first-workflow/phases/implementation-validation-closeout.md`.
 
-Quality and evidence:
-- Apply the task-local implementation quality bar and evidence format from `tasks.md`.
-- For code-writing implementation, use isolated CLI workers only for named reviewable diff-story bundles in isolated worktrees or fresh checkouts. Default launch is `codex exec --cd <isolated-worktree> --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema <schema> -o <final-output> - < <prompt-file>` with event output captured, strict schema used when available, user config/rules inherited, no required named profile, and no forced model/reasoning overrides unless the approved ledger names a task-specific rationale. Do not use `--full-auto`; use `--yolo` or `danger-full-access` only in a ledger-named externally hardened container/VM/CI runner. If launch or resume fails before a usable worker patch exists, stop with the Goal blocked and report the failed command, key output, affected bundle, and repair target; do not author the implementation yourself. Treat worker output as patch evidence only and `ready_for_intake` as advisory: inspect the diff, reject forbidden edits or unapproved decisions, apply only accepted changes, rerun proof in the integration workspace, and update `tasks.md` only after integration proof passes.
-- For narrow same-bundle patch-intake defects, resume the same worker session with `codex exec resume` in the same isolated workspace before starting over. Repair prompts must name one failed obligation and request the smallest patch that fixes only that obligation while preserving accepted in-scope changes. Do not use resume to change scope, ownership, contract, design, dependency, rollout, cleanup disposition, or validation policy.
-- Treat worker discovery hints as starting points, not exhaustive edit permissions, unless the ledger explicitly marks them as hard boundaries. Workers may inspect callers, siblings, owners, generated/manual authorities, and adjacent files needed for the assigned task; edits still must stay inside assigned scope and avoid forbidden/protected surfaces. If completing a worker assignment requires changing approved scope, ownership, contract, validation policy, workflow artifacts, or forbidden surfaces, the worker must stop and return a blocker instead of broadening the patch.
-- Do not rely on current Codex App thread state, runtime-only tools, chat memory, or unsaved app context reaching CLI workers. Put task-critical context in the worker prompt or approved artifacts.
-- Write worker prompts to temporary files, pass them to `codex exec` through explicit stdin marker `- < "$WORKER_PROMPT"`, and delete them after the worker finishes or is abandoned. Do not preserve prompt files as workflow artifacts.
-- Tell CLI workers to choose skills/tools by task need, not availability; invoke only skills that directly map to the assigned surface, otherwise state `no-skill`. For Go code changes, use the repo-local `go-coder` skill when available. Treat `SOUL.md` as lower-precedence engineering taste, never authority over `AGENTS.md`, approved artifacts, or the assignment.
-- Before editing each protected-domain or `test-plan.md`-referencing task, expand its `Source`/`Implementation obligations` into concrete assertions: source anchor -> invariant -> forbidden regression or side effect -> owning code path -> required proof. If this cannot be made concrete, stop and reopen planning or test design.
-- Do not check tasks or claim completion from any unproven obligation, skipped, unavailable, stale, failing, or too-narrow proof; leave affected tasks unchecked and record `Blocked:` or the narrower claim.
+Headings are optional except where the user requests a particular format. Omit empty fields. If the user explicitly needs a CLI slash command, render `/goal <durable objective>` as the first line; otherwise use the shared contract's app-friendly `First, set a Codex Goal for this session:` form.
 
-Progress rule:
-- Update only the progress/evidence and closeout surfaces permitted by `tasks.md` after each checkpoint.
+## Quality Gate
 
-Blocked-stop rule:
-- If an implementation-blocking decision, missing artifact, unavailable required command, or failing proof cannot be resolved inside the approved ledger, stop with the Goal blocked, record the blocker in the allowed ledger/closeout surface, leave affected tasks unchecked, and return `<reopen target>` without marking completion.
-```
+Before returning the prompt, confirm that:
 
-If the user explicitly needs a CLI slash command, make the first line `/goal <durable objective>` and keep the same separate execution brief after it.
-
-## Composition Procedure
-1. Confirm the Goal is eligible:
-   - approved `tasks.md` exists, or the user supplied an explicit long-running objective;
-   - readiness is `PASS`, eligible `CONCERNS`, or eligible `WAIVED`;
-   - the completion condition, blocked-stop behavior, and proof path are concrete and not conflated.
-2. Extract the objective from the `Goal Contract` or explicit user request.
-3. Extract the completion condition from the `Goal Contract`, implementation handoff, and proof obligations.
-4. Identify the first executable task or checkpoint.
-5. Extract `Implementation execution mode`, launch contract, and isolated-worker boundaries when present.
-6. Build the read-first list from ledger authority first, then add task-specific read context only when named by the ledger or needed to preserve non-obvious constraints.
-7. Move all detailed instructions into `Implementation brief`.
-8. Add the progress rule and blocked-stop rule.
-9. Self-check that the prompt:
-   - can be pasted into a fresh session;
-   - does not rely on chat memory;
-   - sets one durable Goal;
-   - preserves approved scope without adding decisions;
-   - names concrete proof, completion, and blocked-stop conditions;
-   - prevents unproven obligations, skipped, unavailable, stale, failing, or too-narrow proof from becoming green task progress;
-   - tells Codex what to do if blocked.
+- the Goal line names the target outcome and remains understandable after compaction or resume;
+- completion requires the approved proof rather than merely recording a blocker;
+- all required ledger tasks and final validation are in scope, not only the first task or checkpoint;
+- every included sentence can change the next session's action, proof, or stop decision;
+- no worker command, generic strictness language, duplicated artifact rule, or empty heading remains;
+- skipped, unavailable, stale, failing, or too-narrow proof cannot be presented as successful completion.
 
 ## Blocked Output
-When a valid Goal cannot be composed, do not produce a vague Goal. Return a short blocked handoff:
+
+When a valid Goal cannot be rendered, return only the compact reopen handoff:
 
 ```text
-Do not set a Codex Goal yet.
+Do not set a Codex Goal yet. Reopen <owning phase> for `<task-local path>`.
 
-Reopen <planning | specification | system-integration-design | go-code-ownership-design | technical-design-review> for `<task-local path>`.
+Reason: <missing or failing Goal input>.
 
-Reason:
-- <missing Goal Contract, failing readiness, unresolved decision, vague completion condition, conflated completion/blocker semantics, or missing proof>.
-
-Expected output:
-- repair the recorded workflow artifact so a future implementation handoff can name one objective, one completion condition, separate blocked-stop behavior, read-before-coding artifacts, task-specific read context when useful, proof obligations, progress rule, and blocked-stop rule.
+Expected output: repair the owning artifact so it supplies one durable objective, one successful completion condition, minimal read order, current implementation mode and preserved constraints, required proof, and separate blocked-stop/reopen behavior.
 
 Stop after that phase and return the next-session prompt.
 ```
 
-Do not include `Subagent authorization:` in routine implementation Goal prompts. Implementation uses the orchestrator and isolated CLI workers, not read-only subagents. Include the exact authorization line from `docs/spec-first-workflow/shared/subagents-and-handoff.md` only when the approved `tasks.md` explicitly requires same-session read-only review, validation, or adequacy fan-out; otherwise record subagent/readiness gate status without asking to spawn lanes.
-
-## Source Notes
-OpenAI's Codex Goal guidance at `https://developers.openai.com/codex/use-cases/follow-goals` frames goals as long-running work toward a verifiable stopping condition, with one objective, read-first context, proof artifacts or commands, checkpoints, a short progress log, and explicit pause/stop behavior. If this product behavior appears stale or the user asks for current docs, refresh against the official Codex Goal page before changing this skill.
+Do not include `Subagent authorization:` in routine implementation Goal prompts. Include the exact line from `docs/spec-first-workflow/shared/subagents-and-handoff.md` only when approved `tasks.md` explicitly requires same-session read-only review, validation, or adequacy fan-out.

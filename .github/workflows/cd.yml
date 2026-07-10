@@ -141,6 +141,9 @@ jobs:
       - name: Verify required repository guardrails
         run: make guardrails-check
 
+      - name: Verify spec-first workflow routing contract
+        run: make workflow-routing-check
+
       - name: Verify agent mirror drift
         run: make agents-check
 

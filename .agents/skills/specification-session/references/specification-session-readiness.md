@@ -27,7 +27,7 @@ Spec state: draft only; do not approve.
 Ready with bounded assumption:
 
 ```text
-Spec readiness: ready with recorded assumption
+`spec.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current
 Assumption: admin-only controls follow the repository's existing admin authorization pattern.
 Risk: if research later contradicts that pattern, reopen specification before technical design.
 ```

@@ -7,17 +7,18 @@ When loaded for planning closeout, this file makes the model stop with a named n
 Load when closing a planning session or resolving whether the phase is complete, blocked, reopened, or still in progress.
 
 ## Decision Rubric
-- Mark `Session boundary reached: yes` only after planning artifacts, workflow-control artifacts, pending task-review/readiness handoff, and required adequacy challenge packet or skip rationale agree.
-- Set `Ready for next session: yes` when planning is complete enough for `task-review/readiness`, or when an eligible direct-path waiver explicitly removes that gate.
-- If planning is blocked, the boundary is not reached for task review; next session starts with the named reopen target.
+- Set `session_boundary=reached` only after planning artifacts, triggered workflow-control artifacts, the pending task-review/readiness handoff, and either the required adequacy challenge packet or the local deterministic no-trigger audit agree.
+- Set `handoff_readiness=ready` when planning is complete enough for a new `task-review/readiness` session. Direct-path work omits untriggered planning rather than waiving a distinct phase after planning has started.
+- If planning is blocked, the boundary is not reached for task review; when the named reopen session can start, set `session_boundary=reached` and `handoff_readiness=ready` for that reopen target.
 - The final planning action is a handoff update, not a code, review, validation, rollout, closeout, `spec.md`, or `design/` action.
-- If the user asks to keep going into implementation, repeat the recorded handoff and stop unless an eligible upfront direct/lean waiver already exists.
+- If the user asks to keep going into implementation, repeat the recorded handoff and stop; `ROUTING-NO-COLLAPSE` does not grant a direct/lean phase-collapse waiver.
 
 ## Imitate
 ```markdown
 Planning phase complete.
-Session boundary reached: yes.
-Ready for next session: yes.
+phase_state: complete.
+session_boundary: reached.
+handoff_readiness: ready.
 Next session starts with: task-review/readiness.
 Stop rule: do not perform code, test, migration, review, validation, rollout execution, or closeout work in this planning session.
 ```
@@ -26,8 +27,9 @@ Copy this shape: it closes the phase and names the next phase without entering i
 
 ```markdown
 Planning phase blocked.
-Session boundary reached: no.
-Ready for next session: no.
+phase_state: blocked.
+session_boundary: reached.
+handoff_readiness: ready.
 Next session starts with: go-code-ownership-design.
 Stop rule: do not create implementation tasks that depend on the missing ownership decision.
 ```
@@ -36,8 +38,9 @@ Copy this shape: a blocked stop names the reopen target and the forbidden shortc
 
 ```markdown
 Planning phase complete with proof obligations.
-Session boundary reached: yes.
-Ready for next session: yes.
+phase_state: complete.
+session_boundary: reached.
+handoff_readiness: ready.
 Next session starts with: task-review/readiness.
 Stop rule: the next session reviews whether the proof obligations are mapped well enough for implementation.
 ```
@@ -52,8 +55,8 @@ Planning complete. Beginning T001 now.
 Failure: it crosses into implementation after the planning boundary.
 
 ```markdown
-Session boundary reached: yes.
-Implementation readiness: <non-pending verdict>.
+session_boundary: reached.
+Task-review/readiness review_verdict: <non-pending verdict assigned by planning>.
 Next session starts with: T001.
 ```
 

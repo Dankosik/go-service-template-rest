@@ -11,7 +11,8 @@
       "expectations": [
         "The review flags that `Use(...)` is registered after routes on the same mux and that chi panics during router construction or startup.",
         "The review explains why this is merge-risky runtime failure, not just a style or ordering preference.",
-        "The review suggests moving the global middleware registration before routes or making the middleware route-local on purpose."
+        "The review suggests moving the global middleware registration before routes or making the middleware route-local on purpose.",
+        "The material finding uses an exact file:line anchor and the shared issue-impact-fix-reference envelope."
       ]
     },
     {
@@ -24,7 +25,8 @@
       "expectations": [
         "The review flags that `root.Match(...)` is using the live `chi.RouteContext(r.Context())` and should probe with a fresh `chi.NewRouteContext()`.",
         "The review flags that advertising `HEAD` because `GET` exists is unsafe unless the router has an explicit `Head(...)` route or `middleware.GetHead`.",
-        "The review suggests an Allow-computation fix that preserves request context and only discloses methods the router can actually serve."
+        "The review suggests an Allow-computation fix that preserves request context and only discloses methods the router can actually serve.",
+        "The material findings use exact file:line anchors and the shared issue-impact-fix-reference envelope."
       ]
     },
     {
@@ -37,7 +39,8 @@
       "expectations": [
         "The review flags that `Mount(\"/files\", ...)` conflicts with existing `/files/*` ownership and can panic during router construction.",
         "The review explains chi mount subtree or wildcard ownership semantics rather than describing the issue as a generic duplicate route.",
-        "The review suggests a single-owner fix instead of keeping both the wildcard handler and the mount on the same subtree."
+        "The review suggests a single-owner fix instead of keeping both the wildcard handler and the mount on the same subtree.",
+        "The material finding uses an exact file:line anchor and the shared issue-impact-fix-reference envelope."
       ]
     },
     {
@@ -50,7 +53,8 @@
       "expectations": [
         "The review flags that `RoutePattern()` is read before downstream handling resolves the final route context.",
         "The review flags raw `r.URL.Path` fallback as a high-cardinality observability label risk.",
-        "The review suggests a safer route-template extraction strategy, such as post-handler extraction or an explicit bounded fallback."
+        "The review suggests a safer route-template extraction strategy, such as post-handler extraction or an explicit bounded fallback.",
+        "The material findings use exact file:line anchors and the shared issue-impact-fix-reference envelope."
       ]
     }
   ]

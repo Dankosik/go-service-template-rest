@@ -21,7 +21,7 @@ Why to copy: later sessions may inspect the wrong phase plan or assume no phase-
 Use:
 - `Classification`: `blocks_phase_handoff`
 - `Recommended Action`: `add_missing_routing`
-- `Exact Orchestrator Addition`: Add `Phase workflow plans: specification active at workflow-plans/specification.md; system-integration-design pending; go-code-ownership-design pending; planning pending`.
+- `Exact Orchestrator Addition`: Add `phase_control=required; active phase file=workflow-plans/specification.md; artifact_state=complete; record_validity=current` with the current routing identity. Keep later phase-file expectations conditional on their own `ROUTING-PHASE-CONTROL` decisions.
 
 ### One unclear lane
 `Gap`: One fan-out lane lacks a single chosen skill, but other lanes are clear and local research can proceed while it is repaired.
@@ -41,7 +41,7 @@ Why to copy: the note improves resume reliability without changing current routi
 Use:
 - `Classification`: `non_blocking_but_record`
 - `Recommended Action`: `record_skip_or_accepted_risk`
-- `Exact Orchestrator Addition`: Add `rollout.md: not expected; rationale: no deploy sequencing, migration, mixed-version, or rollback choreography change`.
+- `Exact Orchestrator Addition`: Add `rollout.md: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; rationale: no deploy sequencing, migration, mixed-version, or rollback choreography change`.
 
 ## Reject
 - "Everything should block until perfect." The challenge filters for execution-quality and handoff-safety impact.

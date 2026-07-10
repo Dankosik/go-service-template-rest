@@ -3,36 +3,100 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "We have a non-trivial feature request to add tenant-scoped async report exports with persisted job state, signed download URLs, and an admin-only control surface. Nothing is researched yet. Use only the workflow-planning session for this task and produce the control outputs that should exist before any research starts.",
-      "expected_output": "A workflow-planning-only result that sets execution shape, research mode, routing, and artifact expectations in `workflow-plan.md` and `workflow-plans/workflow-planning.md`, then stops before research.",
+      "prompt": "Phase 0 is accepted for tenant-scoped async report exports with persisted job state and admin controls. The orchestrator already recorded SHAPE-FULL-FLOOR with FULL-DATA=true, FULL-SECURITY=true, agent_request=substantive, routing_scope=durable, routing_revision=1. Durable multi-session routing is required and no research has started. Use only workflow-planning-session.",
+      "expected_output": "A workflow-planning-only result that consumes the recorded full-orchestrated classification, creates or repairs only durable routing control, plans research and adequacy fan-out, and stops before research.",
       "files": [],
       "expectations": [
-        "The output limits itself to workflow control and does not draft `spec.md`, `design/`, `tasks.md`, or code.",
-        "The output chooses an execution shape and a research mode, with planned fan-out lanes or an explicit local-research choice when appropriate.",
-        "The output records whether later `tasks.md` is expected, missing, or not expected.",
-        "The output includes next-session routing and the required master `workflow-plan.md` handoff fields such as `Session boundary reached`, `Ready for next session`, and `Next session starts with`."
+        "The output consumes SHAPE-FULL-FLOOR and its trigger evidence instead of independently selecting execution shape.",
+        "The output limits writes to workflow-plan.md and workflow-plans/workflow-planning.md and does not draft research, spec, design, test, task, or code artifacts.",
+        "The output records typed routing identity, artifact expectation/lifecycle/validity, phase state, session boundary, handoff readiness, and a new-session research route.",
+        "The output requires formal adequacy because ADEQUACY-FULL-SHAPE, ADEQUACY-FULL-TRIGGER, and ADEQUACY-DURABLE-PLANNING apply.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 1,
-      "prompt": "The change is tiny: echo an incoming `X-Request-ID` header back on `/healthz` if present. I still asked for a workflow-planning session skill. Give me the session output that is appropriate now.",
-      "expected_output": "A boundary-aware response that refuses to force heavyweight workflow artifacts for tiny direct-path work and instead points to the inline skip-rationale path.",
+      "prompt": "Phase 0 is accepted for echoing an optional X-Request-ID header on one health endpoint. The orchestrator already proved SHAPE-DIRECT and every DIRECT-* predicate; routing_scope=current_session, routing_revision=1. There is no durable research or resume need. I invoked workflow-planning-session anyway. Apply only this skill.",
+      "expected_output": "A boundary-aware response that recognizes ROUTING-DEDICATED-PLANNING is not satisfied, preserves the existing direct classification, and stops without creating workflow-control files or implementing the change.",
       "files": [],
       "expectations": [
-        "The output recognizes that a dedicated workflow-planning session would be ceremony for this tiny change.",
-        "The output does not invent heavyweight workflow artifacts, research lanes, or later design/planning artifacts for the header echo task.",
-        "The output keeps the boundary clear that this skill should not drift into implementation even when the task is small."
+        "The output does not reclassify the task or create workflow-plan.md merely because the skill was invoked.",
+        "The output keeps the SHAPE-DIRECT current-session envelope and direct actor boundary intact.",
+        "The output does not implement code, start another phase, or invent research and design artifacts.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 2,
-      "prompt": "The active task already uses `workflow-plan.md` plus `workflow-plans/specification.md` as the approved pre-research control artifact under the current repository contract. Someone now asks you to create `workflow-plans/workflow-planning.md` for the same checkpoint. Apply this skill only.",
-      "expected_output": "A contract-aware response that surfaces the source-of-truth conflict and refuses to create a competing pre-research control file.",
+      "prompt": "The active task already has current durable routing in workflow-plan.md and workflow-plans/specification.md for routing_revision=3. Someone asks workflow-planning-session to create workflow-plans/workflow-planning.md for that same completed checkpoint. Apply this skill only.",
+      "expected_output": "A source-of-truth conflict response that refuses a competing phase-control file and routes to the owning current phase or explicit routing reopen.",
       "files": [],
       "expectations": [
-        "The output treats `AGENTS.md` as authoritative and flags the competing control-file risk.",
-        "The output does not create or recommend two active phase-control files for the same pre-research checkpoint.",
-        "The output escalates or points back to the approved artifact path instead of redefining the workflow locally."
+        "The output treats current durable control as authoritative and does not create a second active pre-research control file.",
+        "The output names the existing routing identity and the correct owner/reopen point.",
+        "The output does not redefine workflow state locally.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Phase 0 is accepted. The orchestrator recorded SHAPE-LEAN with all FULL-* false, all LEAN-* true, agent_request=capability_only, routing_scope=durable, routing_revision=1 because the task must resume next week. Repository lookup already proves research_expectation=not_expected. Use workflow-planning-session only.",
+      "expected_output": "Lean durable routing that preserves capability-only intent, records research as not expected, and hands off to a new specification session without same-session collapse.",
+      "files": [],
+      "expectations": [
+        "The output consumes SHAPE-LEAN, interprets the authorization line as AGENT-CAPABILITY, and does not escalate merely because agent capability exists.",
+        "The output records research_expectation=not_expected independently from next_phase=specification.",
+        "The output records same_session_collapse=prohibited and stops before specification.",
+        "The output creates durable control only because multi-session resume is real.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Phase 0 is accepted. The orchestrator recorded SHAPE-FULL-FLOOR because agent_request=substantive: the accepted result explicitly requires three independent read-only lanes. No protected domain trigger is otherwise present. Durable workflow planning is required. Apply workflow-planning-session only.",
+      "expected_output": "Full routing that preserves the substantive agent trigger, names lane questions, invokes formal adequacy, and stops at the workflow-planning boundary.",
+      "files": [],
+      "expectations": [
+        "The output distinguishes substantive participation from capability-only authorization.",
+        "The output ties the full floor to FULL-AGENT-SUBSTANTIVE rather than bare agent-backed wording.",
+        "The output plans read-only lanes by owned question and keeps final authority with the orchestrator.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "A current routing_revision=2 records SHAPE-LEAN. During workflow-plan validation, new evidence shows FULL-DATA=true and several dependent artifact and review records still claim current revision 2. Use workflow-planning-session only; do not make policy decisions outside this skill.",
+      "expected_output": "A blocked advisory result that identifies direct upward reclassification and stale-state obligations, but leaves the TRANS-* transaction to the orchestrator before further phase work.",
+      "files": [],
+      "expectations": [
+        "The output says the recorded lean route no longer survives the canonical trigger audit.",
+        "The output does not silently relabel shape; it requires orchestrator-owned TRANS-UPWARD and TRANS-REFRESH handling.",
+        "The output marks dependent gates, verdicts, adequacy, and handoff stale or blocked and stops.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "The accepted non-trivial lean task requires mandatory specification review, but the review is bounded, single-session, has no fan-out, formal challenge, multi-session stop, or named review checkpoint. Existing SHAPE-LEAN and routing_revision=1 are current. Decide phase-control depth using workflow-planning-session only.",
+      "expected_output": "A routing decision that keeps specification review mandatory while recording workflow-plans/specification-review.md as not required.",
+      "files": [],
+      "expectations": [
+        "The output applies ROUTING-GATE-NOT-FILE and does not infer a phase file from the mandatory gate alone.",
+        "The output records the review result carrier in the master or lean spec as allowed by the canonical contract.",
+        "The output does not perform specification review in the workflow-planning session.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "workflow-plan.md says routing_scope=durable,routing_revision=4, but workflow-plans/workflow-planning.md says routing_scope=current_session,routing_revision=4 and claims handoff ready. Use workflow-planning-session only.",
+      "expected_output": "A fail-closed routing conflict result that blocks handoff until one orchestrator-owned revision transaction reconciles both scope and revision.",
+      "files": [],
+      "expectations": [
+        "The output compares the full routing identity, not the revision number alone.",
+        "The output records handoff_readiness=blocked and does not choose one file silently.",
+        "The output stops without starting the next phase.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     }
   ]

@@ -1,10 +1,22 @@
 ---
 name: grilling
-description: Interview the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases.
+description: Conduct an exhaustive, one-question-at-a-time stress test of a plan or design only when the user explicitly asks to grill, stress-test, challenge every branch, or run an exhaustive design interview. Do not use for ordinary Phase 0 clarification.
 ---
 
-Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+# Grilling
 
-Ask the questions one at a time, waiting for feedback on each question before continuing. Asking multiple questions at once is bewildering.
+Use this skill only for an explicit request to pressure-test a plan or design exhaustively. Ordinary ambiguity, risk, or an unresolved user-owned intake decision is not a trigger; follow the minimal Phase 0 rules instead.
 
-If a question can be answered by exploring the codebase, explore the codebase instead.
+Before asking, reconstruct the current plan, its decided constraints, and its unresolved decision branches. If a question is repository-factual, answer it through bounded codebase inspection instead of asking the user.
+
+Walk every material unresolved branch that could change the plan or build choice. Resolve dependent decisions in order, but do not reopen a settled branch unless a later answer conflicts with it.
+
+Ask exactly one question at a time and wait for the answer before continuing. For every question:
+
+- state which plan or build choice the answer can change;
+- provide the recommended answer and the main tradeoff;
+- avoid generic checklist questions and hypothetical branches that cannot affect the plan.
+
+After each answer, update the working decision tree and choose the next highest-impact unresolved branch.
+
+Stop when no unresolved decision remains that can materially change the plan or build choice. Then summarize the resolved decisions, bounded assumptions, residual risks, and any condition that would reopen the plan. Do not continue questioning merely to cover more categories.

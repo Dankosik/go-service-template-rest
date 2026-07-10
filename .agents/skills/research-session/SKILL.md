@@ -1,289 +1,45 @@
 ---
 name: research-session
-description: "Own a session dedicated only to research for this repository when research needs a durable checkpoint. Use when the orchestrator already has an accepted Phase 0 task brief plus workflow routing and needs one bounded session to run local research or read-only subagent fan-out, preserve evidence in `research/*.md` when useful, and update triggered workflow-control artifacts without drifting into `spec.md`, design, `tasks.md`, or implementation. Skip raw-intake work, direct-path work, lean-local research that fits inside the compact spec/task handoff, and tasks that have already moved into `specification` or later."
+description: "Own a session dedicated only to research for this repository when research needs a durable checkpoint. Use when the orchestrator already has an accepted Phase 0 task brief plus workflow routing and needs one bounded session to resolve evidence questions before specification."
 ---
 
 # Research Session
 
-## Purpose
-Run only the research checkpoint for one task-local session.
-This wrapper makes evidence gathering and handoff explicit; it does not finalize `spec.md`, start `technical design`, produce `tasks.md`, or implement code.
+## Eligibility And Outcome
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+Use when current routing enters research, research_expectation is expected or conditional-and-triggered, and evidence gaps must close before specification. Skip for SHAPE-DIRECT, research_expectation=not_expected, unresolved intake, specification authoring, design, planning, or implementation.
 
-## Use When
-- the task already has an accepted Phase 0 intake brief and workflow routing, and now needs one research-only session
-- the orchestrator must choose between `local` research and read-only subagent `fan-out` for this session
-- repository evidence, external references, comparisons, or specialist reads must be gathered before specification
-- preserved `research/*.md` notes would reduce later guesswork, make fan-in easier, or support a future resume
-- triggered `workflow-plan.md` or `workflow-plans/research.md` needs the research checkpoint completed or updated before a later `specification-session`
+The outcome is a bounded evidence set with source limits, conflicts, assumptions, and explicit specification destinations. Research supports decisions; it does not make the final spec decision.
 
-## Skip When
-- the work is tiny enough that inline local reasoning plus a short note is sufficient and a dedicated research session would be ceremony
-- lean-local research can be summarized directly in `spec.md` with source references and no reusable evidence note or phase routing value
-- the task is still at Phase 0 intake or workflow planning; use the owning upstream phase
-- the task has already moved into `specification` or later, or `workflow-plans/specification.md` is already the active phase-control file
-- the request tries to combine research with final `spec.md`, `design/`, `tasks.md`, or implementation output in one session
+## Canonical Owners
 
-## Required Inputs
-Need only the minimum phase-ready inputs:
-- accepted Phase 0 intake brief or equivalent confirmed framing
-- framed task goal plus scope and non-goals
-- known constraints, risk hotspots, and success checks
-- current workflow routing and task-local artifact location
-- any already-known research questions, blockers, or assumptions
-- Pattern Fit Diligence scope when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction patterns could change the later spec or design
-- existing research artifacts or lane outputs when this is a continuation
+- [Research phase](../../../docs/spec-first-workflow/phases/research.md) owns entry inputs, evidence quality, research outputs, fan-in, and the research stop rule.
+- [Artifact model](../../../docs/spec-first-workflow/shared/artifact-model.md) owns research expectation, phase-control eligibility, typed state, and routing validity.
+- [Subagents and handoff](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md) owns lane gates, authorization wording, resume order, and final prompt rendering.
+- [Specification phase](../../../docs/spec-first-workflow/phases/specification.md) owns the decisions synthesized from research.
 
-If a research prerequisite is missing, record it as an assumption or blocker instead of inventing facts.
+Additional reads are lazy: use the question-framing reference only for an unclear evidence question, lane-planning only for real fan-out, anti-patterns only when research is expanding without decision value, and fan-in examples only when the handoff is too dense to express compactly.
 
-## Read First
-Always read:
-- `AGENTS.md`
-- `docs/spec-first-workflow.md`
+## Allowed Side Effects
 
-Then read current phase context in this order:
-1. task-local `workflow-plan.md`, if present
-2. task-local `workflow-plans/research.md`, if present
-3. the smallest task-local artifact that explains current routing, blockers, or prior research:
-   - the user request or approved framing artifact
-   - relevant `research/*.md`
-   - existing `spec.md` only to confirm whether specification already started, never to edit it in this session
-4. targeted repository or external sources needed to answer the chosen research questions
+This session may write preserved task-local `research/*.md`, including `research/pattern-fit.md`, when the canonical preservation test passes. It may update existing `workflow-plan.md` and create or update `workflow-plans/research.md` only when ROUTING-PHASE-CONTROL allows it.
 
-Rules:
-- follow `AGENTS.md` if other workflow guidance conflicts
-- read the master `workflow-plan.md` before the phase-local file when both exist
-- do not broad-read the repository or unrelated references when narrow evidence is enough
-- if phase context shows the task already advanced past research, stop instead of casually reopening an earlier phase
+It must not write or repair `spec.md`, design, `test-plan.md`, `tasks.md`, code, tests, generated output, or later-phase control files.
 
-## Allowed Writes
-This session may write or update only:
-- task-local `workflow-plan.md`
-- task-local `workflow-plans/research.md`
-- task-local `research/*.md` when preserved evidence, comparisons, or source notes will materially help later synthesis, challenge, or resume
-- the `workflow-plans/` or `research/` directories only when they must be created to hold those artifacts
+## Unique Method
 
-## Prohibited Actions
-Do not:
-- finalize or approve `spec.md`
-- create `workflow-plans/specification.md`
-- assemble `design/`
-- write `tasks.md`, `test-plan.md`, or `rollout.md`
-- start implementation, tests, migrations, review, or validation work
-- use planning or implementation skills as a backdoor into later phases
-- turn `research/*.md` into a second source of truth for decisions that belong in `spec.md`
-- let subagents write code, files, git state, or the task ledger or implementation handoff
-- silently continue into specification once research feels "close enough"
+1. Convert each uncertainty into an evidence question naming the decision it can change, authoritative source or lane, freshness requirement, minimum useful proof, and specification destination.
+2. Choose the smallest evidence plan. Use read-only lanes only for concrete independent bounded questions when separate context materially improves speed or quality. Keep small, sequential, single-chain, or shared-state work local. Default to no more than three concurrently active subagent lanes; exceeding three requires a task-specific reason.
+3. Compare stdlib, repository patterns, mature OSS, or established system patterns when dependency/OSS or Pattern Fit Diligence is triggered.
+4. Preserve only evidence that aids synthesis, auditability, or resume. Record absence as a source limit unless the searched source is authoritative for absence.
+5. Reconcile conflicts and classify unresolved points as blocks_spec, proof_only, accepted_risk, or needs_specialist.
 
-## Core Defaults
-- this is an orchestrator-facing wrapper, not a domain specialist
-- `AGENTS.md` owns the workflow contract; `docs/spec-first-workflow.md` is the router; phase and shared workflow docs own detailed artifact mechanics
-- this wrapper owns research-session protocol only and must not redefine later artifact ownership
-- use `research-session` only when a dedicated research session is the intended control shape for the task
-- lean local may keep research local and cite the relevant evidence in `spec.md`; create `research/*.md` only when evidence must persist for resume, audit, or later synthesis
-- support both `local` research and read-only subagent `fan-out`
-- for a dedicated non-trivial research session, default to read-only fan-out when the research questions span more than one independent domain, artifact family, source-of-truth seam, or risk lens
-- a local-only pass must record `Local research rationale:` and `Escalation seams:` in `workflow-plans/research.md`
-- `Local research rationale:` must list the research decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out
-- Missing explicit subagent authorization is not a valid `Local research rationale:`. If required lanes are blocked only because the current prompt lacks explicit subagent/delegation authorization, record the research mode as blocked and return a next-session prompt with `Subagent authorization:`.
-- when Pattern Fit Diligence is in scope, search for known applicable design or system-design patterns, concrete descriptions, and real-use examples; compare candidates by task forces, repository boundaries, operational proof, and idiomatic Go fit instead of selecting a design shape from intuition alone
-- preserve the comparison in `research/pattern-fit.md` when multiple candidates, external sources, or examples would materially help later synthesis or auditability; keep final selected/rejected pattern decisions for `spec.md` or the design bundle
-- each subagent lane owns one question and at most one skill, or explicit `no-skill`
-- preserve `research/*.md` only when the evidence will help later fan-in, challenge, auditability, or multi-session resume
-- preserved `research/*.md` notes stay flexible, but the minimum context-first bar is visible question or scope, findings with evidence and limits, conflicts or weak evidence, source notes, and handoff implication
-- a finished research session hands off evidence and routing; it does not convert that evidence into approved `Decisions`
+Missing explicit subagent authorization is not a valid local research rationale. Record the blocked gate and obtain the exact authorization line from the canonical handoff owner.
 
-## Lazy-Loaded References
-Keep this `SKILL.md` as the protocol. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load more only when the task clearly spans multiple independent decision pressures, such as both mode selection and final fan-in handoff.
+## Success, Blocked Stop, And Reopen
 
-Treat every reference as non-authoritative support under `AGENTS.md` and `docs/spec-first-workflow.md`. Use live repository files or current external sources when freshness matters instead of keeping link dumps in the skill.
+Success means every required evidence question is answered or honestly bounded, important sources and dates are recorded, conflicts and weak evidence are visible, preserved notes have a reason to exist, and the specification handoff names decisions, constraints, assumptions, risks, proof obligations, blockers, and files to consume.
 
-| Symptom | Behavior change | Reference |
-| --- | --- | --- |
-| Research questions are too broad, solution-led, biased, or mixed with future decisions. | Makes the model write answerable evidence-targeted questions instead of asking research to decide the solution, check everything, or draft later-phase artifacts. | `references/research-question-framing.md` |
-| The hard choice is whether the session should stay `local` or use read-only `fan-out`. | Makes the model choose mode by evidence surface, risk, and independent-question shape instead of choosing fan-out because "more agents is safer" or staying local to hide cross-domain uncertainty. | `references/local-vs-fanout-mode-selection.md` |
-| Mode is chosen or likely, but `workflow-plans/research.md` has vague lanes, unclear roles, weak source targets, or missing parallelism. | Makes the model assign one owned question, one role, one skill, one evidence target, and a fan-in path per lane instead of using broad domain labels, multi-skill lanes, write-capable workers, or decision-approving subagents. | `references/research-lane-planning.md` |
-| The session must decide whether to preserve `research/*.md`, or an existing research note has poor source hygiene. | Makes the model write compact evidence notes with source relevance, limitations, and handoff value instead of dumping generic notes, command output, links, or `spec.md` decisions. | `references/evidence-note-structure.md` |
-| Research lanes are complete, partial, or blocked and need a clean boundary handoff. | Makes the model hand off comparable evidence, conflicts, readiness, and next-session routing instead of converting research into review-ready `spec.md` decisions or drifting into specification, review, design, and planning. | `references/fan-in-handoff-examples.md` |
-| A research session has concrete drift smells across multiple surfaces, or no narrower positive reference matches. | Makes the model stop, repair the boundary, or route back to the right phase instead of treating `research-session` as a catch-all path into specification, design, planning, implementation, or note sprawl. | `references/research-session-anti-patterns.md` |
+Stop blocked when a user decision, authoritative source, current external proof, required lane, or routing anchor is missing. Do not disguise the gap as a confident conclusion.
 
-## Boundary With Future `specification-session`
-- `research-session` may write `workflow-plan.md`, `workflow-plans/research.md`, and optional `research/*.md`
-- the future `specification-session` owns review-ready `spec.md`, inline lean `Risk Challenge` or formal clarification-gate reconciliation, and any triggered `workflow-plans/specification.md`
-- if the task is ready to move forward, record `Next session starts with: specification` and stop instead of drafting spec sections here
-
-## Workflow
-
-### 1. Confirm This Session Owns Research Only
-- check the master workflow plan and active phase context first
-- if the task is still at Phase 0 intake or workflow planning, send it back to the owning upstream phase
-- if the task is already at specification or later, stop and point to the correct reopen point instead of reopening research casually
-- if the work is direct path or lean local with no durable research value, say so directly and stop rather than forcing this wrapper
-
-### 2. Read Current Phase Context
-- confirm current phase, phase status, blockers, assumptions, and expected next session
-- reuse existing research artifacts or unfinished lane outputs before planning new work
-- detect whether this session is a fresh research pass, a continuation, or targeted re-research after challenge or recheck
-
-### 3. Define The Research Questions
-- list only the questions whose answers can change scope, correctness, constraints, risk handling, or spec readiness
-- include a pattern-fit question when the task would otherwise invent an architecture, workflow, integration, resilience, consistency, data-flow, or abstraction shape
-- separate must-answer-now from nice-to-know
-- keep unknowns visible instead of filling them in
-
-### 4. Choose Research Mode And Plan Lanes
-- choose `fan-out` by default when the research questions span independent domains, artifact families, source-of-truth seams, protected domains, or risk lenses
-- choose `local` only when the work is bounded enough that one orchestrator pass preserves domain separation and independent lanes would not materially improve the evidence
-- when choosing `local`, record `Local research rationale:` and `Escalation seams:` so later phases can tell why fan-out was skipped
-- generic "bounded" or "single-source" wording is not enough for local-only non-trivial research; the rationale must name candidate lanes considered and why each omitted lane cannot change the downstream decision
-- for each lane, record:
-  - owned question
-  - local or subagent execution
-  - role
-  - one chosen skill or explicit `no-skill`
-  - evidence target or expected source surface
-  - order or parallelism
-- if `fan-out` is used, keep every lane read-only, add a local orchestrator fan-in lane or fan-in note, and prefer enough coverage over artificial subagent minimization
-- record whether a later pre-spec challenge pass is expected after research fan-in
-
-### 5. Run Research And Preserve Only What Helps
-- gather repository or external evidence for the chosen questions
-- create `research/*.md` only when the evidence, comparisons, or source notes need to survive beyond this session
-- for pattern-fit research, record candidate pattern name, source description, real-use example, applicability to this task, Go/repository fit, rejected alternatives, and evidence limits
-- keep research artifacts evidence-oriented: question or scope, findings with sources or file references, evidence limits, assumptions, conflicts or open points, and why the note matters for the handoff
-- do not force a universal research template; the required quality is source-hygiene and resume value, not exact headings. Copy the evidence discipline, not a rigid section list
-- do not treat `research/*.md` as the decision record
-
-### 6. Capture Research Fan-In Without Writing `spec.md`
-- summarize what is now known, what remains uncertain, and whether the task is ready for specification, challenge, or more research
-- keep conclusions in research or handoff language, not as approved spec wording
-- if evidence is still weak in a high-impact seam, route to targeted re-research or challenge instead of pretending the task is spec-ready
-
-### 7. Write Or Repair `workflow-plans/research.md`
-- record phase-local orchestration only:
-  - research mode
-  - lane plan or executed lanes
-  - order or parallelism
-  - fan-in path
-  - whether later challenge is expected
-  - phase status
-  - completion marker
-  - stop rule
-  - next action
-  - blockers
-  - what can run in parallel
-- keep this file routing-only; do not turn it into `spec.md`, `design/`, or `tasks.md`
-
-### 8. Write Or Repair `workflow-plan.md`
-- update master phase status, research mode, artifact status, blockers, and next-session routing
-- make the research phase status explicit, and use a separate routing state when research is reopened or routes backward
-- keep the handoff ready for the future `specification-session` without drafting it here
-
-### 9. Stop At The Boundary
-- once research artifacts and routing are consistent, stop
-- do not start `spec.md`, triggered `workflow-plans/specification.md`, design, `tasks.md`, or implementation in the same session
-
-## Research Lane Planning Rules
-When a dedicated research phase file is used, `workflow-plans/research.md` should make lane ownership obvious at a glance.
-Each lane should name:
-- the question it owns
-- whether it is local or subagent work
-- role
-- single skill or `no-skill`
-- evidence target
-- status
-
-Good defaults:
-- keep unrelated questions in separate lanes
-- reuse the same role in multiple lanes when the questions differ
-- use `primary + challenger` or second-opinion coverage when impact is high or assumptions are fragile
-- avoid asking one lane to handle both evidence gathering and final decision writing
-
-## Research Budget And Stop Rules
-- Start with the smallest evidence plan that can answer the current research questions.
-- Run another repository search, external search, or lane only when the current evidence leaves a required fact, owner, date, ID, source, comparison point, or approval-changing claim unsupported.
-- Do not expand research to improve wording, add generic examples, or cover domains that cannot change the next artifact.
-- Stop when the current question can be answered with citable evidence and visible limits, then record remaining uncertainty as an assumption, blocker, follow-up, or reopen target.
-- Treat "absence of evidence" as an evidence limit, not as proof that the thing does not exist unless the searched source is authoritative for that claim.
-
-## Required Master `workflow-plan.md` Updates
-Every completed or blocked pass must update the master file with:
-- current phase set to this research checkpoint and current phase status
-- research mode and why
-- lane summary or an explicit note that research stayed local
-- link or status for `workflow-plans/research.md`
-- status for preserved `research/*.md`, or an explicit note that none were needed
-- whether the evidence is sufficient for the next session to start with `specification`, or whether challenge, recheck, or targeted re-research is next
-- `Session boundary reached`
-- `Ready for next session`
-- `Next session starts with`
-- `Next session context bundle` as an always-present field: say default resume order is sufficient, or list exact artifact paths and one-line reasons for task-specific resume context
-- blockers, accepted assumptions, and open points that still affect spec readiness
-- artifact status for `spec.md`, lean/merged design context or split `design/`, `tasks.md`, and any triggered later artifacts as `approved`, `draft`, `missing`, `conditional`, `waived`, or not expected, with trigger rationale for `not expected`, `conditional`, or `waived`
-
-Do not leave spec readiness or handoff state implicit in chat.
-
-## Expected Outputs
-A finished research session produces only research-phase artifacts and routing:
-- updated or newly created `workflow-plan.md`
-- updated or newly created `workflow-plans/research.md`
-- optional `research/*.md` for preserved evidence or comparisons
-- optional `research/pattern-fit.md` for preserved Pattern Fit Diligence
-- an honest research phase status such as `complete` or `blocked`, plus a separate reopen routing state when relevant, with the next session start point made explicit
-
-It does not produce review-ready `spec.md`, `workflow-plans/specification.md`, `workflow-plans/specification-review.md`, `design/`, `tasks.md`, or implementation output.
-
-## Required Final Chat Handoff
-When this session ends with `Session boundary reached: yes` and `Ready for next session: yes`, the final chat response must include a `Recommended next-session prompt` section with one copy-pastable fenced text block.
-
-Derive that prompt from the recorded workflow handoff state, not memory:
-- `Next session starts with`
-- `Next session context bundle`
-- this phase's stop rule
-- blockers, accepted assumptions, accepted risks, or reopen conditions that still matter
-- the expected artifact or output for the next session
-
-Assume the next session cannot see this chat. Make the prompt self-contained for the next phase but selective: include the recorded objective and current state, exact paths, phase names, task IDs, blocker names, accepted decisions, accepted assumptions or risks, proof obligations, and one-line reasons for non-obvious context files. Omit generic repo rules, resolved history, broad summaries, and artifact dumps that the next agent can read from the named files.
-
-Rules:
-- keep the prompt chat-only; do not write it into workflow artifacts or create a new artifact for it
-- target the recorded next phase or reopen route exactly, including targeted re-research when that is the next step
-- tell the next agent which files to read first, the immediate objective, important constraints, and expected outputs
-- for any non-trivial next phase or reopen target that may use read-only lanes, include the exact `Subagent authorization:` line from `docs/spec-first-workflow/shared/subagents-and-handoff.md`
-- if there is no next session or `Ready for next session: no`, do not invent a prompt
-
-## Stop Condition
-The session is complete when:
-- the current research questions and evidence sources were handled or explicitly deferred
-- research mode and lane ownership are explicit
-- useful preserved research has been written only where it helps later synthesis or resume
-- master and phase-local workflow artifacts agree on phase status, blockers, and handoff
-- the next session start point is explicit, including whether it is `specification`, challenge, or targeted re-research
-- no specification, technical design, planning, or implementation work has started
-
-## Escalate When
-Escalate instead of forcing output when:
-- accepted intake framing or workflow routing is missing and research scope cannot be chosen honestly
-- the request tries to combine research with spec authoring, technical design, planning, or implementation
-- the task already advanced to `specification` or later
-- the task is so small that a dedicated research session would be ceremony
-- a requested fan-out lane cannot be kept read-only
-- evidence conflicts remain unresolved and require challenger or targeted follow-up before handoff
-- creating `workflow-plans/research.md` would conflict with an already-approved later-phase control file
-
-## Anti-Patterns
-- treating this wrapper as a way to sneak into `spec.md`
-- creating research lanes without naming the question each lane owns
-- launching write-capable or multi-skill subagent passes
-- preserving every note in `research/*.md` even when the evidence is disposable
-- restating artifact file formats that belong in repository-level workflow docs
-- marking research complete while spec readiness, blockers, or handoff routing stay implicit
-- writing stable `Decisions` in research artifacts instead of handing them to the future `specification-session`
+Reopen intake for unresolved user intent, workflow planning for invalid routing/control, research for targeted evidence gaps, or specification when evidence is sufficient. Stop before writing the spec. Render the next-session or reopen prompt only through [Subagents and handoff](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md).

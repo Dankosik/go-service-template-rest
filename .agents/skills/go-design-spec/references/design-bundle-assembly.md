@@ -28,14 +28,14 @@ Entrypoint that records selected approach, artifact index, and readiness without
 The feature follows the existing HTTP request path: OpenAPI contract -> generated `internal/api` bindings -> `internal/infra/http` adapter -> `internal/app/orders` use case. The repository-wide dependency direction stays unchanged.
 
 ## Artifact Index
-- `design/component-map.md`: approved; package responsibilities and stable surfaces.
-- `design/sequence.md`: approved; create-order request flow, validation failure, dependency timeout, and persistence failure.
-- `design/ownership-map.md`: approved; OpenAPI, app behavior, migration, and adapter ownership.
-- `design/data-model.md`: expected because persisted order state changes.
-- `design/dependency-graph.md`: not expected; dependency direction stays inside existing app -> infra boundaries.
-- `design/contracts/`: not expected; trigger test found no REST/API, event, generated-contract, status/error/idempotency/retry/async/freshness/compatibility, or material internal-interface change, and `api/openapi/service.yaml` remains the runtime contract authority.
-- `rollout.md`: expected because migration compatibility and backfill order affect release safety.
-- `test-plan.md`: not expected; validation fits in `tasks.md`.
+- `design/component-map.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; package responsibilities and stable surfaces.
+- `design/sequence.md`: artifact_expectation=expected, artifact_state=draft, record_validity=current; create-order flow is mapped but persistence failure policy still blocks review-readiness.
+- `design/ownership-map.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; OpenAPI, app behavior, migration, and adapter ownership.
+- `design/data-model.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; persisted order state changes.
+- `design/dependency-graph.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; dependency direction stays inside existing app -> infra boundaries.
+- `design/contracts/`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; trigger test found no REST/API, event, generated-contract, status/error/idempotency/retry/async/freshness/compatibility, or material internal-interface change, and `api/openapi/service.yaml` remains the runtime contract authority.
+- `rollout.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current; migration compatibility and backfill order affect release safety.
+- `test-plan.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; validation fits in `tasks.md`.
 
 ## Readiness Summary
 Technical design review may start after the persistence failure policy is confirmed in `design/sequence.md`. No implementation tasks are defined here.

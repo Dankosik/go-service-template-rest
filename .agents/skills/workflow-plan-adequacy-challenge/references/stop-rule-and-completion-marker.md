@@ -4,11 +4,11 @@
 When loaded for symptom weak completion or stop rules, this file makes the model protect the phase boundary with concrete handoff routing instead of likely mistake letting the session continue into the next phase.
 
 ## When To Load
-Load this when a phase-local plan has a vague completion marker, no stop rule, unclear phase boundary, or a next action that starts the next phase without an upfront direct/lean waiver.
+Load this when a phase-local plan has a vague completion marker, no stop rule, unclear phase boundary, or a next action that starts another distinct non-implementation phase in the same session.
 
 ## Decision Rubric
 - Completion marker says what proves this phase is done; stop rule says what this session must not start.
-- Block handoff when a non-trivial phase can flow directly into the next phase without an eligible waiver.
+- Block handoff when any distinct non-implementation phase can flow directly into the next phase; `ROUTING-NO-COLLAPSE` has no direct/lean waiver.
 - Block handoff when the completion marker skips required fan-in, challenge reconciliation, artifact approval, or readiness status for the current phase.
 - Record without blocking when the stop rule is adequate but the next action could be sharper for resume reliability.
 

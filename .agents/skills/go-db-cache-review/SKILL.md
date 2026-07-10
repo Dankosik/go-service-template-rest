@@ -8,15 +8,6 @@ description: "Review Go code changes for SQL access discipline, transaction boun
 ## Purpose
 Protect changed data-access and cache paths from consistency, isolation, timeout, invalidation, and origin-protection defects.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review DB and cache code as correctness surfaces, not performance decorations.
 - Prioritize transaction scope, context propagation, cursor/resource cleanup, cache key dimensions, and invalidation timing.
@@ -112,40 +103,8 @@ Do not:
 - Hand off tenant-isolation and sensitive-data defects to `go-security-review`.
 - Hand off broader architectural drift to `go-design-review`.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the concrete DB or cache defect
-- correctness, isolation, or availability impact
-- the smallest safe correction
-- a validation command when useful
-- whether the issue is local code drift or needs design escalation
-
-Severity is merge-risk based:
-- `critical`: confirmed correctness, isolation, or stale-contract breach that makes merge unsafe
-- `high`: strong evidence of significant DB/cache contract mismatch
-- `medium`: bounded but meaningful DB/cache weakness
-- `low`: local hardening or clarity improvement
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-Use this format for each finding:
-
-```text
-[severity] [go-db-cache-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
-
-Use `Reference` for the relevant data contract, cache rule, or approved decision when one exists.
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete DB/cache defect, correctness/isolation/availability impact, relevant data or cache contract, smallest safe correction, and focused validation. `critical` is a confirmed correctness, isolation, or stale-contract breach that makes merge unsafe; `high` is strong evidence of a significant DB/cache contract mismatch.
 
 ## Escalate When
 Escalate when:

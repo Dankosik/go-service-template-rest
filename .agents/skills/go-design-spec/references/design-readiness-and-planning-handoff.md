@@ -9,8 +9,8 @@ Load this when the symptom is readiness uncertainty: `design/overview.md` claims
 Do not load this to write `tasks.md`. This reference only checks whether the design handoff is honest.
 
 ## Decision Rubric
-- Review-ready means required core artifacts are present, consistent, and approved or explicitly waived by an eligible rationale.
-- Conditional artifacts must be either present with reasons or marked not expected with trigger evidence. For contract surfaces, this means `design/contracts/` is approved, compact contract design is explicitly sufficient, or a trigger test proves REST/API, event, generated, and material internal-interface shape is unchanged.
+- Review-ready means required core artifacts are present, consistent, and `artifact_state=review_ready`; conditional artifacts use their typed expectation instead of a flat waiver or absence claim.
+- Conditional artifacts must be either present with `artifact_expectation=expected` or absent with `artifact_expectation=not_expected`, `artifact_state=absent`, `waiver_disposition=none`, and trigger evidence. For contract surfaces, this means `design/contracts/` is review-ready, compact contract design is explicitly sufficient, or a trigger test proves REST/API, event, generated, and material internal-interface shape is unchanged.
 - `design/overview.md` should make that status scannable in its artifact index when technical design review is the next session, instead of forcing review or planning to rediscover conditional triggers from separate files.
 - Accepted risks must have proof obligations and reopen conditions.
 - A planning-critical blocker cannot live only in chat.
@@ -33,10 +33,10 @@ Review must inspect:
 - `design/data-model.md` because persisted state changes
 - `rollout.md` because migration compatibility is release-critical
 
-Not expected:
-- `design/contracts/`; trigger test found no REST/API, event, generated-contract, or material internal-interface change.
-- `design/dependency-graph.md`; dependency direction stays within existing package boundaries.
-- `test-plan.md`; validation obligations fit in `tasks.md`.
+Typed conditional artifacts:
+- `design/contracts/`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; trigger test found no REST/API, event, generated-contract, or material internal-interface change.
+- `design/dependency-graph.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; dependency direction stays within existing package boundaries.
+- `test-plan.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; validation obligations fit in `tasks.md`.
 
 Accepted risks:
 - Backfill duration is unknown; planning must include a verification checkpoint before contract cleanup.
@@ -48,8 +48,13 @@ Accepted risks:
 Workflow-control update summary:
 
 ```markdown
-Technical design status: complete.
-Design artifacts: required core approved; data-model and rollout approved; contracts not expected with trigger evidence; dependency-graph and test-plan not expected.
+phase_state: complete
+session_boundary: reached
+handoff_readiness: ready
+Design artifacts: required core artifact_expectation=expected, artifact_state=review_ready, record_validity=current; data-model and rollout use their recorded typed states; contracts, dependency-graph, and test-plan use artifact_expectation=not_expected, artifact_state=absent, waiver_disposition=none with trigger evidence.
+Technical-design-review procedural_gate_state: pending
+Technical-design-review review_verdict: pending
+Technical-design-review record_validity: current
 Next session starts with: technical design review.
 Stop rule: do not begin review, `tasks.md`, or implementation in this session.
 ```
@@ -83,7 +88,7 @@ Why it is bad: the next session needs artifact status, blockers, accepted risks,
 ## Agent Traps
 - `design/overview.md` says review-ready while triggered core artifacts are missing, draft, or contradictory.
 - `workflow-plan.md` says current phase is technical design review or planning, but `workflow-plans/go-code-ownership-design.md` says design is blocked.
-- `tasks.md` exists before design readiness when no direct/lean waiver was recorded.
+- `tasks.md` exists before every triggered design checkpoint is approved or explicitly resolved as `not_expected`; lean compact design must already be closed in its owning artifact, while `SHAPE-DIRECT` never enters this design/task chain.
 - `tasks.md` is expected but design handoff leaves package surfaces, owner files, placement rules, source responsibility audit, or ownership unresolved.
 - `tasks.md` is expected but design handoff leaves REST/OpenAPI resource shape, status/error semantics, retry/idempotency, async/freshness, compatibility, or generated/manual authority unresolved.
 - `rollout.md` is not expected while a migration, backfill, mixed-version window, or failback rule is planning-critical.
@@ -91,13 +96,13 @@ Why it is bad: the next session needs artifact status, blockers, accepted risks,
 - A blocker is recorded only in chat, not in the design or workflow artifacts that the next session will read.
 
 ## Validation Shape
-Before handoff, produce a compact readiness verdict: status, required artifacts, triggered and non-triggered conditional artifacts, blockers, accepted risks, reopen conditions, next session start point, and stop rule. If any field changes correctness, ownership, rollout, or validation, block technical design review or planning.
+Before handoff, produce a compact typed readiness record: `phase_state`, required and conditional artifact expectation/lifecycle/validity/waiver fields, separate technical-design-review procedure and verdict fields, `session_boundary`, `handoff_readiness`, blockers, accepted risks, reopen conditions, next session start point, and stop rule. If any field changes correctness, ownership, rollout, or validation, block technical design review or planning.
 
 ## Escalation Rules
 - Keep the owning design checkpoint open when a planning-critical decision, artifact, or contradiction remains unresolved.
 - Route to specification when the missing decision changes scope, external behavior, or accepted risk.
 - Route to a specialist when the missing detail is domain-owned and cannot be safely integrated from existing evidence.
-- Route to technical design review only when required compact or split design context is approved or explicitly waived/merged by an eligible direct/lean rationale.
+- Route to technical design review only when separate design depth is triggered and every required design artifact is review-ready; compact lean design that resolves separate depth to `not_expected` does not create or waive the mandatory review gate.
 - Route to planning only after mandatory technical design review is reconciled when separate design depth exists.
 - If planning starts and exposes a missing design decision, reopen `system-integration-design` or `go-code-ownership-design` according to the missing decision owner instead of inventing the decision in `tasks.md`.
 

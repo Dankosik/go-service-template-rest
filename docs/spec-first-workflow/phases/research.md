@@ -10,7 +10,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this for resear
 
 ## Inputs
 
-- Router and artifact-shape decision from `docs/spec-first-workflow.md` and `shared/artifact-model.md`.
+- Current `SHAPE-*` decision from `AGENTS.md`, plus `research_expectation=expected|conditional` and artifact consequences from `shared/artifact-model.md`.
 - Current `workflow-plan.md` or `workflow-plans/research.md` when a dedicated research phase exists.
 - The concrete evidence questions, candidate lanes, and source targets.
 
@@ -26,6 +26,8 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this for resear
 
 Finish research with evidence, limits, conflicts, assumptions, and handoff implications. Do not write review-ready `spec.md`, design artifacts, `tasks.md`, or implementation output in this phase.
 
+Do not enter this phase when `research_expectation=not_expected`. Under `ROUTING-RESEARCH-SKIP`, workflow planning stops and hands a new session to specification; research omission never permits same-session specification.
+
 ## Research
 
 Research is a concern, not always a dedicated phase.
@@ -39,7 +41,7 @@ Start by turning the uncertainty into concrete evidence questions. Each question
 - the handoff if the answer is missing, conflicting, or only partly proven;
 - the expected `spec.md` destination: decision, constraint, assumption, risk, proof obligation, or blocker.
 
-Use local-only research for direct path or when a recorded local-only rationale shows the evidence is trivial, single-source, or not improved by independent lanes.
+`SHAPE-DIRECT` stays outside this phase: its bounded first-read repository lookup is part of direct eligibility and must not become durable research. For lean/full research that is expected, use local-only research only when a recorded rationale shows the evidence is trivial, single-source, and not improved by independent lanes.
 
 Dependency/OSS due diligence is a research concern even when it stays compact. Use local research for obvious stdlib or established-repo-pattern choices; use read-only research fan-out when the selected library or custom implementation decision depends on current external health, license/security posture, domain adoption, or integration trade-offs that could materially change approval.
 
@@ -49,9 +51,9 @@ Pattern Fit Diligence is also a research concern when the task has a real design
 
 Good Pattern Fit research names the task forces, compares viable patterns against repository boundaries, source-of-truth ownership, failure behavior, operational proof path, and idiomatic Go fit, then explains why the selected pattern fits now or why the straightforward repo-native design is better. A named pattern is incomplete without rejected-pattern comparison for viable alternatives. Reject pattern candidates explicitly when they add vocabulary, indirection, class-oriented scaffolding, or distributed-systems machinery without solving a current force.
 
-For non-trivial decisions, first identify distinct evidence questions and normally use read-only fan-out when the questions span more than one domain, artifact family, source-of-truth seam, or risk lens.
+First identify distinct evidence questions. Use read-only fan-out only when they are concrete, independent, bounded, and separate context materially improves speed or quality. Domain, artifact, or risk-lens count alone does not require lanes.
 
-Any local-only rationale must list the decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, what evidence would change that conclusion, and the seam that would reopen fan-out. Generic "bounded" or "single-domain" rationale is invalid for non-trivial phase approval.
+A local decision records why the work is small, sequential, dependent on one reasoning chain, or unsuitable for parallel access to shared mutable state, plus the seam that would reopen fan-out. Do not inventory hypothetical domain lanes.
 
 Preserve `research/*.md` only when it materially helps later synthesis, auditability, or resume. Preserve the note when evidence is multi-source, externally time-sensitive, conflict-bearing, too dense for `spec.md`, needed to justify dependency/OSS or Pattern Fit decisions, or likely to be re-read by specification, design, review, planning, or validation. Keep the result compact when a single stable repository read or obvious stdlib answer can be recorded directly in `spec.md`.
 

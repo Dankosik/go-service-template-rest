@@ -4,11 +4,12 @@
 When loaded for symptom "I need to choose local research versus fan-out or write lane rows," this file makes the model plan read-only lanes by evidence question and one skill per lane instead of creating broad owner lanes, worker lanes, multi-skill lanes, or spawning research during workflow planning.
 
 ## When To Load
-Load this when the execution shape already points toward a research-mode decision or a lane table. Do not load it just to choose direct/lightweight/full, and do not execute any lane from this reference.
+Load this after shape selection when `research_expectation` or a lane table is undecided. Do not use it to classify shape, and do not execute any lane from this reference.
 
 ## Decision Rubric
-- Use `local` when a bounded read of task artifacts and nearby code can answer the next questions without losing important domain separation.
-- Use `fan-out` when independent domain evidence would reduce risk: API, data, security, reliability, QA, performance, delivery, domain invariants, or architecture seams.
+- Decide `research_expectation=expected|conditional|not_expected` independently from execution mode.
+- When research is expected, use `local` for one bounded evidence question and `fan-out` when independent domain evidence reduces risk.
+- Capability-only agent authorization neither selects fan-out nor changes shape; substantive required multi-agent evidence is recorded separately.
 - A lane must have one role, one owned question family, one skill or explicit `no-skill`, and a read-only expected output.
 - Duplicate roles are acceptable when the owned question differs; mixed domains in one lane are not.
 - The adequacy challenger is a workflow-control lane, not a research lane; route it after draft workflow artifacts exist.

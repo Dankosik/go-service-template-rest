@@ -1,218 +1,64 @@
 ---
 name: go-architect-spec
-description: "Design architecture-first specifications for Go services. Use when planning new features, refactors, service extractions, or behavior changes before coding and you need explicit target-state boundary ownership, workload-driven sync/async design, invariant and consistency rules, failure/degradation model, and only the rollout constraints that are truly required. Reach for this whenever the hard part is deciding module vs service boundaries, long-running workflow ownership, read/write topology, or modular-monolith vs microservice trade-offs. Skip when the task is a local code fix, low-level API/DB/security implementation, test-case authoring, or CI/container configuration."
+description: "Design architecture-first specifications for Go services. Use when planning new features, refactors, service extractions, or behavior changes before coding and you need explicit target-state boundary ownership, workload-driven topology, source-of-truth, sync/async flow, consistency, failure, migration, and operability decisions. Skip local implementation, endpoint payload detail, SQL migration mechanics, or post-code review."
 ---
 
 # Go Architect Spec
 
-## Purpose
-Turn ambiguous service changes into explicit target-state architecture decisions that remain correct under growth, failure, backlog pressure, and any unavoidable mixed-version constraints, and express them as a compact architecture section rather than drifting into API, schema, or tool detail.
+## Trigger And Scope
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+Use this skill before coding when a Go service needs a material boundary, topology, runtime, source-of-truth, sync/async, projection, provider, distributed-flow, resilience, or extraction decision. Produce architecture decisions that domain, API, data, reliability, delivery, technical design, and planning can consume.
 
-## Specialist Stance
-- Treat architecture as ownership, invariants, workload shape, and failure behavior before topology.
-- Prefer the smallest boundary change that preserves source-of-truth clarity and operability.
-- Challenge service extraction, broker adoption, and workflow-engine choices unless workload and ownership evidence justify them.
-- Hand off API, data, security, reliability, and delivery details when they become primary rather than architectural consequences.
+Own system boundary and interaction choices, not endpoint payload catalogs, SQL/DDL mechanics, package/file ownership, low-level tuning, CI/container detail, or implementation code. Route those consequences to the matching specialist.
 
-## Scope
-Use this skill to define or review service-level architecture decisions:
-- boundaries and ownership
-- decomposition into modules, runtimes, and services
-- sync vs async interaction style
-- write authority, read topology, and consistency model
-- resilience, degradation, and rollout shape
+## Approved Input And Decision Boundary
 
-## Boundaries
-Do not:
-- reduce the task to local code changes or low-level implementation detail
-- redesign endpoint payload minutiae, physical schema details, cache tuning, or CI/container setup as the primary output
-- approve a new service boundary without ownership, transaction-boundary, runtime-isolation, and operational-readiness proof
-- invent stricter SLOs, freshness budgets, or operational thresholds than the prompt supplies unless they are clearly marked as assumptions
-- leave critical architecture choices implicit for implementation to discover later
+Inspect the approved problem frame, current repository/service boundaries, invariant and write authority, real workload evidence, critical path, team/runtime ownership, external dependencies, failure and degradation expectations, data/read topology, and rollout/mixed-version constraints. Mark invented latency, scale, growth, freshness, RPO/RTO, or cost numbers as assumptions.
 
-## Escalate When
-Escalate if the recommendation depends on unresolved ownership, missing invariant or write-authority assumptions, undefined failure behavior, unclear rollout compatibility, or cross-domain trade-offs that materially affect API, data, security, or operability.
+Architecture may choose among real live forks; it must not manufacture options for completeness. Before selecting a named or custom architecture/system pattern, perform Pattern Fit Diligence using concrete descriptions and real-use examples, repository and operational fit, proof path, and idiomatic Go fit. Record rejected patterns and justify custom shape when known patterns fail.
 
-## Reference Loading
-Load at most one reference by default, and only when its behavior-change thesis matches the task. A reference should make you choose a more discriminating architecture answer than the `SKILL.md` body alone; if the prompt only needs the broad rule, stay in this file.
+## Architecture Invariants And Defaults
 
-Keep the main output architecture-first. Route API payloads, SQL migration mechanics, low-level resilience tuning, and CI/container details to specialist skills instead of expanding architecture references into documentation dumps.
+1. **Invariant and write ownership define boundaries.** Prefer one explicit source of truth per invariant-bearing entity or process; reject service-per-table, shared-schema writes, direct cross-service DB reads, and ambiguous process ownership.
+2. **A modular monolith is the default boundary.** Extract a service only when domain/data/team/transaction ownership, independent deployability, runtime isolation or scaling, operational readiness, and accepted consistency costs all justify it. A separate worker/runtime may solve isolation without a new service.
+3. **Workload shapes topology.** Classify request/response, long-running, bursty fan-out, stream, reconciliation, or operator-driven work; model hot keys/tenants, backlog, payloads, and read/write pressure before choosing a broker, cache, projection, or split.
+4. **Sync is earned by finality and budget.** Keep request paths short, name end-to-end/per-hop deadlines and retry/idempotency classes, and move variable, fan-out, or deferrable work behind an honest job/operation boundary.
+5. **Async has one process owner.** Distinguish commands from events, queue from pub/sub, orchestration from choreography, and internal state machine from workflow engine. Correctness-bearing flows need atomic message linkage, idempotent handling, bounded retries, poison/DLQ ownership, durable state, and reconciliation.
+6. **Hard invariants stay local when possible.** Identify the irreversible pivot, keep local ACID around owned state, and define compensable-before/retryable-after or forward-recovery behavior for cross-process steps. Reject unscoped exactly-once and distributed-lock shortcuts.
+7. **Read scale never moves write truth accidentally.** Replicas, caches, search, exports, aggregators, and CQRS projections are derived with freshness, rebuild, bypass, and correction rules.
+8. **Target-state evolution is bounded and operable.** Prefer a direct target state when it can land safely; use expand/migrate/verify/contract, canary/shadow/dual-read, or temporary bridges only when live constraints require them, with authority, reconciliation, exit criteria, removal proof, rollback limits, and owner.
 
-| Symptom in the prompt | Load | Behavior change |
+Operational overhead, observability, on-call, graceful lifecycle, release coordination, and repair tooling are first-class costs. Do not select technology because it is already fashionable or available.
+
+## Symptom-Driven Reference Selector
+
+Load at most one reference by default. Load more only for independent architecture pressures. State which choice the reference is expected to change.
+
+| Symptom or decision pressure | Load | Behavior change |
 | --- | --- | --- |
-| Boundary placement, write ownership, shared-data pressure, or Go package layout being treated as architecture | [boundary-decomposition-examples.md](references/boundary-decomposition-examples.md) | Choose invariant and ownership boundaries instead of service-per-entity, direct DB reads, or generic packages. |
-| Debate between modular monolith, internal module, separate worker/runtime, or true service extraction | [modular-monolith-vs-service-extraction.md](references/modular-monolith-vs-service-extraction.md) | Apply the all-conditions extraction test instead of treating traffic or team preference as sufficient. |
-| Request-path vs queue, saga, process manager, choreography, orchestration, or workflow engine | [sync-async-workflow-ownership.md](references/sync-async-workflow-ownership.md) | Name the process owner, pivot, and client-visible completion model instead of choosing a broker/tool first. |
-| CQRS, read services, projections, materialized views, search indexes, exports, dashboards, aggregators, or stale reads | [read-write-topology-and-projections.md](references/read-write-topology-and-projections.md) | Keep projections derived-only with freshness and bypass rules instead of letting query convenience become write truth. |
-| External provider, partner lifecycle, webhook state, vendor status vocabulary, or ambiguous third-party result semantics | [external-provider-anti-corruption.md](references/external-provider-anti-corruption.md) | Normalize provider evidence behind a local lifecycle owner instead of importing vendor states as internal truth. |
-| Ownership move, service extraction rollout, source-of-truth change, mixed-version window, canary, shadow read, or rollback boundary | [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) | Select the target-state authority model first, then add bounded compatibility only when live constraints make one-step adoption unsafe. |
-| Premature microservices, distributed monolith, shared database, service-per-table, direct cross-service DB reads, dual writes, retry storm, fragile fallback, or permanent shim smell | [architecture-anti-patterns.md](references/architecture-anti-patterns.md) | Convert the smell into a blocker, accepted risk, or reopen condition with concrete failure consequences. |
+| Boundary placement, write ownership, shared data, team seams, or Go package layout is being mistaken for service architecture. | [boundary-decomposition-examples.md](references/boundary-decomposition-examples.md) | Choose invariant/ownership boundaries and dependency direction instead of entity services or generic packages. |
+| Modular monolith, internal module, separate worker/runtime, or true service extraction is disputed. | [modular-monolith-vs-service-extraction.md](references/modular-monolith-vs-service-extraction.md) | Apply an all-conditions extraction test instead of treating traffic or team preference as sufficient. |
+| Request path versus queue, saga/process manager, orchestration/choreography, or workflow engine is unclear. | [sync-async-workflow-ownership.md](references/sync-async-workflow-ownership.md) | Name process owner, pivot, durable state, and client completion model before choosing tools. |
+| CQRS, replicas, read services, projections, search, dashboards, exports, aggregators, or stale reads are proposed. | [read-write-topology-and-projections.md](references/read-write-topology-and-projections.md) | Preserve write authority and freshness/bypass/rebuild rules instead of promoting a convenient query view to truth. |
+| External provider, webhook state, vendor vocabulary, or ambiguous partner results affect lifecycle. | [external-provider-anti-corruption.md](references/external-provider-anti-corruption.md) | Normalize semi-trusted provider evidence behind a local owner instead of importing vendor state into domain truth. |
+| Ownership/source-of-truth move, service extraction, mixed versions, canary, shadow read, compatibility bridge, or rollback boundary is live. | [rollout-and-migration-patterns.md](references/rollout-and-migration-patterns.md) | Select target-state authority first and bound unavoidable transition machinery with exit proof. |
+| Premature microservices, distributed monolith, shared DB, direct DB reads, dual writes, retry storms, fragile fallback, or permanent shim smells appear. | [architecture-anti-patterns.md](references/architecture-anti-patterns.md) | Turn the smell into a concrete failure consequence, blocker, accepted risk, or reopen condition. |
 
-## Core Defaults
-- Prefer modular monolith boundaries until service extraction is justified by domain capability, data ownership, team ownership, transaction boundaries, and runtime isolation needs.
-- Prefer one explicit source of truth per invariant-bearing entity or process.
-- Prefer runtime splits, bounded worker pools, queues, projections, or read replicas before service splits when the problem is mainly batch work, fan-out, or read scale.
-- Prefer local ACID inside one service-owned datastore; use explicit eventual-consistency patterns across services.
-- Prefer direct target-state evolution when the approved scope can safely land together. Use additive compatibility-first evolution (`expand -> migrate/backfill -> contract`) only when live data, existing clients, or mixed-version operation make one-step adoption unsafe.
-- Treat operational overhead, observability cost, and release coordination as first-class costs in every decomposition decision.
-- Before selecting a named architecture or system-design pattern, search for concrete descriptions and real-use examples, then compare candidate patterns against invariant ownership, workload shape, failure behavior, rollout constraints, repository boundaries, and idiomatic Go implementation. Prefer a proven pattern when it fits; use custom architecture only when known patterns fail a concrete force.
+## Required Evidence And Deliverable
 
-## Architecture Facts To Lock First
-Before recommending topology, make these facts explicit:
-- which invariants are truly hard and who owns them
-- which step is the irreversible or non-compensable pivot
-- who owns write truth, who owns read projections, and which views are derived only
-- what work belongs on the request path and what should move to background execution
-- what actually dominates scale: contention, read fan-out, payload size, hot keys or hot tenants, queue depth, external latency, or team isolation
-- what evidence exists for the choice: latency budget, QPS and burstiness, read/write ratio, freshness SLA, data growth, and RPO/RTO expectations
-- which degradation modes are acceptable and which must fail closed
-- which mixed-version, migration, or rollout windows already constrain the design
+For each material architecture decision, record the problem and constraints, invariant/write owner, dominant workload, critical path, whether a real live fork exists, selected option, rejected viable options and patterns, consistency/failure model, operational and Go/repository fit, measurable acceptance boundary, rollout/rollback only when triggered, assumptions, and reopen or extraction criteria.
 
-## Expertise
+Return a compact architecture packet with:
 
-### Workload Shape And Topology
-- Classify the dominant workload before choosing architecture: request/response, long-running job, bursty fan-out, stream processing, reconciliation, or operator-driven workflow.
-- Do not mistake high read volume, heavy CPU, or large batch/export jobs for proof that a new service boundary is needed.
-- Separate read-scaling problems from write-ownership problems. Read replicas, caches, search indexes, materialized projections, and worker runtimes can change topology without creating a new domain owner.
-- Model hot paths, hot keys, hot tenants, backlog growth, and payload-size pressure explicitly. A service split that leaves the real bottleneck untouched is not an architecture improvement.
-- Use the supplied freshness and latency constraints as the decision boundary. If a tighter number is useful, mark it as an assumption instead of presenting it as an established fact.
-- Reject technology-led decisions such as “use Kafka because we have Kafka” or “split a service because traffic is rising” unless the workload and ownership model actually require them.
+- context, scope, non-goals, boundary/ownership model, and dependency direction where needed;
+- workload, request/background topology, critical path, and sync/async interaction;
+- command/query authority, projection/cache/provider anti-corruption rules;
+- invariant, pivot, state, idempotency, recovery, degradation, lifecycle, and operability model;
+- Pattern Fit evidence and bounded rollout/migration consequences;
+- only downstream API/data/security/operability/delivery decisions or proof obligations that must act now; otherwise state `no new decision required`.
 
-### Boundaries And Decomposition
-- Use a four-axis boundary prompt for every boundary decision: domain capability, data ownership, team ownership, and transaction boundary.
-- Require explicit source-of-truth ownership for each critical entity and process.
-- Internal module seams may follow invariant ownership, change cadence, or failure isolation, not only entity names.
-- When modular-monolith seams are the hard part, express each module in terms of `owns truth`, `must not own`, `sync seam`, `async seam`, and `extraction posture` if that removes ambiguity.
-- For modular-monolith work, make the orchestration or application layer explicit when it coordinates multiple modules, and keep subdomain truth inside the owning modules.
-- If one module owns process truth, do not automatically collapse that into the wiring layer. Describe the application/orchestration layer separately when that distinction prevents peer-module coupling.
-- If dependency direction matters to keep seams real, state it directly rather than leaving it implied.
-- Use anti-corruption adapters when an external or legacy model would otherwise leak across a boundary and distort local domain rules.
-- Reject service-per-table, service-per-CRUD, shared-schema decomposition, and cross-service direct DB access by default.
-- Approve service extraction only when independent deployability, ownership, scaling, runtime isolation, operational readiness, and accepted consistency trade-offs are all explicitly justified.
-- Detect distributed-monolith signals early: coordinated releases, chatty call chains, shared schema coupling, cross-service table reads, or hidden shared business logic.
-- Distinguish service boundaries from runtime boundaries. Separate processes or binaries are sometimes enough; a new service should not be the default answer to every isolation problem.
+## Success, Escalation, And Stop Conditions
 
-### External Boundaries And Anti-Corruption
-- Treat external providers as semi-trusted evidence sources, not as authorities for internal lifecycle truth.
-- Normalize provider results inside the owning module or service. Do not let partner statuses, payload fields, or failure vocabulary become the internal or public source-of-truth model by accident.
-- Name the anti-corruption boundary explicitly when provider instability, mixed-version partner behavior, or domain-language mismatch could leak into the core workflow.
-- Keep retry, reconciliation, timeout, and operator-repair ownership with the local boundary, not with the provider's semantics.
+Success means technical design can assign concrete package/file ownership and planning can order implementation without rediscovering service ownership, runtime topology, write truth, completion semantics, failure recovery, projection authority, or rollout constraints.
 
-### State, Invariants, And Pivots
-- Build an explicit invariant register before selecting sync/async boundaries or service topology.
-- Separate `local_hard_invariant` from `cross_process_invariant` and keep hard invariants inside one local transaction boundary whenever possible.
-- Identify the irreversible or non-compensable pivot in every multi-step flow and design recovery around it.
-- Model long-running or failure-prone flows with explicit durable execution state: monotonic transitions, durable identity, timers, and reconciliation ownership.
-- Derived projections, caches, search indexes, and exports may accelerate reads, but they must not quietly become write authorities.
-- Require one active owner for retries, stuck detection, manual repair, and convergence in any multi-step workflow.
-
-### Sync Communication And Critical Path
-- Prove that synchronous hops are required before selecting transport or adding a service-to-service dependency.
-- Define the critical path, end-to-end deadline budget, and per-hop budget before approving a sync call chain.
-- Keep request paths short and non-chatty. If a design needs multiple remote calls in sequence, justify why the path still meets latency and failure goals.
-- If the outcome does not need immediate finality, prefer a job, long-running operation, or resource-status pattern over stretching the request path.
-- Make retry policy explicit per operation; bound retries and classify non-retry cases.
-- Require idempotency design for retry-unsafe operations.
-- Choose API transport from consumer reach, contract tooling, streaming, latency, and operability. REST/OpenAPI often fits public or browser-facing surfaces; gRPC/Protobuf often fits controlled internal RPC when strong schemas, streaming, or low-latency transport matter.
-- Do not place remote calls after a non-compensable pivot unless the recovery and reconciliation model is explicit.
-
-### Async, Queueing, And Workflow Engines
-- Choose async because of latency variability, fan-out, buffering, backpressure, human-in-the-loop work, cancellation, or retry isolation, not because a broker exists.
-- Classify each async handoff explicitly as an event or a command and align ownership with that intent.
-- Choose orchestration when one owner must track timers, retries, cancellation, reconciliation, or operator actions. Choose choreography only when independent reactions do not need one authoritative process state.
-- Use pub/sub for independent domain reactions and queues for owned work distribution.
-- Require transactional outbox or an equivalent atomic linkage when a DB state change must emit a message.
-- When duplicate processing can change business state or trigger irreversible side effects, require consumer idempotency, durable dedup or inbox handling, bounded retries, poison-message handling, and clear DLQ ownership.
-- Prefer an internal durable state machine or process manager only when the workflow is locally owned and simple enough that state, timers, retries, and repair paths stay reviewable.
-- Consider a workflow engine or durable-execution platform when long timers, human tasks, cross-owner orchestration, replay/debug needs, fleet-wide operations, or hand-rolled retry/state persistence would become the architecture.
-
-### Data And Read Topology
-- Separate command authority, query projections, and analytical or export views. Only one surface should own correctness for writes.
-- Avoid cross-service joins in write paths. For hot read paths, use explicit aggregators, BFFs, or service-owned projections instead of ad hoc cross-service querying.
-- When approving a query runtime or read service, state the rule in one line: who owns write truth, what is derived-only, and which correctness-critical paths must bypass the projection.
-- If one datastore remains shared, enforce strict logical ownership by module or service and forbid shared writes as steady state.
-- For long-running exports, reporting, or scans, define a stable read fence or documented consistency boundary instead of making vague exact-snapshot claims.
-- Treat caches and search indexes as performance tools with a staleness contract, not as hidden sources of truth.
-
-### Distributed Consistency And Evolution
-- Keep hard invariants inside one local transaction boundary whenever possible.
-- For multi-step or cross-service flows, define each step contract: trigger, local transaction scope, idempotency key, timeout, retry class, and compensation or forward-recovery rule.
-- Identify the pivot transaction and enforce compensable-before / retryable-after rules.
-- Collapse a flow back into one ownership boundary if the distributed design adds coordination cost without independent ownership, scaling, or deployability benefits.
-- Require reconciliation ownership, cadence, and repair path for critical eventual-consistency flows.
-- Reject dual writes, hidden invariant ownership, and distributed locks as the primary correctness mechanism.
-- Never allow indefinite dual writes or permanent compatibility shims. If a bridge is temporarily required for migration, bound its authority, reconciliation, removal task, owner, and proof criteria up front inside the accepted scope.
-- Make schema, state, and event evolution additive-first only when live compatibility requires it; otherwise keep the design on the direct target-state path. When additive evolution is required, include explicit contraction criteria and removal proof.
-- Use shadow, dark-read, dual-read, canary, or strangler cutover checkpoints only when data or ownership shifts make a one-step target-state move unsafe; define exit criteria and irreversible checkpoints explicitly.
-
-### Resilience, Degradation, And Release Safety
-- Classify dependencies by criticality before selecting fallback behavior.
-- Define per-dependency timeout, retry budget, bulkhead, fallback mode, and observability signals.
-- Propagate deadlines explicitly and fail fast when remaining budget is insufficient.
-- Bound queues, leases, and concurrency. Make overload shedding, noisy-neighbor protection, and blast-radius isolation explicit.
-- Define degradation modes, activation conditions, and deactivation criteria.
-- Require graceful startup and shutdown semantics for stateful workers, consumers, and long-running jobs.
-- Make rollback authority and rollback limits explicit whenever a change is not trivially reversible.
-
-### Cross-Domain Consequences
-- Record downstream effects only when they force a new decision, handoff, or proof obligation before the current architecture recommendation is usable.
-- API: make consistency disclosure, idempotency, long-running-operation behavior, and compatibility windows explicit when architecture changes external behavior; otherwise record `no new decision required in API`.
-- Data: keep data ownership boundaries clear, justify datastore choices by access patterns, and frame cache or projection use by correctness and staleness contract only when those choices are architecture-critical now.
-- Security: define trust boundaries, identity propagation model, tenant isolation, and fail-closed authorization expectations when architecture changes who enforces them.
-- Operability: require the minimum logging, metrics, traces, and debuggability needed to operate the design safely.
-- Delivery: ensure the architecture can actually be enforced by CI, release gates, migration controls, and runtime assumptions.
-
-## Decision Quality Bar
-For every major architecture recommendation, include:
-- the problem and constraints
-- the dominant workload and invariant drivers
-- whether a real `live fork` exists
-- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
-- when no `live fork` exists, the chosen repo-consistent approach and why it is the only decision that needs current architecture treatment
-- selected and rejected architecture/system-design patterns, source descriptions or examples, task applicability, Go/repository fit, and custom-design justification when no known pattern fits
-- who owns write truth and which views are derived only
-- when external providers matter, how their semantics are normalized and prevented from becoming lifecycle truth
-- trade-offs, risks, and control mechanisms
-- measurable acceptance boundaries
-- rollout strategy and rollback limits only when live constraints require them
-- explicit reopen or extraction criteria when proposing a read runtime, separate runtime, or possible service split
-- for runtime split vs real service extraction, use an all-conditions test when precision matters and state what rollback does and does not revert
-- any invented numeric target marked as an assumption rather than a silent fact
-- assumptions, blockers, and reopen conditions
-
-## Deliverable Shape
-When writing the architecture spec or review, cover:
-- context, scope, and non-goals
-- boundary and ownership model
-- an ownership matrix for internal modules when modular-monolith seams are central to the task
-- dependency direction when internal seams or orchestration placement matters
-- workload shape, critical path, and runtime topology
-- sync or async interaction style
-- command/query authority split when read projections are involved
-- consistency model, invariants, and state-machine expectations
-- anti-corruption or provider-boundary rules when external systems affect domain behavior
-- failure, degradation, and rollout strategy
-- Pattern Fit Diligence when a named or custom architecture/system-design pattern affects ownership, workflow, consistency, resilience, data flow, or abstraction shape
-- only the downstream API, data, security, operability, or delivery effects that force a new decision, handoff, or proof obligation
-- explicit `no new decision required in <domain>` notes when an adjacent domain is affected but not decision-critical now
-
-## Escalate Or Reject
-- a new service boundary without ownership, transaction-boundary, and runtime-isolation proof
-- a read model, cache, or search index quietly becoming write authority
-- a sync call chain without critical-path budgets, retry semantics, and idempotency classification
-- a correctness-bearing async design without atomic message linkage, idempotent consumption or dedup, bounded retries, or DLQ/replay ownership
-- a distributed flow without invariant ownership, pivot definition, and explicit state model
-- a migration that relies on indefinite dual writes, permanent compatibility shims, or manual heroics
-- a workflow-engine or broker recommendation based on tool familiarity instead of workload evidence
-- a named architecture or system-design pattern without task-specific applicability, real-use evidence, and Go/repository fit
-- a custom architecture shape without rejected known-pattern alternatives
-- any architecture decision left for coding to discover later
+Stop or escalate when ownership, invariant, pivot, workload, failure/degradation, consistency, provider normalization, migration compatibility, or operational readiness is unresolved; when a public API, data, security, reliability, delivery, or domain owner must make the decisive choice; or when a named/custom pattern lacks fit evidence. Reject new services without the all-conditions case, sync chains without budgets/retry/idempotency, correctness-bearing async without durable linkage/recovery, projections as truth, indefinite dual writes/shims, and architecture left for coding to discover.

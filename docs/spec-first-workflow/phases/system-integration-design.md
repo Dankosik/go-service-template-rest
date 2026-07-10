@@ -1,6 +1,6 @@
-# System / Integration Design Phase
+# System / Integration Design Checkpoint
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when separate technical design depth is triggered and the next design checkpoint must decide how the service behaves as part of the system before Go code ownership is designed.
+Internal checkpoint companion for the user-started technical-design macro phase. Run it first when separate design depth is triggered, before Go code ownership and technical design review in the same root session.
 
 ## Read When
 
@@ -23,11 +23,11 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when separ
 - Trigger decisions for `design/contracts/`, `design/data-model.md`, `design/sequence.md`, `design/dependency-graph.md`, `design/pattern-fit.md`, `test-design`, and `rollout.md` when those surfaces are plausible.
 - A contract-design checkpoint result when REST resources, OpenAPI or generated contracts, event payloads, client-visible status/error/idempotency/retry/async/freshness/compatibility semantics, or material internal interfaces are changed: `created`, `compact_sufficient`, `not_expected`, or `blocked` with evidence and readiness consequence.
 - Recorded `Design fan-out (system/integration): complete | scoped_down | local_only | blocked` with candidate seams, lane table or rationale, fan-in result, and readiness consequence.
-- Workflow-control updates that route next to `go-code-ownership-design`, or to the smallest reopen target when system/integration design is blocked.
+- Workflow-control updates that mark this internal checkpoint ready for `go-code-ownership-design`, or name the smallest reopen target when system/integration design is blocked.
 
 ## Stop Rule
 
-Stop after the system/integration design checkpoint is complete or blocked. Do not write `tasks.md`, approve implementation readiness, start implementation, or silently continue into Go code ownership unless the active workflow explicitly authorizes same-session phase collapse.
+The checkpoint stops authoring when complete or blocked, but it does not end the user session. When complete, the technical-design root continues directly into Go code ownership. Do not write `tasks.md`, approve implementation readiness, or start implementation.
 
 ## Ownership
 
@@ -87,7 +87,7 @@ Checkpoint results are quality gates, not labels:
 
 A `created` or `compact_sufficient` result is closed only when it states the caller or audience, selected resource or message shape, request/response/error/status semantics, retry/idempotency/concurrency rules, async/freshness/consistency rules when relevant, compatibility class, runtime source of truth, generated outputs, proof carrier, and reopen trigger.
 
-For client-visible REST or OpenAPI behavior, run or record an API/contracts lane using `api-contract-designer-spec` unless a valid local-only rationale proves no independent contract lens can change the selected system mechanism, test-design readiness, planning readiness, or implementation safety. The lane question must be concrete, such as "Should this write be synchronous 201, asynchronous 202 with operation resource, or retry-safe replay through Idempotency-Key?", not a generic "review the API."
+For client-visible REST or OpenAPI behavior, use an API/contracts lane with `api-contract-designer-spec` only when there is a concrete independent contract question that can change the selected mechanism, test-design readiness, planning readiness, or implementation safety. Otherwise the root records the already-settled contract consequence locally. A valid lane question is specific, such as "Should this write be synchronous 201, asynchronous 202 with operation resource, or retry-safe replay through Idempotency-Key?", not "review the API."
 
 `design/contracts/` is design-only task context. Runtime authorities remain canonical, such as `api/openapi/service.yaml` for the REST wire contract, event/proto sources for non-HTTP contracts, and generated outputs derived from those sources. Technical design may approve the target contract and required source-of-truth updates, but implementation performs the canonical source edit, regeneration, and drift proof only from an approved `tasks.md`.
 
@@ -167,7 +167,7 @@ Typical lanes:
 - Observability, metrics, traces, logs, and diagnostic proof.
 - Dependency/OSS or Pattern Fit whenever the design introduces a new dependency, custom infrastructure, meaningful abstraction, or non-trivial system mechanism, or when stdlib, repository patterns, mature OSS, or known design patterns could plausibly change the mechanism or planning handoff.
 
-For every typical lane whose domain is touched by the approved scope, either run a lane or list it under `Collapsed seams` with the tested live-fork or domain-owned question, evidence checked, why it cannot change system design or planning readiness, and the seam that would reopen fan-out.
+Record only candidate seams that expose a plausible independent design question. Do not enumerate every touched domain merely to justify omitting a lane.
 
 Record the gate in this shape:
 
@@ -182,11 +182,11 @@ Reviewer falsification handle: <how review can verify omitted lanes and collapse
 Readiness consequence: <ready for go-code-ownership-design | blocked | reopen specification/research/specification review>
 ```
 
-`local_only` is valid only with candidate-lane analysis proving no omitted lane can change system correctness or planning readiness. For full-orchestrated, protected-domain, high-impact, or user-requested agent-backed design, `local_only` is not eligible. In those shapes, `scoped_down` must still run at least one read-only specialist lane for a remaining planning-critical live fork or domain-owned decision unless read-only execution or authorization is unavailable; when no required lane can run, record `blocked`, not `scoped_down`.
+`local_only` is valid when the root records that the current checkpoint has no concrete independent bounded question whose separate context would materially improve correctness or readiness. `full_orchestrated`, `FULL-*`, and domain count determine design depth, not automatic fan-out. If an actual required lane cannot run because read-only execution or authorization is unavailable, record `blocked`.
 
-## Handoff To Go Code Ownership Design
+## Internal Handoff To Go Code Ownership Design
 
-This checkpoint is ready to hand off only when Go code ownership design can choose packages, files, interfaces, and tests without inventing system behavior.
+This checkpoint is ready to continue only when Go code ownership design can choose packages, files, interfaces, and tests without inventing system behavior. The handoff is root-internal and emits no user prompt.
 
 The handoff must include:
 

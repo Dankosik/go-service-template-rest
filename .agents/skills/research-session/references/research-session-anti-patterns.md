@@ -48,7 +48,8 @@ Lanes:
 Boundary-respecting completion:
 
 ```markdown
-Research status: complete with one accepted limitation
+phase_state: complete
+Accepted limitation: one bounded evidence limit is carried to specification
 Research mode: fan-out
 Preserved notes:
 - `research/export-api-evidence.md`

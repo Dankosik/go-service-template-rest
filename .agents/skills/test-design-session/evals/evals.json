@@ -1,0 +1,45 @@
+{
+  "skill_name": "test-design-session",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Use only the test-design-session wrapper. A current durable workflow-plan routes an approved full-orchestrated payment-state change into test design. Security and data scenario lanes must fan out independently, so ROUTING-PHASE-CONTROL resolves phase_control=required. Produce only test-design outputs and stop before planning.",
+      "expected_output": "A test-design-only result that writes an approved scenario-focused test-plan.md, updates the current master, creates or updates workflow-plans/test-design.md because phase_control=required, and stops before tasks.md or implementation.",
+      "files": [],
+      "expectations": [
+        "The output computes durable_master_control=present and phase_control=required from the stated fan-out reason before choosing workflow-control writes.",
+        "The output creates stable TD-* scenarios with proof levels, pass/fail observables, fail-before expectations, determinism constraints, and reopen targets.",
+        "The output updates both current master control and the required phase file with the same routing identity.",
+        "The output stops before planning, tasks.md, tests, production code, migrations, or generated artifacts.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Use only the test-design-session wrapper. Current durable master control exists for a bounded lean task, but the approved owner trigger says one obvious package test can carry the behavior proof and there is no multi-lane, fan-in, formal-challenge, multi-session-stop, or named review/validation checkpoint reason. Resolve the no-test-plan route and hand off to planning.",
+      "expected_output": "A typed no-test-plan decision recorded in the existing master with phase_control=not_required, no test-plan.md or workflow-plans/test-design.md creation, and a planning handoff.",
+      "files": [],
+      "expectations": [
+        "The output computes durable_master_control=present and phase_control=not_required instead of treating the test-design checkpoint as a phase-file trigger.",
+        "The output records test-plan.md artifact_expectation=not_expected, artifact_state=absent, waiver_disposition=none, and record_validity=current with trigger rationale and reopen condition.",
+        "The output updates only the existing master and does not create workflow-plans/test-design.md.",
+        "The output does not describe the absent test plan as WAIVED or start planning in the same session.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use only the test-design-session wrapper. Test-design fan-out and a phase file are required, but the task has no current durable workflow-plan and the only phase file present carries a stale routing revision. Produce the honest boundary result only.",
+      "expected_output": "A blocked test-design result that refuses to create competing control roots, routes to workflow planning to repair durable routing identity, and writes no downstream artifact.",
+      "files": [],
+      "expectations": [
+        "The output recognizes that required phase control cannot be anchored to a missing current durable master.",
+        "The output does not create or repair test-plan.md, tasks.md, or a new standalone phase file around the stale route.",
+        "The output records an actionable workflow-planning reopen with session_boundary=reached and handoff_readiness=ready when that reopen can start.",
+        "The final chat includes one copy-pastable next-session prompt for the actionable workflow-planning reopen.",
+        "The output stops before planning or implementation.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    }
+  ]
+}

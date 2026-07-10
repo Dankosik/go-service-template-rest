@@ -1,6 +1,6 @@
 # Test Design Phase
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when reviewed behavior needs explicit test scenarios, proof levels, fail-before expectations, or quality gates before `tasks.md` is drafted.
+Detailed macro-phase companion for `docs/spec-first-workflow.md`. Read this when reviewed behavior needs explicit test scenarios, proof levels, fail-before expectations, quality gates, and independent QA review before `tasks.md` is drafted.
 
 ## Read When
 
@@ -14,7 +14,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when revie
 
 - Reviewed `spec.md` and specification-review verdict, including accepted risks and proof obligations.
 - Compact design in `spec.md` or approved `design/` bundle, plus technical-design-review verdict when separate design depth was triggered.
-- Existing `workflow-plan.md` and `workflow-plans/test-design.md` when phase-local routing exists.
+- Existing current durable `workflow-plan.md`, when present, and `workflow-plans/test-design.md` only when `ROUTING-PHASE-CONTROL` resolves `phase_control=required`.
 - Existing `test-plan.md` when this is a repair pass.
 - Repository command source, usually `docs/build-test-and-development-commands.md`, `Makefile`, and CI workflows.
 - Nearby existing tests, fixtures, contract checks, migration checks, or generated drift checks when they affect executable proof.
@@ -22,13 +22,16 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when revie
 ## Outputs
 
 - `test-plan.md` when triggered, with risk-based scenario IDs, selected proof levels, assertion atoms for broad protected-domain scenarios, pass/fail observables, fail-before expectations, command or manual proof shape, residual risks, and reopen targets.
-- Explicit `test-design: not expected` rationale when scenarios are small enough to live directly in `tasks.md`.
+- Typed no-plan decision when scenarios are small enough to live directly in `tasks.md`: `test-plan.md artifact_expectation=not_expected`, `artifact_state=absent`, `record_validity=current`, and `waiver_disposition=none`, with trigger rationale and reopen condition in the current owning artifact.
 - Recorded `Test-design fan-out: complete | scoped_down | local_only | blocked | not_expected` with lane table or local-only rationale when the phase is non-trivial.
-- Workflow-control updates that route next to `planning`, or to the smallest reopen target when behavior or design is not testable yet.
+- A current independent test-design review verdict with exact reviewed revision, model route, findings, repair closure, and planning-readiness consequence when `test-plan.md` is expected.
+- Existing durable master updates that route next to `planning`, or to the smallest reopen target when behavior or design is not testable yet; create or update `workflow-plans/test-design.md` only when `phase_control=required`.
+
+When the no-plan decision is reached without durable master control, it must already be recorded in a current reviewed owning `spec.md` or design/review handoff. Test design does not edit an approved upstream artifact or create a new control root merely to store the decision; if the carrier is missing, reopen the smallest upstream owner before planning.
 
 ## Stop Rule
 
-Stop when test design is approved, explicitly not expected, or blocked. Do not write `tasks.md`, production code, test code, migrations, generated artifacts, or implementation evidence in this phase.
+Do not self-approve an authored `test-plan.md`. Mark it review-ready, launch a fresh read-only QA review, repair every actionable test-design finding, and obtain fresh re-review. Stop only when the current verdict permits `artifact_state=approved`, the typed expectation is `not_expected`, or the macro phase is honestly blocked. Do not write `tasks.md`, production code, test code, migrations, generated artifacts, or implementation evidence in this phase.
 
 ## Ownership
 
@@ -73,7 +76,10 @@ Do not create `test-plan.md` when:
 When not creating `test-plan.md`, record a compact rationale:
 
 ```text
-Test design: not expected
+artifact_expectation: not_expected
+artifact_state: absent
+record_validity: current
+waiver_disposition: none
 Trigger test: <why scenario matrix cannot change planning or proof quality>
 Proof carrier: <tasks.md direct proof | inline direct path proof | other>
 Reopen if: <condition that would make scenario design necessary>
@@ -86,7 +92,9 @@ Use the smallest shape that makes planning executable:
 ```markdown
 # Test Plan
 
-Status: draft | approved | blocked
+artifact_expectation: expected
+artifact_state: draft | approved | blocked
+record_validity: current
 
 ## Inputs
 
@@ -157,13 +165,31 @@ Fan-in outcome: <orchestrator reconciliation that changes or confirms the test p
 Readiness consequence: <ready for planning | blocked | reopen specification/system-integration-design/go-code-ownership-design/technical-design-review>
 ```
 
-`local_only` is valid only with candidate-lane analysis proving no omitted lane can change scenario completeness, proof level, planning readiness, or implementation safety. Missing explicit subagent authorization is not a valid local-only rationale when a required read-only lane would otherwise run.
+`local_only` is valid for authoring fan-out when the scenario work is one sequential reasoning chain and no concrete independent bounded question would materially improve scenario completeness, proof level, planning readiness, or implementation safety. It does not waive the independent test-design review. Repository-standing authorization covers read-only lanes; block only after both primary and configured fallback review surfaces are unavailable.
+
+## Independent Test-Design Review And Repair
+
+After authoring reaches `artifact_state=review_ready`, launch a fresh read-only `qa-agent` semantic review. Use `critical-reviewer-agent` only for one named approval-critical proof question whose protected-domain blast radius justifies high effort. The reviewer checks scenario completeness, source traceability, proof level, pass/fail observables, fail-before expectations or waivers, determinism, quality gates, and reopen ownership. It returns advisory `PASS`, `CONCERNS`, or `FAIL` and never edits `test-plan.md`.
+
+The test-design root reconciles findings and repairs every actionable test-design-owned defect in the same session. A missing behavior, mechanism, ownership, or approval decision reopens the appropriate earlier macro phase instead of being invented here. After repair, mark the prior verdict stale and launch a fresh reviewer context at the same or stronger tier against the changed revision. `CONCERNS` may close only when it contains named accepted risks or downstream proof obligations, not an omitted in-scope scenario repair.
+
+Record:
+
+```text
+Test-design review procedural_gate_state: pending | complete | blocked
+Test-design review_verdict: pending | PASS | CONCERNS | FAIL
+Reviewed revision / cycle: <artifact anchor and attempt>
+Reviewer / model route: <fresh agent thread or process and effective profile>
+Finding closure: <finding id -> repair/evidence anchor -> fresh status>
+Planning readiness: <ready with obligations | blocked and reopen target>
+```
 
 ## Handoff To Planning
 
 Planning may start when:
 
 - `test-plan.md` is `approved`, or test design is explicitly `not expected` with trigger rationale;
+- the independent test-design review verdict is current `PASS` or eligible `CONCERNS` when a test plan exists;
 - every material scenario has a stable ID, source anchor, selected proof level, pass/fail observable, proof command or manual proof shape, and reopen target;
 - broad protected-domain scenarios are split or carry assertion atoms granular enough for planning to map into `Implementation obligations` without inventing coverage;
 - fail-before expectations or waivers are explicit for proof-first behavior tasks;

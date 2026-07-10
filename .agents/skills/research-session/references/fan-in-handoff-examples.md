@@ -19,7 +19,7 @@ A research handoff should answer:
 Keep handoff verbs evidence-oriented: "found", "did not find", "conflicts with", "needs decision", "ready only if", "blocked by". Avoid "approved", "decided", "designed", "planned", or "implemented".
 
 ## Imitate
-Use this shape in one owning place: normally `workflow-plans/research.md` for the routing handoff, or a preserved `research/*.md` note when the evidence comparison itself must be reusable. Other artifacts should link or record a short status line only.
+Use this shape in one owning place: `workflow-plans/research.md` only when `ROUTING-PHASE-CONTROL` requires durable local orchestration, otherwise the current master or a preserved `research/*.md` note when the evidence comparison itself must be reusable. Other artifacts should link or record a short typed state only.
 
 ```markdown
 ## Fan-In Summary
@@ -69,11 +69,12 @@ For blocked research:
 ```markdown
 ## Fan-In Summary
 
-Research status: blocked
 Blocker: no repository evidence is available for who owns export file lifecycle after job completion.
 Evidence gathered: API and auth surfaces were checked; storage lifecycle code was not found under the expected packages.
 Next action: targeted local research on storage lifecycle ownership, or a read-only data/reliability lane if the package owner remains unclear.
-Ready for next session: no
+phase_state: blocked
+session_boundary: reached
+handoff_readiness: ready
 Next session starts with: targeted research
 Stop rule: do not proceed to specification until lifecycle ownership is answered or explicitly recorded as an upstream blocker.
 ```
@@ -92,4 +93,4 @@ Reject because final API, data, and storage decisions belong in `spec.md`, and d
 - Treating "ready for specification" as "specification has started".
 - Flattening lane conflicts into a single confident story.
 - Omitting the stop rule because the next action feels obvious.
-- Hiding a blocker in prose instead of setting `Ready for next session: no` or equivalent routing.
+- Hiding a blocker in prose instead of setting `phase_state=blocked`, `session_boundary=reached`, and `handoff_readiness=ready` for the actionable targeted-research reopen.

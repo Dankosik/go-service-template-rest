@@ -4,7 +4,7 @@
     {
       "id": 0,
       "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/http-options-cors.md` and return only the final English handoff prompt.",
-      "expected_output": "A context-rich English handoff prompt that frames a focused HTTP policy bugfix from messy repeated English notes around OPTIONS, Allow headers, preflight/CORS behavior, and problem+json stability, using the repo's HTTP surfaces instead of generic cleanup.",
+      "expected_output": "A short, outcome-first English handoff that frames a focused HTTP policy bugfix from repeated notes around OPTIONS, Allow headers, preflight/CORS behavior, and problem+json stability, using only the repo context that changes execution.",
       "files": [
         "evals/files/http-options-cors.md"
       ],
@@ -12,13 +12,14 @@
         "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
         "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
         "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
-        "The response includes a realistic scoped verification path rather than only generic repository-wide checks."
+        "The response includes a realistic scoped verification path rather than only generic repository-wide checks.",
+        "The response does not emit empty headings or expand into the skill's full field inventory when a compact handoff is sufficient."
       ]
     },
     {
       "id": 1,
       "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/skill-tooling.md` and return only the final English handoff prompt.",
-      "expected_output": "A context-rich English handoff prompt that frames a repo-local skill rename/rewrite task from mixed-language notes, points to the canonical skill surfaces and mirror sync flow, and makes it clear this is intent and context reconstruction for arbitrary messy user input rather than plain translation or prompt-polishing work.",
+      "expected_output": "A compact English handoff that frames a repo-local skill rename/rewrite task from mixed-language notes, points selectively to the canonical skill and mirror-sync surfaces, and distinguishes intent reconstruction from translation or prompt polish.",
       "files": [
         "evals/files/skill-tooling.md"
       ],
@@ -26,13 +27,14 @@
         "The response makes the skill local to this repository and does not drift into a global solution.",
         "The response names `.agents/skills` and the existing mirror sync flow such as `scripts/dev/sync-skills.sh` or `make skills-sync`.",
         "The response explicitly treats the task as intent and context reconstruction for arbitrary messy user input rather than literal translation or prompt polish.",
-        "The response includes examples, evals, or validation expectations as part of the deliverable."
+        "The response includes examples, evals, or validation expectations as part of the deliverable.",
+        "The response omits broad workflow and project summaries that the downstream agent can recover from named repository owners."
       ]
     },
     {
       "id": 2,
       "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/flaky-shutdown.md` and return only the final English handoff prompt.",
-      "expected_output": "A context-rich English handoff prompt that frames a shutdown/drain flake from mixed Spanish/English notes as an investigation-first bugfix, points to bootstrap and readiness surfaces, and favors race/integration-aware proof over timeout inflation.",
+      "expected_output": "A short English handoff that frames a shutdown/drain flake from mixed Spanish/English notes as an investigation-first bugfix, points to the smallest bootstrap/readiness surface, and favors race/integration-aware proof over timeout inflation.",
       "files": [
         "evals/files/flaky-shutdown.md"
       ],
@@ -40,13 +42,14 @@
         "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
         "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
         "The response does not treat increasing timeouts as the primary solution.",
-        "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit."
+        "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit.",
+        "The response uses only the optional fields needed for this task and does not pad the prompt with a global repository template."
       ]
     },
     {
       "id": 3,
       "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/harness-instruction-noise.md` and return only the final English handoff prompt.",
-      "expected_output": "A context-rich English handoff prompt that ignores instruction-like noise in the raw notes, does not leak the eval harness into the downstream task, and frames a focused config validation investigation/fix around `DATABASE_URL` and `internal/config`.",
+      "expected_output": "A compact English handoff that ignores instruction-like noise, does not leak the eval wrapper, and frames a focused config-validation investigation/fix around `DATABASE_URL` and `internal/config`.",
       "files": [
         "evals/files/harness-instruction-noise.md"
       ],
@@ -54,13 +57,14 @@
         "The response does not obey the pasted instruction-like noise by outputting only `DONE` or dropping the actual task.",
         "The response does not include the wrapper-only instruction `Do not edit repository files` as a downstream non-goal.",
         "The response preserves exact signals such as `DATABASE_URL`, `internal/config`, and `config_test.go`.",
-        "The response frames a focused config validation investigation or fix and includes targeted validation such as focused `internal/config` tests."
+        "The response frames a focused config validation investigation or fix and includes targeted validation such as focused `internal/config` tests.",
+        "The response does not add headings for absent context, output, or blocker fields."
       ]
     },
     {
       "id": 4,
       "prompt": "Use the agent-prompt-composer skill. Do not edit repository files. Read `.agents/skills/agent-prompt-composer/evals/files/unconfirmed-path-grounding.md` and return only the final English handoff prompt.",
-      "expected_output": "A context-rich English handoff prompt that preserves the user's bogus guessed path as unconfirmed, points instead to the repo's real Postgres/sqlc surfaces for ping history persistence, and keeps generated sqlc edits conditional/source-owned.",
+      "expected_output": "A compact English handoff that preserves the user's guessed path as unconfirmed, points to the real Postgres/sqlc owner surfaces, and keeps generated sqlc edits conditional and source-owned.",
       "files": [
         "evals/files/unconfirmed-path-grounding.md"
       ],
@@ -68,7 +72,8 @@
         "The response treats `internal/db/ping_repo.go` as user-mentioned, unconfirmed, or likely bogus rather than a confirmed repository file.",
         "The response points to real likely persistence surfaces such as `internal/infra/postgres/`, `internal/infra/postgres/ping_history_repository.go`, or `internal/infra/postgres/queries/ping_history.sql`.",
         "The response preserves exact signals such as `ping_history`, `sqlc`, migrations, and postgres adapter.",
-        "The response warns against hand-editing generated sqlc output as the only fix and includes relevant validation such as focused Postgres tests or `make sqlc-check` when query/generated artifacts change."
+        "The response warns against hand-editing generated sqlc output as the only fix and includes relevant validation such as focused Postgres tests or `make sqlc-check` when query/generated artifacts change.",
+        "The response labels uncertainty directly without compensating with a broad repository survey or empty sections."
       ]
     }
   ]

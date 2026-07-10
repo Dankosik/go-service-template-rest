@@ -1,28 +1,29 @@
 # Execution Shape Selection
 
 ## Behavior Change Thesis
-When loaded for symptom "I am unsure whether this needs direct path, lean local, or full orchestrated routing," this file makes the model choose the smallest defensible execution shape with an explicit escalation trigger instead of forcing ceremony for tiny work or under-routing cross-domain work.
+When loaded for symptom "the recorded route may not match its evidence," this file makes the model validate or falsify the existing `SHAPE-*` result against canonical rule IDs instead of becoming a second classifier.
 
 ## When To Load
-Load this only when execution shape is the active uncertainty. If the shape is already chosen and the hard part is lane design, artifact status, file authoring, or the adequacy boundary, load that narrower reference instead.
+Load this only when the recorded shape or trigger audit is the active uncertainty. Shape selection itself belongs to `AGENTS.md`; if the hard part is lane design, typed artifact state, file authoring, or the adequacy boundary, load that narrower reference instead.
 
 ## Decision Rubric
-- Choose `direct path` only for tiny, reversible, single-surface work with high confidence after a first read and no need for preserved research, subagents, or multi-session handoff.
-- Choose `lean local` for bounded, non-trivial, mostly single-domain work where local research is enough unless it reveals an escalation trigger. Treat `lightweight local` as a compatibility alias only when reading older artifacts.
-- Choose `full orchestrated` when the work crosses material API, data, security, reliability, observability, delivery, or domain-invariant boundaries; when the decision is hard to reverse; or when user-requested agent-backed work needs durable fan-out evidence.
-- Escalate from `lean local` to `full orchestrated` if local reading exposes persisted-state, public contract, tenant isolation, auth/trust-boundary, concurrency/lifecycle, rollout, or proof-obligation uncertainty.
-- Do not let "the user named this skill" override the tiny/direct-path exception; a workflow-planning session can return "do not create workflow-control files" when the repository contract says ceremony would add noise.
+- Require one matched `SHAPE-*` rule plus evidence for every evaluated `FULL-*`, `DIRECT-*`, and `LEAN-*` row.
+- Reject `SHAPE-DIRECT` when any `DIRECT-*` predicate is false or approval-relevant unknown, or when any `FULL-*` floor is true or unknown.
+- Reject `SHAPE-LEAN` unless every `LEAN-*` predicate is true and every `FULL-*` floor is false.
+- Accept `SHAPE-FULL-FLOOR` only with at least one true/unknown `FULL-*` row. Accept `SHAPE-FALLBACK-FULL` only when direct and lean admission both fail; unsubstantiated full is challengeable.
+- Treat `AGENT-CAPABILITY` as capability only. Only `AGENT-SUBSTANTIVE` activates `FULL-AGENT-SUBSTANTIVE`.
+- If evidence changes, return the exact falsification and required `TRANS-*` reopen; do not overwrite `execution_shape` in this reference.
 
 ## Imitate
 
 Direct-path calibration:
 
 ```markdown
-Execution shape: direct path
-Why: one reversible edit in one skill reference; no runtime behavior, repository architecture, public contract, persisted data, or multi-session resume risk.
-Workflow artifacts: not expected; inline skip rationale is enough.
-Adequacy challenge: skipped with tiny/direct-path rationale.
-Stop rule: proceed only with the requested tiny local edit; no research or planning artifacts.
+Matched rule: SHAPE-DIRECT
+Trigger audit: every FULL-* false; every DIRECT-* true; agent_request=capability_only
+Actor: current orchestrator before any ledger exists
+Artifact consequence: DEPTH-DIRECT
+Reopen: TRANS-DIRECT-ELIGIBILITY-LOSS if any predicate changes
 ```
 
 What to copy: the explanation names why the full workflow contract is not buying safety.
@@ -30,11 +31,10 @@ What to copy: the explanation names why the full workflow contract is not buying
 Lean-local calibration:
 
 ```markdown
-Execution shape: lean local
-Why: bounded single-package behavior change; no visible persisted-state, tenant, API contract, or rollout seam after the initial read.
-Research mode: local in the next session.
-Escalation trigger: reopen workflow planning if local research finds API, data, security, reliability, or rollout ambiguity.
-Stop rule: after workflow-control handoff; do not start the local research read.
+Matched rule: SHAPE-LEAN
+Trigger audit: every FULL-* false; every LEAN-* true
+Artifact consequence: DEPTH-LEAN
+Reopen: TRANS-UPWARD if later evidence activates a FULL-* floor
 ```
 
 What to copy: the escalation trigger is part of the route, not an afterthought.
@@ -42,11 +42,10 @@ What to copy: the escalation trigger is part of the route, not an afterthought.
 Full-orchestrated calibration:
 
 ```markdown
-Execution shape: full orchestrated
-Why: tenant-scoped async exports touch REST contract, job state, tenant isolation, signed URL security, admin authorization, reliability, observability, QA, and rollout.
-Research mode: fan-out in the next session.
-Adequacy challenge: required before handoff.
-Stop rule: stop after workflow-control artifacts and challenge reconciliation; next session starts with research fan-out.
+Matched rule: SHAPE-FULL-FLOOR
+Trigger audit: FULL-PUBLIC-CONTRACT, FULL-DATA, FULL-SECURITY, and FULL-DELIVERY=true
+Artifact consequence: DEPTH-FULL
+Adequacy: ADEQUACY-FULL-SHAPE and ADEQUACY-FULL-TRIGGER
 ```
 
 What to copy: the route names the affected seams without doing their research.
@@ -54,22 +53,21 @@ What to copy: the route names the affected seams without doing their research.
 ## Reject
 
 ```markdown
-Execution shape: full orchestrated
-Why: the repository prefers orchestrators and workflow artifacts.
+Matched rule: SHAPE-FULL-FLOOR
+Evidence: the repository prefers orchestrators and workflow artifacts.
 ```
 
-Failure: generic process preference is not a task-specific risk argument.
+Failure: no canonical `FULL-*` evidence supports the claimed rule.
 
 ```markdown
-Execution shape: lean local
-Why: probably only code.
-Escalation trigger: none.
+Matched rule: SHAPE-LEAN
+Evidence: probably only code.
 ```
 
-Failure: "only code" hides the exact seams that would force fan-out.
+Failure: it does not prove every `LEAN-*` row or falsify every `FULL-*` row.
 
 ## Agent Traps
-- Treating `workflow-planning-session` as a command to create workflow files even when the task is clearly tiny.
-- Choosing `full orchestrated` because many skills exist, not because the task crosses material decision seams.
-- Choosing `lean local` without recording what would make that choice wrong.
-- Starting the next research step while "just checking" whether the chosen shape is right.
+- Recomputing shape locally instead of checking the recorded `SHAPE-*` evidence.
+- Treating capability authorization as `FULL-AGENT-SUBSTANTIVE`.
+- Accepting full without `SHAPE-FULL-FLOOR` or `SHAPE-FALLBACK-FULL` evidence.
+- Starting research while validating the route.

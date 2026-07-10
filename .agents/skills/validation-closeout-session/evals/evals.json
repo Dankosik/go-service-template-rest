@@ -3,13 +3,14 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Implementation and review are complete for a non-trivial task that added tenant-scoped export jobs. The active workflow artifacts say the next session is `validation-phase-1`, and existing `tasks.md` has ledger items T001-T006 ready for proof-based checkbox updates. `spec.md` still needs final `Validation` and `Outcome`, and the proof obligations are: rerun the scoped package tests, rerun the OpenAPI drift check, and rerun the migration validation command. Use only the validation-closeout-session wrapper to finish the task.",
-      "expected_output": "A closeout-only result that uses fresh evidence to update `spec.md`, closes `workflow-plan.md`, updates existing `tasks.md` progress, updates `workflow-plans/validation-phase-1.md`, and stops without implementing code.",
+      "prompt": "Implementation and review are complete for a non-trivial task that added tenant-scoped export jobs. Approved `tasks.md` explicitly names the pre-created `workflow-plans/validation-phase-1.md` as the closeout carrier, and ledger items T001-T006 are ready for proof-based checkbox updates. `spec.md` still needs final `Validation` and `Outcome`, and the proof obligations are: rerun the scoped package tests, rerun the OpenAPI drift check, and rerun the migration validation command. Use only the validation-closeout-session wrapper to finish the task.",
+      "expected_output": "A closeout-only result that uses fresh evidence to update `spec.md`, existing `tasks.md` progress, and the ledger-named pre-created `workflow-plans/validation-phase-1.md`, while leaving historical `workflow-plan.md` unchanged and stopping without implementing code.",
       "files": [],
       "expectations": [
         "The output binds the final closeout claim to the stated scope and uses fresh commands rather than prior summaries as proof.",
-        "The output updates `spec.md` `Validation` and `Outcome`, plus `workflow-plan.md`, existing `tasks.md` progress, and the active `workflow-plans/validation-phase-1.md` artifact.",
-        "The output closes the task only if the fresh evidence supports it and keeps the boundary clear that no new code is written during closeout."
+        "The output updates `spec.md` `Validation` and `Outcome`, existing `tasks.md` progress, and the ledger-named `workflow-plans/validation-phase-1.md` artifact without mutating historical `workflow-plan.md`.",
+        "The output closes the task only if the fresh evidence supports it and keeps the boundary clear that no new code is written during closeout.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
@@ -20,18 +21,20 @@
       "expectations": [
         "The output does not claim completion or readiness without fresh successful evidence.",
         "The output records the failing proof and names an explicit reopen target and next session instead of silently implementing fixes.",
-        "The output keeps `Outcome` and workflow routing honest about the blocked or reopened state."
+        "The output keeps `Outcome` and workflow routing honest about the blocked or reopened state.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
       "id": 2,
-      "prompt": "This is the final pass for a lightweight local change. There is `spec.md` and `workflow-plan.md`, but no dedicated `workflow-plans/validation-phase-1.md` and no `tasks.md` because the waiver says a separate ledger was not used. Yesterday's `go test` output is already in chat. Use only the validation-closeout-session wrapper and finish the closeout without inventing extra ceremony.",
-      "expected_output": "A proportional closeout result that still requires fresh proof, updates the existing closeout artifacts honestly, and does not invent a phase-local validation file or `tasks.md` when the task is not using one.",
+      "prompt": "This is the final pass for execution_shape=lean_local. Approved and reviewed `tasks.md` exists, but it does not name a pre-created validation phase file; `spec.md` still needs final `Validation` and `Outcome`. Yesterday's `go test` output is already in chat. Use only the validation-closeout-session wrapper and finish the closeout without inventing extra ceremony.",
+      "expected_output": "A proportional ledger-owned closeout result that still requires fresh proof, updates `spec.md` and existing `tasks.md` honestly, leaves historical workflow control unchanged, and does not invent a phase-local validation file.",
       "files": [],
       "expectations": [
         "The output reruns or requires fresh proof now instead of trusting yesterday's command output.",
-        "The output updates `spec.md` and `workflow-plan.md` while avoiding a made-up `workflow-plans/validation-phase-1.md` artifact or `tasks.md` ledger.",
-        "The output stops after honest closeout handling and does not drift into implementation."
+        "The output updates `spec.md` and existing `tasks.md` while avoiding changes to historical `workflow-plan.md` or a made-up `workflow-plans/validation-phase-1.md` artifact.",
+        "The output stops after honest closeout handling and does not drift into implementation.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
@@ -42,7 +45,8 @@
       "expectations": [
         "The output treats missing required `tasks.md` as a planning or earlier-phase reopen instead of creating it during validation.",
         "The output does not add task entries or rewrite planning artifacts during closeout.",
-        "The output avoids `done` or `ready` language for the blocked closeout."
+        "The output avoids `done` or `ready` language for the blocked closeout.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     }
   ]

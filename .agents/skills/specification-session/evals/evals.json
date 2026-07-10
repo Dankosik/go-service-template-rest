@@ -9,8 +9,9 @@
       "expectations": [
         "The output reads or refers to current phase context first and keeps the work inside the specification checkpoint.",
         "The output produces or updates `spec.md`, `workflow-plan.md`, and `workflow-plans/specification.md` without drifting into `design/` or implementation.",
-        "The output records clarification challenge status, the read-only lane used or waiver rationale, and resolution status before marking `spec.md` approved.",
-        "The output makes the handoff explicit in `workflow-plan.md`, including `Session boundary reached`, `Ready for next session`, and `Next session starts with: system-integration-design` when the spec is approved and separate design depth is triggered."
+        "The output records clarification `procedural_gate_state`, current validity, the read-only lane used or guarded reclassification evidence, and resolution before marking `spec.md` review_ready.",
+        "The output makes the handoff explicit in `workflow-plan.md` with canonical `session_boundary=reached`, `handoff_readiness=ready`, and `Next session starts with: specification-review`; it does not route authoring directly to design.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
@@ -22,7 +23,8 @@
         "The output identifies why the inputs are not spec-ready instead of pretending the open questions can live as harmless assumptions.",
         "The output updates specification-phase routing and handoff state in `workflow-plan.md` and `workflow-plans/specification.md` rather than approving a false spec.",
         "The output reopens research or challenge as the next session instead of writing `design/` or code.",
-        "The output does not use the clarification challenge to paper over missing core product or domain decisions."
+        "The output does not use the clarification challenge to paper over missing core product or domain decisions.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     },
     {
@@ -33,7 +35,21 @@
       "expectations": [
         "The output distinguishes the wrapper's job from `spec-document-designer`, `go-design-spec`, and planning work.",
         "The output does not write or recommend writing `design/`, `tasks.md`, or implementation output in the same session.",
-        "The output stops after specification artifacts and workflow updates, with clarification gate state recorded and the next session routed to `system-integration-design` or another honest reopen point."
+        "The output stops after specification artifacts and triggered workflow updates, with clarification gate state recorded and the next session routed to `specification-review` or an honest upstream reopen point.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use only the specification-session wrapper. The recorded route is lean_local, but while finalizing the candidate spec you confirm that the change alters persisted refresh-token revocation state and tenant authentication semantics. Do not silently approve the lean spec or redefine the shape inside the challenge.",
+      "expected_output": "A blocked lean specification result with risk_challenge_outcome=RECLASSIFY_FULL that invokes orchestrator-owned guarded upward reclassification, keeps spec.md non-review-ready, and stops before formal clarification or specification review.",
+      "files": [],
+      "expectations": [
+        "The output records the exact field risk_challenge_outcome=RECLASSIFY_FULL and does not use FULL_REQUIRED.",
+        "The output does not place RECLASSIFY_FULL in procedural_gate_state or review_verdict.",
+        "The output identifies FULL-DATA and FULL-SECURITY evidence as invalidating the lean floor and requires the orchestrator-owned guarded reclassification transaction.",
+        "The output keeps spec.md draft or blocked, records the current handoff as non-authorizing, and stops before formal clarification, specification review, design, planning, or implementation.",
+        "The output consumes canonical phase, typed-state, and handoff owners without inventing a skill-local state matrix, read order, authorization paragraph, or handoff template."
       ]
     }
   ]

@@ -104,42 +104,6 @@ Do not approve a diff merely because behavior appears correct. Approval requires
 
 Treat those as presumptive blockers unless the author can justify them with approved artifacts, current repository ownership, and matching validation.
 
-## Finding Quality Bar
+## Evidence And Shared Finding Envelope
 
-Each finding should include:
-
-- exact `file:line`,
-- concrete structural defect,
-- why it increases future-change, review, regression, or operability risk,
-- smallest safe correction,
-- whether correction is local, needs specialist handoff, or needs design escalation,
-- validation signal when useful.
-
-Severity merge-risk based:
-
-- `critical`: structural drift makes safe merge impossible without reopening approved design or likely breaks a protected contract.
-- `high`: complexity growth, owner drift, or surviving old path has meaningful regression or future-change risk.
-- `medium`: bounded structural debt that will realistically mislead future edits or weaken reviewability.
-- `low`: local simplification opportunity with material clarity benefit but low merge risk.
-
-## Deliverable Shape
-
-Return review output in order:
-
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-If a section has no entries, write `None.`
-
-Use this finding format:
-
-```text
-[severity] [go-structural-quality-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the structural defect, future-change/review/regression/operability risk, smallest safe correction, and whether correction is local, needs specialist handoff, or reopens design. `critical` means structural drift makes safe merge impossible or likely breaks a protected contract; `high` means complexity growth, owner drift, or a surviving old path creates material regression or future-change risk.

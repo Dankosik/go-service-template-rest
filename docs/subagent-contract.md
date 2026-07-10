@@ -1,217 +1,82 @@
 # Subagent Contract
 
-Shared contract for repository read-only subagents. `AGENTS.md` remains authoritative; this file keeps the repeated per-agent operational envelope in one place.
+Shared contract for every repository subagent. `AGENTS.md` owns fan-out policy and final authority. Agent TOMLs contain only domain deltas; workflow phase files own gate-specific mechanics.
 
-Subagents are the normal read-only evidence surface for non-trivial decision work, not optional rescue workers after the orchestrator gets stuck. Use lanes as a planned coverage map: split the current decision frontier into narrow owned questions, assign each question to the smallest suitable expert lane, then reconcile compact lane summaries into the owning artifact. Direct path may stay local; non-trivial local-only decisions require a recorded rationale. Specification review remains a distinct read-only gate after non-trivial `spec.md` is written and before downstream phases. Separate design authoring is split by default into system/integration design and Go code ownership design, and each triggered checkpoint has its own fan-out decision before the design packet is review-ready. Technical design review remains a distinct read-only gate whenever separate technical design depth is triggered, with lane depth scaled to the task risk.
+## Boundary
 
-## Shared Invariants
+- Subagents are read-only and advisory. Enforce this with the execution sandbox: no file or code writes, git mutation, task-ledger mutation, implementation-handoff changes, approval, or completion claims.
+- The root orchestrator owns lane selection, synthesis, conflict resolution, authoritative artifacts, final decisions, validation, and completion.
+- Each lane owns one concrete, independent, bounded question. Do not delegate a broad role label, a sequential step in the root reasoning chain, or work that would contend over shared mutable state.
+- Each lane uses one skill, or explicitly `no-skill`. A selected skill owns its procedure and stricter output shape.
+- Use no more than three concurrently active subagent lanes per root task by default. A larger concurrent set requires a task-specific reason recorded in the lane plan.
+- Keep agent nesting at depth one. A child returns any newly discovered independent question to the root instead of spawning another child.
 
-- Subagents are advisory and read-only: no code writes, file edits, git-state mutation, task-ledger changes, or implementation-handoff changes.
-- Final decisions, synthesis, implementation, reconciliation, and validation belong to the orchestrator.
-- Each lane uses at most one skill. If a selected skill defines a procedure or output shape, the skill owns it.
-- Agent files own domain scope, use/do-not-use rules, inspect-first surfaces, skill routing, and unique escalation rules.
-- Deep design and corner-case coverage stay in scope, but downstream effect alone does not create a new required domain decision.
-- Open another lane only when another domain must make a new decision before the current artifact can be production-ready for the accepted scope; otherwise return the consequence as a constraint, proof obligation, follow-up, or explicit `no new decision required` note.
-- A lane must not use `follow_up_only`, `constraint_only`, or `no new decision required` to defer a knowable architecture, ownership, contract, reliability, security, rollout, or validation decision that is required for production readiness in the accepted scope.
-- A lane must not recommend temporary bridges, compatibility shims, feature flags, canaries, or staged rollout unless the user requested staging or the inspected live constraints make a one-step target-state change unsafe or impossible. If such staging is unavoidable, the lane must include target state, exit criteria, removal/proof task, and owner.
-- When a lane evaluates non-trivial custom implementation, a new runtime dependency, or a meaningful helper/abstraction, it must compare the current Go standard library, established repository patterns, and mature open-source options. Report selected and rejected options with current evidence for maintenance/release activity, adoption such as stars or domain-equivalent signals, license, security posture, transitive dependency cost, API stability, repository-boundary fit, and the reason custom code is still justified when no library is selected.
-- When a lane evaluates a non-trivial architecture, system-design, workflow, integration, data-flow, resilience, or abstraction choice, it must perform Pattern Fit Diligence for its owned question. Search for known applicable design or system-design patterns, read concrete descriptions and real-use examples, compare each viable candidate against task forces, repository boundaries, operability, validation, and idiomatic Go fit, and report the selected pattern, rejected patterns, evidence, and custom-design justification when no pattern fits.
-- For replacement or cleanup-relevant scopes, lanes must inspect for unexplained surviving legacy surfaces in their assigned files or diff. Report each old surface as removed, refactored into the active path, retained with owner/reason/proof/exit condition, not applicable, or a reopen risk; do not leave stale code, tests, fixtures, configs, docs, generated outputs, skills, agents, or mirrors as implicit follow-up work.
-- Direct work normally stays local. Lean-local and full-orchestrated non-trivial work normally use multiple narrow lanes when independent questions exist; local-only lean work requires recorded rationale.
-- Every non-trivial phase approval must record `Subagent gate: complete | scoped_down | local_only | waived | not_expected | blocked` with an evidence pointer or rationale and readiness consequence. Missing gate status keeps the owning phase draft or blocked.
-- If the active subagent tool requires explicit user authorization for subagents, delegation, or parallel agent work, missing authorization is not a valid local-only, scoped-down, waived, or not-expected rationale. A required lane blocked only by missing authorization must be recorded as `Subagent gate: blocked: missing explicit subagent authorization`, and the next-session or reopen prompt must include an explicit `Subagent authorization:` line.
-- Every non-trivial task-local `spec.md` must receive a specification-review verdict before technical design, planning, or implementation starts. The review uses read-only lanes by default and records `PASS`, `CONCERNS`, or `FAIL`; `FAIL` reopens specification, research, specialist review, or a required user decision.
-- Separate design authoring must record `Design fan-out: complete | scoped_down | local_only | blocked` for every triggered system/integration or Go code ownership checkpoint before the design packet is review-ready. Run read-only specialist lanes for unresolved live forks or domain-owned design decisions; `local_only` requires candidate-lane analysis proving no omitted lane can change design correctness or planning readiness. For full-orchestrated, protected-domain, high-impact, or user-requested agent-backed technical design, `local_only` is invalid; scoped-down authoring still runs at least one read-only specialist lane unless read-only execution is unavailable and the gate is `blocked`. Missing design fan-out status blocks technical design review, planning, and implementation.
-- Lean-local work with a separate `design/overview.md` must still record a technical design review checkpoint before planning; local-only review requires a rationale explaining why no independent lane would materially improve correctness.
-- Full-orchestrated work uses multiple lanes by default; each lane still needs one owned question, one lens or specialist domain, and one skill or `no-skill`.
-- Full-orchestrated triggered design uses at least one technical-design-review lane before planning. A local-only review needs a scoped-down rationale and is invalid when independent design questions remain.
-- If technical design review returns `FAIL`, the repaired design or spec packet must receive a follow-up review verdict before planning. The follow-up may be targeted, but it must inspect the revised packet, verify the failed blockers were closed, and check that adjacent assumptions did not drift.
-- Broad formal spec clarification normally uses multiple challenger lanes with distinct lenses instead of one generic challenger. More lanes are justified by independent approval-risk domains, including when one default lens bundles domains that are independently approval-critical for the task; fewer lanes require a scoped-down rationale.
-- A scoped-down rationale must list every default lens, the approval-critical question considered for that lens, retained lane or lanes, and evidence-backed reason each omitted lens cannot change approval. If an omitted lens has an unresolved approval-critical question, that lane must run.
-- Lens is metadata for coverage, not a replacement for existing challenge or handoff classification vocabularies.
-- Do not invent missing artifacts, source facts, policy decisions, diffs, validation output, or skill results.
-- If input is insufficient, return `Missing input`, `Why it blocks`, and `Smallest artifact/evidence needed`.
-- If a bounded assumption is safe enough, label it and proceed.
+## Required Brief
 
-## Required Input Bundle
+Every lane brief includes:
 
-Every handoff should include:
+- owned question and why separate context helps;
+- mode: research, review, adjudication, or challenge;
+- inspect-first artifacts or source surfaces;
+- evidence boundary, constraints, and non-goals;
+- expected specialist output;
+- one skill or `no-skill`;
+- model route: custom-agent profile, exact model and reasoning effort selected by the root before launch, task-complexity rationale, and the launch surface that enforces the pair;
+- read-only execution choice.
 
-- goal and exact question,
-- expected mode: research, review, adjudication, or challenge,
-- current workflow phase and task-local artifact paths when present,
-- relevant diff, source files, source-of-truth documents, or specialist outputs to inspect,
-- lens or specialist domain when part of a multi-lane fan-out,
-- constraints, risk hotspots, non-goals, and known blockers,
-- contract-design scope when REST/API, OpenAPI/generated, event/webhook, or material internal-interface shape is plausible, including the exact resource/status/error/retry/async/freshness/compatibility question if known,
-- dependency/OSS due-diligence scope when a new dependency, custom infrastructure, or material abstraction is plausible,
-- Pattern Fit Diligence scope when architecture, workflow, integration, resilience, consistency, data-flow, or abstraction patterns could change the design,
-- known old surfaces, retired identifiers, generated/mirror sources, or retained compatibility surfaces when cleanup is in scope,
-- chosen skill name or `no-skill`,
-- fan-out decision: planned lanes with owned questions, or the recorded local-only rationale,
-- explicit read-only enforcement.
+Add only fields that can change the lane result. Review and challenge gates also name the reviewed artifact revision/content anchor, review-cycle attempt, prior findings whose closure must be checked, finding classification vocabulary, required evidence anchor, and allowed verdict recommendation. Do not copy repository-wide authority, fallback, model matrix, or handoff prose into each brief.
 
-For short challenge or review lanes, the input bundle may be compressed to one paragraph plus inspect-first paths, as long as the exact question, evidence requirement, skill, and read-only enforcement remain explicit.
+The `evidence-agent` may gather or reduce facts and propose a mechanical repair, but it cannot recommend or record a gate verdict. Role profiles do not select models. The root chooses and explicitly applies a task-appropriate model/reasoning pair before every lane launch under the canonical routing contract. A follow-up review uses a fresh thread/process and the same or a stronger task-appropriate capability choice than the review that found the issue.
 
-For specification review lanes, include the review gate status target and inspect the completed spec before downstream artifacts:
+## Compact Result
 
-- review-ready `spec.md`;
-- `workflow-plan.md`, `workflow-plans/specification.md`, and `workflow-plans/specification-review.md` when present;
-- preserved `research/*.md` or formal clarification fan-in that the spec relies on;
-- relevant source-of-truth artifacts named by the spec;
-- known assumptions, accepted trade-offs, non-goals, reopen conditions, and expected downstream proof obligations.
+When the chosen skill does not require a stricter shape, return:
 
-For technical design review lanes, include the review gate status target and inspect the system/integration plus Go code ownership design packet before implementation artifacts:
+- `Conclusion`: direct answer to the owned question.
+- `Evidence`: bounded file, artifact, source, or command anchors; separate facts from assumptions.
+- `Finding or decision`: specialist-specific fields requested by the brief.
+- `Open gap`: only unresolved input or risk that can change the conclusion.
+- `Escalation`: target owner or artifact and the smallest next action, or `none`.
 
-- specification-review-approved `spec.md`;
-- `design/overview.md`, triggered `design/system-integration.md`, triggered `design/go-code-ownership.md`, and other split or conditional design artifacts;
-- `workflow-plan.md` and `workflow-plans/system-integration-design.md`, `workflow-plans/go-code-ownership-design.md`, or `workflow-plans/technical-design-review.md` when present;
-- `docs/repo-architecture.md` when boundary, ownership, dependency direction, or runtime flow matters;
-- relevant specialist outputs;
-- prior technical design review findings and claimed resolutions when this is a follow-up review after `FAIL`;
-- known assumptions, accepted trade-offs, non-goals, reopen conditions, and expected planning proof obligations.
+Every material finding names its `Fan-in destination`: `spec_decision`, `spec_constraint`, `proof_obligation`, `accepted_risk_candidate`, `reopen`, or `record_only`. Review or challenge findings also name the owner/reopen target and why the severity is not stronger or weaker.
 
-## Lane Planning
+## Shared Review Finding Envelope
 
-Before spawning lanes for a non-trivial phase, the orchestrator should record a compact lane plan in the active workflow surface or handoff:
+Review skills inherit this envelope instead of copying it into every `SKILL.md`. A specialist skill adds only domain-specific axes, evidence, severity calibration, no-finding wording, or escalation fields.
 
-- `Trigger`: why fan-out is required, scoped down, waived, or not expected.
-- `Gate type`: research fan-out, spec clarification, specification review, workflow adequacy, system-integration-design fan-out, go-code-ownership-design fan-out, design-authoring fan-out, technical design review, task-ledger review, review/validation fan-out, or another named gate.
-- `Required lane policy`: default lens set, expanded lane set, scoped-down lane set, or local-only rationale.
-- `Lane table`: lane ID, agent, mode, lens/domain, owned question, skill or `no-skill`, inspect-first evidence target, order or parallelism, read-only enforcement, and status.
-- `Fan-in owner`: always the orchestrator.
+Order review output as `Findings`, `Handoffs`, `Design Escalations`, `Residual Risks`, and `Validation Commands`. Put merge-risk findings first. Write `None.` for an empty section, or use a specialist's explicit no-finding sentence when it defines one; still disclose residual risks and evidence gaps.
 
-Use several narrow lanes over one broad lane when independent domains can change the decision. Merge duplicate lanes. If a plausible lens is omitted, record why it cannot change the current approval, design, planning, or readiness decision.
+Each finding uses:
 
-If subagent spawning is expected but no spawn tool is visible, first use tool discovery for subagent or multi-agent tooling before declaring lane execution unavailable. If the discovered or active tool is blocked only because the prompt did not explicitly authorize subagents, delegation, or parallel agent work, stop at the phase boundary with the missing-authorization blocker instead of converting the gate to local-only review.
+```text
+[severity] [skill-name] [file:line]
+Issue:
+Impact:
+Suggested fix:
+Reference:
+```
 
-Before adding a lane, record the candidate seam, the live-fork question, the artifact or task-ledger decision it could change, and why the narrowest suitable lane is needed. If there is no live fork and no domain-owned decision, do not spawn the lane; record the seam as a constraint, proof obligation, follow-up, or no-action item for fan-in.
+Every finding includes the exact source anchor, concrete defect, observable impact or realistic failure mode, smallest safe correction, supporting contract or evidence when one exists, and a focused validation command or missing-proof statement when useful. It also names whether the correction is local, needs a specialist handoff, or reopens design; material subagent findings retain the `Fan-in destination`, owner/reopen target, and why the severity is not stronger or weaker.
 
-A local-only rationale is valid only when it lists the decision frontier, candidate lanes or lenses considered, evidence checked for each, why each omitted lane cannot change approval or readiness, and the seam that would reopen fan-out. Generic "bounded" or "single-domain" rationale is invalid for non-trivial phase approval.
+Calibrate severity by merge risk:
 
-## Fan-In Envelope
+- `critical`: confirmed high-impact correctness, security, data, availability, compatibility, or release-safety failure that makes merge unsafe;
+- `high`: strong evidence of a significant defect or unbounded risk on a material path;
+- `medium`: bounded but meaningful correctness, operability, maintainability, or evidence weakness;
+- `low`: local hardening or clarity improvement with concrete value and limited blast radius.
 
-When the chosen skill does not define a stricter shape, return:
+Do not invent a finding to fill the envelope. If the evidence does not support a merge-risk defect, record the proof gap or residual risk instead.
 
-- `Decision or findings`: the role-specific conclusion, recommendation, blocker call, or ordered findings.
-- `Evidence`: tight references to files, artifacts, commands, contracts, or source facts.
-- `Legacy cleanup status`: when cleanup is in scope, list unexplained surviving old surfaces and whether each is removed, refactored, retained with owner/reason/proof/exit condition, not applicable, or requires reopen.
-- `Dependency/OSS status`: when dependency choice or custom implementation is in scope, list selected and rejected stdlib, repository-pattern, and OSS options with evidence and any missing due-diligence blocker.
-- `Pattern Fit status`: when design/system patterns are in scope, list selected and rejected patterns, source descriptions or examples, task applicability, Go/repository fit, and any missing due-diligence blocker.
-- `Contract-design status`: when contract design is in scope, state whether `design/contracts/`, compact contract design, `not_expected`, or `blocked` is recommended, plus runtime source of truth, generated outputs, compatibility class, proof carrier, and reopen trigger.
-- `Open risks/gaps`: unresolved assumptions, compatibility, ownership, test, validation, or rollout risks.
-- `Recommended handoff`: one smallest next action with target owner or artifact.
-- `Confidence`: high, medium, or low with the key uncertainty.
+## Input Gaps And Escalation
 
-Every material lane finding must include a `Fan-in destination`: `spec_decision`, `spec_constraint`, `proof_obligation`, `accepted_risk_candidate`, `reopen`, or `record_only`. A finding without a destination is not synthesis-ready because the orchestrator cannot tell which artifact, proof path, or reopen target must absorb it.
+- Do not invent missing artifacts, source facts, policy decisions, validation output, or sibling-lane results.
+- If a safe bounded assumption permits progress, label it and continue.
+- Otherwise return `Missing input`, `Why it blocks`, and `Smallest evidence needed`; do not broaden the lane or ask for unrelated context.
+- Escalate when the answer belongs to another owner, the lane question is not independent, required evidence is outside the brief, or resolving it would change approved scope, contract, ownership, or workflow state.
+- A lane may recommend another lane only by naming the new independent question. The root decides whether to spawn it, merge it, run it later, or keep it local.
 
-Every material review or challenge finding must also include an `Owner/reopen target` and `Why not stronger/weaker`. The owner is the artifact, phase, user or specialist decision, or downstream proof surface that can absorb the finding. The severity note explains why the finding is not merely record-only, not only a proof obligation, and not a blocker when a weaker classification is recommended.
+## Gate Preservation
 
-When a downstream domain is touched, strongly prefer classifying each major point with one of:
+Mandatory specification review, formal clarification challenge, technical design review, task-ledger review, and other recorded independent gates remain mandatory when triggered. Mandatory means the checkpoint and independent review/challenge must occur; it does not imply several broad lanes. One focused lane is sufficient when it owns the only independent approval question. Multiple lanes are justified only by multiple non-duplicative questions that can change the gate result.
 
-- `must_decide_now`: another domain must make a new decision before the current artifact can be production-ready for the accepted scope.
-- `constraint_only`: the current decision stands, but later work must preserve a concrete constraint in that domain.
-- `proof_only`: no new decision is required now, but implementation, review, or validation must prove something in that domain.
-- `follow_up_only`: the effect is real but not planning-critical for the current artifact and not required for production readiness in the accepted scope; revisit only if later work reaches that seam.
-
-Recommended handoff classifications:
-
-- `spawn_agent`
-- `reopen_phase`
-- `needs_user_decision`
-- `accept_risk`
-- `record_only`
-- `no_action`
-
-Pair the classification with the target owner or artifact and the smallest next step.
-
-Specification review fan-in must end with one gate result:
-
-- `PASS`: technical design, compact tasking, or planning may start from the reviewed spec.
-- `CONCERNS`: the next phase may start only with named accepted spec risks and proof obligations.
-- `FAIL`: downstream phases must not start; reopen specification, research, specialist review, or required user decision. After repair, a follow-up review verdict is still required before downstream work.
-
-Specification review lens coverage should include trigger or source, owned readiness question, falsification check, status, evidence pointer, reason, and disposition. `covered` means the lane tried to disprove readiness for that lens; related prose alone is insufficient.
-
-Use this specification-review decision order: any `fail` lens, missing required spec decision, or unresolved blocker classification means `FAIL`; otherwise bounded accepted risks or proof obligations that downstream artifacts can carry without changing the spec decision mean `CONCERNS`; otherwise the result may be `PASS`.
-
-Specification review findings should use the strongest downstream-readiness classification:
-
-- `blocks_spec_approval`: the spec cannot become downstream-ready until the issue is resolved.
-- `reopens_specification`: the spec content must change before review can pass.
-- `reopens_research`: missing evidence prevents an honest spec decision.
-- `requires_user_decision`: the missing decision belongs to the user or external policy/business owner.
-- `accepted_risk_candidate`: the orchestrator may proceed only with a named accepted risk and boundary.
-- `proof_obligation`: downstream artifacts must carry a named proof.
-- `record_only`: useful context that does not affect downstream entry.
-
-Do not let specification review become spec authorship. Review agents do not edit `spec.md`; if a finding requires changing scope, decisions, assumptions, validation, or handoff language, return `FAIL` or the smallest reopen target instead of patching the spec inside review.
-
-Do not use `proof_obligation` to defer a missing spec decision. If the decision itself is absent or contradictory, classify the finding as `reopens_specification`, `reopens_research`, `requires_user_decision`, or `blocks_spec_approval` and recommend `FAIL`.
-
-Technical design review fan-in must end with one gate result:
-
-- `PASS`: planning may start from the reviewed system/integration and Go code ownership design.
-- `CONCERNS`: planning may start only with named accepted design risks and proof obligations.
-- `FAIL`: planning must not start; reopen system/integration design, Go code ownership design, or specification. After repair, a follow-up review verdict is still required before planning.
-
-Technical design review must also include decision-quality rationale. For every material finding or gate result, state:
-
-- the planning decision that would become unsafe, ambiguous, or unreviewable if the issue is ignored, including system behavior, package/file ownership, cleanup, or test ownership when relevant;
-- whether the issue is a real design defect, a missing approved decision, a bounded implementation proof, or only an implementation preference;
-- the strongest plausible counterargument or simpler alternative considered, and why it does or does not change the recommendation;
-- why the chosen gate result is not stronger or weaker, such as why a finding is `CONCERNS` instead of `FAIL`, or `record_only` instead of `proof_obligation`;
-- for `PASS`, the main falsification checks performed and why they did not expose a planning blocker.
-
-Do not let design review become taste review. A stylistic preference, preferred abstraction shape, or "could be cleaner" concern is not a blocker unless it creates a concrete system ownership, package/file ownership, contract, sequencing, failure-mode, rollout, operability, cleanup, test ownership, or validation risk for planning. Conversely, do not downgrade a missing production-readiness decision to a proof obligation when planning would have to invent the decision.
-
-A technical-design-review lane must name the exact `tasks.md` planning decision that becomes unsafe if its finding is ignored. If no task source, owner file/package, order, proof, checkpoint, cleanup/test obligation, or stop/reopen condition would change, classify the point as `record_only` or no finding instead of blocking planning.
-
-Classify each technical design review finding by strongest planning impact:
-
-- `blocks_planning`: planning would invent or hide an important decision if it started now.
-- `reopens_design`: the design bundle must change before review can pass.
-- `reopens_spec`: the approved problem frame, invariant, scope, or contract must change.
-- `accepted_risk_candidate`: the orchestrator may accept the risk only with a named reason and boundary.
-- `proof_obligation`: planning may proceed only if the obligation is carried into `tasks.md`, `test-plan.md`, or `rollout.md`.
-- `record_only`: useful context that does not affect planning entry.
-
-`CONCERNS` is valid only when no finding still has `blocks_planning`, `reopens_design`, or `reopens_spec`, and the remaining accepted risks or proof obligations are named for planning.
-
-A follow-up technical design review after `FAIL` must identify the prior failed gate, the revised artifacts or decisions, the blockers that are now closed, any changed assumptions, the residual planning obligations, and the final gate result. A design author's repair note is evidence, not a substitute for the follow-up verdict.
-
-Follow-up technical design review records should include a compact closure table: `Prior finding | Repair/evidence anchor | Rechecked areas | Closure status | Residual proof obligation/reopen target`.
-
-For multi-lane fan-out, the orchestrator must reconcile lane outputs before treating the gate as complete:
-
-- deduplicate overlapping findings;
-- resolve or record conflicting assumptions;
-- treat lane-level missing input, unresolved blockers, and material blocker-severity conflicts as blocking the relevant approval area until answered, explicitly waived or accepted as risk, or routed to the owning phase;
-- preserve only final decisions, assumptions, constraints, proof obligations, accepted risks, or reopen targets in authoritative artifacts;
-- keep raw lane transcripts out of `spec.md`, `design/`, and `tasks.md`.
-- keep existing per-lane classification names stable unless the workflow docs and templates are intentionally changed together.
-
-When workflow-control artifacts are used, fan-in should be recorded as a compact audit:
-
-- `Lane result summary`: strongest finding, classification, falsification check or decisive evidence test, recommended handoff, owner or reopen target, and evidence pointer.
-- `Fan-in`: orchestrator resolution, action, owner or artifact updated, unresolved conflicts, accepted risks, proof obligations, and why severity is not stronger or weaker when material.
-- `Gate result`: complete, blocked, waived, not expected, `PASS`, `CONCERNS`, or `FAIL`, using the phase vocabulary.
-- `Readiness consequence`: whether the next phase may start and where any proof obligations are carried.
-- `Reopen target`: required when blocked or failed.
-
-## Escalation Rules
-
-Escalate instead of stretching the lane when:
-
-- the decisive fact or required new decision belongs to a different domain owner,
-- the answer would require another skill in the same pass,
-- the approved artifact bundle is missing or contradictory,
-- a local review exposes a spec/design/planning gap,
-- a user or product policy decision is required,
-- the requested work would require edits or git mutation.
-
-Do not escalate only because another domain is affected. If that domain does not need to decide now, keep the answer local and return the consequence classification instead.
-
-## Brief Quality Bar
-
-Good subagent briefs are narrow, evidence-oriented, explicit about output, and centered on one owned question instead of a parallel cross-domain design package. For multi-challenger clarification, all lanes may share the same candidate spec bundle, but each lane must have a distinct lens, sibling-lens context, and a fan-in path. Start from `docs/subagent-brief-template.md` when the lane is not trivial; use the short variant for focused challenge or review lanes.
+Applicable repository instructions provide standing `capability_only` authorization for read-only lanes. Do not ask the user to repeat authorization between a macro phase and its internal checkpoints. If both the primary spawn surface and configured independent Codex fallback are unavailable, block only the genuinely required lane; do not create extra lanes to manufacture the blocker or downgrade required review to local-only work.

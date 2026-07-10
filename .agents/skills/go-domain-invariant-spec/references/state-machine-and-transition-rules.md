@@ -21,8 +21,8 @@ Owner: orchestrator workflow contract
 State: planning
 Trigger: expected `tasks.md` is ready for implementation handoff
 Preconditions:
-- `spec.md` is approved or eligible for explicit direct-path waiver
-- required compact or split design context is approved, merged into `spec.md`, or covered by design-skip rationale
+- non-trivial `spec.md` is approved by a current specification-review verdict
+- required compact or split design context is approved, or the owner trigger resolved separate design depth to not expected
 - validation/proof path is explicit
 Allowed next states:
 - implementation when readiness = PASS
@@ -40,7 +40,7 @@ Copy the shape: exact current state, trigger, guard, legal next state, forbidden
 ```text
 | From | Trigger | Guard | To | Violation outcome |
 | --- | --- | --- | --- | --- |
-| `specification` | `spec.md` candidate complete | clarification gate reconciled, or formal gate not expected after recorded shape reclassification plus subagent gate decision | `technical_design` | keep `spec.md` draft or blocked |
+| `specification` | `spec.md` candidate complete | clarification gate reconciled, or formal gate not expected after recorded shape reclassification plus subagent gate decision | `specification_review` | keep `spec.md` draft or blocked |
 | `implementation` | proof exposes missing required `tasks.md` | none | `planning_reopen` | stop coding; do not invent task ledger mid-code |
 ```
 

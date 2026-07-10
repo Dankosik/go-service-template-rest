@@ -1,6 +1,6 @@
-# Go Code / Ownership Design Phase
+# Go Code / Ownership Design Checkpoint
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this after system/integration design is complete or explicitly not expected, when the next design checkpoint must decide how the approved behavior belongs in idiomatic, maintainable Go code before technical design review and planning.
+Internal checkpoint companion for the user-started technical-design macro phase. Run it after system/integration design is complete or explicitly not expected and before independent technical design review in the same root session.
 
 ## Read When
 
@@ -23,11 +23,11 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this after syst
 - A Go code ownership design record in `design/overview.md`, `design/go-code-ownership.md`, `design/component-map.md`, `design/ownership-map.md`, or `design/dependency-graph.md`.
 - A concrete owner package/file placement decision for each meaningful changed responsibility, or a blocker/reopen target when placement would require a missing system/spec decision.
 - Recorded `Design fan-out (go-code/ownership): complete | scoped_down | local_only | blocked` with candidate code seams, lane table or rationale, fan-in result, and readiness consequence.
-- Workflow-control updates that route next to `technical-design-review`, or to the smallest reopen target when Go code ownership design is blocked.
+- Workflow-control updates that mark this internal checkpoint ready for `technical-design-review`, or name the smallest reopen target when Go code ownership design is blocked.
 
 ## Stop Rule
 
-Stop after the Go code ownership design checkpoint is complete or blocked. Do not draft `tasks.md`, approve implementation readiness, start implementation, or perform technical design review in this phase.
+The checkpoint stops authoring when complete or blocked, but it does not end the user session. When complete, the technical-design root invokes independent technical design review. Do not draft `tasks.md`, approve implementation readiness, or start implementation.
 
 ## Ownership
 
@@ -134,11 +134,11 @@ Reviewer falsification handle: <how review can verify omitted lanes and collapse
 Readiness consequence: <ready for technical-design-review | blocked | reopen system-integration-design/specification/research>
 ```
 
-`local_only` is valid only with candidate-lane analysis proving no omitted lane can change code ownership correctness or planning readiness. For full-orchestrated, protected-domain, high-impact, or user-requested agent-backed design, `local_only` is not eligible.
+`local_only` is valid when the root records that the checkpoint has no concrete independent bounded ownership question whose separate context would materially improve correctness or planning readiness. `full_orchestrated`, `FULL-*`, and domain count do not require a specialist authoring lane by themselves.
 
-## Handoff To Technical Design Review
+## Internal Handoff To Technical Design Review
 
-This checkpoint is ready to hand off only when technical design review can test planning readiness without choosing package/file ownership.
+This checkpoint is ready to continue only when technical design review can test planning readiness without choosing package/file ownership. The handoff is root-internal and emits no user prompt.
 
 Missing `Source responsibility audit` keeps this checkpoint blocked. It is not a planning concern and cannot be converted into a proof-only obligation.
 

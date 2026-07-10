@@ -8,15 +8,6 @@ description: "Review Go code changes for architecture alignment, boundary integr
 ## Purpose
 Protect approved design intent in code so boundaries, ownership, maintainability, and cross-domain seams do not drift silently.
 
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
-
 ## Specialist Stance
 - Review design drift as ownership, dependency direction, source-of-truth spread, and accidental complexity.
 - Prioritize hidden new decisions and boundary bypasses over subjective cleanup.
@@ -68,43 +59,8 @@ Do not:
 - Complexity control: abstractions, helpers, wrappers, and interfaces reduce real change risk instead of becoming ownership buckets.
 - Cross-domain seams: flag design-shape risk and hand off deep specialist correctness to the owner review.
 
-## Finding Quality Bar
-Each finding should include:
-- exact `file:line`
-- the concrete design drift
-- why it increases change, regression, or operability risk
-- the smallest safe correction
-- the relevant contract or decision when one exists
-- whether the issue is local code drift or needs design escalation
-- whether the drift is scattered source-of-truth ownership or over-broad helper abstraction
-- whether an unexplained surviving replaced or unused legacy surface should be removed, refactored, retained through an approved artifact, or routed to a reopen target
-- whether a dependency/custom-code choice lacks approved due diligence or needs specification, technical design, or planning escalation
-- whether a pattern-like design shape lacks approved Pattern Fit Diligence or fails to preserve the selected pattern's guarantee
-- whether a code-level pattern simplifies local ownership and proof, or expands into accidental complexity that needs simplification or design escalation
-
-Severity is merge-risk based:
-- `critical`: boundary or ownership violation that makes merge unsafe
-- `high`: unexplained surviving replaced path can still execute, import, generate, or validate, or major design drift or complexity growth has meaningful regression risk
-- `medium`: unexplained surviving test, fixture, doc, config, skill, agent, or mirror drift, or bounded maintainability or seam-integrity weakness
-- `low`: local design hardening, clarity improvement, or clearly unreachable/non-authoritative old surface that could still mislead future work
-
-## Deliverable Shape
-Return review output in this order:
-- `Findings`
-- `Handoffs`
-- `Design Escalations`
-- `Residual Risks`
-- `Validation Commands`
-
-Use this format for each finding:
-
-```text
-[severity] [go-design-review] [file:line]
-Issue:
-Impact:
-Suggested fix:
-Reference:
-```
+## Evidence And Shared Finding Envelope
+Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete design drift, change/regression/operability risk, contract or decision, smallest safe correction, and whether the problem is source-of-truth scattering, over-broad abstraction, an unexplained surviving replaced or unused legacy surface, missing dependency/OSS or Pattern Fit diligence, or a code-level pattern that increases rather than removes complexity. `critical` is a merge-unsafe boundary/ownership violation; `high` includes an executable/importable/generated/validated replaced path or major design drift with material regression risk.
 
 ## Escalate When
 Escalate when:

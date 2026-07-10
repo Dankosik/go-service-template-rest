@@ -1,7 +1,7 @@
 # Clarification-Gate Reconciliation
 
 ## Behavior Change Thesis
-When loaded after a `spec-clarification-challenge` pass, this file makes the model reconcile findings into final spec sections and gate status instead of pasting the challenge transcript or approving through unresolved blockers.
+When loaded after a `spec-clarification-challenge` pass, this file makes the model reconcile findings into final spec sections and formal clarification `procedural_gate_state` instead of pasting the challenge transcript or approving through unresolved blockers.
 
 ## When To Load
 Load this after challenge findings arrive, when checking whether non-trivial `spec.md` review-readiness is legitimate, or when a draft contains reviewer comments rather than resolved outcomes.
@@ -12,7 +12,7 @@ Load this after challenge findings arrive, when checking whether non-trivial `sp
 - For design-shaped detail, record `[defer_to_design]` only when the behavior decision is already stable.
 - For external product or policy decisions, record `[requires_user_decision]` and keep the spec draft or blocked if the answer changes planning.
 - For under-evidenced technical claims, record `[targeted_research]` or reopen research instead of guessing.
-- If a material decision changes or a major seam reopens and then resolves, rerun the clarification challenge once before approval.
+- If a material decision changes or a major seam reopens and then resolves, rerun the clarification challenge once before review-ready handoff; mandatory specification review owns approval.
 - Do not copy raw findings, reviewer names, or back-and-forth into `spec.md`.
 
 ## Imitate

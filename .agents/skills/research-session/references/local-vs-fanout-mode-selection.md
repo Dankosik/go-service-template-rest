@@ -9,17 +9,11 @@ Load when the hard choice is the research mode for this session.
 Do not load for tiny direct-path work where `research-session` itself should be skipped, or when mode is already chosen and only lane details need repair; use `research-lane-planning.md` for that.
 
 ## Decision Rubric
-Choose `local` when:
-- the uncertainty is bounded to one domain, artifact family, or repository surface
-- the orchestrator can inspect the evidence directly without losing clarity
-- the answer is low-risk or easily reversible
-- a preserved note may help, but independent specialist lanes would not change the result
+Choose `local` when the work is small, sequential, dependent on one reasoning chain, or would contend over shared mutable state. Domain count and execution shape do not create lanes by themselves.
 
-Choose read-only `fan-out` when:
-- materially different domains can produce different evidence, for example API, data, security, reliability, or rollout
-- a second opinion would reduce ambiguity or high-impact risk
-- the questions can be split into independent lanes with one question each
-- preserved specialist evidence will help later synthesis, challenge, or resume
+Choose read-only `fan-out` when the work divides into concrete independent bounded questions and separate context materially improves speed or quality. Each lane owns one question and an evidence boundary.
+
+Default to no more than three concurrently active subagent lanes. Exceed three only with a task-specific reason why the extra question cannot wait, merge, or run sequentially.
 
 Refuse both easy mistakes: do not fan out to write-capable or multi-skill lanes, and do not stay local just because fan-out would expose an unresolved seam.
 
@@ -38,13 +32,13 @@ Copy this when the work is narrow but still worth an explicit research checkpoin
 
 ```markdown
 Research mode: fan-out
-Why: export jobs touch API semantics, persisted state, download security, retry behavior, and rollout risk. Independent read-only lanes reduce the chance of one research pass flattening those seams.
+Why: export jobs expose three independent evidence questions whose sources can be inspected separately.
 Lanes:
 - L1 api-agent/no-skill: identify existing async job endpoint patterns and response/status conventions.
 - L2 data-agent/no-skill: identify persisted job state ownership, tenant keys, and transaction boundaries.
 - L3 security-agent/no-skill: inspect existing auth and download-link trust boundaries.
-- L4 reliability-agent/no-skill: identify retry, timeout, and terminal failure evidence in current worker patterns.
-Fan-in: orchestrator compares lane claims, records conflicts, and routes either to pre-spec challenge or future `specification-session`.
+- Reliability and rollout follow only after root fan-in identifies an unresolved independent question; they are not automatic lanes.
+Fan-in: the root orchestrator compares lane claims, records conflicts, and routes either to pre-spec challenge or future `specification-session`.
 Stop rule: no `spec.md`, no `design/`, no implementation.
 ```
 

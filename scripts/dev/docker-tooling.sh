@@ -100,6 +100,7 @@ usage() {
 	echo "  gosec"
 	echo "  go-security"
 	echo "  secret-scan"
+	echo "  workflow-routing-check"
 	echo "  guardrails-check"
 	echo "  skills-check"
 	echo "  agents-check"
@@ -504,6 +505,9 @@ go-security)
 secret-scan|secrets-scan)
 	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json ."
 	;;
+workflow-routing-check)
+	run_go "go test ./scripts/ci/workflow-routing-check && go run ./scripts/ci/workflow-routing-check && bash ./scripts/ci/sync-mirror-integration-check.sh"
+	;;
 guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"
 	;;
@@ -530,6 +534,7 @@ container-security)
 	;;
 ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
+	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" workflow-routing-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" agents-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check

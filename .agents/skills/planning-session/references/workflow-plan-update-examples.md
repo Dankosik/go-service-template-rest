@@ -9,32 +9,32 @@ Load when repairing or writing the master `workflow-plan.md` planning status, ar
 ## Decision Rubric
 - Keep `workflow-plan.md` cross-phase: status, artifact inventory, blockers, pending task-review/readiness state, challenge packet state, boundary, and next session.
 - Do not copy `tasks.md`, `spec.md`, or design details into the master file.
-- Master and `workflow-plans/planning.md` must agree on lifecycle `Phase status` such as `pending`, `in_progress`, `blocked`, or `complete`; use a separate routing state for reopened handoffs.
+- Master and `workflow-plans/planning.md` must agree on canonical `phase_state=not_started|active|complete|blocked|reopened`; lifecycle, routing validity, session boundary, and handoff readiness remain separate fields.
 - Record a `Next session context bundle` every time: either say default resume order is sufficient or list the task-specific file bundle for the next implementation or reopen session.
 - If planning is blocked, `Next session starts with` points to the reopen target, not a coding task.
-- Adequacy challenge status must say whether blocking findings were reconciled, waived under an eligible rationale, or still block handoff.
+- When formal adequacy is triggered, its typed gate state must say whether blocking findings were reconciled or still block handoff; when no `ADEQUACY-*` condition is true, record the local deterministic matrix audit instead of a waiver.
 
 ## Imitate
 ```markdown
 Current phase: planning
-Phase status: complete
-Session boundary reached: yes
-Ready for next session: yes
+phase_state: complete
+session_boundary: reached
+handoff_readiness: ready
 Next session starts with: task-review/readiness
 Next session context bundle: `spec.md` for decisions; `design/overview.md` and required design maps for technical constraints; `tasks.md` for ledger review and proof mapping.
 
-Artifact status:
-- `spec.md`: approved
-- `design/`: approved
-- `tasks.md`: draft_review_ready
-- `test-design`: not expected; proof obligations fit in `tasks.md`
-- `rollout.md`: not expected; no migration or delivery choreography
-- `workflow-plans/planning.md`: complete
-- review/validation phase-control files: not expected; `tasks.md` is sufficient for the task-review/readiness packet
+Artifact state:
+- `spec.md`: artifact_expectation=expected, artifact_state=approved, record_validity=current
+- `design/`: artifact_expectation=expected, artifact_state=approved, record_validity=current
+- `tasks.md`: artifact_expectation=expected, artifact_state=review_ready, record_validity=current
+- `test-plan.md`: artifact_expectation=not_expected, artifact_state=absent, record_validity=current, waiver_disposition=none; the test-design owner trigger resolved to not expected because proof obligations fit directly in `tasks.md`
+- `rollout.md`: artifact_expectation=not_expected, artifact_state=absent, waiver_disposition=none; no migration or delivery choreography
+- `workflow-plans/planning.md`: artifact_expectation=expected, artifact_state=complete, record_validity=current
+- review/validation phase-control files: artifact_expectation=not_expected, artifact_state=absent; `tasks.md` is sufficient for the task-review/readiness packet
 
-Task ledger review: pending_task_review
-Implementation readiness: pending_task_review
-Workflow plan adequacy challenge packet: ready for review, or not expected with rationale
+Task-review/readiness procedural_gate_state: pending
+Task-review/readiness review_verdict: pending
+Workflow plan adequacy procedural_gate_state: pending when any ADEQUACY-* condition is true; otherwise local deterministic matrix audit: complete
 Blockers: none
 ```
 
@@ -48,21 +48,21 @@ Next session context bundle: default resume order is sufficient; no task-specifi
 
 ```markdown
 Current phase: planning
-Phase status: blocked
-Session boundary reached: no
-Ready for next session: no
+phase_state: blocked
+session_boundary: reached
+handoff_readiness: ready
 Next session starts with: go-code-ownership-design
 Next session context bundle: `spec.md`, current `design/overview.md`, and the blocked design artifact that owns the missing decision.
 
-Artifact status:
-- `tasks.md`: blocked
-- `workflow-plans/planning.md`: blocked
+Artifact state:
+- `tasks.md`: artifact_expectation=expected, artifact_state=blocked, record_validity=current
+- `workflow-plans/planning.md`: artifact_expectation=expected, artifact_state=blocked, record_validity=current
 
-Task ledger review: pending_task_review
-Implementation readiness: pending_task_review
+Task-review/readiness procedural_gate_state: blocked
+Task-review/readiness review_verdict: pending
 Blocker: implementation order depends on a missing ownership decision in the design bundle.
-Reopen target: go-code-ownership-design
-Routing state: reopen go-code-ownership-design
+phase_state: reopened
+reopen_target: go-code-ownership-design
 ```
 
 Copy this shape: the blocked master update routes upstream instead of implying implementation can start.
@@ -70,8 +70,8 @@ Copy this shape: the blocked master update routes upstream instead of implying i
 ## Reject
 ```markdown
 Current phase: planning
-Planning status: complete
-Implementation readiness: <non-pending verdict>
+phase_state: complete
+Task-review/readiness review_verdict: <non-pending verdict assigned by planning>
 ```
 
 Failure: planning is assigning readiness. The next session should normally be `task-review/readiness`.
@@ -86,4 +86,4 @@ Failure: it hides whether blocking findings existed and whether they were reconc
 - Letting master and phase-local files contradict each other.
 - Recording `tasks.md: approved` before the separate task-review/readiness gate passes.
 - Treating `workflow-plan.md` as a full planning document.
-- Omitting `Session boundary reached`, `Next session starts with`, or the always-present `Next session context bundle`, forcing the next agent to infer state from chat.
+- Omitting canonical `session_boundary`, `Next session starts with`, or the always-present `Next session context bundle`, forcing the next agent to infer state from chat.

@@ -1,6 +1,6 @@
 ---
 name: spec-clarification-challenge
-description: "Run a specification clarification challenge when formal challenge is triggered for `spec.md` work. Use inside a read-only challenger subagent during full-orchestrated, high-risk, protected-domain, or otherwise formally challenged specification, after candidate decisions exist and before `spec.md` is marked review-ready, to surface non-obvious questions, hidden assumptions, corner cases, architecture/data/API/security/reliability concerns, and review-readiness blockers the orchestrator must reconcile. Lean-local work without an escalation trigger uses inline `Risk Challenge` instead."
+description: "Run a specification clarification challenge when the canonical formal-clarification predicate is triggered for `spec.md`: `execution_shape=full_orchestrated`, relevant `FULL-*` evidence true or approval-relevant unknown, hard-to-reverse or cross-domain decisions, `agent_request=substantive`, or an explicit deep challenge. Use inside a read-only challenger subagent after candidate decisions exist and before review-ready handoff to surface approval-changing questions the orchestrator must reconcile. Lean-local work without one of those triggers uses inline `Risk Challenge` instead."
 ---
 
 # Spec Clarification Challenge
@@ -8,23 +8,14 @@ description: "Run a specification clarification challenge when formal challenge 
 ## Purpose
 Surface the few questions that could still make `spec.md` review-readiness dishonest.
 
-This skill is a formal gate inside `specification`, not a workflow phase, not the mandatory post-spec specification-review gate, and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk before the spec becomes review-ready. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. In broad formal clarification, this skill normally runs as one lane in a multi-lane read-only challenger set. Single-lane use is valid only when the orchestrator provides a scoped-down rationale listing the default lenses considered and showing with evidence that omitted lenses cannot change review-readiness.
-
-## Outcome-First Operating Rules
-- Start by naming the skill-specific outcome, success criteria, constraints, available evidence, and stop rule.
-- Treat workflow steps as decision rules, not a ritual checklist. Follow exact order only when this skill or the repository contract makes the sequence an invariant.
-- Use the minimum context, references, tools, and validation loops that can change the deliverable; stop expanding when the quality bar is met.
-- Before acting, resolve prerequisite discovery, lookup, or artifact reads that the outcome depends on; parallelize only independent evidence gathering and synthesize before the next decision.
-- Prefer bounded assumptions and local evidence over broad questioning; ask only when a missing fact would change correctness, ownership, safety, or scope.
-- When evidence is missing or conflicting, retry once with a targeted strategy or label the assumption, blocker, or reopen target instead of treating absence as proof.
-- Finish only when the requested deliverable is complete in the required shape and verification or a clearly named blocker/residual risk is recorded.
+This skill is a formal gate inside `specification`, not a workflow phase, not the mandatory post-spec specification-review gate, and not a second design document. It gives the orchestrator approval-focused questions to answer from evidence, route to targeted expert research, defer explicitly, or record as accepted risk before the spec becomes review-ready. Lean-local `Risk Challenge` is handled inline in `spec.md` unless an escalation trigger requires this formal lane. One focused independent challenger lane is the default; add lanes only for additional concrete independent approval questions that can change review-readiness and materially benefit from separate context.
 
 ## Scope
 - inspect candidate decisions that are already close to `spec.md` review-readiness
 - find non-obvious questions that could change scope, acceptance semantics, architecture boundaries, source-of-truth ownership, data/API/security/reliability behavior, failure semantics, rollout, or validation strategy
 - classify each question by approval impact and recommend the smallest next action
 - keep the output compact enough for direct orchestrator reconciliation
-- preserve the escalation boundary: use this formal lane for full-orchestrated or protected-domain approval risk, not for lean-local ceremony
+- preserve the escalation boundary: use this formal lane only when `execution_shape=full_orchestrated` or another exact canonical formal-clarification trigger from `AGENTS.md` is true, not for lean-local ceremony
 - when used in multi-challenger fan-out, stay inside the assigned lens instead of trying to cover every domain
 
 ## Boundaries
@@ -95,7 +86,7 @@ The orchestrator owns reconciliation after the subagent returns:
 - reopen targeted research or one read-only expert subagent per expert question when evidence is missing
 - record final resolved outcomes in existing `spec.md` sections, not raw subagent transcripts
 - update `workflow-plans/specification.md` with clarification challenge status, lane or lane set used, lenses when relevant, targeted research status, resolution status, and approval or block rationale
-- update `workflow-plan.md` with `spec.md` status and clarification gate status
+- update `workflow-plan.md` with `spec.md` status and formal clarification `procedural_gate_state`
 - rerun this challenge once if material decisions changed or a major seam was reopened
 
 ## Reference Loading

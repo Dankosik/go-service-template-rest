@@ -1,10 +1,10 @@
 # Resource Lifetime, I/O, And Transactions
 
 ## Behavior Change Thesis
-When loaded for resource or transaction-lifetime pressure, this file makes the model keep acquisition, cleanup, terminal errors, and transaction scope explicit instead of hiding ownership in helpers, leaking resources, or leaving half-checked database/I/O paths.
+When loaded for resource or transaction-lifetime pressure, this file makes the model keep acquisition, cleanup, terminal errors, transaction scope, and authoritative-before-derived side effects explicit instead of hiding ownership in helpers, leaking resources, or leaving half-checked database/I/O paths.
 
 ## When To Load
-Load this when work touches readers, writers, response bodies, files, `Rows`, scanners, statements, dedicated SQL connections, transactions, locks, timers, tickers, derived contexts, or cleanup helper extraction.
+Load this when work touches readers, writers, response bodies, files, `Rows`, scanners, statements, dedicated SQL connections, transactions, locks, timers, tickers, derived contexts, post-commit cache effects, or cleanup helper extraction.
 
 ## Decision Rubric
 - Keep acquire, use, and release in one obvious scope unless ownership is explicitly transferred.
@@ -12,6 +12,7 @@ Load this when work touches readers, writers, response bodies, files, `Rows`, sc
 - Check terminal error surfaces: `rows.Err`, scanner errors, writer close errors when terminal, and `Commit` errors.
 - Use the datastore's context-aware API, such as `database/sql` `QueryContext`, `ExecContext`, and `BeginTx`, or pgx/sqlc `Query(ctx, ...)`, `Exec(ctx, ...)`, and `BeginTx(ctx, ...)`.
 - Keep slow network calls, queue publishes, and unrelated side effects outside transactions unless the approved design says otherwise.
+- Apply cache invalidation or other derived-state effects only after the authoritative commit succeeds unless the approved design explicitly owns another order. A commit error remains the mutation outcome and must stay inspectable.
 - Bound reads at trust boundaries before expensive work or side effects.
 
 ## Imitate
@@ -103,6 +104,15 @@ _ = publishToQueue(ctx, event)
 _, err := db.ExecContext(ctx, "COMMIT")
 ```
 
+Reject derived-state changes before authoritative commit.
+
+```go
+cache.Delete(order.ID)
+if err := tx.Commit(); err != nil {
+	return err
+}
+```
+
 Reject unbounded reads on untrusted bodies.
 
 ```go
@@ -115,11 +125,13 @@ body, err := io.ReadAll(r.Body)
 - Converting transaction logic into a callback helper before transaction scope, retry, and side-effect rules are stable.
 - Ignoring `rows.Err`, scanner errors, writer close errors, or `Commit` errors.
 - Treating rollback errors after a successful commit as a new failure.
+- Invalidating or publishing derived state before commit, which can expose a mutation that never became authoritative.
 - Adding `io.ReadAll` to simplify parsing without a size bound at a trust boundary.
 
 ## Validation Shape
 - Use fake `io.Closer`, `httptest`, or repository fakes to prove close behavior when ownership changes.
 - Add repository tests for scan and iteration failures when cursor handling changed.
 - Test transaction failure points when order changes: begin, write, later write, commit.
+- When cache or derived-state order changes, prove commit failure leaves the derived surface untouched and successful commit applies the effect once.
 - Use canceled contexts to prove caller cancellation reaches the datastore call or transaction begin for the active driver.
 - Run `go test -race` when cleanup, locks, timers, or shared state changed.

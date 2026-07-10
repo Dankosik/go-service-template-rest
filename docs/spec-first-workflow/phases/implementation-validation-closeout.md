@@ -1,6 +1,6 @@
-# Implementation, Validation, And Closeout Phase
+# Implementation, Validation, And Closeout Macro Phase
 
-Detailed phase companion for `docs/spec-first-workflow.md`. Read this when implementing from an approved ledger, running post-code review/reconciliation, validating, or closing out.
+Detailed macro-phase companion for `docs/spec-first-workflow.md`. One user-started implementation session owns approved worker execution, independent post-code review, repair, fresh re-review, validation, and closeout.
 
 ## Read When
 
@@ -10,7 +10,7 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when imple
 
 ## Inputs
 
-- Approved `tasks.md` first, then artifacts named by that ledger, including `test-plan.md` when the ledger references scenario IDs.
+- Approved `tasks.md` first, including its active `(routing_scope,routing_revision)`, current review/readiness validity, and any blocker/reopen pointer; then artifacts named by that ledger, including `test-plan.md` when the ledger references scenario IDs.
 - Existing `workflow-plans/review-phase-N.md` or `workflow-plans/validation-phase-N.md` only when the ledger explicitly names that pre-created phase file.
 - Repository-owned validation commands and current workspace state.
 
@@ -18,15 +18,16 @@ Detailed phase companion for `docs/spec-first-workflow.md`. Read this when imple
 
 - Code, tests, config, generated output, or docs required by the approved ledger.
 - Updated existing `tasks.md` progress/evidence and ledger-owned closeout surfaces.
+- Current post-code review verdict with finding closure and fresh re-review anchors.
 - Fresh validation evidence, or a recorded blocker with exact reopen target.
 
 ## Stop Rule
 
-Do not create or approve missing pre-code workflow artifacts after implementation starts. If proof or validation exposes a missing decision, missing `test-plan.md` scenario, or missing artifact, record the blocker in the ledger or closeout surface permitted by `tasks.md` and reopen the owning earlier phase.
+Do not create or approve missing pre-code workflow artifacts after implementation starts. An in-scope code, test, generation, documentation, or validation defect returns automatically to the owning worker bundle for repair, then to fresh integration proof and re-review in the same implementation session. If proof or review instead exposes a missing decision, missing `test-plan.md` scenario, missing tasking, or missing pre-code artifact, apply `TRANS-POST-LEDGER-REOPEN`: record the blocker and exact macro-phase reopen target in `tasks.md` first, mark dependent readiness/evidence stale or blocked, and stop. `tasks.md` remains the execution-state source but cannot authorize execution until fresh task review/readiness is current for that route.
 
 ## Ledger-First Execution
 
-Implementation starts from an approved, reviewed `tasks.md` or it does not start. Read `tasks.md` before `workflow-plan.md`, phase-control files, prior chat, or broad repository search. Then read only the artifacts the ledger names under `Read before coding` and the task-specific artifacts it names under `Read before relevant tasks`.
+Implementation starts from an approved, reviewed `tasks.md` whose verdict/readiness is `record_validity=current` for the active durable routing identity, or it does not start. Read `tasks.md` before `workflow-plan.md`, phase-control files, prior chat, or broad repository search. Then read only the artifacts the ledger names under `Read before coding` and the task-specific artifacts it names under `Read before relevant tasks`.
 
 Before the first edit, read current workspace state and separate pre-existing unrelated changes from this session's work. Do not use unrelated dirty files as task evidence, do not clean them up without an explicit request, and do not let their presence widen the ledger's approved scope.
 
@@ -57,38 +58,44 @@ Orchestrator control must be strict and evidence-based:
 
 Isolated Codex CLI workers are an implementation tactic for reducing context bias and constraining write scope. They do not replace the implementation Goal, task-ledger authority, or orchestrator closeout responsibility.
 
+This phase file is the single repository-wide owner of worker launch, resume, sandbox, prompt-file lifecycle, patch-intake, and integration-proof mechanics. Approved `tasks.md` owns task-specific worker boundaries. Chat handoffs and prompt-rendering skills reference those owners and do not copy this manual or its commands.
+
 Use an isolated worker only when all are true:
 
 - `tasks.md` has passed task-review/readiness with `PASS`, eligible `CONCERNS`, or eligible `WAIVED`;
 - the approved ledger or implementation handoff marks `Implementation execution mode` as `isolated-cli-worker required` and names worker boundaries;
 - the worker unit is one reviewable diff story or an explicitly coupled task bundle, not an arbitrary single checkbox split that would separate proof-first tests from the implementation they prove;
 - owner package/file, generated or mirrored source authority, proof, evidence fields, and stop/reopen condition are already approved for the worker unit;
+- the root has selected and recorded the exact currently available model and supported reasoning effort for this worker from task complexity, ambiguity, blast radius, context/tool needs, and latency/cost sensitivity;
 - a separate worktree, fresh checkout, container workspace, or equivalent isolated filesystem is used so the worker cannot mutate the orchestrator's integration workspace while producing the patch.
 
-Do not add isolated-worker mode during implementation. If the execution mode or worker boundaries are missing, stale, vague, or authority-confusing, reopen planning or task-review/readiness. When worker launch or resume fails before a usable patch, stop hard: report the failed command, key output, task bundle, and smallest repair target to the user. Do not author the implementation yourself. Do not use isolated write workers when the next step needs a missing specification, design, test-design, planning, readiness, dependency/OSS, Pattern Fit, source-of-truth, or validation decision. Do not use parallel write workers for overlapping owner files, generated outputs, migrations, schemas, fixtures, package initialization, shared test helpers, global config, or checkpoint-dependent tasks. When overlap is possible, run workers serially or keep the work in the orchestrator.
+Do not add isolated-worker mode during implementation. If the execution mode or worker boundaries are missing, stale, vague, or authority-confusing, reopen planning or task-review/readiness. When worker launch or resume fails before a usable patch, stop hard: report the failed command, key output, task bundle, and smallest repair target to the user. Do not author the implementation yourself. Do not use isolated write workers when the next step needs a missing specification, design, test-design, planning, readiness, dependency/OSS, Pattern Fit, source-of-truth, or validation decision. Do not use parallel write workers for overlapping owner files, generated outputs, migrations, schemas, fixtures, package initialization, shared test helpers, global config, or checkpoint-dependent tasks. When overlap is possible, run workers serially; if no safe worker boundary remains, stop blocked and reopen the owning phase.
 
-The orchestrator owns worker setup. Default launch shape:
+The orchestrator owns worker setup. Immediately before launch it evaluates the approved worker-boundary selection criteria against current task evidence and runtime availability, records the chosen pair in execution evidence, then sets `WORKER_MODEL` and `WORKER_REASONING_EFFORT`. Default launch shape:
 
 ```bash
-codex exec \
+codex \
+  --model "$WORKER_MODEL" \
+  -c "model_reasoning_effort=\"$WORKER_REASONING_EFFORT\"" \
   --cd "$WORKTREE" \
   --sandbox workspace-write \
---ask-for-approval never \
---strict-config \
---json \
---output-schema "$WORKER_SCHEMA" \
--o "$WORKER_OUT/final.md" \
-- < "$WORKER_PROMPT" > "$WORKER_OUT/events.jsonl"
+  --ask-for-approval never \
+  exec \
+  --strict-config \
+  --json \
+  --output-schema "$WORKER_SCHEMA" \
+  -o "$WORKER_OUT/final.md" \
+  - < "$WORKER_PROMPT" > "$WORKER_OUT/events.jsonl"
 ```
 
-Do not require a named profile or hard-code user-specific tools in the template. By default, do not pass `--ignore-user-config` or `--ignore-rules`; let Codex inherit the user's active config, MCP servers, plugins, hooks, feature flags, and local tooling. Do not force `--model` or `-c model_reasoning_*` overrides unless the approved ledger names a task-specific rationale; avoid downgrading user defaults accidentally. The worker may use any inherited tool that helps the assigned task, but an unavailable optional tool is not a blocker unless the approved ledger made it required.
+Do not hard-code a worker model in repository config, role profiles, task planning, or this template. The root chooses the pair for each worker bundle immediately before launch, records the task-specific rationale and effective pair in execution evidence, and passes both overrides explicitly as shown above; silent inheritance from the root session is invalid. Keep user config, MCP servers, plugins, hooks, feature flags, and local tooling inherited unless the approved ledger says otherwise. The worker may use any inherited tool that helps the assigned task, but an unavailable optional tool is not a blocker unless the approved ledger made it required. A resumed repair keeps the original worker's selected pair; changing the pair requires a new worker launch and recorded rationale.
 
 Use `--output-schema "$WORKER_SCHEMA"` when the launch harness can provide a schema; otherwise require the same fields in the worker's final message and record that schema enforcement was unavailable. Schemas must be strict: top-level `additionalProperties: false`, and every property listed in `required`. The minimum result fields are patch summary, changed files, commands run, key output, residual risks, blockers, and ready-for-intake status. Use `--add-dir` only for ledger-named extra paths. Do not use deprecated `--full-auto`. Do not use `--yolo` or `--sandbox danger-full-access` unless the worker runs inside an externally hardened container, VM, or CI runner with no ambient secrets and the approved ledger explicitly names that broader access. Do not use `--ephemeral` for task-bearing workers because patch intake needs the run history.
 
 If patch intake finds a narrow in-scope defect, resume the same worker session instead of starting over:
 
 ```bash
-codex exec resume "$WORKER_THREAD_ID" --cd "$WORKTREE" --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema "$WORKER_SCHEMA" -o "$WORKER_OUT/final-repair.json" - < "$REPAIR_PROMPT" > "$WORKER_OUT/events-repair.jsonl"
+codex --cd "$WORKTREE" --sandbox workspace-write --ask-for-approval never exec resume "$WORKER_THREAD_ID" --strict-config --json --output-schema "$WORKER_SCHEMA" -o "$WORKER_OUT/final-repair.json" - < "$REPAIR_PROMPT" > "$WORKER_OUT/events-repair.jsonl"
 ```
 
 Use resume only for same task bundle, same isolated workspace, and same approved boundaries. Repair prompts are transient like worker prompts. Do not resume worker to choose new scope, ownership, contract, design, dependency, rollout, cleanup disposition, or validation policy; record blocker/reopen target instead.
@@ -99,7 +106,7 @@ Worker prompt file lifecycle:
 WORKER_PROMPT="$(mktemp -t codex-worker-prompt.XXXXXX.md)"
 trap 'rm -f "$WORKER_PROMPT"' EXIT
 # write prompt into "$WORKER_PROMPT", run codex exec with stdin, then remove it
-codex exec --cd "$WORKTREE" --sandbox workspace-write --ask-for-approval never --strict-config --json --output-schema "$WORKER_SCHEMA" -o "$WORKER_OUT/final.md" - < "$WORKER_PROMPT" > "$WORKER_OUT/events.jsonl"
+codex --cd "$WORKTREE" --sandbox workspace-write --ask-for-approval never exec --strict-config --json --output-schema "$WORKER_SCHEMA" -o "$WORKER_OUT/final.md" - < "$WORKER_PROMPT" > "$WORKER_OUT/events.jsonl"
 rm -f "$WORKER_PROMPT"
 trap - EXIT
 ```
@@ -142,7 +149,7 @@ Worker output is evidence, not completion. Treat `ready_for_intake=yes` as advis
 Patch intake is an orchestrator duty:
 
 1. Inspect the worker diff before applying it to the integration workspace. Confirm every changed file maps to the assigned task bundle, generated/mirrored outputs follow the approved source order, no forbidden artifact changed, and no new dependency, pattern, architecture, public contract, data behavior, security behavior, rollout behavior, or validation policy was invented. For code-quality objections, name the concrete task quality bar, repository pattern, owner responsibility, proof gap, or changed-surface maintainability risk.
-2. Apply or merge only the accepted patch. Resolve only mechanical conflicts that stay inside the approved ledger; otherwise rerun the worker, repair the patch manually inside approved scope, or record a blocker/reopen target.
+2. Apply or merge only the accepted patch. Resolve only mechanical patch-application conflicts that do not author implementation behavior. Otherwise resume or rerun the worker with the exact failed obligation, or record a blocker/reopen target; the orchestrator does not manually repair implementation code.
 3. Run the task proof and any checkpoint/final validation in the integration workspace after applying the patch. Worker-local proof is useful evidence but cannot by itself satisfy task evidence, checkpoint gates, or closeout.
 4. Update existing `tasks.md` progress/evidence only after integration-workspace proof covers the task claim. Name worker evidence as supporting context when useful, but do not substitute it for fresh integration proof.
 
@@ -198,9 +205,17 @@ Review should also flag hand-written source files that grew into mixed-responsib
 
 Severity for unexplained surviving replaced paths is risk-based: `high` when the old path can still execute, import, generate, or validate; `medium` for test, fixture, doc, config, skill, agent, or mirror drift; `low` only when the surface is clearly unreachable, non-authoritative, and unlikely to mislead future work.
 
-Post-code review findings close only when the task evidence names the finding, the action taken, the proof that covers it, and the residual risk or narrower claim. A reviewer report, subagent summary, cached command, or green unrelated check is not proof by itself.
+### Mandatory Post-Code Review, Repair, And Fresh Re-Review
 
-Validation uses fresh evidence matched to the changed surface and the ledger's completion condition. A closeout claim is valid only when the commands or manual proof actually cover that claim, including targeted behavior proof, repository-owned validation commands, targeted negative searches or reads for retired identifiers and references where text proof is reliable, retained-surface proof when old artifacts remain, generated or mirror drift proof when owning sources changed, and whitespace/drift checks for changed docs or tooling.
+After each ledger-defined review checkpoint, and at minimum before final closeout for non-trivial code-writing work, launch the required independent read-only review lanes against the exact integration revision. Route bounded deterministic evidence gathering to `evidence-agent`, ordinary semantic review to the relevant domain agents, and only named approval-critical conflicts to critical profiles. Reviewers never edit the integration workspace or approve their own repairs.
+
+The implementation root reconciles findings. For every actionable finding already inside approved ledger scope, resume the owning isolated worker with the exact failed obligation and smallest repair request, intake the patch, and rerun integration proof. Mark the old review verdict stale and launch a fresh reviewer context at the same or stronger tier against the changed revision. A finding closes only when fresh re-review confirms its repair or narrows it to an explicit residual risk/proof obligation allowed by the ledger.
+
+Do not return control to the user between review, worker repair, patch intake, re-review, and validation. Stop only when the current review verdict and all ledger proof permit closeout, or when the finding requires an upstream macro-phase decision/artifact or the review loop meets the canonical stagnation stop.
+
+Post-code review findings close only when task evidence names the finding, action taken, integration proof, fresh re-review anchor, and residual risk or narrower claim. A reviewer report, subagent summary, cached command, or green unrelated check is not proof by itself.
+
+Validation is the final internal checkpoint of the same implementation session. It uses fresh evidence matched to the changed surface and the ledger's completion condition. An in-scope validation failure returns to the owning worker for bounded repair and then repeats review and validation; it is not a user-started closeout phase. A closeout claim is valid only when the commands or manual proof actually cover that claim, including targeted behavior proof, repository-owned validation commands, targeted negative searches or reads for retired identifiers and references where text proof is reliable, retained-surface proof when old artifacts remain, generated or mirror drift proof when owning sources changed, and whitespace/drift checks for changed docs or tooling.
 
 Negative proof must name the retired identifiers, paths, commands, config keys, generated files, fixtures, docs, skills, agents, or mirrors searched. A generic search such as `rg legacy` is not sufficient unless the retired surface is literally named `legacy`.
 
