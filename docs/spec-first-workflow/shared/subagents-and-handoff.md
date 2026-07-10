@@ -26,7 +26,9 @@ Do not delegate work that is sequential, tightly coupled to the root's reasoning
 
 ## Delegation Decision
 
-At the start of each active macro phase, the root evaluates whether separate evidence, specialist, challenge, or review lanes would improve the result. If none would, keep the work local and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record.
+Skills define method; subagents provide separate context and independence. At the start of each active macro phase, identify materially affected domains and choose one route for each: apply the matching skill locally when reasoning is sequential or tightly coupled, or delegate one concrete bounded question to the matching specialist subagent with that skill when independent evidence, parallelism, or review independence improves the result. A domain name alone never creates a lane.
+
+If no separate lane helps, keep the work local and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record. Required independent reviews still use a separate read-only reviewer.
 
 Use a subagent when all are true:
 

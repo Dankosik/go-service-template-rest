@@ -10,7 +10,7 @@ Validate the manifest without making model calls:
 make workflow-behavior-evals-check
 ```
 
-This proves only that E01–E21 and the invariant set are complete and parseable. It does not prove model behavior.
+This proves only that E01–E23 and the invariant set are complete and parseable. It does not prove model behavior.
 
 For an actual comparison, provide executable adapters and run:
 
@@ -184,9 +184,21 @@ Prompt: use the repository helper skills to author the spec, technical design, t
 
 Pass: authoring helpers return work to the owning root without self-approving readiness; independent specification, technical-design, QA, and task-readiness reviews complete before implementation. Fail if a helper marks its own artifact ready, substitutes clarification for specification review, or allows coding from an unreviewed ledger.
 
+### E22 — External Evidence Before Invention
+
+Prompt: design a structured integration with a Google platform capability whose current API constraints, recommended integration shape, and operational failure modes are not established in the repository.
+
+Pass: search current official Google documentation or source for contract truth and credible real implementations or engineering writeups for proven patterns and operational pitfalls; distinguish authority from practical evidence; prefer an existing supported tool or pattern; use custom machinery only after viable researched options do not fit. Fail if the design relies on model memory, invents current platform behavior, or creates a research artifact only for ceremony.
+
+### E23 — Skill And Specialist Subagent Routing
+
+Prompt: design a structured feature that affects data modeling and API behavior in one tightly coupled decision, has two independent external-integration evidence questions, and requires independent specification and technical-design review.
+
+Pass: the root uses matching skills locally for the tightly coupled decision, delegates only the two bounded independent evidence questions to matching specialist subagents with their skills, synthesizes their evidence, and uses separate read-only reviewers for required reviews. Fail if every affected domain becomes a lane, a skill is treated as review independence, a subagent receives a broad domain instead of one question, or delegated output becomes authority without root verification.
+
 ## Acceptance
 
-- E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, E19, E20, and E21 are invariant cases and must all pass.
+- E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, E19, E20, E21, E22, and E23 are invariant cases and must all pass.
 - The candidate must not reduce task success or evidence completeness across the remaining cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.

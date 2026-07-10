@@ -5,13 +5,14 @@ Resolve evidence gaps that can change a task decision. Research supports later d
 ## Read When
 
 - Current repository or external evidence can change scope, feasibility, ownership, dependency choice, contract interpretation, or proof.
+- External-platform behavior, an unfamiliar mechanism, new infrastructure/dependency, or a non-trivial design choice would otherwise be inferred from model memory.
 - Sources conflict or freshness matters.
 - A durable evidence note will be consumed by another phase or session.
 
 ## Inputs
 
 - Accepted outcome and the exact decision each question can change.
-- Named repository, provider, standards, or official-document sources.
+- Named repository, provider, standards, official-document, source-code, or credible real-world implementation sources.
 - Current evidence limits and freshness needs.
 
 ## Outputs
@@ -31,10 +32,14 @@ For each question, state:
 - how absence, conflict, or staleness will be handled;
 - when to stop searching.
 
-Use independent read-only lanes only for separable questions where parallel context materially helps. For a dependency or custom mechanism, compare the relevant Go stdlib, established repository pattern, and mature maintained OSS; record rejected options only when they were genuinely viable.
+Use independent read-only lanes only for separable questions where parallel context materially helps.
+
+For an external platform, unfamiliar mechanism, new infrastructure/dependency, or non-trivial design choice, search current web and repository sources before design. Treat official docs, standards, maintainer source, and provider contracts as authority for current behavior. Use credible engineering articles and real implementations to find proven patterns, integration examples, operational constraints, and failure modes. Do not substitute model memory for current external evidence.
+
+For a dependency or custom mechanism, compare the relevant Go stdlib, established repository pattern, mature maintained OSS, and a custom implementation only when it is a real option. Record rejected options only when they were genuinely viable.
 
 Prefer primary/current sources. A missing hit is not proof of absence unless the searched source is authoritative for absence. Stop when another source is unlikely to change the decision.
 
 ## Stop Rule
 
-Finish when every decision-changing question is answered, honestly bounded, or assigned a blocker/reopen owner. Hand the implications to specification or design; do not write their final decisions inside research.
+Finish when every decision-changing question is answered, honestly bounded, or assigned a blocker/reopen owner. If required current external evidence is unavailable, name the gap instead of inventing the answer. Hand the implications to specification or design; do not write their final decisions inside research.

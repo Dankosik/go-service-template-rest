@@ -68,7 +68,7 @@ make skills-check
 make workflow-behavior-evals-check
 ```
 
-The behavior-eval check validates the E01–E21 manifest only. Actual baseline/candidate model comparison uses `make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The behavior-eval check validates the E01–E23 manifest only. Actual baseline/candidate model comparison uses `make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
 At each active macro phase, evaluate whether concrete, independent, bounded subagent lanes improve evidence or review independence. Use only useful lanes and keep sequential work local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. The root owns synthesis, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
 

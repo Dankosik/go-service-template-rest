@@ -13,7 +13,7 @@ Own system boundary and interaction choices, not endpoint payload catalogs, SQL/
 
 ## Approved Input And Decision Boundary
 
-Inspect the approved problem frame, current repository/service boundaries, invariant and write authority, real workload evidence, critical path, team/runtime ownership, external dependencies, failure and degradation expectations, data/read topology, and rollout/mixed-version constraints. Mark invented latency, scale, growth, freshness, RPO/RTO, or cost numbers as assumptions.
+Inspect the approved problem frame, current repository/service boundaries, invariant and write authority, real workload evidence, critical path, team/runtime ownership, external dependencies, failure and degradation expectations, data/read topology, and rollout/mixed-version constraints. Ground external-platform behavior in current official docs/source and credible real implementations; do not infer it from model memory. Mark invented latency, scale, growth, freshness, RPO/RTO, or cost numbers as assumptions.
 
 Architecture may choose among real live forks; it must not manufacture options for completeness. When a real choice exists, compare the viable stdlib, repository, mature-OSS, and custom options against repository, operational, proof, and idiomatic-Go fit. Record only rejections that explain the selected design.
 

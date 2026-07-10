@@ -145,6 +145,26 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'helper skills must not bypass required review gates'
 require_text \
+  '### E22 — External Evidence Before Invention' \
+  docs/spec-first-workflow-evals.md \
+  'external-platform design must research current evidence before invention'
+require_text \
+  '### E23 — Skill And Specialist Subagent Routing' \
+  docs/spec-first-workflow-evals.md \
+  'specialist routing must distinguish local skills from subagent lanes'
+require_text \
+  'Skills define method; subagents provide separate context and independence.' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'delegation must distinguish a skill method from a separate specialist context'
+require_text \
+  'Evidence before invention.' \
+  AGENTS.md \
+  'the global external-evidence rule is missing'
+require_text \
+  'Do not substitute model memory for current external evidence.' \
+  docs/spec-first-workflow/phases/research.md \
+  'research must reject model-memory substitution for current external behavior'
+require_text \
   'authoring leaves `status: draft`' \
   .agents/skills/spec-document-designer/SKILL.md \
   'spec authoring must not self-approve readiness'
@@ -219,7 +239,14 @@ for stale_example in \
   fi
 done
 stale_matches="$(grep -RInE -- "${stale_pattern}" \
-  AGENTS.md README.md SOUL.md docs .agents/skills .codex/agents specs || true)"
+  AGENTS.md README.md SOUL.md \
+  docs/spec-first-workflow.md \
+  docs/spec-first-workflow-evals.md \
+  docs/spec-first-workflow \
+  docs/subagent-contract.md \
+  docs/subagent-brief-template.md \
+  .agents/skills \
+  .codex/agents || true)"
 
 if [[ -n "${stale_matches}" ]]; then
   echo "workflow instruction check failed: retired workflow-machine vocabulary remains"

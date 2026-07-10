@@ -39,11 +39,13 @@ When a caller-visible API, generated contract, event, or material shared interfa
 - canonical source and generated outputs;
 - proof and migration/deprecation consequences.
 
-Calls to another service require current provider-contract evidence. `design/contracts/` is optional context; it never replaces the runtime OpenAPI/event/proto source.
+Design against an external platform or service requires current official contract evidence. When integration shape or operational fit is non-obvious, also consume credible real implementations or engineering writeups for proven patterns and failure modes. Do not infer current external behavior from model memory. `design/contracts/` is optional context; it never replaces the runtime OpenAPI/event/proto source.
 
 ## Fan-Out And Review
 
-Use specialist lanes only for live independent forks that can change the mechanism. Examples: sync vs async, source A vs B, fail-closed vs degraded, or expand/backfill/contract vs one-step migration. Domain names alone do not justify lanes.
+At phase entry, identify the materially affected domains: domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Resolve each affected domain locally with its matching skill when the reasoning is sequential or tightly coupled, or delegate one concrete bounded question to the matching specialist subagent with that skill when separate context, parallel evidence, or independence improves the result. Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
+
+Use specialist lanes only for live independent forks that can change the mechanism. Examples: sync vs async, source A vs B, fail-closed vs degraded, or expand/backfill/contract vs one-step migration.
 
 For structured or orchestrated work, run [Technical Design Review](technical-design-review.md) after the system and Go-ownership decisions are complete. The owning root handles repair and fresh re-review in the same root session. Direct work uses independent design review only when the user or risk requires it.
 

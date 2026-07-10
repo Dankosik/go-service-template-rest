@@ -1,15 +1,6 @@
 # Spec-First Workflow
 
-Stable router for repository work. `AGENTS.md` owns global policy; this file explains how to choose and load only the workflow detail that can change the current result.
-
-## Principles
-
-- Start from the desired outcome, constraints, success criteria, and stop conditions.
-- Use the smallest path and artifact set that preserves correctness and proof.
-- Treat phases as decision boundaries. Structured and orchestrated work crosses them in order without requiring separate chats.
-- State a rule once. Link to its owner instead of paraphrasing it elsewhere.
-- Persist information only when another phase, actor, or session needs it.
-- Let risk determine review depth; let the execution path determine which core review gates must exist.
+Stable router for repository work. `AGENTS.md` owns authorization and global invariants; this file owns execution-path selection, phase order, review routing, and movement between phases.
 
 ## Choose A Path
 
@@ -25,7 +16,7 @@ Use `structured` for the normal non-trivial case. Keep a reviewed `spec.md` and 
 
 Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
 
-Re-evaluate the path only when evidence changes the risk, ownership, reversibility, or proof shape. A path is not a quality tier: all paths must satisfy the accepted outcome.
+Re-evaluate the path only when evidence changes risk, ownership, reversibility, or proof. A path is not a quality tier.
 
 ### Required Spine
 
@@ -39,7 +30,7 @@ Structured and orchestrated work evaluates the phase router in order:
 6. complete `tasks.md` and independent task review/readiness;
 7. implement, review the diff, validate, and close out.
 
-Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff. It does not justify a new phase-control file. Specification, planning, and their review gates are not skipped for structured or orchestrated work.
+Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification, planning, and their review gates remain required.
 
 ## Phase Router
 
@@ -54,9 +45,9 @@ Scoping down research, design, or test design needs one concrete reason in the c
 | Turn decisions into executable work. | [Planning](spec-first-workflow/phases/planning.md) | A small, dependency-ordered ledger with completion proof. |
 | Change, review, validate, and close out. | [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) | Working changes and evidence-clamped completion. |
 
-### Review Gates
+### Review Routing
 
-Review is an internal method of the artifact-owning phase, not a separate phase or automatic user handoff:
+Required review is an internal method of the artifact-owning phase:
 
 | Review need | Read | Outcome |
 | --- | --- | --- |
@@ -65,13 +56,13 @@ Review is an internal method of the artifact-owning phase, not a separate phase 
 | Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings returned to test design. |
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
 
-Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only when deciding what to persist, how to resume, or which artifact owns current state. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only when delegation, independent review, resume, or a handoff is relevant. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
+Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
 
 ## Phase Movement
 
 Move forward when the next phase can work without inventing a decision owned by the current phase. Reopen the smallest owner when that is not true.
 
-A request that authorizes end-to-end implementation may continue through the needed phases in one session, in order and with the required gates. Stop at a macro-phase boundary only when:
+A request authorizing end-to-end implementation may continue through the needed phases and reviews in one session. Stop only when:
 
 - the user explicitly named that boundary;
 - a required user or external decision is missing;
@@ -79,25 +70,10 @@ A request that authorizes end-to-end implementation may continue through the nee
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
 
-Review, repair, and re-review stay with the artifact owner. Structured and orchestrated work uses the required spine above; direct work uses independent review when the user requires it or impact, reversibility, ambiguity, or weak self-falsification justifies it. The owning root runs internal review loops in the same session and emits no next-session prompt. An explicitly user-requested standalone review stays read-only and stops at that boundary. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md#handoff) owns the exact prompt gate.
-
-## Artifact And Handoff Rules
-
-- Do not create empty workflow files or copy full chat prompts into artifacts.
-- Use one short `status: draft | ready | blocked | done` field when durable state is useful; prose explains the blocker or evidence.
-- `spec.md` owns decisions. `tasks.md` owns implementation progress after it exists. `workflow-plan.md` owns only cross-session coordination.
-- A handoff contains the next outcome, first artifact to read, material constraints, required proof, and blocker/reopen rule. Omit repository-wide instructions already recoverable from `AGENTS.md`.
-- If the work is done, return evidence and remaining gaps; do not invent another phase or prompt.
+Review, repair, and re-review stay with the artifact owner. Direct work uses independent review only when the user or risk requires it. A standalone review remains read-only. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns the full review and handoff contract.
 
 ## Prompt Maintenance
 
 Current reference: OpenAI's [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model) and [Prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6).
 
-When changing this workflow:
-
-1. preserve outcome, safety/permission boundaries, success criteria, proof, and true stop conditions;
-2. remove repeated process instructions, examples that do not change behavior, and universal rules for judgment calls;
-3. prefer decision rules over keyword matrices and mandatory templates;
-4. change one instruction group at a time when representative evals exist;
-5. run the compact [workflow behavior evals](spec-first-workflow-evals.md);
-6. compare task success and evidence completeness before counting token or line reduction as a win.
+Preserve outcome, permission boundaries, success criteria, proof, and stop conditions. Change one instruction group at a time, run the [workflow behavior evals](spec-first-workflow-evals.md), and keep reductions only when task success and evidence completeness do not regress.
