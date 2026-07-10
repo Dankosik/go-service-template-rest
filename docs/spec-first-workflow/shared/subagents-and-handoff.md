@@ -83,28 +83,16 @@ Child roles are unpinned in `.codex/agents/*.toml`. The root must choose each ch
 
 ### Current Child Model Catalog
 
-Catalog scope: exact OpenAI model identifiers allowed for Codex subagents and Codex subprocesses launched by the root. This is an allowlist for dynamic per-lane selection, not a fixed role-to-model matrix and not a default for the root session.
+Catalog verified: `2026-07-10`. This catalog applies to Codex subagents and Codex subprocesses; the root session's model and app mode remain user-selected.
 
-Catalog verified: `2026-07-10`. The official Codex models page lists the three GPT-5.6 variants below, describes GPT-5.5 as previous-generation, and labels the remaining Codex Spark option as a research preview. The latest-model guide identifies Sol as the flagship, Terra as the intelligence/cost balance, and Luna as the efficient high-volume choice. This catalog therefore keeps only the latest production family.
-
-| Allowed exact model ID | Official capability position | Dynamic selection pressure |
+| Exact model ID | Use when | Reasoning effort |
 | --- | --- | --- |
-| [`gpt-5.6-sol`](https://developers.openai.com/api/docs/models/gpt-5.6-sol) | Frontier capability for complex professional work. | Prefer when ambiguity, blast radius, difficult reconciliation, or the cost of a wrong judgment justifies maximum capability. |
-| [`gpt-5.6-terra`](https://developers.openai.com/api/docs/models/gpt-5.6-terra) | Strong balance of intelligence and cost. | Prefer for substantial everyday evidence, implementation, and review work that does not need Sol's full depth. |
-| [`gpt-5.6-luna`](https://developers.openai.com/api/docs/models/gpt-5.6-luna) | Cost-sensitive, high-volume capability. | Prefer for clear, bounded, repeatable extraction, transformation, or scan work with an objective result shape. |
+| [`gpt-5.6-sol`](https://developers.openai.com/api/docs/models/gpt-5.6-sol) | The lane is ambiguous, approval-critical, hard to reverse, requires difficult reconciliation, or has a high cost of wrong judgment. | Any supported effort at or above `light`. |
+| [`gpt-5.6-terra`](https://developers.openai.com/api/docs/models/gpt-5.6-terra) | The lane is clear or bounded evidence, extraction, transformation, implementation, or review work that does not require Sol. | Any supported effort strictly below `high`. |
 
-Use only these exact identifiers. Do not substitute a family alias, previous-generation model, research preview, deprecated model, or any other runtime-visible model. Runtime availability narrows this allowlist; it never expands it. If the preferred model is unavailable, choose another catalog model from the lane's actual requirements and record the fallback rationale. If no catalog model is available, record the capability gap and do not claim a routed lane or silently fall back to an older model.
+Select between these models dynamically for each lane. If no catalog model is available with a policy-compliant reasoning effort, record the capability gap and do not launch the lane.
 
-This snapshot becomes stale when OpenAI changes the recommended Codex family, publishes a migration or deprecation affecting an entry, the runtime no longer exposes an entry, or more than 30 days have passed since `Catalog verified`. Reverify it against the official [Codex models](https://learn.chatgpt.com/docs/models), [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model), and [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents) pages before the next child launch. When the official recommended set changed, update this catalog and its guardrail allowlist together before using new identifiers. If the active task does not authorize that instruction change, report the drift and do not claim a catalog-compliant required lane.
-
-| Route | Project profile | Selection pressure | Boundary |
-| --- | --- | --- | --- |
-| Evidence | `evidence-agent` | Prefer the fastest and least costly currently available pair that can reliably handle the evidence volume, tools, context, and extraction accuracy required by the lane. | No gate verdict, readiness approval, semantic adjudication, or file write. |
-| Semantic | Existing domain/review agents | Increase capability and reasoning with ambiguity, cross-source reconciliation, edge-case depth, and the cost of a wrong judgment. | One bounded question per lane; root owns synthesis and repair. |
-| Critical review | `critical-reviewer-agent` | Select a stronger currently available pair only for one named approval-critical, hard-to-reverse, protected-domain, or complex multi-source question. | Not a default route and not a substitute for missing success criteria or evidence. |
-| Critical adjudication | `critical-adjudicator-agent` | Select the strongest justified currently available pair only after ordinary review/repair/re-review leaves a material evidence-backed conflict. | Never first pass; return advisory resolution evidence to root. |
-
-Before every launch, the root records the exact catalog model identifier, supported reasoning effort, task-specific rationale, and enforcement path. Agent role or filename never chooses the model by itself. Do not turn the catalog into a static model matrix, inherit the root model silently, or treat a prior lane's choice as the default for the next lane. Re-check the choice when task evidence, scope, or risk changes; a follow-up verdict uses the same or a stronger task-appropriate capability choice than the review that found the issue.
+Before every launch, the root records the exact catalog model identifier, supported reasoning effort, task-specific rationale, and enforcement path. Agent role or filename never chooses the model by itself. Do not turn the catalog into a static model matrix, inherit the root model silently, or treat a prior lane's choice as the default for the next lane. Re-check the choice when task evidence, scope, or risk changes; a follow-up verdict uses the same or a stronger task-appropriate capability choice than the review that found the issue while remaining inside the catalog's reasoning bounds.
 
 Use the native spawn surface only when it can enforce the selected model and effort for that launch. Otherwise launch a bounded process with explicit overrides, for example `codex --model "$LANE_MODEL" -c "model_reasoning_effort=\"$LANE_REASONING_EFFORT\"" --sandbox read-only exec ...`, and have the prompt load the named role profile plus `docs/subagent-contract.md`. For non-Codex subprocesses, pass the selected pair through that runtime's per-launch flags or environment; do not store provider-wide child-model defaults in repository config. If no path can enforce the selected pair, record the capability gap and do not claim routed review.
 

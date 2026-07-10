@@ -114,7 +114,7 @@ require_only_current_child_models() {
 
   while IFS= read -r model; do
     case "${model}" in
-      gpt-5.6-sol|gpt-5.6-terra|gpt-5.6-luna)
+      gpt-5.6-sol|gpt-5.6-terra)
         ;;
       *)
         echo "guardrail check failed: child model routing surfaces may use only the current catalog"
@@ -285,9 +285,9 @@ require_regex '^### Current Child Model Catalog$' "docs/spec-first-workflow/shar
 require_regex 'Catalog verified: `2026-07-10`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must retain its verification date"
 require_regex '`gpt-5\.6-sol`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must allow the current flagship model"
 require_regex '`gpt-5\.6-terra`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must allow the current balanced model"
-require_regex '`gpt-5\.6-luna`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must allow the current efficient model"
-require_regex 'Runtime availability narrows this allowlist; it never expands it' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "runtime model availability must not permit outdated child-model fallback"
-require_regex 'more than 30 days have passed since `Catalog verified`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must have a bounded freshness rule"
+require_regex 'Any supported effort at or above `light`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "Sol child routes must not use reasoning below light"
+require_regex 'Any supported effort strictly below `high`' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "Terra child routes must stay below high reasoning"
+require_absent_regex 'previous-generation|research preview|deprecated model|older model' "docs/spec-first-workflow/shared/subagents-and-handoff.md" "child model catalog must not explain excluded model families"
 child_model_routing_files=(
   "AGENTS.md"
   "docs/subagent-contract.md"
