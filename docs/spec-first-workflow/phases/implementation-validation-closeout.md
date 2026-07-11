@@ -1,6 +1,6 @@
 # Implementation / Validation / Closeout
 
-Make the requested change, review the resulting diff, and prove the accepted outcome. Implementation may be local or delegated; the root remains accountable.
+Before editing, establish the single root Codex Goal required by `AGENTS.md`. Then make the requested change, review the resulting diff, and prove the accepted outcome. Implementation may be local or delegated; the root remains accountable.
 
 ## Read When
 

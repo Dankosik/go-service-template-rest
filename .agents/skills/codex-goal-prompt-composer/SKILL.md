@@ -1,15 +1,15 @@
 ---
 name: codex-goal-prompt-composer
-description: "Compose a compact Codex Goal from an explicit user request or a ready tasks.md implementation ledger."
+description: "Compose the single compact root Codex Goal required for every authorized implementation, or when the user explicitly asks for one."
 ---
 
 # Codex Goal Prompt Composer
 
-Use only when the user asks for a Codex Goal prompt or a ready implementation ledger needs a handoff.
+Use before the first edit in every authorized implementation, regardless of task size, and when the user explicitly asks for a Codex Goal prompt. Direct work uses its accepted inline outcome; structured or orchestrated work uses the ready `tasks.md` ledger.
 
-Do not compose a Goal for specification review, technical-design review, test-design QA review, task-readiness review, post-code review, in-scope repair, re-review, validation, or closeout while the owning root can continue. Those are internal next actions, not handoffs.
+Compose one root-thread Goal covering implementation, post-code review, in-scope repair, re-review, validation, and closeout. Do not create separate Goals for subagents, workers, individual tasks, or internal checkpoints. Those are internal next actions, not handoffs.
 
-Read [the handoff contract](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md) and `tasks.md` first. Add another artifact only when the ledger points to a non-obvious constraint that must appear in the prompt.
+Read the accepted inline outcome or ready `tasks.md` first. Read [the handoff contract](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md) only for a next-session handoff. Add another artifact only when the accepted source points to a non-obvious constraint that must appear in the Goal.
 
 Return only:
 

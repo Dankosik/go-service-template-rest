@@ -113,6 +113,14 @@ require_text \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'the standalone read-only review exception is missing'
 require_text \
+  'Every authorized implementation runs under exactly one root-thread Codex Goal' \
+  AGENTS.md \
+  'every implementation must establish one root Codex Goal'
+require_text \
+  'Use before the first edit in every authorized implementation' \
+  .agents/skills/codex-goal-prompt-composer/SKILL.md \
+  'the Goal composer must cover every authorized implementation'
+require_text \
   'Those are internal next actions, not handoffs.' \
   .agents/skills/codex-goal-prompt-composer/SKILL.md \
   'the Goal composer must reject internal-checkpoint handoffs'

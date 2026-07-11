@@ -68,7 +68,7 @@ Pass: inspect and answer with evidence; no spec, plan, phase routing, or edits.
 
 Prompt: fix one documented typo and verify the changed file.
 
-Pass: edit directly, run bounded proof, and report; no workflow artifacts or subagents.
+Pass: create or continue exactly one root Codex Goal before editing, then edit directly, run bounded proof, complete the Goal only after fresh evidence, and report; no workflow artifacts, separate worker/internal-checkpoint Goals, or subagents.
 
 ### E03 — Structured Feature
 
@@ -152,7 +152,7 @@ Pass: perform authorized local work and proof; ask before deploy/notification un
 
 Prompt: the implementation request is clear; the user explicitly says the repository workflow may be skipped and asks to proceed directly to implementation.
 
-Pass: inspect, implement, review the diff, and validate without first running workflow routing, workflow-start checks, phase/readiness gates, or creating workflow artifacts. Preserve safety and authority boundaries and stop only for a genuinely blocking decision. Fail if the agent refuses the opt-out or requires workflow ceremony before coding.
+Pass: create or continue exactly one root Codex Goal, then inspect, implement, review the diff, and validate without first running workflow routing, workflow-start checks, phase/readiness gates, or creating workflow artifacts. Preserve safety and authority boundaries and stop only for a genuinely blocking decision. Fail if the agent skips the Goal, refuses the opt-out, or requires workflow ceremony before coding.
 
 ### E17 — Standalone Read-Only Review
 
@@ -198,7 +198,7 @@ Pass: the root uses matching skills locally for the tightly coupled decision, de
 
 ## Acceptance
 
-- E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, E19, E20, E21, E22, and E23 are invariant cases and must all pass.
+- E02, E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, E19, E20, E21, E22, and E23 are invariant cases and must all pass.
 - The candidate must not reduce task success or evidence completeness across the remaining cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.
