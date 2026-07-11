@@ -28,9 +28,11 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then independently review the design;
 5. complete test design when proof is non-obvious, then obtain independent QA review;
 6. complete `tasks.md` and independent task review/readiness;
-7. implement, review the diff, validate, and close out.
+7. implement, validate, independently review the candidate final diff and evidence, then repair, revalidate, re-review, and close out as needed.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification, planning, and their review gates remain required.
+
+For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase and requires independent synthesis review; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
 
 ## Phase Router
 
@@ -51,16 +53,24 @@ Required review is an internal method of the artifact-owning phase:
 
 | Review need | Read | Outcome |
 | --- | --- | --- |
+| Falsify a standalone research synthesis. | [Research](spec-first-workflow/phases/research.md#review) | Evidence findings and verdict returned to research. |
 | Falsify a completed spec. | [Specification Review](spec-first-workflow/phases/specification-review.md) | Findings and `PASS`, `CONCERNS`, or `FAIL` returned to specification. |
 | Test technical design and ownership readiness. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) | Findings and verdict returned to technical design. |
-| Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings returned to test design. |
+| Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings and verdict returned to test design. |
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
+| Falsify the candidate final diff and its proof. | [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md#review) | Findings and verdict returned to implementation. |
+
+For every required review, phase movement and closeout wait for the [shared `PASS`-only convergence rule](spec-first-workflow/shared/subagents-and-handoff.md#review-independence); `CONCERNS` and `FAIL` stay inside repair, disposition, or reopen work.
 
 Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
 
 ## Phase Movement
 
 Move forward when the next phase can work without inventing a decision owned by the current phase. Reopen the smallest owner when that is not true.
+
+### Implementation-Input Closure
+
+Before moving forward, every input required by the next phase must be exactly defined by a current canonical source, mechanically derivable from approved sources without a semantic choice, or recorded as an external input with its owner, authoritative source, required shape, and earliest required checkpoint. Prose promises and future fixtures without deterministic content do not count as closure. Before implementation, apply closure to every mandatory task and proof on every dependency path through the accepted completion, not only the first executable task. A known unavailable external input may remain only when its dependent task and protected claim are excluded from the current completion and routed to a later ledger; otherwise readiness is `FAIL` and reopens the smallest owner.
 
 A request authorizing end-to-end implementation may continue through the needed phases and reviews in one session. Stop only when:
 
@@ -70,7 +80,7 @@ A request authorizing end-to-end implementation may continue through the needed 
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
 
-Review, repair, and re-review stay with the artifact owner. Direct work uses independent review only when the user or risk requires it. A standalone review remains read-only. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns the full review and handoff contract.
+Review, repair, and re-review stay with the artifact owner until the shared convergence condition is met. Structured and orchestrated implementation requires independent final-diff review; direct work uses independent review only when the user or risk requires it. A standalone review remains read-only. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns the full review and handoff contract.
 
 ## Prompt Maintenance
 

@@ -59,9 +59,11 @@ status: draft | ready | blocked | done
 ```
 
 - `draft`: still being authored or repaired.
-- `ready`: the artifact is usable by its next consumer.
+- `ready`: the artifact has closed every decision or input it owns for the accepted completion condition, and its next consumer can use them without semantic invention. A ready `tasks.md` additionally satisfies [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure) for every mandatory task and proof path through that completion; a known-unavailable input on such a path requires `blocked`.
 - `blocked`: name the missing decision/evidence and reopen owner.
 - `done`: use for execution/closeout state, not as a substitute for evidence.
+
+When review is required, only `PASS` can move an artifact to `ready` or permit `done`; `CONCERNS` keeps it `draft` while the owner dispositions the concern and obtains fresh review, and `FAIL` requires repair or reopening.
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 
@@ -106,9 +108,10 @@ Use additional fields only when they change an action or verdict.
 
 ## Resume Order
 
-1. Read current `tasks.md` first when implementation or validation is active.
+1. Inspect current workspace and Git status, then read current `tasks.md` first when implementation or validation is active.
 2. Otherwise read `workflow-plan.md` when it exists for a real multi-session task.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
+5. Before continuing an implementation task, rerun the smallest ledger proof that can detect workspace drift affecting the next unchecked task; broaden only when the result or changed surface requires it.
 
 Keep only active task bundles. After completion, move durable decisions into canonical docs/code and delete the completed bundle; Git remains the history.

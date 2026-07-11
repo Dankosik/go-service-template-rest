@@ -51,10 +51,10 @@ Choose production-ready behavior for the accepted scope unless the user asked fo
 
 For structured or orchestrated work, run the independent [Specification Review](specification-review.md) before leaving this phase. Direct work uses focused self-review unless the user or risk requires independent review.
 
-After actionable findings, repair the spec and recheck the changed decision surface. Preserve accepted concerns only when they are bounded risks or downstream proof obligations, not missing spec decisions.
+After actionable findings, repair the spec and recheck the changed decision surface. Disposition each concern by repair, authorized risk acceptance, a downstream proof obligation, or scope reopen/split, record that disposition in the owning artifact, and obtain fresh `PASS`.
 
 When specification owns the review, review, repair, and fresh re-review run as internal checkpoints in the same root session; they do not produce a next-session prompt.
 
 ## Stop Rule
 
-Continue to design or planning when the decision bar is met and the required review has no blocker. Reopen intake, research, or a user/specialist decision when the missing answer belongs there. Do not start implementation from a blocked spec.
+Continue to design or planning when the decision bar is met and the required review has returned `PASS`. Reopen intake, research, or a user/specialist decision when the missing answer belongs there. Do not start implementation from a blocked spec.

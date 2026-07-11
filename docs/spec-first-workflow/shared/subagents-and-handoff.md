@@ -41,7 +41,7 @@ Good lanes include independent source research, one specialist design question, 
 
 The root owns scope, lane choice, synthesis, edits, and completion claims. Research and review lanes are read-only. Implementation workers may write only inside their assigned boundary; use isolation when concurrent writes or risky experiments justify it, not by default.
 
-Default to at most three concurrent lanes and no nested delegation. Run dependent questions sequentially. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
+Default to at most three concurrent lanes and no nested delegation. This limits concurrency only, not total lanes or sequential review waves. Run dependent questions sequentially. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
 
 Choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error. Do not hard-code a dated model catalog in repository instructions or assume the largest setting is best. Re-review should be at least as capable as the review that found the issue.
 
@@ -62,16 +62,23 @@ Do not copy the repository workflow, generic strictness language, or unrelated a
 
 ## Review Independence
 
-Structured and orchestrated work requires an independent reviewer for the completed specification, any triggered technical design or test design, and the completed implementation ledger. Direct work uses an independent reviewer when required by the user or when the decision is hard to reverse, materially high-impact, ambiguous, or poorly falsified by the author alone.
+Structured and orchestrated work requires an independent reviewer for a standalone `research only` synthesis, the completed specification, any triggered technical design or test design, the completed implementation ledger, and the final implementation diff. Direct work uses an independent reviewer when required by the user or when the decision is hard to reverse, materially high-impact, ambiguous, or poorly falsified by the author alone. A required gate reviewer is any separate read-only subagent following the phase review method; named specialist profiles add depth but do not own the root's final gate decision.
 
 The reviewer:
 
 - reads a fixed artifact revision or diff;
 - reports anchored findings and a verdict recommendation;
 - does not edit or approve its own repair;
-- distinguishes blockers, bounded concerns/proof obligations, and non-blocking observations.
+- distinguishes blockers, bounded concerns/proof obligations, and non-blocking observations;
+- states the evidence boundary and disposition of every materially affected lens: covered, delegated to a named specialist result, or not triggered with a concrete reason.
 
-The root repairs in-scope findings and decides whether the changed surface needs focused or full re-review. Repeat only while new evidence or repairs change the result; stop and name the blocker when the same issue survives reasonable attempts without a new decision path.
+There is no fixed review-pass or reviewer count. One independent reviewer is the minimum gate, not a coverage cap. Use the fewest non-overlapping reviewers that can credibly cover the materially affected lenses, adding sequential specialist waves when separate expertise can change readiness. Every required gate also includes one whole-artifact or whole-diff coherence pass; specialist lane results do not replace it.
+
+The root repairs every in-scope actionable finding and re-reviews the exact latest revision, the changed surface, and any transitively affected behavior, contract, ownership, or proof decision. Use focused re-review for a local repair; it may reuse a prior lens disposition only after explicitly confirming that the repair did not invalidate that lens's evidence. Otherwise use full affected-surface re-review, including whenever a repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue.
+
+A macro phase reaches review convergence only when its latest required review returns `PASS` and finds no blocker, known current-phase defect, unowned question, uncovered materially affected lens, or unresolved cross-lens contradiction. `CONCERNS` is non-terminal: a bounded risk or downstream proof obligation still needs disposition in the owning phase, and it never permits phase movement or closeout. The root repairs it, records authorized acceptance with evidence, owner, and reopen condition, or splits/reopens scope, then obtains fresh review; `PASS` means every concern has a disposition, not that no residual risk exists. `FAIL` blocks movement and requires repair or reopening before fresh review. Non-blocking observations do not prevent `PASS`. Repeat without an arbitrary pass-count limit while a finding, uncovered lens, new evidence, or repair can change readiness. If closure needs unavailable evidence, authority, or an upstream decision, mark the phase blocked and reopen that owner. Do not repeat an unchanged `PASS` revision merely to collect verdicts.
+
+Any mutation after review to the reviewed artifact, implementation diff, generated outputs, or proof evidence invalidates convergence for every affected lens. Revalidate and obtain fresh review of those lenses before closeout.
 
 ## Fan-In
 
@@ -98,18 +105,20 @@ If those sources disagree, the task is blocked until the narrowest owner reconci
 
 A next-session handoff is permitted only when work intentionally stops at a true macro-phase boundary and the next outcome belongs to a later macro phase, including when the user explicitly requests that macro-phase handoff, or when a stop condition in [Phase Movement](../../spec-first-workflow.md#phase-movement) prevents the current root from continuing without an earlier-owner decision, user authority, external evidence/action, or required tooling. Crossing a macro phase inside the same authorized request does not itself require a prompt, and requesting a separate session for an internal checkpoint does not make it eligible.
 
-Specification review, technical-design review, test-design QA review, task-readiness review, post-code review, in-scope repair, fresh re-review, validation, and closeout are internal checkpoints of their owning macro phase. The root launches the required read-only lane, repairs authoritative work, obtains any required fresh verdict, and continues automatically in the same session. A durable review record is only a carrier; it does not create a user-started phase or a next-session prompt.
+Required research-synthesis challenge, specification review, technical-design review, test-design QA review, task-readiness review, post-code review, in-scope repair, fresh re-review, validation, and closeout are internal checkpoints of their owning macro phase. The root launches the required read-only lane, repairs authoritative work, obtains any required fresh verdict, and continues automatically in the same session. A durable review record is only a carrier; it does not create a user-started phase or a next-session prompt.
 
 An explicitly user-requested standalone review remains read-only: return findings and stop at the requested review boundary. It gains no repair, implementation, or workflow-handoff authority unless the user separately grants it.
 
-An allowed handoff contains:
+An allowed handoff to a non-implementation macro phase contains:
 
 ```text
-Goal: <one next outcome>
+Objective: <one next outcome>
 Read first: <one owning artifact, then only non-obvious context>
 Constraints: <only task-specific boundaries not recoverable from AGENTS.md>
 Proof: <required evidence or owning ledger section>
 Stop/reopen: <exact blocker behavior and owner>
 ```
+
+When the next outcome enters implementation/validation/closeout, use `codex-goal-prompt-composer` and its `Goal:` shape instead. `Goal:` is reserved for that implementation handoff; earlier macro-phase handoffs use `Objective:` and never create or continue a Codex Goal.
 
 Keep prompts in chat unless the user asks for a standalone prompt artifact. Do not include worker command manuals, model catalogs, full repository summaries, repeated authorization policy, or empty headings. Emit no next-session prompt for an internal checkpoint or completed task.

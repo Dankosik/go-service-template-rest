@@ -45,6 +45,8 @@ Planning must make these explicit where relevant:
 - fresh validation and negative proof for retired identifiers;
 - one successful completion condition distinct from blocked stop.
 
+Before readiness, cold-walk every mandatory dependency path from the first task through final validation. Each task and required proof must be startable and completable from canonical, mechanically derived, or currently available external inputs. A known unavailable external gate may remain only when its dependent task and claim are excluded from the current completion and routed to a later ledger; it may not sit on a path to final validation. Never approve `PASS subject to gates` for a mandatory path.
+
 ## Readiness Review
 
 For structured or orchestrated work, run independent [Task Review / Readiness](task-review-readiness.md) before implementation. Direct work needs only its inline plan and focused self-check unless the user or risk requires independent review.
@@ -55,4 +57,4 @@ Task review, planning-owned repair, and fresh re-review are internal checkpoints
 
 ## Stop Rule
 
-Implementation may start when tasks are dependency-ordered, owned, traceable, and provable, and the required readiness review has no blocker. Do not start implementation merely because a draft ledger exists.
+Implementation may start when every mandatory path through the completion condition is dependency-ordered, owned, traceable, provable, and currently executable, and the required readiness review has returned `PASS`. Do not start implementation merely because a draft ledger exists.

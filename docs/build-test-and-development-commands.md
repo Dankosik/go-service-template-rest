@@ -515,15 +515,15 @@ Bootstrap shortcuts:
 ### CI policy helper checks
 
 - `make workflow-routing-check`
-  - Runs the lean workflow-instruction structure, link, retired-vocabulary, and prompt-budget check, followed by the mirror integration harness.
-  - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or locks exact prose.
+  - Runs workflow-instruction structure, link, retired-vocabulary, canonical-invariant, and orphan-reference checks, followed by the mirror integration harness.
+  - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or enforces an aggregate word limit.
 
 - `make workflow-behavior-evals-check`
-  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E23, a prompt and pass condition for each case, and the required invariant set.
+  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E26, a prompt and pass condition for each case, and the required invariant set.
   - Makes no model calls and is not behavioral proof.
 
-- `WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge make workflow-behavior-evals`
-  - Compares the `HEAD` instruction baseline with the current worktree using external model and judge adapters.
+- `WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_BASE_REF=<ref> make workflow-behavior-evals`
+  - Compares isolated clean Git snapshots of the selected instruction baseline (`HEAD` by default) and the current tracked worktree using external model and judge adapters. Use `1ddd7cc` for the pre-GPT-5.6-simplification baseline.
   - Saves prompts, outputs, logs, judgments, and the acceptance summary under `.artifacts/workflow-evals/`.
   - Adapter arguments and judgment output are defined in `docs/spec-first-workflow-evals.md`. Keep model, reasoning effort, repository assumptions, and tools equal across variants.
 

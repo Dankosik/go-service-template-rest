@@ -15,7 +15,8 @@ Repository-wide contract for producing reliable Go-service changes with the leas
 
 - `answer`, `explain`, `review`, `diagnose`, and `plan` authorize inspection and reporting, not implementation.
 - `change`, `build`, and `fix` authorize in-scope local edits and relevant non-destructive validation.
-- Every authorized implementation runs under exactly one root-thread Codex Goal, created or continued before the first edit regardless of task size and completed only after fresh review and validation evidence. Reuse a matching active Goal; do not create separate Goals for subagents, workers, tasks, or internal checkpoints. If an unrelated Goal is active, ask the user to pause or clear it. A workflow opt-out does not waive this execution control.
+- A Codex Goal is an execution control for the implementation/validation/closeout macro phase only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts. Direct work enters implementation immediately.
+- On entering implementation/validation/closeout, create or continue exactly one root-thread Codex Goal immediately before the first implementation edit, regardless of task size, and complete it only after fresh review and validation evidence. Reuse a matching active Goal; do not create separate Goals for subagents, workers, tasks, or internal checkpoints. If an unrelated Goal is active, ask the user to pause or clear it. A workflow opt-out does not waive this execution control.
 - Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary repository reads, in-scope edits, or tests.
 - Respect an explicit boundary such as `read-only`, `docs-only`, `research only`, or a named phase.
 

@@ -26,8 +26,8 @@ Ranked findings with:
 
 Verdict:
 
-- `PASS`: no material readiness gap found within the evidence boundary.
-- `CONCERNS`: the spec is usable, with named bounded risks or proof obligations.
+- `PASS`: the sufficient material evidence boundary has no readiness gap, current-phase defect, unowned question, or uncovered affected lens.
+- `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; the spec cannot leave specification on this verdict.
 - `FAIL`: a missing or contradictory decision prevents honest design/planning.
 
 ## Review Questions
@@ -41,4 +41,4 @@ Report only findings that can change readiness or required proof. Do not block o
 
 ## Stop Rule
 
-For an internal checkpoint, return the advisory verdict to the owning root; it repairs and re-reviews the affected surface in the same root session without a user handoff. For an explicitly user-requested standalone review, return findings and stop read-only. Do not rerun unrelated lenses by default.
+For an internal checkpoint, return the advisory verdict to the owning root; it repairs and re-reviews under the shared convergence contract in the same root session without a user handoff. Use focused re-review for local repairs and full affected-surface review when scope, behavior, ownership, shared assumptions, or proof changes. For an explicitly user-requested standalone review, return findings and stop read-only.

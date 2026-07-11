@@ -6,7 +6,7 @@ Subagents answer narrow questions. The root owns task scope, synthesis, edits, a
 
 Delegate only when the question is concrete, bounded, independent of mutable work in other lanes, and materially improved by separate context or review independence. Keep sequential, tiny, or tightly coupled work local.
 
-Default to at most three concurrent lanes and no nested delegation.
+Default to at most three concurrent lanes and no nested delegation. This is a concurrency limit, not a cap on justified sequential lanes or review iterations.
 
 ## Boundaries
 
@@ -32,6 +32,8 @@ Recommended action and owner
 ```
 
 If no finding survives, say so and state the evidence boundary. Do not pad a clean review.
+
+Every review return also names the exact revision or diff and accounts for each materially affected lens as covered, delegated to a named specialist result, or not triggered with a concrete reason. A required gate includes one whole-artifact or whole-diff coherence pass. One reviewer may cover compatible lenses; do not create duplicate lanes merely to increase the count.
 
 ## Return
 

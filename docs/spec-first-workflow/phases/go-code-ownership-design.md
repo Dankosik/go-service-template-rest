@@ -34,4 +34,4 @@ For structured or orchestrated work, use [Technical Design Review](technical-des
 
 ## Stop Rule
 
-Continue when placement preserves the accepted behavior and planning can task it directly. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.
+Continue when placement preserves the accepted behavior, planning can task it directly, and the required technical-design review has returned `PASS`. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.

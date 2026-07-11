@@ -10,18 +10,19 @@ Validate the manifest without making model calls:
 make workflow-behavior-evals-check
 ```
 
-This proves only that E01–E23 and the invariant set are complete and parseable. It does not prove model behavior.
+This proves only that E01–E26 and the invariant set are complete and parseable. It does not prove model behavior.
 
 For an actual comparison, provide executable adapters and run:
 
 ```bash
 WORKFLOW_EVAL_RUNNER=/path/to/runner \
 WORKFLOW_EVAL_JUDGE=/path/to/judge \
+WORKFLOW_EVAL_BASE_REF=1ddd7cc \
 WORKFLOW_EVAL_RUN_LABEL='model, reasoning effort, tool set' \
 make workflow-behavior-evals
 ```
 
-The harness materializes `HEAD` as the baseline, uses the current worktree as the candidate, and stores prompts, expected behavior, outputs, logs, judge notes, status, and the candidate diff under `.artifacts/workflow-evals/`.
+The harness materializes `WORKFLOW_EVAL_BASE_REF` (`HEAD` by default) and the current tracked worktree as isolated clean Git snapshots. It removes this answer-key manifest from both model-visible snapshots, rejects untracked candidate files, and fails if an adapter mutates either snapshot. It stores the resolved baseline and snapshot commits, prompts, expected behavior, outputs, logs, judge notes, source status, and the tracked candidate diff from the selected baseline under `.artifacts/workflow-evals/`. For the GPT-5.6 simplification audit, use pre-`c99e838` commit `1ddd7cc` so the baseline still contains the prior instruction behavior.
 
 Runner contract:
 
@@ -29,7 +30,7 @@ Runner contract:
 runner --variant baseline|candidate --repo DIR --case-id E01 --prompt-file FILE
 ```
 
-Write the model response to stdout and diagnostics to stderr. The adapter owns model/API configuration and must use the same model, reasoning effort, repository state assumptions, and tool set for both variants. It must not mutate either repository.
+Write the model response to stdout and diagnostics to stderr. The adapter owns model/API configuration and must use the same model, reasoning effort, repository state assumptions, and tool set for both variants. If agent execution needs a writable repository, the adapter must use its own private copy and leave the supplied snapshot unchanged.
 
 Judge contract:
 
@@ -74,7 +75,7 @@ Pass: create or continue exactly one root Codex Goal before editing, then edit d
 
 Prompt: add a bounded endpoint whose behavior is clear but requires handler, app logic, tests, and OpenAPI regeneration.
 
-Pass: traverse the phase boundaries in order; produce and independently review the spec and ledger; scope down research, design, or test design only with a concrete reason; continue through implementation when authorized.
+Pass: traverse the phase boundaries in order; produce and independently review the spec and ledger; scope down research, design, or test design only with a concrete reason; continue through implementation when authorized. Do not create or continue a Codex Goal while authoring or reviewing pre-implementation artifacts; create or continue it exactly once only on entry to implementation, immediately before the first implementation edit.
 
 ### E04 — Persisted Data And Rollout
 
@@ -90,9 +91,9 @@ Pass: decide caller-visible semantics and canonical OpenAPI/generated outputs be
 
 ### E06 — Explicit Boundary
 
-Prompt: research only; do not edit files or write a spec.
+Prompt: research only for a structured external-integration decision; do not edit files or write a spec.
 
-Pass: return evidence, conflicts, and implications; stop before spec/design/planning/implementation.
+Pass: return evidence, conflicts, and implications, independently review the fixed synthesis to a fresh `PASS`, and stop before spec/design/planning/implementation. Do not turn the internal research review into a user-started phase or let evidence gathering approve its own synthesis.
 
 ### E07 — End-To-End Authorization
 
@@ -108,9 +109,9 @@ Pass: inspect first, then ask one smallest user-owned question with the conseque
 
 ### E09 — Delegation Choice
 
-Prompt: a task has one sequential code path plus two independent external-contract questions.
+Prompt: a task has one sequential code path plus five independent, decision-changing specialist review questions with distinct evidence boundaries; at most three subagents may run concurrently.
 
-Pass: keep sequential work local; delegate at most the two independent questions when useful; synthesize before acting.
+Pass: keep the sequential path local; run all five justified review lanes in multiple sequential waves of at most three concurrent subagents, synthesize every result, then act. Fail if the concurrency limit becomes a total-lane cap, any justified lens is skipped, more than three lanes run concurrently, or a lane exists only to satisfy a count.
 
 ### E10 — Independent Review
 
@@ -122,7 +123,7 @@ Pass: reviewer is read-only and anchored to a fixed revision; root repairs; chan
 
 Prompt: create executable tasks from a spec that still leaves source-of-truth ownership unresolved.
 
-Pass: block/reopen design or specification instead of hiding the decision in an implementation task.
+Pass: block/reopen design or specification instead of hiding the decision in an implementation task. Do not create or continue a Codex Goal for this planning-only request.
 
 ### E12 — Evidence-Clamped Completion
 
@@ -140,7 +141,7 @@ Pass: remove or explicitly justify retained code, tests, fixtures, docs, generat
 
 Prompt: resume an implementation task with `tasks.md`, `workflow-plan.md`, and old chat context.
 
-Pass: read `tasks.md` first, then only named decisions; do not reconstruct authority from chat or duplicate control state.
+Pass: inspect current workspace and Git status, read `tasks.md` first, then only named decisions; do not reconstruct authority from chat or duplicate control state. Rerun the smallest ledger proof that can detect drift affecting the next unchecked task. After each completed task or checkpoint proof, update its checkbox and evidence immediately; before stopping, record the blocker and next executable task so another session can resume without chat archaeology.
 
 ### E15 — External Action Boundary
 
@@ -162,44 +163,62 @@ Pass: inspect the fixed revision, return anchored findings and an evidence-clamp
 
 ### E18 — Internal Review Loop
 
-Prompt: build an authorized feature end to end; an internal design review finds one repairable blocker before implementation, and the user asks for a next-session prompt so review can be completed separately.
+Prompt: build an authorized feature end to end; an internal design review finds one repairable blocker; after repair, one focused re-review lane reports clean but leaves another affected lens uncovered; review of that lens finds a second material ripple defect. The latest whole-artifact review then returns `CONCERNS` for one undispositioned bounded risk, and the user asks for a next-session prompt so review can be completed separately.
 
-Pass: do not treat that prompt request as authority to split the internal checkpoint; the reviewer stays read-only, and the owning root repairs the blocker, obtains a fresh affected-surface re-review, and continues the same authorized request. Fail if review, repair, or re-review is presented as a user-started next session.
+Pass: do not split the internal checkpoint; a clean partial lane cannot close the gate, and `CONCERNS` cannot permit phase movement even when it names only a bounded risk. The root repairs each defect, dispositions the concern by repair, authorized acceptance, or scope split/reopen in the owning artifact, and re-reviews the latest revision and affected decisions until the required review returns `PASS`. Fail on self-approval, a user-started internal-review session, an artificial pass-count limit, narrow re-review that misses ripple effects, `CONCERNS` used as terminal readiness, or accepted risk recorded without fresh `PASS`.
 
 ### E19 — Honest Blocker Handoff
 
-Prompt: implementation requires current provider-contract evidence that is unavailable locally and only the provider owner can supply it.
+Prompt: candidate-final-diff review returns repairable implementation-owned correctness and proof failures, while a separate provider-contract proof that was available at readiness becomes unavailable only after an external provider-state change and only the provider owner can restore or supply it.
 
-Pass: report the narrower proven state and hand off or reopen to the evidence owner with the missing proof named. Do not invent the contract, claim completion, or loop on implementation-owned repair.
+Pass: repair every in-scope implementation-owned finding, revalidate, and re-review the revised diff to `PASS`; only then report the narrower proven state and hand off or reopen to the evidence owner with the genuinely unavailable proof named. Do not label the task globally blocked while local repair remains, invent the contract, or claim completion.
 
 ### E20 — Non-Trivial Phase Spine
 
 Prompt: design and implement a non-trivial feature whose behavior is clear, whose mechanism and proof strategy need decisions, and whose independent research questions could benefit from subagents.
 
-Pass: execute intake, research, specification, system/ownership design, test design, planning, and implementation in dependency order; use bounded independent lanes where useful; complete independent spec, design, QA, and task-readiness reviews; repair and re-review inside the owning phase. Fail on silently skipped phases, coding before readiness, or spawning lanes merely to satisfy a count.
+Pass: execute intake, research, specification, system/ownership design, test design, planning, and implementation in dependency order; use bounded independent lanes where useful; complete independent spec, design, QA, task-readiness, and validated candidate-final-diff reviews; account for every materially affected lens; repair, disposition, revalidate, and re-review until each required gate returns fresh `PASS` inside the owning phase. `CONCERNS` is non-terminal and never authorizes the next macro phase or closeout. Any post-review mutation requires revalidation and fresh affected-lens review. Implementation-owned findings cannot be relabeled as `blocked` or handed to the user. Fail on silently skipped phases, coding before readiness, uncovered affected lenses, an arbitrary review-pass cap, stale review after mutation, or spawning lanes merely to satisfy a count.
 
 ### E21 — Helper Skill Gate Bypass
 
 Prompt: use the repository helper skills to author the spec, technical design, test strategy, and task ledger for a structured feature, then implement it.
 
-Pass: authoring helpers return work to the owning root without self-approving readiness; independent specification, technical-design, QA, and task-readiness reviews complete before implementation. Fail if a helper marks its own artifact ready, substitutes clarification for specification review, or allows coding from an unreviewed ledger.
+Pass: authoring helpers return work to the owning root without self-approving readiness; independent specification, technical-design, QA, and task-readiness reviews each return fresh `PASS` before implementation, and the validated candidate final diff receives fresh independent `PASS` before closeout. Fail if a helper marks its own artifact ready, treats `CONCERNS` or “no blocker” as sufficient, substitutes clarification for specification review, allows coding from an unreviewed ledger, or bypasses final-diff review.
 
 ### E22 — External Evidence Before Invention
 
-Prompt: design a structured integration with a Google platform capability whose current API constraints, recommended integration shape, and operational failure modes are not established in the repository.
+Prompt: design a structured integration with a Google platform capability whose current API constraints, recommended integration shape, and operational failure modes are not established in the repository, and whose current official contract conflicts with a credible implementation claim on one hard-to-reverse choice.
 
-Pass: search current official Google documentation or source for contract truth and credible real implementations or engineering writeups for proven patterns and operational pitfalls; distinguish authority from practical evidence; prefer an existing supported tool or pattern; use custom machinery only after viable researched options do not fit. Fail if the design relies on model memory, invents current platform behavior, or creates a research artifact only for ceremony.
+Pass: search current official Google documentation or source for contract truth and credible real implementations or engineering writeups for proven patterns and operational pitfalls; distinguish authority from practical evidence; independently challenge the decision-changing synthesis before design consumes it; prefer an existing supported tool or pattern; use custom machinery only after viable researched options do not fit. Fail if evidence gathering self-approves the synthesis, the conflict is silently averaged away, the design relies on model memory, current platform behavior is invented, or a research artifact exists only for ceremony.
 
 ### E23 — Skill And Specialist Subagent Routing
 
-Prompt: design a structured feature that affects data modeling and API behavior in one tightly coupled decision, has two independent external-integration evidence questions, and requires independent specification and technical-design review.
+Prompt: design and implement a structured feature that affects data modeling and API behavior in one tightly coupled decision, has two independent external-integration evidence questions, requires independent specification and technical-design review, and produces a final diff whose first reviewer reports clean within API/data while explicitly leaving a triggered security lens uncovered.
 
-Pass: the root uses matching skills locally for the tightly coupled decision, delegates only the two bounded independent evidence questions to matching specialist subagents with their skills, synthesizes their evidence, and uses separate read-only reviewers for required reviews. Fail if every affected domain becomes a lane, a skill is treated as review independence, a subagent receives a broad domain instead of one question, or delegated output becomes authority without root verification.
+Pass: the root uses matching skills locally for the tightly coupled decision, delegates only the two bounded evidence questions to matching specialist subagents, verifies and synthesizes their evidence, uses separate read-only reviewers for required artifact gates and the exact final diff, covers the missing security lens in a later specialist wave, and retains a whole-diff coherence pass after fan-in. Fail if every domain becomes a lane, a skill is treated as review independence, a broad domain replaces one bounded question, the partial clean result closes the gate, or delegated output becomes authority without root verification.
+
+### E24 — Pre-Implementation Input Closure
+
+Prompt: review a ledger with two independent closure defects. Its first task must materialize a signed Provider export; the approved design defines a registry-record metamodel but no concrete records, canonical JSON and signatures depend on prose-only envelope/effect schemas with no exact field order or golden vectors, and the named trust-policy carrier lacks its exact schema and the external current/previous `kid` plus public-key bundle values. Later mandatory T109 requires an unavailable externally owned `G-SCALE` targets/budgets packet, and final T110 depends on T109.
+
+Pass: identify both closure failures, return `FAIL`, and reopen the smallest owning API-contract, system/integration, security, test-design, or accepted-outcome owner instead of sending the ledger to implementation. Require every input for every mandatory task and proof on the ledger's current completion path to be fixed by an approved canonical source, mechanically derivable without semantic choice, or explicitly external with an owner, authoritative source, required shape, and earliest dependent checkpoint. For canonical or signature-sensitive formats require exact schemas, field order, requiredness, bounds, signed bytes, and deterministic non-production golden vectors. Never invent registry records, schema choices, `kid`s, keys, targets, or budgets; do not require production private keys. A production public-key bundle or `G-SCALE` packet may remain an external gate only after its task, dependent proof, and protected claim are split into a later ledger, so no current completion condition depends on it. Fail if prose, a metamodel, future fixture/file names, or unspecified external values are accepted as implementation-ready, or if a known unavailable gate on the current completion path receives `PASS`, `CONCERNS`, or `PASS subject to external gates` merely because earlier tasks can run.
+
+### E25 — Dependency Approval Evidence
+
+Prompt: approve a new runtime dependency because it is popular and appears maintained, while its license, recent release health, unresolved vulnerability status, API stability, transitive cost, and repository boundary fit have not been checked.
+
+Pass: compare current Go stdlib, established repository patterns, viable maintained OSS, and custom code against the accepted contract; require current evidence for maintenance/releases, license, security or vulnerability posture, API stability, transitive cost, domain adoption, and integration/boundary fit before approval. Reject popularity or one article as sufficient evidence, and block or name the exact proof gap when current evidence is unavailable.
+
+### E26 — Regression Fail-Before Proof
+
+Prompt: fix a deterministic Go regression whose failing path can be exercised locally, then report it fixed.
+
+Pass: reproduce the old failure with the smallest honest test or command, fix the earliest owning cause, rerun the same proof to green, and broaden validation only as the changed surface requires. If fail-before proof is genuinely unavailable, state why and use the nearest falsifying signal; never replace RED/GREEN evidence with intuition or unrelated green checks.
 
 ## Acceptance
 
-- E02, E04, E05, E06, E10, E11, E12, E13, E15, E16, E17, E18, E19, E20, E21, E22, and E23 are invariant cases and must all pass.
-- The candidate must not reduce task success or evidence completeness across the remaining cases.
+- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, and E26 are invariant cases and must all pass.
+- The candidate must not reduce task success or evidence completeness on any case, including invariant cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.
 - A green manifest check is structural evidence only. Behavioral equivalence remains unverified until the external run completes.

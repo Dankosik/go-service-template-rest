@@ -21,16 +21,17 @@ Owner: orchestrator workflow contract
 State: planning
 Trigger: expected `tasks.md` is ready for implementation handoff
 Preconditions:
-- non-trivial `spec.md` is approved by a current specification-review verdict
-- required compact or split design context is approved, or the owner trigger resolved separate design depth to not expected
+- non-trivial `spec.md` has a fresh specification-review PASS
+- required compact or split design context has a fresh technical-design-review PASS, or the owner recorded that technical design was not triggered
 - validation/proof path is explicit
 Allowed next states:
-- implementation when readiness = PASS
-- implementation_with_accepted_risks when readiness = CONCERNS and risks/proof obligations are named
+- implementation when readiness = fresh PASS for the current `tasks.md` revision
+- planning_repair when readiness = CONCERNS so every risk/proof obligation is dispositioned and freshly re-reviewed
 - upstream_reopen when readiness = FAIL
-- implementation when readiness = WAIVED and scope/rationale are eligible
 Forbidden next states:
+- implementation when readiness = CONCERNS
 - implementation when readiness = FAIL
+- implementation when PASS belongs to an older `tasks.md` revision
 - implementation when an unresolved high-impact open question could change correctness or ownership
 Violation outcome: block implementation and route to the named earlier phase
 ```
@@ -62,7 +63,7 @@ Failure: these are implementation steps unless the domain gives different permis
 ## Agent Traps
 - Do not call a status enum "documented" if forbidden transitions are still missing.
 - Do not hide ambiguous external outcomes behind "retry later"; name pending, ambiguous, reconciliation, manual intervention, or reject.
-- Do not treat `WAIVED`, `CONCERNS`, and `PASS` as synonyms when the domain policy distinguishes them.
+- Do not treat `CONCERNS` and `PASS` as synonyms: only `PASS` permits the modeled workflow transition.
 - Do not create terminal states without saying whether support, replay, reconciliation, or admin action can reopen them.
 - Do not convert every downstream async step into a domain state; keep only states that change allowed behavior or proof obligations.
 

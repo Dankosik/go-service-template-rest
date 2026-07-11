@@ -7,7 +7,7 @@ These examples show compact, conditional handoffs. They do not use every possibl
 Raw fixture: `evals/files/http-options-cors.md`
 
 ```md
-Goal
+Objective
 Fix and regression-test HTTP `OPTIONS` handling so a known non-preflight route returns `204 No Content` with the correct `Allow` header, while CORS preflight remains fail-closed when CORS is disabled.
 
 Success criteria
@@ -39,7 +39,7 @@ Inspect `.agents/skills/agent-prompt-composer/` and `scripts/dev/sync-skills.sh`
 Raw fixture: `evals/files/flaky-shutdown.md`
 
 ```md
-Goal
+Objective
 Find and fix the root cause of the flaky shutdown/drain path where `context canceled` may be swallowed or a worker may fail to stop, causing a test hang.
 
 Success criteria

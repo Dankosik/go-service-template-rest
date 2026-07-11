@@ -10,7 +10,7 @@ Choose the runtime mechanism needed to satisfy the accepted behavior. Use a sepa
 
 ## Inputs
 
-- Ready spec and carried concerns/proof obligations.
+- Ready spec and dispositioned accepted risks/downstream proof obligations.
 - `docs/repo-architecture.md` when repository boundaries matter.
 - Current provider contracts, OpenAPI/event/schema sources, generated-source owners, and relevant runtime code.
 - Research that can change the mechanism.
@@ -39,6 +39,8 @@ When a caller-visible API, generated contract, event, or material shared interfa
 - canonical source and generated outputs;
 - proof and migration/deprecation consequences.
 
+When canonicalization, hashing, signing, or verification depends on a data shape, close it at byte level: exact schema, field order, requiredness/nullability, bounds, exact bytes covered by canonicalization, digest, or signature, and at least one deterministic non-secret golden vector. When keyed signing or verification applies, also define public trust-material lookup and rotation. A metamodel or prose field list is insufficient. Environment-owned keys or trust data follow the router's [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure); do not persist production secrets or private keys in repository artifacts.
+
 Design against an external platform or service requires current official contract evidence. When integration shape or operational fit is non-obvious, also consume credible real implementations or engineering writeups for proven patterns and failure modes. Do not infer current external behavior from model memory. `design/contracts/` is optional context; it never replaces the runtime OpenAPI/event/proto source.
 
 ## Fan-Out And Review
@@ -51,4 +53,4 @@ For structured or orchestrated work, run [Technical Design Review](technical-des
 
 ## Stop Rule
 
-Continue to Go ownership, test design, or planning when implementation can proceed without inventing runtime behavior. Reopen specification or research when the missing fact changes accepted behavior, ownership policy, or proof feasibility.
+Continue to Go ownership when implementation can proceed without inventing runtime behavior. Continue to test design or planning only after Go ownership is complete and the required technical-design review has returned `PASS`. Reopen specification or research when the missing fact changes accepted behavior, ownership policy, or proof feasibility.

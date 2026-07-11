@@ -38,7 +38,7 @@ The workflow chooses among three paths:
 
 Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require full-depth work or a durable artifact in every phase.
 
-Structured and orchestrated work evaluates every phase boundary in order. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Review, in-scope repair, fresh re-review, validation, and closeout stay inside the owning macro phase; a next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
+Structured and orchestrated work evaluates every phase boundary in order. The owning macro phases are specification, technical design, test design, planning, and implementation/validation/closeout; intake and research support the owning phase unless the user names `research only`, which makes the fixed synthesis its own independently reviewed macro-phase outcome. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Only a fresh `PASS` permits the next macro phase or closeout; `CONCERNS` stays for disposition/re-review, `FAIL` for repair/reopen. Review, in-scope repair, fresh re-review, validation, and closeout stay inside the owning macro phase until all materially affected lenses are covered and no known current-phase defect or unowned question remains; structured/orchestrated implementation includes independent final-diff review before closeout. A next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
 
 ### Artifacts
 
@@ -68,9 +68,9 @@ make skills-check
 make workflow-behavior-evals-check
 ```
 
-The behavior-eval check validates the E01–E23 manifest only. Actual baseline/candidate model comparison uses `make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The behavior-eval check validates the E01–E26 manifest only. Actual baseline/candidate model comparison uses `WORKFLOW_EVAL_BASE_REF=<ref> make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
-At each active macro phase, evaluate whether concrete, independent, bounded subagent lanes improve evidence or review independence. Use only useful lanes and keep sequential work local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. The root owns synthesis, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation.
+At each active macro phase, evaluate whether concrete, independent, bounded subagent lanes improve evidence or review independence. Use only useful lanes and keep sequential work local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. The root owns synthesis, edits, and completion claims. Default to at most three concurrent lanes and no nested delegation; the limit does not cap justified sequential lanes or review iterations.
 
 Representative agents:
 

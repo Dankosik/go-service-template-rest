@@ -1,6 +1,6 @@
 # Implementation / Validation / Closeout
 
-Before editing, establish the single root Codex Goal required by `AGENTS.md`. Then make the requested change, review the resulting diff, and prove the accepted outcome. Implementation may be local or delegated; the root remains accountable.
+On entering this macro phase, and only then, establish the single root Codex Goal required by `AGENTS.md` immediately before the first implementation edit. Then make the requested change, review the resulting diff, and prove the accepted outcome. Implementation may be local or delegated; the root remains accountable.
 
 ## Read When
 
@@ -33,6 +33,8 @@ Before editing, establish the single root Codex Goal required by `AGENTS.md`. Th
 
 The root may implement directly. Delegate a patch only when the bundle is concrete and independent or isolation materially reduces risk/contended writes. A worker brief names the outcome, task IDs, workspace/boundary, required context, forbidden decisions, proof, and blocker output. Worker success is advisory until the root inspects the diff and reruns relevant proof in the integration workspace.
 
+When `tasks.md` exists, update each task or checkpoint checkbox and evidence immediately after its proof. Before an intentional stop, record the blocker and next executable task; on resume, follow the shared [Resume Order](../shared/artifact-model.md#resume-order) instead of reconstructing progress from chat.
+
 ## Review
 
 Always inspect the final diff for:
@@ -44,9 +46,17 @@ Always inspect the final diff for:
 - ownership, unnecessary abstraction/dependencies, and stale replacement surfaces;
 - tests that prove behavior rather than implementation detail.
 
-Use independent read-only review when the user requires it or the change is high-impact, hard to reverse, broad, ambiguous, or difficult to falsify locally. Repair in-scope findings, then re-review the changed surface at appropriate depth. Reopen upstream decisions rather than broadening implementation.
+After relevant validation, structured or orchestrated work requires independent read-only review of the exact candidate final diff and proof evidence before closeout. Direct work uses independent review when the user requires it or the change is high-impact, hard to reverse, broad, ambiguous, or difficult to falsify locally.
 
-Post-code review, in-scope repair, fresh re-review, validation, and closeout run automatically in the same root session. An implementation-owned failure never produces a next-session prompt.
+The reviewer returns one verdict under the shared convergence contract:
+
+- `PASS`: the current validated diff has no known in-scope defect, unapproved decision, unowned question, proof gap, or uncovered affected lens;
+- `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit closeout;
+- `FAIL`: an implementation defect, unapproved decision, missing proof, or invalid evidence prevents closeout.
+
+Repair in-scope findings, then revalidate and re-review until convergence. Any mutation after review invalidates affected review and proof dispositions. Reopen upstream decisions rather than broadening implementation. A passing command is insufficient when its implemented fixtures or assertions do not exercise the binding proof obligation; a matching selector name alone is not evidence.
+
+Validation, post-code review, in-scope repair, revalidation, fresh re-review, and closeout run automatically in the same root session. An implementation-owned failure never produces a next-session prompt.
 
 ## Validate
 
@@ -76,4 +86,4 @@ Use `complete`, `fixed`, `ready`, or equivalent only when fresh evidence support
 
 ## Stop Rule
 
-Finish when the accepted completion condition is met and relevant proof passes. Continue in-scope repair when the failure is implementation-owned. Stop and reopen planning, test design, technical design, specification, research, or user/external authority only when that owner must change a decision or supply unavailable evidence.
+Finish when the accepted completion condition is met, the required review has returned `PASS`, and relevant proof passes. Continue in-scope repair when the failure is implementation-owned. Stop and reopen planning, test design, technical design, specification, research, or user/external authority only when that owner must change a decision or supply unavailable evidence.

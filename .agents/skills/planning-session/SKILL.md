@@ -11,4 +11,4 @@ Write outcome-oriented tasks with source, owner/surface, dependencies, proof, an
 
 For structured or orchestrated work, invoke [task review/readiness](../../../docs/spec-first-workflow/phases/task-review-readiness.md) before implementation. Direct work uses a focused self-check unless the user or risk requires independent review. Repair ledger defects; reopen earlier owners for missing behavior/design/test decisions.
 
-Task review, planning-owned repair, and fresh re-review stay in the same root session and never produce a next-session prompt. Stop before implementation only when the user named planning as the boundary; otherwise continue directly into implementation in the same authorized request.
+Task review, planning-owned repair, and fresh re-review to the shared convergence condition stay in the same root session and never produce a next-session prompt. Stop before implementation only when the user named planning as the boundary; otherwise continue directly into implementation in the same authorized request.

@@ -1,11 +1,13 @@
 ---
 name: codex-goal-prompt-composer
-description: "Compose the single compact root Codex Goal required for every authorized implementation, or when the user explicitly asks for one."
+description: "Compose the single compact root Codex Goal when implementation is ready to start."
 ---
 
 # Codex Goal Prompt Composer
 
-Use before the first edit in every authorized implementation, regardless of task size, and when the user explicitly asks for a Codex Goal prompt. Direct work uses its accepted inline outcome; structured or orchestrated work uses the ready `tasks.md` ledger.
+Use only when entering the implementation/validation/closeout macro phase: direct work has an accepted inline outcome, or structured/orchestrated work has a ready independently reviewed `tasks.md` ledger. Establish the Goal immediately before the first implementation edit.
+
+Do not use during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts. If the user explicitly asks for a Codex Goal before implementation is ready, state that it starts only on entry to implementation and return no Goal.
 
 Compose one root-thread Goal covering implementation, post-code review, in-scope repair, re-review, validation, and closeout. Do not create separate Goals for subagents, workers, individual tasks, or internal checkpoints. Those are internal next actions, not handoffs.
 

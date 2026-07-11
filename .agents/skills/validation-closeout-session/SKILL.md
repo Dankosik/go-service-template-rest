@@ -11,6 +11,6 @@ Bind each claim to changed files, accepted task/spec, and the smallest fresh pro
 
 Skipped, cached, failing, unavailable, worker output alone, or too-narrow evidence cannot prove the full claim. Record the narrower proven result and remaining owner.
 
-Update task progress only after proof passes. Return complete only when the accepted completion condition is met; otherwise report partial or blocked with exact evidence and reopen target.
+Update task progress only after proof passes. For structured or orchestrated work, return complete only when the accepted completion condition is met, required independent final-diff review has reached convergence, and fresh proof passes; otherwise report partial or blocked with exact evidence and reopen target.
 
 Validation, implementation-owned repair, re-review, and closeout remain internal to the active implementation request and do not create a next-session prompt. Stop at findings or evidence only when the user explicitly requested a standalone review or validation boundary.

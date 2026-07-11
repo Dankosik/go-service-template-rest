@@ -55,11 +55,11 @@ Do not paste broad project summaries, generic workflow rules, or documentation i
 
 Recover and package only the information needed for the downstream outcome:
 
-1. **Goal:** the requested action and outcome, stated first.
+1. **Objective:** the requested action and outcome, stated first.
 2. **Success criteria:** observable conditions that distinguish done from merely attempted.
 3. **Constraints and authorization:** preserved scope, allowed side effects, non-goals, and user or repository boundaries that materially affect execution.
 4. **Inspect/evidence:** exact identifiers, repository starting points, and proof commands only when they help the agent avoid a real mistake.
-5. **Expected output:** the requested artifact, change, findings, or response shape when it is not obvious from the goal.
+5. **Expected output:** the requested artifact, change, findings, or response shape when it is not obvious from the objective.
 6. **Stop/block rule:** the smallest clarification, blocker, bounded assumption, or reopen behavior when unresolved ambiguity could change correctness, ownership, safety, or scope.
 
 This is a conditional shape, not a mandatory template. Use headings only when they improve scanability. Omit empty headings, merge related fields, and return a short paragraph or compact list when that is sufficient.
@@ -76,7 +76,7 @@ Keep facts and uncertainty honest:
 
 Before returning the handoff, confirm that:
 
-- the goal is outcome-first and no broader than the user's ask;
+- the objective is outcome-first and no broader than the user's ask;
 - exact identifiers and meaningful emphasis survived deduplication and translation;
 - wrapper instructions and instruction noise did not leak into the downstream task;
 - repository claims are confirmed or labeled;
