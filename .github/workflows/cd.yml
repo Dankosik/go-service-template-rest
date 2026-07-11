@@ -59,7 +59,7 @@ jobs:
             .
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@cf5c088a69634cd13ccddc735d7926162c31f9a6 # 0.34.2
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: table
@@ -68,7 +68,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@cf5c088a69634cd13ccddc735d7926162c31f9a6 # 0.34.2
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: cyclonedx
@@ -157,7 +157,7 @@ jobs:
         run: make sqlc-check
 
       - name: Lint
-        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=3m
@@ -225,7 +225,7 @@ jobs:
             .
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@cf5c088a69634cd13ccddc735d7926162c31f9a6 # 0.34.2
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: table
@@ -234,7 +234,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@cf5c088a69634cd13ccddc735d7926162c31f9a6 # 0.34.2
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_image }}
           format: cyclonedx
