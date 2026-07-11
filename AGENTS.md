@@ -1,11 +1,5 @@
 # AGENTS.md
 
-<!-- codebase-memory-binding:start -->
-## Codebase Memory MCP
-
-This repository is indexed as `Users-daniil-Projects-Opensource-go-service-template-rest`.
-Use that project directly. Check `index_status` when freshness matters. If the MCP is unavailable, fall back to CodeGraph, then `rg` or direct reads, and state the fallback when it affects confidence.
-<!-- codebase-memory-binding:end -->
 
 Repository-wide contract for producing reliable Go-service changes with the least workflow needed.
 
