@@ -34,6 +34,8 @@ Scoping down research, design, or test design needs one concrete reason in the c
 
 For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase and requires independent synthesis review; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
 
+Before each required review of an applicable structured or orchestrated non-implementation owning macro phase, run one autonomous read-only challenge probe before the separate reviewer. The applicable boundaries are Specification, combined Technical Design, Test Design, Planning, and an explicit `research only` boundary; run it once after the whole candidate meets its authoring bar, with Technical Design waiting for both system/integration and Go ownership. Direct work, supporting steps, and Implementation/Validation/Closeout do not run this probe. A closed candidate may return `DONE` immediately. [Autonomous Pre-Review Challenge](spec-first-workflow/shared/subagents-and-handoff.md#autonomous-pre-review-challenge) owns the exchange, authority, state, exhaustion, invalidation, and reviewer-separation contract.
+
 ## Phase Router
 
 | Need | Read | Outcome |

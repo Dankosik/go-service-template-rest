@@ -40,7 +40,7 @@ Load at most one reference by default; use more only for independent proof press
 
 ## Boundaries
 
-Do not debug or repair the failure, author process artifacts, force unrelated repository-wide checks for a narrow claim, or treat review findings as verified implementation evidence. If the proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report that as the proof gap.
+Standalone verification is evidence-only: do not debug or repair the failure, author process artifacts, force unrelated repository-wide checks for a narrow claim, or treat review findings as verified implementation evidence. Inside an active implementation/validation/closeout request, return the failure signal to the root; the root follows the phase contract and repairs implementation-owned failures before revalidation and closeout. If the proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report that as the proof gap.
 
 ## Output
 
@@ -48,4 +48,4 @@ Return a compact note: claim and scope; commands actually run; observed pass/fai
 
 ## Success And Stop
 
-Success means each positive statement has fresh evidence of equal scope. Otherwise stop with `partially verified` or `not verified`, the blocking signal, and the smallest next verification action.
+Success means each positive statement has fresh evidence of equal scope. Otherwise return `partially verified` or `not verified`, the blocking signal, and the smallest next verification action.

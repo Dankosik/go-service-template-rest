@@ -14,6 +14,7 @@ Default to at most three concurrent lanes and no nested delegation. This is a co
 - An implementation worker may write only inside its explicit task/workspace boundary.
 - A lane does not broaden scope, invent missing policy, edit workflow authority, approve its own repair, or claim task completion.
 - Missing input returns to the root with the smallest useful question or reopen owner.
+- Internal macro-phase grilling follows the canonical [Autonomous Pre-Review Challenge](spec-first-workflow/shared/subagents-and-handoff.md#autonomous-pre-review-challenge): the challenger returns one protocol event and no verdict, while the root records decisions and continues the same lane.
 
 ## Evidence
 

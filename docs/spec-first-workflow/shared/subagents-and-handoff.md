@@ -60,6 +60,82 @@ Stop: <missing input, conflict, or completion condition>
 
 Do not copy the repository workflow, generic strictness language, or unrelated artifact summaries into every brief.
 
+## Autonomous Pre-Review Challenge
+
+For each candidate routed here by the workflow, the root launches the existing
+read-only challenger in internal grilling mode after the candidate meets its
+authoring bar. Supply the current phase method, exact candidate revision,
+accepted constraints, evidence boundary, authority boundary, and stop rule.
+Explicit user-requested grilling remains a root-to-user dialogue; the internal
+challenger never relays those questions.
+
+The challenger inspects repository facts rather than asking for them, then
+selects the highest-impact unresolved material branch. It may apply a materially triggered specialist method locally but never delegates recursively. Each turn
+returns exactly one event: `QUESTION`, `HUMAN_REQUIRED`, `REOPEN`, or `DONE`.
+Do not emit a questionnaire or a readiness verdict.
+
+```text
+QUESTION
+Changes: <one current-phase decision>
+Question: <one root-answerable question>
+Recommended: <recommended answer>
+Tradeoff: <main cost or risk>
+Evidence: <artifact or repository anchor, or bounded assumption>
+
+HUMAN_REQUIRED
+Decision: <user-owned decision>
+Authority reason: <why the root cannot decide>
+Recommended: <recommended option when evidence supports one>
+Tradeoff: <main cost or risk>
+Dependency impact: <independent continuation or WAIT_HUMAN>
+
+REOPEN
+Owner: <evidence or upstream owner>
+Gap or conflict: <missing evidence or contradicted decision>
+Impact: <choice or readiness that cannot close>
+Next evidence or repair: <smallest resolution route>
+
+DONE
+Resolved: <material decisions dispositioned in the latest candidate>
+Assumptions: <bounded assumptions or none>
+Residual risks: <owned risks or none>
+Reopen when: <objective invalidation condition or none>
+```
+
+The root decides mechanism, system/package/file/instruction ownership, proof
+strategy, and task order inside accepted behavior and authority. Undecided user
+intent, observable behavior or scope, policy, new authority or external action,
+and user-owned material risk acceptance return `HUMAN_REQUIRED`. Missing facts,
+conflicting evidence, or an upstream decision gap return `REOPEN`.
+
+For `QUESTION`, the root verifies the evidence and responds with `ACCEPT`, `OVERRIDE`, or `RECLASSIFY`. Record the selected decision or corrected owner,
+strongest basis, destination in the owning candidate, bounded assumption, reopen
+condition, and exact latest revision before the next turn. `RECLASSIFY` prevents
+the root from answering for the user or hiding an upstream gap.
+
+For `HUMAN_REQUIRED` or `REOPEN`, record the deduplicated item in the existing
+owner, then respond with `CONTINUE_INDEPENDENT`, `WAIT_HUMAN`, or `REOPEN_OWNER`,
+plus its destination, exact latest revision, and relevant open items.
+`CONTINUE_INDEPENDENT` permits only branches that do not depend on the recorded
+item; the other responses wait for the human answer or owner repair.
+
+Continue dependent turns through the same challenger with the exact latest candidate.
+The owning candidate is authoritative; the child transcript is not. If the
+runtime cannot resume that child, relaunch the existing challenger from the
+exact latest candidate and named open items rather than remembered chat. Do not create a probe transcript, receipt, queue, status, lifecycle field, or review verdict.
+
+There is no question quota. Return `DONE` when no new or evidence-reopened
+material current-phase decision remains; repeated dispositions, generic
+category coverage, and questions with no affected choice are no progress.
+Wording-only edits and repairs that apply an existing disposition reuse
+completion. New evidence or a material change to a decision, assumption,
+authority boundary, source of truth, or upstream dependency requires a fresh
+probe; uncertain resume state also reruns it.
+
+After `DONE`, a different read-only child reviews the exact latest candidate
+under the owning phase's existing review method. The challenger never supplies
+that verdict or replaces the required reviewer.
+
 ## Review Independence
 
 Use the shared [Review Finding

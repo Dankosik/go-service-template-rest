@@ -25,11 +25,12 @@ On entering this macro phase, and only then, establish the single root Codex Goa
 ## Implement
 
 1. Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing.
-2. Preserve accepted behavior, ownership, failure, cleanup, rollout, and proof decisions.
-3. Prefer stdlib and existing repository patterns. Do not add a dependency, interface, helper layer, or architectural pattern without a present need and an owner.
-4. Remove replaced paths and adjacent stale artifacts unless current compatibility evidence requires retention.
-5. Keep changes reviewable and avoid unrelated cleanup.
-6. If implementation exposes a missing product, contract, source-of-truth, ownership, test-strategy, or rollout decision, stop and reopen that owner instead of inventing it.
+2. For a defect, fix the narrowest owning surface whose contract the reproducer proves is violated; do not patch only the reported entry point when sibling callers share that contract.
+3. Preserve accepted behavior, ownership, failure, cleanup, rollout, and proof decisions.
+4. Prefer stdlib and existing repository patterns. Do not add a dependency, interface, helper layer, or architectural pattern without a present need and an owner.
+5. Remove replaced paths and adjacent stale artifacts unless current compatibility evidence requires retention.
+6. Keep changes reviewable and avoid unrelated cleanup.
+7. If implementation exposes a missing product, contract, source-of-truth, ownership, test-strategy, or rollout decision, stop and reopen that owner instead of inventing it.
 
 The root may implement directly. Delegate a patch only when the bundle is concrete and independent or isolation materially reduces risk/contended writes. A worker brief names the outcome, task IDs, workspace/boundary, required context, forbidden decisions, proof, and blocker output. Worker success is advisory until the root inspects the diff and reruns relevant proof in the integration workspace.
 
@@ -56,6 +57,8 @@ The reviewer returns one verdict under the shared convergence contract:
 
 Repair in-scope findings, then revalidate and re-review until convergence. Any mutation after review invalidates affected review and proof dispositions. Reopen upstream decisions rather than broadening implementation. A passing command is insufficient when its implemented fixtures or assertions do not exercise the binding proof obligation; a matching selector name alone is not evidence.
 
+Treat edits to tests, fixtures, golden files, skip or exclusion settings, lint/build configuration, and proof commands as proof-surface changes. They require an accepted task or behavior reason; a green result obtained by weakening or removing an oracle or bypassing a triggered gate is invalid.
+
 Validation, post-code review, in-scope repair, revalidation, fresh re-review, and closeout run automatically in the same root session. An implementation-owned failure never produces a next-session prompt.
 
 ## Validate
@@ -70,7 +73,7 @@ Run the smallest fresh evidence set that covers the claim:
 
 Worker output, cached results, unrelated green checks, skipped commands, and too-narrow tests do not prove the claim. When a required check cannot run, record the command, reason, narrower evidence, and unverified remainder.
 
-Map each in-scope changed file to the accepted outcome or ledger. Preserve unrelated pre-existing changes.
+Reconcile both directions: every accepted obligation and every ledger task on the current completion path maps to its implementation or an already accepted evidence-backed no-implementation disposition, and to adequate proof; every material change maps back to accepted scope. Keep this reconciliation inline unless an existing ledger owns it. Preserve unrelated pre-existing changes.
 
 ## Close Out
 

@@ -31,6 +31,7 @@ skill_files=(
   .agents/skills/specification-review/SKILL.md
   .agents/skills/go-design-spec/SKILL.md
   .agents/skills/go-coder/SKILL.md
+  .agents/skills/grilling/SKILL.md
   .agents/skills/workflow-status/SKILL.md
   .agents/skills/workflow-plan-adequacy-challenge/SKILL.md
 )
@@ -140,6 +141,98 @@ require_text \
   '`Goal:` is reserved for that implementation handoff' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'Goal terminology must be reserved for the implementation handoff'
+require_text \
+  '### E42 — Autonomous Challenge Authority And Continuation' \
+  docs/spec-first-workflow-evals.md \
+  'the autonomous challenge authority and continuation eval is missing'
+require_text \
+  'The root returns `ACCEPT` or `OVERRIDE`' \
+  docs/spec-first-workflow-evals.md \
+  'the autonomous challenge eval must exercise a recorded root disposition'
+require_text \
+  '### E43 — Autonomous Challenge Exhaustion Freshness And Review Separation' \
+  docs/spec-first-workflow-evals.md \
+  'the autonomous challenge exhaustion and freshness eval is missing'
+require_text \
+  'the material authority change invalidates it and triggers one fresh probe' \
+  docs/spec-first-workflow-evals.md \
+  'the autonomous challenge eval must invalidate completion after a material change'
+require_text \
+  '"id": 9' \
+  .agents/skills/grilling/evals/evals.json \
+  'the grilling skill evals must cover internal completion and invalidation'
+require_text \
+  'run one autonomous read-only challenge probe before the separate reviewer' \
+  docs/spec-first-workflow.md \
+  'the workflow router must place one autonomous challenge before review'
+require_text \
+  'Specification, combined Technical Design, Test Design, Planning, and an explicit `research only` boundary' \
+  docs/spec-first-workflow.md \
+  'the workflow router must name every applicable owning boundary'
+require_text \
+  'Direct work, supporting steps, and Implementation/Validation/Closeout do not run this probe.' \
+  docs/spec-first-workflow.md \
+  'the workflow router must exclude direct, supporting, and implementation work'
+require_text \
+  '## Autonomous Pre-Review Challenge' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the canonical autonomous challenge protocol is missing'
+require_text \
+  '`QUESTION`, `HUMAN_REQUIRED`, `REOPEN`, or `DONE`' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the autonomous challenge must expose exactly one event vocabulary'
+require_text \
+  'Continue dependent turns through the same challenger with the exact latest candidate.' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'dependent challenge turns must reuse the same child and latest candidate'
+require_text \
+  '`ACCEPT`, `OVERRIDE`, or `RECLASSIFY`' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the root challenge disposition envelope is incomplete'
+require_text \
+  '`CONTINUE_INDEPENDENT`, `WAIT_HUMAN`, or `REOPEN_OWNER`' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the root challenge continuation envelope is incomplete'
+require_text \
+  'The owning candidate is authoritative; the child transcript is not.' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the autonomous challenge must keep state in the owning candidate'
+require_text \
+  'Do not create a probe transcript, receipt, queue, status, lifecycle field, or review verdict.' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the autonomous challenge must not create a parallel lifecycle artifact'
+require_text \
+  'After `DONE`, a different read-only child reviews the exact latest candidate' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the challenger and required reviewer must remain separate'
+require_text \
+  'Explicit user-requested grilling remains a root-to-user dialogue' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'explicit user grilling must not be relayed through the internal challenger'
+require_text \
+  'may apply a materially triggered specialist method locally but never delegates recursively' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the internal challenger must not delegate recursively'
+require_text \
+  "run the router's autonomous pre-review challenge before the separate required reviewer" \
+  AGENTS.md \
+  'the global contract must route applicable candidates through the autonomous challenge'
+require_text \
+  'spec-first-workflow/shared/subagents-and-handoff.md#autonomous-pre-review-challenge' \
+  docs/subagent-contract.md \
+  'the portable subagent contract must link to the canonical challenge protocol'
+require_text \
+  '## Explicit user mode' \
+  .agents/skills/grilling/SKILL.md \
+  'the grilling skill must preserve explicit root-to-user mode'
+require_text \
+  '## Internal challenger mode' \
+  .agents/skills/grilling/SKILL.md \
+  'the grilling skill must define internal challenger mode'
+require_text \
+  'Internal macro-phase grilling' \
+  .codex/agents/challenger-agent.toml \
+  'the existing challenger agent must dispatch internal grilling mode'
 require_text \
   'Use only when entering the implementation/validation/closeout macro phase' \
   .agents/skills/codex-goal-prompt-composer/SKILL.md \
@@ -432,6 +525,10 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'the regression fail-before behavior case is missing'
 require_text \
+  'fix the narrowest owning surface whose contract the reproducer proves is violated' \
+  docs/spec-first-workflow-evals.md \
+  'the regression eval must preserve the contract-owning repair boundary'
+require_text \
   '### E27 — Independent Affected-Surface Review' \
   docs/spec-first-workflow-evals.md \
   'the independent affected-surface behavior case is missing'
@@ -540,6 +637,30 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'the planning semantics eval must preserve a valid future invalidation trigger'
 require_text \
+  '### E40 — Implementation Bidirectional Closeout And Proof Integrity' \
+  docs/spec-first-workflow-evals.md \
+  'the implementation closeout eval must cover bidirectional completeness and proof integrity'
+require_text \
+  'map every accepted obligation and every ledger task on the current completion path to its implementation or an already accepted evidence-backed no-implementation disposition, and to adequate proof; map every material change back to accepted scope' \
+  docs/spec-first-workflow-evals.md \
+  'the implementation closeout eval must detect omitted accepted work'
+require_text \
+  'remove the unrelated helper' \
+  docs/spec-first-workflow-evals.md \
+  'the implementation closeout eval must remove unrelated implementation work'
+require_text \
+  'reject green obtained by weakening or removing an oracle or bypassing a triggered gate' \
+  docs/spec-first-workflow-evals.md \
+  'the implementation closeout eval must reject proof-surface greenwashing'
+require_text \
+  '### E41 — Implementation Verification Repair Ownership' \
+  docs/spec-first-workflow-evals.md \
+  'the implementation verification ownership eval is missing'
+require_text \
+  'treat `partially verified` as the verification-step result, not the root phase result' \
+  docs/spec-first-workflow-evals.md \
+  'the verification helper boundary must not stop implementation-owned repair'
+require_text \
   'race instrumentation without an exercising scenario' \
   docs/spec-first-workflow-evals.md \
   'the adversarial Test Design review must reject instrumentation-only proof'
@@ -548,7 +669,7 @@ require_text \
  docs/spec-first-workflow-evals.md \
  'an accepted normative decision must not become an assumption or evidence gap'
 require_text \
-  '39 cases, 35 invariants' \
+  '43 cases, 39 invariants' \
   scripts/dev/workflow-behavior-evals.sh \
   'the behavior eval harness must report the expanded invariant manifest'
 require_text \
@@ -563,6 +684,35 @@ require_text \
   'For a regression, run or add the smallest proof that fails on the old behavior' \
   .agents/skills/go-coder/SKILL.md \
   'go-coder must preserve fail-before proof for regressions'
+require_text \
+  'fix the narrowest owning surface whose contract the reproducer proves is violated' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'implementation must fix the narrowest owning contract surface rather than one reported entry point'
+require_text \
+  'Treat edits to tests, fixtures, golden files, skip or exclusion settings, lint/build configuration, and proof commands as proof-surface changes.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'implementation review must treat proof-surface mutations as part of the candidate diff'
+require_text \
+  'They require an accepted task or behavior reason' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'proof-surface changes must trace to an accepted task or behavior reason'
+require_text \
+  'Reconcile both directions: every accepted obligation and every ledger task on the current completion path maps to its implementation or an already accepted evidence-backed no-implementation disposition, and to adequate proof; every material change maps back to accepted scope.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'implementation closeout must reconcile accepted work and changed files in both directions'
+require_text \
+  'Return success only when every critical obligation has passing proof, the tests are deterministic and reviewable, and every positive claim is bounded by commands actually run. Otherwise report the exact unresolved owner without claiming readiness.' \
+  .agents/skills/go-qa-tester/SKILL.md \
+  'go-qa-tester must not report success while a critical obligation lacks passing proof'
+require_text \
+  'Inside an active implementation/validation/closeout request, return the failure signal to the root' \
+  .agents/skills/go-verification-before-completion/SKILL.md \
+  'verification helper failure must return to active implementation repair'
+if grep -Fq -- 'In standalone use this ends' \
+  .agents/skills/go-verification-before-completion/SKILL.md; then
+  echo 'workflow instruction check failed: verification stop boundary is duplicated'
+  exit 1
+fi
 require_text \
   'update each task or checkpoint checkbox and evidence immediately after its proof' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
@@ -971,6 +1121,15 @@ for reference in .agents/skills/go-coder/references/*.md; do
   fi
 done
 
+for reference in .agents/skills/go-qa-tester/references/*.md; do
+  reference_link="references/$(basename "${reference}")"
+  if ! grep -Fq -- "](${reference_link})" .agents/skills/go-qa-tester/SKILL.md; then
+    echo "workflow instruction check failed: go-qa-tester reference is not routed"
+    echo "  reference: ${reference}"
+    exit 1
+  fi
+done
+
 forbidden_internal_target_pattern='next[_ -]?phase[=: ]+(research[-_ ]?synthesis[-_ ]?(challenge|review)|specification[-_ ]?review|technical[-_ ]?design[-_ ]?review|test[-_ ]?design([-_ ]?qa)?[-_ ]?review|task[-_ ]?(review([/_ -]?readiness)?|readiness[-_ ]?review)|readiness[-_ ]?review|post[-_ ]?code[-_ ]?review|validation|closeout)'
 for forbidden_target in \
   'next_phase=research-synthesis-challenge' \
@@ -1042,6 +1201,17 @@ stale_matches="$(grep -RInE -- "${stale_pattern}" \
 if [[ -n "${stale_matches}" ]]; then
   echo "workflow instruction check failed: retired workflow-machine vocabulary remains"
   printf '%s\n' "${stale_matches}" | sed 's/^/  /'
+  exit 1
+fi
+
+probe_lifecycle_artifacts="$(
+  find docs .agents .codex specs -type f -print 2>/dev/null \
+    | grep -Ei '(^|/)[^/]*(grill|probe|challenge)[^/]*(receipt|transcript|queue|status)[^/]*$' \
+    || true
+)"
+if [[ -n "${probe_lifecycle_artifacts}" ]]; then
+  echo 'workflow instruction check failed: an autonomous challenge lifecycle artifact exists'
+  printf '%s\n' "${probe_lifecycle_artifacts}" | sed 's/^/  /'
   exit 1
 fi
 

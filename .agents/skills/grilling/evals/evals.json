@@ -36,6 +36,90 @@
         "The output asks no more than one question in the turn.",
         "The question targets a material plan or build choice rather than generic coverage."
       ]
+    },
+    {
+      "id": 3,
+      "prompt": "Internal macro-phase grilling mode for a structured Technical Design candidate before review. AGENTS.md and docs/spec-first-workflow.md already establish the phase owner. The only unresolved branch is whether one new proof adapter belongs beside its consumer or in a shared workflow package. Return the next challenger event only.",
+      "expected_output": "Exactly one QUESTION event for the root-owned placement choice, with the changed decision, recommendation, tradeoff, and repository evidence; no factual question or readiness verdict.",
+      "files": [],
+      "expectations": [
+        "The output uses internal challenger mode rather than asking the user.",
+        "The named repository facts are inspected or treated as supplied evidence instead of becoming a question.",
+        "The turn emits exactly one QUESTION with Changes, Question, Recommended, Tradeoff, and Evidence fields.",
+        "The question is root-answerable inside accepted behavior and the output does not issue PASS, CONCERNS, or FAIL."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Internal Specification grilling mode. The latest candidate contains an undecided user-owned retention policy and a separate root-owned choice about which existing proof boundary will verify an already accepted invariant. Return the next event only.",
+      "expected_output": "One HUMAN_REQUIRED event that preserves the retention decision for the user and identifies that the independent proof branch may continue.",
+      "files": [],
+      "expectations": [
+        "The output does not select the retention policy for the user.",
+        "The turn emits exactly one HUMAN_REQUIRED event with authority reason, recommendation when supportable, tradeoff, and dependency impact.",
+        "The dependency impact permits only the independent root-owned proof branch to continue.",
+        "The output does not repeat the user item as multiple questions or delegate recursively."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Internal Test Design grilling mode. One deduplicated human-owned risk acceptance is already recorded in the latest candidate, every independent branch is closed, and the remaining frontier depends on that human answer. Return the next event only.",
+      "expected_output": "One HUMAN_REQUIRED event whose dependency impact is WAIT_HUMAN, without inventing an answer or asking a new category question.",
+      "files": [],
+      "expectations": [
+        "The output preserves the existing human-owned decision instead of answering it.",
+        "The event marks WAIT_HUMAN because no independent material branch remains.",
+        "The output does not reopen settled branches or emit a generic coverage question.",
+        "The output does not claim review readiness."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "You are the root continuing an internal grilling dialogue. The challenger returned QUESTION asking which new public behavior the user wants, but the accepted candidate and evidence do not select that user-owned scope. Return the root disposition envelope only.",
+      "expected_output": "A RECLASSIFY disposition that corrects the owner to HUMAN_REQUIRED, records the basis and destination, and does not answer for the user.",
+      "files": [],
+      "expectations": [
+        "The disposition is RECLASSIFY rather than ACCEPT or OVERRIDE.",
+        "The output names the corrected human authority and strongest basis.",
+        "The user-owned item is recorded in the owning candidate with a latest revision or anchor.",
+        "The output does not invent the public behavior."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Internal Planning grilling mode. The candidate task order depends on a Specification rule that conflicts with current repository evidence, and no independent planning branch remains. Return the next challenger event only.",
+      "expected_output": "One REOPEN event naming Specification, the conflict and impact, and the smallest evidence or repair route; no root answer or continuation before repair.",
+      "files": [],
+      "expectations": [
+        "The turn emits exactly one REOPEN event.",
+        "The event names the upstream owner, gap or conflict, readiness impact, and smallest repair route.",
+        "The output does not hide the conflict in a planning assumption or ask the user to choose repository facts.",
+        "The output stops for REOPEN_OWNER rather than continuing a dependent branch."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Resume an internal Technical Design grilling probe after the runtime reports that the original child cannot be continued. Use only the supplied exact latest candidate and named open items. A security lens is materially triggered, but nested delegation is unavailable and forbidden. Return the next challenger event only.",
+      "expected_output": "One valid internal event derived from the latest candidate after applying the relevant security method locally, without transcript reconstruction, recursive delegation, or a new agent type.",
+      "files": [],
+      "expectations": [
+        "The latest owning candidate and named open items are treated as authority.",
+        "The output does not infer missing state from remembered child chat.",
+        "The materially triggered specialist method is applied locally without spawning a nested agent.",
+        "The turn still emits exactly one QUESTION, HUMAN_REQUIRED, REOPEN, or DONE event."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Internal Planning grilling mode. The exact latest candidate closes every material current-phase decision; the only subsequent edit was wording-only and applied an existing disposition. Return the next challenger event only and state the objective condition that would invalidate completion.",
+      "expected_output": "Immediate DONE with resolved decisions, assumptions, residual risks, and a material-change reopen condition; no ritual question, receipt, or readiness verdict.",
+      "files": [],
+      "expectations": [
+        "The output emits DONE immediately because no material branch remains.",
+        "The wording-only edit does not force another probe.",
+        "The reopen condition covers new evidence or a material decision, assumption, authority, source-of-truth, or upstream-dependency change.",
+        "The output creates no transcript, receipt, queue, status artifact, or review verdict."
+      ]
     }
   ]
 }

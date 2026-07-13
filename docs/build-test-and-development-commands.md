@@ -519,7 +519,7 @@ Bootstrap shortcuts:
   - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or enforces an aggregate word limit.
 
 - `make workflow-behavior-evals-check`
-  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E39, a prompt and pass condition for each case, and the required invariant set.
+  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E43, a prompt and pass condition for each case, and the required invariant set.
   - Makes no model calls and is not behavioral proof.
 
 - `WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_BASE_REF=<ref> make workflow-behavior-evals`
