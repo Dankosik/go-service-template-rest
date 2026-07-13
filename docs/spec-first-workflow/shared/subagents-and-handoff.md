@@ -62,6 +62,10 @@ Do not copy the repository workflow, generic strictness language, or unrelated a
 
 ## Review Independence
 
+Use the shared [Review Finding
+Envelope](../../subagent-contract.md#shared-review-finding-envelope) for every
+review return.
+
 Structured and orchestrated work requires an independent reviewer for a standalone `research only` synthesis, the completed specification, any triggered technical design or test design, the completed implementation ledger, and the final implementation diff. Direct work uses an independent reviewer when required by the user or when the decision is hard to reverse, materially high-impact, ambiguous, or poorly falsified by the author alone. A required gate reviewer is any separate read-only subagent following the phase review method; named specialist profiles add depth but do not own the root's final gate decision.
 
 The reviewer:
@@ -107,7 +111,10 @@ A next-session handoff is permitted only when work intentionally stops at a true
 
 Required research-synthesis challenge, specification review, technical-design review, test-design QA review, task-readiness review, post-code review, in-scope repair, fresh re-review, validation, and closeout are internal checkpoints of their owning macro phase. The root launches the required read-only lane, repairs authoritative work, obtains any required fresh verdict, and continues automatically in the same session. A durable review record is only a carrier; it does not create a user-started phase or a next-session prompt.
 
-An explicitly user-requested standalone review remains read-only: return findings and stop at the requested review boundary. It gains no repair, implementation, or workflow-handoff authority unless the user separately grants it.
+An explicitly user-requested standalone review remains read-only: return the
+complete review result and stop at the requested review boundary. It gains no
+repair, implementation, or workflow-handoff authority unless the user separately
+grants it.
 
 An allowed handoff to a non-implementation macro phase contains:
 

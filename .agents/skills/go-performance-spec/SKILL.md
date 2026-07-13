@@ -1,154 +1,56 @@
 ---
 name: go-performance-spec
-description: "Design performance-first specifications for Go services. Use when planning or revising latency, throughput, allocation, contention, or capacity behavior and you need explicit hot-path budgets, benchmark/profile/trace acceptance criteria, and performance risk controls before coding. Skip when the task is a local code fix, endpoint-only API payload design, schema-only modeling, CI/container setup, or low-level micro-optimization implementation."
+description: "Design measurable performance contracts for Go services before coding. Use when latency, throughput, allocation, contention, memory, or capacity needs explicit workload budgets and benchmark/profile/trace proof. Skip local optimization implementation, generic speed advice, and unrelated API/schema/CI design."
 ---
 
 # Go Performance Spec
 
-## Purpose
-Turn performance intent into measurable, reproducible pre-coding contracts for latency, throughput, allocation, contention, and capacity.
+## Outcome
 
-## Specialist Stance
-- Treat performance as budgets, bottleneck hypotheses, and measurement plans, not generic speed advice.
-- Decide what must be fast, at what percentile or throughput, under what input shape, and with what proof.
-- Prefer bounded, observable performance risks over speculative micro-optimization or tool-led rewrites.
-- Hand off API, data, reliability, and concurrency design when performance depends on those primary decisions.
-- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
+Produce a reproducible performance contract for the affected operation: workload, budget, bottleneck hypothesis, proof protocol, thresholds, runtime signal, and rollout action.
 
-## Scope
-Use this skill to define or review latency, throughput, allocation, contention, and capacity behavior, including hot-path budgets, measurement protocol, acceptance thresholds, and production validation signals.
+## Method
 
-## Operating Loop
-1. Frame the affected operation class, workload, hot path, and user-visible or system-visible performance objective.
-2. Load at most one reference by default from the selector below. Load more only when the task clearly spans independent decision pressures, such as memory budgets plus overload semantics.
-3. Compare viable options only when a real `live fork` exists before selecting a performance contract. Keep unproven numeric targets marked as assumptions.
-4. Write section-ready spec content with budgets, workload shape, selected and rejected options, measurement protocol, thresholds, runtime telemetry, and rollout checkpoints.
-5. Stop at the pre-coding boundary. Do not drift into low-level optimization, implementation review, or benchmark result interpretation without a specification decision to support.
+1. Name the operation class, user/system outcome, workload shape, hot path, and current evidence.
+2. Set explicit latency, throughput, allocation, memory, contention, or capacity budgets only where relevant; label unproven numbers as assumptions.
+3. Compare options only for a real live fork and prefer the least-complex option that can meet the budget.
+4. Specify a reproducible benchmark, profile, trace, or scenario protocol with baseline, target, variance rule, and pass/fail threshold.
+5. Add runtime telemetry and rollout/rollback checkpoints proportional to the claim, then hand off semantic changes to their owning domain.
 
-## Reference Files
-References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load a reference only when its behavior-change thesis matches the symptom in the prompt. If you cannot name the likely mistake it prevents, do not load it. If a narrower positive reference matches, prefer it over a broad neighboring reference.
+## Decision Rules
 
-| Symptom | Behavior Change | Load |
+- Measure a named hot path under representative input, concurrency, skew, cache, and dependency state; do not optimize a dashboard average or toy fixture.
+- Prefer algorithmic, data-flow, payload, and round-trip reductions before micro-optimization, pooling, caching, PGO, or added fan-out.
+- Keep concurrency bounded and specify cancellation, queue, contention, saturation, and shutdown behavior when performance work adds parallelism.
+- Match the proof to the claim: microbenchmarks do not establish system latency, profiles do not establish correctness, and one best run does not establish a stable improvement.
+- Define DB/cache, overload, degradation, or API-visible consequences explicitly when they change behavior; performance does not own those semantics.
+- Preserve mixed-version and rollback safety. Do not accept a gain without a detection path and rollback trigger.
+- Use `constraint_only`, `proof_only`, or `no new decision required in <domain>` when an adjacent domain needs no new decision now.
+
+## Reference Selector
+
+Load at most one reference by default; load more only for independent decision pressures.
+
+| Symptom | Load | Decision it sharpens |
 | --- | --- | --- |
-| The request says "make X faster" or lacks a budgeted hot path | Choose operation budgets, component reserve, and a measurable bottleneck hypothesis instead of generic speed goals or dashboard averages | `references/budget-modeling-and-hot-path-maps.md` |
-| The proof depends on traffic mix, tenant skew, cache state, dependency state, or fixture size | Choose representative workload buckets and labels instead of median-only or toy fixtures | `references/workload-profile-and-input-shape.md` |
-| The spec must decide what kind of proof is sufficient | Choose a symptom-matched measurement protocol and variance rule instead of a familiar microbenchmark or single best run | `references/measurement-protocols.md` |
-| The proof type is known but the spec needs concrete Go benchmark/profile/trace commands | Write executable proof obligations and avoid benchmark/profile traps instead of vague "run benchmarks" instructions | `references/benchmark-profile-and-trace-plans.md` |
-| The proposed optimization class is under-justified or disproportionately complex | Choose the least-complex option that can meet the budget instead of reaching for cache, PGO, pooling, or fan-out by habit | `references/option-selection-and-complexity-bounds.md` |
-| The performance idea adds fan-out, queues, workers, locks, or capacity changes | Require bounded concurrency, saturation signals, and cancellation/deadline proof instead of "more goroutines" or "more workers" | `references/concurrency-contention-and-capacity.md` |
-| The bottleneck crosses DB, cache, pagination, retry, or API-visible behavior | Surface contract handoffs and fallback budgets instead of hiding semantic changes inside "performance" | `references/db-cache-api-performance-contracts.md` |
-| The decision needs canary, rollback, runtime telemetry, or production validation | Tie rollout gates to budget metrics and actions instead of "watch dashboards" | `references/runtime-telemetry-and-rollout-checkpoints.md` |
-| The risk is allocation rate, live heap, GC CPU, GOGC/GOMEMLIMIT, or container memory | Specify memory envelopes and GC trade-offs instead of vague "reduce allocations" or unsafe tuning | `references/memory-allocation-and-gc-budgets.md` |
-| The proposal involves PGO, default.pgo, profile merging, profile freshness, or source skew | Require representative CPU profile lifecycle and rollback checks instead of enabling PGO because it "usually helps" | `references/pgo-profile-lifecycle.md` |
-| The performance envelope depends on overload, shedding, degraded results, queues, retries, or tenant fairness | Define capacity-protection semantics and retry limits instead of best-effort overload behavior | `references/overload-backpressure-and-load-shedding.md` |
-| The spec must connect latency to SLI/SLO, histograms, aggregation windows, or error-budget risk | Use percentile/window/label-aware thresholds instead of averages or copied dashboard values | `references/latency-sli-slo-and-histogram-thresholds.md` |
-| Payload shape, JSON work, response size, streaming, flushing, or large-body behavior dominates | Bound representation and streaming semantics instead of optimizing serialization around unbounded payloads | `references/payload-serialization-and-streaming-budgets.md` |
+| “Make it faster” has no budgeted hot path. | [budget-modeling-and-hot-path-maps.md](references/budget-modeling-and-hot-path-maps.md) | Choose operation budgets and a bottleneck hypothesis. |
+| Traffic mix, skew, cache, dependency, or fixture shape matters. | [workload-profile-and-input-shape.md](references/workload-profile-and-input-shape.md) | Define representative workload buckets. |
+| The sufficient proof type is unclear. | [measurement-protocols.md](references/measurement-protocols.md) | Select a symptom-matched protocol and variance rule. |
+| Go commands or artifact capture must be executable. | [benchmark-profile-and-trace-plans.md](references/benchmark-profile-and-trace-plans.md) | Write concrete benchmark/profile/trace obligations. |
+| An optimization class appears under-justified. | [option-selection-and-complexity-bounds.md](references/option-selection-and-complexity-bounds.md) | Select the least-complex viable option. |
+| Fan-out, queues, workers, locks, or capacity changes. | [concurrency-contention-and-capacity.md](references/concurrency-contention-and-capacity.md) | Bound concurrency and saturation proof. |
+| DB, cache, pagination, retry, or API semantics are affected. | [db-cache-api-performance-contracts.md](references/db-cache-api-performance-contracts.md) | Expose semantic handoffs and fallback budgets. |
+| Canary, telemetry, rollback, or production proof is needed. | [runtime-telemetry-and-rollout-checkpoints.md](references/runtime-telemetry-and-rollout-checkpoints.md) | Tie signals to release actions. |
+| Allocation, live heap, GC CPU, or memory limit dominates. | [memory-allocation-and-gc-budgets.md](references/memory-allocation-and-gc-budgets.md) | Specify memory and GC envelopes. |
+| PGO/profile lifecycle is proposed. | [pgo-profile-lifecycle.md](references/pgo-profile-lifecycle.md) | Require representative profile provenance and rollback. |
+| Overload, shedding, queueing, retries, or tenant fairness matters. | [overload-backpressure-and-load-shedding.md](references/overload-backpressure-and-load-shedding.md) | Define capacity-protection semantics. |
+| SLI/SLO, histogram, or percentile thresholds matter. | [latency-sli-slo-and-histogram-thresholds.md](references/latency-sli-slo-and-histogram-thresholds.md) | Set percentile/window-aware acceptance. |
+| Payload, JSON, streaming, flushing, or body size dominates. | [payload-serialization-and-streaming-budgets.md](references/payload-serialization-and-streaming-budgets.md) | Bound representation and streaming behavior. |
 
-## Boundaries
-Do not:
-- optimize by instinct, anecdote, or microbenchmark alone
-- recommend concurrency or caching changes without boundedness, correctness, and fallback implications
-- reduce performance work to code-level tricks before budgets and bottlenecks are explicit
-- leave runtime validation and reproducibility undefined
+## Output
 
-## Escalate When
-Escalate if critical paths lack budgets, workload assumptions are missing, measurement cannot be reproduced, or proposed improvements materially affect API, data/cache correctness, reliability, or observability contracts.
+Return the relevant hot-path map, workload and budget table, bottleneck hypothesis, option decision, proof protocol and thresholds, runtime/rollout checkpoints, forced handoffs, assumptions, blockers, and reopen conditions.
 
-## Core Defaults
-- Measure first: no optimization decision is valid without a metric target and evidence protocol.
-- Prefer algorithmic, data-flow, and round-trip reductions before micro-level tuning.
-- Keep complexity proportional to verified bottlenecks; keep the simpler option when gains are unproven.
-- Treat missing workload, budget, or measurement facts as explicit assumptions or blockers.
-- Preserve compatibility and operational safety across mixed-version rollout.
+## Success And Stop
 
-## Expertise
-
-### Budget Modeling
-- Require explicit budgets for each changed critical path:
-  - latency percentiles such as `p95` and `p99`
-  - throughput or concurrency target
-  - allocation or memory constraints
-  - CPU/contention bounds where relevant
-- Decompose budgets across `api -> domain -> db/cache -> outbound dependency` so debt is visible.
-- Tie budgets to user-visible or system-visible outcomes; avoid global averages as primary acceptance metrics.
-- For async flows, include processing latency, lag/backlog, retry, and DLQ impact budgets.
-
-### Workload And Hot-Path Normalization
-- Define workload profile before choosing options:
-  - request or message shape
-  - cardinality and skew
-  - concurrency level
-  - data distribution and hot-key behavior
-- Normalize warm vs cold paths, peak vs steady load, cache-up vs cache-down, and degraded dependency behavior.
-- Maintain one authoritative hot-path map per affected operation with a bottleneck hypothesis and ownership.
-- Reject conclusions based on toy inputs or non-representative traffic assumptions.
-
-### Measurement Protocol
-- Every major recommendation needs a reproducible measurement protocol:
-  - benchmark/profile/trace type
-  - environment/runtime class
-  - dataset shape and scale
-  - baseline and target thresholds
-  - pass/fail rule
-- Keep before/after comparisons fair: same workload class, stable environment, repeated runs, and basic variance sanity checks.
-- Microbenchmarks alone are insufficient for system-level claims; combine them with profile, trace, or scenario-level evidence.
-- Use trace planning when scheduler, blocking, locking, or fan-out behavior matters.
-
-### Benchmarking And Profiling
-- Use `go test -bench` for focused hot paths and include `-benchmem` when allocation matters.
-- Keep setup outside timed loops.
-- Use the right profile for the symptom: CPU, heap, allocs, mutex, block, or goroutine.
-- Profile before and after nontrivial performance changes.
-- Optimize measured bottlenecks, not code that merely looks expensive.
-- Consider PGO only after representative CPU profiling and validated bottleneck analysis.
-
-### Concurrency And Contention
-- For concurrency-sensitive paths, make goroutine fan-out bounds, queue/channel limits, lock hotspots, and cancellation/shutdown behavior explicit.
-- Require bounded parallelism with explicit limits when concurrency is introduced for speed.
-- Require race-aware validation when concurrency changes are material.
-- Treat unbounded concurrency, ignored blocking behavior, or missing cancellation as performance-spec blockers.
-
-### DB, Cache, And API Performance
-- Make DB round-trip budget, query-shape limits, pool assumptions, and timeout/deadline expectations explicit.
-- For cache-related performance changes, define cacheability class, hit-ratio expectation, stampede protection, and cache-down fallback behavior.
-- Align with data/cache correctness constraints whenever performance choices change freshness or consistency.
-- When performance is API-visible, make payload limits, pagination defaults, idempotency/retry semantics, and honest async behavior explicit.
-- Include overload/backpressure outcomes such as `429` or `503` when shedding or degradation is part of the envelope.
-
-### Observability And Delivery Alignment
-- Map performance acceptance to runtime telemetry: RED metrics, saturation signals, and trace/log correlation on critical paths.
-- Tie user-facing performance objectives to SLI/SLO expectations when relevant.
-- Define the minimum production diagnostics needed to validate budgets.
-- Translate verification into executable benchmark/profile/trace obligations and rollout checkpoints.
-- Treat missing reproducible validation paths as a decision-quality defect.
-
-## Decision Quality Bar
-For every major performance recommendation, include:
-- the target operation and workload
-- bottleneck hypothesis and baseline assumptions
-- whether a real `live fork` exists
-- when a `live fork` exists, the viable options, the selected option, and at least one explicit rejection reason
-- measurement protocol and thresholds
-- latency/throughput/allocation/complexity/cost trade-offs
-- only the downstream architecture, API, data/cache, reliability, observability, or delivery effects that force a new decision, handoff, or proof obligation now
-- assumptions, blockers, and reopen conditions
-
-## Deliverable Shape
-When writing the performance spec or review, cover:
-- hot-path map
-- budget decomposition by operation class
-- bottleneck hypotheses
-- benchmark/profile/trace plan
-- acceptance thresholds and pass/fail rules
-- performance-sensitive rollout and rollback checkpoints
-- downstream decision/proof consequences only when another domain must act now; otherwise use `no new decision required in <domain>`
-
-## Escalate Or Reject
-- affected critical paths without explicit budgets
-- no reproducible measurement protocol
-- performance claims based only on anecdote or microbenchmark
-- concurrency-sensitive designs without bounded-concurrency and validation plans
-- DB/cache-heavy optimization without query/cache constraints and fallback implications
-- API-visible performance behavior changed without explicit contract impact
-- no runtime telemetry path to detect and validate the claimed improvement
-- critical performance ambiguity deferred to coding
+Success means implementation can pursue a measured budget without inventing workload, proof, or semantic policy. Stop when the critical path or workload is unknown, targets have no authority, proof cannot be reproduced, or meeting the budget would require unresolved API, data/cache, reliability, concurrency, observability, or delivery decisions.

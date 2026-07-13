@@ -1,6 +1,6 @@
 # Go Code / Ownership Design
 
-Place the accepted mechanism into clear Go package and file responsibilities without changing behavior.
+Place the accepted mechanism in Go packages and files without changing behavior. Give each changed responsibility one clear, evidence-backed owner and make its affected execution paths reviewer-traceable.
 
 ## Read When
 
@@ -12,26 +12,26 @@ Place the accepted mechanism into clear Go package and file responsibilities wit
 
 - Ready spec and system/integration design when present.
 - `docs/repo-architecture.md` and current package/file responsibilities.
-- Relevant callers, siblings, composition root, generated sources, tests, and legacy path.
+- Relevant callers, siblings, composition root, generated sources, tests, and any replaced or compatibility paths.
 
 ## Outputs
 
 A compact ownership section in `design/overview.md` or `design/go-code-ownership.md` covering:
 
-- owner package/file for each responsibility;
-- dependency direction and composition boundary;
-- generated versus hand-written authority;
-- concrete type or narrow interface choice;
-- new file/seam only when it creates a stable responsibility;
-- replaced code and adjacent test/config/doc cleanup;
+- current file/symbol evidence for the existing owner and selected owner package and file placement for each changed responsibility; only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead; include why the owner stays or changes and what stays, moves, is added, or is removed;
+- dependency direction, composition boundary, and, when planning would otherwise choose it, the owner and minimum required shape of each introduced or changed cross-package type, error, mapping, constructor, or exported symbol;
+- generated source of truth and its hand-written change or regeneration point;
+- concrete types by default; when a present consumer must substitute implementations or direct coupling would violate dependency direction, use the smallest interface in the consumer package and name its composition-root wiring;
+- keep/split rationale for each hand-written owner whose responsibility changes; add a file, package, or seam only when keeping the change in the current owner would mix distinct present responsibilities or violate a required dependency or generated/manual boundary;
+- disposition of each replaced or compatibility path and every now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition;
 - test owner and proof entrypoint.
 
-Inspect the current owner before naming a new one. Prefer concrete types, explicit control flow, same-package focused seams, current Go stdlib, and established repository patterns. Reject one-implementation interfaces, generic helper buckets, factories with one product, and speculative extension points unless a present boundary requires them.
+Keep symbols unexported and code with its current owner unless the selected responsibility or dependency direction requires a move. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count alone, or test convenience alone do not justify a new interface, package, helper, factory, or seam. Keep owner-specific behavior out of generic helper buckets, one-product factories, and speculative extension points.
 
 ## Review
 
-For structured or orchestrated work, use [Technical Design Review](technical-design-review.md) with system design before planning. It is an internal checkpoint: the owning root repairs and re-reviews in the same root session. Direct work uses it only when the user or risk requires it. The smoke test is simple: can planning name files, owner, cleanup, tests, and proof without making another design choice?
+For structured or orchestrated work, use [Technical Design Review](technical-design-review.md) with system design before planning. It is an internal checkpoint: the owning root repairs and re-reviews in the same root session. Direct work uses it only when the user or risk requires it.
 
 ## Stop Rule
 
-Continue when placement preserves the accepted behavior, planning can task it directly, and the required technical-design review has returned `PASS`. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.
+This phase is complete when accepted behavior is preserved, every changed responsibility has an evidence-backed owner and file placement or deterministic implementation-local rule, planning has no material ownership, dependency, generated/manual, or exported-surface decision left to make, and any required technical-design review has returned `PASS`. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.

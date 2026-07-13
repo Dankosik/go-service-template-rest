@@ -1,14 +1,13 @@
 ---
 name: specification-session
-description: "Create or repair a compact spec.md that makes behavior and proof decisions explicit, then complete its review gate."
+description: "Own the root specification macro phase: create or repair spec.md, run the required read-only review, repair findings, and reach the phase stop rule. Use when the whole specification phase must complete; skip delegated draft-only authoring, which belongs to spec-document-designer."
 ---
 
 # Specification Session
 
-Use [the specification phase](../../../docs/spec-first-workflow/phases/specification.md) when behavior, scope, invariants, constraints, or proof expectations must survive into implementation.
+Follow [the Specification
+phase](../../../docs/spec-first-workflow/phases/specification.md).
 
-Write the smallest useful `spec.md`. Resolve material `TBD`s, live alternatives, source-of-truth ambiguity, hidden scope cuts, and cleanup disposition. Keep implementation mechanism out unless it is required to make the behavior decision.
-
-For structured or orchestrated work, invoke [specification review](../../../docs/spec-first-workflow/phases/specification-review.md). Direct work uses focused self-review unless the user or risk requires independent review. Repair in-scope findings and re-review to the shared convergence condition in the same root session; internal review never creates a next-session prompt.
-
-Success means design/planning can proceed without inventing product meaning. Stop and reopen intake/research/user authority when that owner must supply the missing decision.
+Own the root Specification macro phase through its canonical Stop Rule. Apply
+its Method and Decision Bar while authoring or repairing the smallest useful
+`spec.md`, then invoke the required read-only review.

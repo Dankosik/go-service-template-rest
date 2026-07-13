@@ -1,151 +1,52 @@
 ---
 name: go-qa-tester-spec
-description: "Design test-strategy-first specifications for Go services. Use inside the repository test-design phase or when planning/revising testing before coding and you need explicit `TD-*` scenarios, unit/integration/contract/e2e-smoke obligations, traceability to invariants and reliability fail-paths, fail-before expectations, quality-gate expectations, and an implementation-ready test strategy. Skip when the task is writing test code, reviewing a diff, fixing a local implementation bug, or making architecture/API/data/security decisions as the primary domain."
+description: "Design risk-based test strategy for Go services before coding. Use in test design when behavior needs stable TD-* scenarios, proof-level selection, fail-before expectations, invariant traceability, and executable quality gates. Skip writing tests, reviewing implementation diffs, and deciding unresolved product/API/data/security/reliability behavior."
 ---
 
 # Go QA Tester Spec
 
-## Purpose
-Turn changed behavior into explicit, risk-based test obligations before coding so that planning, implementation, and review do not need to invent coverage later.
+## Outcome
 
-## Specialist Stance
+Produce the smallest honest test strategy that makes non-obvious risks executable, deterministic, traceable, and ready for planning without inventing behavior during implementation.
+
+## Method
+
+1. Read approved behavior/design, the affected runtime boundary, nearby tests/fixtures, and live repository commands; for each material claim record whether existing proof is sufficient, must be strengthened, or needs a new scenario.
+2. Choose the smallest set of complementary proof boundaries that jointly proves each claim: `unit`, `integration`, `contract`, `component/process`, `e2e-smoke`, or a repository-specific proof type.
+3. In repository Test Design, use the [canonical Test Design Outputs](../../../docs/spec-first-workflow/phases/test-design.md#outputs); do not create a competing artifact schema here.
+4. Cover fail and edge behavior; add abuse, retry, concurrency, reliability, data/cache/security, or distributed scenarios only when triggered by the accepted change.
+5. Route unresolved semantics back to their owner instead of encoding them as test assumptions.
+
+## Decision Rules
+
 - Treat test strategy as risk selection and proof design, not a coverage checklist.
-- Choose the smallest level that can honestly prove each invariant, contract, failure mode, or regression risk.
-- Make scenarios executable, deterministic, ID-stable, and traceable to approved behavior.
-- Hand off domain, API, data, reliability, security, or performance decisions when test obligations depend on unresolved semantics.
-- If another domain is only affected, record the consequence as `proof_only`, `follow_up_only`, or explicit `no new decision required` instead of widening the design.
+- Disposition every affected material accepted claim; omission is not evidence that a risk is untriggered. For each claim selected for proof, name a traceable oracle. An accepted change that triggers a material fail path with no proof or authorized residual-risk disposition is a blocker.
+- Give each selected proof boundary a distinct observable; reject a boundary when it cannot establish its claim or merely duplicates another boundary.
+- Every scenario must distinguish a material behavior or failure mechanism and name a plausible incorrect observable behavior or regression that its oracle would reject. Merge rows with the same risk, trigger, oracle, and reopen path.
+- Derive the oracle from approved behavior or an independent reference, not from production logic. Reject existence, non-zero, or no-panic assertions unless that weak property is itself the accepted claim.
+- An oracle includes the primary result plus relevant durable state, emitted effects, and forbidden or absent side effects. A command is proof only when its result can establish that oracle.
+- A fail-before reason unavailable must name why fail-first adds no useful discrimination and the nearest existing falsifying signal; it never waives mandatory current-completion proof.
+- Keep triggers deterministic and commands runnable in the named local, CI, or controlled target environment. Name isolation, cleanup, and deterministic controls for shared state, external resources, or nondeterminism. Never rely on test order. Do not use sleeps when a deterministic control exists; if deterministic control is infeasible, any bounded wait must target a named observable condition and record the reason, limitation, and mitigation.
+- Do not write test code, `tasks.md`, implementation sequencing, or new domain/API/data/security/reliability policy.
 
-## Scope
-Use this skill to define or review risk-based test strategy: level selection, scenario matrix, invariant traceability, fail-path obligations, contract coverage, and executable quality checks.
+## Reference Selector
 
-## Boundaries
-Do not:
-- write test code or review implementation details as the primary output
-- write `tasks.md` or turn scenario design into implementation sequencing
-- default to broad test coverage when a smaller level can prove the behavior
-- allow happy-path-only planning or untestable acceptance criteria
-- define obligations that repository tooling or CI cannot actually run
+References sharpen a triggered proof decision; they do not define scope or act as checklists. Reconstruct accepted behavior first. Load one reference by default and add another only for a materially independent unresolved proof decision.
 
-## Escalate When
-Escalate if critical invariants are not traceable to test obligations, side effects lack idempotency/retry/concurrency coverage, reliability behavior is unprovable, or the design is not testable without first changing the design itself.
-
-## Core Defaults
-- Test strategy is risk-first and evidence-first, not checklist-first.
-- Prefer the smallest level that proves the requirement: `unit -> integration -> contract -> e2e-smoke`.
-- Treat missing fail-path coverage as a blocker.
-- Treat untestable requirements as design defects that must be escalated.
-- Keep validation realistic: use repository commands and CI-compatible environments.
-- In this repository's workflow, the test-design phase uses this skill to produce or repair `test-plan.md`; an independent reviewer applies it to the fixed test plan together with the phase verdict and shared convergence condition. Structured/orchestrated work obtains independent QA review before planning maps approved `TD-*` scenarios into `tasks.md`; the author never self-approves the gate.
-- Scenario IDs are stable planning anchors: use `TD-001`, `TD-002`, and so on for triggered scenario matrices.
-
-## Source And Reference Policy
-- Prefer approved task artifacts, repository docs, nearby tests, `docs/build-test-and-development-commands.md`, `Makefile`, and CI workflows as the local source of truth for executable checks.
-- Treat reference files as compact rubrics and example banks, not exhaustive checklists or domain documentation.
-- Load at most one reference by default. Load multiple only when the task clearly spans independent decision pressures, such as API contract proof and migration execution gates.
-- Use the selector below by symptom and behavior change. If two references seem to match the same symptom, pick the narrower one and explain the residual issue locally.
-- Do not open every reference file by default.
-- Keep this skill strategy-only: define test obligations, proof levels, pass/fail observables, and validation commands. Do not write test code, review implementation details, or decide API/data/security/reliability semantics that belong to another specialist.
-
-## Reference Files Selector
-| Symptom | Load | Behavior Change |
+| Symptom | Load | Decision it sharpens |
 | --- | --- | --- |
-| The strategy needs a proof level choice or is drifting toward broad integration/e2e "for safety" | `references/test-level-selection.md` | Makes the model choose the smallest boundary that proves the risk and name rejected weaker/broader levels. |
-| The matrix is happy-path-only, generic, or missing fail/edge/abuse/retry/concurrency observables | `references/scenario-matrix-patterns.md` | Makes the model write compact scenario rows with data shape, selected proof level, and pass/fail observables. |
-| Invariants, acceptance criteria, or state transitions are not traceable to explicit proof obligations | `references/invariant-and-acceptance-traceability.md` | Makes the model map each claim to owner/source, proof level, scenario rows, observable, and reopen trigger. |
-| Timeout, cancellation, retry, poison, backpressure, shutdown, degradation, or async recovery semantics must be proven | `references/reliability-fail-path-test-obligations.md` | Makes the model require deterministic fail-path triggers, failure classes, and side-effect/lifecycle observables. |
-| REST/OpenAPI, generated API, HTTP status/problem details, validation, idempotency key, auth/tenant/object boundary, or async `202` behavior changed | `references/api-contract-and-boundary-tests.md` | Makes the model choose boundary-observable contract proof and treat missing HTTP semantics as API-spec blockers. |
-| Durable state, SQL, cache, tenant-scoped storage, migration, outbox/inbox, dedup, replay, ordering, compensation, or reconciliation proof is needed | `references/data-cache-security-distributed-test-obligations.md` | Makes the model choose stateful/cache/message observables instead of mocks or successful API responses as proof. |
-| The strategy must name executable local/CI validation commands or proof limits | `references/quality-gates-and-execution.md` | Makes the model map obligations to repository-supported commands and honestly state skips, artifacts, and residual limits. |
+| Proof level is unclear or broad e2e is proposed “for safety.” | [test-level-selection.md](references/test-level-selection.md) | Choose the smallest sufficient set of complementary boundaries. |
+| The matrix is generic or happy-path-only. | [scenario-matrix-patterns.md](references/scenario-matrix-patterns.md) | Produce compact scenarios with observable outcomes. |
+| Invariants or acceptance criteria lack traceable proof. | [invariant-and-acceptance-traceability.md](references/invariant-and-acceptance-traceability.md) | Map each claim to scenario and reopen trigger. |
+| Timeout, retry, poison, backpressure, shutdown, or recovery matters. | [reliability-fail-path-test-obligations.md](references/reliability-fail-path-test-obligations.md) | Define deterministic failure triggers and lifecycle observables. |
+| REST/OpenAPI, auth, validation, idempotency, or async 202 changed. | [api-contract-and-boundary-tests.md](references/api-contract-and-boundary-tests.md) | Choose boundary-observable contract proof. |
+| SQL, cache, tenant storage, migration, outbox/inbox, replay, or reconciliation matters. | [data-cache-security-distributed-test-obligations.md](references/data-cache-security-distributed-test-obligations.md) | Select stateful and message observables instead of mocks. |
+| Local/CI commands or proof limits are unclear. | [quality-gates-and-execution.md](references/quality-gates-and-execution.md) | Bind obligations to executable repository checks. |
 
-## Expertise
+## Output
 
-### Test-Level Selection
-- Compare multiple candidate levels for a major risk only when a real `live fork` exists and the right proving level is not obvious.
-- Use level-selection rules:
-  - unit for deterministic logic and local invariants
-  - integration for DB/cache/network/process-boundary behavior
-  - contract for transport-visible semantics
-  - e2e-smoke for minimal critical-path confidence across composed runtime edges
-- Escalate level only when a lower level cannot prove behavior with sufficient confidence.
+Return only triggered scope, proof-boundary decisions, traceability, scenario matrix, executable quality gates, proof limits, residual risk, and reopen conditions. Omit adjacent domains that do not affect the strategy; when one blocks proof, name the exact unresolved owner and checkpoint.
 
-### Scenario Matrix Completeness
-- Every major risk needs explicit happy path, fail path, and edge-case scenarios.
-- Add abuse/negative scenarios when trust boundaries or misuse risk exist.
-- Add idempotency/retry/concurrency scenarios whenever side effects or parallelism exist.
-- Every scenario should define preconditions, data shape, expected observable outcome, and pass/fail rule.
-- Every scenario should define a fail-before expectation, or an explicit waiver when fail-first proof would be misleading, too expensive, or impossible in the current repository proof surface.
-- Outcomes must be externally meaningful: response, persisted effect, emitted message, or visible state transition.
+## Success And Stop
 
-### Invariant And Acceptance Traceability
-- Map every critical domain invariant to explicit test obligations.
-- Map every acceptance criterion to at least one proving scenario and explain why the chosen level is sufficient.
-- Distinguish local hard invariants from cross-service process invariants; the latter require convergence and reconciliation evidence.
-
-### Reliability And Failure Modes
-- Include timeout/deadline propagation, bounded retries, no-retry conditions, backpressure/load shedding, degradation, and graceful startup/shutdown where relevant.
-- Tie retry/idempotency checks to explicit conflict semantics and duplicate-suppression behavior.
-- For async flows, include `retryable`, `non-retryable`, and `poison` failure-class coverage plus DLQ or escalation expectations.
-
-### Error, Context, And Contract Semantics
-- Verify wrapped errors are inspectable where that matters.
-- Keep cancellation and deadline errors recognizable.
-- Verify request context is propagated rather than replaced.
-- Avoid brittle string-based assertions unless exact text is part of the public contract.
-- When API behavior changes, cover status codes, problem details, idempotency keys, conflict or mismatch semantics, async `202` status-monitor or operation-identity behavior, validation, limits, and request/correlation IDs.
-
-### Data, Cache, Security, And Distributed Concerns
-- Cover transaction behavior, optimistic/pessimistic conflicts, deterministic pagination, and N+1/chatty query risk when the change is data-heavy.
-- For schema evolution, cover mixed-version compatibility, idempotent/resumable backfill behavior, and verification gates before destructive steps.
-- For cache-sensitive behavior, cover hit/miss/fallback correctness, staleness, stampede protection, tenant-safe keying, and degraded cache behavior.
-- For security-sensitive flows, cover strict validation, auth fail-closed behavior, tenant mismatch denial, invalid/expired credentials, and misuse paths.
-- For distributed flows, cover outbox/inbox expectations, dedup semantics, replay safety, ack-after-durable-state behavior, ordering assumptions, compensation/forward recovery, and convergence/reconciliation.
-
-### Quality Gates And Execution
-- Express validation through real repository-executable checks such as unit tests, race tests, integration tests, lint/vet, contract checks, and migration validation when relevant.
-- Keep local and CI expectations aligned.
-- Do not define obligations that the repository cannot actually execute.
-- Make residual risks, coverage limits, and reopen conditions explicit.
-
-## Decision Quality Bar
-For every major testing recommendation, include:
-- the risk, invariant, or contract under test
-- stable scenario ID when the strategy is feeding `test-plan.md`
-- whether a real `live fork` exists
-- when a `live fork` exists, the viable levels or approaches, the selected option, and at least one explicit rejection reason
-- scenario classes and pass/fail observables
-- preconditions, data, and environment assumptions
-- traceability to invariants, contracts, reliability behavior, and other affected domains
-- residual risks, blockers, and reopen conditions
-
-## Deliverable Shape
-When writing the test strategy or review, cover:
-- scope and chosen test levels
-- level-selection rationale
-- traceability to invariants and major decisions
-- scenario matrix for happy, fail, edge, abuse, and retry/concurrency behavior
-- reliability and failure-mode coverage
-- API/contract coverage
-- data, cache, security, and distributed-consistency coverage where relevant
-- quality checks and execution expectations
-- downstream decision blockers only when another domain must still decide before the strategy is honest; otherwise use `no new decision required in <domain>`
-- residual risks and reopen criteria
-
-When writing `test-plan.md` for the repository test-design phase, use a compact scenario matrix with:
-- stable `TD-*` ID
-- source anchor to approved spec, review, design, or technical design review obligation
-- behavior/risk under test
-- scenario class: happy, fail, edge, abuse, retry/concurrency, reliability, contract, data/cache/security, or distributed
-- proof level: unit, integration, contract, e2e-smoke, or repo-specific named level
-- setup/input shape and determinism constraint
-- pass/fail observable
-- fail-before expectation or waiver
-- expected proof command or command family
-- reopen target if the scenario cannot be designed without changing behavior, design, rollout, ownership, or tooling
-
-## Escalate Or Reject
-- happy-path-only planning
-- missing traceability to critical invariants or reliability contracts
-- missing idempotency, retry, or concurrency coverage where side effects exist
-- API, data, security, cache, or distributed behavior changed without matching test obligations
-- quality-check expectations that do not match repository tooling or CI
-- critical testing decisions deferred to implementation
+Success means planning can map reviewed scenarios into tasks without inventing coverage or commands. Stop and reopen the owning decision when a critical invariant is untestable, semantics are unresolved, proof required for current completion is unavailable, a mandatory current-completion check has no executable path, or the strategy omits fail, retry/idempotency, concurrency, contract, or stateful proof required by the accepted change.

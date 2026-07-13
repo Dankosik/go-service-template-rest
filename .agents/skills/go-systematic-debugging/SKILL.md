@@ -1,18 +1,20 @@
 ---
 name: go-systematic-debugging
-description: "Debug Go service bugs, flaky tests, build failures, hangs, deadlocks, timeout incidents, and production regressions with root-cause-first diagnosis, concrete Go runtime forensics, and evidence-backed verification. Use whenever the user reports a panic, race, leak, flaky test, stuck goroutine, context deadline, or unexplained CI/build failure, even if they only ask to 'fix the test' or 'investigate the incident'."
+description: "Diagnose Go service bugs, flaky tests, build failures, hangs, deadlocks, timeout incidents, and production regressions from symptom to supported root cause. Use for investigation or diagnosis-only requests and for authorized fixes; in diagnosis-only mode stop before edits, while fix-authorized mode applies and verifies the smallest causal correction."
 ---
 
 # Go Systematic Debugging
 
 ## Trigger And Scope
 
-Use this skill for Go test or CI flakes, compilation and generation failures, panics, incorrect state, races, hangs, deadlocks, goroutine leaks, timeout incidents, pool or queue saturation, and production regressions. Diagnose the first broken invariant, implement the smallest local fix only after root cause is supported, and verify against the original failure signal.
+Use this skill for Go test or CI flakes, compilation and generation failures, panics, incorrect state, races, hangs, deadlocks, goroutine leaks, timeout incidents, pool or queue saturation, and production regressions. First classify the request as `diagnosis_only` or `fix_authorized`; both lanes trace the symptom to the first supported broken invariant.
 
 Do not turn defect pressure into feature design, broad refactoring, several speculative fixes, permanent debug scaffolding, timeout inflation, retry widening, or client-visible/API/data/security/reliability/rollout changes without approval.
 
 ## Diagnostic Boundary
 
+- In `diagnosis_only`, inspect and run non-mutating experiments, then return the supported root cause, rejected hypotheses, residual uncertainty, and next falsifying experiment. Do not edit implementation or tests.
+- In `fix_authorized`, diagnose first, then apply the smallest causal correction and verify it against the original failure signal.
 - Start with the exact symptom, environment, failing scope, and evidence that exists now. Preserve volatile evidence—first stack, dump, trace, profile, logs, failing seed, or incident timing—before restart or edits can destroy it.
 - Use `fast_path` for a deterministic test, build failure, or short causal chain. Use `deep_dive` only when intermittency, concurrency, live hangs, saturation, or production-only conditions require runtime forensics.
 - Debugging may implement a local behavior-preserving fix when authorized. If the safe fix changes a public contract, data model, security rule, retry/timeout policy, ownership boundary, rollout, or architecture, stop after root-cause proof and route the decision to its owner.
@@ -57,7 +59,7 @@ Prefer the narrow failing command, then broaden only when the defect class needs
 
 ## Success, Escalation, And Stop Conditions
 
-Success means the original symptom is reproducible or precisely characterized, the earliest broken invariant and causal path are supported by evidence, the smallest authorized fix is applied, the matching fresh signal turns green, and retained diagnostics are intentional and safe.
+`diagnosis_only` succeeds when the symptom is reproducible or precisely characterized, the earliest broken invariant and causal path are supported by evidence, and the next experiment is explicit if uncertainty remains. `fix_authorized` additionally requires the smallest causal fix, matching fresh green proof, and cleanup of temporary diagnostics.
 
 If root cause is not proven, stop with the next concrete falsifying experiment—not a patch list. Escalate when required evidence is unavailable, ownership cannot be localized, the only safe fix changes approved behavior or policy, the defect is primarily a design/domain/security/reliability/performance/data-cache decision, or fresh regression proof cannot be obtained. Never report `fixed` from intuition, one lucky flake pass, a wider timeout, or unrelated green checks.
 

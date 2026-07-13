@@ -1,12 +1,18 @@
 ---
 name: specification-review
-description: "Read-only review method for a fixed spec revision, with anchored findings and PASS, CONCERNS, or FAIL."
+description: "Review a fixed spec revision read-only and return the complete result: evidence boundary, anchored findings when present, and PASS, CONCERNS, or FAIL. Use for required Specification gates or explicitly requested standalone spec reviews."
 ---
 
 # Specification Review
 
-Use only for a fixed, reviewable spec revision or an explicitly read-only user review. Follow [specification review](../../../docs/spec-first-workflow/phases/specification-review.md).
+Use only for a fixed, reviewable spec revision or an explicitly read-only user
+review. Follow [Specification
+Review](../../../docs/spec-first-workflow/phases/specification-review.md).
 
-Try to falsify scope, behavior, invariants, source-of-truth ownership, compatibility, proof feasibility, and downstream clarity only where the spec triggers them. Report anchored blockers, bounded concerns/proof obligations, and non-blocking observations. Do not edit the spec or block on prose polish.
+Remain read-only. Apply the canonical affected-surface reconstruction and
+falsification method, then return the shared review envelope plus its
+Specification-specific fields. Do not edit the spec, approve your own repair,
+or block on prose polish.
 
-Return `PASS`, `CONCERNS`, or `FAIL`, the evidence boundary, and the smallest repair/reopen owner. For an internal checkpoint, return to the owning root for same-session repair and fresh review to the shared convergence condition without a user handoff. An explicitly requested standalone review returns findings only and stops read-only.
+Return the complete review result to the owning root. For an explicitly
+requested standalone review, return it to the user and stop read-only.

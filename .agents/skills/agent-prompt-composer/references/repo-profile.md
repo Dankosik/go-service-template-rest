@@ -8,7 +8,7 @@ Load this file only when a durable repository fact could change the handoff's ow
 - The sample service is intentionally thin; do not overfit prompts to `ping` or `ping_history` unless the request actually points there.
 
 ## Core Stack
-- Go `1.26.3`
+- Go version and optional toolchain directive from the current `go.mod`; read them live before making version-sensitive claims.
 - `chi` for HTTP routing
 - OpenAPI-first contract in `api/openapi/service.yaml`
 - generated strict server bindings in `internal/api`

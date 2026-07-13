@@ -113,6 +113,14 @@ require_text \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'the standalone read-only review exception is missing'
 require_text \
+  'complete review result and stop at the requested review boundary' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'a standalone review must preserve the complete review result'
+require_text \
+  '../../subagent-contract.md#shared-review-finding-envelope' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'review returns must link to the shared finding envelope'
+require_text \
   'A Codex Goal is an execution control for the implementation/validation/closeout macro phase only.' \
   AGENTS.md \
   'Codex Goal lifecycle must be limited to implementation'
@@ -176,6 +184,10 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'the standalone-review behavior case is missing'
 require_text \
+  'complete result with the revision anchor, stated evidence boundary, affected-lens dispositions, an explicit no-findings statement, and `PASS`' \
+  docs/spec-first-workflow-evals.md \
+  'a clean standalone Specification review must return a complete PASS result'
+require_text \
   '### E18 — Internal Review Loop' \
   docs/spec-first-workflow-evals.md \
   'the internal review-loop behavior case is missing'
@@ -220,21 +232,45 @@ require_text \
   docs/spec-first-workflow/shared/artifact-model.md \
   'ledger readiness must require full-path input closure without overloading every upstream artifact'
 require_text \
-  'exact bytes covered by canonicalization, digest, or signature' \
-  docs/spec-first-workflow/phases/system-integration-design.md \
-  'byte-sensitive contracts must close schemas and bytes before implementation'
+ 'exact bytes covered by canonicalization, digest, or signature' \
+ docs/spec-first-workflow/phases/system-integration-design.md \
+ 'byte-sensitive contracts must close schemas and bytes before implementation'
 require_text \
-  'inventory every input-bearing design surface on the current implementation completion path' \
-  docs/spec-first-workflow/phases/technical-design-review.md \
-  'technical-design review must attempt full-path input-bearing artifact construction'
+  'For each material mechanism decision' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must tie each material mechanism decision to evidence and consequences'
+require_text \
+  'apply `go-architect-spec` and its Required Evidence/Deliverable and Stop Conditions' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'material architecture decisions must route through the canonical architecture method'
+require_text \
+  'package/file placement will not reopen a material decision about system boundaries/topology' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must close architecture before Go ownership'
+require_text \
+  '[persistence trigger](../shared/artifact-model.md#when-to-persist) applies' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design artifacts must remain conditional'
+require_text \
+  'When a durable design artifact is triggered' \
+  .agents/skills/technical-design-session/SKILL.md \
+  'the technical-design wrapper must preserve conditional artifact creation'
+require_text \
+  "Follow the system/integration phase's fan-out and review rules." \
+  .agents/skills/technical-design-session/SKILL.md \
+  'the technical-design wrapper must not duplicate fan-out or review policy'
+require_text \
+ 'inventory every input-bearing design surface on the current implementation completion path' \
+ docs/spec-first-workflow/phases/technical-design-review.md \
+ 'technical-design review must attempt full-path input-bearing artifact construction'
 require_text \
   'a phase-level `PASS` requires rechecking implementation-input closure across every materially distinct input-bearing surface on the current completion path' \
   docs/spec-first-workflow/phases/technical-design-review.md \
   'focused re-review must not bypass phase-level input closure'
 require_text \
-  'valid fail-before signal only when their expected contents are mechanically derivable' \
+  'Missing test code or fixtures establish a proof gap, not behavioral fail-before evidence.' \
   docs/spec-first-workflow/phases/test-design.md \
-  'test design must distinguish missing code from missing design inputs'
+  'test design must not treat absent test code as behavioral RED evidence'
 require_text \
   'only that owner may narrow or split the outcome' \
   docs/spec-first-workflow/phases/test-design.md \
@@ -244,25 +280,117 @@ require_text \
   docs/spec-first-workflow/phases/test-design.md \
   'unavailable test proof must be excluded from the accepted current completion'
 require_text \
-  'cold-walk every mandatory dependency path from the first task through final validation' \
+  'Test Design does not edit `tasks.md`.' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design must leave ledger ownership to planning'
+require_text \
+  'Omission is not disposition.' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design must reconcile material claims in both traceability directions'
+require_text \
+  'a named non-test proof that can falsify the claim' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design non-test proof must be falsifying rather than an escape label'
+require_text \
+  'smallest set of complementary proof boundaries' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design must choose complementary proof instead of one broad level'
+require_text \
+  'plausible incorrect observable behavior or regression that its oracle would reject' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design scenarios must discriminate behavior rather than mirror implementation'
+require_text \
+  'its name, prior green status, or coverage hit is not proof' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design must inspect existing proof before reusing it'
+require_text \
+  'A proof command is adequate only when it executes the relevant path and its result can establish the named oracle' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design must bind commands to the exercised path and oracle'
+require_text \
+  'Merge rows with the same risk, trigger, oracle, and reopen path.' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'test design must normalize equivalent scenario rows'
+require_text \
+  'cold-walk every mandatory dependency path from each dependency root through final validation' \
   docs/spec-first-workflow/phases/planning.md \
-  'planning must dry-run the full completion path'
+  'planning must dry-run every root-to-validation completion path'
 require_text \
   'Never approve `PASS subject to gates` for a mandatory path.' \
   docs/spec-first-workflow/phases/planning.md \
   'planning must reject conditional readiness for mandatory work'
 require_text \
-  'Cold completion: can a fresh agent execute every mandatory task and required proof through final validation' \
+  'Before drafting tasks, identify every in-scope accepted obligation' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must inventory accepted obligations before drafting tasks'
+require_text \
+  'A command is not proof unless its expected observable can establish that claim.' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning proof must bind its command to a claim and observable'
+require_text \
+  'unless the accepted proof strategy requires manual observation' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must preserve an accepted manual proof strategy'
+require_text \
+  'name the deterministic placement rule or canonical source that resolves the file choice' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must resolve bounded implementation discovery deterministically'
+require_text \
+  "every task must trace to an accepted obligation, every proof to its task's claim" \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must distinguish task traceability from proof linkage'
+require_text \
+  'missing input required by a mandatory path through the current completion condition belongs in `Blocked stop`' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must block known gaps on the current completion path'
+require_text \
+  'Treat each task as one coherent outcome that is independently reviewable once its declared prerequisites are satisfied.' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning tasks must remain coherent and reviewable without suppressing real prerequisites'
+require_text \
+  '`Reopen if` is optional and records only a concrete objective future condition' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must omit rather than invent future invalidation conditions'
+require_text \
+  'document order, review preference, and convenient sequencing are not dependencies.' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning dependencies must represent true execution or proof gates'
+require_text \
+  'Treat rationale, rejected alternatives, non-normative examples, and future ideas as context, not implementation work.' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must filter non-normative source material before drafting tasks'
+require_text \
+  'A no-implementation disposition must cite either current authoritative evidence that the obligation is already satisfied or an accepted upstream decision that no implementation change is required, plus its proving surface or objective recheck condition.' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must require an authoritative basis and recheck for no implementation'
+require_text \
+  'no implementation delta may be duplicated or fall between task boundaries' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must neither duplicate nor omit an implementation delta'
+require_text \
+  'An obligation may span multiple tasks when each carries the relevant constraint' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning must preserve cross-cutting obligations without merging distinct task deltas'
+require_text \
+  'executable in dependency order from current inputs' \
+  docs/spec-first-workflow/phases/planning.md \
+  'planning readiness must mean executable dependency closure rather than simultaneous task startability'
+require_text \
+  'Cold completion: can a fresh agent execute every mandatory path from each dependency root through final validation in dependency order' \
   docs/spec-first-workflow/phases/task-review-readiness.md \
-  'task readiness must test end-to-end cold completion'
+  'task readiness must test multi-root end-to-end cold completion'
 require_text \
   'A ledger cannot receive `PASS subject to gates` when a gate can block mandatory completion.' \
   docs/spec-first-workflow/phases/task-review-readiness.md \
   'readiness must reject unavailable inputs on any mandatory completion path'
 require_text \
-  'every mandatory task and proof through current completion is executable from closed inputs' \
+  'every mandatory task and proof through current completion is executable in dependency order from closed inputs' \
   docs/spec-first-workflow/phases/task-review-readiness.md \
   'readiness PASS must mean end-to-end execution readiness'
+require_text \
+  'invent a generic future trigger where no objective invalidation condition exists' \
+  docs/spec-first-workflow/phases/task-review-readiness.md \
+  'readiness must reject speculative reopen boilerplate'
 require_text \
   'return `FAIL` and reopen the accepted-outcome owner; the reviewer does not narrow scope.' \
   docs/spec-first-workflow/phases/task-review-readiness.md \
@@ -303,6 +431,126 @@ require_text \
   '### E26 — Regression Fail-Before Proof' \
   docs/spec-first-workflow-evals.md \
   'the regression fail-before behavior case is missing'
+require_text \
+  '### E27 — Independent Affected-Surface Review' \
+  docs/spec-first-workflow-evals.md \
+  'the independent affected-surface behavior case is missing'
+require_text \
+ '### E32 — Proportional Specification' \
+ docs/spec-first-workflow-evals.md \
+ 'the proportional specification behavior case is missing'
+require_text \
+  '### E33 — System Mechanism Selection' \
+  docs/spec-first-workflow-evals.md \
+  'the system mechanism selection behavior case is missing'
+require_text \
+  'invariant/write/process authority, dominant workload, critical path' \
+  docs/spec-first-workflow-evals.md \
+  'system mechanism selection must use architecture decision drivers'
+require_text \
+  'naming either skill without the required result does not pass' \
+  docs/spec-first-workflow-evals.md \
+  'system mechanism selection must not reward bare skill routing claims'
+require_text \
+  'comparing only surviving substitutes at one live level' \
+  docs/spec-first-workflow-evals.md \
+  'system mechanism selection must compare substitutes at one decision level'
+require_text \
+  '### E34 — Proportional System Design' \
+  docs/spec-first-workflow-evals.md \
+  'the proportional system-design behavior case is missing'
+require_text \
+  'A passing response does not create a durable design artifact or invoke architecture/fan-out work.' \
+  docs/spec-first-workflow-evals.md \
+  'proportional system design must avoid untriggered ceremony'
+require_text \
+  '### E35 — Planning Bidirectional Coverage' \
+  docs/spec-first-workflow-evals.md \
+  'the bidirectional planning coverage behavior case is missing'
+require_text \
+  'map every accepted obligation to an executable task and adequate proof or an evidence-backed no-implementation disposition' \
+  docs/spec-first-workflow-evals.md \
+  'the planning coverage eval must reject omitted obligations and orphan tasks'
+require_text \
+  'preserving the legitimate bounded file choice, inspection bounds, and deterministic placement rule' \
+  docs/spec-first-workflow-evals.md \
+  'the planning coverage eval must preserve legitimate bounded discovery while rejecting avoidable discovery'
+require_text \
+  'one concise ready-for-Go-ownership disposition' \
+  docs/spec-first-workflow-evals.md \
+  'proportional system design must stop at a compact Go-ownership handoff'
+require_text \
+  'one clear, evidence-backed owner' \
+  docs/spec-first-workflow/phases/go-code-ownership-design.md \
+  'Go ownership design must produce one grounded owner per changed responsibility'
+require_text \
+  'the smallest interface in the consumer package' \
+  docs/spec-first-workflow/phases/go-code-ownership-design.md \
+  'Go ownership design must keep inversion boundaries consumer-owned and narrow'
+require_text \
+  '### E36 — Go Ownership Placement' \
+  docs/spec-first-workflow-evals.md \
+  'the focused Go ownership placement behavior case is missing'
+require_text \
+  'A competing proposal instead puts all new hand-written responsibilities into one already mixed file' \
+  docs/spec-first-workflow-evals.md \
+  'Go ownership placement must reject under-splitting into an already mixed owner'
+require_text \
+  'planning must still choose a material ownership, dependency, generated/manual, or exported-surface decision' \
+  docs/spec-first-workflow-evals.md \
+  'Go ownership placement must close implementation-facing ownership decisions'
+require_text \
+  '### E37 — Risk-Based Test Design' \
+  docs/spec-first-workflow-evals.md \
+  'the risk-based Test Design behavior case is missing'
+require_text \
+  'self-review or a merely declared QA `PASS` does not pass' \
+  docs/spec-first-workflow-evals.md \
+  'the Test Design eval must exhibit an independent fixed-revision review'
+require_text \
+  '### E38 — Adversarial Test-Plan Review' \
+  docs/spec-first-workflow-evals.md \
+  'the adversarial Test Design review case is missing'
+require_text \
+  'the vacuous `TD-006` oracle' \
+  docs/spec-first-workflow-evals.md \
+  'the adversarial Test Design review must reject vacuous assertions'
+require_text \
+  'not merely because the command is broad' \
+  docs/spec-first-workflow-evals.md \
+  'the adversarial Test Design review must reject proof gaps rather than broad commands'
+require_text \
+  '### E39 — Planning Source And Dependency Semantics' \
+  docs/spec-first-workflow-evals.md \
+  'the planning source and dependency semantics behavior case is missing'
+require_text \
+  'citation alone counts as coverage' \
+  docs/spec-first-workflow-evals.md \
+  'the planning semantics eval must reject coverage by citation without an executable obligation'
+require_text \
+  'two independent dependency roots' \
+  docs/spec-first-workflow-evals.md \
+  'the planning semantics eval must exercise a multi-root dependency graph'
+require_text \
+  'omit the generic `Reopen if` entries' \
+  docs/spec-first-workflow-evals.md \
+  'the planning semantics eval must reject speculative reopen boilerplate'
+require_text \
+  'preserve the accepted schema-version trigger on the affected task' \
+  docs/spec-first-workflow-evals.md \
+  'the planning semantics eval must preserve a valid future invalidation trigger'
+require_text \
+  'race instrumentation without an exercising scenario' \
+  docs/spec-first-workflow-evals.md \
+  'the adversarial Test Design review must reject instrumentation-only proof'
+require_text \
+ 'Preserve that precedence as an explicitly accepted normative decision while grounding any factual claims separately' \
+ docs/spec-first-workflow-evals.md \
+ 'an accepted normative decision must not become an assumption or evidence gap'
+require_text \
+  '39 cases, 35 invariants' \
+  scripts/dev/workflow-behavior-evals.sh \
+  'the behavior eval harness must report the expanded invariant manifest'
 require_text \
   'WORKFLOW_EVAL_BASE_REF' \
   scripts/dev/workflow-behavior-evals.sh \
@@ -439,6 +687,42 @@ require_text \
   'fixed, reviewable spec revision' \
   .agents/skills/specification-review/SKILL.md \
   'specification review must accept a draft candidate before PASS'
+require_text \
+  '# <User/operator-visible outcome>' \
+  docs/spec-first-workflow/phases/specification.md \
+  'the canonical spec shape must name the user/operator-visible outcome'
+require_text \
+  'Derive the affected behavior surface' \
+  docs/spec-first-workflow/phases/specification.md \
+  'spec authoring must derive affected lenses independently of existing spec content'
+require_text \
+  'Choose the smallest representation that removes ambiguity' \
+  docs/spec-first-workflow/phases/specification.md \
+  'spec authoring must adapt representation to the decision shape'
+require_text \
+  'Ground each decision-changing factual claim in current evidence and each' \
+  docs/spec-first-workflow/phases/specification.md \
+  'spec claims must distinguish evidence-backed facts from accepted normative decisions'
+require_text \
+  'Only uncertainty about proving an already accepted rule' \
+  docs/spec-first-workflow/phases/specification.md \
+  'a downstream proof obligation must not hide a missing specification decision'
+require_text \
+  'Reconstruct the affected behavior surface independently' \
+  docs/spec-first-workflow/phases/specification-review.md \
+  'spec review must reconstruct affected lenses independently of the spec'
+require_text \
+  'Do not treat omission from the spec as evidence' \
+  docs/spec-first-workflow/phases/specification-review.md \
+  'an omitted lens must not hide its own review trigger'
+require_text \
+  'two reasonable downstream implementations' \
+  docs/spec-first-workflow/phases/specification-review.md \
+  'spec review must detect behaviorally divergent compliant interpretations'
+require_text \
+  'not a second Specification template' \
+  docs/spec-first-workflow/shared/artifact-model.md \
+  'artifact status guidance must link to rather than duplicate the spec shape'
 
 if grep -Eq -- 'implementation_with_accepted_risks|readiness = WAIVED' \
   .agents/skills/go-domain-invariant-spec/references/state-machine-and-transition-rules.md; then
@@ -548,6 +832,22 @@ require_text \
   .agents/skills/spec-document-designer/SKILL.md \
   'spec authoring must not self-approve readiness'
 require_text \
+  'never approves its own readiness' \
+  .agents/skills/spec-document-designer/SKILL.md \
+  'the spec author wrapper must retain its unique self-approval boundary'
+require_text \
+  'Own the root Specification macro phase through its canonical Stop Rule' \
+  .agents/skills/specification-session/SKILL.md \
+  'the specification session wrapper must retain root phase ownership'
+require_text \
+  'Remain read-only' \
+  .agents/skills/specification-review/SKILL.md \
+  'the specification reviewer wrapper must retain its unique mutation boundary'
+require_text \
+  'Return the complete review result to the owning root' \
+  .agents/skills/specification-review/SKILL.md \
+  'the specification reviewer wrapper must preserve the complete review envelope'
+require_text \
   'proceeds to planning only after independent technical-design review' \
   .agents/skills/go-design-spec/SKILL.md \
   'design authoring must route through independent review'
@@ -556,8 +856,12 @@ require_text \
   .agents/skills/planning-and-task-breakdown/SKILL.md \
   'task authoring must route through readiness review'
 require_text \
-  'obtains independent QA review before planning' \
-  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'the canonical Stop Rule is unmet' \
+  .agents/skills/planning-session/SKILL.md \
+  'planning must not continue into implementation before readiness'
+require_text \
+  'run an independent QA review before planning' \
+  docs/spec-first-workflow/phases/test-design.md \
   'test design must route through independent QA review'
 require_text \
   'repair, revalidation, and fresh convergence review before closeout' \
@@ -572,6 +876,10 @@ require_text \
   docs/spec-first-workflow/phases/test-design.md \
   'test design review must use explicit convergence verdict semantics'
 require_text \
+  'standalone QA review returns the complete review result and stops read-only' \
+  docs/spec-first-workflow/phases/test-design.md \
+  'standalone test-design review must preserve the complete review envelope'
+require_text \
   'including when the check is honestly unavailable outside current completion' \
   docs/spec-first-workflow/phases/test-design.md \
   'unavailable test proof must not receive PASS'
@@ -584,9 +892,47 @@ require_text \
   .codex/agents/qa-agent.toml \
   'the QA reviewer must route fixed test plans through phase verdict semantics'
 require_text \
-  'the phase verdict and shared convergence condition' \
+  'The owning root repairs review findings and re-reviews to the shared convergence condition' \
+  .agents/skills/test-design-session/SKILL.md \
+  'the test design wrapper must not self-approve a fixed proof disposition'
+require_text \
+  'Derive the oracle from approved behavior or an independent reference, not from production logic.' \
   .agents/skills/go-qa-tester-spec/SKILL.md \
-  'the test strategy skill must not self-approve a fixed test plan'
+  'the test strategy oracle must be independent from production logic'
+require_text \
+  'triggers a material fail path with no proof or authorized residual-risk disposition is a blocker' \
+  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'the test strategy must block only triggered undispositioned fail paths'
+require_text \
+  'named local, CI, or controlled target environment' \
+  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'test strategy commands must name their proving environment'
+require_text \
+  'Never rely on test order.' \
+  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'test strategy must forbid order-dependent proof'
+require_text \
+  'if deterministic control is infeasible, any bounded wait must target a named observable condition' \
+  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'test strategy wait fallback must remain bounded and observable'
+require_text \
+  'Keep proof inline when the canonical persistence rule does not require `test-plan.md`.' \
+  .agents/skills/test-design-session/SKILL.md \
+  'test strategy review must support inline proof when no test plan is persisted'
+require_text \
+  '[canonical Test Design Outputs](../../../docs/spec-first-workflow/phases/test-design.md#outputs)' \
+  .agents/skills/go-qa-tester-spec/SKILL.md \
+  'the test strategy skill must use the canonical scenario schema'
+if grep -Eq -- 'proof_only|follow_up_only|no new decision required in' \
+  .agents/skills/go-qa-tester-spec/SKILL.md; then
+  echo 'workflow instruction check failed: test strategy uses an ambiguous disposition label'
+  exit 1
+fi
+if grep -Eq -- 'plausible incorrect implementation|Missing test code or fixtures are a valid fail-before signal' \
+  docs/spec-first-workflow/phases/test-design.md .agents/skills/go-qa-tester-spec/SKILL.md; then
+  echo 'workflow instruction check failed: test design retains implementation-mirroring or false RED wording'
+  exit 1
+fi
 require_text \
   'required independent final-diff review has reached convergence' \
   .agents/skills/validation-closeout-session/SKILL.md \
@@ -605,12 +951,9 @@ require_text \
   'the user-facing workflow summary must name independent final-diff review'
 
 for convergence_skill in \
-  .agents/skills/specification-session/SKILL.md \
-  .agents/skills/specification-review/SKILL.md \
   .agents/skills/technical-design-session/SKILL.md \
   .agents/skills/test-design-session/SKILL.md \
   .agents/skills/planning-session/SKILL.md \
-  .agents/skills/spec-document-designer/SKILL.md \
   .agents/skills/go-design-spec/SKILL.md \
   .agents/skills/planning-and-task-breakdown/SKILL.md; do
   require_text \

@@ -19,18 +19,21 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 
 Ranked anchored findings and one verdict:
 
-- `PASS`: every mandatory task and proof through current completion is executable from closed inputs, with no hidden execution work, current-phase defect, unowned question, or uncovered affected lens.
+- `PASS`: every mandatory task and proof through current completion is executable in dependency order from closed inputs, with no hidden execution work, current-phase defect, unowned question, or uncovered affected lens.
 - `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit implementation.
 - `FAIL`: the ledger or an upstream decision must be repaired first.
 
 ## Review Questions
 
-- Does every task trace to an accepted decision and own an outcome rather than an activity?
-- Are dependencies, owner/surface, generated-source order, cleanup, and proof clear?
-- Can each proof actually establish the task claim, including failure and negative paths where relevant?
+- Does every in-scope accepted obligation map to an executable task and adequate proof or an evidence-backed no-implementation disposition, and does every task trace back to an accepted obligation and own an outcome rather than an activity?
+- Does the ledger preserve accepted examples or scenarios that define behavior or proof while excluding rationale, rejected alternatives, non-normative examples, and future ideas from implementation scope? Does each no-implementation disposition cite current authoritative evidence that the obligation is already satisfied or an accepted upstream decision that no implementation change is required, plus a proving surface or objective recheck condition?
+- Are dependency edges true execution or proof gates rather than document order or review preference, and do independent roots remain unchained? Are owner/surface, generated-source order, cleanup, non-duplicated task deltas, and proof obligations for constraints spanning tasks clear, including any actual interfaces or handoffs?
+- Does each proof name its claim, check, and expected observable, and can that observable establish the claim, including failure and negative paths where relevant?
+- Are source anchors narrow enough and execution-critical constraints carried into tasks so a fresh implementer need not reconstruct them from broad documents or chat? Are discovery boundaries used only when unavoidable, with bounded inspection and a deterministic placement rule or canonical source that resolves the file choice?
+- Does any `Reopen if` entry hide a known current decision, evidence, or mandatory-input gap, or invent a generic future trigger where no objective invalidation condition exists?
 - Is the completion condition successful and observable, not merely “record blocker” or “run commands”?
 - Would implementation have to choose behavior, design, test strategy, or rollout policy?
-- Cold completion: can a fresh agent execute every mandatory task and required proof through final validation from cited sources and currently available inputs, without chat history or choosing behavior, schema, values, ownership, or proof strategy?
+- Cold completion: can a fresh agent execute every mandatory path from each dependency root through final validation in dependency order from cited sources and currently available inputs, without chat history or choosing behavior, schema, values, ownership, or proof strategy?
 - Is every known external input on a mandatory path available now? If not, is its dependent task and claim excluded from current completion and routed separately? A ledger cannot receive `PASS subject to gates` when a gate can block mandatory completion.
 - Is any task both mandatory for completion and permitted to remain blocked? If so, return `FAIL` and reopen the accepted-outcome owner; the reviewer does not narrow scope.
 - Is the ledger smaller and clearer than the work it coordinates?

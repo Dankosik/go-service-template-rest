@@ -1,11 +1,11 @@
 # System / Integration Design
 
-Choose the runtime mechanism needed to satisfy the accepted behavior. Use a separate design artifact only when the mechanism is not already obvious from the spec and repository.
+Choose the smallest coherent target-state runtime mechanism that satisfies the accepted behavior and invariants under the accepted workload, failure, security, operability, and rollout constraints. Close every material system choice that implementation would otherwise have to invent.
 
 ## Read When
 
 - Implementation would otherwise decide contracts, source of truth, data flow, failure behavior, cross-service interaction, or rollout.
-- Public API/events, persisted data, caches, security boundaries, concurrency/lifecycle, or deployment behavior changes.
+- The change introduces or materially affects public APIs/events, persisted data, caches, security boundaries, concurrency/lifecycle, or deployment behavior.
 - An existing design needs repair after review or new evidence.
 
 ## Inputs
@@ -13,21 +13,27 @@ Choose the runtime mechanism needed to satisfy the accepted behavior. Use a sepa
 - Ready spec and dispositioned accepted risks/downstream proof obligations.
 - `docs/repo-architecture.md` when repository boundaries matter.
 - Current provider contracts, OpenAPI/event/schema sources, generated-source owners, and relevant runtime code.
+- Decision-relevant current-state evidence for invariant/write/process ownership, runtime and data flow, workload and critical path, operators, external dependencies, and mixed-version constraints.
 - Research that can change the mechanism.
 
 ## Outputs
 
-Use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
+When the shared [persistence trigger](../shared/artifact-model.md#when-to-persist) applies, use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
 
-The design answers the applicable questions:
+For each material mechanism decision, record the selected mechanism, accepted decision drivers, supporting current evidence, bounded assumptions, a measurable acceptance boundary, material consequences for failure, operations, and rollout, required proof, and the reopen condition. When existing behavior changes, distinguish observed current state from the selected target state and name what is retained, replaced, or removed. Use the questions below as coverage checks; omit unaffected domains.
 
-- Which component owns the source of truth, and which surfaces are derived?
+- What target-state component/runtime topology, system-level dependency direction, and invariant/write/process ownership are required, and which surfaces are derived?
+- What accepted caller-completion/finality and consistency semantics, workload, and critical path determine request-path versus background work, sync/async interactions, capacity, latency/throughput/resource budgets, backpressure, and load shedding?
 - What is the happy-path sequence and each material failure/partial-work branch?
 - What are timeout, cancellation, retry/no-retry, idempotency, cleanup, recovery, and degraded-mode rules?
 - What contract, schema, cache, consistency, retention, or mixed-version behavior changes?
 - What security, tenant, secret, abuse, observability, and cardinality boundaries matter?
-- What rollout/rollback order and proof are required?
-- Which viable simpler/established alternatives were rejected, and why?
+- For any transition, what target authority, mixed-version checkpoints, reconciliation, exit/removal proof, rollback limit, and owner bound it?
+- When a real live fork exists, which surviving viable simpler or established alternatives were rejected, and why? Do not manufacture options for completeness.
+
+## Architecture Rule
+
+When a material boundary, topology, runtime, source-of-truth, completion/finality, consistency, sync/async, projection/provider, migration, resilience, or extraction decision is live, apply `go-architect-spec` and its Required Evidence/Deliverable and Stop Conditions; otherwise keep this phase compact.
 
 ## Contract Rule
 
@@ -45,12 +51,12 @@ Design against an external platform or service requires current official contrac
 
 ## Fan-Out And Review
 
-At phase entry, identify the materially affected domains: domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Resolve each affected domain locally with its matching skill when the reasoning is sequential or tightly coupled, or delegate one concrete bounded question to the matching specialist subagent with that skill when separate context, parallel evidence, or independence improves the result. Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
+At phase entry, identify the materially affected domains: architecture/topology, domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Apply each matching skill locally or delegate under the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision). Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
 
-Use specialist lanes only for live independent forks that can change the mechanism. Examples: sync vs async, source A vs B, fail-closed vs degraded, or expand/backfill/contract vs one-step migration.
+Parallelize only concrete bounded questions that can be answered independently and can change a material design decision or its required evidence; keep dependent decisions sequential and synthesize all results before selecting the mechanism.
 
 For structured or orchestrated work, run [Technical Design Review](technical-design-review.md) after the system and Go-ownership decisions are complete. The owning root handles repair and fresh re-review in the same root session. Direct work uses independent design review only when the user or risk requires it.
 
 ## Stop Rule
 
-Continue to Go ownership when implementation can proceed without inventing runtime behavior. Continue to test design or planning only after Go ownership is complete and the required technical-design review has returned `PASS`. Reopen specification or research when the missing fact changes accepted behavior, ownership policy, or proof feasibility.
+Continue to Go ownership only when package/file placement will not reopen a material decision about system boundaries/topology, invariant/write/process authority, critical path, completion/consistency/failure/recovery semantics, projection authority, or rollout constraints. Continue to test design or planning only after Go ownership is complete and the required technical-design review has returned `PASS`. Reopen the narrowest upstream evidence or decision owner when a missing fact or unset decision can change accepted behavior, ownership, mechanism choice, or proof feasibility.

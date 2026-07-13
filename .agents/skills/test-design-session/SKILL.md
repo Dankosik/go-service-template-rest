@@ -1,14 +1,14 @@
 ---
 name: test-design-session
-description: "Define non-obvious risk scenarios and proof levels before planning; keep obvious proof directly in tasks.md."
+description: "Own non-obvious proof design before planning; keep obvious proof as an inline planning handoff."
 ---
 
 # Test Design Session
 
-Use [test design](../../../docs/spec-first-workflow/phases/test-design.md) when proof spans meaningful scenarios, failure modes, protected concerns, or test levels.
+Own the root [Test Design](../../../docs/spec-first-workflow/phases/test-design.md) macro phase through its canonical Outputs, Review, and Stop Rule when proof spans meaningful scenarios, failure modes, protected concerns, or proof boundaries.
 
-Create `test-plan.md` only when a scenario matrix adds value. Each material scenario names its source decision/risk, level, setup/action, expected observable, fail-before signal or rationale, command, residual gap, and reopen owner.
+Apply [go-qa-tester-spec](../go-qa-tester-spec/SKILL.md) for risk selection, scenario design, proof-boundary choice, and executable quality gates. Keep proof inline when the canonical persistence rule does not require `test-plan.md`. Do not write tests, edit `tasks.md`, or change approved behavior.
 
-For structured or orchestrated work, use independent QA review and the test-design phase verdict before planning. Direct work uses them only when the user or risk requires it. This skill designs proof; it does not write tests or change approved behavior. The owning root repairs findings, re-reviews to the shared convergence condition, and may continue into planning and implementation in the same authorized request unless the user named test design or standalone QA review as the boundary.
+The owning root repairs review findings and re-reviews to the shared convergence condition, then may continue into planning and implementation in the same authorized request unless the user named Test Design or standalone QA review as the boundary.
 
-Success means planning can map proof without inventing behavior or test strategy. Otherwise reopen the appropriate spec/design owner.
+Success means planning can map proof without inventing behavior or test strategy. Otherwise reopen the owner named by the canonical Test Design phase.

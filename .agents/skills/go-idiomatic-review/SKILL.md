@@ -1,6 +1,6 @@
 ---
 name: go-idiomatic-review
-description: "Review Go code changes for language-level correctness, toolchain-aware language-native or standard-library reinvention, error contracts, receiver and method-set safety, nil and zero-value behavior, ownership leaks, and standard-library contract misuse with real merge-risk impact. Use whenever a Go PR, diff, refactor, or incident fix may hide Go-semantic defects, even if the request is phrased as a generic code review or another review lane also applies."
+description: "Review changed Go for language and standard-library correctness: error contracts, context lifetime, receivers, method sets, nil/zero values, aliasing, resources, and exported API shape. Use when Go semantics can create merge risk; skip local readability cleanup, broad structural strictness, and architecture ownership drift, which have dedicated review skills."
 ---
 
 # Go Idiomatic Review
@@ -12,7 +12,7 @@ Protect changed Go code from language-level, standard-library, and exported-surf
 - Review Go semantics and standard-library contracts as correctness surfaces, not style trivia.
 - Prioritize error contracts, context lifetime, receiver and copy safety, nil behavior, exported API shape, and mutable ownership leaks.
 - Prefer language-native and standard-library fixes when local wrappers add no real semantic value.
-- When changed code introduces custom infrastructure, a new runtime dependency, or a material helper/abstraction, check that approved artifacts record stdlib, repository-pattern, mature-OSS, and custom-code due diligence. Flag missing due diligence as design/planning risk instead of approving the change as local style.
+- When changed code introduces custom infrastructure, a new runtime dependency, or a material helper/abstraction, verify that the approved artifact chain contains the live-choice evidence required by the canonical [research method](../../../docs/spec-first-workflow/phases/research.md#method). Flag missing evidence as design/planning risk instead of approving the change as local style.
 - When changed code implements a selected design/system pattern, check that the implementation remains idiomatic Go: explicit control flow, narrow interfaces, context-aware I/O, simple composition, and no framework-style layer stack unless the approved pattern fit requires it.
 - Stay in the Go-language review lane; hand off domain, concurrency, DB/cache, security, performance, reliability, or architecture depth instead of drifting into redesign.
 - Treat Effective Go as useful core-language guidance with its official caveat: it was written for Go's 2009 release and is not actively updated. Prefer current release notes, pkg.go.dev docs, the Go spec, Go Code Review Comments, and official Go blog posts for version-sensitive claims.
@@ -55,7 +55,6 @@ If symptoms overlap, load the file whose thesis matches the concrete risk. Examp
 - Nil and zero values: prefer useful or harmless zero values when practical. Make typed-nil, nil map writes, nil channel blocking, and nil-vs-empty public contracts explicit.
 - Ownership: treat slices, maps, `[]byte`, buffers, headers, and URL values as aliasing surfaces. Clone or copy at boundaries when callers must not mutate internal state.
 - Standard library first: prefer current builtins and stdlib helpers over local reinvention when the helper adds no compatibility, ownership, normalization, or domain contract.
-- Mature dependency check: for new dependencies or custom substitutes, verify that the approved artifact chain selected the approach from current stdlib, repo-pattern, OSS, and custom-code evidence; hand off to design/planning when that decision is missing.
 - Pattern Go-fit check: for selected design/system patterns, verify the code expresses the approved guarantee without unidiomatic inheritance-style layers, over-broad interfaces, hidden goroutine lifetimes, or generic manager/factory scaffolding that Go callers must mentally unwind.
 - Code-level pattern fit check: approve small Go-native patterns only when they simplify local code, such as table-driven tests, guard clauses, first-class function strategy, narrow consumer-owned interfaces, map-driven dispatch, or same-package policy seams; flag class-oriented pattern scaffolding when direct stdlib or repo-native Go is shorter and clearer.
 - Exported surface: keep exported API small, documented, compatible, and consumer-oriented. Prefer concrete return types unless an interface represents a real behavior boundary.

@@ -18,7 +18,7 @@ Return only:
 ```text
 Goal: <one durable outcome>
 Completion: <one observable successful condition>
-Read first: <tasks.md and minimal extra context>
+Read first: <accepted inline outcome or ready tasks.md, plus minimal extra context>
 Constraints: <task-specific boundaries only>
 Proof: <required evidence or ledger section>
 Stop/reopen: <exact blocker behavior and owner>

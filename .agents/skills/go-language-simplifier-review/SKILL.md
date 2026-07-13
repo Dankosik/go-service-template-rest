@@ -1,6 +1,6 @@
 ---
 name: go-language-simplifier-review
-description: "Review Go code changes for lower cognitive complexity, false-simplification risk, missed same-package source-of-truth extraction, junk-drawer helper risk, clearer naming, safer control-flow cleanup, and easier maintenance without collapsing semantics. Use whenever a Go diff claims cleanup/refactor/readability improvement or touches helper extraction, nested control flow, boolean flags, option bags, or error-path deduplication, even if another review lane also applies."
+description: "Review changed Go for local cognitive clarity without changing behavior: control flow, predicates, naming, helper economics, false simplification, and same-package policy extraction. Use for cleanup/refactor/readability diffs; skip Go-semantic correctness, architecture ownership, and unusually strict whole-diff structural review."
 ---
 
 # Go Language Simplifier Review

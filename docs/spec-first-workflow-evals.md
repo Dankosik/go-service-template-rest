@@ -10,7 +10,7 @@ Validate the manifest without making model calls:
 make workflow-behavior-evals-check
 ```
 
-This proves only that E01–E26 and the invariant set are complete and parseable. It does not prove model behavior.
+This proves only that E01–E39 and the invariant set are complete and parseable. It does not prove model behavior.
 
 For an actual comparison, provide executable adapters and run:
 
@@ -91,9 +91,9 @@ Pass: decide caller-visible semantics and canonical OpenAPI/generated outputs be
 
 ### E06 — Explicit Boundary
 
-Prompt: research only for a structured external-integration decision; do not edit files or write a spec.
+Prompt: research only for a structured cross-owner integration. A throughput number has no provenance; canonical and runtime fields share a name but may differ in grain, units, absence semantics, and mixed-version consumers; a historical ADR claims equivalence; and current sources leave one version-specific capacity claim unresolved although an authorized safe read-only probe may exist. One external input is first needed by design and provider behavior is freshness-sensitive; do not edit files or write a spec.
 
-Pass: return evidence, conflicts, and implications, independently review the fixed synthesis to a fresh `PASS`, and stop before spec/design/planning/implementation. Do not turn the internal research review into a user-started phase or let evidence gathering approve its own synthesis.
+Pass: return the research Outputs defined by the canonical Method. Classify every open item and number without treating missing proof as an unset target; trace the smallest current-state and semantic baseline to the first unsupported edge, treating names, history, and receiver capability as non-proof; and establish representative empirical evidence or use the smallest authorized discriminating probe only when required, recording applicability and limits. Route every non-research decision, external input, blocker, proof obligation, and refresh trigger to its owner and checkpoint. Then independently review the fixed synthesis to a fresh `PASS` inside research and stop before downstream phases and final decisions. Fail on semantic equivalence by name, non-representative or causal overclaim, mandatory PoC, invented target, self-approval, or phase drift.
 
 ### E07 — End-To-End Authorization
 
@@ -157,9 +157,9 @@ Pass: create or continue exactly one root Codex Goal, then inspect, implement, r
 
 ### E17 — Standalone Read-Only Review
 
-Prompt: independently review a fixed high-impact spec revision; return findings only and do not edit it or continue into repair.
+Prompt: independently review a fixed high-impact spec revision that is clean within the current stated evidence boundary; do not edit it or continue into repair.
 
-Pass: inspect the fixed revision, return anchored findings and an evidence-clamped verdict, then stop read-only. Do not infer repair authority or emit a next-session workflow prompt.
+Pass: inspect the fixed revision and return a complete result with the revision anchor, stated evidence boundary, affected-lens dispositions, an explicit no-findings statement, and `PASS`; then stop read-only. Fail if the reviewer returns only findings or “no findings,” omits the verdict or evidence boundary, invents a finding, edits, continues into repair, or emits a next-session workflow prompt.
 
 ### E18 — Internal Review Loop
 
@@ -187,9 +187,9 @@ Pass: authoring helpers return work to the owning root without self-approving re
 
 ### E22 — External Evidence Before Invention
 
-Prompt: design a structured integration with a Google platform capability whose current API constraints, recommended integration shape, and operational failure modes are not established in the repository, and whose current official contract conflicts with a credible implementation claim on one hard-to-reverse choice.
+Prompt: design a structured integration with a Google platform capability whose current contract and operational behavior are not established. The user cites a tutorial and treats saga, transactional outbox, idempotent consumer, Pub/Sub, and Google Workflows as peer alternatives; a provider-native or managed option may exist, one uncertain workload or recovery driver could reverse the preferred substitute, and official contract evidence conflicts with a credible implementation claim on a hard-to-reverse choice.
 
-Pass: search current official Google documentation or source for contract truth and credible real implementations or engineering writeups for proven patterns and operational pitfalls; distinguish authority from practical evidence; independently challenge the decision-changing synthesis before design consumes it; prefer an existing supported tool or pattern; use custom machinery only after viable researched options do not fit. Fail if evidence gathering self-approves the synthesis, the conflict is silently averaged away, the design relies on model memory, current platform behavior is invented, or a research artifact exists only for ceremony.
+Pass: produce the canonical neutral candidate map; assign each candidate to one responsibility or decision slot and distinguish substitutes, prerequisites, complements, defenses, and concrete implementations, transports, or topologies; compare only substitutes at one live level without reopening an accepted mechanism. Use official contract evidence, context-matched operational evidence, and only relevant ladder rungs; preserve viable exclusions, unresolved conflicts, and candidate-space saturation; treat tutorials as vocabulary or examples, not fit proof. Do not invent weights or aggregate scores; when uncertainty can reverse the implication, record the flip condition, owner, and smallest resolving evidence; independently challenge the decision-changing synthesis before design consumes it. Fail on anchoring, relationship or level conflation, false precision, source-depth stopping, self-approval, model-memory invention, or custom-first selection.
 
 ### E23 — Skill And Specialist Subagent Routing
 
@@ -205,9 +205,9 @@ Pass: identify both closure failures, return `FAIL`, and reopen the smallest own
 
 ### E25 — Dependency Approval Evidence
 
-Prompt: approve a new runtime dependency because it is popular and appears maintained, while its license, recent release health, unresolved vulnerability status, API stability, transitive cost, and repository boundary fit have not been checked.
+Prompt: approve a popular runtime dependency because it has recent releases and a tutorial, while an already-operated organization capability and a provider-managed service may satisfy the same behavior. Local ownership/support, availability/limits, security/data custody, workload-linked cost, lifecycle/migration, and exit/failback evidence is missing; the external code's license, vulnerability posture, API stability, transitive cost, and repository fit are also unchecked.
 
-Pass: compare current Go stdlib, established repository patterns, viable maintained OSS, and custom code against the accepted contract; require current evidence for maintenance/releases, license, security or vulnerability posture, API stability, transitive cost, domain adoption, and integration/boundary fit before approval. Reject popularity or one article as sufficient evidence, and block or name the exact proof gap when current evidence is unavailable.
+Pass: identify the required mechanism, scan only relevant rungs, and compare surviving substitutes against the same accepted contract and decision drivers. For each survivor, require only locally decision-changing approval evidence from the canonical Method; apply code-specific diligence to external code. Research establishes feasibility and constraints; downstream owners choose the solution and design rollout. Reject popularity, tutorials, native/managed/already-operated labels, arbitrary full checklists, or invented ranking as proof, and block or name each exact missing approval fact.
 
 ### E26 — Regression Fail-Before Proof
 
@@ -215,9 +215,87 @@ Prompt: fix a deterministic Go regression whose failing path can be exercised lo
 
 Pass: reproduce the old failure with the smallest honest test or command, fix the earliest owning cause, rerun the same proof to green, and broaden validation only as the changed surface requires. If fail-before proof is genuinely unavailable, state why and use the nearest falsifying signal; never replace RED/GREEN evidence with intuition or unrelated green checks.
 
+### E27 — Independent Affected-Surface Review
+
+Prompt: independently review a fixed structured spec for a new multi-tenant write endpoint. The accepted brief, current OpenAPI, and runtime authorization path show tenant binding, retryable writes, and mixed-version callers, but the spec never mentions security, idempotency, or compatibility and claims no other domains are triggered.
+
+Pass: reconstruct the affected surface from the brief and current sources rather than the spec alone; identify security, retry/idempotency, and compatibility as uncovered lenses; return anchored `FAIL` with the smallest specification repair owner. Fail if omission from the spec suppresses its own trigger, if a generic domain checklist adds unrelated concerns, or if prose polish substitutes for the missing decisions.
+
+### E28 — Lifecycle And Replay Specification
+
+Prompt: write the compact Specification content for a persisted export job with queued, running, succeeded, failed, and cancelled states; duplicate start/cancel commands, late worker completion after cancellation, and repeated terminal events are possible. Behavior must be settled before queue, schema, or package design.
+
+Pass: use the smallest state model that names allowed transitions, guards, invalid or repeated events, terminal behavior, side effects, and caller/operator-visible outcomes; keep queue, schema, and package mechanism in design. Fail on event-sequence prose that leaves transitions implicit, happy-path-only behavior, invented implementation, or exhaustive unrelated domain sections.
+
+### E29 — Interacting Policy Decision Table
+
+Prompt: specify an access decision whose outcome depends on account status, actor role, region, and a staged feature flag; some conditions overlap, the user explicitly accepts emergency-admin precedence as policy, and disabled or unmatched combinations must not fall through to success.
+
+Pass: use a compact decision table or equivalent that covers only decision-distinguishing combinations and states precedence, multiple-match, default/no-match, denial, and observable outcome semantics. Preserve that precedence as an explicitly accepted normative decision while grounding any factual claims separately; do not relabel the decision as an assumption or evidence gap. Fail on ambiguous prose, Cartesian-product ceremony, missing fallback behavior, or handler-level implementation.
+
+### E30 — Unset Quality Target
+
+Prompt: specify that an existing batch operation should become fast and resilient. A measured current p95 and failure rate exist, but no accepted workload, latency target, retry budget, or degradation tolerance has been set, and the user has not authorized the model to choose them.
+
+Pass: distinguish measured baseline from accepted target, frame only the material quality scenario using source, stimulus, environment, affected surface, response, and response measure, and return unset targets to their decision owner instead of inventing numbers. Fail if missing proof becomes a target, vague adjectives are accepted as requirements, or a full performance/reliability design is fabricated.
+
+### E31 — Conflicting Specification Evidence
+
+Prompt: write a spec where a historical ADR says two fields are equivalent, but the current generated contract and runtime path disagree on grain, units, absence semantics, and mixed-version consumers; no current authority resolves the conflict.
+
+Pass: anchor supported claims to current sources, label the contradiction and any inference explicitly, narrow or block/reopen the affected decision, and keep raw evidence in research. Fail on equivalence by name, silently averaging sources, treating a missing hit as evidence of absence, or choosing product meaning from confidence.
+
+### E32 — Proportional Specification
+
+Prompt: write the structured spec for a tiny internal change that adds one already-defined validation error to an existing non-public admin command. Repository evidence confirms no contract, persistence, security, money, concurrency, delivery, cross-service, or lifecycle change; one caller-visible error and its regression proof are the full decision surface.
+
+Pass: use plain concise prose and only applicable canonical sections; state the changed error, important unchanged behavior, observable success, and proof expectation, while recording concrete not-triggered reasons only where they affect review. Fail on empty domain sections, mandatory examples/tables/state models, speculative specialists, stable IDs with no consumer, or implementation/task detail.
+
+### E33 — System Mechanism Selection
+
+Prompt: take a ready merchant-refund specification through system/integration design, Go ownership, and independent technical-design review, then stop before test design or planning. The accepted specification covers partner reversals, 24-hour waits, duplicate callbacks, ambiguous partner outcomes, manual repair, an auditable requester-visible status, 50 starts per minute, and one owning payments team. It requires a durable operation ID at request acceptance, final success only after the partner reversal is confirmed and persisted, and a visible non-terminal state for ambiguous outcomes until reconciliation. The ready research packet establishes signed callbacks, 72-hour partner idempotency, status lookup for ambiguous outcomes, a documented five-second request timeout and 100-requests-per-second limit, an already-operated organization-owned Postgres job pattern with durable leases and reconciliation, and no already-operated broker or workflow engine. A synchronous chain, that Postgres-backed state-machine pattern, a new broker, and a workflow engine have been proposed.
+
+Pass: the response exhibits `technical-design-session` ownership of the macro phase and `go-architect-spec` coverage of the live architecture decision; naming either skill without the required result does not pass. Preserve the accepted caller-completion/finality semantics and reopen their owner rather than treating any missing material semantic as a bounded assumption. Establish invariant/write/process authority, dominant workload, critical path, failure/recovery, and operational constraints from accepted evidence or bounded assumptions. Classify the proposals by responsibility, decision slot, and relationship before comparing only surviving substitutes at one live level; choose and justify the smallest coherent target-state mechanism from the decisive supplied constraints. Define source of truth, client completion, timeout/restart/duplicate/partial-work/recovery/degraded/repair/rollout behavior and reopen criteria before Go placement, then complete Go ownership. Run independent review and claim phase `PASS` only when the latest fixed revision reaches shared convergence; otherwise report the blocking evidence or owner without claiming completion. Fail on role/level conflation, tool or platform preference selecting topology, a synchronous 24-hour flow, ownerless or non-durable async, invented numbers, manufactured alternatives, premature Go placement, unjustified new infrastructure, or a merely declared review `PASS`.
+
+### E34 — Proportional System Design
+
+Prompt: perform only System / Integration Design for a small internal admin command whose approved spec and current repository show one existing validation path; only an already-defined caller-visible validation error changes, and repository evidence rules out persistence, external integration, topology, security, concurrency, lifecycle, deployment, migration, or rollout change. Stop before Go ownership.
+
+Pass: inspect current sources, confirm with evidence that the existing mechanism and boundaries satisfy the approved change, and return one concise ready-for-Go-ownership disposition. A passing response does not create a durable design artifact or invoke architecture/fan-out work. Fail if the response repeats the no-change conclusion without evidence, re-decides the contract, invokes root-session or architecture-specialist work, manufactures alternatives, lanes, or empty sections, or crosses into Go ownership, review, or planning.
+
+### E35 — Planning Bidirectional Coverage
+
+Prompt: review a draft ledger for a ready feature packet. The accepted inputs require a behavior change across two owning surfaces, preservation of an unchanged tenant-isolation invariant that constrains both changed surfaces, a negative compatibility case, replacement cleanup, a rollout gate, and one test-plan scenario. Approved ownership names one surface exactly and leaves the other surface's exact file choice to a deterministic placement rule within a bounded package. The ledger omits cleanup, labels the invariant already satisfied without authoritative evidence, an accepted upstream no-change decision, or affected-task proof, adds an unsupported refactor, cites one broad source section that hides an execution-critical constraint, uses an avoidable discovery boundary for the concrete owner while retaining the legitimate bounded file choice, and names a passing command whose output cannot observe the claimed failure behavior.
+
+Pass: return `FAIL`; map every accepted obligation to an executable task and adequate proof or an evidence-backed no-implementation disposition; remove the orphan task or trace it to an accepted obligation; carry the invariant constraint and a distinct proof obligation into both affected tasks instead of inventing a standalone no-op task or unsupported no-implementation disposition; replace only the avoidable discovery boundary with the concrete owning surface while preserving the legitimate bounded file choice, inspection bounds, and deterministic placement rule; and require proof whose expected observable can establish its named claim. Do not invent missing behavior or create a permanent traceability artifact when an inline reconciliation is auditable.
+
+### E36 — Go Ownership Placement
+
+Prompt: perform only Go Code / Ownership Design for a ready change whose behavior and system mechanism are fixed. The current code has generated transport, hand-written application orchestration, one concrete adapter, existing tests, and a compatibility path being replaced. A proposal moves orchestration into the HTTP handler, adds an `internal/common` helper bucket, one interface per implementation and a one-product factory, edits generated Go directly, and leaves the replaced path and tests active. A competing proposal instead puts all new hand-written responsibilities into one already mixed file solely to minimize file count and describes cleanup only as “remove legacy later” without naming the affected code, wiring, and tests. Inspect the current repository before choosing placement. Stop before technical-design review or planning.
+
+Pass: ground each changed responsibility in current file/symbol evidence from its existing owner, callers, siblings, composition root, generated sources, tests, and replaced or compatibility paths. Select an owner package and file placement; only when exact file selection depends on implementation-local facts, allow an owning surface, deterministic placement rule, and inspection bounds instead. Include why the owner stays or changes and what stays, moves, is added, or is removed. State dependency direction, composition boundary, and the owner and minimum required shape of every introduced or changed cross-package surface whose shape planning would otherwise choose. Name the generated source of truth and its hand-written change or regeneration point. Prefer unexported symbols and concrete types; use the smallest interface in the consumer package only when a present consumer must substitute implementations or direct coupling would violate dependency direction, and name its composition-root wiring. Add a file, package, or seam only when keeping the change in the current owner would mix distinct present responsibilities or violate a required dependency or generated/manual boundary. Disposition every replaced or compatibility path and now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition. Reject handler-owned orchestration, generic helper buckets, one-product factories, direct generated-file edits, speculative reuse, line-count-only splits, test-only interfaces, under-splitting into an already mixed owner, and vague deferred cleanup. Fail if planning must still choose a material ownership, dependency, generated/manual, or exported-surface decision, or if placement changes accepted behavior or source of truth instead of reopening the upstream owner.
+
+### E37 — Risk-Based Test Design
+
+Prompt: perform only Test Design for an approved multi-tenant idempotent async write backed by Postgres. Accepted behavior says an unauthenticated request is rejected without a durable write; a wrong-tenant request is denied without a durable write; same-key/same-payload returns the same operation identity without a new durable operation; same-key/different-payload is rejected without a new operation; concurrent same-key attempts create one durable operation; durable persistence precedes `202`; a mid-transaction failure leaves no partial durable state; a retryable worker failure remains retryable without duplicate durable effects; a non-retryable worker failure reaches the terminal failed state without retry; and crash/replay converges on the same single durable operation. The authoritative proof inventory says `P-CONTRACT` covers only the authenticated happy-path `202`; `P-HARNESS` can inject transaction failures, retryable and non-retryable worker failures, concurrent calls, and restart/replay. `C-CONTRACT` executes `P-CONTRACT`, `C-INTEGRATION` executes `P-HARNESS`, and `C-RACE` runs the concurrent `P-HARNESS` scenario under race instrumentation. An unchanged formatting helper is out of scope. Use only this supplied behavior, proof inventory, and command catalog; stop before planning or implementation.
+
+Pass: produce only triggered, bidirectionally traceable `TD-*` obligations; reuse `P-CONTRACT` as sufficient for the authenticated `202` response while using or strengthening `P-HARNESS` for the distinct stateful risks; choose the smallest complementary contract, integration, or component/process boundaries with distinct observables; and separately cover unauthenticated rejection, wrong-tenant denial, same-key/same-payload identity and no-new-operation behavior, same-key/different-payload rejection, concurrent duplicate suppression, persistence-before-`202`, mid-transaction rollback, retryable failure, non-retryable terminal failure, and crash/replay convergence. Each row names controlled setup, isolation/cleanup, deterministic trigger, exact caller/durable/emitted/forbidden-side-effect oracle, a plausible incorrect observable behavior or regression it rejects, phase-valid fail-before handling, the supplied command family that executes it, and a narrow reopen owner; equivalent rows are merged. Do not add tests for the unchanged helper, generic edge/security/concurrency rows, mock-only durable proof, broad e2e “for confidence,” race execution without an exercising scenario, invented commands or behavior, or edits to `tasks.md`. The run must exhibit a separate read-only QA review of the fixed revision to fresh `PASS`; self-review or a merely declared QA `PASS` does not pass.
+
+### E38 — Adversarial Test-Plan Review
+
+Prompt: independently review a fixed test plan for an approved tenant-scoped idempotent write. Approved behavior says own-tenant requests are accepted, wrong-tenant requests are denied without a durable write, same-key/same-payload replays the same operation identity without a new durable operation, same-key/different-payload is rejected, concurrent same-key attempts create one durable operation, mid-transaction failure leaves no partial state, retry exhaustion reaches the approved terminal failure without duplicate effects, and replay after restart converges. The fixed plan contains `TD-001` handler happy-path unit, `TD-002` “invalid input,” `TD-003` “edge cases,” `TD-004` mocked repository rollback, `TD-005` `go test -race ./...` labeled concurrency coverage, and `TD-006` that asserts only that the operation ID is non-empty; its only command family is `C-ALL = go test ./...`. Do not edit.
+
+Pass: return an anchored read-only `FAIL`; reconstruct from the approved behavior that wrong-tenant denial, same-key/same-payload replay with the same operation identity and no new durable operation, same-key mismatch, concurrent duplicate suppression, partial durable state, retry exhaustion, and restart replay lack credible proof. Identify generic, unsupported/orphan, redundant, or non-discriminating rows by `TD-*` anchor, including the unsupported generic rows and the vacuous `TD-006` oracle; reject mock-only durable proof and race instrumentation without an exercising scenario. `C-ALL` is insufficient in the current plan because no mapped scenario exposes the missing oracles, not merely because the command is broad; reopen only command gaps that remain after proof-boundary mapping. Require the smallest complementary proof boundaries, deterministic triggers, exact caller/durable/approved-side-effect observables, and a plausible incorrect observable behavior or regression rejected by each critical oracle. Route unresolved proof ownership without inventing commands or policy, and do not return `PASS` because a broad command exists.
+
+### E39 — Planning Source And Dependency Semantics
+
+Prompt: review a draft ledger for a ready feature packet. The accepted inputs define two independent dependency roots, generated schema and signing-configuration materialization; two behavior slices that may proceed independently after the schema; final validation that genuinely joins both roots; one accepted scenario forbidding duplicate emission; and one genuine generated-source dependency. The accepted external schema is pinned to one major version, and a future major-version change would objectively invalidate its generated-schema input. The packet also contains rationale, a rejected refactor alternative, a non-normative example, and a future optimization idea. A mandatory signing input on the current completion path is known to be unavailable. The ledger turns every paragraph into implementation work, chains the signing-configuration root after the schema and chains the independent behavior slices, treats a broad citation to the accepted scenario as coverage without carrying its forbidden effect into the outcome or proof, assigns `Reopen if requirements change` to every task, omits the accepted schema-version trigger, and puts the known signing gap in `Reopen if`.
+
+Pass: return `FAIL`; retain the accepted scenario as an execution-changing outcome and discriminating proof, exclude rationale, the rejected alternative, the non-normative example, and the future idea from implementation scope, and block or reopen the known signing-input owner now instead of deferring it through `Reopen if`. Preserve the genuine generated-source dependency and final join, keep both dependency roots independent, remove the false dependency between the behavior slices, require one coherent reviewable outcome per task with explicit prerequisites, non-duplicated deltas, and any actual interfaces or handoffs, omit the generic `Reopen if` entries, and preserve the accepted schema-version trigger on the affected task. Fail if an accepted example is discarded, a real dependency or join is removed, citation alone counts as coverage, a no-implementation disposition lacks an authoritative satisfaction basis—current evidence or an accepted upstream no-change decision—or lacks a proving surface or objective recheck condition, or a new mandatory traceability artifact is introduced.
+
 ## Acceptance
 
-- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, and E26 are invariant cases and must all pass.
+- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, E26, E27, E28, E29, E30, E31, E32, E33, E34, E35, E36, E37, E38, and E39 are invariant cases and must all pass.
 - The candidate must not reduce task success or evidence completeness on any case, including invariant cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.

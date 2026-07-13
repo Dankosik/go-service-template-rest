@@ -69,7 +69,7 @@ help:
 	@echo "  make agents-check            # Codex/Claude agent mirror drift check"
 	@echo "  make skills-check            # skill mirror drift check"
 	@echo "  make workflow-routing-check  # workflow instruction structure, links, vocabulary, and invariant guards"
-	@echo "  make workflow-behavior-evals-check # validate the E01-E26 eval manifest (no model calls)"
+	@echo "  make workflow-behavior-evals-check # validate the E01-E39 eval manifest (no model calls)"
 	@echo "  make workflow-behavior-evals # compare a selected baseline and worktree through external model adapters"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"

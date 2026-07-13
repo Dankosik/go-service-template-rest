@@ -9,6 +9,8 @@ Use for one explicit task path or the current directory when the active task is 
 
 Read in this order: current `tasks.md` for implementation/validation; otherwise `workflow-plan.md`; then only the spec/design/test/research/rollout artifacts named by the next action.
 
+Before reporting `ready`, `done`, or `Implementation may start: yes`, inspect the current workspace and relevant Git diff/status for drift from the owning artifact. Treat unreviewed implementation changes, stale generated or mirrored outputs, and missing fresh proof as evidence gaps rather than inheriting an artifact's older status.
+
 Return:
 
 ```text

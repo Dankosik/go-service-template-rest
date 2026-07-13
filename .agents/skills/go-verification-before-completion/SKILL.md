@@ -5,105 +5,47 @@ description: "Verify correctness or readiness claims with fresh command evidence
 
 # Go Verification Before Completion
 
-## Purpose
-Prevent false-positive completion claims by requiring fresh verification evidence that matches the scope of the claim.
+## Outcome
 
-## Scope
-- verify statements such as "fixed", "tests pass", "lint clean", "build succeeds", or "ready for handoff"
-- map each claim to the smallest command set that honestly proves it
-- run commands, inspect results, and report factual outcomes
-- block optimistic completion language when proof is missing or weaker than the claim
+Bind every positive completion or readiness claim to fresh evidence from the current workspace, and narrow the conclusion when proof is missing, skipped, stale, cached unexpectedly, or out of scope.
+
+## Method
+
+1. State the exact claim and its scope.
+2. Inspect the current workspace and the repository-owned proof commands.
+3. Choose the smallest command set that directly proves the claim.
+4. Run it now, inspect exit status plus key pass/fail/skip signals, and record the result.
+5. Report `verified`, `partially verified`, or `not verified` without extrapolating beyond the evidence.
+
+## Proof Rules
+
+- A targeted fix replays the original failing signal or narrowest honest reproducer.
+- Package, repository, race, lint, build, generated, migration, and readiness claims use the command owned by that surface.
+- Replacement or cleanup claims add targeted negative proof for the exact retired identifiers, paths, routes, configs, commands, generated artifacts, fixtures, docs, skills, agents, or mirrors.
+- Generated or mirrored changes require source-of-truth plus drift/sync proof; a hand-edited derived file is not evidence.
+- Delegated reports, old CI logs, artifact status, and prior-session output are leads, not current proof.
+- A skipped or cached action supports a positive claim only when its semantics genuinely prove the claim.
+- Focused proof supports only a focused conclusion; broad readiness requires all checks triggered by the changed surfaces.
+
+## Reference Selector
+
+Load at most one reference by default; use more only for independent proof pressures.
+
+| Symptom | Load | Decision it sharpens |
+| --- | --- | --- |
+| “Fixed”, “green”, “ready”, test, lint, build, race, package, or repo claim is ambiguous. | [claim-to-proof-mapping.md](references/claim-to-proof-mapping.md) | Select the narrowest sufficient proof without overclaiming. |
+| OpenAPI, generated API, sqlc, query, or migration changed. | [generated-api-and-migration-verification.md](references/generated-api-and-migration-verification.md) | Add authoritative drift or migration proof. |
+| An agent, tool, CI snippet, or prior session says work is done. | [delegated-work-verification.md](references/delegated-work-verification.md) | Rebind the claim to current workspace evidence. |
+| Proof failed, skipped, is absent, or is weaker than the claim. | [failure-and-gap-reporting.md](references/failure-and-gap-reporting.md) | Report the gap and next proving action without optimistic wording. |
 
 ## Boundaries
-Do not:
-- turn this into root-cause investigation or broad debugging
-- treat design or code review findings as verified just because an agent reported them
-- force full-repository verification for every narrow claim when smaller proof is sufficient
-- soften missing or failing proof with optimistic wording
-- create or repair workflow, research, specification, design, planning, or temp artifacts to compensate for missing proof inputs
 
-## Specialist Stance
-- Evidence first, wording second.
-- Fresh run required for every positive claim in current scope.
-- Use the smallest sufficient command set, but never weaker than the claim.
-- If verification fails or was not run, say so explicitly.
-- Consume existing task artifacts and fresh command output when they exist; do not author new process artifacts from this skill.
-- If proof depends on missing expected context, report the proof gap and the smallest unblock action instead of inventing replacement context.
-- If command output shows cached or skipped work, keep the conclusion narrower than an executed green run unless the cache or skip semantics are sufficient for the claim.
+Do not debug or repair the failure, author process artifacts, force unrelated repository-wide checks for a narrow claim, or treat review findings as verified implementation evidence. If the proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report that as the proof gap.
 
-## Lazy References
-References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default. Load more only when the claim clearly spans independent decision pressures, such as delegated work plus generated API drift plus a failed proof command.
+## Output
 
-Before loading, name the behavior-change thesis you need: "When loaded for symptom X, this file makes me choose Y instead of likely mistake Z." If no reference has a concrete thesis for the symptom, stay in `SKILL.md` and inspect live repo files such as `Makefile` or `docs/build-test-and-development-commands.md` as needed.
+Return a compact note: claim and scope; commands actually run; observed pass/fail/skip signal; proportional conclusion; next action when not fully verified.
 
-| Reference | Symptom | Behavior change |
-|---|---|---|
-| `references/claim-to-proof-mapping.md` | ambiguous "fixed", "green", "ready", test, lint, build, race, package, or repo claim | choose the narrowest sufficient proof for the exact claim instead of either over-running unrelated checks or generalizing a focused pass to repo readiness |
-| `references/generated-api-and-migration-verification.md` | OpenAPI, generated API, sqlc, query, or migration surface changed | add drift or migration rehearsal proof instead of treating compile/tests as enough or accepting skipped migration output as validation |
-| `references/delegated-work-verification.md` | another agent, tool, CI snippet, or prior session says work is done | rebind the delegated claim to current workspace evidence instead of treating a report or stale log as proof |
-| `references/failure-and-gap-reporting.md` | proof failed, skipped, was missing, was cached unexpectedly, or is weaker than the requested claim | report "not verified" or "partially verified" with the blocking signal and next verification action instead of writing a positive closeout |
+## Success And Stop
 
-## Expertise
-
-### Verification Gate Function
-Before any success or readiness claim:
-1. identify the exact claim
-2. bind it to explicit scope
-3. choose commands that directly prove that scope
-4. run them now
-5. inspect exit status and key pass/fail signals
-6. report evidence or report the gap
-
-### Claim-To-Proof Mapping
-Use these defaults unless the claim scope requires something stricter:
-- targeted fix: rerun the exact failing command or the narrowest reproducer that covers the fixed path
-- scoped package behavior: run the relevant `go test` package pattern, with `-run` and `-count=1` when a specific test or uncached execution matters
-- repository test claim: run the repository test target or an explicit repository-wide `go test` pattern
-- race-safety claim: run race-detector coverage for the changed concurrent path
-- lint, build, generated API, and migration claims: run the repository target that owns that proof
-- replacement or cleanup claims: require targeted negative proof for retired identifiers, routes, configs, commands, generated artifacts, fixtures, docs, skills, agents, or mirrors where search/read proof is reliable, and retained-surface proof with owner/reason/continued-need/exit-condition when old artifacts remain
-- negative proof must name the retired identifiers, paths, commands, config keys, generated files, fixtures, docs, skills, agents, or mirrors searched; a generic `rg legacy` is not sufficient unless the retired surface is literally named `legacy`
-- readiness claim: combine the checks required by the changed surface; never use one green check as proof for unrelated surfaces
-
-### Freshness And Scope
-- "Fresh" means executed in the current iteration against the current workspace state.
-- Focused verification is valid only for a focused claim.
-- Broad claims require broad proof.
-- Generated or mirrored cleanup claims require source-of-truth proof plus drift/sync checks; a hand-edited derived artifact is not sufficient proof.
-- Do not extrapolate from targeted checks to repository-wide success.
-
-### Delegation And Trust
-- An agent or subagent report is not proof by itself.
-- Validate delegated work against current workspace state and fresh command output before claiming success.
-
-### Failure And Gap Reporting
-When proof fails or is missing:
-- state the failing or missing command explicitly
-- include the key error signal or missing proof gap
-- avoid success language
-- give the next concrete verification action
-
-## Verification Quality Bar
-A correct verification report:
-- states the claim explicitly
-- binds it to the right scope
-- lists commands actually executed
-- reports pass/fail honestly
-- keeps conclusion wording proportional to proof strength
-
-## Deliverable Shape
-Return a compact verification note with:
-- claim and scope
-- commands actually executed
-- observed pass/fail signal
-- conclusion proportional to the evidence
-- next action when not verified
-
-The conclusion may be positive only when the evidence supports it. Otherwise state `not verified`.
-
-## Escalate When
-Escalate if:
-- the required proving command is unclear
-- the claim scope is broader than the available evidence
-- delegated work has not been checked against current state
-- failing commands block the claim and need remediation before any completion language
+Success means each positive statement has fresh evidence of equal scope. Otherwise stop with `partially verified` or `not verified`, the blocking signal, and the smallest next verification action.

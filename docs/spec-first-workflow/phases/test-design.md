@@ -1,6 +1,6 @@
 # Test Design
 
-Turn risky behavior into explicit proof obligations before implementation. Keep obvious tests in `tasks.md`; create `test-plan.md` only when a scenario matrix adds value.
+Turn risky behavior into explicit proof obligations before implementation. Keep obvious proof as an inline handoff for Planning; create `test-plan.md` only when a scenario matrix adds value. Test Design does not edit `tasks.md`.
 
 ## Read When
 
@@ -17,21 +17,27 @@ Turn risky behavior into explicit proof obligations before implementation. Keep 
 
 ## Outputs
 
-Either compact proof rows in `tasks.md` or `test-plan.md` with:
+Before writing scenarios, disposition every material acceptance claim, invariant, state transition, failure mode, and protected side effect affected by the change as existing sufficient proof, existing proof to strengthen, one or more `TD-*` scenarios, a named non-test proof that can falsify the claim, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition. Omission is not disposition. Derive this proof surface from approved behavior and affected contract, runtime, state, trust, and lifecycle boundaries, not from existing test names or implementation branches.
+
+When a durable matrix is unnecessary, return a compact inline proof handoff for Planning. Otherwise create `test-plan.md` with the canonical row shape:
 
 ```text
-ID | source decision/risk | level | setup/action | expected observable | fail-before signal or reason unavailable | proof command | residual gap/reopen owner
+TD-ID | source claim/risk | scenario class | current proof/gap | proof boundary/type | controlled setup/action/failure trigger | oracle: result plus relevant state/emissions/forbidden side effects | fail-before/regression discriminator or phase-allowed reason unavailable | proof command/family | residual gap/reopen owner
 ```
 
-Choose the smallest convincing level: unit, integration, contract, or e2e smoke. Include happy path, material failure/edge/negative paths, and protected-domain branches that could regress. Broad scenario labels are not enough when they hide several state transitions or side effects.
+Choose the smallest set of complementary proof boundaries that jointly proves the claim: unit, integration, contract, component/process, e2e smoke, or a repository-specific proof type. Each level owns a distinct observable; broader proof does not merely duplicate narrower proof. Include happy path, material failure/edge/negative paths, and protected-domain branches only when triggered by the accepted change.
 
-Missing test code or fixtures are a valid fail-before signal only when their expected contents are mechanically derivable from approved sources. If setup requires choosing fields, values, ordering, encoding, trust material, or security policy, reopen design instead.
+Each scenario must distinguish a material behavior or failure mechanism and name a plausible incorrect observable behavior or regression that its oracle would reject. Reuse or strengthen existing proof before proposing a new test, but call it sufficient only after inspecting its setup, exercised path, oracle/assertions, isolation, and runnable command; its name, prior green status, or coverage hit is not proof. Merge rows with the same risk, trigger, oracle, and reopen path. Broad scenario labels and coverage alone are not proof. A proof command is adequate only when it executes the relevant path and its result can establish the named oracle; successful execution alone is insufficient.
+
+Missing test code or fixtures establish a proof gap, not behavioral fail-before evidence. Define their required contents only when they are mechanically derivable from approved sources. If setup requires choosing fields, values, ordering, encoding, trust material, or security policy, reopen design instead.
+
+When fail-before evidence adds no useful discrimination or is honestly unavailable, record why and name the nearest existing falsifying signal. This never waives proof required by the accepted current implementation completion.
 
 An honestly unavailable target, budget, fixture, command, environment, or other proof input may remain only for a task and claim already outside the accepted current implementation completion. If a mandatory completion path needs it, test design returns `FAIL` and reopens the accepted-outcome owner; only that owner may narrow or split the outcome before the excluded task and claim are routed to a later ledger.
 
 ## Review
 
-When structured or orchestrated work triggers test design, run an independent QA review before planning. Direct work uses one only when the user or risk requires it. The reviewer checks traceability, setup derivability, observables, determinism, fail-before expectations, command feasibility, and residual gaps; it does not write tests or change behavior.
+When structured or orchestrated work triggers test design, run an independent QA review before planning. Direct work uses one only when the user or risk requires it. The reviewer falsifies the Outputs above, including bidirectional traceability, existing-proof disposition, scenario normalization, setup derivability, oracle discrimination, command-to-oracle coupling, determinism/isolation, proof-boundary sufficiency, fail-before expectations, command feasibility, and residual gaps. It does not write tests or change behavior.
 
 The reviewer returns one verdict under the shared convergence contract:
 
@@ -39,7 +45,7 @@ The reviewer returns one verdict under the shared convergence contract:
 - `CONCERNS`: a bounded downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit planning, including when the check is honestly unavailable outside current completion;
 - `FAIL`: a missing scenario, observable, proof level, feasible command path, owner, or upstream decision prevents honest planning.
 
-When test design owns that review, findings return to the owning root for same-session repair and fresh re-review until convergence. An explicitly user-requested standalone QA review returns findings only and stops read-only.
+When test design owns that review, findings return to the owning root for same-session repair and fresh re-review until convergence. An explicitly user-requested standalone QA review returns the complete review result and stops read-only.
 
 ## Stop Rule
 

@@ -1,6 +1,6 @@
 ---
 name: go-design-review
-description: "Review Go code changes for architecture alignment, boundary integrity, source-of-truth seam integrity, accidental complexity, and maintainability drift."
+description: "Review changed Go for conformance to approved architecture: package ownership, dependency direction, source-of-truth seams, hidden design decisions, and boundary drift. Use when implementation may violate system design; skip language-level Go correctness, local readability cleanup, and structure-only harsh review as the primary lane."
 ---
 
 # Go Design Review
@@ -13,7 +13,7 @@ Protect approved design intent in code so boundaries, ownership, maintainability
 - Prioritize hidden new decisions and boundary bypasses over subjective cleanup.
 - Treat an unexplained surviving replaced or unused legacy surface as source-of-truth drift when the approved artifact chain does not retain it with owner, reason, proof, and exit condition.
 - Prefer one explicit same-package seam for stable local policy over both scattered copies and vague helper buckets.
-- Treat unapproved custom infrastructure, new runtime dependencies, and meaningful helper/abstraction choices as design drift when the approved artifact chain lacks stdlib, repository-pattern, mature-OSS, and custom-code due diligence.
+- Treat unapproved custom infrastructure, new runtime dependencies, and meaningful helper/abstraction choices as design drift when the approved artifact chain lacks the live-choice evidence required by the canonical [research method](../../../docs/spec-first-workflow/phases/research.md#method).
 - Treat invented or cargo-culted design/system patterns as design drift when no present requirement and live-alternative evidence justify them, or when implementation violates the selected pattern's real guarantee.
 - Treat code-level pattern choices as design drift only when they become ownership, dependency, or maintainability problems: useful local patterns reduce code and clarify seams; pattern-shaped mini-frameworks create accidental complexity.
 - Hand off deep API, data, security, reliability, performance, or QA issues when design review only detects the seam.
@@ -52,7 +52,6 @@ Do not:
 - Dependency direction: concrete adapter dependencies do not leak inward except through approved composition roots.
 - Source-of-truth integrity: generated, config, migration, contract, and stable local policy ownership stays singular.
 - Legacy cleanup integrity: replaced or unused code, tests, fixtures, generated artifacts, configs, docs, skills, agents, or mirrors are removed/refactored, or retained with approved owner/reason/proof/exit condition.
-- Dependency/OSS integrity: new dependencies, custom infrastructure, and material abstractions match approved due diligence, including selected and rejected stdlib, repository-pattern, OSS, and custom-code options.
 - Design-choice integrity: architecture, workflow, integration, resilience, data-flow, or abstraction shapes match the approved design, and an unsupported material choice is routed back to research, specification, or technical design.
 - Code-level pattern integrity: local patterns such as same-package seams, map dispatch, narrow interfaces, functional options, middleware, or table-driven tests reduce code, clarify ownership, or improve proof instead of turning into unapproved mini-frameworks.
 - Hidden decisions: new fallback, async, lifecycle, contract, or data-shape behavior is approved rather than smuggled through code.

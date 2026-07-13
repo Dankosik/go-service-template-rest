@@ -1,128 +1,51 @@
 ---
 name: pre-spec-challenge
-description: "Pressure-test candidate decisions before planning with discriminating questions about hidden assumptions, corner cases, ownership seams, failure semantics, and rollout risk. Use whenever research is done but the orchestrator wants an independent challenge pass before decisions harden into the spec, even if the user only says 'critique this', 'ask the hard questions', or 'make sure we did not miss edge cases.'"
+description: "Pressure-test a candidate synthesis before specification or planning with a few discriminating questions about hidden assumptions, ownership, failure semantics, and rollout risk. Use when research/framing exists and an independent challenge could change decisions; skip blank-page framing, ordinary spec review, and one isolated high-impact spec question."
 ---
 
 # Pre-Spec Challenge
 
-## Purpose
-Pressure-test candidate decisions before planning so the orchestrator learns which assumptions are still unsafe to carry forward.
+## Outcome
 
-When used from a project agent such as `challenger-agent`, let the agent own ownership, trigger rules, boundaries, and handoffs. This skill owns the challenge behavior: how to falsify assumptions, prune low-value questions, classify blocker severity, and stop once planning risk is well bounded.
+Return the smallest set of unresolved seams that could still make planning unsafe, together with severity and a concrete resolution route. The orchestrator owns decisions; this skill stays advisory and read-only.
 
-This is distinct from `spec-clarification-challenge`: use this skill in synthesis when risk or ambiguity justifies a pre-spec pressure test; use `spec-clarification-challenge` only for one concrete high-impact specification question. Independent `specification-review` owns readiness.
+Use `spec-clarification-challenge` for one concrete high-impact specification question and `specification-review` for readiness of a fixed spec revision.
 
-## Scope
-- inspect candidate synthesis, not a blank request
-- challenge only seams that could still change scope, correctness, ownership, failure semantics, or rollout
-- convert uncertainty into the smallest actionable next step
-- keep the pass compact enough that the orchestrator can reconcile it directly
+## Challenge Method
 
-## Boundaries
-Do not:
-- make final product, architecture, API, data, security, or rollout decisions
-- rewrite the whole scope or reopen already-settled decisions without concrete evidence
-- ask generic category questions with no seam attached
-- ask the user directly; recommend `ask_user` only when the orchestrator truly lacks an external fact
-- produce a second design document that competes with `spec.md`
+1. Confirm the input contains a problem frame, candidate decisions, material constraints/assumptions, and relevant evidence.
+2. Extract only assumptions carrying the candidate path and try to falsify each: what breaks in production if it is false?
+3. Keep a question only when a different answer changes scope, correctness, ownership, failure semantics, rollout, or planning order.
+4. Classify the seam and choose its next action before wording the final question.
+5. Stop when remaining uncertainty is tracked, low-value, or ordinary downstream elaboration.
 
-## Escalate When
-Escalate if:
-- candidate synthesis is too thin to challenge meaningfully
-- the real problem is missing framing rather than missing pressure-test
-- one challenged point clearly needs fresh specialist research rather than more questioning
-- the candidate path is so contradictory that integration or domain design must happen before challenge can help
+## Question Rules
 
-## Core Defaults
-- Prefer `3-5` strong questions over broader coverage.
-- Treat every question as a potential design fork: if the answer changes nothing material, drop it.
-- Attack assumptions by trying to falsify them, not by asking for more prose.
-- Ask about categories like security, performance, or rollout only through a concrete seam already present in the candidate synthesis.
-- Stay advisory. The orchestrator decides.
+- Prefer `3-5` strong questions; use fewer when fewer material forks exist.
+- Name the challenged assumption or seam, why it matters, and what changes.
+- Ask about security, performance, failure, or rollout only through a concrete seam already present.
+- Do not reopen settled decisions without evidence, ask the user directly, author replacement design, or produce a competing spec.
 
-## Reference Files
-Load references lazily. Use repository workflow docs, especially `docs/spec-first-workflow.md`, as the authority for phase placement; these references are compact rubrics and example banks, not exhaustive checklists or design guidance.
+Use blocker levels: `blocks_planning`, `blocks_specific_domain`, `non_blocking`.
 
-Load at most one reference by default. Load more than one only when the candidate synthesis spans independent decision pressures, such as both async ownership and mixed-version rollout.
+Use next actions: `answer`, `re-research`, `ask_user`, `defer`, `accept_risk`. For `re-research`, name the specialist/fact pattern and whether challenge must rerun.
 
-| Symptom | Behavior Change | Load |
+## Reference Selector
+
+Load at most one reference by default; load more only for independent seams.
+
+| Symptom | Load | Decision it sharpens |
 | --- | --- | --- |
-| The input bundle may be too thin or blank-page design is tempting | Makes the model route to framing or targeted research instead of inventing challenge questions from missing decisions | `references/input-sufficiency-and-challenge-readiness.md` |
-| Candidate decisions lean on convenience assumptions like frontend dedupe, TTL cleanup, UUID secrecy, or manual fixes | Makes the model ask falsifying failure questions instead of generic "what about retries/security/scale?" prompts | `references/falsifying-candidate-assumptions.md` |
-| Source-of-truth, actor authority, side effects, async handoff, cache, or destructive admin seams are underdefined | Makes the model challenge durable ownership and recovery instead of vague ownership/auth questions or implementation advice | `references/ownership-boundary-and-failure-seams.md` |
-| Rollout, migration, compatibility, feature flags, canaries, backfills, global enablement, or rollback are material | Makes the model test mixed-version and rollback state instead of forcing ceremony or ignoring hard-to-reverse release risk | `references/rollout-compatibility-and-risk-questions.md` |
-| Strong questions exist but severity or resolution route is unclear | Makes the model classify by what changes planning and choose a concrete next action instead of overblocking or reflexively asking for more research | `references/triage-and-next-action-routing.md` |
+| The bundle may be too thin to challenge. | [input-sufficiency-and-challenge-readiness.md](references/input-sufficiency-and-challenge-readiness.md) | Route to framing/research instead of inventing questions. |
+| Convenience assumptions carry the candidate path. | [falsifying-candidate-assumptions.md](references/falsifying-candidate-assumptions.md) | Ask failure-discriminating questions instead of category prompts. |
+| Source of truth, actor authority, side effects, async, cache, or destructive seams are unclear. | [ownership-boundary-and-failure-seams.md](references/ownership-boundary-and-failure-seams.md) | Challenge durable ownership and recovery. |
+| Migration, compatibility, flags, canary, backfill, or rollback matters. | [rollout-compatibility-and-risk-questions.md](references/rollout-compatibility-and-risk-questions.md) | Test mixed-version and rollback states. |
+| Severity or resolution route is unclear. | [triage-and-next-action-routing.md](references/triage-and-next-action-routing.md) | Classify by planning impact and choose one action. |
 
-## Challenge Loop
-1. Confirm the input is challenge-ready rather than underframed.
-2. Extract the candidate assumptions that are actually carrying the plan.
-3. Try to falsify each assumption by asking: what breaks if this is false in production?
-4. Keep only the seams where a different answer would materially change planning.
-5. Classify each surviving seam before wording the final question.
-6. Stop when the unresolved set is no longer planning-critical.
+## Output
 
-## Question Filter
-Keep a question only if all are true:
-- it names a specific challenged assumption or seam
-- it changes planning, not just later polish
-- it would still matter if the orchestrator already knew the general domain best practices
-- it is more useful than sending the task straight back to specialist research
+Return `Challenge Summary`, `Questions`, `Escalations / Re-research`, and `Confidence`. Each question includes `Question / Challenged Assumption`, `Why It Matters`, `What Changes`, `Blocker Level`, `Next Action`, and `Research Reopen` only when applicable.
 
-If any of those fail, do not ask it.
+## Stop Or Reject
 
-## Lenses
-- **Input sufficiency:** expect a problem frame, candidate decisions, constraints, assumptions or open questions, and evidence links that matter. If the bundle is missing, escalate instead of guessing.
-- **Falsification:** look for assumptions disguised as convenience, policy, or `v1` simplification, especially around client behavior, operator workarounds, TTLs, UUID secrecy, natural expiry, or future cleanup.
-- **Failure semantics:** test denial, retry, timeout, duplicate request, partial success, stale state, irreversibility, and manual follow-up only when they could change planning.
-- **Ownership seams:** challenge unclear source-of-truth ownership, actor boundaries, privilege boundaries, and cross-domain side effects that would otherwise be decided later in code.
-- **Rollout and compatibility:** ask about migration, backward compatibility, launch cohort, canary, or rollback only when the answer can materially change implementation order or risk controls.
-
-## Blocker Classification
-Use:
-- `blocks_planning` when planning would be unsafe or misleading without resolution
-- `blocks_specific_domain` when the question should reopen only one specialist area
-- `non_blocking` when the point is real but can stay as explicit accepted risk or open question
-
-## Next Action Selection
-Use:
-- `answer` when the orchestrator likely already has enough evidence
-- `re-research` when a specialist or retrieval pass should reopen
-- `ask_user` when an external policy or product decision is missing
-- `defer` when the point is real but can stay explicit without blocking planning
-- `accept_risk` when the current path is still coherent and the remaining issue is a conscious trade-off
-
-When `Next Action` is `re-research`:
-- name the specialist lane or fact pattern that should be reopened
-- state why local orchestrator reasoning is not enough for this seam
-- say whether the orchestrator should rerun challenge after the new research returns
-
-## Stop Condition
-- Stop once the remaining unresolved questions no longer change planning safety materially.
-- If everything left is low-value, already tracked, or belongs in ordinary downstream design elaboration, say the checkpoint is sufficiently reconciled.
-
-## Anti-Patterns
-- generic “what about security/performance?” prompting with no seam
-- reopening settled scope because “more thought is always good”
-- padding the pass with low-value questions to hit a quota
-- drifting into architecture authorship instead of pressure-testing the candidate path
-- writing commentary that explains the whole design instead of surfacing the few seams that still matter
-
-## Deliverable Shape
-Return challenge work in this order:
-- `Challenge Summary`
-- `Questions`
-- `Escalations / Re-research`
-- `Confidence`
-
-For each item in `Questions`, include:
-- `Question / Challenged Assumption`
-- `Why It Matters`
-- `What Changes`
-- `Blocker Level`
-- `Next Action`
-- `Research Reopen` when `Next Action = re-research`
-
-## Escalate Or Reject
-- a request to nitpick rather than improve planning quality
-- a challenge pass on a trivial local task with no material ambiguity
-- candidate synthesis that is really a disguised blank page
+Stop as sufficiently reconciled when unresolved items no longer change planning safety. Reject or route upstream when the request is trivial, asks for nitpicks, lacks candidate synthesis, or needs problem framing/integration design before challenge can add value.

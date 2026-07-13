@@ -15,7 +15,7 @@ Own system boundary and interaction choices, not endpoint payload catalogs, SQL/
 
 Inspect the approved problem frame, current repository/service boundaries, invariant and write authority, real workload evidence, critical path, team/runtime ownership, external dependencies, failure and degradation expectations, data/read topology, and rollout/mixed-version constraints. Ground external-platform behavior in current official docs/source and credible real implementations; do not infer it from model memory. Mark invented latency, scale, growth, freshness, RPO/RTO, or cost numbers as assumptions.
 
-Architecture may choose among real live forks; it must not manufacture options for completeness. When a real choice exists, compare the viable stdlib, repository, mature-OSS, and custom options against repository, operational, proof, and idiomatic-Go fit. Record only rejections that explain the selected design.
+Architecture may choose among real live forks; it must not manufacture options for completeness. When a material choice lacks accepted evidence, apply the canonical [research solution-discovery method](../../../docs/spec-first-workflow/phases/research.md#method) before selecting, then compare only surviving real options against repository, operational, proof, and idiomatic-Go fit. Record only rejections that explain the selected design.
 
 ## Architecture Invariants And Defaults
 

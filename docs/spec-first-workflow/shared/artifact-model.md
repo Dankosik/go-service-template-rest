@@ -69,15 +69,9 @@ Add a reviewed revision or verdict only when a review actually occurred. Do not 
 
 ## Compact Shapes
 
-A useful `spec.md` usually needs:
-
-```markdown
-# Outcome
-## Scope and non-goals
-## Behavior and invariants
-## Decisions and constraints
-## Risks and proof expectations
-```
+A useful `spec.md` follows the canonical shape and adaptive authoring method in
+[Specification](../phases/specification.md). This file owns artifact
+persistence and status, not a second Specification template.
 
 A useful `tasks.md` row usually needs:
 
