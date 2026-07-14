@@ -7,7 +7,7 @@ description: "Implement the smallest complete production-grade Go change from ac
 
 Use for authorized Go features, fixes, refactors, integrations, generated-source updates, cleanup, and task-required tests.
 
-Start direct work from its accepted inline outcome. Start structured or orchestrated work only from a ready independently reviewed `tasks.md`.
+Start direct work from its accepted inline outcome. Start structured or orchestrated work only from one task assigned by the root from a ready independently reviewed `tasks.md`. Own only that task until the root accepts it or returns concrete gaps; do not mark it complete, start the next task, or launch a reviewer.
 
 Before editing, inspect the owning package/file, callers, siblings, tests, and generated/manual source. Preserve accepted behavior and stop if code would need to invent architecture, contract, data/security/reliability/rollout policy, dependency choice, or ownership.
 
@@ -31,4 +31,4 @@ Load at most one reference by default; load more only for independent pressures.
 | Tests, fuzzing, clocks, randomness, failure messages, or verification shape changes. | [testing-verification-patterns.md](references/testing-verification-patterns.md) |
 | OpenAPI, sqlc, protobuf, mocks, generated files, config, or mirrors change. | [generated-source-of-truth-and-drift.md](references/generated-source-of-truth-and-drift.md) |
 
-Run the smallest fresh proof that covers the behavior, then broader changed-surface gates when needed. Inspect the diff for scope, errors/context/resources, concurrency, generated drift, cleanup, and unapproved decisions. After relevant validation, the root obtains independent read-only review of the exact candidate final diff and proof evidence for structured or orchestrated work, followed by repair, revalidation, and fresh convergence review before closeout; direct work does so when the user or risk requires it. Any post-review mutation invalidates affected review and proof dispositions. Report changed behavior, files, commands/results, and residual gaps. Do not overstate skipped, unavailable, failing, or too-narrow proof.
+Run the smallest fresh proof that covers the behavior, then broader changed-surface gates when needed. Inspect the task diff for scope, errors/context/resources, concurrency, generated drift, cleanup, and unapproved decisions. Return the exact diff, acceptance-criteria mapping, commands/results, and blockers to the root. If the root returns a gap, continue the same task and return the corrected evidence; root acceptance, not worker self-approval or a separate reviewer, decides when the next task starts. Small direct work closes after root diff inspection and bounded validation. Independent review runs only when explicitly requested or concretely risk-triggered by the integrated change. Report residual gaps honestly; do not overstate skipped, unavailable, failing, or too-narrow proof.

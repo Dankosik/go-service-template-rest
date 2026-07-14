@@ -26,7 +26,7 @@ Do not delegate work that is sequential, tightly coupled to the root's reasoning
 
 ## Delegation Decision
 
-Skills define method; subagents provide separate context and independence. At the start of each active macro phase, identify materially affected domains and choose one route for each: apply the matching skill locally when reasoning is sequential or tightly coupled, or delegate one concrete bounded question to the matching specialist subagent with that skill when independent evidence, parallelism, or review independence improves the result. A domain name alone never creates a lane.
+Skills define method; subagents provide separate context and independence. At the start of each active macro phase, identify materially affected domains and apply matching skills locally by default. Delegate only one concrete bounded question when independent evidence, separate context, parallelism, or review independence can change the result. A domain name, matching keyword, skill handoff, or desire for more confidence alone never creates a lane.
 
 If no separate lane helps, keep the work local and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record. Required independent reviews still use a separate read-only reviewer.
 
@@ -37,11 +37,11 @@ Use a subagent when all are true:
 - separate context or review independence materially improves the result;
 - the output can be checked and synthesized by the root.
 
-Good lanes include independent source research, one specialist design question, or review of a fixed revision. Bad lanes include broad “review everything,” duplicate lenses, tiny lookups, and tasks whose next step depends on each preceding result.
+Good lanes include independent source research, one specialist design question, or review of a fixed revision. Bad research/review lanes include broad “review everything,” duplicate lenses, and tiny lookups. Dependency-ordered implementation tasks use the worker loop below rather than being treated as evidence or review lanes.
 
-The root owns scope, lane choice, synthesis, edits, and completion claims. Research and review lanes are read-only. Implementation workers may write only inside their assigned boundary; use isolation when concurrent writes or risky experiments justify it, not by default.
+The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Research and review lanes are read-only. Implementation workers may write only inside their assigned task boundary; use isolation when risky experiments justify it, not by default.
 
-Default to at most three concurrent lanes and no nested delegation. This limits concurrency only, not total lanes or sequential review waves. Run dependent questions sequentially. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
+Default to at most three concurrent research/review lanes, one bounded wave, and no nested delegation. Additional sequential research/review lanes still require distinct decision-changing questions that could not be covered locally or in the first wave. The one-at-a-time implementation worker loop is separate from that limit. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
 
 Choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error. Do not hard-code a dated model catalog in repository instructions or assume the largest setting is best. Re-review should be at least as capable as the review that found the issue.
 
@@ -59,6 +59,14 @@ Stop: <missing input, conflict, or completion condition>
 ```
 
 Do not copy the repository workflow, generic strictness language, or unrelated artifact summaries into every brief.
+
+## Implementation Worker Loop
+
+When an accepted ledger exists, the root selects one ready task in dependency order and assigns only that task to one implementation worker. That worker remains the task owner across corrections until the root accepts the integrated task diff and proof or a genuine upstream blocker reopens another owner.
+
+The worker returns the exact diff, acceptance-criteria mapping, commands/results, and blockers. It does not mark the task complete, start another task, spawn a reviewer, or approve its own work. The root inspects that return against the task boundary and accepted proof. If anything required is missing, the root returns concrete gaps to the same worker and does not advance the ledger or repair the task itself. If the task is accepted, the root records its checkbox and evidence, then assigns the next ready task to a fresh worker. Reuse the previous worker only for corrections to its own task.
+
+This root acceptance is the required review of worker output; it is orchestration, not a separate review lane. A final independent reviewer is optional and risk-triggered under Review Independence below, and never substitutes for accepting each task before advancing.
 
 ## Autonomous Pre-Review Challenge
 
@@ -142,7 +150,7 @@ Use the shared [Review Finding
 Envelope](../../subagent-contract.md#shared-review-finding-envelope) for every
 review return.
 
-Structured and orchestrated work requires an independent reviewer for a standalone `research only` synthesis, the completed specification, any triggered technical design or test design, the completed implementation ledger, and the final implementation diff. Direct work uses an independent reviewer when required by the user or when the decision is hard to reverse, materially high-impact, ambiguous, or poorly falsified by the author alone. A required gate reviewer is any separate read-only subagent following the phase review method; named specialist profiles add depth but do not own the root's final gate decision.
+Structured and orchestrated work requires an independent reviewer for a standalone `research only` synthesis, the completed specification, any triggered technical design or test design, and the completed implementation ledger. During implementation, the root instead accepts every worker task before advancing. The final integrated diff adds an independent reviewer only when the user explicitly requests it or a concrete trigger makes the integrated change broad, hard to reverse, materially high-impact, ambiguous, cross-task-sensitive, protected-domain-sensitive, or poorly falsified by the root alone. Small direct work uses root diff inspection and bounded validation under the same trigger rule. Code change, Goal closeout, skill availability, domain keywords, and generic confidence are not review triggers. A required gate reviewer is any separate read-only subagent following the phase review method; named specialist profiles add depth but do not own the root's final gate decision.
 
 The reviewer:
 
@@ -152,13 +160,13 @@ The reviewer:
 - distinguishes blockers, bounded concerns/proof obligations, and non-blocking observations;
 - states the evidence boundary and disposition of every materially affected lens: covered, delegated to a named specialist result, or not triggered with a concrete reason.
 
-There is no fixed review-pass or reviewer count. One independent reviewer is the minimum gate, not a coverage cap. Use the fewest non-overlapping reviewers that can credibly cover the materially affected lenses, adding sequential specialist waves when separate expertise can change readiness. Every required gate also includes one whole-artifact or whole-diff coherence pass; specialist lane results do not replace it.
+When an independent gate is required, one whole-artifact or whole-diff reviewer is the default. That reviewer applies compatible matching methods locally in one coherence pass and accounts for every materially affected lens. Run a specialist before that gate only for one concrete high-impact question the root cannot credibly cover locally. If the gate reviewer discovers such an uncovered question, run one bounded specialist follow-up and return only that disposition for a focused verdict update; do not repeat an unchanged whole revision. A domain label, generic handoff, or desire for more confidence does not justify another reviewer.
 
-The root repairs every in-scope actionable finding and re-reviews the exact latest revision, the changed surface, and any transitively affected behavior, contract, ownership, or proof decision. Use focused re-review for a local repair; it may reuse a prior lens disposition only after explicitly confirming that the repair did not invalidate that lens's evidence. Otherwise use full affected-surface re-review, including whenever a repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue.
+The root collects all in-scope actionable findings for the fixed revision. For worker-owned implementation, return the findings to the worker that owns the affected task; that worker repairs them as one coherent batch where dependencies allow. The root repairs only direct work and root-owned artifacts, then reruns affected proof. The same gate reviewer performs focused re-review of the repair and any transitively affected behavior, contract, ownership, or proof decision. Reuse unaffected lens dispositions by default; use full affected-surface re-review only when the repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue.
 
-A macro phase reaches review convergence only when its latest required review returns `PASS` and finds no blocker, known current-phase defect, unowned question, uncovered materially affected lens, or unresolved cross-lens contradiction. `CONCERNS` is non-terminal: a bounded risk or downstream proof obligation still needs disposition in the owning phase, and it never permits phase movement or closeout. The root repairs it, records authorized acceptance with evidence, owner, and reopen condition, or splits/reopens scope, then obtains fresh review; `PASS` means every concern has a disposition, not that no residual risk exists. `FAIL` blocks movement and requires repair or reopening before fresh review. Non-blocking observations do not prevent `PASS`. Repeat without an arbitrary pass-count limit while a finding, uncovered lens, new evidence, or repair can change readiness. If closure needs unavailable evidence, authority, or an upstream decision, mark the phase blocked and reopen that owner. Do not repeat an unchanged `PASS` revision merely to collect verdicts.
+A macro phase reaches review convergence only when its latest required review returns `PASS` and finds no blocker, known current-phase defect, unowned question, uncovered materially affected lens, or unresolved cross-lens contradiction. `CONCERNS` is non-terminal: a bounded risk or downstream proof obligation still needs disposition in the owning phase, and it never permits phase movement or closeout. The owning author repairs it; for worker-owned implementation, the root returns it to that worker. The root records authorized acceptance with evidence, owner, and reopen condition, or splits/reopens scope, then obtains focused fresh review; `PASS` means every concern has a disposition, not that no residual risk exists. `FAIL` blocks movement and requires repair or reopening before focused fresh review. Non-blocking observations do not prevent `PASS`. Repeat only while a concrete new finding or semantic repair changes readiness. If closure needs unavailable evidence, authority, or an upstream decision, mark the phase blocked and reopen that owner. Do not repeat an unchanged `PASS` revision or launch speculative lenses merely to collect confidence.
 
-Any mutation after review to the reviewed artifact, implementation diff, generated outputs, or proof evidence invalidates convergence for every affected lens. Revalidate and obtain fresh review of those lenses before closeout.
+A semantic mutation after review to the reviewed artifact, implementation diff, generated outputs, tests, or proof evidence invalidates convergence only for affected lenses. Finalize ledger checkboxes and evidence before review; chat, Goal, and other status-only closeout updates after `PASS` are outside the candidate and do not invalidate it. Revalidate affected proof and obtain focused fresh review before closeout.
 
 ## Fan-In
 

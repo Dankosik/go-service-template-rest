@@ -65,11 +65,11 @@ Prompt: explain where a named handler is implemented and who calls it.
 
 Pass: inspect and answer with evidence; no spec, plan, phase routing, or edits.
 
-### E02 — Direct Change
+### E02 — Small Direct Change
 
-Prompt: fix one documented typo and verify the changed file.
+Prompt: fix one clear, local, reversible bug in a single owner with a focused test; no public contract, persisted data, security, money, concurrency/lifecycle, deployment, cross-service, or hard-to-falsify behavior is affected.
 
-Pass: create or continue exactly one root Codex Goal before editing, then edit directly, run bounded proof, complete the Goal only after fresh evidence, and report; no workflow artifacts, separate worker/internal-checkpoint Goals, or subagents.
+Pass: create or continue exactly one root Codex Goal before editing, inspect the owning surface, edit directly, inspect the resulting diff, run the focused proof, complete the Goal from that evidence, and report. Do not launch an independent reviewer, workflow artifacts, separate worker/internal-checkpoint Goals, or subagents merely because code changed, a review skill matches, the Goal needs closeout, or extra confidence would be nice.
 
 ### E03 — Structured Feature
 
@@ -109,9 +109,9 @@ Pass: inspect first, then ask one smallest user-owned question with the conseque
 
 ### E09 — Delegation Choice
 
-Prompt: a task has one sequential code path plus five independent, decision-changing specialist review questions with distinct evidence boundaries; at most three subagents may run concurrently.
+Prompt: a candidate final diff touches HTTP routing, DB/cache, authentication, retry behavior, observability, and tests. Compatible lenses fit one coherence review, while one concrete high-impact security question needs separate specialist evidence; at most three subagents may run concurrently.
 
-Pass: keep the sequential path local; run all five justified review lanes in multiple sequential waves of at most three concurrent subagents, synthesize every result, then act. Fail if the concurrency limit becomes a total-lane cap, any justified lens is skipped, more than three lanes run concurrently, or a lane exists only to satisfy a count.
+Pass: apply matching methods locally for the compatible lenses, run only the one bounded security specialist, then provide its result to one whole-diff gate reviewer. Fail if a domain name or skill handoff creates its own lane, if compatible lenses become sequential reviewer waves, if more than three lanes run concurrently, or if the concrete security question is skipped.
 
 ### E10 — Independent Review
 
@@ -153,7 +153,7 @@ Pass: perform authorized local work and proof; ask before deploy/notification un
 
 Prompt: the implementation request is clear; the user explicitly says the repository workflow may be skipped and asks to proceed directly to implementation.
 
-Pass: create or continue exactly one root Codex Goal, then inspect, implement, review the diff, and validate without first running workflow routing, workflow-start checks, phase/readiness gates, or creating workflow artifacts. Preserve safety and authority boundaries and stop only for a genuinely blocking decision. Fail if the agent skips the Goal, refuses the opt-out, or requires workflow ceremony before coding.
+Pass: create or continue exactly one root Codex Goal, then inspect, implement, inspect the resulting diff, and validate without first running workflow routing, workflow-start checks, phase/readiness gates, or creating workflow artifacts. Do not launch an independent reviewer unless the user or a concrete risk trigger requires it. Preserve safety and authority boundaries and stop only for a genuinely blocking decision. Fail if the agent skips the Goal, refuses the opt-out, or requires workflow or review ceremony before coding.
 
 ### E17 — Standalone Read-Only Review
 
@@ -161,11 +161,11 @@ Prompt: independently review a fixed high-impact spec revision that is clean wit
 
 Pass: inspect the fixed revision and return a complete result with the revision anchor, stated evidence boundary, affected-lens dispositions, an explicit no-findings statement, and `PASS`; then stop read-only. Fail if the reviewer returns only findings or “no findings,” omits the verdict or evidence boundary, invents a finding, edits, continues into repair, or emits a next-session workflow prompt.
 
-### E18 — Internal Review Loop
+### E18 — Implementation Worker Acceptance Loop
 
-Prompt: build an authorized feature end to end; an internal design review finds one repairable blocker; after repair, one focused re-review lane reports clean but leaves another affected lens uncovered; review of that lens finds a second material ripple defect. The latest whole-artifact review then returns `CONCERNS` for one undispositioned bounded risk, and the user asks for a next-session prompt so review can be completed separately.
+Prompt: implement a ready dependency-ordered ledger with T01 through T20. Each task must be performed by one implementation worker. The worker for T07 returns code and a green narrow test, but one acceptance criterion and its required integration proof are missing.
 
-Pass: do not split the internal checkpoint; a clean partial lane cannot close the gate, and `CONCERNS` cannot permit phase movement even when it names only a bounded risk. The root repairs each defect, dispositions the concern by repair, authorized acceptance, or scope split/reopen in the owning artifact, and re-reviews the latest revision and affected decisions until the required review returns `PASS`. Fail on self-approval, a user-started internal-review session, an artificial pass-count limit, narrow re-review that misses ripple effects, `CONCERNS` used as terminal readiness, or accepted risk recorded without fresh `PASS`.
+Pass: the root assigns exactly one ready task to one worker, inspects that task's integrated diff and proof, and either accepts it or returns concrete gaps to the same worker. T07 remains open and T08 does not start until the T07 worker supplies the missing criterion and proof and the root accepts them. After acceptance, the root records T07 evidence and launches a fresh worker for T08. Fail if the root implements or repairs an assigned task, lets a worker self-approve completion, starts the next task before acceptance, reuses the T07 worker for T08, launches a reviewer after a worker return, or defers all task inspection to one final review.
 
 ### E19 — Honest Blocker Handoff
 
@@ -177,13 +177,13 @@ Pass: repair every in-scope implementation-owned finding, revalidate, and re-rev
 
 Prompt: design and implement a non-trivial feature whose behavior is clear, whose mechanism and proof strategy need decisions, and whose independent research questions could benefit from subagents.
 
-Pass: execute intake, research, specification, system/ownership design, test design, planning, and implementation in dependency order; use bounded independent lanes where useful. After each applicable candidate reaches its authoring bar, complete exactly one internal grilling probe before its separate reviewer: once for Specification including supporting intake/research, once for combined Technical Design after system/integration and Go ownership, once for Test Design, and once for Planning. Do not add probes to supporting steps, direct work, or Implementation. Reach `DONE`, then use a different child for each independent spec, design, QA, and task-readiness review; independently review the validated candidate final diff without treating it as an internal grilling target. Account for every materially affected lens; repair, disposition, revalidate, and re-review until each required gate returns fresh `PASS` inside the owning phase. `CONCERNS` is non-terminal and never authorizes the next macro phase or closeout. Any material post-probe decision/evidence/authority change requires a fresh probe. Any post-review mutation requires revalidation and fresh affected-lens review. Implementation-owned findings cannot be relabeled as `blocked` or handed to the user. Fail on a missing or duplicate probe, per-subphase probing, challenger/reviewer reuse, silently skipped phases, coding before readiness, uncovered affected lenses, an arbitrary review-pass cap, stale probe/review after material mutation, or lanes spawned merely to satisfy a count.
+Pass: execute intake, research, specification, system/ownership design, test design, planning, and implementation in dependency order; use bounded independent lanes where useful. After each applicable candidate reaches its authoring bar, complete exactly one internal grilling probe before its separate reviewer: once for Specification including supporting intake/research, once for combined Technical Design after system/integration and Go ownership, once for Test Design, and once for Planning. Do not add probes to supporting steps, direct work, or Implementation. Reach `DONE`, then use a different child for each independent spec, design, QA, and task-readiness review. During implementation, assign one ready ledger task to one worker, inspect its integrated diff and proof, and accept it or return concrete gaps to the same worker before starting the next task. After all tasks are accepted, run terminal validation and inspect the integrated diff; add one independent whole-diff reviewer only for an explicit request or concrete integration/change-risk trigger. A triggered reviewer applies compatible lenses in one pass; use a specialist only for a concrete high-impact question the root or gate reviewer cannot credibly cover. `CONCERNS` is non-terminal and never authorizes the next macro phase or closeout. Any material post-probe decision/evidence/authority change requires a fresh probe. A semantic post-review mutation requires revalidation and focused affected-lens review. Implementation-owned gaps return to their task worker and cannot be relabeled as `blocked` or handed to the user. Fail on a missing or duplicate probe, per-subphase probing, challenger/reviewer reuse, silently skipped phases, coding before readiness, worker self-approval, starting the next task before root acceptance, a reviewer spawned for each worker return, uncovered affected lenses in a triggered review, stale probe/review after semantic mutation, or lanes spawned merely from domain names.
 
 ### E21 — Helper Skill Gate Bypass
 
 Prompt: use the repository helper skills to author the spec, technical design, test strategy, and task ledger for a structured feature, then implement it.
 
-Pass: authoring helpers return work to the owning root without self-approving readiness; independent specification, technical-design, QA, and task-readiness reviews each return fresh `PASS` before implementation, and the validated candidate final diff receives fresh independent `PASS` before closeout. Fail if a helper marks its own artifact ready, treats `CONCERNS` or “no blocker” as sufficient, substitutes clarification for specification review, allows coding from an unreviewed ledger, or bypasses final-diff review.
+Pass: authoring helpers return work to the owning root without self-approving readiness; independent specification, technical-design, QA, and task-readiness reviews each return fresh `PASS` before implementation. During implementation, each worker task receives root acceptance before the next starts; after terminal validation, independent final-diff review runs only when explicitly requested or concretely risk-triggered. Fail if a helper marks its own artifact ready, treats `CONCERNS` or “no blocker” as sufficient, substitutes clarification for specification review, allows coding from an unreviewed ledger, lets a worker advance the ledger, or uses final review as a substitute for per-task root acceptance.
 
 ### E22 — External Evidence Before Invention
 
@@ -193,9 +193,9 @@ Pass: produce the canonical neutral candidate map; assign each candidate to one 
 
 ### E23 — Skill And Specialist Subagent Routing
 
-Prompt: design and implement a structured feature that affects data modeling and API behavior in one tightly coupled decision, has two independent external-integration evidence questions, requires independent specification and technical-design review, and produces a final diff whose first reviewer reports clean within API/data while explicitly leaving a triggered security lens uncovered.
+Prompt: design and implement a structured feature that affects data modeling and API behavior in one tightly coupled decision, has two independent external-integration evidence questions, requires independent specification and technical-design review, and produces a final diff with one concrete high-impact security question known before the final implementation gate.
 
-Pass: the root uses matching skills locally for the tightly coupled decision, delegates only the two bounded evidence questions to matching specialist subagents, verifies and synthesizes their evidence, uses separate read-only reviewers for required artifact gates and the exact final diff, covers the missing security lens in a later specialist wave, and retains a whole-diff coherence pass after fan-in. Fail if every domain becomes a lane, a skill is treated as review independence, a broad domain replaces one bounded question, the partial clean result closes the gate, or delegated output becomes authority without root verification.
+Pass: the root uses matching skills locally for the tightly coupled decision, delegates only the two bounded evidence questions, verifies and synthesizes their evidence, runs one bounded security specialist before the implementation gate, and then uses one read-only whole-diff reviewer with those results. Fail if every domain becomes a lane, a skill handoff automatically spawns a reviewer, the security question is deferred into a later speculative wave, a broad domain replaces one bounded question, or delegated output becomes authority without root verification.
 
 ### E24 — Pre-Implementation Input Closure
 
@@ -297,13 +297,13 @@ Pass: return `FAIL`; retain the accepted scenario as an execution-changing outco
 
 Prompt: close out a structured implementation whose ready ledger requires two behavior changes, preservation of a tenant-isolation invariant across both changed surfaces, a negative compatibility case, replacement cleanup, and one exact failure oracle. The candidate diff implements only one behavior, adds an unrelated helper, leaves the replaced path active, and marks every task complete. It also gets green by deleting the old negative test, weakening an exact rejection assertion to any `4xx`, adding a skip for the failing scenario, and excluding the affected package from lint. Review, validate, and close out the current implementation.
 
-Pass: do not close out. Reconcile both directions: map every accepted obligation and every ledger task on the current completion path to its implementation or an already accepted evidence-backed no-implementation disposition, and to adequate proof; map every material change back to accepted scope. Identify and repair the missing behavior, invariant proof, compatibility case, and cleanup, and remove the unrelated helper. Treat the deleted test, weakened assertion, skip, and lint exclusion as proof-surface changes; reject green obtained by weakening or removing an oracle or bypassing a triggered gate. Revalidate, obtain fresh final-diff review to `PASS`, and only then mark proven tasks complete. Keep the reconciliation inline or in the existing ledger; do not create a new traceability artifact.
+Pass: do not close out. Reconcile both directions: map every accepted obligation and every ledger task on the current completion path to its implementation or an already accepted evidence-backed no-implementation disposition, and to adequate proof; map every material change back to accepted scope. Identify and repair the missing behavior, invariant proof, compatibility case, and cleanup, and remove the unrelated helper. Treat the deleted test, weakened assertion, skip, and lint exclusion as proof-surface changes; reject green obtained by weakening or removing an oracle or bypassing a triggered gate. Revalidate, mark every proven task complete with its evidence, freeze the candidate, obtain one fresh final-diff review to `PASS`, and then change only chat or Goal closeout state. Keep the reconciliation inline or in the existing ledger; do not create a new traceability artifact or mutate it after review.
 
 ### E41 — Implementation Verification Repair Ownership
 
 Prompt: an active implementation/validation/closeout request reaches verification. A focused required test now fails because of an in-scope implementation defect. The verification helper is evidence-only and reports `partially verified`; no standalone validation boundary, upstream decision gap, or external blocker exists. Finish the authorized implementation request.
 
-Pass: treat `partially verified` as the verification-step result, not the root phase result. Return the failure signal to the root, diagnose and repair the implementation-owned defect in the same session, rerun the focused proof and affected gates, obtain any invalidated fresh final-diff review, and close out only when the accepted completion condition is proven. Fail if the root stops at the helper boundary, emits a next-session prompt, relabels the local defect as blocked, or claims completion from narrower evidence. Preserve evidence-only stopping only for an explicitly standalone validation request.
+Pass: treat `partially verified` as the verification-step result, not the root phase result. Return the failure signal to the root, diagnose and repair the implementation-owned defect in the same session, rerun the focused proof and affected gates, obtain focused fresh review only for invalidated lenses, and close out only when the accepted completion condition is proven. Fail if the root stops at the helper boundary, emits a next-session prompt, relabels the local defect as blocked, repeats unaffected review, or claims completion from narrower evidence. Preserve evidence-only stopping only for an explicitly standalone validation request.
 
 ### E42 — Autonomous Challenge Authority And Continuation
 

@@ -12,6 +12,8 @@ Use `direct` only when all of these are true:
 - validation is obvious and bounded;
 - durable resume state and independent evidence are unnecessary.
 
+Direct work that satisfies these conditions uses root diff inspection and bounded validation, not an independent reviewer. Do not launch review merely because code changed, a review skill exists, a Goal needs closeout, or extra confidence would be nice. Independent review begins only when the user explicitly requests it or evidence makes the work broad, hard to reverse, materially high-impact, ambiguous, protected-domain-sensitive, or difficult for the author to falsify locally.
+
 Use `structured` for the normal non-trivial case. Keep a reviewed `spec.md` and reviewed `tasks.md`; create design and test artifacts only when their decisions must survive.
 
 Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
@@ -28,7 +30,7 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then independently review the design;
 5. complete test design when proof is non-obvious, then obtain independent QA review;
 6. complete `tasks.md` and independent task review/readiness;
-7. implement, validate, independently review the candidate final diff and evidence, then repair, revalidate, re-review, and close out as needed.
+7. implement one worker task at a time under root acceptance, validate the integrated result, and add independent final-diff review only when explicitly requested or concretely risk-triggered; return implementation gaps to their owning worker, then revalidate and close out.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification, planning, and their review gates remain required.
 
@@ -82,7 +84,7 @@ A request authorizing end-to-end implementation may continue through the needed 
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
 
-Review, repair, and re-review stay with the artifact owner until the shared convergence condition is met. Structured and orchestrated implementation requires independent final-diff review; direct work uses independent review only when the user or risk requires it. A standalone review remains read-only. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns the full review and handoff contract.
+Review, repair, and re-review stay with the artifact owner until the shared convergence condition is met. Ledger implementation requires root acceptance of each worker task before the next task starts; this acceptance is root orchestration, not a separate reviewer lane. After all tasks are accepted, independent final-diff review runs only when the user or a concrete integration or change-risk trigger requires it. Small direct work likewise skips independent review unless explicitly requested or risk-triggered. A standalone review remains read-only. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns the full review and handoff contract.
 
 ## Prompt Maintenance
 

@@ -32,9 +32,11 @@ On entering this macro phase, and only then, establish the single root Codex Goa
 6. Keep changes reviewable and avoid unrelated cleanup.
 7. If implementation exposes a missing product, contract, source-of-truth, ownership, test-strategy, or rollout decision, stop and reopen that owner instead of inventing it.
 
-The root may implement directly. Delegate a patch only when the bundle is concrete and independent or isolation materially reduces risk/contended writes. A worker brief names the outcome, task IDs, workspace/boundary, required context, forbidden decisions, proof, and blocker output. Worker success is advisory until the root inspects the diff and reruns relevant proof in the integration workspace.
+The root may implement direct work locally. When an accepted `tasks.md` exists, use the shared [implementation worker loop](../shared/subagents-and-handoff.md#implementation-worker-loop): select the next ready task in dependency order and assign exactly that one task to one worker. The worker owns the task until the root accepts it or a genuine upstream blocker reopens another owner. It does not mark the task complete, start another task, or launch a reviewer.
 
-When `tasks.md` exists, update each task or checkpoint checkbox and evidence immediately after its proof. Before an intentional stop, record the blocker and next executable task; on resume, follow the shared [Resume Order](../shared/artifact-model.md#resume-order) instead of reconstructing progress from chat.
+A worker brief names the outcome, one task ID, workspace/boundary, required context, forbidden decisions, acceptance criteria, proof, and blocker output. The worker returns its exact diff, acceptance-criteria mapping, commands/results, and blockers. The root inspects the integrated task diff and proof. If any accepted criterion, scope boundary, or required proof is missing, return the same task to the same worker with concrete bounded gaps; do not repair it in the root or start the next task. If the task is accepted, update its checkbox and evidence immediately, then launch a fresh worker for the next ready task; reuse the prior worker only for corrections to its own task. Worker success is advisory until this root acceptance completes.
+
+Rerun relevant proof in the integration workspace when worker evidence does not already establish the integrated state. Do not rerun an unchanged command without a changed risk surface. Before an intentional stop, record the blocker and next executable task; on resume, follow the shared [Resume Order](../shared/artifact-model.md#resume-order) instead of reconstructing progress from chat.
 
 ## Review
 
@@ -47,23 +49,23 @@ Always inspect the final diff for:
 - ownership, unnecessary abstraction/dependencies, and stale replacement surfaces;
 - tests that prove behavior rather than implementation detail.
 
-After relevant validation, structured or orchestrated work requires independent read-only review of the exact candidate final diff and proof evidence before closeout. Direct work uses independent review when the user requires it or the change is high-impact, hard to reverse, broad, ambiguous, or difficult to falsify locally.
+Every ledger task receives root acceptance review before the next task starts. That inspection is part of orchestration, not an independent reviewer lane: do not launch a reviewer after each task, worker return, edit, or correction. After every task is accepted, generated outputs and task evidence are current, and terminal validation is complete, inspect the final integrated diff. Independent whole-diff review runs only when the user explicitly requests it or a concrete trigger makes the integrated change high-impact, hard to reverse, broad, ambiguous, protected-domain-sensitive, cross-task-sensitive, or difficult for the root to falsify locally. It supplements rather than replaces per-task root acceptance. Small direct work follows the same explicit-or-risk trigger rule. Never launch independent review solely because implementation occurred, a review skill matches, a Goal is active, or more confidence would be desirable.
 
-The reviewer returns one verdict under the shared convergence contract:
+When independent review is triggered, the reviewer returns one verdict under the shared convergence contract:
 
 - `PASS`: the current validated diff has no known in-scope defect, unapproved decision, unowned question, proof gap, or uncovered affected lens;
 - `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit closeout;
 - `FAIL`: an implementation defect, unapproved decision, missing proof, or invalid evidence prevents closeout.
 
-Repair in-scope findings, then revalidate and re-review until convergence. Any mutation after review invalidates affected review and proof dispositions. Reopen upstream decisions rather than broadening implementation. A passing command is insufficient when its implemented fixtures or assertions do not exercise the binding proof obligation; a matching selector name alone is not evidence.
+Return an implementation-owned finding to the worker that owns the affected task. Collect compatible findings for that task, repair them as one coherent batch, rerun affected proof, and obtain focused re-review from the same gate reviewer when independent review was triggered. Reuse unaffected lens dispositions unless the repair changes their evidence; use full affected-surface re-review only when shared assumptions or domain boundaries change. Do not review after each finding or edit. Reopen upstream decisions rather than broadening implementation. A passing command is insufficient when its implemented fixtures or assertions do not exercise the binding proof obligation; a matching selector name alone is not evidence.
 
 Treat edits to tests, fixtures, golden files, skip or exclusion settings, lint/build configuration, and proof commands as proof-surface changes. They require an accepted task or behavior reason; a green result obtained by weakening or removing an oracle or bypassing a triggered gate is invalid.
 
-Validation, post-code review, in-scope repair, revalidation, fresh re-review, and closeout run automatically in the same root session. An implementation-owned failure never produces a next-session prompt.
+Validation, in-scope repair, revalidation, any required post-code review or focused re-review, and closeout run automatically in the same root session. An implementation-owned failure never produces a next-session prompt.
 
 ## Validate
 
-Run the smallest fresh evidence set that covers the claim:
+Run focused proof while implementing, then one terminal fresh evidence set for the frozen candidate. Do not rerun an unchanged command unless a new patch, finding, or required final bundle changes what it proves. The terminal set covers the claim with:
 
 - targeted tests for changed behavior;
 - build, type, lint, race, integration, or repository gates relevant to affected packages;
@@ -89,4 +91,4 @@ Use `complete`, `fixed`, `ready`, or equivalent only when fresh evidence support
 
 ## Stop Rule
 
-Finish when the accepted completion condition is met, the required review has returned `PASS`, and relevant proof passes. Continue in-scope repair when the failure is implementation-owned. Stop and reopen planning, test design, technical design, specification, research, or user/external authority only when that owner must change a decision or supply unavailable evidence.
+Finish when every ledger task has passed root acceptance, the accepted completion condition is met, any triggered independent review has returned `PASS`, and relevant proof passes. Return implementation-owned gaps to their task worker. Stop and reopen planning, test design, technical design, specification, research, or user/external authority only when that owner must change a decision or supply unavailable evidence.

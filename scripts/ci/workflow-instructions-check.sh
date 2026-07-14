@@ -134,6 +134,14 @@ require_text \
   AGENTS.md \
   'implementation entry must establish exactly one root Codex Goal'
 require_text \
+  'A small direct change does not need an independent reviewer merely because a Goal exists.' \
+  AGENTS.md \
+  'Goal closeout must not trigger review for small direct work'
+require_text \
+  'after acceptance, a fresh worker owns the next task' \
+  AGENTS.md \
+  'repository authority must require a fresh worker per accepted ledger task'
+require_text \
   'Objective: <one next outcome>' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'non-implementation handoffs must use Objective instead of Goal'
@@ -242,6 +250,10 @@ require_text \
   .agents/skills/codex-goal-prompt-composer/SKILL.md \
   'the Goal composer must reject internal-checkpoint handoffs'
 require_text \
+  'A Goal does not itself trigger independent review for small direct work.' \
+  .agents/skills/codex-goal-prompt-composer/SKILL.md \
+  'the Goal composer must not turn small direct work into reviewed work'
+require_text \
   '**Objective:** the requested action and outcome' \
   .agents/skills/agent-prompt-composer/SKILL.md \
   'generic handoffs must use Objective instead of Goal'
@@ -281,13 +293,13 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'a clean standalone Specification review must return a complete PASS result'
 require_text \
-  '### E18 — Internal Review Loop' \
+  '### E18 — Implementation Worker Acceptance Loop' \
   docs/spec-first-workflow-evals.md \
-  'the internal review-loop behavior case is missing'
+  'the implementation worker acceptance behavior case is missing'
 require_text \
-  'the user asks for a next-session prompt so review can be completed separately' \
+  'T07 remains open and T08 does not start' \
   docs/spec-first-workflow-evals.md \
-  'the internal review-loop case must cover an explicit prompt request'
+  'the worker loop must block advancement until root acceptance'
 require_text \
   'independently review the fixed synthesis to a fresh `PASS`' \
   docs/spec-first-workflow-evals.md \
@@ -708,15 +720,48 @@ require_text \
   'Inside an active implementation/validation/closeout request, return the failure signal to the root' \
   .agents/skills/go-verification-before-completion/SKILL.md \
   'verification helper failure must return to active implementation repair'
+require_text \
+  'returns worker-owned failures to their task worker, and repairs only direct work' \
+  .agents/skills/go-verification-before-completion/SKILL.md \
+  'verification repair routing must preserve worker task ownership'
 if grep -Fq -- 'In standalone use this ends' \
   .agents/skills/go-verification-before-completion/SKILL.md; then
   echo 'workflow instruction check failed: verification stop boundary is duplicated'
   exit 1
 fi
 require_text \
-  'update each task or checkpoint checkbox and evidence immediately after its proof' \
+  'If the task is accepted, update its checkbox and evidence immediately' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'ledger progress must be durable after each proven checkpoint'
+  'ledger progress must be durable after root task acceptance'
+require_text \
+  'Direct work that satisfies these conditions uses root diff inspection and bounded validation, not an independent reviewer.' \
+  docs/spec-first-workflow.md \
+  'the direct path must skip independent review by default'
+require_text \
+  'Small direct work uses root diff inspection and bounded validation under the same trigger rule.' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the shared review contract must skip independent review for small direct work'
+require_text \
+  'Small direct work follows the same explicit-or-risk trigger rule.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'implementation closeout must skip independent review for small direct work'
+require_text \
+  'Do not launch an independent reviewer, workflow artifacts' \
+  docs/spec-first-workflow-evals.md \
+  'the small direct eval must reject review ceremony'
+require_text \
+  'inspect the resulting diff, run the focused proof' \
+  docs/spec-first-workflow-evals.md \
+  'the small direct eval must inspect the final diff before closeout'
+require_text \
+  'any required post-code review or focused re-review' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'implementation closeout must run review only when required or triggered'
+if grep -Fq -- 'Validation, post-code review, in-scope repair, revalidation, fresh re-review, and closeout run automatically' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  echo 'workflow instruction check failed: implementation closeout still mandates review for every change'
+  exit 1
+fi
 require_text \
   'Inspect current workspace and Git status' \
   docs/spec-first-workflow/shared/artifact-model.md \
@@ -734,7 +779,7 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'the honest-blocker eval must not normalize a known pre-implementation gate'
 require_text \
-  'Implementation-owned findings cannot be relabeled as `blocked` or handed to the user.' \
+  'Implementation-owned gaps return to their task worker and cannot be relabeled as `blocked` or handed to the user.' \
   docs/spec-first-workflow-evals.md \
   'the phase-spine eval must reject implementation-owned blocker handoffs'
 require_text \
@@ -750,21 +795,21 @@ require_text \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'delegation must distinguish a skill method from a separate specialist context'
 require_text \
-  'There is no fixed review-pass or reviewer count.' \
+  'When an independent gate is required, one whole-artifact or whole-diff reviewer is the default.' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'review convergence must not use an arbitrary pass or reviewer cap'
+  'triggered independent review must default to one coherence reviewer'
 require_text \
-  'Repeat without an arbitrary pass-count limit' \
+  'Repeat only while a concrete new finding or semantic repair changes readiness.' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'review convergence must continue while evidence can change readiness'
+  'review convergence must continue only for concrete readiness-changing work'
 require_text \
-  'This limits concurrency only, not total lanes or sequential review waves.' \
+  'The one-at-a-time implementation worker loop is separate from that limit.' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'the three-lane default must not cap total justified review work'
+  'delegation limits must not block the sequential implementation worker loop'
 require_text \
-  'whole-artifact or whole-diff coherence pass' \
+  'applies compatible matching methods locally in one coherence pass' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'specialist review coverage must retain a whole-revision coherence pass'
+  'the default reviewer must cover compatible lenses in one pass'
 require_text \
   'A macro phase reaches review convergence only when' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
@@ -886,57 +931,90 @@ if grep -Fq -- 'Use only for a ready spec revision' .agents/skills/specification
 fi
 
 require_text \
-  'Any mutation after review' \
+  'A semantic mutation after review' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'post-review mutations must invalidate affected convergence evidence'
+  'semantic post-review mutations must invalidate affected convergence evidence'
 require_text \
-  'After relevant validation, structured or orchestrated work requires independent read-only review of the exact candidate final diff and proof evidence before closeout.' \
+  'assign exactly that one task to one worker' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'structured and orchestrated implementation must receive independent final-diff review'
+  'ledger implementation must assign one task per worker'
+require_text \
+  'then launch a fresh worker for the next ready task' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'each accepted task must be followed by a fresh worker for the next task'
+require_text \
+  'return the same task to the same worker with concrete bounded gaps' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the root must return incomplete work to its task worker'
+require_text \
+  'do not repair it in the root or start the next task' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the root must not bypass worker task ownership or acceptance order'
+require_text \
+  'Every ledger task receives root acceptance review before the next task starts.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'every worker task must receive root acceptance before advancement'
+require_text \
+  'implement one worker task at a time under root acceptance' \
+  docs/spec-first-workflow.md \
+  'the top-level router must use task-by-task worker acceptance'
+require_text \
+  'add independent final-diff review only when explicitly requested or concretely risk-triggered' \
+  docs/spec-first-workflow.md \
+  'the top-level router must keep final implementation review conditional'
+if grep -Fq -- 'implement, validate, independently review the candidate final diff and evidence' \
+  docs/spec-first-workflow.md; then
+  echo 'workflow instruction check failed: the top-level router still mandates final review for every implementation'
+  exit 1
+fi
+require_text \
+  'then assigns the next ready task to a fresh worker' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the shared worker loop must use a fresh worker for the next task'
+require_text \
+  'For worker-owned implementation, return the findings to the worker that owns the affected task' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'review findings must preserve implementation worker ownership'
 require_text \
   'Every review return also names the exact revision or diff' \
   docs/subagent-contract.md \
   'the shared reviewer envelope must preserve revision and affected-lens coverage'
 require_text \
-  'review of that lens finds a second material ripple defect' \
+  'assigns exactly one ready task to one worker' \
   docs/spec-first-workflow-evals.md \
-  'the internal review-loop eval must exercise more than one repair cycle'
+  'the worker-loop eval must enforce one task per worker'
 require_text \
-  'an artificial pass-count limit' \
+  'returns concrete gaps to the same worker' \
   docs/spec-first-workflow-evals.md \
-  'the internal review-loop eval must reject fixed review iteration caps'
+  'the worker-loop eval must preserve worker ownership across correction'
 require_text \
-  'five independent, decision-changing specialist review questions with distinct evidence boundaries' \
+  'reuses the T07 worker for T08' \
   docs/spec-first-workflow-evals.md \
-  'the delegation eval must require more useful lanes than the concurrency limit'
+  'the worker-loop eval must reject worker reuse across tasks'
 require_text \
-  'multiple sequential waves of at most three concurrent subagents' \
+  'Compatible lenses fit one coherence review' \
   docs/spec-first-workflow-evals.md \
-  'the delegation eval must distinguish concurrent capacity from total useful lanes'
+  'the delegation eval must keep compatible lenses in one reviewer'
 require_text \
-  'a clean partial lane cannot close the gate' \
+  'run only the one bounded security specialist' \
   docs/spec-first-workflow-evals.md \
-  'a clean focused review must not close uncovered affected lenses'
+  'the delegation eval must reject speculative specialist waves'
 require_text \
-  '`CONCERNS` cannot permit phase movement even when it names only a bounded risk' \
+  'launches a reviewer after a worker return' \
   docs/spec-first-workflow-evals.md \
-  'the internal review-loop eval must keep bounded concerns non-terminal'
+  'the worker-loop eval must reject per-task reviewer lanes'
 require_text \
-  'accepted risk recorded without fresh `PASS`' \
+  'produces a final diff with one concrete high-impact security question known before the final implementation gate' \
   docs/spec-first-workflow-evals.md \
-  'accepted-risk disposition must still receive fresh PASS'
+  'specialist routing must identify the concrete question before the final gate'
 require_text \
-  'produces a final diff whose first reviewer reports clean within API/data while explicitly leaving a triggered security lens uncovered' \
+  'runs one bounded security specialist before the implementation gate' \
   docs/spec-first-workflow-evals.md \
-  'specialist routing must exercise a partial clean final-diff review'
+  'specialist routing must fan in before one whole-diff review'
 require_text \
-  'covers the missing security lens in a later specialist wave' \
+  'A semantic post-review mutation requires revalidation and focused affected-lens review.' \
   docs/spec-first-workflow-evals.md \
-  'specialist routing must cover the missing final-diff lens before convergence'
-require_text \
-  'Any post-review mutation requires revalidation and fresh affected-lens review.' \
-  docs/spec-first-workflow-evals.md \
-  'post-review implementation mutations must invalidate stale review evidence'
+  'post-review implementation mutations must trigger only affected focused review'
 require_text \
   'it never permits phase movement or closeout' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
@@ -1014,9 +1092,13 @@ require_text \
   docs/spec-first-workflow/phases/test-design.md \
   'test design must route through independent QA review'
 require_text \
-  'repair, revalidation, and fresh convergence review before closeout' \
+  'Own only that task until the root accepts it or returns concrete gaps' \
   .agents/skills/go-coder/SKILL.md \
-  'implementation helpers must route structured and orchestrated diffs through independent convergence review'
+  'the implementation worker must retain one task through corrections'
+require_text \
+  'root acceptance, not worker self-approval or a separate reviewer, decides when the next task starts' \
+  .agents/skills/go-coder/SKILL.md \
+  'the coder must return task acceptance authority to the root'
 require_text \
   '`research only` is the structured/orchestrated macro-phase boundary' \
   .agents/skills/research-session/SKILL.md \
@@ -1084,21 +1166,25 @@ if grep -Eq -- 'plausible incorrect implementation|Missing test code or fixtures
   exit 1
 fi
 require_text \
-  'required independent final-diff review has reached convergence' \
+  'Accept the task and start the next worker only when its criteria and proof pass' \
   .agents/skills/validation-closeout-session/SKILL.md \
-  'validation closeout must not bypass final-diff review convergence'
+  'validation closeout must enforce root task acceptance before advancement'
 require_text \
   'go-structural-quality-review' \
   .codex/agents/quality-agent.toml \
   'the quality reviewer must expose structural-quality review'
 require_text \
-  'This is a concurrency limit, not a cap on justified sequential lanes or review iterations.' \
+  'The one-at-a-time implementation task loop is separate from that lane limit.' \
   docs/subagent-contract.md \
-  'the runtime lane contract must distinguish concurrency from total review work'
+  'the runtime lane contract must distinguish task workers from review lanes'
 require_text \
-  'structured/orchestrated implementation includes independent final-diff review before closeout' \
+  'one worker owns one task until the root accepts its diff and proof or returns concrete gaps' \
   README.md \
-  'the user-facing workflow summary must name independent final-diff review'
+  'the user-facing workflow summary must describe worker task acceptance'
+require_text \
+  'Small direct work uses root diff inspection and bounded validation without an independent reviewer unless the user or a concrete risk trigger requires one.' \
+  README.md \
+  'the user-facing workflow summary must skip review for small direct work'
 
 for convergence_skill in \
   .agents/skills/technical-design-session/SKILL.md \
