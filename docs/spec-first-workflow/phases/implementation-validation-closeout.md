@@ -70,6 +70,7 @@ Run focused proof while implementing, then one terminal fresh evidence set for t
 - targeted tests for changed behavior;
 - build, type, lint, race, integration, or repository gates relevant to affected packages;
 - contract, migration, generation, or mirror drift checks when their source changes;
+- integrated target-environment proof across the affected deployment graph when the accepted outcome is system-wide; provider deployment status or one component's readiness alone is insufficient;
 - a smoke/manual check when automated proof is unavailable or insufficient;
 - targeted negative searches for identifiers and references that should be gone.
 

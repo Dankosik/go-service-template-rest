@@ -142,6 +142,10 @@ require_text \
   AGENTS.md \
   'repository authority must require a fresh worker per accepted ledger task'
 require_text \
+  'completion covers the full affected deployment graph' \
+  AGENTS.md \
+  'repository authority must bind system completion to the affected deployment graph'
+require_text \
   'Objective: <one next outcome>' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'non-implementation handoffs must use Objective instead of Goal'
@@ -161,6 +165,14 @@ require_text \
   '### E43 — Autonomous Challenge Exhaustion Freshness And Review Separation' \
   docs/spec-first-workflow-evals.md \
   'the autonomous challenge exhaustion and freshness eval is missing'
+require_text \
+  'worker and Postgres placement may be in different regions' \
+  docs/spec-first-workflow-evals.md \
+  'the rollout eval must exercise deployment placement and network risk'
+require_text \
+  'update it, prove mixed-version compatibility from current evidence, or keep system completion blocked under its owner' \
+  docs/spec-first-workflow-evals.md \
+  'the contract eval must close every affected caller or consumer'
 require_text \
   'the material authority change invalidates it and triggers one fresh probe' \
   docs/spec-first-workflow-evals.md \
@@ -345,6 +357,42 @@ require_text \
   docs/spec-first-workflow/phases/system-integration-design.md \
   'system design must tie each material mechanism decision to evidence and consequences'
 require_text \
+  '## Interaction And Data Flow' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must own end-to-end request, event, and data-flow decisions'
+require_text \
+  'Interaction design is complete when a fresh reviewer can trace every material flow' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must define an outcome-first interaction completion bar'
+require_text \
+  'A flow is material when its ordering, ownership, contract, authority, failure behavior, or finality can change implementation, rollout, or proof.' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must bound material flows by implementation, rollout, or proof impact'
+require_text \
+  'broker destination and any material routing/partition/ordering key' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'event flow design must identify its contract, destination, and routing semantics'
+require_text \
+  'add a Mermaid diagram only when compact text is insufficient for a reviewer to validate' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must route diagrams by review need rather than semantic shortcuts'
+require_text \
+  'derive the smallest affected deployment graph and its integrated release proof from the documented material flows' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system design must derive release closure from documented material flows'
+require_text \
+  'a producer-only green build is not contract closure' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system release closure must cover affected producers and consumers'
+require_text \
+  'An unverified cross-region or otherwise remote latency-sensitive path is a blocker' \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system release closure must reject unproven deployment placement and latency'
+require_text \
+  "provider deployment status or one component's health is insufficient" \
+  docs/spec-first-workflow/phases/system-integration-design.md \
+  'system release closure must require integrated proof rather than platform status alone'
+require_text \
   'apply `go-architect-spec` and its Required Evidence/Deliverable and Stop Conditions' \
   docs/spec-first-workflow/phases/system-integration-design.md \
   'material architecture decisions must route through the canonical architecture method'
@@ -368,6 +416,14 @@ require_text \
  'inventory every input-bearing design surface on the current implementation completion path' \
  docs/spec-first-workflow/phases/technical-design-review.md \
  'technical-design review must attempt full-path input-bearing artifact construction'
+require_text \
+  'Can a fresh reviewer trace every material flow from its actor or trigger to caller-visible completion or durable finality' \
+  docs/spec-first-workflow/phases/technical-design-review.md \
+  'technical-design review must falsify interaction and data-flow completeness'
+require_text \
+  'Where compact text is insufficient, does the smallest useful diagram clarify ordering, ownership, fan-out, recovery, or transformation' \
+  docs/spec-first-workflow/phases/technical-design-review.md \
+  'technical-design review must falsify diagram usefulness and agreement'
 require_text \
   'a phase-level `PASS` requires rechecking implementation-input closure across every materially distinct input-bearing surface on the current completion path' \
   docs/spec-first-workflow/phases/technical-design-review.md \
@@ -565,13 +621,17 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'system mechanism selection must compare substitutes at one decision level'
 require_text \
+  'Include one compact Mermaid `sequenceDiagram` because the callback, status-lookup, reconciliation, and finality branches cannot be reliably validated from compact text alone.' \
+  docs/spec-first-workflow-evals.md \
+  'system mechanism selection must exercise a useful end-to-end flow diagram'
+require_text \
   '### E34 — Proportional System Design' \
   docs/spec-first-workflow-evals.md \
   'the proportional system-design behavior case is missing'
 require_text \
-  'A passing response does not create a durable design artifact or invoke architecture/fan-out work.' \
+  'A passing response does not create another artifact or diagram or invoke architecture/fan-out work.' \
   docs/spec-first-workflow-evals.md \
-  'proportional system design must avoid untriggered ceremony'
+  'proportional persisted system design must avoid untriggered diagram ceremony'
 require_text \
   '### E35 — Planning Bidirectional Coverage' \
   docs/spec-first-workflow-evals.md \
@@ -704,6 +764,14 @@ require_text \
   'Treat edits to tests, fixtures, golden files, skip or exclusion settings, lint/build configuration, and proof commands as proof-surface changes.' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
   'implementation review must treat proof-surface mutations as part of the candidate diff'
+require_text \
+  'integrated target-environment proof across the affected deployment graph' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'implementation closeout must require integrated proof for system-wide outcomes'
+require_text \
+  'an accidental cross-region path is blocking evidence' \
+  .agents/skills/go-devops-spec/references/railway-release-runtime-policy.md \
+  'Railway delivery guidance must verify placement and latency instead of assuming proximity'
 require_text \
   'They require an accepted task or behavior reason' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \

@@ -26,6 +26,8 @@ Ranked anchored findings and one verdict:
 ## Review Questions
 
 - Are source of truth, contracts, runtime sequence, failure behavior, data/consistency, rollout, and proof explicit where relevant?
+- Can a fresh reviewer trace every material flow from its actor or trigger to caller-visible completion or durable finality without guessing its owners, contract, data authority, or failure/recovery behavior?
+- Where compact text is insufficient, does the smallest useful diagram clarify ordering, ownership, fan-out, recovery, or transformation and agree with the normative text and canonical sources?
 - Are package/file ownership, dependency direction, generated/manual authority, cleanup, and test ownership clear?
 - Are viable alternatives genuinely closed, or has implementation been left a live fork?
 - Can planning name task owners, files, tests, and evidence without deciding design?
