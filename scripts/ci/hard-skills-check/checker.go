@@ -43,11 +43,80 @@ type evalCase struct {
 	Files          []string        `json:"files"`
 }
 
+type stage2Selection struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+}
+
+type stage2Metadata struct {
+	SchemaVersion         int               `json:"schema_version"`
+	PromptSHA256          string            `json:"prompt_sha256"`
+	RepositoryCommit      string            `json:"repository_commit"`
+	RoutingMode           string            `json:"routing_mode"`
+	ExplicitSkillMentions []string          `json:"explicit_skill_mentions"`
+	ForcedSkills          []string          `json:"forced_skills"`
+	SelectedSkills        []stage2Selection `json:"selected_skills"`
+	ProvenanceSource      string            `json:"provenance_source"`
+}
+
+var (
+	hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
+)
+
+// validateStage2Metadata is intentionally dormant: it seals the future runner ABI
+// but does not make a self-reported router selection activation evidence.
+func validateStage2Metadata(data []byte, promptSHA256, commit string, explicitOnly map[string]bool) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse stage 2 metadata: %w", err)
+	}
+	want := map[string]bool{"schema_version": true, "prompt_sha256": true, "repository_commit": true, "routing_mode": true, "explicit_skill_mentions": true, "forced_skills": true, "selected_skills": true, "provenance_source": true}
+	for key := range raw {
+		if !want[key] {
+			return fmt.Errorf("stage 2 metadata has unknown key %q", key)
+		}
+	}
+	if len(raw) != len(want) {
+		return errors.New("stage 2 metadata is missing required fields")
+	}
+	var metadata stage2Metadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return fmt.Errorf("decode stage 2 metadata: %w", err)
+	}
+	if metadata.SchemaVersion != 1 || metadata.PromptSHA256 != promptSHA256 || !hex64.MatchString(metadata.PromptSHA256) || metadata.RepositoryCommit != commit || !hex40.MatchString(metadata.RepositoryCommit) || metadata.RoutingMode != "implicit" || metadata.ProvenanceSource != "runtime_events" {
+		return errors.New("stage 2 metadata violates sealed ABI")
+	}
+	if len(metadata.ExplicitSkillMentions) != 0 || len(metadata.ForcedSkills) != 0 {
+		return errors.New("stage 2 metadata reports explicit routing")
+	}
+	router := false
+	seen := map[string]bool{}
+	for _, selected := range metadata.SelectedSkills {
+		if selected.Name == "" || selected.Source != "implicit" || seen[selected.Name] {
+			return errors.New("stage 2 metadata has invalid selected skill")
+		}
+		seen[selected.Name] = true
+		if selected.Name == "go-specialist-router" && selected.Source == "implicit" {
+			router = true
+		}
+		if explicitOnly[selected.Name] {
+			return fmt.Errorf("stage 2 metadata selected explicit-only specialist %s", selected.Name)
+		}
+	}
+	if !router {
+		return errors.New("stage 2 metadata omits implicit go-specialist-router")
+	}
+	return nil
+}
+
 func checkRepository(root string, skills []string, scoped bool) error {
 	var problems []string
 	if !scoped {
 		problems = append(problems, validateInventory(root)...)
 		problems = append(problems, validateSharedContract(root)...)
+		problems = append(problems, validateCatalog(root)...)
+		problems = append(problems, validateImplicitPolicies(root)...)
 		problems = append(problems, validateRetiredIdentifiers(root)...)
 	}
 
@@ -127,13 +196,118 @@ func validateSkill(root, name string) []string {
 	}
 	problems = append(problems, validateDescription(name, doc.Description)...)
 	problems = append(problems, validateMarkdownLinks(root, path, doc.Body)...)
-	if !executionSkills[name] {
+	if !executionSkills[name] && name != "go-specialist-router" {
 		problems = append(problems, validateDirectSharedLink(root, path, doc.Body)...)
-		bundle, err := readEvalBundle(root, name)
+	}
+	bundle, err := readEvalBundle(root, name)
+	if err != nil {
+		problems = append(problems, fmt.Sprintf("%s: %v", name, err))
+	} else {
+		problems = append(problems, validateEvalBundle(name, bundle)...)
+	}
+	return problems
+}
+
+func validateCatalog(root string) []string {
+	var problems []string
+	skillsDir := filepath.Join(root, ".agents", "skills")
+	_ = filepath.WalkDir(skillsDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			problems = append(problems, fmt.Sprintf("%s: %v", name, err))
-		} else {
-			problems = append(problems, validateEvalBundle(name, bundle)...)
+			problems = append(problems, fmt.Sprintf("scan skill catalog: %v", err))
+			return nil
+		}
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".md") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			problems = append(problems, fmt.Sprintf("read %s: %v", relativePath(root, path), readErr))
+			return nil
+		}
+		problems = append(problems, validateMarkdownLinks(root, path, data)...)
+		if entry.Name() == "SKILL.md" {
+			doc, parseErr := parseSkillDocument(data, path)
+			if parseErr != nil {
+				problems = append(problems, fmt.Sprintf("%s: %v", relativePath(root, path), parseErr))
+			} else if strings.TrimSpace(doc.Description) == "" {
+				problems = append(problems, fmt.Sprintf("%s: description is empty", doc.Name))
+			} else if doc.Name != filepath.Base(filepath.Dir(path)) {
+				problems = append(problems, fmt.Sprintf("%s: frontmatter name %q does not match directory", relativePath(root, path), doc.Name))
+			}
+		}
+		return nil
+	})
+	return problems
+}
+
+func specialistNames(root string) ([]string, []string) {
+	entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills"))
+	if err != nil {
+		return nil, []string{fmt.Sprintf("read skill catalog: %v", err)}
+	}
+	var names []string
+	var problems []string
+	for _, entry := range entries {
+		if !entry.IsDir() || entry.Name() == "go-specialist-router" {
+			continue
+		}
+		path := filepath.Join(root, ".agents", "skills", entry.Name(), "SKILL.md")
+		data, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("read %s: %v", relativePath(root, path), err))
+			continue
+		}
+		if len(validateDirectSharedLink(root, path, data)) == 0 {
+			names = append(names, entry.Name())
+		}
+	}
+	slices.Sort(names)
+	return names, problems
+}
+
+func validateImplicitPolicies(root string) []string {
+	names, problems := specialistNames(root)
+	expected := make(map[string]bool, len(names))
+	for _, name := range names {
+		expected[name] = true
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills"))
+	if err != nil {
+		return append(problems, fmt.Sprintf("read skill catalog: %v", err))
+	}
+	var found []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		path := filepath.Join(root, ".agents", "skills", name, "agents", "openai.yaml")
+		data, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("read policy %s: %v", name, err))
+			continue
+		}
+		if string(data) != "policy:\n  allow_implicit_invocation: false\n" {
+			problems = append(problems, fmt.Sprintf("%s: invalid explicit-only policy", name))
+			continue
+		}
+		found = append(found, name)
+	}
+	if len(found) == 0 {
+		return problems
+	}
+	if len(found) != len(names) {
+		problems = append(problems, "explicit-only policies must cover exactly every shared-contract specialist")
+	}
+	for _, name := range found {
+		if !expected[name] {
+			problems = append(problems, fmt.Sprintf("%s: router or non-specialist must remain implicitly eligible", name))
 		}
 	}
 	return problems
@@ -261,7 +435,19 @@ func validateDirectSharedLink(root, source string, data []byte) []string {
 
 func validateMarkdownLinks(root, source string, data []byte) []string {
 	var problems []string
-	for _, match := range markdownLinkPattern.FindAllSubmatch(data, -1) {
+	inFence := false
+	var prose strings.Builder
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if !inFence {
+			prose.WriteString(line)
+			prose.WriteByte('\n')
+		}
+	}
+	for _, match := range markdownLinkPattern.FindAllSubmatch([]byte(prose.String()), -1) {
 		raw := string(match[1])
 		target, ok := resolveRelativeLink(source, raw)
 		if !ok {
@@ -358,6 +544,9 @@ func validateEvalCase(label string, eval evalCase, selected bool) []string {
 	}
 	problems = append(problems, validateNonEmptyStrings(label+" assertions", eval.Assertions)...)
 	problems = append(problems, validateNonEmptyStrings(label+" expectations", eval.Expectations)...)
+	if eval.TrialClass != "" && eval.TrialClass != "standard" && eval.TrialClass != "safety_authority" {
+		problems = append(problems, label+": invalid trial_class "+strconv.Quote(eval.TrialClass))
+	}
 	if selected {
 		problems = append(problems, validateSelectedEvalCase(label, eval)...)
 	}

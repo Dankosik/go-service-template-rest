@@ -4,7 +4,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHECKER_PACKAGE="./scripts/ci/hard-skills-check"
-EXPECTED_IDS="go-reliability-review:domain_defect go-reliability-review:clean go-reliability-review:neighbor go-reliability-review:unresolved_policy go-security-spec:domain_defect go-security-spec:clean go-security-spec:neighbor go-security-spec:unresolved_policy go-observability-review:domain_defect go-observability-review:clean go-observability-review:neighbor go-observability-review:unresolved_policy"
 TEMP_ROOT=""
 EMITTED_DIR=""
 
@@ -50,15 +49,13 @@ check_manifest() {
     return 1
   fi
 
-  local actual_ids
-  actual_ids="$(awk -F $'\t' 'NF != 5 { exit 2 } { print $1 }' "$EMITTED_DIR/manifest.tsv" | paste -sd ' ' -)" || {
+  local count
+  count="$(awk -F $'\t' 'NF != 5 || $1 != $2 ":" $3 { exit 2 } { count++ } END { print count+0 }' "$EMITTED_DIR/manifest.tsv")" || {
     echo "hard skill eval manifest check failed: malformed manifest.tsv" >&2
     return 1
   }
-  if [[ "$actual_ids" != "$EXPECTED_IDS" ]]; then
-    echo "hard skill eval manifest check failed: selected IDs differ" >&2
-    echo "  expected: $EXPECTED_IDS" >&2
-    echo "  actual: ${actual_ids:-none}" >&2
+  if [[ "$count" != 36 ]]; then
+    echo "hard skill eval manifest check failed: expected 36 selected cases, got $count" >&2
     return 1
   fi
 
@@ -69,7 +66,7 @@ check_manifest() {
       return 1
     fi
   done <"$EMITTED_DIR/manifest.tsv"
-  echo "hard skill eval manifest passed: 12 selected cases"
+  echo "hard skill eval manifest passed: $count selected cases"
 }
 
 read_verdict_value() {
@@ -110,9 +107,9 @@ seal_snapshot() {
   local repo="$1"
   local label="$2"
 
-  for skill in go-reliability-review go-security-spec go-observability-review; do
+  while IFS=$'\t' read -r _ skill _ _ _; do
     rm -rf -- "$repo/.agents/skills/$skill/evals"
-  done
+  done <"$EMITTED_DIR/manifest.tsv"
   git -C "$repo" init --quiet
   git -C "$repo" add --all --force
   git -C "$repo" \
@@ -185,11 +182,12 @@ run_pair() {
   local candidate_snapshot="$8"
   local prompt_seal="$9"
   local expected_seal="${10}"
+  local authoritative_prompt="${11}"
   local adapter_status=0
 
   mkdir -p "$attempt_dir"
   "$WORKFLOW_EVAL_RUNNER" \
-    --variant baseline --repo "$baseline_dir" --case-id "$case_id" --prompt-file "$prompt_file" \
+    --variant baseline --repo "$baseline_dir" --prompt-file "$prompt_file" \
     >"$attempt_dir/baseline-output.txt" 2>"$attempt_dir/baseline-runner.log" || adapter_status=$?
   assert_payloads_unchanged "$prompt_file" "$prompt_seal" "$expected_file" "$expected_seal" "$case_id" || return 1
   if [[ "$adapter_status" -ne 0 ]]; then
@@ -200,7 +198,7 @@ run_pair() {
 
   adapter_status=0
   "$WORKFLOW_EVAL_RUNNER" \
-    --variant candidate --repo "$candidate_dir" --case-id "$case_id" --prompt-file "$prompt_file" \
+    --variant candidate --repo "$candidate_dir" --prompt-file "$prompt_file" \
     >"$attempt_dir/candidate-output.txt" 2>"$attempt_dir/candidate-runner.log" || adapter_status=$?
   assert_payloads_unchanged "$prompt_file" "$prompt_seal" "$expected_file" "$expected_seal" "$case_id" || return 1
   if [[ "$adapter_status" -ne 0 ]]; then
@@ -216,6 +214,10 @@ run_pair() {
     --candidate-output "$attempt_dir/candidate-output.txt" \
     >"$attempt_dir/judgment.env" 2>"$attempt_dir/judge.log" || adapter_status=$?
   assert_payloads_unchanged "$prompt_file" "$prompt_seal" "$expected_file" "$expected_seal" "$case_id" || return 1
+  if ! cmp -s -- "$prompt_seal" "$authoritative_prompt"; then
+    echo "hard skill eval run failed: adapter mutated $case_id authoritative prompt payload" >&2
+    return 1
+  fi
   if [[ "$adapter_status" -ne 0 ]]; then
     echo "hard skill eval run failed: judge failed for $case_id" >&2
     return 1
@@ -246,6 +248,10 @@ run_evals() {
   fi
   if [[ -z "${WORKFLOW_EVAL_JUDGE:-}" || ! -x "$WORKFLOW_EVAL_JUDGE" ]]; then
     echo "hard skill eval run requires executable WORKFLOW_EVAL_JUDGE" >&2
+    return 1
+  fi
+  if [[ "${WORKFLOW_EVAL_COST_AUTHORIZED:-}" != true ]]; then
+    echo "hard skill eval run requires WORKFLOW_EVAL_COST_AUTHORIZED=true before adapters" >&2
     return 1
   fi
 
@@ -284,6 +290,7 @@ run_evals() {
   printf 'case_id\tattempts\tbaseline_pass\tcandidate_pass\tcandidate_non_regression\taccepted\n' >"$artifact_dir/summary.tsv"
 
   local failures=0
+  local runner_index=0
   local case_id skill category prompt_rel expected_rel
   while IFS=$'\t' read -r case_id skill category prompt_rel expected_rel; do
     local case_dir="$artifact_dir/cases/$skill/$category"
@@ -299,9 +306,13 @@ run_evals() {
     local baseline_pass=false candidate_pass=false non_regression=false disputed=false judge_uncertain=false
     while :; do
       local attempt_dir="$case_dir/attempt-$attempt"
-      run_pair "$case_id" "$case_dir/prompt.txt" "$case_dir/expected.txt" "$attempt_dir" \
+      runner_index=$((runner_index + 1))
+      local runner_prompt="$TEMP_ROOT/runner-prompts/$(printf '%06d' "$runner_index")/input.txt"
+      mkdir -p "$(dirname "$runner_prompt")"
+      cp "$case_dir/prompt.txt" "$runner_prompt"
+      run_pair "$case_id" "$runner_prompt" "$case_dir/expected.txt" "$attempt_dir" \
         "$baseline_dir" "$candidate_dir" "$baseline_snapshot" "$candidate_snapshot" \
-        "$payload_seal_dir/prompt.txt" "$payload_seal_dir/expected.txt" || return 1
+        "$payload_seal_dir/prompt.txt" "$payload_seal_dir/expected.txt" "$case_dir/prompt.txt" || return 1
       baseline_pass="$(require_boolean_verdict baseline_pass "$attempt_dir/judgment.env")" || return 1
       candidate_pass="$(require_boolean_verdict candidate_pass "$attempt_dir/judgment.env")" || return 1
       non_regression="$(require_boolean_verdict candidate_non_regression "$attempt_dir/judgment.env")" || return 1
@@ -337,7 +348,7 @@ run_evals() {
     echo "  summary: $artifact_dir/summary.tsv" >&2
     return 1
   fi
-  echo "hard skill evals passed: 12 selected cases"
+  echo "hard skill evals passed: $(wc -l <"$EMITTED_DIR/manifest.tsv" | tr -d ' ') selected cases"
   echo "  artifacts: $artifact_dir"
 }
 

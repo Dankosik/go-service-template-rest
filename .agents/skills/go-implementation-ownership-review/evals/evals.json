@@ -2,6 +2,14 @@
   "skill_name": "go-implementation-ownership-review",
   "evals": [
     {
+      "id": 6,
+      "category": "domain_defect",
+      "prompt": "A HTTP handler directly selects Postgres rows although the accepted design assigns tenant lookup construction to internal/accounts and cmd/api is only the composition root. Review ownership only.",
+      "expected_output": "Report the package and source-of-truth ownership bypass.",
+      "assertions": ["Finds the handler bypass of the accepted account-reader seam.", "Does not invent cache, security, or reliability mechanics."],
+      "files": []
+    },
+    {
       "id": 0,
       "category": "domain_defect",
       "trial_class": "safety_authority",

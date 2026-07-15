@@ -34,6 +34,7 @@ var targetSkills = []string{
 	"go-test-implementation",
 	"go-test-review",
 	"go-verification-before-completion",
+	"go-specialist-router",
 }
 
 var renamedSkills = map[string]string{
@@ -55,6 +56,12 @@ var selectedSkills = []string{
 	"go-reliability-review",
 	"go-security-spec",
 	"go-observability-review",
+	"go-coder",
+	"go-verification-before-completion",
+	"go-security-review",
+	"go-implementation-ownership-review",
+	"go-systematic-debugging",
+	"go-specialist-router",
 }
 
 var evalCategories = []string{

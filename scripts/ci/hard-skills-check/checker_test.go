@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -17,8 +18,8 @@ import (
 
 func TestInventoryContract(t *testing.T) {
 	t.Parallel()
-	if len(targetSkills) != 33 {
-		t.Fatalf("target inventory has %d skills, want 33", len(targetSkills))
+	if len(targetSkills) != 34 {
+		t.Fatalf("target inventory has %d skills, want 34", len(targetSkills))
 	}
 	wantRenames := map[string]string{
 		"go-api-contract-spec":               "api-contract-designer-spec",
@@ -37,9 +38,147 @@ func TestInventoryContract(t *testing.T) {
 	if !maps.Equal(renamedSkills, wantRenames) {
 		t.Fatalf("rename mapping = %#v, want %#v", renamedSkills, wantRenames)
 	}
-	wantSelected := []string{"go-reliability-review", "go-security-spec", "go-observability-review"}
+	wantSelected := []string{"go-reliability-review", "go-security-spec", "go-observability-review", "go-coder", "go-verification-before-completion", "go-security-review", "go-implementation-ownership-review", "go-systematic-debugging", "go-specialist-router"}
 	if !slices.Equal(selectedSkills, wantSelected) {
 		t.Fatalf("selected skills = %v, want %v", selectedSkills, wantSelected)
+	}
+}
+
+func TestStage2MetadataIsClosedAndDormant(t *testing.T) {
+	t.Parallel()
+	prompt := strings.Repeat("a", 64)
+	commit := strings.Repeat("b", 40)
+	valid := fmt.Sprintf(`{"schema_version":1,"prompt_sha256":%q,"repository_commit":%q,"routing_mode":"implicit","explicit_skill_mentions":[],"forced_skills":[],"selected_skills":[{"name":"go-specialist-router","source":"implicit"}],"provenance_source":"runtime_events"}`, prompt, commit)
+	if err := validateStage2Metadata([]byte(valid), prompt, commit, map[string]bool{"go-security-review": true}); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct{ name, metadata string }{
+		{"wrong digest", strings.Replace(valid, prompt, strings.Repeat("c", 64), 1)},
+		{"wrong commit", strings.Replace(valid, commit, strings.Repeat("c", 40), 1)},
+		{"wrong mode", strings.Replace(valid, `"routing_mode":"implicit"`, `"routing_mode":"explicit"`, 1)},
+		{"explicit list", strings.Replace(valid, `"explicit_skill_mentions":[]`, `"explicit_skill_mentions":["go-specialist-router"]`, 1)},
+		{"forced list", strings.Replace(valid, `"forced_skills":[]`, `"forced_skills":["go-specialist-router"]`, 1)},
+		{"omitted router", strings.Replace(valid, `[{"name":"go-specialist-router","source":"implicit"}]`, `[{"name":"agent-prompt-composer","source":"implicit"}]`, 1)},
+		{"explicit-only specialist", strings.Replace(valid, `"go-specialist-router"`, `"go-security-review"`, 1)},
+		{"non-implicit source", strings.Replace(valid, `"source":"implicit"`, `"source":"explicit"`, 1)},
+		{"duplicate selection", strings.Replace(valid, `[{"name":"go-specialist-router","source":"implicit"}]`, `[{"name":"go-specialist-router","source":"implicit"},{"name":"go-specialist-router","source":"implicit"}]`, 1)},
+		{"empty selection", strings.Replace(valid, `[{"name":"go-specialist-router","source":"implicit"}]`, `[]`, 1)},
+		{"unknown key", strings.Replace(valid, `"runtime_events"}`, `"runtime_events","extra":true}`, 1)},
+		{"non-runtime provenance", strings.Replace(valid, `"runtime_events"`, `"adapter_claim"`, 1)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateStage2Metadata([]byte(test.metadata), prompt, commit, map[string]bool{"go-security-review": true}); err == nil {
+				t.Fatal("invalid stage 2 metadata passed")
+			}
+		})
+	}
+}
+
+func TestCatalogAndPolicyMutations(t *testing.T) {
+	t.Run("non-hard name mismatch", func(t *testing.T) {
+		root := makeValidRepository(t)
+		writeSkill(t, root, "grilling", "wrong", validDescription(), "# Body\n")
+		if got := strings.Join(validateCatalog(root), "\n"); !strings.Contains(got, "frontmatter name \"wrong\" does not match directory") {
+			t.Fatalf("catalog mismatch = %s", got)
+		}
+	})
+	for _, test := range []struct{ name, path, body string }{
+		{"nested selector link", ".agents/skills/go-chi-review/references/index.md", "[missing](missing.md)\n"},
+		{"router arbitration link", ".agents/skills/go-specialist-router/references/index.md", "[arbitration](../../missing-arbitration.md)\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := makeValidRepository(t)
+			mustWriteFile(t, filepath.Join(root, filepath.FromSlash(test.path)), []byte(test.body))
+			if got := strings.Join(validateCatalog(root), "\n"); !strings.Contains(got, "unresolved local Markdown link") {
+				t.Fatalf("broken link passed: %s", got)
+			}
+		})
+	}
+	makePolicies := func(t *testing.T) (string, []string) {
+		root := makeValidRepository(t)
+		names, problems := specialistNames(root)
+		if len(problems) != 0 || len(names) != 29 {
+			t.Fatalf("derived specialists = %d, %v", len(names), problems)
+		}
+		for _, name := range names {
+			mustWriteFile(t, filepath.Join(root, ".agents/skills", name, "agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
+		}
+		return root, names
+	}
+	t.Run("zero policies", func(t *testing.T) {
+		if got := validateImplicitPolicies(makeValidRepository(t)); len(got) != 0 {
+			t.Fatal(got)
+		}
+	})
+	t.Run("exact derived policies", func(t *testing.T) {
+		root, _ := makePolicies(t)
+		if got := validateImplicitPolicies(root); len(got) != 0 {
+			t.Fatal(got)
+		}
+	})
+	for _, test := range []struct {
+		name   string
+		mutate func(*testing.T, string, []string)
+	}{
+		{"partial policies", func(t *testing.T, root string, names []string) {
+			mustRemoveAll(t, filepath.Join(root, ".agents/skills", names[0], "agents"))
+		}},
+		{"extra non-specialist", func(t *testing.T, root string, _ []string) {
+			writeSkill(t, root, "grilling", "grilling", validDescription(), "# Body\n")
+			mustWriteFile(t, filepath.Join(root, ".agents/skills/grilling/agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
+		}},
+		{"router false", func(t *testing.T, root string, _ []string) {
+			mustWriteFile(t, filepath.Join(root, ".agents/skills/go-specialist-router/agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
+		}},
+		{"malformed policy", func(t *testing.T, root string, names []string) {
+			mustWriteFile(t, filepath.Join(root, ".agents/skills", names[0], "agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: true\n"))
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root, names := makePolicies(t)
+			test.mutate(t, root, names)
+			if got := validateImplicitPolicies(root); len(got) == 0 {
+				t.Fatal("invalid policy state passed")
+			}
+		})
+	}
+}
+
+func TestTrialClassMatrixAndManifestStability(t *testing.T) {
+	t.Parallel()
+	root := makeValidRepository(t)
+	bundle := validEvalBundle("go-reliability-review")
+	if problems := validateEvalBundle(bundle.SkillName, bundle); len(problems) != 0 {
+		t.Fatalf("empty core trial_class rejected: %v", problems)
+	}
+	aux := bundle.Evals[0]
+	aux.ID = json.RawMessage(`"aux"`)
+	aux.TrialClass = "standard"
+	bundle.Evals = append(bundle.Evals, aux)
+	if problems := validateEvalBundle(bundle.SkillName, bundle); len(problems) != 0 {
+		t.Fatalf("standard rejected: %v", problems)
+	}
+	writeEvalBundle(t, root, bundle.SkillName, bundle)
+	first := filepath.Join(t.TempDir(), "standard")
+	if err := emitSelectedEvals(root, first); err != nil {
+		t.Fatal(err)
+	}
+	bundle.Evals[len(bundle.Evals)-1].TrialClass = "safety_authority"
+	if problems := validateEvalBundle(bundle.SkillName, bundle); len(problems) != 0 {
+		t.Fatalf("safety_authority rejected: %v", problems)
+	}
+	writeEvalBundle(t, root, bundle.SkillName, bundle)
+	second := filepath.Join(t.TempDir(), "safety")
+	if err := emitSelectedEvals(root, second); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := snapshotTree(t, second), snapshotTree(t, first); got != want {
+		t.Fatal("allowed auxiliary trial_class changed 36-core emission")
+	}
+	bundle.Evals[len(bundle.Evals)-1].TrialClass = "auxiliary"
+	if got := strings.Join(validateEvalBundle(bundle.SkillName, bundle), "\n"); !strings.Contains(got, "invalid trial_class") {
+		t.Fatalf("arbitrary trial_class passed: %s", got)
 	}
 }
 
@@ -323,8 +462,8 @@ func TestEmitSelectedEvalsDeterministically(t *testing.T) {
 
 	manifest := mustReadFile(t, filepath.Join(first, "manifest.tsv"))
 	lines := strings.Split(strings.TrimSpace(string(manifest)), "\n")
-	if len(lines) != 12 {
-		t.Fatalf("manifest has %d cases, want 12", len(lines))
+	if len(lines) != 36 {
+		t.Fatalf("manifest has %d cases, want 36", len(lines))
 	}
 	for index, line := range lines {
 		fields := strings.Split(line, "\t")
@@ -357,22 +496,42 @@ func TestSizeReportAccounting(t *testing.T) {
 		t.Fatalf("token heuristic is not labelled:\n%s", text)
 	}
 	rows := parseSizeRows(t, text)
+	skills, err := catalogSkillNames(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, skill := range skills {
+		if _, ok := rows[skill]; !ok {
+			t.Errorf("per-skill row missing: %s", skill)
+		}
+	}
+	for _, family := range []string{"shared-contract-specialist", "direct-execution-method", "specialist-router", "workflow-session"} {
+		row, ok := rows["FAMILY:"+family]
+		if !ok || row[1] != family {
+			t.Errorf("family row missing or wrong: %s", family)
+		}
+	}
+	familyCount := 0
+	for name := range rows {
+		if strings.HasPrefix(name, "FAMILY:") {
+			familyCount++
+		}
+	}
+	if familyCount != 4 {
+		t.Fatalf("family row count = %d, want 4", familyCount)
+	}
 	api := rows["go-api-contract-spec"]
-	if api[1] != "api-contract-designer-spec" {
-		t.Fatalf("rename mapping = %q", api[1])
+	if api[2] != "api-contract-designer-spec" {
+		t.Fatalf("rename mapping = %q", api[2])
 	}
 	reliability := rows["go-reliability-review"]
-	candidateBodyBytes := mustAtoi(t, reliability[8])
-	candidateEffectiveBytes := mustAtoi(t, reliability[16])
 	sharedBytes := len([]byte("shared contract words\n"))
-	if candidateEffectiveBytes != candidateBodyBytes+sharedBytes {
-		t.Fatalf("specialist effective bytes = %d, want %d", candidateEffectiveBytes, candidateBodyBytes+sharedBytes)
-	}
-	coder := rows["go-coder"]
-	if coder[8] != coder[16] {
-		t.Fatalf("execution skill effective bytes %s differ from body bytes %s", coder[16], coder[8])
-	}
-	if _, ok := rows["AGGREGATE"]; !ok {
+	assertEffectiveBytes(t, "specialist", reliability, mustAtoi(t, reliability[9])+sharedBytes)
+	router := rows["go-specialist-router"]
+	assertEffectiveBytes(t, "router", router, mustAtoi(t, router[9])+sharedBytes)
+	assertEffectiveBytes(t, "direct execution", rows["go-coder"], mustAtoi(t, rows["go-coder"][9]))
+	assertEffectiveBytes(t, "workflow/session", rows["planning-session"], mustAtoi(t, rows["planning-session"][9]))
+	if _, ok := rows["CATALOG"]; !ok {
 		t.Fatal("aggregate row missing")
 	}
 	if err := writeSizeReport(root, "missing", &bytes.Buffer{}); err == nil {
@@ -380,11 +539,18 @@ func TestSizeReportAccounting(t *testing.T) {
 	}
 }
 
+func assertEffectiveBytes(t *testing.T, label string, row []string, want int) {
+	t.Helper()
+	if got := mustAtoi(t, row[17]); got != want {
+		t.Fatalf("%s effective bytes = %d, want %d", label, got, want)
+	}
+}
+
 func TestHarnessManifestAndRequiredInputs(t *testing.T) {
 	t.Parallel()
 	fixture := makeHarnessFixture(t)
 	output, err := runHarness(t, fixture, []string{"check"}, nil)
-	if err != nil || !strings.Contains(output, "12 selected cases") {
+	if err != nil || !strings.Contains(output, "36 selected cases") {
 		t.Fatalf("manifest check: %v\n%s", err, output)
 	}
 
@@ -408,6 +574,50 @@ func TestHarnessManifestAndRequiredInputs(t *testing.T) {
 	}
 }
 
+func TestHarnessCheckOnlyAndCostAuthorizationMakeNoAdapterCalls(t *testing.T) {
+	fixture := makeHarnessFixture(t)
+	env := fixture.runEnv()
+	if output, err := runHarness(t, fixture, []string{"check"}, env); err != nil {
+		t.Fatalf("check failed: %v\n%s", err, output)
+	}
+	assertNoAdapterCalls(t, fixture)
+	for _, test := range []struct {
+		name  string
+		value *string
+	}{
+		{"missing", nil}, {"false", func() *string { value := "false"; return &value }()},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := makeHarnessFixture(t)
+			env := fixture.runEnv()
+			if test.value == nil {
+				delete(env, "WORKFLOW_EVAL_COST_AUTHORIZED")
+			} else {
+				env["WORKFLOW_EVAL_COST_AUTHORIZED"] = *test.value
+			}
+			output, err := runHarness(t, fixture, []string{"run", filepath.Join(t.TempDir(), "artifacts")}, env)
+			if err == nil || !strings.Contains(output, "WORKFLOW_EVAL_COST_AUTHORIZED=true before adapters") {
+				t.Fatalf("authorization error = %v\n%s", err, output)
+			}
+			assertNoAdapterCalls(t, fixture)
+		})
+	}
+}
+
+func assertNoAdapterCalls(t *testing.T, fixture harnessFixture) {
+	t.Helper()
+	if data, err := os.ReadFile(fixture.runnerLog); err == nil && len(bytes.TrimSpace(data)) != 0 {
+		t.Fatalf("runner called: %s", data)
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(fixture.judgeCount); err == nil && len(bytes.TrimSpace(data)) != 0 {
+		t.Fatalf("judge called: %s", data)
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
+}
+
 func TestHarnessIsolationAndAdapterSymmetry(t *testing.T) {
 	t.Parallel()
 	fixture := makeHarnessFixture(t)
@@ -415,23 +625,24 @@ func TestHarnessIsolationAndAdapterSymmetry(t *testing.T) {
 	env := fixture.runEnv()
 	env["FAKE_REQUIRE_CANDIDATE_FILE"] = ".agents/skills/go-reliability-review/references/untracked-authority.md"
 	env["FAKE_FORBID_FILE"] = "unrelated-sentinel.txt"
+	env["FAKE_ASSERT_SEALED"] = "true"
 	output, err := runHarness(t, fixture, []string{"run", artifactDir}, env)
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, output)
 	}
 	logLines := nonEmptyLines(string(mustReadFile(t, fixture.runnerLog)))
-	if len(logLines) != 24 {
-		t.Fatalf("runner calls = %d, want 24", len(logLines))
+	if len(logLines) != 72 {
+		t.Fatalf("runner calls = %d, want 72", len(logLines))
 	}
 	for index := 0; index < len(logLines); index += 2 {
 		baseline := strings.Split(logLines[index], "\t")
 		candidate := strings.Split(logLines[index+1], "\t")
-		if len(baseline) != 3 || len(candidate) != 3 || baseline[0] != "baseline" || candidate[0] != "candidate" || baseline[1] != candidate[1] || baseline[2] != candidate[2] {
+		if len(baseline) != 2 || len(candidate) != 2 || baseline[0] != "baseline" || candidate[0] != "candidate" || baseline[1] != candidate[1] {
 			t.Fatalf("asymmetric pair: %q / %q", logLines[index], logLines[index+1])
 		}
 	}
 	summary := string(mustReadFile(t, filepath.Join(artifactDir, "summary.tsv")))
-	if strings.Count(strings.TrimSpace(summary), "\n") != 12 || strings.Contains(summary, "\tfalse\n") {
+	if strings.Count(strings.TrimSpace(summary), "\n") != 36 || strings.Contains(summary, "\tfalse\n") {
 		t.Fatalf("unexpected summary:\n%s", summary)
 	}
 	runEnv := string(mustReadFile(t, filepath.Join(artifactDir, "run.env")))
@@ -463,7 +674,7 @@ func TestHarnessDetectsPromptAndExpectedPayloadMutation(t *testing.T) {
 		want   string
 	}{
 		{name: "baseline runner prompt", mutate: "baseline:prompt", want: "prompt payload"},
-		{name: "candidate runner expected", mutate: "candidate:expected", want: "expected payload"},
+		{name: "candidate runner prompt", mutate: "candidate:prompt", want: "prompt payload"},
 		{name: "judge prompt", mutate: "judge:prompt", want: "prompt payload"},
 		{name: "judge expected", mutate: "judge:expected", want: "expected payload"},
 	}
@@ -502,8 +713,8 @@ func TestHarnessRepeatPolicyAndCap(t *testing.T) {
 		if err != nil {
 			t.Fatalf("repeat run failed: %v\n%s", err, output)
 		}
-		if got := len(nonEmptyLines(string(mustReadFile(t, fixture.runnerLog)))); got != 26 {
-			t.Fatalf("runner calls = %d, want 26", got)
+		if got := len(nonEmptyLines(string(mustReadFile(t, fixture.runnerLog)))); got != 74 {
+			t.Fatalf("runner calls = %d, want 74", got)
 		}
 		summary := nonEmptyLines(string(mustReadFile(t, filepath.Join(artifactDir, "summary.tsv"))))
 		if !strings.Contains(summary[1], "\t2\t") {
@@ -537,11 +748,12 @@ type harnessFixture struct {
 
 func (fixture harnessFixture) runEnv() map[string]string {
 	return map[string]string{
-		"WORKFLOW_EVAL_BASE_REF": fixture.baseline,
-		"WORKFLOW_EVAL_RUNNER":   fixture.runner,
-		"WORKFLOW_EVAL_JUDGE":    fixture.judge,
-		"FAKE_RUNNER_LOG":        fixture.runnerLog,
-		"FAKE_JUDGE_COUNT":       fixture.judgeCount,
+		"WORKFLOW_EVAL_BASE_REF":        fixture.baseline,
+		"WORKFLOW_EVAL_RUNNER":          fixture.runner,
+		"WORKFLOW_EVAL_JUDGE":           fixture.judge,
+		"WORKFLOW_EVAL_COST_AUTHORIZED": "true",
+		"FAKE_RUNNER_LOG":               fixture.runnerLog,
+		"FAKE_JUDGE_COUNT":              fixture.judgeCount,
 	}
 }
 
@@ -583,17 +795,20 @@ func runHarness(t *testing.T, fixture harnessFixture, args []string, overrides m
 	t.Helper()
 	command := exec.CommandContext(t.Context(), "bash", append([]string{filepath.Join(fixture.root, "scripts/dev/hard-skills-evals.sh")}, args...)...)
 	controlled := map[string]bool{
-		"HARD_SKILLS_CHECKER":         true,
-		"WORKFLOW_EVAL_BASE_REF":      true,
-		"WORKFLOW_EVAL_RUNNER":        true,
-		"WORKFLOW_EVAL_JUDGE":         true,
-		"FAKE_RUNNER_LOG":             true,
-		"FAKE_JUDGE_COUNT":            true,
-		"FAKE_JUDGE_MODE":             true,
-		"FAKE_MUTATE_VARIANT":         true,
-		"FAKE_MUTATE_PAYLOAD_ON":      true,
-		"FAKE_REQUIRE_CANDIDATE_FILE": true,
-		"FAKE_FORBID_FILE":            true,
+		"HARD_SKILLS_CHECKER":           true,
+		"WORKFLOW_EVAL_BASE_REF":        true,
+		"WORKFLOW_EVAL_RUNNER":          true,
+		"WORKFLOW_EVAL_JUDGE":           true,
+		"WORKFLOW_EVAL_COST_AUTHORIZED": true,
+		"FAKE_RUNNER_LOG":               true,
+		"FAKE_JUDGE_COUNT":              true,
+		"FAKE_JUDGE_MODE":               true,
+		"FAKE_MUTATE_VARIANT":           true,
+		"FAKE_MUTATE_PAYLOAD_ON":        true,
+		"FAKE_REQUIRE_CANDIDATE_FILE":   true,
+		"FAKE_FORBID_FILE":              true,
+		"FAKE_ASSERT_SEALED":            true,
+		"FAKE_SELECTED_SKILLS":          true,
 	}
 	var env []string
 	for _, entry := range os.Environ() {
@@ -603,6 +818,7 @@ func runHarness(t *testing.T, fixture harnessFixture, args []string, overrides m
 		}
 	}
 	env = append(env, "HARD_SKILLS_CHECKER="+fixture.checker)
+	env = append(env, "FAKE_SELECTED_SKILLS="+strings.Join(selectedSkills, ","))
 	for key, value := range overrides {
 		env = append(env, key+"="+value)
 	}
@@ -613,20 +829,34 @@ func runHarness(t *testing.T, fixture harnessFixture, args []string, overrides m
 
 const fakeRunnerScript = `#!/usr/bin/env bash
 set -euo pipefail
+argv="$*"
 variant=""
 repo=""
-case_id=""
 prompt_file=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --variant) variant="$2"; shift 2 ;;
     --repo) repo="$2"; shift 2 ;;
-    --case-id) case_id="$2"; shift 2 ;;
     --prompt-file) prompt_file="$2"; shift 2 ;;
     *) exit 64 ;;
   esac
 done
-printf '%s\t%s\t%s\n' "$variant" "$case_id" "$(cksum <"$prompt_file")" >>"$FAKE_RUNNER_LOG"
+case "$argv" in
+  *--case-id*|*expected*|*answer-key*|*domain_defect*|*clean*|*neighbor*|*unresolved_policy*) echo "routing or answer-key hint leaked in runner argv" >&2; exit 67 ;;
+esac
+IFS=',' read -r -a selected_skills <<<"$FAKE_SELECTED_SKILLS"
+for skill in "${selected_skills[@]}"; do
+  if [[ "$argv" == *"$skill"* ]]; then echo "selected skill leaked in runner argv" >&2; exit 67; fi
+  if [[ "${FAKE_ASSERT_SEALED:-}" == true && -e "$repo/.agents/skills/$skill/evals" ]]; then echo "selected eval directory leaked into $variant snapshot: $skill" >&2; exit 68; fi
+done
+case "$prompt_file" in
+  *cases*|*go-*|*domain_defect*|*unresolved_policy*|*expected*) echo "routing hint leaked in prompt path" >&2; exit 67 ;;
+esac
+if find "$(dirname "$prompt_file")" -mindepth 1 -maxdepth 1 ! -name input.txt | grep -q .; then
+  echo "non-prompt payload accessible in opaque runner directory" >&2
+  exit 69
+fi
+printf '%s\t%s\n' "$variant" "$(cksum <"$prompt_file")" >>"$FAKE_RUNNER_LOG"
 if [[ "${FAKE_MUTATE_VARIANT:-}" == "$variant" ]]; then
   printf 'mutation\n' >"$repo/adapter-mutation.txt"
 fi
@@ -683,8 +913,8 @@ func makeValidRepository(t *testing.T) string {
 		body := "# Skill\n"
 		if !executionSkills[skill] {
 			body += "\n[Shared contract](../specialist-contract.md)\n"
-			writeEvalBundle(t, root, skill, validEvalBundle(skill))
 		}
+		writeEvalBundle(t, root, skill, validEvalBundle(skill))
 		writeSkill(t, root, skill, skill, validDescription(), body)
 	}
 	return root
@@ -759,6 +989,7 @@ func makeSizeRepository(t *testing.T) (string, string) {
 		}
 		writeSkill(t, root, baselineSkill, baselineSkill, validDescription(), "baseline "+baselineSkill+"\n")
 	}
+	writeSkill(t, root, "planning-session", "planning-session", validDescription(), "baseline planning-session\n")
 	mustWriteFile(t, filepath.Join(root, filepath.FromSlash(sharedContractPath)), []byte("baseline shared\n"))
 	runGit(t, root, "init", "--quiet")
 	runGit(t, root, "add", "--all")
@@ -768,8 +999,13 @@ func makeSizeRepository(t *testing.T) (string, string) {
 		if old, ok := renamedSkills[skill]; ok {
 			mustRemoveAll(t, filepath.Join(root, ".agents/skills", old))
 		}
-		writeSkill(t, root, skill, skill, validDescription(), "candidate "+skill+"\n")
+		body := "candidate " + skill + "\n"
+		if !executionSkills[skill] {
+			body += "[Shared contract](../specialist-contract.md)\n"
+		}
+		writeSkill(t, root, skill, skill, validDescription(), body)
 	}
+	writeSkill(t, root, "planning-session", "planning-session", validDescription(), "candidate planning-session\n")
 	mustWriteFile(t, filepath.Join(root, filepath.FromSlash(sharedContractPath)), []byte("shared contract words\n"))
 	return root, baseline
 }
@@ -779,7 +1015,7 @@ func parseSizeRows(t *testing.T, report string) map[string][]string {
 	rows := make(map[string][]string)
 	for _, line := range strings.Split(report, "\n") {
 		fields := strings.Split(line, "\t")
-		if len(fields) == 18 && fields[0] != "skill" {
+		if len(fields) == 19 && fields[0] != "skill" {
 			rows[fields[0]] = fields
 		}
 	}

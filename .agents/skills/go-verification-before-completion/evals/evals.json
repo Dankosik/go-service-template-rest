@@ -7,7 +7,7 @@
       "prompt": "Use the go-verification-before-completion skill. The claim is: migration-backed cache changes are fully ready. Fresh output shows make check-full exited 0, but it printed that Docker was unavailable and migration validation was skipped; the focused cache package test passed with -count=1, and no race command ran although shared cache state changed. Return the compact verification note.",
       "expected_output": "A claim-scoped verification result that rejects full readiness, classifies the skipped and missing evidence, and preserves the focused passing proof.",
       "files": [],
-      "expectations": [
+      "assertions": [
         "The response marks migration validation as skipped rather than passed despite exit code 0.",
         "The response records the focused cache test as passed and race evidence as unavailable or not run.",
         "The final claim is partially verified or not verified, with concrete next commands and no readiness wording."
@@ -19,7 +19,7 @@
       "prompt": "Use the go-verification-before-completion skill. Verify only the claim that TestParseLimitRejectsTrailingData now passes. In the current workspace, go test ./internal/parser -run '^TestParseLimitRejectsTrailingData$' -count=1 just exited 0 and reported PASS; no broader readiness claim is requested.",
       "expected_output": "Verified for the exact focused test claim, with no unrelated commands or broader readiness statement.",
       "files": [],
-      "expectations": [
+      "assertions": [
         "The response reports the exact focused claim as verified from fresh uncached execution.",
         "The response does not require repository-wide proof for the narrow claim.",
         "The response does not broaden the conclusion beyond the named test."
@@ -31,7 +31,7 @@
       "prompt": "Use the go-verification-before-completion skill. A fresh focused Go test fails with a panic whose cause has not been diagnosed, and the request asks you to both determine the root cause and repair it before saying fixed. Return only the forced owner and verification consequence; do not edit files.",
       "expected_output": "Route diagnosis and repair to go-systematic-debugging and report the fix claim as not verified until fresh causal repair proof exists.",
       "files": [],
-      "expectations": [
+      "assertions": [
         "The response names go-systematic-debugging as the owner of unknown-root-cause diagnosis and authorized causal repair.",
         "The response does not debug or patch within verification.",
         "The response states that the fixed claim remains not verified pending fresh matching evidence."
@@ -43,7 +43,7 @@
       "prompt": "Use the go-verification-before-completion skill. The requested claim is that a staged rollout is ready, but no accepted artifact defines the required canary duration, rollback trigger, migration ordering, or blocking release gate, and the repository has no command encoding those criteria. Return the verification outcome without inventing policy.",
       "expected_output": "Block the readiness claim on go-delivery-platform-spec because no accepted rollout and release-gate criteria exist to verify.",
       "files": [],
-      "expectations": [
+      "assertions": [
         "The response reports the readiness claim as not verified because its acceptance criteria are unresolved.",
         "The response names go-delivery-platform-spec as the missing policy owner.",
         "The response invents no canary duration, rollback threshold, migration sequence, release gate, or substitute command."

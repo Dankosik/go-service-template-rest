@@ -1,0 +1,9 @@
+{
+  "skill_name": "go-specialist-router",
+  "evals": [
+    {"id": 0, "category": "domain_defect", "prompt": "An API change adds a tenant-scoped resource and changes its durable owner record. Route every independent axis.", "expected_output": "Select both API-contract and data-architecture specialists.", "assertions": ["Selects go-api-contract-spec and go-data-architecture-spec as independent primary owners."], "files": []},
+    {"id": 1, "category": "clean", "prompt": "A requested change has no affected Go specialist axis.", "expected_output": "Select no specialist.", "assertions": ["Returns no specialist selection."], "files": []},
+    {"id": 2, "category": "neighbor", "prompt": "A changed accepted retry budget violates reliability policy; no other axis changes.", "expected_output": "Select only go-reliability-review.", "assertions": ["Selects go-reliability-review and rejects neighboring owners."], "files": []},
+    {"id": 3, "category": "unresolved_policy", "prompt": "A new endpoint has no accepted authorization policy. Route without inventing it.", "expected_output": "Route the missing decision to go-security-spec.", "assertions": ["Names go-security-spec as the unresolved decision owner and invents no policy."], "files": []}
+  ]
+}

@@ -498,6 +498,12 @@ Bootstrap shortcuts:
 
 ### CI policy helper checks
 
+- `bash scripts/dev/hard-skills-evals.sh check`
+  - Emits and validates the deterministic nine-skill, 36-core-case manifest without calling adapters.
+
+- `WORKFLOW_EVAL_BASE_REF=<immutable-commit> WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_COST_AUTHORIZED=true bash scripts/dev/hard-skills-evals.sh run [artifact-dir]`
+  - Runs the cost-authorized comparison only after sealing every manifest-selected eval bundle from both runner snapshots. This is Stage 1 comparison plumbing, not proof of implicit router provenance or Stage 2 activation.
+
 - `make workflow-routing-check`
   - Runs the hard-skills checker, selected instruction-eval manifest/fixture and fake-adapter harness checks, and workflow-instruction structural checks.
   - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or enforces an aggregate word limit.

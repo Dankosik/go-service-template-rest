@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -20,6 +21,7 @@ type sizeMetrics struct {
 
 type sizeRow struct {
 	Skill              string
+	Family             string
 	BaselineSkill      string
 	BaselineBody       sizeMetrics
 	CandidateBody      sizeMetrics
@@ -42,19 +44,25 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 	}
 	sharedMetrics := measure(shared)
 
-	rows := make([]sizeRow, 0, len(targetSkills))
-	for _, skill := range targetSkills {
+	skills, err := catalogSkillNames(root)
+	if err != nil {
+		return err
+	}
+	rows := make([]sizeRow, 0, len(skills))
+	for _, skill := range skills {
 		baselineSkill := skill
 		if old, ok := renamedSkills[skill]; ok {
 			baselineSkill = old
 		}
-		baselineData, err := gitBytes(root, "show", baselineCommit+":.agents/skills/"+baselineSkill+"/SKILL.md")
-		if err != nil {
-			return fmt.Errorf("read baseline skill %s: %w", baselineSkill, err)
-		}
-		baselineDoc, err := parseSkillDocument(baselineData, baselineSkill)
-		if err != nil {
-			return fmt.Errorf("parse baseline skill %s: %w", baselineSkill, err)
+		baselineDoc := skillDocument{}
+		baselineData, baselineErr := gitBytes(root, "show", baselineCommit+":.agents/skills/"+baselineSkill+"/SKILL.md")
+		if baselineErr == nil {
+			baselineDoc, err = parseSkillDocument(baselineData, baselineSkill)
+			if err != nil {
+				baselineDoc = skillDocument{Body: skillBody(baselineData)}
+			}
+		} else if skill != "go-specialist-router" {
+			return fmt.Errorf("read baseline skill %s: %w", baselineSkill, baselineErr)
 		}
 		candidateDoc, err := readSkillDocument(filepath.Join(root, ".agents", "skills", skill, "SKILL.md"))
 		if err != nil {
@@ -62,12 +70,14 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 		}
 		baselineBody := measure(baselineDoc.Body)
 		candidateBody := measure(candidateDoc.Body)
+		family := skillFamily(root, skill, candidateDoc)
 		candidateEffective := candidateBody
-		if !executionSkills[skill] {
+		if loadsSharedContract(root, candidateDoc) {
 			candidateEffective = addMetrics(candidateEffective, sharedMetrics)
 		}
 		rows = append(rows, sizeRow{
 			Skill:              skill,
+			Family:             family,
 			BaselineSkill:      baselineSkill,
 			BaselineBody:       baselineBody,
 			CandidateBody:      candidateBody,
@@ -83,7 +93,7 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 		return fmt.Errorf("write baseline commit: %w", err)
 	}
 	if _, err := fmt.Fprintln(output, strings.Join([]string{
-		"skill", "baseline_skill",
+		"skill", "family", "baseline_skill",
 		"baseline_body_lines", "baseline_body_words", "baseline_body_bytes", "baseline_body_tokens_ceil_bytes_div_4",
 		"candidate_body_lines", "candidate_body_words", "candidate_body_bytes", "candidate_body_tokens_ceil_bytes_div_4",
 		"baseline_effective_lines", "baseline_effective_words", "baseline_effective_bytes", "baseline_effective_tokens_ceil_bytes_div_4",
@@ -92,19 +102,76 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 		return fmt.Errorf("write size report header: %w", err)
 	}
 
-	var aggregate sizeRow
-	aggregate.Skill = "AGGREGATE"
-	aggregate.BaselineSkill = "-"
+	aggregates := map[string]sizeRow{}
+	total := sizeRow{Skill: "CATALOG", Family: "whole-catalog", BaselineSkill: "-"}
 	for _, row := range rows {
 		if err := writeSizeRow(output, row); err != nil {
 			return err
 		}
+		aggregate := aggregates[row.Family]
+		aggregate.Skill, aggregate.Family, aggregate.BaselineSkill = "FAMILY:"+row.Family, row.Family, "-"
 		aggregate.BaselineBody = addMetrics(aggregate.BaselineBody, row.BaselineBody)
 		aggregate.CandidateBody = addMetrics(aggregate.CandidateBody, row.CandidateBody)
 		aggregate.BaselineEffective = addMetrics(aggregate.BaselineEffective, row.BaselineEffective)
 		aggregate.CandidateEffective = addMetrics(aggregate.CandidateEffective, row.CandidateEffective)
+		aggregates[row.Family] = aggregate
+		total.BaselineBody = addMetrics(total.BaselineBody, row.BaselineBody)
+		total.CandidateBody = addMetrics(total.CandidateBody, row.CandidateBody)
+		total.BaselineEffective = addMetrics(total.BaselineEffective, row.BaselineEffective)
+		total.CandidateEffective = addMetrics(total.CandidateEffective, row.CandidateEffective)
 	}
-	return writeSizeRow(output, aggregate)
+	for _, family := range []string{"shared-contract-specialist", "direct-execution-method", "specialist-router", "workflow-session"} {
+		if row, ok := aggregates[family]; ok {
+			if err := writeSizeRow(output, row); err != nil {
+				return err
+			}
+		}
+	}
+	return writeSizeRow(output, total)
+}
+
+func skillBody(data []byte) []byte {
+	if !bytes.HasPrefix(data, []byte("---\n")) {
+		return data
+	}
+	if closing := bytes.Index(data[4:], []byte("\n---\n")); closing >= 0 {
+		return data[4+closing+5:]
+	}
+	return data
+}
+
+func catalogSkillNames(root string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills"))
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if _, err := os.Stat(filepath.Join(root, ".agents", "skills", entry.Name(), "SKILL.md")); err == nil {
+				names = append(names, entry.Name())
+			}
+		}
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
+func skillFamily(root, skill string, doc skillDocument) string {
+	if skill == "go-specialist-router" {
+		return "specialist-router"
+	}
+	if loadsSharedContract(root, doc) {
+		return "shared-contract-specialist"
+	}
+	if executionSkills[skill] {
+		return "direct-execution-method"
+	}
+	return "workflow-session"
+}
+
+func loadsSharedContract(root string, doc skillDocument) bool {
+	return len(validateDirectSharedLink(root, doc.Path, doc.Body)) == 0
 }
 
 func measure(data []byte) sizeMetrics {
@@ -130,8 +197,8 @@ func addMetrics(left, right sizeMetrics) sizeMetrics {
 }
 
 func writeSizeRow(output io.Writer, row sizeRow) error {
-	if _, err := fmt.Fprintf(output, "%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
-		row.Skill, row.BaselineSkill,
+	if _, err := fmt.Fprintf(output, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+		row.Skill, row.Family, row.BaselineSkill,
 		row.BaselineBody.Lines, row.BaselineBody.Words, row.BaselineBody.Bytes, row.BaselineBody.Tokens,
 		row.CandidateBody.Lines, row.CandidateBody.Words, row.CandidateBody.Bytes, row.CandidateBody.Tokens,
 		row.BaselineEffective.Lines, row.BaselineEffective.Words, row.BaselineEffective.Bytes, row.BaselineEffective.Tokens,
