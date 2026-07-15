@@ -5,4 +5,10 @@ description: "Stress-test a plan, decision, idea, or design one material branch 
 
 # Grilling
 
-For explicit user grilling, ask one material root-to-user question at a time and wait for the answer. For internal autonomous challenge only, use [the autonomous pre-review challenge](../../../docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) and return exactly its allowed event. Stop when another question would invent scope.
+## Explicit user mode
+
+For explicit user grilling, ask one material root-to-user question at a time and wait for the answer.
+
+## Internal challenger mode
+
+For internal autonomous challenge only, use [the autonomous pre-review challenge](../../../docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) and return exactly its allowed event. Stop when another question would invent scope.
