@@ -5,8 +5,4 @@ description: "Read-only challenge of a workflow-plan.md when routing or handoff 
 
 # Workflow Plan Adequacy Challenge
 
-Use only when a durable workflow plan exists and an independent challenge can change coordination safety. Do not use merely because the task is non-trivial.
-
-Inspect the accepted goal, current phase, active artifacts, blockers/assumptions, next action, proof, and handoff. Ask whether a context-blind session could resume without inventing scope, phase, owner, or completion policy.
-
-Return anchored gaps classified as handoff blocker, lane blocker, or non-blocking simplification. Recommend the smallest repair, including deletion of duplicated control text. Do not edit, classify the task, approve readiness, or demand artifacts that do not change an action.
+Read-only challenge a workflow plan only when routing or handoff is high-impact or contested; return anchored gaps and the next owner. Use [the artifact model](../../../docs/spec-first-workflow/shared/artifact-model.md) rather than restating its method. Return only the named artifact or status and its evidence.

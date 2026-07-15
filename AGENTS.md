@@ -42,6 +42,7 @@ Repository-wide contract for producing reliable Go-service changes with the leas
 ## Instruction Ownership
 
 - Keep global rules here.
+- [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - Keep path selection, phase order, review routing, and movement rules in `docs/spec-first-workflow.md`.
 - Keep phase-specific method in `docs/spec-first-workflow/phases/`.
 - Keep artifact persistence and status rules in `docs/spec-first-workflow/shared/artifact-model.md`.

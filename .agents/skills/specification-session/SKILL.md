@@ -5,9 +5,4 @@ description: "Own the root specification macro phase: create or repair spec.md, 
 
 # Specification Session
 
-Follow [the Specification
-phase](../../../docs/spec-first-workflow/phases/specification.md).
-
-Own the root Specification macro phase through its canonical Stop Rule. Apply
-its Method and Decision Bar while authoring or repairing the smallest useful
-`spec.md`, then invoke the required read-only review.
+Own the specification phase through candidate spec, review, and repair routing; stop at accepted specification readiness, not implementation. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) rather than restating its method. Return only the named artifact or status and its evidence.

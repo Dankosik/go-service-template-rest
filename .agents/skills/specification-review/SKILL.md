@@ -5,14 +5,4 @@ description: "Review a fixed spec revision read-only and return the complete res
 
 # Specification Review
 
-Use only for a fixed, reviewable spec revision or an explicitly read-only user
-review. Follow [Specification
-Review](../../../docs/spec-first-workflow/phases/specification-review.md).
-
-Remain read-only. Apply the canonical affected-surface reconstruction and
-falsification method, then return the shared review envelope plus its
-Specification-specific fields. Do not edit the spec, approve your own repair,
-or block on prose polish.
-
-Return the complete review result to the owning root. For an explicitly
-requested standalone review, return it to the user and stop read-only.
+Read-only review a fixed spec against evidence and authorities; return anchored findings and PASS, CONCERNS, or FAIL without editing. Use [Specification Review](../../../docs/spec-first-workflow/phases/specification-review.md) rather than restating its method. Return only the named artifact or status and its evidence.

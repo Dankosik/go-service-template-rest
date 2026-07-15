@@ -5,6 +5,4 @@ description: "Own the root planning macro phase: create or repair tasks.md, run 
 
 # Planning Session
 
-Own the root [Planning](../../../docs/spec-first-workflow/phases/planning.md) macro phase through its canonical Stop Rule. Create or repair the ledger, run the required independent task review/readiness, repair planning-owned findings, and obtain fresh re-review to the shared convergence condition. Reopen the narrow upstream owner instead of hiding a missing decision in a task.
-
-Stop before implementation when Planning is the user-named boundary or the canonical Stop Rule is unmet; otherwise continue in the same authorized request.
+Own the planning phase: repair the task ledger and route required review until its stop rule; do not implement or alter accepted design. Use [Planning](../../../docs/spec-first-workflow/phases/planning.md) rather than restating its method. Return only the named artifact or status and its evidence.

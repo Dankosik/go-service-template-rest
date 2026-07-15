@@ -5,6 +5,4 @@ description: "Draft one dependency-ordered tasks.md from already ready decisions
 
 # Planning And Task Breakdown
 
-Draft one ledger by applying the canonical [Planning](../../../docs/spec-first-workflow/phases/planning.md) method to already ready decisions. Return the draft to the owning root when it is complete or when an upstream decision must reopen.
-
-Do not edit implementation or approve readiness. The root runs independent task review/readiness, repair, and fresh re-review to the shared convergence condition.
+Turn accepted decisions into one dependency-ordered task ledger with owner, proof, cleanup, and reopen conditions; do not decide behavior or implement. Use [Planning](../../../docs/spec-first-workflow/phases/planning.md) rather than restating its method. Return only the named artifact or status and its evidence.

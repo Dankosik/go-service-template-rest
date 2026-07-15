@@ -5,14 +5,4 @@ description: "Draft or normalize one candidate spec.md revision from an accepted
 
 # Spec Document Designer
 
-Use [the specification phase](../../../docs/spec-first-workflow/phases/specification.md).
-
-Author only the current candidate revision from the accepted brief and relevant
-evidence. Apply the phase's canonical shape and Method, omitting empty headings
-and foreign template ceremony.
-
-Keep task order in `tasks.md` and raw evidence in research notes. For a replaced
-surface, preserve the phase's cleanup decision.
-
-For structured/orchestrated work, authoring leaves `status: draft`.
-It never approves its own readiness; return the candidate to the owning root.
+Draft one candidate spec from accepted brief and evidence, preserving authorities and explicit open decisions; stop when the brief cannot decide behavior. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) rather than restating its method. Return only the named artifact or status and its evidence.

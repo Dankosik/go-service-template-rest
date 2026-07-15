@@ -1,0 +1,12 @@
+# Reference Selector
+
+References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load lazily for the symptom that matches the active seam; if a reference would not change a decision, do not load it.
+
+| Symptom | Behavior Change | Load |
+| --- | --- |
+| Slow SQL, N+1, dynamic filters, pagination, generated-query contract, or cache proposed before origin shape is proven | Makes the model require a named, bounded origin query contract and reject cache-as-cover instead of approving Redis around an undefined query path | [sql-access-discipline-and-query-budget.md](sql-access-discipline-and-query-budget.md) |
+| Write transaction boundary, retry eligibility, idempotency keys, `ON CONFLICT`, or cache invalidation coupled to writes | Makes the model choose whole-use-case retry plus idempotent write and durable invalidation linkage or an explicit harmless-loss fallback instead of statement-level retry or best-effort dual writes | [transaction-retry-and-idempotency-contracts.md](transaction-retry-and-idempotency-contracts.md) |
+| DB/cache deadline hierarchy, request cancellation, pool saturation, dedicated connection use, or fallback budget | Makes the model budget cache, origin, and pool waits explicitly instead of assuming a handler timeout or larger pool setting is enough | [context-timeout-and-connection-budget.md](context-timeout-and-connection-budget.md) |
+| Cache requested because a path is slow, or topology is unclear across no-cache, local, distributed, hybrid, or client-side caching | Makes the model compare no-cache and topology tradeoffs with evidence, divergence, memory, key-safety, and client-side invalidation hazards instead of defaulting to Redis | [cache-necessity-and-topology.md](cache-necessity-and-topology.md) |
+| Freshness window, TTL, jitter, invalidation source, versioned keys, stale-while-revalidate, negative caching, or key transitions | Makes the model assign an operation-level freshness class and invalidation contract instead of treating TTL as correctness proof | [cache-invalidation-staleness-and-ttl.md](cache-invalidation-staleness-and-ttl.md) |
+| Cache outage, fail-open/fail-closed policy, origin protection, telemetry labels, degraded-mode proof, or test obligations | Makes the model specify containment and low-cardinality proof for degraded cache paths instead of saying "fall back to DB" or testing only hits | [cache-failure-observability-and-testing.md](cache-failure-observability-and-testing.md) |
