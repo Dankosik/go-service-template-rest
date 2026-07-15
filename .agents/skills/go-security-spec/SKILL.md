@@ -1,47 +1,34 @@
 ---
 name: go-security-spec
-description: "Design security requirements for Go services: trust boundaries, identity and access rules, tenant isolation, threat-class controls, abuse resistance, secure defaults, and testable security behavior."
+description: "Use when trust boundaries, identities, access rules, tenant and object isolation, browser or token controls, threat defenses, abuse resistance, secure defaults, or security proof must be decided before coding; Own security policy; Skip when the task is enforcement review, API resource semantics, chi wiring, or implementation."
 ---
 
 # Go Security Spec
 
-## Purpose
-Define security requirements before coding so trust boundaries, identity rules, authorization, tenant isolation, threat controls, data protection, privacy, abuse resistance, and negative-path proof are explicit and testable.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Treat security as explicit trust boundaries, identity rules, denial behavior, and abuse controls.
-- Separate authentication, authorization, tenant isolation, sensitive-data handling, privacy, and resource-exhaustion defenses.
-- Prefer fail-closed, least-privilege, standard-library-friendly controls with concrete negative-path proof.
-- Hand off architecture, API, physical schema, reliability, observability, or delivery policy when they stop being security-owned decisions.
-- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
+## Outcome And Boundary
 
-## Scope
-- define trust boundaries, attacker paths, security assumptions, and threat exposure for affected flows
-- define identity and access rules, including caller/subject separation, tenant binding, object-level authorization, and property-level authorization
-- define secure-by-default controls for untrusted input, outbound access, secrets, sensitive data, privacy, and telemetry redaction
-- define abuse-resistance behavior: limits, bounded concurrency, timeout policy, rate-limit semantics, and safe degradation
-- define fail-closed behavior for critical security paths and degraded dependencies
-- define verification obligations for negative and abuse-path security behavior
-- surface hidden security decisions instead of leaving them to implementation guesses
+Define testable policy for trust and threat assumptions; authn; authz; tenant/object/property/admin isolation; browser/session/CORS/CSRF; input and abuse; secrets/crypto; egress/SSRF; sensitive data; audit; dependencies/supply chain; and acceptance proof.
 
-## Boundaries
-Do not:
-- redesign general service architecture, ownership topology, or distributed coordination model as the primary output
-- take ownership of full API resource modeling or physical schema design outside their security impact
-- prescribe low-level middleware, handler, repository, or CI wiring as the main result
-- treat observability, reliability, or delivery policy as the primary domain unless they materially affect security behavior
+Keep authn, authz, tenant membership, and object ownership distinct. A valid credential proves identity claims, not permission, trusted tenant, or path-object ownership; never flatten them into one access check.
 
-## Core Defaults
-- Use a zero-trust baseline: external, partner, internal service, async worker, and third-party API traffic are untrusted unless explicitly justified otherwise.
-- Keep authentication, authorization, tenant isolation, data protection, privacy, and abuse resistance as separate decision blocks.
-- Prefer deny-by-default and least privilege. Missing policy means deny.
-- Prefer standard library and vetted existing platform controls; security libraries require explicit justification.
-- Missing trust-boundary facts, identity-model facts, data-classification facts, or enforcement ownership are blockers, not details to improvise later.
+Do not redesign topology, API/schema, reliability/performance, observability, delivery, distributed coordination, or wiring. State forced security constraints only; block when unset neighboring policy prevents safety.
 
-## Reference Files
-References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the task clearly spans independent security decision pressures, such as tenant authorization plus SSRF, async replay plus secret handling, or REST status semantics plus abuse budgeting.
+## Owned Contract
 
-Before loading a reference, name the symptom and the behavior change you need. If the skill body already steers the decision, skip the reference.
+- Map external, partner, internal, async, admin, and third-party boundaries. Treat each as untrusted unless justified; name attacker path, asset/classification, enforcement owner, degraded behavior, and assumption.
+- Authenticate caller/subject from accepted claims; independently authorize action, bind tenant from trusted identity/server state, and check object/property/admin scope authoritatively. Deny by default; headers, roles, or identity equality alone prove none of these.
+- Define session fixation/rotation/expiry/revocation, cookie attributes, credentialed origin-specific CORS, ambient-authority CSRF, and safe redirects/errors. For tokens, define issuer, audience, expiry, replay, delegation, and least privilege.
+- Bound and strictly parse input before effects; control injection/interpretation and sanitize output. Constrain egress scheme/destination/port, DNS, redirects, proxies, and connected IP; authenticate callbacks and block private/control-plane reachability.
+- Classify, minimize, isolate, encrypt as required, retain/delete, and redact sensitive data. Keep secrets out of source, durable payloads, telemetry, and shared caches; require approved sources, scoped identity, rotation/revocation, and justified vetted crypto/dependencies.
+- Across queues, callbacks, and service hops, require authenticity, step authorization, business idempotency, replay window, dedup, poison handling, and scoped credentials. Internal transport and durable bearer-token propagation are not trust.
+- Gate abuse cheaply before allocation/effects by principal, tenant, operation, and cost; bound body, concurrency, queue, attempts, timeout, fan-out, and spend. Separate hostile-use controls from legitimate-capacity policy; preserve fail-closed invariants.
+- Audit allow/deny/admin actions safely; record dependency, supply-chain, privilege, and runtime-hardening assumptions. Prove unauthenticated, unauthorized, cross-tenant, non-owner, injection, replay, secret, egress, and exhaustion denial with forbidden side effects; scanners are supplementary.
+
+## Symptom-Driven References
+
+Load the rubric whose symptom would materially change the security decision.
 
 | Symptom | Load | Behavior Change |
 | --- | --- | --- |
@@ -54,45 +41,10 @@ Before loading a reference, name the symptom and the behavior change you need. I
 | Rate limits, expensive operations, bulk work, provider-cost triggers, repeated attempts, or resource exhaustion are in scope. | `references/resource-abuse-and-cost-controls.md` | Choose principal/tenant-scoped budgets and cheap pre-side-effect gates instead of one global rate limit or reliability-only overload wording. |
 | Security decisions need proof obligations, test matrices, abuse-path checks, or scanner-vs-test separation. | `references/security-negative-path-verification.md` | Choose concrete negative-path and no-side-effect proof obligations instead of "covered by integration tests" or scanner-only confidence. |
 
-## Design Method
-- Start from the affected flow and name the security decision that is still implicit.
-- Load at most one relevant reference by default and reuse its rubric, examples, traps, and proof shape. Load another only for an independent pressure the first file does not cover.
-- Produce requirements, not implementation guesses: state the threat scenario, selected control, rejected alternative, enforcement point, failure behavior, and verification obligation.
-- Tie security requirements to repo-local sources of truth when present, such as `api/openapi/service.yaml`, `internal/infra/http`, `internal/config`, `SECURITY.md`, and CI security targets.
-- If a control depends on an identity provider, gateway, service mesh, secret manager, cache, queue, or third-party API not present in the repo, record the assumption or blocker.
+Use repository API, transport, config, `SECURITY.md`, and CI authorities. Record absent identity, gateway/mesh, secret, cache/queue, third-party, or enforcement guarantees as assumptions or blockers.
 
-## Decision Quality Bar
-Major security recommendations should make the following explicit:
-- trust boundary and attacker path
-- whether a real `live fork` exists
-- when a `live fork` exists, the selected control and at least one rejected alternative
-- enforcement point and owner
-- fail-closed behavior and degraded-dependency behavior
-- sensitive-data and privacy impact
-- negative-path and abuse-path verification
-- downstream decision/proof consequences only when another domain must act before the current artifact is usable
-- residual risk and reopen conditions
+## Return And Stop
 
-Security claims without enforcement and verification are incomplete.
+Return the threat-control map, separate access decisions, data/secret/egress/abuse/audit/supply-chain policy, enforcement/fail behavior, negative proof and forbidden effects, forced consequences, assumptions, risks, and reopen conditions. Claims need an enforcement owner and falsifiable proof.
 
-## Deliverable Shape
-Return security work in a compact, reviewable form:
-- `Security Decisions`
-- `Threat-Control Matrix`
-- `Identity, Authorization, And Tenant Rules`
-- `Sensitive Data, Privacy, And Redaction Rules`
-- `Abuse Resistance And Fail Behavior`
-- `Verification Obligations`
-- `Downstream Decision Or Proof Consequences`
-- `Assumptions And Residual Risks`
-
-## Escalate When
-Escalate if:
-- trust boundaries or identity model are ambiguous
-- object-level authorization, property-level authorization, or tenant isolation lacks an explicit enforcement point
-- untrusted input lacks threat-class control coverage
-- retry-unsafe behavior has no idempotency contract
-- async paths lack authenticity, replay, or dedup rules
-- sensitive-data handling lacks minimization, sanitization, or redaction rules
-- abuse-prone paths have no bounded timeout, limit, or concurrency strategy
-- runtime hardening assumptions materially affect safety but remain undefined
+Block on ambiguous trust/identity; missing authn, authz, tenant, object/property/admin authority or enforcement; uncovered input/egress threats; unsafe retry/async authenticity or replay; incomplete secret/data lifecycle; unbounded abuse; material dependency/runtime assumptions; or denial proof that cannot exclude side effects.

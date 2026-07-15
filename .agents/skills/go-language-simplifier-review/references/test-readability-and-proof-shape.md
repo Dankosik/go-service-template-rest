@@ -5,7 +5,7 @@ Behavior Change Thesis: When loaded for test cleanup, this file makes the model 
 ## When To Load
 Load this when a diff changes tests by adding or removing table tests, subtests, assertion helpers, custom comparison helpers, fixture builders, terse failure messages, or broad "test cleanup."
 
-Use this for simplification review of proof readability. Coverage completeness, nondeterminism, and validation readiness belong to `go-qa-review` unless the readability issue itself creates merge risk.
+Use this for simplification review of proof readability. Coverage completeness, nondeterminism, and validation readiness belong to `go-test-review` unless the readability issue itself creates merge risk.
 
 ## Decision Rubric
 - A table is clearer when entries share setup, trigger, and assertion shape.

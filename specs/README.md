@@ -1,6 +1,8 @@
 # Specs
 
-This directory stores active task-local spec-first records for real repository work.
+This Codex-native repository stores active task-local workflow records here.
+
+This directory stores spec-first records for real repository work.
 
 Use `specs/<feature-id>/` only while a task needs persistent workflow, decision,
 design, planning, or validation artifacts. After completion, move durable

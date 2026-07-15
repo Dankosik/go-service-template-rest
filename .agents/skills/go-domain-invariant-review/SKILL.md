@@ -1,118 +1,43 @@
 ---
 name: go-domain-invariant-review
-description: "Review Go code changes for business-invariant preservation, state-transition correctness, acceptance semantics, and side-effect safety."
+description: "Use when changed Go can alter business rules, lifecycle transitions, acceptance outcomes, violation behavior, or side effects; Own preservation of accepted domain invariants and meaning; Skip when the primary defect is transport, data/cache mechanics, security enforcement, or test structure."
 ---
 
 # Go Domain Invariant Review
 
-## Purpose
-Protect approved business rules in code so critical invariants, forbidden transitions, and acceptance behavior do not drift silently.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Review behavior through business invariants and legal transitions, not through implementation shape alone.
-- Prioritize invalid state acceptance, side effects before preconditions, duplicate effects, and silent invariant drift.
-- Treat domain wording, state names, and acceptance semantics as correctness surfaces when code changes them.
-- Hand off API, data, reliability, or security depth when the domain issue depends on those seams.
+## Target And Boundary
 
-## Scope
-- review invariant enforcement in changed code paths
-- review allowed and forbidden state transitions
-- review preconditions, postconditions, and side-effect safety
-- review happy-path, fail-path, and corner-case acceptance semantics
-- review domain error behavior for invariant violations
-- review domain-language drift when changed terminology alters business meaning
-- review whether critical invariant and transition behavior remains testable
+Review changed behavior against approved business rules from task artifacts, domain docs, tests, fixtures, callers, and adjacent code, in that order. If no approved artifact exists, label the smallest rule inferred from code-visible evidence; never import a generic DDD rule as local authority.
 
-## Boundaries
-Do not:
-- redesign the domain model during review unless local correction is impossible
-- take primary ownership of transport, DB/cache, security, or reliability depth when those are only supporting causes
-- accept “eventual correction later” for hard domain invariants without an explicit process contract
-- reduce domain review to happy-path-only validation
+Own business invariants, legal transitions, acceptance/rejection meaning, and business side-effect safety. Do not redesign the model, accept eventual repair for a hard invariant without an explicit process contract, or duplicate transport, DB/cache, security, reliability, architecture, or test-strategy findings.
 
-## Core Defaults
-- Approved domain behavior is the source of truth.
-- Hidden transition logic and implicit business assumptions are defects until proven aligned.
-- Observable behavior matters, not only internal state shape.
-- Preconditions should protect side effects, not explain them afterward.
-- Prefer the smallest safe fix that restores invariant enforcement and deterministic behavior.
+## Domain Defect Invariants
 
-## Source Authority
-Use repo-local evidence before general domain modeling advice:
-- reviewed `spec.md`, domain docs, plans, task artifacts, and task-local design files
-- existing tests, fixtures, and accepted behavior examples
-- changed code and adjacent code when no approved artifact is attached
+1. Every affected invariant has an enforcement point on every accepting, mutating, constructing, or persistence path; no path may accept, persist, or expose forbidden state.
+2. Changed lifecycle code permits only approved transitions, preserves terminal states and postconditions, and keeps success, rejection, no-op, and already-applied semantics deterministic. Commands and events retain their distinct accepted handling.
+3. All domain preconditions run before irreversible, durable, or externally visible effects. A rejected operation produces no prohibited charge, refund, inventory, entitlement, event, webhook, email, or save; state and effects cannot split into a forbidden mixed outcome.
+4. Retry, replay, duplicate, stale, delayed, dependency-failure, side-channel, and out-of-order paths preserve the same transition rules and idempotency meaning as the first attempt. Tie any defect to the exact repeated, skipped, or overwritten business effect rather than requesting generic deduplication or ordering.
+5. Success, failure, and corner cases preserve approved domain errors and observable business meaning. Treat vocabulary drift as a defect only when it changes state, obligation, ownership, eligibility, amount meaning, audit interpretation, or another locally distinct concept.
+6. Require focused negative proof when a changed invariant, transition, rejection, duplicate, or side-effect rule could regress without detection; identify the business failure that the missing assertion would allow. Leave broad test strategy and test shape to `go-test-review`.
 
-If no approved artifact is present, say the rule is inferred from code-visible behavior, tests, names, or caller expectations. Do not treat external DDD or workflow sources as business-rule authority; use them only to calibrate review questions and finding quality.
+## Symptom-Driven References
 
-## Lazy-Loaded Review References
-References are compact rubrics and example banks, not exhaustive checklists. Load at most one reference by default: choose the one that best matches the changed risk. Load a second only when the diff clearly spans independent decision pressures, such as side-effect ordering plus missing proof.
+The examples are review lenses, not reusable business rules. Select the one that changes the finding, then cite local authority or state the bounded inference.
 
-| Reference | Symptom | Behavior change |
+| Symptom | Load | Distinction preserved |
 | --- | --- | --- |
-| `references/invariant-preservation-review.md` | Mutation, construction, repository save, handler guard, or direct field update may accept impossible business state. | Makes the model prove a local invariant bypass instead of asking for generic DDD reshaping. |
-| `references/state-transition-review.md` | Status enum, lifecycle guard, transition table, terminal state, or event-driven state update changed. | Makes the model check legal movement and terminal-state semantics instead of redesigning a state machine. |
-| `references/acceptance-and-rejection-semantics.md` | Command, domain error, no-op, duplicate, event consumer, or validation placement changes whether input is accepted, rejected, ignored, or already applied. | Makes the model preserve deterministic business acceptance semantics instead of commenting on error style. |
-| `references/preconditions-side-effects-and-partial-failure.md` | Payment, refund, inventory, entitlement, event, webhook, email, or save can outlive a rejected operation. | Makes the model review guard-before-effect ordering and mixed outcomes instead of prescribing sagas by default. |
-| `references/retry-duplicate-and-reorder-domain-risks.md` | Retry, replay, idempotency key, stale event, backfill, optimistic concurrency, or out-of-order consumer path changed. | Makes the model tie duplicate/reorder handling to a concrete business effect instead of saying "add dedupe." |
-| `references/domain-language-and-meaning-drift.md` | Renames or vocabulary changes touch domain states, obligations, ownership, eligibility, totals, or lifecycle terms. | Makes the model distinguish behavior-changing semantic drift from pure naming taste. |
-| `references/domain-test-traceability.md` | A changed invariant, transition, rejection, duplicate path, or side-effect rule has missing or weak proof. | Makes the model report missing proof only when a specific business regression can slip through instead of asking for more tests generally. |
+| Construction, mutation, save, guard, or direct field update may admit impossible state. | [invariant-preservation-review.md](references/invariant-preservation-review.md) | Prove a local bypass, not generic aggregate reshaping. |
+| Status, lifecycle guard, terminal state, transition table, or event-driven state update changed. | [state-transition-review.md](references/state-transition-review.md) | Prove an illegal or missing move, not demand a formal state machine. |
+| A command, error, no-op, duplicate, event, or validation path changes accepted/rejected/ignored/already-applied meaning. | [acceptance-and-rejection-semantics.md](references/acceptance-and-rejection-semantics.md) | Preserve exact business acceptance semantics, not error-style taste. |
+| An external or durable effect can outlive a rejected or partially completed operation. | [preconditions-side-effects-and-partial-failure.md](references/preconditions-side-effects-and-partial-failure.md) | Prove guard/effect ordering or a forbidden mixed outcome before escalating design. |
+| Retry, replay, idempotency, stale input, backfill, optimistic concurrency, or reordered delivery changed. | [retry-duplicate-and-reorder-domain-risks.md](references/retry-duplicate-and-reorder-domain-risks.md) | Tie duplicate/order handling to one concrete business consequence. |
+| A rename changes states, obligations, ownership, eligibility, totals, or lifecycle terms. | [domain-language-and-meaning-drift.md](references/domain-language-and-meaning-drift.md) | Separate semantic drift from readability taste. |
+| Changed business behavior lacks a falsifying negative-path assertion. | [domain-test-traceability.md](references/domain-test-traceability.md) | Name the regression that can pass, not generic coverage work. |
 
-The examples are not reusable business rules. Adapt only the review lens and finding shape, then cite the local contract or state the local inference.
+## Findings, Escalation, And Stop
 
-## Expertise
+Each finding names the violated invariant, transition, acceptance rule, or side-effect contract; the approved or explicitly inferred evidence; the exact business impact; and the smallest owner-preserving correction. `critical` means a confirmed invariant violation, forbidden transition, silent corruption/loss, prohibited side effect, or forbidden mixed outcome; `high` means strong evidence of a material failure-path or corner-case break.
 
-### Invariant Preservation
-- Verify each affected invariant still has a clear enforcement point.
-- Flag bypass paths where alternate flows can skip critical guards.
-- Reject “repair later” logic for hard invariants unless a deliberate process-level guarantee exists.
-- Keep invariant ownership explicit at runtime.
-
-### State Transition Correctness
-- Verify changed logic permits only approved transitions and blocks forbidden ones.
-- Require preconditions before side effects and clear postconditions afterward.
-- Flag hidden transitions introduced through retries, duplicates, reorder, or side-channel updates.
-- Treat incorrect transition guards as domain defects even when tests are green.
-
-### Acceptance Behavior
-- Review externally visible behavior on success, failure, and corner cases.
-- Verify domain errors remain deterministic and semantics-preserving.
-- Flag behavior that changes business meaning without an explicit contract or decision.
-
-### Domain Language And Meaning Drift
-- Treat domain vocabulary as evidence only when a changed term alters state, obligation, ownership, eligibility, amount meaning, or caller interpretation.
-- Flag collapses of distinct business concepts, such as turning `cancelled` and `expired` into one branch, only when the local contract keeps them distinct.
-- Avoid taste-only naming findings; hand off readability-only naming issues to `go-language-simplifier-review`.
-
-### Invariant Violation Semantics
-- Invariant violation must fail predictably; it must not silently continue.
-- Review whether partial side effects are prevented, compensated, or otherwise kept safe.
-- Treat silent corruption, silent loss, or mixed outcomes as blocker-level domain risk.
-
-### Corner Cases And Failure Paths
-- Review retry, duplicate, reorder, delay, and dependency-failure paths when they can affect business validity.
-- Require these paths to preserve the same domain rules as the happy path.
-- Flag undefined or contradictory state outcomes.
-
-### Test Traceability
-- Review whether critical invariants and transitions still have clear validating tests or evidence.
-- Flag missing coverage for fail paths and corner cases when changed behavior depends on them.
-- Keep QA ownership separate: this skill identifies domain-risky gaps, while `go-qa-review` owns test-strategy depth.
-
-### Cross-Domain Handoffs
-- Hand off transaction, query, and cache mechanics to `go-db-cache-review`.
-- Hand off retry, timeout, and degradation policy depth to `go-reliability-review`.
-- Hand off authz, tenant, or object-ownership root causes to `go-security-review`.
-- Hand off broader architecture drift to `go-design-review`.
-- Hand off coverage completeness and test-shape depth to `go-qa-review`.
-
-## Evidence And Shared Finding Envelope
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the violated invariant/transition/acceptance rule, concrete business impact, relevant approved or inferred contract, and smallest safe correction. `critical` is a confirmed invariant violation or forbidden transition; `high` is a high-likelihood fail-path or corner-case break. Keep correction local; if it changes the invariant set, transition model, acceptance contract, or ownership boundary, escalate rather than redesigning inside review.
-
-## Escalate When
-Escalate when:
-- safe correction changes the approved invariant set, state model, or acceptance rules (`go-domain-invariant-spec`)
-- API-visible behavior or error semantics must change (`api-contract-designer-spec`)
-- the fix depends on new transaction, cache, or consistency design (`go-db-cache-spec`)
-- the right answer requires a new retry, reconciliation, or degradation model (`go-reliability-spec` or `go-distributed-architect-spec`)
-- local repair exposes broader design drift (`go-design-spec`)
+Stop and hand off rather than changing policy: invariant, transition, or acceptance meaning to `go-domain-invariant-spec`; API-visible behavior or errors to `go-api-contract-spec`; transaction/cache/consistency design to `go-db-cache-spec`; retry/degradation to `go-reliability-spec`; durable replay/reconciliation to `go-distributed-spec`; and placement or responsibility drift to `go-implementation-ownership-spec`. For accepted supporting contracts, hand transaction/query/cache mechanics to `go-db-cache-review`, timeout/retry/degradation enforcement to `go-reliability-review`, authn/authz/tenant/object enforcement to `go-security-review`, and test-shape depth to `go-test-review` without duplicating their findings.

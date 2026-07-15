@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 0,
+      "category": "domain_defect",
       "prompt": "Review this Go diff with `go-domain-invariant-review`. Focus only on merge-relevant domain findings and return the review in the skill's normal output shape.\n\nApproved behavior:\n- Only `authorized` orders may transition to `completed`.\n- Card capture is irreversible and must happen only after all domain preconditions pass.\n- If completion is rejected, the customer must not be charged.\n\nChanged file: `internal/order/service.go`\n\n```go\n40 func (s *Service) Complete(ctx context.Context, order *Order) error {\n41     if err := s.payments.Capture(ctx, order.PaymentID); err != nil {\n42         return err\n43     }\n44     if order.Status != StatusAuthorized {\n45         return ErrOrderNotAuthorized\n46     }\n47     order.Status = StatusCompleted\n48     return s.repo.Save(ctx, order)\n49 }\n```",
       "expected_output": "Flags a blocking domain issue: the irreversible card capture happens before the `authorized` precondition, which can charge customers even when completion is rejected.",
       "files": [],
@@ -15,6 +16,7 @@
     },
     {
       "id": 1,
+      "category": "domain_defect",
       "prompt": "Review this Go diff with `go-domain-invariant-review`. Focus only on merge-relevant domain findings and return the review in the skill's normal output shape.\n\nApproved behavior:\n- `paid -> cancelled` may happen once.\n- Duplicate cancellation events must not trigger a second refund.\n- Replay or out-of-order events must not create additional irreversible side effects.\n\nChanged file: `internal/orders/consumer.go`\n\n```go\n18 func (h *Handler) HandleOrderCancelled(ctx context.Context, ev OrderCancelledEvent) error {\n19     ord, err := h.repo.Get(ctx, ev.OrderID)\n20     if err != nil { return err }\n21     ord.Status = StatusCancelled\n22     if err := h.repo.Save(ctx, ord); err != nil { return err }\n23     return h.refunds.Create(ctx, ord.PaymentID, ord.Total)\n24 }\n```",
       "expected_output": "Flags a replay and transition bug: duplicate or out-of-order cancellation handling can save `cancelled` again and trigger a second refund.",
       "files": [],
@@ -27,6 +29,7 @@
     },
     {
       "id": 2,
+      "category": "domain_defect",
       "prompt": "Review this Go change with `go-domain-invariant-review`. Focus only on merge-relevant domain findings and return the review in the skill's normal output shape.\n\nNo approved spec or plan is attached. Infer only the smallest plausible domain intent from the code and tests below; do not invent extra rules.\n\nChanged files: `internal/subscription/service.go`, `internal/subscription/service_test.go`\n\n```go\n// internal/subscription/service.go\n52 func (s *Service) Reactivate(ctx context.Context, sub *Subscription) error {\n53     sub.Status = StatusActive\n54     if err := s.repo.Save(ctx, sub); err != nil { return err }\n55     if sub.CancelledAt.IsZero() {\n56         return nil\n57     }\n58     return s.billing.Resume(ctx, sub.BillingID)\n59 }\n```\n\n```go\n// internal/subscription/service_test.go\n20 func TestReactivateRejectedWhenNotCancelled(t *testing.T) {}\n21 func TestReactivateResumesBillingBeforeReturningSuccess(t *testing.T) {}\n```",
       "expected_output": "Says the intent is inferred from code-visible behavior, then flags that the service persists `active` or returns success before proving the subscription can be reactivated or billing is resumed.",
       "files": [],
@@ -35,6 +38,42 @@
         "The review identifies that the code persists `StatusActive` or returns success before proving the subscription is cancelled or billing is resumed.",
         "The review explains business impact as active subscription state without resumed billing, or reactivation of a non-cancelled subscription.",
         "The review's `Reference:` names inferred intent from the test names or other code-visible behavior."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "clean",
+      "prompt": "Review only accepted domain behavior. Approved rules and code agree: only `authorized -> completed` is allowed; all guards run before capture; a rejected completion returns the established domain error and performs no save, capture, event, or email; duplicate completion with the same idempotency key returns the recorded result without repeating effects; stale events are ignored under the approved event policy; tests assert both the transition and zero effects on rejection. No transport, persistence-mechanism, security, or test-structure change is present.",
+      "expected_output": "Return no domain findings without padding, inferred extra rules, or neighboring-domain warnings.",
+      "files": [],
+      "expectations": [
+        "Returns no domain-invariant findings.",
+        "Does not invent additional transitions, rejection semantics, side effects, or idempotency rules.",
+        "Does not pad the result with DB/cache, security, reliability, or test-review findings."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "neighbor",
+      "prompt": "Approved domain behavior is fully preserved: `authorized -> completed` occurs once, all preconditions precede effects, duplicate requests reuse the accepted result, and rejection has no business side effects. The changed repository implementation performs two dependent SQL writes outside a transaction, omits rollback on an early return, and ignores a commit error. Review owner arbitration only.",
+      "expected_output": "Name go-db-cache-review as the single primary owner for transaction execution, rollback, and commit uncertainty; emit no duplicate domain finding.",
+      "files": [],
+      "expectations": [
+        "Names exactly go-db-cache-review as the primary review owner.",
+        "Identifies transaction scope, rollback, or commit-result handling as the decisive axis.",
+        "Emits no domain finding because accepted business transition and side-effect semantics are stated as preserved."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "unresolved_policy",
+      "prompt": "A new `suspended` subscription state is introduced, but no approved artifact says which states may enter it, whether it is terminal, whether suspension rejects or no-ops for already-cancelled subscriptions, or whether billing and entitlement effects happen before or after the transition. The code is internally consistent with one possible interpretation. Review without choosing domain policy.",
+      "expected_output": "Hand off the missing state-transition, acceptance, and side-effect policy to go-domain-invariant-spec without inventing rules or filing a conformance finding.",
+      "files": [],
+      "expectations": [
+        "Names go-domain-invariant-spec as the unresolved decision owner.",
+        "Does not choose allowed source states, terminal behavior, rejection/no-op semantics, or effect ordering.",
+        "Does not report a domain conformance defect against policy that has not been accepted."
       ]
     }
   ]

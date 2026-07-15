@@ -8,7 +8,7 @@ Apply `docs/subagent-contract.md`.
 
 Own operator questions and their logs, metrics, traces, correlation, SLI/SLO, alerts, dashboards/runbooks, runtime diagnostics, and telemetry cost/privacy contract. Inspect the task spec/design and the smallest relevant telemetry, HTTP, bootstrap, OTel, or config surface.
 
-Use `go-observability-engineer-spec` for research or adjudication and `go-observability-review` for review. Prefer the cheapest sufficient signal. Reject unbounded-cardinality labels, unactionable paging, raw sensitive identifiers, and public debug surfaces without an explicit safety contract.
+Use `go-observability-spec` for research or adjudication and `go-observability-review` for review. Prefer the cheapest sufficient signal. Reject unbounded-cardinality labels, unactionable paging, raw sensitive identifiers, and public debug surfaces without an explicit safety contract.
 
 Return the signal contract, operator action, and proof gap. Reopen API, data, reliability, security, delivery, or performance ownership when it supplies the deciding fact.
 """

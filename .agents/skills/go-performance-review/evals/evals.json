@@ -1,0 +1,54 @@
+{
+  "skill_name": "go-performance-review",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Review only measurable performance regressions. Accepted workload: ListInvoices serves 1,000-item pages at 200 requests/second under a p95 150 ms budget; baseline uses one batched query, at most 8 bounded dependency calls, and 2 allocations per encoded item. The change performs one customer query and one JSON marshal per item inside the loop, launches one goroutine per invoice, appends retained 1 MiB buffers to a cache, and claims improvement from a single 50 ms microbenchmark run without -benchmem, repetitions, environment control, benchstat, profiles, or end-to-end evidence.",
+      "expected_output": "Report I/O and fan-out amplification, allocation/retention and contention/tail risk, plus benchmark evidence defects against the accepted workload and budget.",
+      "files": [],
+      "expectations": [
+        "Names the per-item query/marshal scaling and unbounded goroutine fan-out as workload amplification.",
+        "Identifies allocation or retained-memory risk from the large cached buffers.",
+        "Rejects the one-run microbenchmark as proof because workload, allocation, repetition, control, practical significance, or end-to-end fit is missing.",
+        "Requests the narrow benchmark, benchstat, profile, trace, query-count, or load evidence that matches each material claim."
+      ]
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "Review only accepted performance behavior. The changed hot path names its production-representative workload, scale dimension, p95 budget, baseline, environment, and metric. It reduces round trips and copies without changing results; active work, queues, fan-out, retries, blocking I/O, and retention remain bounded and cancellation-aware. Repeated -benchmem runs and benchstat show a practically meaningful gain under stable fixtures, while matching CPU and allocation profiles explain it. The simpler ownership shape remains. No performance policy is missing or changed.",
+      "expected_output": "Return no performance findings without padding, invented budgets, micro-optimization advice, or neighboring-domain warnings.",
+      "files": [],
+      "expectations": [
+        "Returns no performance findings.",
+        "Does not invent workloads, budgets, benchmarks, profiles, or optimization complexity.",
+        "Does not pad the result with concurrency, DB/cache, reliability, or architecture findings."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "Accepted performance budgets and fresh benchmarks show no latency, throughput, allocation, contention, I/O, or scaling regression. The changed worker protocol calls wg.Add after launching a goroutine, closes the same channel from both producer and receiver, and can wait forever after cancellation. Review owner arbitration only.",
+      "expected_output": "Name go-concurrency-review as the single primary owner for WaitGroup ordering, channel-close ownership, cancellation unblock, and join defects; emit no duplicate performance finding.",
+      "files": [],
+      "expectations": [
+        "Names exactly go-concurrency-review as the primary review owner.",
+        "Identifies concrete happens-before, channel ownership, cancellation, or join mechanics as the decisive axis.",
+        "Emits no performance finding because measured performance conformance is stated as preserved."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "A serialization path is changed and a small microbenchmark becomes faster, but no accepted workload, traffic or data scale, latency/throughput/allocation budget, baseline environment, representative benchmark boundary, or required profile/load evidence exists. Correctness is unchanged and no unbounded amplification is visible from the diff. Review without choosing performance policy.",
+      "expected_output": "Hand off the missing workload, budget, and proof contract to go-performance-spec without inventing targets or reporting an unsupported regression.",
+      "files": [],
+      "expectations": [
+        "Names go-performance-spec as the unresolved decision owner.",
+        "Does not invent scale, latency, throughput, allocation, environment, benchmark, profile, or load targets.",
+        "Does not report a performance regression when neither accepted policy nor concrete amplification supports one."
+      ]
+    }
+  ]
+}

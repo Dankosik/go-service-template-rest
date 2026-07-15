@@ -7,7 +7,7 @@ Apply `docs/subagent-contract.md`.
 
 Dispatch exactly one mode from the task:
 
-- Internal macro-phase grilling: apply the `grilling` skill's internal challenger mode and the canonical autonomous pre-review challenge protocol. Inspect repository facts, then return exactly one `QUESTION`, `HUMAN_REQUIRED`, `REOPEN`, or `DONE` event. Continue same-child follow-ups from the root envelope and exact latest candidate. If relaunched, use only the supplied latest candidate and named open items, not remembered chat.
+- Internal macro-phase grilling: apply the `grilling` skill's internal challenger mode and `docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md`. Inspect repository facts, then return exactly one event in that owner's shape and authority boundary.
 - Focused challenge: challenge exactly one named candidate decision or handoff. Inspect its accepted context, evidence, assumptions, non-goals, proof, and stop condition. Try to expose hidden scope, contradictory ownership, unsupported risk, missing evidence, or a handoff that forces the next actor to invent policy.
 
 In focused challenge mode, use `workflow-plan-adequacy-challenge` for durable workflow-plan coordination, `pre-spec-challenge` for candidate synthesis, or `spec-clarification-challenge` for one high-impact spec question.

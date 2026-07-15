@@ -3,10 +3,11 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prioritize chi-specific runtime behavior over style and recommend the smallest safe correction.",
+      "category": "domain_defect",
+      "prompt": "Review the chi routing change in `.agents/skills/go-chi-review/evals/fixtures/use-after-routes/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prioritize chi-specific runtime behavior over style and recommend the smallest safe correction.",
       "expected_output": "A review that catches chi startup panic risk from registering global middleware after routes.",
       "files": [
-        "iteration-4/eval-0-use-after-routes-panic/inputs/router.go"
+        ".agents/skills/go-chi-review/evals/fixtures/use-after-routes/router.go"
       ],
       "expectations": [
         "The review flags that `Use(...)` is registered after routes on the same mux and that chi panics during router construction or startup.",
@@ -17,10 +18,11 @@
     },
     {
       "id": 1,
-      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prioritize HTTP method policy and chi context semantics over stylistic cleanup.",
+      "category": "domain_defect",
+      "prompt": "Review the chi routing change in `.agents/skills/go-chi-review/evals/fixtures/live-context-head/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prioritize HTTP method policy and chi context semantics over stylistic cleanup.",
       "expected_output": "A review that catches live RouteContext mutation through Match and incorrect HEAD disclosure in custom Allow handling.",
       "files": [
-        "iteration-4/eval-1-live-context-and-head-policy/inputs/router.go"
+        ".agents/skills/go-chi-review/evals/fixtures/live-context-head/router.go"
       ],
       "expectations": [
         "The review flags that `root.Match(...)` is using the live `chi.RouteContext(r.Context())` and should probe with a fresh `chi.NewRouteContext()`.",
@@ -31,10 +33,11 @@
     },
     {
       "id": 2,
-      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prefer deterministic ownership fixes over stylistic refactors.",
+      "category": "domain_defect",
+      "prompt": "Review the chi routing change in `.agents/skills/go-chi-review/evals/fixtures/mount-conflict/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Prefer deterministic ownership fixes over stylistic refactors.",
       "expected_output": "A review that catches chi mount conflict and startup panic risk caused by overlapping wildcard and mount ownership.",
       "files": [
-        "iteration-4/eval-2-mount-conflict-panic/inputs/router.go"
+        ".agents/skills/go-chi-review/evals/fixtures/mount-conflict/router.go"
       ],
       "expectations": [
         "The review flags that `Mount(\"/files\", ...)` conflicts with existing `/files/*` ownership and can panic during router construction.",
@@ -45,16 +48,53 @@
     },
     {
       "id": 3,
-      "prompt": "Review the chi routing change in `inputs/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Do not redesign the service; report the smallest safe fixes.",
+      "category": "domain_defect",
+      "prompt": "Review the chi routing change in `.agents/skills/go-chi-review/evals/fixtures/route-labels/router.go`. Focus on merge-risk findings only. Treat this as a Go PR review using the go-chi-review skill. Do not redesign the service; report the smallest safe fixes.",
       "expected_output": "A review that catches route-context timing and observability labeling defects in chi middleware.",
       "files": [
-        "iteration-4/eval-3-route-context-observability/inputs/router.go"
+        ".agents/skills/go-chi-review/evals/fixtures/route-labels/router.go"
       ],
       "expectations": [
         "The review flags that `RoutePattern()` is read before downstream handling resolves the final route context.",
         "The review flags raw `r.URL.Path` fallback as a high-cardinality observability label risk.",
         "The review suggests a safer route-template extraction strategy, such as post-handler extraction or an explicit bounded fallback.",
         "The material findings use exact file:line anchors and the shared issue-impact-fix-reference envelope."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "clean",
+      "prompt": "Review only accepted chi transport behavior. Router construction registers global middleware before routes; each subtree and mount has one non-nil owner; nested middleware scope and order match the accepted policy; alternate-method probes use a fresh chi route context; explicit GET and HEAD routes, OPTIONS, CORS, Allow, 404, and 405 responses advertise exactly served capabilities; generated handlers are mounted once from their canonical source; route-template labels are extracted after resolution with a bounded unmatched value; constructor and httptest coverage exercise these paths. No policy is missing or changed.",
+      "expected_output": "Return no chi findings without padding, invented transport policy, or neighboring-domain warnings.",
+      "files": [],
+      "expectations": [
+        "Returns no chi findings.",
+        "Does not invent route ownership, middleware, fallback, method, CORS, generated-source, or label requirements.",
+        "Does not pad the result with API, reliability, observability, or general Go findings."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "neighbor",
+      "prompt": "Accepted chi transport behavior is fully preserved: router construction, mounts, middleware, fallbacks, method capability, generated ownership, and route-template labels are correct. A handler on an unchanged route now permits the approved terminal `cancelled` order to transition to `completed` and sends a completion email. Review owner arbitration only.",
+      "expected_output": "Name go-domain-invariant-review as the single primary owner for the forbidden business transition and side effect; emit no duplicate chi finding.",
+      "files": [],
+      "expectations": [
+        "Names exactly go-domain-invariant-review as the primary review owner.",
+        "Identifies accepted lifecycle transition and business side-effect meaning as the decisive axis.",
+        "Emits no chi finding because all routing and transport behavior is stated as correct."
+      ]
+    },
+    {
+      "id": 6,
+      "category": "unresolved_policy",
+      "prompt": "A new chi subtree is wired deterministically with one owner and valid middleware mechanics, but no accepted transport policy says whether it supports implicit or explicit HEAD, which OPTIONS/Allow methods it advertises, whether browser CORS preflight is enabled, or which 404/405 representation applies. Review without choosing client-visible behavior.",
+      "expected_output": "Hand off the missing chi transport policy to go-chi-spec without inventing method, fallback, OPTIONS, or CORS behavior and without filing a conformance defect.",
+      "files": [],
+      "expectations": [
+        "Names go-chi-spec as the unresolved decision owner.",
+        "Does not choose HEAD, OPTIONS, Allow, CORS, 404, or 405 semantics.",
+        "Does not report a chi conformance finding against transport policy that has not been accepted."
       ]
     }
   ]

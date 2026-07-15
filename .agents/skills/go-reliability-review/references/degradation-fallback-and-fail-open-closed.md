@@ -6,7 +6,7 @@ When loaded for symptom `fallback, stale data, degraded response, optional depen
 ## When To Load
 Load when a diff changes fallback behavior, cache or stale-data fallback, optional dependency handling, degraded response shape, feature-disable paths, circuit-breaker fallback, fail-open or fail-closed behavior, or recovery from a dependency outage.
 
-Keep findings local: ask whether the changed fallback is bounded, observable, and contract-safe. Hand off primary security policy for fail-open access decisions to `go-security-review`, DB/cache consistency to `go-db-cache-review`, and product/API contract changes to `api-contract-designer-spec`.
+Keep findings local: ask whether the changed fallback is bounded, observable, and contract-safe. Hand off primary security policy for fail-open access decisions to `go-security-review`, DB/cache consistency to `go-db-cache-review`, and product/API contract changes to `go-api-contract-spec`.
 
 ## Decision Rubric
 - A fallback silently returns zero values, empty lists, defaults, or stale data where correctness matters.

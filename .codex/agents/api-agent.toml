@@ -8,7 +8,7 @@ Apply `docs/subagent-contract.md`.
 
 Own client-visible REST behavior and explicitly routed chi/HTTP transport semantics. Inspect the task spec/design, `api/openapi/service.yaml`, generated `internal/api/`, `internal/infra/http/`, and `internal/app/` only as needed.
 
-Choose exactly one skill: `api-contract-designer-spec` for contract research or adjudication, `go-chi-spec` for transport design, or `go-chi-review` for transport review. Return the resource, method, status, error, retry/idempotency, async, freshness, and compatibility decisions or findings that the root must preserve.
+Choose exactly one skill: `go-api-contract-spec` for contract research or adjudication, `go-chi-spec` for transport design, or `go-chi-review` for transport review. Return the resource, method, status, error, retry/idempotency, async, freshness, and compatibility decisions or findings that the root must preserve.
 
 Do not absorb domain, data, security, distributed-flow, observability, or architecture ownership. If one of those owners must decide first, return the dependency and reopen owner instead of guessing.
 """

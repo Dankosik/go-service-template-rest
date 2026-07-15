@@ -1,0 +1,53 @@
+{
+  "skill_name": "go-distributed-review",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Review this durable order flow against the accepted at-least-once contract. Completion must survive process loss, consumers must be idempotent, and redrive may replay any message.\n\n```go\nfunc Complete(ctx context.Context, id string) error {\n    if err := orders.MarkComplete(ctx, id); err != nil { return err }\n    return broker.Publish(ctx, OrderCompleted{ID: id})\n}\nfunc Consume(ctx context.Context, msg Message) error {\n    msg.Ack()\n    return projections.Apply(ctx, msg.OrderID)\n}\n```",
+      "expected_output": "Find the dual-write crash window, ack-before-durable-effect loss, and missing replay idempotency as distributed defects with process-loss scenarios.",
+      "assertions": [
+        "Identifies that state commit and message intent lack one durable success boundary",
+        "Identifies ack before the local projection effect is durable",
+        "Requires stable idempotency or dedup behavior for replay and redrive",
+        "Explains concrete process-loss duplicate or lost-work scenarios"
+      ],
+      "files": []
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "Review only distributed-flow correctness. The accepted at-least-once flow writes aggregate state and an outbox record in one transaction; the relay deletes only after broker confirmation; the consumer commits its effect and inbox marker atomically before ack; the stable business-scoped event ID is retained beyond the redrive horizon; transitions reject stale sequence numbers; stored v1 and v2 events are both readable; poison messages enter an observable DLQ with owned redrive and reconciliation. No contrary code is shown.",
+      "expected_output": "Return no distributed findings without padding or speculative redesign.",
+      "assertions": [
+        "Returns no distributed findings",
+        "Does not invent exactly-once, compensation, ordering, or retention defects contradicted by the prompt"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "A synchronous in-process HTTP client call has no messages, durable queue, process handoff, persisted workflow state, replay, or reconciliation. It replaces the caller context and retries every error forever despite an accepted 2-second end-to-end deadline and two-attempt retry budget. Review owner arbitration only.",
+      "expected_output": "Name go-reliability-review as the single primary owner for the accepted deadline and retry-budget violations; emit no distributed finding.",
+      "assertions": [
+        "Names exactly go-reliability-review as the primary review owner",
+        "Explains that no durable process or service boundary exists",
+        "Emits no duplicate distributed finding"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "A durable multi-service workflow can receive PaymentCaptured after OrderCancelled and can lose a process after the payment pivot. The repository has no accepted ordering key or stale-event rule, no compensation versus forward-recovery decision, and no owner or completion rule for redrive and reconciliation. Review without designing the workflow.",
+      "expected_output": "Hand off the missing ordering, post-pivot recovery, redrive, and reconciliation contract to go-distributed-spec without inventing policy or filing an implementation defect.",
+      "assertions": [
+        "Names go-distributed-spec as the unresolved decision owner",
+        "Does not invent ordering, compensation, forward-recovery, redrive, or reconciliation policy",
+        "Does not file a distributed implementation finding when the governing contract is absent"
+      ],
+      "files": []
+    }
+  ]
+}

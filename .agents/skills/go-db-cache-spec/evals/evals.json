@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 0,
+      "category": "domain_defect",
       "prompt": "We have a Go commerce API on PostgreSQL. `GET /v1/catalog/{slug}` and category pages are causing heavy DB load during product launches, and the team wants Redis. Writes happen in the same service from an admin panel. Stock counts can change every few seconds, marketing copy changes a few times per day, and tenant-specific price rules plus locale change the response shape. Write compact DB/cache spec content for `spec.md`, not code. Call out whether whole-response caching is safe, how query/access discipline should look, key shape, invalidation, stale-data behavior, and any downstream handoffs.",
       "expected_output": "A section-ready DB/cache spec that distinguishes cacheable vs strong-consistency paths, defines key safety and invalidation, and names required handoffs.",
       "files": [],
@@ -16,6 +17,7 @@
     },
     {
       "id": 1,
+      "category": "domain_defect",
       "prompt": "We run a Go billing API on PostgreSQL. `GET /accounts/{id}/invoices?status=open` got slower after adding filters, and somebody suggested putting Redis in front of it. Right now we only have one p95 latency screenshot and no query breakdown, no EXPLAIN, and no hit-rate estimate. Write the DB/cache spec content that decides whether cache is justified, what SQL access contract must be defined first, which missing facts should be marked as assumptions or blockers, and what validation evidence would be required before approving cache rollout.",
       "expected_output": "A DB/cache spec that does not rubber-stamp Redis, defines the query-path contract first, surfaces missing evidence, and sets measurable proof obligations.",
       "files": [],
@@ -29,6 +31,7 @@
     },
     {
       "id": 2,
+      "category": "domain_defect",
       "prompt": "We have a Go SaaS app using PostgreSQL plus Redis. User profile reads are cached today. A new feature will let users rotate API keys and permissions from a separate worker after an audit event. The admin UI for the same tenant must reflect permission changes immediately, but the public profile page can be stale for up to 30 seconds. Write compact DB/cache spec content for `spec.md` that covers transaction scope, invalidation or update publication, strong vs eventual read paths, degraded-mode behavior if Redis is down, and any API/reliability/data handoffs this design creates.",
       "expected_output": "A section-ready DB/cache spec that makes freshness classes, invalidation linkage, degraded behavior, and cross-domain handoffs explicit.",
       "files": [],
@@ -38,6 +41,42 @@
         "The output defines degraded-mode behavior for Redis outage.",
         "The output names at least one API, reliability, or data handoff caused by the split freshness contract.",
         "The output makes transaction ownership or boundary explicit."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "clean",
+      "prompt": "The accepted DB/cache spec already fixes named SQL queries, transaction ownership, context/resource handling, retry and commit-uncertainty rules, cache topology, keys, values, TTL, invalidation, stampede control, degraded mode, telemetry, and tests. A follow-up only renames a Go repository package without changing runtime behavior. Apply the go-db-cache-spec role.",
+      "expected_output": "No new DB/cache decision, with the accepted runtime access contract unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns `no_new_decision_required` or explicit unchanged DB/cache constraints.",
+        "Does not redesign queries, transactions, retries, cache, fallback, or proof.",
+        "Leaves package naming to implementation ownership without padding."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "neighbor",
+      "prompt": "The local profile write transaction and cache contract are accepted: the write records one invalidation intent atomically, public reads may be stale for 30 seconds, and admin reads bypass cache. The remaining question is how another service delivers, orders, redrives, and reconciles those durable invalidation messages after process loss. Apply the go-db-cache-spec role without designing the distributed flow.",
+      "expected_output": "Only the forced distributed owner and the cache consequence that durable invalidation must preserve the accepted freshness split, without choosing delivery recovery topology.",
+      "files": [],
+      "expectations": [
+        "Names `go-distributed-spec` as owner of delivery, ordering, redrive, and reconciliation across the durable boundary.",
+        "Carries only the accepted atomic invalidation intent and admin/public freshness constraints.",
+        "Does not choose a broker, outbox relay, ordering strategy, redrive, or reconciliation design."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "unresolved_policy",
+      "prompt": "Approve Redis and choose TTL, stale fallback, and fail-open behavior now, but product and the API owner have not decided whether users may observe stale entitlement data, security has not classified the cached value, and there is no query-plan, origin-load, or hit-rate evidence. Produce the final cache contract so coding can start.",
+      "expected_output": "A blocked DB/cache specification that names the unresolved API/product and security owners plus missing runtime evidence, without inventing cache semantics.",
+      "files": [],
+      "expectations": [
+        "Stops on missing client-visible freshness, security classification, and bottleneck evidence.",
+        "Names `go-api-contract-spec` and `go-security-spec` as required policy owners.",
+        "Does not approve Redis or invent TTL, stale fallback, fail-open behavior, or hit-rate assumptions."
       ]
     }
   ]

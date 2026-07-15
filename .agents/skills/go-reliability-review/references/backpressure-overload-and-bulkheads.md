@@ -1,15 +1,15 @@
 # Backpressure, Overload, And Bulkheads
 
 ## Behavior Change Thesis
-When loaded for symptom `fan-out, queue, limiter, worker pool, rate limit, circuit breaker, or bulkhead changed`, this file makes the model ask how work is bounded, rejected, or isolated instead of likely mistake `accept more goroutines, larger queues, or wait-until-timeout behavior as capacity handling`.
+When loaded for symptom `accepted fan-out, queue, rate-limit, circuit-breaker, or bulkhead behavior changed`, this file makes the model ask whether work is bounded, rejected, or isolated as promised instead of likely mistake `accept larger queues or wait-until-timeout behavior as capacity handling`.
 
 ## When To Load
-Load when a Go diff touches fan-out, worker pools, semaphores, queues, buffered channels, rate limits, overload responses, circuit breakers, bulkheads, dependency-specific pools, or a path that can accumulate work faster than it processes it.
+Load when a Go diff touches fan-out, queues, rate limits, overload responses, circuit breakers, bulkheads, dependency-specific pools, or a path that can accumulate work faster than it processes it and accepted overload behavior supplies the governing policy. Route worker, semaphore, channel, or goroutine mechanism correctness to `go-concurrency-review`.
 
-Keep findings local: ask for the changed path to bound resource use and reject or degrade predictably. Hand off throughput benchmarking to `go-performance-review`, goroutine coordination depth to `go-concurrency-review`, and architecture-wide overload policy to `go-reliability-spec` or `go-design-spec`.
+Keep findings local: ask for the changed path to bound resource use and reject or degrade predictably. Hand off throughput benchmarking to `go-performance-review`, goroutine coordination depth to `go-concurrency-review`, and architecture-wide overload policy to `go-reliability-spec` or `go-implementation-ownership-spec`.
 
 ## Decision Rubric
-- A request loops over inputs and starts one goroutine per item with no cap.
+- A request exceeds an accepted per-request or per-dependency concurrency/fan-out cap.
 - A new queue, slice backlog, or buffered channel has no maximum, no drop policy, or no producer backpressure.
 - All dependencies share one worker pool, so a slow optional dependency can starve critical work.
 - The code waits indefinitely for queue capacity instead of honoring `ctx.Done()`.
@@ -20,7 +20,7 @@ Keep findings local: ask for the changed path to bound resource use and reject o
 
 ## Imitate
 
-Bad finding shape to copy: the defect is local amplification, not "could be optimized."
+Bad finding shape to copy: given an accepted cap and overload outcome, the defect is contract-breaking amplification, not "could be optimized." Concrete goroutine/channel mechanics remain concurrency-owned.
 
 ```go
 func (s *Service) Refresh(ctx context.Context, ids []string) error {
@@ -41,7 +41,7 @@ func (s *Service) Refresh(ctx context.Context, ids []string) error {
 
 ```text
 [high] [go-reliability-review] internal/cache/refresh.go:31
-Issue: The changed refresh path starts one remote call per id without a concurrency cap or overload response.
+Issue: The accepted refresh contract caps remote calls and requires a prompt overload response, but the changed path starts one call per id without either bound.
 Impact: A large request or slow dependency can create a local fan-out storm, exhaust sockets/goroutines, and amplify downstream overload.
 Suggested fix: Use the repository's bounded worker/semaphore pattern, honor ctx while acquiring capacity, and return a deliberate overload or partial result when capacity is unavailable.
 Reference: Google SRE overload guidance and Azure Bulkhead pattern.

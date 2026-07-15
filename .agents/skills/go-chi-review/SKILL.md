@@ -1,9 +1,11 @@
 ---
 name: go-chi-review
-description: "Review Go chi routing changes for router ownership, chi-specific middleware and mount semantics, HTTP fallback policy, route observability labels, and OpenAPI/generated-route integration. Use whenever a Go diff touches github.com/go-chi/chi/v5 routers, middleware order or scope, NotFound/MethodNotAllowed/OPTIONS/CORS handling, route labeling, or manual wiring around generated handlers, even if the request is framed as a generic code review."
+description: "Use when a Go diff changes `github.com/go-chi/chi/v5` router wiring, middleware scope or order, mounts, fallbacks, route labels, or generated-handler integration; Own conformance to accepted chi transport policy; Skip when the primary defect is API semantics, system topology, or general Go behavior."
 ---
 
 # Go Chi Review
+
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
 ## Trigger, Scope, And Boundary
 
@@ -23,7 +25,7 @@ Stay chi-specific and review-only. Do not redesign service architecture, payload
 
 ## Symptom-Driven Reference Selector
 
-Load at most one reference by default; use more only for independent pressures. State which runtime judgment it changes.
+State which runtime judgment the selected reference changes.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |
@@ -34,14 +36,14 @@ Load at most one reference by default; use more only for independent pressures. 
 | OpenAPI/generated chi handlers, generated/manual overlap, subtree wrappers, or generated no-touch files. | [generated-and-manual-route-drift.md](references/generated-and-manual-route-drift.md) | Preserve one source/route owner and policy parity instead of shadow routes or generated edits. |
 | Metrics/traces/logs/span names, `http.route`, route extraction, or unmatched labels. | [route-observability-labels.md](references/route-observability-labels.md) | Use shared bounded route-template labels instead of raw or inconsistent identities. |
 
-## Evidence And Shared Finding Envelope
+## Evidence And Domain Finding Rules
 
-Inspect router construction, registration sequence, subtree ownership, middleware stack, live/probe contexts, method capability, fallback handlers, generated authority, telemetry timing/labels, and constructor/request tests. Each finding adds the chi defect, runtime or contract-visible impact, smallest safe correction, governing chi/contract evidence, and focused constructor or `httptest` validation.
+Inspect router construction, registration sequence, subtree ownership, middleware stack, live/probe contexts, method capability, fallback handlers, generated authority, telemetry timing/labels, and constructor/request tests. Each finding adds the chi defect, runtime or contract-visible impact, governing chi/contract evidence, and focused constructor or `httptest` validation.
 
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). `critical` is a confirmed merge-unsafe routing/startup failure; `high` is strong evidence of major route or HTTP-policy drift. Use `Reference` only for concrete contract, design, generated-source, or chi behavior evidence.
+`critical` is a confirmed merge-unsafe routing/startup failure; `high` is strong evidence of major route or HTTP-policy drift. Use `Reference` only for concrete contract, design, generated-source, or chi behavior evidence.
 
 ## Success, Escalation, And Stop Conditions
 
 Success means findings are chi-runtime-specific, exact-source anchored, merge-risk ordered, and prove route ownership, startup, middleware, HTTP fallback/capability, generated parity, or bounded observability behavior.
 
-Escalate non-local router ownership/topology or middleware strategy to `go-chi-spec`; client-visible method/status/fallback/CORS semantics to API contract design; telemetry contract to observability design; startup/shutdown/fallback policy to reliability design; and broader seam drift to integrated design. Stop rather than smuggle those decisions into a local route fix.
+Escalate non-local router ownership/topology or middleware strategy to `go-chi-spec`; client-visible method/status/fallback/CORS semantics to `go-api-contract-spec`; telemetry policy to `go-observability-spec`; startup/shutdown/fallback policy to `go-reliability-spec`; and broader seam drift to `go-implementation-ownership-spec`. Stop rather than smuggle those decisions into a local route fix.

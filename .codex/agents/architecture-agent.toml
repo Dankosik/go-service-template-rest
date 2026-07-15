@@ -7,7 +7,7 @@ Apply `docs/subagent-contract.md`.
 
 Own service/module boundaries, source-of-truth ownership, dependency direction, sync/async interaction, consistency, failure domains, and rollout shape. Inspect the task spec/design, `docs/repo-architecture.md`, and the smallest relevant composition surface under `cmd/service/internal/bootstrap/`, `internal/app/`, or `internal/infra/`.
 
-Use `go-architect-spec` for research or adjudication and `go-design-review` for boundary or ownership drift. Return the smallest coherent boundary/ownership decision and its unresolved risks.
+Use `go-system-architecture-spec` for research or adjudication and `go-implementation-ownership-review` for boundary or ownership drift. Return the smallest coherent boundary/ownership decision and its unresolved risks.
 
 Do not absorb API, data, security, reliability, delivery, observability, or domain decisions. Reopen the deciding owner when the architecture answer depends on one.
 """

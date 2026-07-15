@@ -1,35 +1,37 @@
 ---
 name: go-performance-spec
-description: "Design measurable performance contracts for Go services before coding. Use when latency, throughput, allocation, contention, memory, or capacity needs explicit workload budgets and benchmark/profile/trace proof. Skip local optimization implementation, generic speed advice, and unrelated API/schema/CI design."
+description: "Use when latency, throughput, allocation, contention, memory, or capacity needs an explicit workload model, budget, and benchmark/profile/trace proof before coding; Own measurable performance contracts; Skip when the task is optimization implementation, resilience policy, system topology, or generic speed advice."
 ---
 
 # Go Performance Spec
 
-## Outcome
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-Produce a reproducible performance contract for the affected operation: workload, budget, bottleneck hypothesis, proof protocol, thresholds, runtime signal, and rollout action.
+## Outcome And Boundary
+
+Produce a reproducible contract for one operation: critical path, workload, latency/throughput/resource budgets, bottleneck hypothesis, proof, regression threshold, runtime signal, and rollout action.
+
+Own measurable workload, latency, throughput, allocation/GC, memory, contention, and capacity policy. Do not choose topology, DB/cache mechanism, API or resilience semantics, synchronization, general observability/delivery, or placement; carry forced budgets only and block on unset upstream policy.
 
 ## Method
 
-1. Name the operation class, user/system outcome, workload shape, hot path, and current evidence.
-2. Set explicit latency, throughput, allocation, memory, contention, or capacity budgets only where relevant; label unproven numbers as assumptions.
-3. Compare options only for a real live fork and prefer the least-complex option that can meet the budget.
-4. Specify a reproducible benchmark, profile, trace, or scenario protocol with baseline, target, variance rule, and pass/fail threshold.
-5. Add runtime telemetry and rollout/rollback checkpoints proportional to the claim, then hand off semantic changes to their owning domain.
+1. Name operation/outcome, critical path, workload, baseline, and bottleneck evidence; set only relevant budgets and label unsupported numbers with their authority or assumption.
+2. Prefer the least-complex option that can meet the budget.
+3. Specify controlled benchmark/load/profile/trace proof with baseline, target, samples, variance, regression threshold, and oracle.
+4. Add proportional bounded telemetry and rollout/rollback checkpoints; hand semantic changes to their owners.
 
 ## Decision Rules
 
-- Measure a named hot path under representative input, concurrency, skew, cache, and dependency state; do not optimize a dashboard average or toy fixture.
+- Model representative mix, input size/cardinality/skew, concurrency, rate/burst, tenants, cache/dependency/retry modes, and worst accepted envelope. Keep decisive buckets separate; reject averages, median-only aggregates, and toy fixtures.
 - Prefer algorithmic, data-flow, payload, and round-trip reductions before micro-optimization, pooling, caching, PGO, or added fan-out.
-- Keep concurrency bounded and specify cancellation, queue, contention, saturation, and shutdown behavior when performance work adds parallelism.
-- Match the proof to the claim: microbenchmarks do not establish system latency, profiles do not establish correctness, and one best run does not establish a stable improvement.
-- Define DB/cache, overload, degradation, or API-visible consequences explicitly when they change behavior; performance does not own those semantics.
+- Budget CPU, allocation/live heap, GC/scheduler, locks/pools/queues/goroutines, and downstream capacity when relevant; bound parallelism and expose cancellation, contention, saturation, and shutdown consequences.
+- Match proof to claim: microbenchmarks isolate code, scenarios compare operations, load tests prove envelopes, profiles locate cost, and traces expose scheduling/contention. Reject one best run, hidden variance, mismatched fixtures, and aggregate wins that regress a protected bucket.
+- State DB/cache, overload/degradation, streaming, or API consequences, but leave semantics and mechanisms to their owners.
 - Preserve mixed-version and rollback safety. Do not accept a gain without a detection path and rollback trigger.
-- Use `constraint_only`, `proof_only`, or `no new decision required in <domain>` when an adjacent domain needs no new decision now.
 
 ## Reference Selector
 
-Load at most one reference by default; load more only for independent decision pressures.
+Load the reference whose symptom sharpens the highest-risk performance decision.
 
 | Symptom | Load | Decision it sharpens |
 | --- | --- | --- |
@@ -49,8 +51,8 @@ Load at most one reference by default; load more only for independent decision p
 
 ## Output
 
-Return the relevant hot-path map, workload and budget table, bottleneck hypothesis, option decision, proof protocol and thresholds, runtime/rollout checkpoints, forced handoffs, assumptions, blockers, and reopen conditions.
+Return critical path, workload/budgets, baseline/hypothesis, option, proof and thresholds, runtime/rollout actions, forced constraints, assumptions, blockers, and reopen conditions.
 
 ## Success And Stop
 
-Success means implementation can pursue a measured budget without inventing workload, proof, or semantic policy. Stop when the critical path or workload is unknown, targets have no authority, proof cannot be reproduced, or meeting the budget would require unresolved API, data/cache, reliability, concurrency, observability, or delivery decisions.
+Stop when critical path/workload or baseline is unknown, targets lack authority, proof/variance is irreproducible, regression thresholds are absent, or the budget needs unresolved neighboring policy.

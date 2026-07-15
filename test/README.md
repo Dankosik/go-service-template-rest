@@ -1,5 +1,7 @@
 # Integration Tests
 
+This Codex-native repository keeps broad executable proof in this directory.
+
 Store end-to-end, migration-backed, container-backed, and larger cross-package tests in this directory.
 
 Integration tests use the `integration` build tag and are not executed by default.

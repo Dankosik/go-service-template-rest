@@ -3,7 +3,7 @@
 Load this file only when a durable repository fact could change the handoff's owner, source-of-truth guidance, starting surface, or proof command. Skip it when the source task is already repository-grounded.
 
 ## What This Repository Is
-- This repo is an AI-native Go REST service template for coding-agent workflows.
+- This repo is a Codex-native Go REST service template.
 - It is not a business-specific product repo with one fixed domain model.
 - The sample service is intentionally thin; do not overfit prompts to `ping` or `ping_history` unless the request actually points there.
 
@@ -63,8 +63,7 @@ Load this file only when a durable repository fact could change the handoff's ow
 - Integration tests: `make test-integration`
 - Security scans: `make go-security`, `make secrets-scan`
 - Migration rehearsal: `make migration-validate`
-- Agent mirrors: `make agents-sync`, `make agents-check`
-- Skill mirrors: `make skills-sync`, `make skills-check`
+- Workflow and skill instructions: `make workflow-routing-check`
 
 ## Context Rules For This Skill
 - Do not inject this profile as a standard project summary.

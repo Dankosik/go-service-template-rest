@@ -1,49 +1,35 @@
 ---
 name: go-distributed-review
-description: "Review Go code and design changes for distributed flow correctness: saga and orchestration/choreography drift, outbox/inbox linkage, idempotency, replay and ordering safety, compensation, forward recovery, DLQ/redrive, and reconciliation behavior."
+description: "Use when changed behavior crosses a durable process or service boundary through sagas, messages, outbox/inbox, replay, ordering, compensation, redrive, or reconciliation; Own distributed-flow correctness against accepted policy; Skip when the primary defect is local synchronization, service lifecycle resilience, or SQL/cache execution."
 ---
 
 # Go Distributed Review
 
-## Purpose
-Review changed cross-service or async workflow surfaces for consistency, replay, and recovery defects under partial failure.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Treat distributed behavior as ownership, durability, and recovery first; transport choice is secondary.
-- Assume at-least-once delivery, retries, redrive, stale projections, and mixed-version rollout unless the code proves otherwise.
-- Prefer explicit idempotency, dedup, durable intent, and reconciliation over "best effort" side effects.
-- Hand off API, data, reliability, security, observability, or delivery depth when the defect belongs there.
+## Review Target And Boundary
 
-## Scope
-- Sagas, orchestration/choreography, workflow state machines, and cross-service process ownership.
-- Outbox/inbox, relay, consumer ack/offset timing, dedup, idempotency keys, and replay handling.
-- Compensation, pivot transaction, forward recovery, DLQ, redrive, stuck-flow, and reconciliation behavior.
-- Event or command compatibility, ordering assumptions, projection freshness, and mixed-version behavior.
-- Correlation and operator-visible recovery signals only when they affect distributed correctness review.
+Review changed sagas, orchestration/choreography, workflow state machines, outbox/inbox paths, relays, consumers, projections, and recovery tooling for consistency under partial failure across a durable process or service boundary. Treat ownership, durability, replay, and recovery as primary; transport is secondary. Assume at-least-once delivery, retries, redrive, stale projections, and mixed versions unless repository evidence proves a narrower model.
 
-## Boundaries
-Do not:
-- review purely local transaction code with no async or cross-service consequence,
-- redesign the whole workflow inside a code review unless local repair is impossible,
-- accept broker "exactly once" or global ordering claims without explicit repository evidence,
-- absorb low-level retry, SQL, security, or telemetry ownership when another review lane is primary.
+Do not absorb local synchronization, service timeout/overload/lifecycle policy, SQL/cache execution, security, telemetry, API, or delivery defects. Purely local transactions with no durable-boundary consequence are outside this review. Do not redesign the flow unless local repair is impossible or accept broker "exactly once" or global ordering claims without explicit evidence.
 
-## Review Checklist
-- State change and message intent are durably linked where correctness depends on async follow-up.
-- Consumers persist side effects and dedup markers before ack or offset commit.
-- Idempotency keys are stable, business-scoped, and retained long enough for replay/redrive.
-- Ordering assumptions are explicit and bounded by business key, partition, version, or state transition guard.
-- Compensation and forward recovery are distinguished; non-compensable post-pivot steps are retryable or repairable.
-- DLQ, poison message, stuck-flow, redrive, and reconciliation ownership are explicit.
-- Event or command version changes remain compatible across stored messages and mixed deployments.
+## Distributed Invariants
 
-## Evidence And Shared Finding Envelope
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the violated distributed-consistency expectation, partial-failure/replay scenario, duplicate/lost/stale/stuck/unrecoverable effect, smallest safe correction, and scenario proof. `critical` is likely unrecoverable corruption under normal partial failure; `high` is strong duplicate/lost side-effect, ack-before-durable-effect, or ownerless recovery risk.
+1. A state change and required async intent share a durable success boundary; no crash window can commit one while permanently losing or falsely publishing the other.
+2. Consumers make the local effect and dedup/inbox marker durable before ack or offset commit, so process loss yields safe replay rather than lost work.
+3. Idempotency and dedup keys are stable, business-scoped, collision-safe, and retained for the full replay/redrive horizon.
+4. Ordering assumptions are explicit and bounded by business key, partition, version, or guarded state transition; stale projections and duplicate or reordered messages cannot silently regress state.
+5. Compensation, forward recovery, and pivot semantics are distinct; non-compensable post-pivot work is retryable, repairable, or reconciled.
+6. Retry exhaustion, poison messages, DLQ, redrive, stuck-flow detection, reconciliation ownership, and operator recovery are explicit rather than "best effort."
+7. Event and command evolution remains compatible with stored messages and mixed deployments; correlation and recovery signals are required when they determine whether a flow can be repaired.
 
-## Escalate When
-- safe correction changes the flow model or consistency contract (`go-distributed-architect-spec`),
-- local repair depends on DB schema, transaction, or cache ownership (`go-data-architect-spec` or `go-db-cache-spec`),
-- retry/timeout/degradation policy is the primary issue (`go-reliability-spec`),
-- API-visible async status or idempotency semantics must change (`api-contract-designer-spec`),
-- replay authenticity or async identity is unresolved (`go-security-spec`),
-- DLQ/redrive/reconciliation signals are the primary gap (`go-observability-engineer-spec`).
+## Symptom-Driven Reference
+
+For dual writes, ack timing, outbox/inbox, relay, dedup, DLQ, redrive, or replay holes, load [async-durable-side-effect-review.md](references/async-durable-side-effect-review.md) to test the concrete crash boundary and recovery path.
+
+## Evidence And Domain Finding Rules
+Each finding adds the violated distributed-consistency expectation, partial-failure/replay scenario, duplicate/lost/stale/stuck/unrecoverable effect, and scenario proof. `critical` is likely unrecoverable corruption under normal partial failure; `high` is strong duplicate/lost side-effect, ack-before-durable-effect, or ownerless recovery risk.
+
+## Escalation And Stop
+
+Escalate a missing or changed flow, consistency, ordering, compensation, or recovery contract to `go-distributed-spec`; data model ownership to `go-data-architecture-spec`; transaction/cache mechanics to `go-db-cache-spec`; timeout/retry/degradation policy to `go-reliability-spec`; caller-visible async or idempotency semantics to `go-api-contract-spec`; replay identity to `go-security-spec`; and recovery-signal policy to `go-observability-spec`. Stop rather than invent the missing distributed policy.

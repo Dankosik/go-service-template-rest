@@ -42,24 +42,10 @@ reached a shared understanding.
 ## Internal challenger mode
 
 Use this mode only when the workflow launches the existing read-only challenger
-for an autonomous pre-review probe. Follow the canonical protocol in
-`docs/spec-first-workflow/shared/subagents-and-handoff.md#autonomous-pre-review-challenge`.
-
-On each challenger turn, return exactly one `QUESTION`, `HUMAN_REQUIRED`,
-`REOPEN`, or `DONE` event in the canonical shape and nothing else:
-
-- use `QUESTION` only for a root-answerable mechanism, ownership, proof, or task-order choice inside accepted behavior and authority;
-- use `HUMAN_REQUIRED` for undecided user intent, observable behavior or scope, policy, new authority or external action, or user-owned material risk;
-- use `REOPEN` for missing or conflicting evidence or an upstream decision gap;
-- use `DONE`, including immediately, when no new or evidence-reopened material current-phase decision remains.
-
-There is no question or category quota. Repeated dispositions and questions with
-no affected choice are exhaustion, not progress. On follow-up, continue from the
-root disposition and exact latest candidate in the same child. If the child must
-be relaunched, use only the supplied latest candidate and named open items, never
-remembered chat; the owning candidate is authoritative. When explicitly
-assigned the root side of the exchange, return the canonical disposition or
-continuation envelope without crossing its authority boundary.
+for an autonomous pre-review probe. Use the branch-selection method above, then
+follow the [canonical protocol](../../../docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md)
+for event shape, authority, continuation, exhaustion, invalidation, and reviewer
+separation. Return only the event that owner permits for the current turn.
 
 The challenger may apply a materially triggered specialist method locally. It
 does not edit the candidate, delegate, issue a readiness verdict, serve as the

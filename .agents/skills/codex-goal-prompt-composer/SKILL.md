@@ -5,11 +5,16 @@ description: "Compose the single compact root Codex Goal when implementation is 
 
 # Codex Goal Prompt Composer
 
-Use only when entering the implementation/validation/closeout macro phase: direct work has an accepted inline outcome, or structured/orchestrated work has a ready independently reviewed `tasks.md` ledger. Establish the Goal immediately before the first implementation edit.
+Use only when an accepted inline outcome or ready independently reviewed `tasks.md`
+enters [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md).
+[Repository authorization](../../../AGENTS.md#authorization) owns when the single
+root-thread Goal starts and ends. Before implementation, return no Goal and name
+the missing accepted input.
 
-Do not use during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts. If the user explicitly asks for a Codex Goal before implementation is ready, state that it starts only on entry to implementation and return no Goal.
-
-Compose one root-thread Goal covering implementation, root acceptance of every Worker result, root review of the final integrated diff and affected lenses, Worker repair, validation, and closeout. Implementation launches no built-in subagent lanes. Do not create separate Goals for workers, individual tasks, or internal checkpoints. Those are internal next actions, not handoffs.
+Compose one durable Goal for that whole macro phase. Bind completion to the
+accepted outcome or ledger, final integrated review, and fresh proof without
+copying Worker commands or phase mechanics. Do not create separate Goals for
+Workers, ledger tasks, corrections, or internal checkpoints.
 
 Read the accepted inline outcome or ready `tasks.md` first. Read [the handoff contract](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md) only for a next-session handoff. Add another artifact only when the accepted source points to a non-obvious constraint that must appear in the Goal.
 
@@ -24,4 +29,8 @@ Proof: <required evidence or ledger section>
 Stop/reopen: <exact blocker behavior and owner>
 ```
 
-Omit workflow manuals, worker commands, model catalogs, broad repository summaries, repeated authorization rules, and empty fields. If a successful completion condition or proof is missing, return a blocked handoff only when the missing input satisfies the shared handoff gate; otherwise the owning root repairs the artifact without a prompt.
+Omit workflow manuals, Worker commands, model catalogs, broad repository
+summaries, repeated authorization rules, and empty fields. If completion or
+proof is unresolved, return a blocked handoff only when the missing input
+satisfies the shared handoff gate; otherwise the owning root repairs the source
+artifact without a prompt.

@@ -1,0 +1,53 @@
+{
+  "skill_name": "go-coder",
+  "evals": [
+    {
+      "id": "coder-domain-defect",
+      "category": "domain_defect",
+      "prompt": "Use the go-coder skill and return its implementation outcome without editing repository files. Accepted fix: a Go repository List method currently returns success when rows.Err() reports a terminal cursor failure. The repository contract requires an inspectable ErrRepository category while preserving the underlying cause, no partial-success result, and a regression test using the package's existing fake rows style. State the smallest production and test changes plus fresh commands.",
+      "expected_output": "A smallest-complete implementation outcome that fixes terminal row-error handling at the repository owner and proves the accepted failure behavior.",
+      "files": [],
+      "expectations": [
+        "The response changes the owning repository path rather than guarding a downstream symptom or inventing transport behavior.",
+        "The response preserves both ErrRepository inspectability and the underlying cursor error, rejects partial success, and adds the focused regression test.",
+        "The response names fresh focused proof and any broader package gate justified by the changed surface."
+      ]
+    },
+    {
+      "id": "coder-clean",
+      "category": "clean",
+      "prompt": "Use the go-coder skill and return only its compact execution outcome without editing repository files. The accepted cleanup was to replace oldParseLimit with strconv.Atoi, remove the retired helper and its helper-only test, preserve the public error category, and run the parser package tests. Inspection shows the canonical implementation, cleanup, and error behavior already match those obligations; a fresh package test is green and no retired identifier remains.",
+      "expected_output": "No implementation work: report the already-satisfied accepted outcome and bounded fresh proof without proposing extra cleanup or refactoring.",
+      "files": [],
+      "expectations": [
+        "The response makes no code or test change and does not pad the result with speculative improvements.",
+        "The response states that the accepted behavior and cleanup constraints remain unchanged.",
+        "Any positive statement stays bounded to the supplied fresh package and negative-search evidence."
+      ]
+    },
+    {
+      "id": "coder-neighbor",
+      "category": "neighbor",
+      "prompt": "Use the go-coder skill. Do not edit repository files. The request is only to perform a read-only review of a Go diff for nil, context, error-wrapping, and resource-lifetime defects; no implementation outcome or accepted repair is authorized. Return only the forced owner and consequence.",
+      "expected_output": "Route the read-only language and standard-library contract review to go-idiomatic-review and make no implementation change.",
+      "files": [],
+      "expectations": [
+        "The response names go-idiomatic-review as the owner of the requested read-only defect review.",
+        "The response states that go-coder makes no edits because no repair is accepted or authorized.",
+        "The response does not produce review findings, duplicate the review, or broaden the handoff."
+      ]
+    },
+    {
+      "id": "coder-unresolved-policy",
+      "category": "unresolved_policy",
+      "prompt": "Use the go-coder skill. Do not edit repository files. Implement POST /exports idempotency, but the accepted artifacts do not decide whether a reused key with a different payload returns 409 or 422, which response body is public, or whether the original operation is returned. Existing code has no established behavior for this case. Return the execution outcome.",
+      "expected_output": "Block implementation on the missing API-contract decision and name go-api-contract-spec without inventing status, representation, or replay behavior.",
+      "files": [],
+      "expectations": [
+        "The response identifies the unresolved client-visible idempotency behavior as an API-contract decision owned by go-api-contract-spec.",
+        "The response makes no speculative production or test patch.",
+        "The response names the exact missing decision and does not choose 409, 422, a response shape, or replay semantics."
+      ]
+    }
+  ]
+}

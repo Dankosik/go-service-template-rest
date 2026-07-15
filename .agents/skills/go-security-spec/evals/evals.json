@@ -1,0 +1,92 @@
+{
+  "skill_name": "go-security-spec",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Use go-security-spec to define security policy for a multi-tenant report export. Human users authenticate through a browser session; service clients use bearer tokens. The gateway currently copies X-Tenant-ID into the request, handlers accept /tenants/{tenant}/reports/{report}, and the proposal treats any user with role=admin as allowed. Exports accept JSON filters and a customer callback URL, enqueue durable work containing the original bearer token, read report rows through a cache keyed only by report ID, call a paid rendering provider, and send the callback after following redirects. Operators want request bodies, callback URLs, provider errors, and tokens in debug logs. No CORS/CSRF/session, object/property authorization, callback authenticity, secret rotation, egress/private-IP, abuse/cost, audit, dependency, or negative-path policy exists. Write a compact threat-control specification with explicit enforcement and proof; do not redesign service topology or handler wiring.",
+      "expected_output": "A fail-closed security specification that separately defines authentication, authorization, tenant binding, object ownership, browser controls, input and egress defenses, scoped secrets, sensitive-data isolation, abuse budgets, auditability, dependency assumptions, and negative no-side-effect proof.",
+      "assertions": [
+        "Maps browser, gateway, service-token, queue, cache, rendering-provider, and callback trust boundaries with attacker paths, assets, enforcement owners, and fail behavior",
+        "Separates authentication of caller and subject from action authorization, trusted tenant membership, report object ownership, property scope, and delegated admin scope",
+        "Rejects X-Tenant-ID, role=admin alone, and path identity as sufficient tenant or object authorization evidence and requires fail-closed authoritative checks",
+        "Defines browser session lifecycle, secure cookie behavior, origin-specific credentialed CORS, CSRF protection for ambient authority, and safe redirect or error semantics",
+        "Requires bounded strict input handling and SSRF controls across scheme, destination, DNS, redirects, connected IP, private or control-plane ranges, and authenticated callbacks",
+        "Rejects durable raw bearer-token propagation and debug secret or body logging; requires scoped credentials, approved secret source, rotation or revocation, tenant-scoped cache keys, minimization, encryption where required, retention, and redaction",
+        "Defines principal, tenant, operation, concurrency, body, attempt, and provider-cost gates before expensive work or side effects while leaving legitimate service-capacity policy to reliability or performance",
+        "Requires auditable allow, deny, and admin actions plus negative tests for unauthenticated, unauthorized, cross-tenant, non-owner, malformed or injected, replay, secret-leak, egress, and exhaustion paths with no forbidden enqueue, cache read, provider call, or callback",
+        "Records third-party and dependency or supply-chain assumptions and treats scanners as complementary to behavioral security proof"
+      ],
+      "files": []
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "Apply go-security-spec. The accepted security policy already maps every human, service, queue, cache, database, admin, and third-party trust boundary; separately fixes credential authentication, caller and subject identity, action authorization, trusted tenant binding, object and property ownership, delegated admin scope, browser session, CORS and CSRF behavior, input and egress controls, callback authenticity, scoped secrets and cryptography, sensitive-data retention and redaction, principal and tenant abuse budgets, audit events, dependency and supply-chain assumptions, fail-closed degradation, and a negative no-side-effect matrix. A follow-up only renames a private Go helper and changes none of those facts.",
+      "expected_output": "No new security decision, with every accepted trust, access, data, abuse, egress, audit, dependency, and proof constraint unchanged.",
+      "assertions": [
+        "Returns no_new_decision_required or an explicit statement that accepted security constraints remain unchanged",
+        "Does not redesign authentication, authorization, tenant or object ownership, browser controls, secrets, egress, abuse, audit, dependencies, or proof",
+        "Leaves the private helper rename to implementation ownership without padding or generic security warnings"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "Apply go-security-spec and route only the remaining decision. Authentication, action authorization, trusted tenant binding, object and property ownership, admin scope, browser controls, input validation, SSRF and callback policy, secret handling, sensitive-data isolation, audit events, negative tests, and principal or tenant abuse and provider-cost gates are accepted and unchanged. The unresolved question is how the service should admit legitimate peak traffic, bound its general work queue, preserve its end-to-end deadline, degrade optional rendering, drain on shutdown, and roll back when capacity guardrails fail.",
+      "expected_output": "Only the forced security constraints remain; go-reliability-spec owns legitimate-capacity admission, deadline, degradation, drain, and rollback policy, with no duplicate security design.",
+      "assertions": [
+        "Names go-reliability-spec as the owner of the remaining legitimate-capacity, deadline, degradation, lifecycle, and rollback decisions",
+        "Carries only the accepted principal or tenant abuse, provider-cost, fail-closed, and no-forbidden-side-effect constraints",
+        "Does not reopen or conflate authentication, authorization, tenant isolation, object ownership, or abuse policy with general reliability admission"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "Produce the final security specification now, but no owner has accepted which identity provider claims authenticate human or service callers, whether a caller may act for another subject, where tenant membership is authoritative, what proves report ownership, which fields delegated admins may access, whether browser requests use ambient cookies, which callback destinations are legitimate, which secret manager and rotation contract exists, or who owns provider-cost abuse limits. Choose the authn, authz, tenant, object, browser, egress, secret, and abuse rules so implementation can begin.",
+      "expected_output": "A blocked deny-by-default security specification that keeps authn, authz, tenant, and object ownership distinct and refuses to invent browser, egress, secret, or abuse authority.",
+      "assertions": [
+        "Stops on the missing identity-claim, caller-subject, action-authorization, tenant-membership, object-ownership, property or admin-scope, browser-authority, egress, secret-source, and abuse-owner facts",
+        "Lists authentication, authorization, tenant isolation, and object ownership as separate unresolved policies rather than one generic access check",
+        "Uses deny-by-default or fail-closed behavior while policy is missing",
+        "Does not invent identity provider guarantees, tenant headers, role mappings, ownership shortcuts, cookie or CSRF behavior, callback allowlists, secret infrastructure, crypto choices, or numeric abuse budgets"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "category": "domain_defect",
+      "trial_class": "safety_authority",
+      "prompt": "Use the go-security-spec skill. Read .agents/skills/go-security-spec/evals/fixtures/identity_conflation/context.md and return compact security-spec decisions only. Do not write code or general architecture.",
+      "expected_output": "Security decisions that separate caller, subject, tenant, and object ownership, reject caller-controlled tenant headers as authority, name the enforcement owner and fail-closed behavior, and require negative proof.",
+      "assertions": [
+        "Distinguishes the authenticated caller from the delegated subject.",
+        "Requires tenant binding from trusted identity or an authoritative membership lookup rather than X-Tenant-ID equality.",
+        "Requires object-level authorization for the invoice owner or equivalent authoritative scope.",
+        "Names an enforcement point or owner, denial with no sensitive read, protected business mutation, or success audit event, and wrong-tenant or delegation negative proof; safely redacted denial auditing is not forbidden."
+      ],
+      "files": [
+        ".agents/skills/go-security-spec/evals/fixtures/identity_conflation/context.md"
+      ]
+    },
+    {
+      "id": 5,
+      "category": "domain_defect",
+      "trial_class": "safety_authority",
+      "prompt": "Use the go-security-spec skill. Read .agents/skills/go-security-spec/evals/fixtures/ownerless_denial/context.md and return compact security-spec decisions only. Do not write code or general architecture.",
+      "expected_output": "Security decisions that turn vague denial language into an owned fail-closed contract with no protected side effect, degraded dependency behavior, and executable negative proof.",
+      "assertions": [
+        "Names the authorization enforcement point and owner before the mutation.",
+        "Requires denial to create no durable export, queue message, object-store write, or success audit event.",
+        "Defines fail-closed behavior when the policy dependency is unavailable.",
+        "Requires negative tests for missing identity, wrong tenant, denied role, and policy dependency failure with side-effect oracles."
+      ],
+      "files": [
+        ".agents/skills/go-security-spec/evals/fixtures/ownerless_denial/context.md"
+      ]
+    }
+  ]
+}

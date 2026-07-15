@@ -1,12 +1,12 @@
 # Go Service Template REST
 
-AI-native Go REST template for solo developers who want coding agents to work inside real Go, API, data, and operational constraints without carrying a heavyweight process prompt.
+Codex-native Go REST template for solo developers who want Codex to work inside real Go, API, data, and operational constraints without carrying a heavyweight process prompt.
 
 The repository combines:
 
 - outcome-first workflow guidance with risk-proportional artifacts;
 - project-scoped read-only specialist agents;
-- portable Go design, implementation, review, and verification skills;
+- reusable Go design, implementation, review, and verification skills;
 - OpenAPI-first HTTP, PostgreSQL, `sqlc`, telemetry, tests, and CI gates;
 - explicit repository ownership and generated-source discipline.
 
@@ -38,9 +38,9 @@ The workflow chooses among three paths:
 
 Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require full-depth work or a durable artifact in every phase.
 
-Structured and orchestrated work evaluates every phase boundary in order. The owning macro phases are specification, technical design, test design, planning, and implementation/validation/closeout; intake and research support the owning phase unless the user names `research only`, which makes the fixed synthesis its own independently reviewed macro-phase outcome. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Required non-implementation reviews need a fresh `PASS`; `CONCERNS` stays for disposition/re-review and `FAIL` for repair/reopen. Every implementation is produced by an external `codex exec` Worker in an isolated Git worktree: one Worker for direct work, or one fresh Worker per ledger task with same-session correction until root acceptance. The root reviews every Worker result, applies matching review skills and specialist lenses locally, re-inspects corrections, and reviews the final integrated diff without launching built-in subagents. An explicitly requested independent review of completed implementation is a separate read-only request, not an implementation gate. A next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
+Structured and orchestrated work evaluates every phase boundary in order. The owning macro phases are specification, technical design, test design, planning, and implementation/validation/closeout; intake and research support the owning phase unless the user names `research only`, which makes the fixed synthesis its own independently reviewed macro-phase outcome. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Required non-implementation reviews need a fresh `PASS`; `CONCERNS` stays for disposition/re-review and `FAIL` for repair/reopen. Implementation uses the native App Worker contract in [AGENTS.md](AGENTS.md#working-contract) and the phase-owned [assignment, acceptance, review, correction, and evidence contract](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance). An explicitly requested independent review of completed implementation is a separate read-only request. A next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
 
-Before each applicable non-implementation review, the root runs one autonomous read-only grilling probe against the completed candidate, records material dispositions in that candidate, and then uses a different child for the required review. This applies once to Specification, combined Technical Design, Test Design, Planning, and explicit `research only`; it does not add probes to supporting steps, direct work, or Implementation. Explicit user-requested grilling remains a root-to-user dialogue. See [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/subagents-and-handoff.md#autonomous-pre-review-challenge).
+Before each applicable non-implementation review, the root runs one autonomous read-only grilling probe against the completed candidate, records material dispositions in that candidate, and then uses a different child for the required review. This applies once to Specification, combined Technical Design, Test Design, Planning, and explicit `research only`; it does not add probes to supporting steps, direct work, or Implementation. Explicit user-requested grilling remains a root-to-user dialogue. See [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md).
 
 ### Artifacts
 
@@ -58,21 +58,17 @@ Use `status: draft | ready | blocked | done` when durable status is useful. Do n
 
 ## Agents And Skills
 
-`.codex/agents/*.toml` contains project-scoped read-only specialist roles. `.agents/skills` is the canonical portable skill set. Claude, Cursor, Gemini, GitHub, and OpenCode mirrors are generated; do not hand-maintain them.
+`.codex/agents/*.toml` contains project-scoped read-only specialist roles. `.agents/skills` is the canonical Codex-native skill set.
 
 Useful commands:
 
 ```bash
-make agents-sync
-make agents-check
-make skills-sync
-make skills-check
 make workflow-behavior-evals-check
 ```
 
-The behavior-eval check validates the E01–E43 manifest only. Actual baseline/candidate model comparison uses `WORKFLOW_EVAL_BASE_REF=<ref> make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The behavior-eval check validates the E01–E45 manifest only. Actual baseline/candidate model comparison uses `WORKFLOW_EVAL_BASE_REF=<ref> make workflow-behavior-evals` with the external adapters documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
-In non-implementation macro phases, evaluate whether concrete, independent, bounded research or review lanes improve evidence or review independence. Use only useful read-only subagent lanes and keep tightly coupled reasoning local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. Implementation review is entirely root-local. The root owns synthesis, integration, task acceptance, and completion claims. External implementation Workers are separate processes, not subagents.
+In non-implementation macro phases, evaluate whether concrete, independent, bounded research or review lanes improve evidence or review independence. Use only useful read-only subagent lanes and keep tightly coupled reasoning local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns those lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) owns its native App Worker and root-review boundary.
 
 Representative agents:
 
@@ -95,10 +91,10 @@ Representative workflow skills:
 | `idea-refine` / `spec-first-brainstorming` | the outcome still needs product or engineering framing |
 | `research-session` | evidence can change a decision |
 | `specification-session` / `spec-document-designer` | behavior decisions need a durable record |
-| `technical-design-session` / `go-design-spec` | mechanism or Go ownership is not obvious |
+| `technical-design-session` / `go-implementation-ownership-spec` | mechanism or Go ownership is not obvious |
 | `test-design-session` | proof needs a real scenario matrix |
 | `planning-session` / `planning-and-task-breakdown` | implementation needs a durable ledger |
-| `go-coder` / `go-qa-tester` | implement accepted Go behavior and tests |
+| `go-coder` / `go-test-implementation` | implement accepted Go behavior and tests |
 | `go-systematic-debugging` | diagnose a bug, flake, hang, or build failure |
 | `go-verification-before-completion` | map completion claims to fresh evidence |
 | `workflow-status` | report status and next action from one task path |
@@ -107,7 +103,7 @@ Domain spec and review skills cover API/chi, data/cache, distributed consistency
 
 ## Orchestrator Model
 
-The root agent owns framing, route selection, the sole Goal, Worker orchestration, synthesis, integration, task acceptance, validation, and final claims. An external Worker owns one direct outcome or ledger task until root acceptance; Worker output is evidence, not authority.
+The root owns orchestration and final claims under [AGENTS.md](AGENTS.md); the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) owns the Worker/root acceptance boundary.
 
 For multi-session work, a compact task bundle may look like:
 

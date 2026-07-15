@@ -1,12 +1,12 @@
 # Retry Budget And Idempotency Review
 
 ## Behavior Change Thesis
-When loaded for symptom `retry, redrive, idempotency, duplicate suppression, or replay behavior changed`, this file makes the model require retry eligibility, a bounded budget, cancellation, and duplicate-effect protection instead of likely mistake `treat retries as generic resilience or add backoff without proving the operation is retry-safe`.
+When loaded for symptom `operation-local retry, idempotency, duplicate suppression, or replay behavior changed against an accepted resilience contract`, this file makes the model require retry eligibility, a bounded budget, cancellation, and duplicate-effect protection instead of likely mistake `treat retries as generic resilience or add backoff without proving the operation is retry-safe`.
 
 ## When To Load
-Load when a Go diff adds, changes, or removes retries, backoff, jitter, retry classification, HTTP status retry handling, message redrive, idempotency keys, duplicate suppression, or operation replay behavior.
+Load when a Go diff adds, changes, or removes retries, backoff, jitter, retry classification, HTTP status retry handling, idempotency keys, duplicate suppression, or operation-local replay behavior. Route redrive or replay across a durable process/service boundary to `go-distributed-review`.
 
-Keep findings local: review whether this changed call is safe to retry and bounded. Hand off API-visible idempotency contracts to `api-contract-designer-spec`, broader distributed replay design to `go-distributed-architect-spec`, and DB uniqueness or transaction mechanics to `go-db-cache-review`.
+Keep findings local: review whether this changed call is safe to retry and bounded. Hand off API-visible idempotency contracts to `go-api-contract-spec`, broader distributed replay design to `go-distributed-spec`, and DB uniqueness or transaction mechanics to `go-db-cache-review`.
 
 ## Decision Rubric
 - Retries are added for all errors, all HTTP 5xx statuses, or all `net.Error`s without checking the operation class.

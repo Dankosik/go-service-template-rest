@@ -1,6 +1,6 @@
 ---
 name: technical-design-session
-description: "Own the root technical-design macro phase: complete system/integration and Go-ownership design, run technical-design review, repair findings, and reach the phase stop rule. Use for end-to-end phase orchestration; use go-design-spec for design authoring without session ownership."
+description: "Own the root technical-design macro phase: complete system/integration and Go-ownership design, run technical-design review, repair findings, and reach the phase stop rule. Use for end-to-end phase orchestration; use go-implementation-ownership-spec for design authoring without session ownership."
 ---
 
 # Technical Design Session

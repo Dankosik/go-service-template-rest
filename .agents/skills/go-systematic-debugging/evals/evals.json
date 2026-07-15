@@ -3,11 +3,10 @@
   "evals": [
     {
       "id": 0,
-      "prompt": "Read the provided scenario file and produce the skill's compact debug envelope. Focus on the smallest concrete experiments, the first broken boundary, and exact Go commands or artifacts you would use next. Do not rewrite the code yet.",
+      "category": "domain_defect",
+      "prompt": "Use go-systematic-debugging in diagnosis_only mode. A worker test passes locally but fails about 6/100 runs on CI, uses time.Sleep before asserting queue drain, and sometimes fails only after another package test. Produce the compact debug envelope with the smallest separate repetition, order/shuffle, CPU, and race experiments; identify the first broken boundary and replace timing guesses with an observable condition in the proposed causal repair. Do not rewrite code yet.",
       "expected_output": "A debugging report that characterizes the flake, proposes concrete Go repro commands, identifies the first broken boundary, and recommends condition-based waiting plus race/order diagnostics instead of timeout inflation.",
-      "files": [
-        "evals/files/flaky-worker-ci.md"
-      ],
+      "files": [],
       "expectations": [
         "Uses a repeated or shuffled go test command rather than a single vague test run",
         "Calls out the flake as coordination, lifecycle, or shared-state sensitive instead of simply saying 'timing issue'",
@@ -17,11 +16,10 @@
     },
     {
       "id": 1,
-      "prompt": "Read the provided scenario file and produce the skill's compact debug envelope. Focus on concrete forensics steps before restart, the likely failure boundary, and the smallest next experiment. Do not rewrite the code yet.",
+      "category": "domain_defect",
+      "prompt": "Use go-systematic-debugging in diagnosis_only mode. A live Go API process accepts connections but requests and shutdown make no progress, CPU is low, and goroutine count has been rising. Restart would destroy the current state; a protected localhost pprof endpoint is available. Produce the compact debug envelope with the first volatile artifact, concrete capture commands, the likely blocked ownership boundary, and the smallest next discriminating experiment. Do not rewrite code yet.",
       "expected_output": "A debugging report that asks for goroutine dump or runtime forensics, distinguishes stuck coordination from CPU work, and proposes concrete dump/profile commands before any speculative patch.",
-      "files": [
-        "evals/files/api-hang-goroutines.md"
-      ],
+      "files": [],
       "expectations": [
         "Recommends goroutine dump or runtime forensics before speculative code edits",
         "Uses at least one concrete Go dump, profile, or trace command",
@@ -31,16 +29,51 @@
     },
     {
       "id": 2,
-      "prompt": "Read the provided scenario file and produce the skill's compact debug envelope. Focus on where the timeout budget is being spent, the likely first broken boundary, and the smallest proving commands. Do not rewrite the code yet.",
+      "category": "domain_defect",
+      "prompt": "Use go-systematic-debugging in diagnosis_only mode. Requests have a two-second caller deadline and fail with context deadline exceeded. Current incident data shows about 1.7 seconds of DB pool wait, 120 milliseconds of query execution, rising DB WaitCount, and a transaction that stays open during a network call. Produce the compact debug envelope, separate budget ownership from the symptom, and name concrete stats or trace evidence and the smallest next experiment. Do not widen timeout or retries.",
       "expected_output": "A debugging report that separates timeout symptom from root cause, traces pool wait or long transaction behavior, and avoids simply increasing timeouts or retries.",
-      "files": [
-        "evals/files/db-timeout-pool.md"
-      ],
+      "files": [],
       "expectations": [
         "Treats the issue as budget, wait, or resource ownership analysis rather than only suggesting a larger timeout",
         "Calls out DB pool wait, lock wait, or transaction scope as a likely diagnostic target",
         "Uses concrete commands, metrics, or artifacts to prove where time is spent",
         "States an escalation decision if the safe fix would change timeout or retry policy"
+      ]
+    },
+    {
+      "id": 3,
+      "category": "clean",
+      "prompt": "Use go-systematic-debugging in diagnosis_only mode. A reported deterministic parser failure cannot be reproduced with the pinned input on the current commit: the exact focused test passed fresh 200 times, the saved failing revision differs from the workspace, and no current stack, state violation, or error-chain mismatch exists. Return the compact debug outcome without proposing a repair.",
+      "expected_output": "No repair: report that no current root cause is supported, preserve the revision mismatch, and name only the next discriminating reproduction step.",
+      "files": [],
+      "expectations": [
+        "The response makes no implementation or test change and does not claim the historical issue fixed.",
+        "The response records the current clean reproduction evidence and the differing revision as the key constraint.",
+        "The response gives one concrete next falsifying experiment without speculative patch lists."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "neighbor",
+      "prompt": "Use go-systematic-debugging. Do not edit repository files. The request contains an accepted, non-defect feature outcome to add a new health endpoint; there is no failing symptom, reproducer, incident, regression, or unknown root cause. Return only the forced owner and consequence.",
+      "expected_output": "Route the accepted feature implementation to go-coder and perform no debugging work.",
+      "files": [],
+      "expectations": [
+        "The response names go-coder as the owner of the accepted feature implementation.",
+        "The response performs no diagnosis, experiment, or repair.",
+        "The response carries only the forced owner and consequence without inventing a defect."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "unresolved_policy",
+      "prompt": "Use go-systematic-debugging in fix_authorized mode. Evidence proves requests exhaust their accepted caller deadline while waiting for a saturated dependency, but no accepted artifact defines whether to change the end-to-end timeout budget, retry count, degradation response, or overload behavior. The local code has no established policy. Return the compact debug outcome.",
+      "expected_output": "Return the supported saturation root cause but block repair on go-reliability-spec without inventing timeout, retry, degradation, or overload policy.",
+      "files": [],
+      "expectations": [
+        "The response separates the proven saturation cause from the unresolved repair policy.",
+        "The response names go-reliability-spec as the decision owner and makes no policy-changing patch.",
+        "The response does not widen deadlines, add retries, choose degradation behavior, or claim fixed."
       ]
     }
   ]

@@ -1,0 +1,56 @@
+{
+  "skill_name": "go-test-design",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Design the pre-coding test strategy for an accepted multi-tenant transfer flow. The API requires tenant-scoped auth and an `Idempotency-Key`; same-key/same-payload retries replay the original result and same-key/different-payload returns `409`. One Postgres transaction writes the transfer and outbox row, then returns `202` with an operation resource. A worker may retry provider timeouts three times, emits an at-least-once completion event, and updates an eventually consistent Redis-backed status view. Cross-tenant reads must return the accepted non-disclosing `404`; failed transactions emit no event or cache update. Use repository commands `go test ./...`, `go test -race ./...`, and `make integration-test`. Produce risk/invariant traceability, the smallest complementary proof levels, positive/negative/fail/abuse scenarios, deterministic oracles and fixtures, fail-before expectations, executable gates, and residual gaps. Do not write tests or alter accepted behavior.",
+      "expected_output": "A planning-ready risk-based test design that deterministically proves the accepted API, transaction/outbox, idempotency, tenant-isolation, retry/event, and cache-projection invariants without implementing tests or inventing policy.",
+      "files": [],
+      "expectations": [
+        "Traces each material accepted invariant to a distinct scenario, proof boundary, oracle, command, and reopen condition rather than producing a generic coverage list.",
+        "Chooses complementary unit, contract, integration, component/process, or repository-specific levels based on observables and rejects redundant broad e2e proof.",
+        "Covers same-key replay, conflicting payload, tenant-isolation abuse, transaction rollback with forbidden event/cache effects, provider retry exhaustion, duplicate completion delivery, and eventual status visibility.",
+        "Defines deterministic controls for timeouts, retries, concurrency, external resources, and projection observation without relying on test order or unbounded sleeps.",
+        "Oracles include response plus relevant Postgres/outbox/cache/event state and forbidden side effects, with a plausible regression and fail-before discriminator.",
+        "Binds proof to the provided repository commands and names any residual environment or fixture gap without writing tests or changing policy."
+      ]
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "The reviewed test design already traces every accepted claim to deterministic scenarios, distinct proof levels, full result/state/effect oracles, fixtures, fail-before discriminators, repository commands, residual gaps, and reopen owners. The implementation plan now renames a documentation heading without changing behavior, generated output, test inputs, or executable gates. Apply go-test-design.",
+      "expected_output": "No new test-design decision, with the accepted proof strategy explicitly unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required or an explicit unchanged proof constraint.",
+        "Does not invent scenarios, proof levels, fixtures, assertions, commands, or gates.",
+        "Avoids restating the complete test plan or drifting into implementation and planning."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "The accepted test strategy already fixes the scenarios, proof levels, deterministic fixtures and oracles, fail-before signals, and runnable `go test -race ./...` command for a concurrency-sensitive change. The remaining decisions are whether that command blocks every pull request or runs nightly, how required status checks are named, and what time-bounded release exception is allowed. Apply go-test-design only.",
+      "expected_output": "Only the forced proof-command constraint, with go-delivery-platform-spec owning CI blocking, cadence, status checks, and release exceptions.",
+      "files": [],
+      "expectations": [
+        "Names go-delivery-platform-spec as owner of merge blocking, cadence, required-status naming, and exception policy.",
+        "Carries only the accepted deterministic race-proof command and evidence requirement that delivery policy must place.",
+        "Does not choose PR versus nightly execution, status names, branch protection, release blocking, or an exception path."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "Design final tests for timed-out transfer retries now. The domain owner has not decided whether a retry is the same transfer or a new business action, when a transfer becomes irreversible, which timeout outcomes are terminal, or whether duplicate provider acceptance is compensated. Choose test scenarios, expected states, event assertions, and pass/fail oracles so implementation can start.",
+      "expected_output": "A blocked test design that names the missing domain policy and refuses to encode invented transfer identity, lifecycle, terminal-outcome, or compensation semantics as test oracles.",
+      "files": [],
+      "expectations": [
+        "Stops because stable scenarios and deterministic oracles cannot be derived from the unset business identity, lifecycle, terminal-outcome, and compensation semantics.",
+        "Names go-domain-invariant-spec as the owner required before proof design can continue, with go-distributed-spec only if durable compensation policy remains separately unset.",
+        "Does not invent transfer identity, states, retry meaning, event outcomes, compensation behavior, fixtures, or pass/fail assertions."
+      ]
+    }
+  ]
+}

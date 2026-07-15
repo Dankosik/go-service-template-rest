@@ -32,7 +32,7 @@ PR-only Dependency Review and nightly Trivy repository filesystem/config scannin
 ## Ongoing Gate Expectations
 
 - Keep generated artifacts in sync (`openapi`, `sqlc`).
-- Keep generated agent mirrors and skill mirrors in sync when they are materialized locally (`make agents-check`, `make skills-check`).
+- Keep Codex workflow and skill checks green (`make workflow-routing-check`).
 - Keep docs-drift gate green when behavior/contract/CI-sensitive files change.
 - Keep required security gates green (`govulncheck`, `gosec`, `gitleaks`, Trivy image scanning).
 - Review informational Dependency Review and nightly Trivy repository filesystem/config findings before deciding whether a future task should make them blocking.

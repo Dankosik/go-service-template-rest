@@ -5,7 +5,6 @@ required_files=(
   AGENTS.md
   SOUL.md
   README.md
-  RTK.md
   railway.toml
   Makefile
   .editorconfig
@@ -33,9 +32,6 @@ required_files=(
   docs/subagent-brief-template.md
   scripts/ci/workflow-instructions-check.sh
   scripts/dev/workflow-behavior-evals.sh
-  scripts/ci/sync-mirror-integration-check.sh
-  scripts/dev/sync-skills.sh
-  scripts/dev/sync-agents.sh
   scripts/dev/module-origin.sh
 )
 
@@ -111,7 +107,7 @@ require_regex '-f build/docker/Dockerfile' .github/workflows/cd.yml "CD must use
 # Instruction ownership and runtime configuration.
 require_regex 'docs/spec-first-workflow\.md' AGENTS.md "AGENTS.md must link the workflow router"
 require_regex '^@SOUL\.md$' AGENTS.md "AGENTS.md must include SOUL.md"
-require_regex '^@RTK\.md$' AGENTS.md "AGENTS.md must include RTK.md"
+require_absent_regex '^@RTK\.md$' AGENTS.md "AGENTS.md must not duplicate user-level RTK instructions"
 require_absent_regex '^model[[:space:]]*=' .codex/config.toml "root model selection must remain user-owned"
 require_absent_regex '^model_reasoning_effort[[:space:]]*=' .codex/config.toml "root reasoning effort must remain user-owned"
 require_regex '^max_depth = 1$' .codex/config.toml "nested subagent delegation must remain disabled by default"
@@ -126,6 +122,7 @@ done
 # Workflow checks keep structure and links deterministic without locking prose.
 bash scripts/ci/workflow-instructions-check.sh
 require_regex '^workflow-routing-check:$' Makefile "Makefile must expose the compatibility workflow check target"
+require_regex 'go run \.\/scripts/ci/hard-skills-check' Makefile "workflow check target must run the hard-skills checker"
 require_regex 'bash scripts/ci/workflow-instructions-check\.sh' Makefile "workflow check target must run the lean instruction checker"
 require_regex '^workflow-behavior-evals-check:$' Makefile "Makefile must expose the behavior eval manifest check"
 require_regex '^workflow-behavior-evals:$' Makefile "Makefile must expose external behavior eval execution"
@@ -133,23 +130,9 @@ require_regex 'bash scripts/dev/workflow-behavior-evals\.sh check' scripts/ci/wo
 require_regex 'run: make workflow-routing-check' .github/workflows/ci.yml "CI must run the workflow instruction check"
 require_regex 'run: make workflow-routing-check' .github/workflows/cd.yml "release preflight must run the workflow instruction check"
 require_regex 'workflow-routing-check\)' scripts/dev/docker-tooling.sh "Docker tooling must expose the workflow check"
-
-# Mirror registries remain deterministic generation policy.
-require_regex '"claude_agents\|\.claude/agents\|optional"' scripts/dev/sync-agents.sh "agent mirror registry must name the optional Claude target"
-for row in \
-  '"claude_skills\|\.claude/skills\|optional"' \
-  '"gemini_skills\|\.gemini/skills\|optional"' \
-  '"github_skills\|\.github/skills\|optional"' \
-  '"cursor_skills\|\.cursor/skills\|optional"' \
-  '"opencode_skills\|\.opencode/skills\|optional"'; do
-  require_regex "${row}" scripts/dev/sync-skills.sh "skill mirror registry is incomplete"
-done
-
-for state in mirror_optional_absent mirror_present_in_sync mirror_present_stale mirror_required_missing mirror_render_failed mirror_compare_failed; do
-  require_regex "${state}" scripts/dev/sync-agents.sh "agent sync must report ${state}"
-  require_regex "${state}" scripts/dev/sync-skills.sh "skill sync must report ${state}"
-done
-
+require_regex 'run_go "go run \.\/scripts/ci/hard-skills-check"' scripts/dev/docker-tooling.sh "Docker workflow check must run the hard-skills checker in the Go image"
+require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/instruction-evals-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the instruction eval guard"
+require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/workflow-instructions-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the workflow instruction guard"
 # Branch-protection contexts must match CI jobs.
 branch_protection_contexts() {
   awk '

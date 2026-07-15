@@ -1,0 +1,58 @@
+{
+  "skill_name": "go-reliability-spec",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Use go-reliability-spec to define the resilience policy for a synchronous checkout endpoint. Product has accepted that payment authorization is critical and must fail closed, recommendations are optional and may be omitted, and a successful response must complete within a 900 ms end-to-end deadline. The payment read is idempotent and documents 502, 503, 504, timeout, 429 with Retry-After, validation, authorization, and conflict outcomes. Traffic has a 4x burst for 30 seconds; checkout and bulk imports currently share an unbounded worker queue. Kubernetes gives 30 seconds from SIGTERM to hard kill, ordinary requests should drain within 15 seconds, and streams may last minutes. Releases use a 5%-25%-100% canary, but no retry, overload, readiness, stream-drain, fallback-exit, rollback-trigger, or fault-proof policy exists. Write the compact reliability contract without choosing goroutine/channel mechanics or a durable saga design.",
+      "expected_output": "A bounded reliability specification covering criticality, deadline and cancellation, retry eligibility and budget, overload admission, degradation, lifecycle, recovery, rollout, and falsifiable proof without concrete synchronization design.",
+      "files": [],
+      "expectations": [
+        "Classifies payment as fail-closed and recommendations as optional fail-open while preserving caller and operator signals.",
+        "Derives per-hop work and retries from the 900 ms end-to-end deadline and preserves caller cancellation or an explicit bounded handoff.",
+        "Names retry-eligible transient classes, never-retry classes, one retry owner, bounded attempts, jitter, idempotency, exhaustion, and Retry-After budget interaction.",
+        "Replaces the unbounded shared queue with named admission, queue age/depth, concurrency or bulkhead, rejection, and burst behavior.",
+        "Separates startup, liveness, readiness, diagnostics, ordinary drain, long-stream handling, telemetry flush, and the 30-second hard-kill boundary.",
+        "Defines degradation entry and exit plus canary guardrails, rollback triggers, observation windows, and focused fault, overload, and lifecycle proof.",
+        "Does not choose concrete goroutine, channel, lock, join, or durable replay mechanisms."
+      ]
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "The accepted reliability contract already fixes dependency criticality, fail-open and fail-closed behavior, end-to-end and per-hop deadlines, cancellation and async handoff, retry eligibility and budget, queue and concurrency bounds, overload rejection, degradation entry and exit, startup, liveness, readiness, drain and long-stream shutdown, recovery drills, canary guardrails, rollback triggers, operator signals, and falsifiable proof. A follow-up only renames an internal Go helper without changing any observable or lifecycle behavior. Apply go-reliability-spec.",
+      "expected_output": "No new reliability decision, with the accepted resilience and lifecycle contract unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required or explicit unchanged reliability constraints.",
+        "Does not redesign deadlines, retries, overload, degradation, lifecycle, recovery, or rollout.",
+        "Leaves helper naming and placement to implementation ownership without padding."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "The accepted service lifecycle policy already says readiness fails before admission stops, ordinary requests drain for at most 15 seconds, long streams receive a close signal and 10-second grace period, telemetry flush is bounded, and the process exits before a 30-second hard kill. The only remaining work is choosing the exact goroutine ownership, channel-close order, WaitGroup joins, mutex protection, and package placement that implement this accepted policy. Apply go-reliability-spec and route by the decision being made.",
+      "expected_output": "No new reliability policy; preserve the accepted lifecycle constraints and leave concrete synchronization to implementation with go-concurrency-review and placement to go-implementation-ownership-spec.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required for reliability or only constraint_only lifecycle consequences.",
+        "Identifies goroutine, channel, WaitGroup, mutex, cancellation-unblock, and join correctness as the go-concurrency-review axis.",
+        "Names go-implementation-ownership-spec only for package or mechanism placement.",
+        "Does not invent or prescribe the concrete synchronization protocol."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "Write the final reliability contract for purchase approval now. The business owner has not decided whether a timed-out fraud check may create a pending order, whether stale approval may ever authorize capture, or whether duplicate attempts are the same purchase. No caller latency objective, dependency criticality, safe fallback, recovery owner, or accepted completion semantics exists. Choose fail-open versus fail-closed, numeric deadlines, retries, degradation, and rollout so coding can start.",
+      "expected_output": "A blocked reliability specification that names the unresolved business-policy owner and refuses to invent failure semantics, budgets, retry safety, or recovery behavior.",
+      "files": [],
+      "expectations": [
+        "Stops on missing purchase invariants, retry identity, completion meaning, criticality, fallback safety, and target authority.",
+        "Names go-domain-invariant-spec as owner of pending, stale-approval, duplicate-action, and completion meaning.",
+        "Does not choose fail-open or fail-closed behavior, numeric deadlines, retry eligibility, degradation, or rollout around invented policy."
+      ]
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 ---
 name: go-performance-review
-description: "Review Go code changes for hot-path regressions, latency/throughput/allocation/contention risk, and benchmark/pprof/trace evidence quality. Use whenever a Go PR, diff, incident fix, or optimization touches hot paths, batching, serialization, fan-out, caching, query count, sync.Pool, pprof, benchstat, or tail-latency behavior, even if the user frames it as a generic code review."
+description: "Use when a Go diff affects hot paths, batching, serialization, fan-out, query count, caching, allocation, contention, `sync.Pool`, or benchmark/profile evidence; Own measurable performance-regression risk and proof quality; Skip when budgets are unset or correctness belongs to concurrency, DB/cache, reliability, or domain review."
 ---
 
 # Go Performance Review
+
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
 ## Trigger, Scope, And Boundary
 
@@ -23,7 +25,7 @@ Stay evidence-first and review-only. Do not block on micro-optimization taste, a
 
 ## Symptom-Driven Reference Selector
 
-Load at most one reference by default and more only for independent pressures. State which evidence or correction choice the reference will change.
+State which evidence or correction choice the selected reference will change.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |
@@ -36,11 +38,11 @@ Load at most one reference by default and more only for independent pressures. S
 | Allocation churn, GC, buffer reuse, retained backing arrays, or `sync.Pool` changes. | [allocation-gc-and-syncpool-review.md](references/allocation-gc-and-syncpool-review.md) | Require allocation/retention/reset evidence instead of pooling by default. |
 | Retries, fallback, admission, queueing, or deadline behavior changes on a hot path. | [retry-overload-and-tail-latency.md](references/retry-overload-and-tail-latency.md) | Identify amplification and tail collapse while handing policy ownership to reliability. |
 
-## Evidence And Shared Finding Envelope
+## Evidence And Domain Finding Rules
 
-Each finding adds the dominant axis (`latency`, `throughput`, `allocations`, `contention`, `I/O`, or `evidence`), concrete regression or proof gap, observed or required evidence, scaling impact, smallest safe correction, and the narrow command/artifact that would prove it. Use the approved budget/reference when one exists; otherwise say `N/A` rather than inventing a target.
+Each finding adds the dominant axis (`latency`, `throughput`, `allocations`, `contention`, `I/O`, or `evidence`), concrete regression or proof gap, observed or required evidence, scaling impact, and the narrow command/artifact that would prove it. Use the approved budget/reference when one exists; otherwise say `N/A` rather than inventing a target.
 
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). `critical` requires a proven severe regression or missing mandatory proof on a clearly high-risk path; `high` requires strong evidence of meaningful regression or unbounded amplification. Start `Issue` with `Axis:` when useful.
+`critical` requires a proven severe regression or missing mandatory proof on a clearly high-risk path; `high` requires strong evidence of meaningful regression or unbounded amplification. Start `Issue` with `Axis:` when useful.
 
 Choose validation from the symptom: focused `go test -bench ... -benchmem`, repeated benchmark plus `benchstat`, CPU/memory/block/mutex profiles, `go tool trace`, query-count/integration/load evidence, or an explicit missing-proof statement. Do not dump a generic command catalog into every review.
 

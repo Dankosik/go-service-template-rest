@@ -1,10 +1,10 @@
 # Timeout, Deadline, And Cancellation Review
 
 ## Behavior Change Thesis
-When loaded for symptom `request-scoped work, outbound I/O, polling, or detached context changed`, this file makes the model report dropped caller cancellation and unbounded waits instead of likely mistake `accept context.Background, arbitrary local timeouts, or context-unaware APIs as normal reliability hardening`.
+When loaded for symptom `request-scoped work, outbound I/O, polling, or detached context changed against an accepted end-to-end contract`, this file makes the model report dropped caller cancellation and unbounded waits instead of likely mistake `accept context.Background, arbitrary local timeouts, or context-unaware APIs as normal reliability hardening`.
 
 ## When To Load
-Load when a Go diff touches request-scoped work, outbound HTTP/RPC calls, DB calls, sleeps, polling loops, long-running handlers, background work spawned from handlers, or code that adds `context.Background()`, `context.TODO()`, `context.WithTimeout`, `context.WithDeadline`, or `context.WithoutCancel`.
+Load when a Go diff touches request-scoped work, outbound HTTP/RPC calls, DB calls, sleeps, polling loops, long-running handlers, background work spawned from handlers, or code that adds `context.Background()`, `context.TODO()`, `context.WithTimeout`, `context.WithDeadline`, or `context.WithoutCancel`, and the evidence establishes an accepted end-to-end deadline or cancellation expectation. Route context API/lifetime misuse without that reliability contract to `go-idiomatic-review`, and concrete goroutine cancellation-unblock or join failure to `go-concurrency-review`.
 
 Keep the finding local: ask for the changed operation to preserve caller cancellation and have a bounded wait. Hand off global timeout-budget design to `go-reliability-spec`, DB cleanup depth to `go-db-cache-review`, and goroutine lifecycle depth to `go-concurrency-review`.
 

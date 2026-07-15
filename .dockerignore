@@ -1,11 +1,7 @@
 .git
 .cache
 .agents
-.claude
 .codex
-.cursor
-.gemini
-.opencode
 .github
 bin
 .env*

@@ -1,79 +1,45 @@
 ---
 name: go-idiomatic-review
-description: "Review changed Go for language and standard-library correctness: error contracts, context lifetime, receivers, method sets, nil/zero values, aliasing, resources, and exported API shape. Use when Go semantics can create merge risk; skip local readability cleanup, broad structural strictness, and architecture ownership drift, which have dedicated review skills."
+description: "Use when changed Go may violate language or standard-library contracts for errors, context API or lifetime, nil and zero values, receivers, method sets, aliasing, resources, or exported APIs; Own Go-semantic correctness; Skip when behavior is correct but readability, whole-diff structure, or package ownership is the primary issue."
 ---
 
 # Go Idiomatic Review
 
-## Purpose
-Protect changed Go code from language-level, standard-library, and exported-surface mistakes that create correctness, diagnosability, compatibility, or long-term maintenance risk.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Review Go semantics and standard-library contracts as correctness surfaces, not style trivia.
-- Prioritize error contracts, context lifetime, receiver and copy safety, nil behavior, exported API shape, and mutable ownership leaks.
-- Prefer language-native and standard-library fixes when local wrappers add no real semantic value.
-- When changed code introduces custom infrastructure, a new runtime dependency, or a material helper/abstraction, verify that the approved artifact chain contains the live-choice evidence required by the canonical [research method](../../../docs/spec-first-workflow/phases/research.md#method). Flag missing evidence as design/planning risk instead of approving the change as local style.
-- When changed code implements a selected design/system pattern, check that the implementation remains idiomatic Go: explicit control flow, narrow interfaces, context-aware I/O, simple composition, and no framework-style layer stack unless the approved pattern fit requires it.
-- Stay in the Go-language review lane; hand off domain, concurrency, DB/cache, security, performance, reliability, or architecture depth instead of drifting into redesign.
-- Treat Effective Go as useful core-language guidance with its official caveat: it was written for Go's 2009 release and is not actively updated. Prefer current release notes, pkg.go.dev docs, the Go spec, Go Code Review Comments, and official Go blog posts for version-sensitive claims.
+## Target And Invariants
 
-## When To Use
-- Review Go PRs, diffs, incident fixes, and refactors where correctness may be weakened by non-idiomatic Go.
-- Use even on generic review requests when the change touches error handling, contexts, exported APIs, interfaces, sync primitives, slices, maps, `[]byte`, nil handling, receiver choice, or wrappers around standard-library types.
-- Run a toolchain-aware pass when the repository's `go.mod` version may make newer builtins or packages available.
+Review Go language, standard-library, and exported-surface semantics as correctness, not style. Read the changed code, affected tests, accepted intent, and effective Go version before version-sensitive findings.
 
-## Review Loop
-1. Read the changed Go files, directly affected tests, and any approved task artifacts that define intent.
-2. Identify the repository's Go version from `go.mod`, build tags, or stated toolchain constraints before making version-sensitive claims.
-3. Choose the relevant review axes and lazily load only the needed reference files from `references/`.
-4. Select findings by merge risk: direct failure, hidden success, panic, data corruption, ownership leak, broken public contract, or durable maintenance drift.
-5. For each finding, name the concrete Go rule or stdlib contract, the observable impact, the smallest safe correction, and the validation signal.
-6. Escalate or hand off when the fix needs another lane's ownership.
+- Preserve deliberate error identity and inspectability with sentinels, typed or joined errors, `%w`, `errors.Is`, and version-appropriate `errors.As`/`errors.AsType`; reject string matching, log-and-swallow, and hidden success.
+- Keep caller-owned `context.Context` first and flowing through request work; reject nil or stored call-scoped contexts, unjustified replacement with `Background`, and derived contexts whose owner never cancels them.
+- Match receivers and method sets to mutation, identity, interface satisfaction, and copy safety; reject copies of must-not-copy state and account for aliasing in buffers and slice-backed fields.
+- Treat typed nil, nil map writes, nil channel blocking, zero-value usability, and observable nil-versus-empty behavior as contracts.
+- Treat slices, maps, `[]byte`, buffers, headers, and URL values as mutable ownership surfaces; copy only where isolation is required and never assume map iteration order.
+- Require correct resource lifetime and completion probes, including body/file/rows close, `rows.Err`, `scanner.Err`, cancel functions, and timer/ticker stop or reset behavior.
+- Prefer current builtins and stdlib when a wrapper adds no compatibility, ownership, normalization, or domain contract. Keep exported APIs small, documented, compatible, consumer-oriented, and concrete unless an interface is a real behavior seam.
+- For an approved pattern, verify explicit Go control flow, narrow interfaces, context-aware I/O, and simple composition. Treat framework layers, broad interfaces, hidden goroutine lifetimes, managers, or factories as idiomatic defects only when they violate a Go/stdlib contract; local readability and whole-diff overbuild remain neighboring axes.
+- For custom infrastructure, runtime dependencies, or material abstractions, report missing live-choice evidence required by the [research method](../../../docs/spec-first-workflow/phases/research.md#method) as ownership/design risk, not Go style.
 
-## Lazy Reference Selection
-References are compact rubrics and example banks, not exhaustive checklists or Go documentation dumps. Load at most one reference by default. Load multiple only when the diff clearly spans independent decision pressures, such as both error-contract drift and mutable ownership leakage.
+Use current release notes, the Go specification, pkg.go.dev, Go Code Review Comments, and official Go posts for version-sensitive claims; Effective Go is useful but not current release authority.
 
-Choose the reference by the symptom you are reviewing and the behavior change you need:
+## Symptom-Driven References
 
-| Reference | Symptom | Behavior change when loaded |
-| --- | --- | --- |
-| `references/errors-and-contracts-review.md` | Returned errors are swallowed, logged instead of returned, string-matched, wrapped with `%w` or `%v`, joined, typed, sentinel-based, inspected with `errors.As`/`errors.AsType`, or exported as package contracts. | Choose the caller-observable error contract and hidden-success risk instead of reflexively saying "use `%w`" or "custom error type". |
-| `references/context-and-lifetime-review.md` | `context.Context` is stored, replaced with `context.Background`, passed nil, omitted from request-scoped work, or derived without clear cancellation ownership. | Review cancellation ownership and lifetime instead of blanket "add context everywhere" or "never use Background". |
-| `references/receivers-methodsets-and-copy-safety.md` | Receivers, method sets, interface satisfaction, value copies, `sync` fields, `strings.Builder`, `bytes.Buffer`, or pointer-to-map/slice/interface shapes changed. | Tie receiver/copy findings to mutation, identity, method-set reachability, and must-not-copy or aliasing state instead of preferring pointer receivers everywhere. |
-| `references/nil-zero-value-and-typed-nil.md` | Nil interfaces, typed-nil errors, nil maps/channels/slices, constructors, zero-value usability, absent vs empty semantics, or JSON-visible nil behavior changed. | Treat nil and zero values as observable runtime/API contracts instead of style preferences. |
-| `references/slices-maps-buffers-and-ownership.md` | Slices, maps, `[]byte`, buffers, `http.Header`, `url.Values`, cloning, aliasing, map iteration order, or mutable data crossing package boundaries changed. | Review aliasing, mutation authority, and observable ordering instead of blindly cloning or banning exposed maps. |
-| `references/resource-closure-and-iteration-probes.md` | `Body.Close`, `rows.Close`, `rows.Err`, `scanner.Err`, files, timers, tickers, cancel funcs, partial reads, or `defer` lifetime changed. | Require the completion probe and correct release lifetime instead of stopping at "Close exists" or adding `defer` in the wrong scope. |
-| `references/stdlib-first-modern-go-review.md` | Custom helpers duplicate current Go builtins or stdlib packages such as `errors`, `slices`, `maps`, `cmp`, `strings`, `bytes`, `net/url`, or `net/http`. | Check effective Go version and semantic deltas before choosing stdlib replacement or preserving a wrapper. |
-| `references/exported-api-and-interface-shape.md` | Exported names, doc comments, package names, interfaces, constructors, compatibility, option structs, or public method/function signatures changed. | Review consumer-owned abstraction and compatibility risk instead of generic "small interface" or doc-comment advice. |
+| Pressure | Load |
+| --- | --- |
+| Error wrapping, identity, inspection, cancellation mapping, or hidden success. | [errors-and-contracts-review.md](references/errors-and-contracts-review.md) |
+| Stored, nil, replaced, omitted, derived, or uncancelled context. | [context-and-lifetime-review.md](references/context-and-lifetime-review.md) |
+| Receivers, method sets, interface satisfaction, value copies, sync fields, buffers, or pointer-to-container shapes. | [receivers-methodsets-and-copy-safety.md](references/receivers-methodsets-and-copy-safety.md) |
+| Typed nil, nil containers/channels, constructors, zero values, or nil-versus-empty behavior. | [nil-zero-value-and-typed-nil.md](references/nil-zero-value-and-typed-nil.md) |
+| Mutable containers, cloning, headers/URL values, aliasing, or map ordering. | [slices-maps-buffers-and-ownership.md](references/slices-maps-buffers-and-ownership.md) |
+| Close/error probes, files, rows, scanner, body, cancel, timer/ticker, partial reads, or defer scope. | [resource-closure-and-iteration-probes.md](references/resource-closure-and-iteration-probes.md) |
+| A local helper may duplicate current builtins or stdlib. | [stdlib-first-modern-go-review.md](references/stdlib-first-modern-go-review.md) |
+| Exported names, docs, packages, constructors, interfaces, options, signatures, or compatibility. | [exported-api-and-interface-shape.md](references/exported-api-and-interface-shape.md) |
 
-If symptoms overlap, load the file whose thesis matches the concrete risk. Examples: use `context-and-lifetime-review.md` for lost cancellation flow, `errors-and-contracts-review.md` for whether cancellation remains inspectable; use `slices-maps-buffers-and-ownership.md` for aliasing, `stdlib-first-modern-go-review.md` for whether a local helper still beats `slices` or `maps`. If a reference points to deeper concurrency, data, security, domain, or architecture policy, use it to frame the handoff rather than doing that review here.
+When pressures overlap, choose by the violated contract: context lifetime versus error inspectability, or mutable aliasing versus whether stdlib can replace the helper.
 
-## Core Axes
-- Error semantics: preserve inspectable contracts with deliberate sentinel, typed, joined, wrapped, or opaque errors. Use `errors.Is` and version-appropriate `errors.As` or `errors.AsType` when callers need cause inspection; do not string-match error text.
-- Context lifetime: pass caller-owned `ctx context.Context` through request-scoped work, keep it first, avoid storing it in structs, and cancel derived contexts on all resource-owning paths.
-- Receivers and method sets: match receiver choice to mutation, identity, interface satisfaction, and copy-sensitive state. Avoid value receivers or value copies on types containing documented must-not-copy fields; treat buffers and slice-backed fields as aliasing risks when mutation after copy matters.
-- Nil and zero values: prefer useful or harmless zero values when practical. Make typed-nil, nil map writes, nil channel blocking, and nil-vs-empty public contracts explicit.
-- Ownership: treat slices, maps, `[]byte`, buffers, headers, and URL values as aliasing surfaces. Clone or copy at boundaries when callers must not mutate internal state.
-- Standard library first: prefer current builtins and stdlib helpers over local reinvention when the helper adds no compatibility, ownership, normalization, or domain contract.
-- Pattern Go-fit check: for selected design/system patterns, verify the code expresses the approved guarantee without unidiomatic inheritance-style layers, over-broad interfaces, hidden goroutine lifetimes, or generic manager/factory scaffolding that Go callers must mentally unwind.
-- Code-level pattern fit check: approve small Go-native patterns only when they simplify local code, such as table-driven tests, guard clauses, first-class function strategy, narrow consumer-owned interfaces, map-driven dispatch, or same-package policy seams; flag class-oriented pattern scaffolding when direct stdlib or repo-native Go is shorter and clearer.
-- Exported surface: keep exported API small, documented, compatible, and consumer-oriented. Prefer concrete return types unless an interface represents a real behavior boundary.
-- Resources and control flow: check cleanup and error probes such as `Body.Close`, `rows.Close`, `rows.Err`, `scanner.Err`, timer/ticker Stop or Reset behavior, and `defer` lifetime where they are part of the changed Go contract.
+## Findings And Escalation
 
-## Evidence And Shared Finding Envelope
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete Go/stdlib rule or semantic pitfall, correctness/diagnosability/compatibility/ownership/maintenance risk, smallest safe correction, Go-version/source anchor when version-sensitive, and any missing dependency or design-choice evidence. For local code-level patterns, name the missed simplification or indirection cost. `critical` is a confirmed Go-level panic/corruption/operational defect; `high` is strong correctness, API-contract, ownership, or must-not-copy risk. Start `Issue` with the plain-language defect.
+Each finding names the concrete Go/stdlib rule, observable correctness, diagnosability, compatibility, ownership, or maintenance impact, validation signal, and Go-version/source anchor when relevant. `critical` means confirmed Go-level panic, corruption, or operational failure; `high` means strong correctness, exported-contract, mutable-ownership, or must-not-copy risk.
 
-## Boundaries And Handoffs
-- Hand off deep goroutine lifecycle, channel, lock-order, `sync/atomic`, or shutdown analysis to `go-concurrency-review`.
-- Hand off DB/cache ownership, transaction, query, and invalidation semantics to `go-db-cache-review`.
-- Hand off public API product semantics, package ownership, or architecture drift to `go-design-review` or architecture/spec lanes.
-- Hand off auth, tenant isolation, injection, SSRF, secret handling, and abuse depth to `go-security-review`.
-- Hand off profiling, benchmark sufficiency, allocation budgets, and hot-path tradeoffs to `go-performance-review`.
-- Hand off coverage strategy completeness to `go-qa-review`.
-
-## Escalate When
-Escalate when:
-- a safe correction changes a public API, exported zero-value contract, compatibility promise, or approved package ownership model
-- transport or API-visible error/status behavior must change
-- the issue reveals missing reliability, security, data, domain, concurrency, or distributed policy owned elsewhere
-- local idiomatic cleanup is blocked by a broader design mistake or missing approved decision
+Hand off concrete goroutine/channel/lock/atomic protocols to `go-concurrency-review`; transaction/query/cache semantics to `go-db-cache-review`; auth, tenant, injection, SSRF, secret, or abuse depth to `go-security-review`; benchmark/allocation/hot-path proof to `go-performance-review`; proof completeness to `go-test-review`; and package ownership to `go-implementation-ownership-review`. Escalate to the nearest specification owner when correction would define or change public/transport behavior, zero-value or compatibility promises, package ownership, or reliability/security/data/domain/concurrency/distributed policy.

@@ -1,5 +1,7 @@
 # Generated API Artifacts
 
+This Codex-native repository keeps generated API guidance beside its owning package.
+
 OpenAPI bindings are generated into this package via:
 
 ```bash

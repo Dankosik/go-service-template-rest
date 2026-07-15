@@ -4,9 +4,9 @@
 When loaded for symptom `startup, health probe, readiness, liveness, signal handling, HTTP drain, or shutdown sequencing changed`, this file makes the model distinguish process liveness, traffic readiness, and drain completion instead of likely mistake `approve one health endpoint or fire-and-forget shutdown as operationally sufficient`.
 
 ## When To Load
-Load when a diff touches service bootstrap, health endpoints, Kubernetes probes, readiness gates, liveness checks, startup warmup, signal handling, `http.Server.Shutdown`, drain behavior, `RegisterOnShutdown`, or shutdown sequencing.
+Load when a diff touches service bootstrap, health endpoints, Kubernetes probes, readiness gates, liveness checks, startup warmup, signal handling, `http.Server.Shutdown`, drain behavior, `RegisterOnShutdown`, or shutdown sequencing and accepted service/platform behavior establishes the lifecycle expectation. Route WaitGroup, channel-close, cancellation-unblock, and join mechanism defects to `go-concurrency-review`.
 
-Keep findings local: ask for startup, health, and drain semantics in the changed service path. Hand off detailed goroutine shutdown ownership to `go-concurrency-review`, deployment probe policy to `go-devops-spec`, and global lifecycle design to `go-reliability-spec`.
+Keep findings local: ask for startup, health, and drain semantics in the changed service path. Hand off detailed goroutine shutdown ownership to `go-concurrency-review`, deployment probe policy to `go-delivery-platform-spec`, and global lifecycle design to `go-reliability-spec`.
 
 ## Decision Rubric
 - Readiness returns success before the server has loaded required config, warmed mandatory state, or connected to critical dependencies.

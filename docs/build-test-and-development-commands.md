@@ -57,7 +57,7 @@ Bootstrap shortcuts:
     - create `.env` from `env/.env.example` when missing,
     - `go mod download` when local `go` is available,
     - otherwise pre-pull Docker tooling images when Docker daemon is reachable.
-  - Does not run template/admin rewiring (`go.mod` module init, CODEOWNERS replacement, skills or agent mirror sync).
+  - Does not run template/admin rewiring (`go.mod` module init or CODEOWNERS replacement).
 
 - `make check`
   - Purpose: quick local validation for daily feature work.
@@ -94,9 +94,7 @@ Bootstrap shortcuts:
   - Includes:
     - module path auto-init from `git remote origin` when needed,
     - CODEOWNERS placeholder auto-replacement (with origin inference or explicit `CODEOWNER`),
-    - environment doctor checks,
-    - skills mirror sync,
-    - agent mirror sync.
+    - environment doctor checks.
 
 - `make setup`
   - Runs: `bash ./scripts/dev/setup.sh`
@@ -123,9 +121,7 @@ Bootstrap shortcuts:
     - create `.env` from `env/.env.example` when missing,
     - module path auto-init (when clone origin differs from template module),
     - `go mod download`,
-    - `make doctor-native`,
-    - `make skills-sync`,
-    - `make agents-sync`.
+    - `make doctor-native`.
 
 - `make template-init-native-strict` / `make setup-native-strict`
   - Runs: `bash ./scripts/dev/setup.sh --native --strict`
@@ -139,9 +135,7 @@ Bootstrap shortcuts:
     - create `.env` from `env/.env.example` when missing,
     - pull pinned tool images,
     - module path auto-init in Docker mode (when clone origin differs from template module),
-    - `make doctor-docker`,
-    - `make skills-sync`,
-    - `make agents-sync`.
+    - `make doctor-docker`.
 
 - `make doctor`
   - Runs: `bash ./scripts/dev/doctor.sh --mode auto`
@@ -440,8 +434,6 @@ Bootstrap shortcuts:
     - `mod-check`
     - `workflow-routing-check`
     - `guardrails-check`
-    - `agents-check`
-    - `skills-check`
     - `fmt-check`
     - `lint`
     - `test`
@@ -475,12 +467,6 @@ Bootstrap shortcuts:
 - `make docker-guardrails-check`
   - Runs required repository guardrails check in Docker mode wrapper.
 
-- `make docker-skills-check`
-  - Runs skill mirror consistency check.
-
-- `make docker-agents-check`
-  - Runs Codex/Claude agent mirror consistency check.
-
 - `make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs docs drift policy check through Docker mode wrapper.
 
@@ -494,8 +480,6 @@ Bootstrap shortcuts:
   - Zero-setup composite check (closest local equivalent to CI gates):
     - `mod-check`
     - `guardrails-check`
-    - `agents-check`
-    - `skills-check`
     - `fmt-check`
     - `lint`
     - `test`
@@ -515,21 +499,23 @@ Bootstrap shortcuts:
 ### CI policy helper checks
 
 - `make workflow-routing-check`
-  - Runs workflow-instruction structure, link, retired-vocabulary, canonical-invariant, and orphan-reference checks, followed by the mirror integration harness.
+  - Runs the hard-skills checker, selected instruction-eval manifest/fixture and fake-adapter harness checks, and workflow-instruction structural checks.
   - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or enforces an aggregate word limit.
+  - Makes no external model calls.
 
 - `make workflow-behavior-evals-check`
-  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E43, a prompt and pass condition for each case, and the required invariant set.
+  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E45, a prompt and pass condition for each case, and the required invariant set.
   - Makes no model calls and is not behavioral proof.
 
-- `WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_BASE_REF=<ref> make workflow-behavior-evals`
-  - Compares isolated clean Git snapshots of the selected instruction baseline (`HEAD` by default) and the current tracked worktree using external model and judge adapters. Use `1ddd7cc` for the pre-GPT-5.6-simplification baseline.
-  - Saves prompts, outputs, logs, judgments, and the acceptance summary under `.artifacts/workflow-evals/`.
-  - Adapter arguments and judgment output are defined in `docs/spec-first-workflow-evals.md`. Keep model, reasoning effort, repository assumptions, and tools equal across variants.
+- `WORKFLOW_EVAL_TARGETS=<targets> WORKFLOW_EVAL_BASE_REF=34d9776 WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_COST_AUTHORIZED=true make workflow-behavior-evals`
+  - Runs only the unique explicit workflow/skill targets as matched five- or ten-trial comparisons; seed base defaults to `5600`.
+  - Materializes candidate-extracted answer-key-free inputs identically into isolated baseline/candidate snapshots and rejects untracked source, metadata/config drift, input drift, or adapter mutation.
+  - Saves prompts, outputs, closed metadata/judgments, per-trial evidence, Wilson bounds, resource coverage, and acceptance labels under `.artifacts/workflow-evals/`.
+  - The full adapter ABI and deterministic safety/standard/Pareto gates are defined in `docs/spec-first-workflow-evals.md`; no live execution is part of repository checks.
 
 - `make guardrails-check`
   - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce required repository files, deployment/toolchain alignment, instruction ownership links, read-only subagent configuration, mirror registries, branch-protection context alignment, and core architecture import boundaries.
+  - Purpose: enforce required repository files, deployment/toolchain alignment, instruction ownership links, read-only subagent configuration, branch-protection context alignment, and core architecture import boundaries.
 
 - `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
   - Runs: `bash ./scripts/ci/docs-drift-check.sh`
@@ -541,37 +527,6 @@ Bootstrap shortcuts:
     - when `MIGRATION_DSN` is provided, runs native `go tool migrate` against `env/migrations` (`up`, `down 1`, `up 1`);
     - when `MIGRATION_DSN` is empty and Docker daemon is available, falls back to `make docker-migration-validate`;
     - when both `MIGRATION_DSN` and Docker daemon are unavailable, prints warning and skips with success.
-
-### Agent and skill distribution and sync
-
-- `make agents-sync`
-  - Runs: `scripts/dev/sync-agents.sh`
-  - Purpose: render ignored local Claude Code agent mirrors from canonical Codex agent sources.
-  - Source:
-    - `.codex/agents/*.toml`
-  - Mirror:
-    - `.claude/agents/*.md`
-
-- `make agents-check`
-  - Runs: `scripts/dev/sync-agents.sh --check`
-  - Purpose: validate `.claude/agents` against canonical `.codex/agents` when the generated mirror exists.
-  - Note: clean checkouts may not have generated mirrors.
-
-- `make skills-sync`
-  - Runs: `scripts/dev/sync-skills.sh`
-  - Purpose: sync ignored local runtime skill directories from canonical source `.agents/skills`.
-  - Mirrors:
-    - `.claude/skills/`
-    - `.gemini/skills/`
-    - `.github/skills/`
-    - `.cursor/skills/`
-    - `.opencode/skills/`
-  - Note: `docs/skills/` stores documentation only.
-
-- `make skills-check`
-  - Runs: `scripts/dev/sync-skills.sh --check`
-  - Purpose: validate present mirrors against canonical source `.agents/skills`.
-  - Note: clean checkouts may not have generated mirrors.
 
 ### Run and build
 
@@ -647,7 +602,6 @@ Targeted parity checks:
 | Test parallelism suggestions | `make test-parallelism-check` or `make docker-test-parallelism-check` |
 | Legacy cleanup replacement proof | Targeted `rg`/read checks for retired identifiers, old routes, stale configs, fixtures, generated artifacts, docs, skills, agents, and mirrors; record removed, refactored, retained with owner/reason/proof/exit condition, or not-applicable status in the task ledger or closeout artifact. |
 | Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
-| Agent and skill mirror drift | `make agents-check`, `make skills-check`, `make docker-agents-check`, or `make docker-skills-check` |
 | Container image scan | `make docker-container-security` |
 | Branch-protection required status context audit | `make gh-protect-check BRANCH=main` |
 | Nightly-only flake and fuzz smoke | `make test-flake-smoke` and `make test-fuzz-smoke FUZZ_TIME=60s` |
@@ -694,7 +648,7 @@ For the usual quick fmt/lint/test loop, run `make docker-check`; use the stepwis
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make workflow-routing-check` + `make guardrails-check` + `make agents-check` + `make skills-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make workflow-routing-check` + `make guardrails-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
@@ -713,7 +667,6 @@ Zero-setup wrappers:
 - `make docker-check` runs quick fmt/lint/test validation through pinned Docker tooling.
 - `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
 - `make docker-openapi-check`, `make docker-openapi-breaking`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-modernize-check`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
-- `make docker-agents-check` and `make docker-skills-check` mirror repository instruction drift checks.
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:

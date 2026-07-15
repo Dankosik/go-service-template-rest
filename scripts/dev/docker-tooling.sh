@@ -102,8 +102,6 @@ usage() {
 	echo "  secret-scan"
 	echo "  workflow-routing-check"
 	echo "  guardrails-check"
-	echo "  skills-check"
-	echo "  agents-check"
 	echo "  docs-drift-check <base-ref> <head-ref>"
 	echo "  migration-validate"
 	echo "  container-security"
@@ -506,16 +504,15 @@ secret-scan|secrets-scan)
 	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json ."
 	;;
 workflow-routing-check)
-	run_go "bash ./scripts/ci/workflow-instructions-check.sh && bash ./scripts/ci/sync-mirror-integration-check.sh"
+	# Keep the Go checker in the pinned toolchain image. The shell-only guards
+	# use host jq and filesystem semantics; the base Go image intentionally does
+	# not bundle those tools.
+	run_go "go run ./scripts/ci/hard-skills-check"
+	bash "${ROOT_DIR}/scripts/ci/instruction-evals-check.sh"
+	bash "${ROOT_DIR}/scripts/ci/workflow-instructions-check.sh"
 	;;
 guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"
-	;;
-skills-check)
-	bash "${ROOT_DIR}/scripts/dev/sync-skills.sh" --check --strict
-	;;
-agents-check)
-	bash "${ROOT_DIR}/scripts/dev/sync-agents.sh" --check
 	;;
 docs-drift-check)
 	base_ref="${1:-}"
@@ -536,8 +533,6 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" mod-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" workflow-routing-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" guardrails-check
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" agents-check
-	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" skills-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" fmt-check
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" lint
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" test

@@ -1,21 +1,21 @@
 ---
 name: go-verification-before-completion
-description: "Verify correctness or readiness claims with fresh command evidence matched to claim scope before reporting success."
+description: "Use when a correctness, readiness, or completion claim needs fresh evidence; Own claim-to-command matching, result inspection, proof scope, and explicit gaps; Skip when code or tests must be changed, root cause is unknown, test strategy is unresolved, or implementation is still underway."
 ---
 
 # Go Verification Before Completion
 
-## Outcome
+## Accepted Input And Boundary
 
-Bind every positive completion or readiness claim to fresh evidence from the current workspace, and narrow the conclusion when proof is missing, skipped, stale, cached unexpectedly, or out of scope.
+Accept a concrete correctness, cleanup, readiness, or completion claim and its intended scope. Verification is evidence-only: inspect the current workspace and repository proof surfaces, but do not debug, repair, change tests, author process artifacts, or treat implementation reports and review findings as proof. If behavior, ownership, acceptance criteria, or the proving command remains unresolved after inspecting repository authorities, name that owner and stop.
 
 ## Method
 
-1. State the exact claim and its scope.
-2. Inspect the current workspace and the repository-owned proof commands.
-3. Choose the smallest command set that directly proves the claim.
-4. Run it now, inspect exit status plus key pass/fail/skip signals, and record the result.
-5. Report `verified`, `partially verified`, or `not verified` without extrapolating beyond the evidence.
+1. Inventory each positive claim and its exact scope, including behavior, cleanup, generated drift, migration, race, build, lint, package, repository, or readiness dimensions.
+2. Inspect the current workspace and repository-owned proof commands, then choose the smallest command set capable of proving every dimension.
+3. Run the commands now. Inspect working scope, exit status, executed versus cached work, and key pass, fail, skip, or unavailable signals rather than trusting a summary line.
+4. Reject stale reports, prior-session output, unexpected cache reuse, weakened commands, skips, exclusions, and focused proof that is narrower than the claim.
+5. Classify each evidence item as passed, failed, unavailable, or skipped, then report `verified`, `partially verified`, or `not verified` without extrapolation.
 
 ## Proof Rules
 
@@ -38,14 +38,6 @@ Load at most one reference by default; use more only for independent proof press
 | An agent, tool, CI snippet, or prior session says work is done. | [delegated-work-verification.md](references/delegated-work-verification.md) | Rebind the claim to current workspace evidence. |
 | Proof failed, skipped, is absent, or is weaker than the claim. | [failure-and-gap-reporting.md](references/failure-and-gap-reporting.md) | Report the gap and next proving action without optimistic wording. |
 
-## Boundaries
+## Proof, Return, And Stop
 
-Standalone verification is evidence-only: do not debug or repair the failure, author process artifacts, force unrelated repository-wide checks for a narrow claim, or treat review findings as verified implementation evidence. Inside an active implementation/validation/closeout request, return the failure signal to the root; the root follows the phase contract and resumes the external Worker that owns the direct outcome or task for repair before revalidation and closeout. If the proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report that as the proof gap.
-
-## Output
-
-Return a compact note: claim and scope; commands actually run; observed pass/fail/skip signal; proportional conclusion; next action when not fully verified.
-
-## Success And Stop
-
-Success means each positive statement has fresh evidence of equal scope. Otherwise return `partially verified` or `not verified`, the blocking signal, and the smallest next verification action.
+If a proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report the proof gap instead of guessing or forcing unrelated broad checks. Return a compact note with each claim and scope, commands actually run, observed pass/fail/skip/unavailable signals, and a proportional conclusion. Success means every positive statement has fresh evidence of equal scope. Otherwise return `partially verified` or `not verified`, the blocking signal, its owner, and the smallest next verification action.

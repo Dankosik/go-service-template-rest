@@ -1,9 +1,11 @@
 ---
 name: go-security-review
-description: "Review Go code changes for trust-boundary enforcement, authn/authz and tenant isolation, browser session/CORS/CSRF risk, token and credential flows, injection/SSRF/path risk, secret handling, and abuse resistance."
+description: "Use when changed Go crosses a trust boundary or affects authn, authz, tenant or object isolation, browser sessions, CORS/CSRF, tokens, credentials, injection, SSRF, paths, secrets, or abuse controls; Own security-policy enforcement defects; Skip when policy is unset or the primary issue is business meaning, chi wiring, or observability privacy."
 ---
 
 # Go Security Review
+
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
 ## Trigger, Scope, And Boundary
 
@@ -23,7 +25,7 @@ Stay read-only and fail-path-first. Do not invent policy when no approved contra
 
 ## Symptom-Driven Reference Selector
 
-Load at most one reference by default; load more only for independent exploit paths. State what unsafe assumption the reference will change.
+State what unsafe assumption the selected reference will change.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |
@@ -37,14 +39,14 @@ Load at most one reference by default; load more only for independent exploit pa
 | Secrets, PII, auth headers, DSNs, errors, telemetry, panic/debug/admin endpoints, or deployment policy change. | [secrets-pii-and-telemetry-disclosure.md](references/secrets-pii-and-telemetry-disclosure.md) | Review concrete disclosure sinks and bounded redaction. |
 | Size, pagination/filter complexity, retries, fan-out, queues, file work, OTP/reset/webhook/provider cost, or rate limits change. | [abuse-resistance-and-resource-bounds.md](references/abuse-resistance-and-resource-bounds.md) | Name the exhausted resource and enforce limits before work. |
 
-## Evidence And Shared Finding Envelope
+## Evidence And Domain Finding Rules
 
-Trace attacker-controlled input through validation, identity/tenant context, authorization, query/URL/path construction, side effects, storage, errors, telemetry, async replay, and resource consumption. Each finding adds the security axis, violated control/unsafe assumption, realistic attacker preconditions, affected trust boundary/data asset, exploit impact, smallest safe correction, and focused negative proof.
+Trace attacker-controlled input through validation, identity/tenant context, authorization, query/URL/path construction, side effects, storage, errors, telemetry, async replay, and resource consumption. Each finding adds the security axis, violated control/unsafe assumption, realistic attacker preconditions, affected trust boundary/data asset, exploit impact, and focused negative proof.
 
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Start `Issue` with `Axis:` when it clarifies the risk. `critical` requires a confirmed exploitable high-impact vulnerability; `high` requires strong evidence of a significant security-contract breach. No finding is preferable to generic hardening without an exploit or contract path.
+Start `Issue` with `Axis:` when it clarifies the risk. `critical` requires a confirmed exploitable high-impact vulnerability; `high` requires strong evidence of a significant security-contract breach. No finding is preferable to generic hardening without an exploit or contract path.
 
 ## Success, Escalation, And Stop Conditions
 
 Success means findings are exploit-oriented, fail-closed, evidence-anchored, merge-risk ordered, and bounded to the changed surface with explicit handoffs and proof.
 
-Escalate when the smallest safe correction changes identity/tenant model, public error/status/session contract, data isolation, distributed trust/replay, abuse/reliability policy, or rollout. Hand performance, QA, DB/cache, concurrency, and operability depth to their primary owners once the security consequence is stated.
+Stop rather than invent policy: unresolved or changed identity, tenant, object, session, credential, disclosure, or abuse controls go to `go-security-spec`; public errors/statuses to `go-api-contract-spec`; data-isolation architecture to `go-data-architecture-spec`; durable trust/replay to `go-distributed-spec`; and reliability/rollout policy to `go-reliability-spec`. Hand performance, test, DB/cache, concurrency, and operability depth to their primary reviewers once the security consequence is stated.

@@ -1,19 +1,22 @@
 ---
 name: go-coder
-description: "Implement the smallest complete production-grade Go change from accepted behavior or a ready ledger, then provide fresh proof."
+description: "Use when an authorized Go outcome is accepted and ready to implement; Own the smallest complete production change, task-required tests, cleanup, and fresh proof; Skip when behavior or ownership is unresolved, or the request is diagnosis-only, test-only, or verification-only."
 ---
 
 # Go Coder
 
-Use for authorized Go features, fixes, refactors, integrations, generated-source updates, cleanup, and task-required tests.
+## Accepted Input And Boundary
 
-Run this skill inside the external CLI Worker defined by the implementation phase, never as a built-in subagent or the root. Start direct work from its one accepted inline outcome. Start structured or orchestrated work only from one task assigned by the root from a ready independently reviewed `tasks.md`. Own only that outcome or task until the root accepts it or resumes this session with concrete gaps; do not create or change a Goal, update workflow status, self-accept, start another task, delegate, or claim repository completion.
+[Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md) owns Worker assignment, lifecycle, acceptance, and integration. This skill owns only the assigned Go outcome: the smallest complete feature, fix, refactor, integration, generated-source update, cleanup, or task-required tests. Inspect the owning package and files, callers, sibling behavior, nearby tests, repository commands, and generated/manual source before editing. Stop at the exact missing owner if implementation would require inventing architecture, product or API behavior, data, security, reliability, rollout, dependency, or ownership policy.
 
-Before editing, inspect the owning package/file, callers, siblings, tests, and generated/manual source. Preserve accepted behavior and stop if code would need to invent architecture, contract, data/security/reliability/rollout policy, dependency choice, or ownership.
+## Method
 
-Quality bar: produce the smallest complete change that a maintainer can understand from the code and tests. Prefer current Go and stdlib, then established repository patterns, then an approved maintained dependency. Keep control flow explicit, names precise, and ownership narrow. Avoid speculative abstractions, hidden coupling, duplicated policy, and comments that restate the code. Split code only for distinct responsibilities or a present stable boundary. Change canonical sources before generated output.
-
-Tests must prove observable behavior and material failure paths. For a regression, run or add the smallest proof that fails on the old behavior, then rerun the same proof after the fix. If honest fail-before proof is unavailable, record why and use the nearest falsifying signal.
+1. Quality bar: produce the smallest complete change that a maintainer can understand from the code and tests. Prefer the active module's Go and standard library, then established repository patterns, then an approved maintained dependency.
+2. Avoid speculative abstractions, hidden coupling, duplicated policy, and comments that restate the code. Keep control flow explicit, names precise, and ownership narrow; split or extract only for a present repeated policy, distinct responsibility, or stable boundary.
+3. Preserve inspectable errors, caller context and cancellation, transaction and resource lifetime, concurrency ownership and joins, mutable-data ownership, and boundary mappings whenever the changed path touches them.
+4. Change canonical sources before generated output and keep required generated artifacts in sync. Do not mix unrelated generated drift into the outcome.
+5. Tests must prove observable behavior and material failure paths. Prove result, state, and effects at the smallest reliable layer. For a regression, run or add the smallest proof that fails on the old behavior, then rerun the same proof after the fix; when honest RED proof is unavailable, state why and use the nearest falsifying signal.
+6. Leave no temporary diagnostics or compatibility path without current evidence.
 
 ## Symptom-Driven References
 
@@ -31,4 +34,6 @@ Load at most one reference by default; load more only for independent pressures.
 | Tests, fuzzing, clocks, randomness, failure messages, or verification shape changes. | [testing-verification-patterns.md](references/testing-verification-patterns.md) |
 | OpenAPI, sqlc, protobuf, mocks, generated files, config, or mirrors change. | [generated-source-of-truth-and-drift.md](references/generated-source-of-truth-and-drift.md) |
 
-Run the smallest fresh proof that covers the behavior, then broader changed-surface gates when needed. Before returning, remove replaced code and adjacent stale tests/config/docs, check the local diff for defects and scope drift across errors/context/resources, concurrency, generated drift, cleanup, and unapproved decisions, and report any trade-off or proof gap. This check is task-local implementation feedback, not acceptance. Return the exact diff, criteria traceability, commands and raw results, and blockers to the root. If the root returns a gap, continue the same outcome or task in this Worker session and return corrected evidence. Do not overstate skipped, unavailable, failing, or too-narrow proof.
+## Proof, Return, And Stop
+
+Run the smallest fresh proof that covers the behavior, then the broader gates triggered by the changed surface. Before returning, remove replaced code and adjacent stale tests/config/docs, check the local diff for defects and scope drift across errors/context/resources, concurrency, generated drift, cleanup, and unapproved decisions, and report any trade-off or proof gap. Return changed files, accepted-criteria traceability, commands with observed results, and blockers. Do not overstate skipped, unavailable, failing, cached, or too-narrow evidence; if a required decision is unresolved, name its owner and stop without a speculative patch.

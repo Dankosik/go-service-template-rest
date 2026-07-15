@@ -7,8 +7,8 @@ This document explains the `go-service-template-rest` repository layout: what is
 ```text
 .
 ├── .agents/                    # canonical project skill sources
-├── .codex/, .claude/, ...       # agent configs and runtime mirrors
-├── .github/                     # CI, release, skill mirror, repository policy
+├── .codex/                      # Codex project-agent configuration
+├── .github/                     # CI, release, and repository policy
 ├── .artifacts/test/             # generated local test reports, not source
 ├── api/
 │   ├── openapi/service.yaml     # REST contract source of truth
@@ -118,7 +118,7 @@ Developer and CI helper scripts.
 Why: standard commands for local work and CI without repeating long command lines.
 
 Key scripts:
-- `scripts/dev/setup.sh`: onboarding bootstrap (native or docker mode), `.env` creation, skills and agent mirror sync, module auto-initialization from `git remote origin`, CODEOWNER inference from origin, and optional strict native coverage sanity (`--strict`).
+- `scripts/dev/setup.sh`: onboarding bootstrap (native or docker mode), `.env` creation, module auto-initialization from `git remote origin`, CODEOWNER inference from origin, and optional strict native coverage sanity (`--strict`).
 - `scripts/dev/doctor.sh`: readiness checks for native/docker prerequisites and template placeholders.
 - `scripts/dev/module-origin.sh`: shared parser for deriving a Go module path from `git remote origin`.
 - `scripts/init-module.sh`: manual fallback for module path and CODEOWNERS initialization after clone.
@@ -130,19 +130,11 @@ Why: development rules and structure should be explicit and versioned, not scatt
 
 ### `.agents/skills`
 Canonical source of runnable `SKILL.md` definitions.  
-Why: this is the repository-native authoring surface used as the source for skill mirror sync.
+Why: this is the Codex-native authoring and runtime source for repository skills.
 
 ### `.codex/agents`
 Canonical source of project Codex subagent definitions.
-Why: these standalone TOML files are loaded through `.codex/config.toml` and mirrored into Claude Code agent files by `scripts/dev/sync-agents.sh`.
-
-### `.claude/agents`
-Claude Code project-agent mirror directory.
-Why: Claude Code uses Markdown agent files, so this ignored local directory is generated from `.codex/agents` rather than hand-maintained.
-
-### `.claude/skills`, `.gemini/skills`, `.github/skills`, `.cursor/skills`, `.opencode/skills`
-Provider runtime skill directories (`SKILL.md` files are generated here when needed).
-Why: these ignored local mirrors let runtime-specific tools load skills without making generated copies part of the source tree.
+Why: these standalone TOML files are loaded through `.codex/config.toml`.
 
 ### `.github/`
 CI workflow and dependency update automation (Dependabot).  

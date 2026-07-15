@@ -17,14 +17,14 @@ Load this when a domain spec needs invariant statements, owner assignment, sourc
 ## Imitate
 ```text
 INV-SKILL-CANONICAL-001
-Statement: A repository skill change is authoritative only when it is made under `.agents/skills`; runtime mirrors are derived surfaces and must not become competing sources of truth.
+Statement: A repository skill change is authoritative only when it is made under `.agents/skills`.
 Type: local_hard_invariant
 Owner: repository skill source-of-truth policy
 Source of truth: specs/agents-skills-source-of-truth/spec.md
-Enforcement point: skill sync/check workflow and reviewer discipline
+Enforcement point: repository checks and reviewer discipline
 Observable pass/fail: no active tooling or docs treat top-level `skills/` as canonical
-Violation outcome: reject the change or repair mirror/source-of-truth drift before validation closes
-Downstream handoff: tooling docs and sync validation must point at `.agents/skills`
+Violation outcome: reject the change or repair the source-of-truth drift before validation closes
+Downstream handoff: tooling docs and validation must point at `.agents/skills`
 ```
 
 Copy the shape: one falsifiable rule, one owner, one authority source, one pass/fail signal, and one consequence.

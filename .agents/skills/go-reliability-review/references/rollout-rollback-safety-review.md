@@ -6,7 +6,7 @@ When loaded for symptom `feature flag, config rollout, mixed-version compatibili
 ## When To Load
 Load when a diff changes feature flags, config rollout, schema compatibility, startup behavior under new config, canary signals, metric labels needed for release comparison, progressive rollout assumptions, rollback behavior, migration sequencing, or capacity-sensitive release behavior.
 
-Keep findings local: identify code paths that make safe rollout or rollback brittle. Hand off CI/CD gates, deployment policy, migration-runner ownership, and release governance to `go-devops-spec` or `go-design-spec` when the fix is broader than the changed code.
+Keep findings local: identify code paths that make safe rollout or rollback brittle. Hand off CI/CD gates, deployment policy, migration-runner ownership, and release governance to `go-delivery-platform-spec` or `go-implementation-ownership-spec` when the fix is broader than the changed code.
 
 ## Decision Rubric
 - New code assumes all instances switch versions at the same time.

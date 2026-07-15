@@ -1,22 +1,19 @@
 ---
 name: go-structural-quality-review
-description: "Run an unusually strict read-only Go maintainability review for structural simplification, abstraction cost, spaghetti growth, mixed-responsibility files, and missed deletion. Use when the user asks for thermonuclear/harsh review or a working diff appears overbuilt; skip ordinary idiom checks, local readability cleanup, and architecture conformance as the primary lane."
+description: "Use when the user explicitly requests a harsh whole-diff review or a change appears structurally overbuilt across files; Own abstraction cost, spaghetti growth, mixed responsibilities, speculative flexibility, and missed deletion; Skip when ordinary Go semantics, local readability, or architecture conformance is the primary lane."
 ---
 
 # Go Structural Quality Review
+
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
 ## Outcome
 
 Find merge-relevant, behavior-preserving structural simplifications that delete concepts, branches, wrappers, modes, helper layers, file sprawl, or stale paths instead of polishing them.
 
-## Review Method
+Use only for an explicitly harsh whole-diff review or clear cross-file overbuild. Stay read-only; read the governing artifacts, complete diff, touched callers, owning packages, existing helpers, and affected tests, then rank concrete risks by merge impact. Generated files are exempt from size findings.
 
-1. Stay read-only. Read the diff, governing task artifacts, touched callers, owning packages, existing helpers, and directly affected tests.
-2. Ask what concept can disappear, whether ownership became more cohesive, and whether a direct stdlib or repository path replaces custom machinery.
-3. Rank only concrete structural risks with tight `file:line` evidence and the smallest safe correction.
-4. Escalate corrections that change approved behavior, public contracts, data, security, reliability, concurrency, or architecture.
-
-## Flag
+## Structural Defects
 
 - more concepts, indirection, hidden state, or ownership spread for the same behavior;
 - one-off branches, flags, nullable modes, callbacks, or option bags bolted into busy flows;
@@ -27,7 +24,7 @@ Find merge-relevant, behavior-preserving structural simplifications that delete 
 - custom helpers already covered by current Go stdlib or a canonical repository owner;
 - replaced code, tests, fixtures, configs, docs, skills, agents, generated outputs, or mirrors left active without owner, reason, proof, and exit condition.
 
-## Prefer
+Ask what concept can disappear and whether ownership becomes more cohesive. Prefer:
 
 - deletion over rearrangement;
 - logic in the package/file that already owns the concept;
@@ -37,13 +34,8 @@ Find merge-relevant, behavior-preserving structural simplifications that delete 
 - explicit policy flows over boolean or mode-driven helper APIs;
 - removal or refactor of the old surface in the same accepted replacement.
 
-## Boundaries And Handoffs
+## Findings And Stop
 
-- Hand off architecture ownership, dependency direction, and source-of-truth drift to `go-design-review`.
-- Hand off local cognitive complexity, predicates, naming, and helper economics to `go-language-simplifier-review`.
-- Hand off Go semantics, error/context/nil/receiver/resource contracts, and stdlib correctness to `go-idiomatic-review`.
-- Hand off test proof and specialist security, reliability, DB/cache, concurrency, performance, observability, routing, distributed, or domain concerns to their matching review skills.
+Each finding names a concrete cross-file structural defect at `file:line` and its future-change, review, regression, or operability risk. Do not emit taste-only nits or approve while a clear structural regression, owner leak, unjustified abstraction/file sprawl, or executable replaced path remains unexplained.
 
-## Output And Approval Bar
-
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding names the structural defect, future-change/review/regression/operability risk, smallest behavior-preserving correction, and handoff if required. Do not approve while a clear structural regression, owner leak, unjustified abstraction/file sprawl, or executable replaced path remains unexplained. Do not emit taste-only nits.
+Hand off package/file ownership, dependency direction, and source-of-truth seams to `go-implementation-ownership-review`; local control-flow, predicate, naming, and helper clarity to `go-language-simplifier-review`; Go/stdlib contracts to `go-idiomatic-review`; and test or specialist correctness to the matching review. Escalate when correction changes accepted behavior, public contracts, data, security, reliability, concurrency, or architecture; use `go-implementation-ownership-spec` when responsibility or placement is unset, otherwise the owning behavior specification.

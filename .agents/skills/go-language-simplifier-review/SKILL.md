@@ -1,113 +1,47 @@
 ---
 name: go-language-simplifier-review
-description: "Review changed Go for local cognitive clarity without changing behavior: control flow, predicates, naming, helper economics, false simplification, and same-package policy extraction. Use for cleanup/refactor/readability diffs; skip Go-semantic correctness, architecture ownership, and unusually strict whole-diff structural review."
+description: "Use when changed Go is behaviorally correct and locally owned but control flow, predicates, naming, or helper shape is hard to understand or change; Own behavior-preserving cognitive simplification; Skip when Go semantics, package ownership, or explicit harsh whole-diff structure is the primary issue."
 ---
 
 # Go Language Simplifier Review
 
-## Purpose
-Protect local reasoning quality in changed Go code without endorsing refactors that only reduce line count while hiding policy, state transitions, ownership, cleanup, error contracts, or caller-visible semantics.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Treat simplicity as reduced reasoning load, not lower line count.
-- Flag false simplifications that merge distinct semantics, hide ownership, or push policy into generic helpers.
-- Also flag missed same-package source-of-truth extraction when stable local policy is visibly starting to drift.
-- Check whether a small Go-native code-level pattern would materially reduce local complexity, and whether a pattern-shaped abstraction is adding ceremony instead of simplifying the code.
-- Hand off deep Go-semantic, domain, concurrency, or design ownership when simplification review only identifies the risk.
+## Target And Invariants
 
-## When To Use
-- review Go PRs, diffs, refactors, and cleanup commits where the stated goal is simpler or more readable code
-- use even on generic review requests when the change touches helper extraction, nested branching, delayed state interpretation, boolean mode flags, option bags, or error-path "deduplication"
-- stay in the simplification lane; hand off deeper design or Go-semantic ownership instead of drifting into a broad review
+Review only behaviorally correct, locally owned Go for cognitive cost. Simpler means less reasoning, not fewer lines; prefer the smallest local change, and accept duplication when extraction would flatten policy, state transitions, side-effect order, ownership, cleanup, error identity, or caller-visible behavior.
 
-## Review Posture
-- Stay read-only and advisory.
-- Review changed files and directly affected tests first.
-- If approved task artifacts exist, treat them as governing intent.
-- Findings come first and must be ordered by merge risk, not by section order or taste.
-- Green tests do not prove a cleanup preserved local reasoning safety.
-- Always check touched helper or policy changes for source-of-truth drift: flag stable same-package policy still scattered across files and bogus extraction into vague helper buckets only when there is concrete future-change risk.
-- For cleanup or replacement diffs, flag unexplained surviving replaced or unused legacy code as reasoning debt when the approved artifact chain does not justify retention with owner, reason, proof, and exit condition.
-- Prefer official Go docs, Go Code Review Comments, Go module/package organization docs, and repository-local review patterns over external clean-code advice. Treat Effective Go as enduring core-language idiom guidance, not sole authority for modules, generics, or newer standard-library behavior; treat generic clean-code material as calibration only.
+- Prefer guard clauses and one abstraction level when they preserve audit/cleanup/rollback order and which error wins; flag nested success pyramids, sentinel state, temporal coupling, and delayed interpretation.
+- Make decisions readable at call sites. Flag compound negatives, boolean clusters, raw modes, same-typed arguments, and `map[string]any` option decoding when they hide intent.
+- Keep helpers that name stable policy, ownership, defaulting, cleanup, stdlib quirks, or error normalization. Flag pass-through wrappers, vague `util/common/shared` buckets, and mode-heavy extraction that only relocates complexity.
+- Flag stable same-package policy repeated across files when one seam-named local owner would prevent drift; do not turn this into package-placement review.
+- Preserve distinct failure classes, inspectability, status/cancellation mapping, and cleanup/audit precedence. A semantic change is not a simplification finding: route it to `go-idiomatic-review` or the owning behavior review.
+- Use small Go-native patterns only when they shorten the reader's path; reject class-shaped ceremony locally, while explicit harsh whole-diff overbuild belongs to `go-structural-quality-review`.
+- Raise naming and test-readability findings only when they materially affect safe change or diagnosis; green tests alone do not prove reasoning safety.
+- Treat an unexplained executable/importable/generated/validated old path as reasoning debt after replacement unless accepted artifacts retain it with owner, reason, proof, and exit condition.
 
-## Scope
-- review control flow, state shape, and predicate clarity
-- review abstraction cost, helper economics, and call-site burden
-- review false simplification in error paths, ownership seams, and thin policy wrappers
-- review whether stable same-package policy is scattered across files when one seam-named helper or local owner should own it
-- review whether a new helper actually reduces reasoning or just hides policy in a `util/common/shared` bucket
-- review whether a code-level pattern such as guard clauses, table-driven tests, map-driven dispatch, first-class function strategy, or a same-package policy seam would reduce branching, duplication, or helper noise without changing behavior
-- review naming and test readability when they materially affect safe future changes
-- review whether touched validation is enough to protect subtle precedence or branch behavior
+Do not recommend removing clone/copy isolation, observable nil/empty behavior, receiver or method-set protections, zero-value guarantees, must-not-copy state, cleanup/lifetime ordering, or stdlib wrapper contracts as ceremony.
 
-## Reference Files Selector
-References are compact rubrics and example banks, not exhaustive checklists or Go documentation. Load at most one reference by default: choose the file whose symptom best matches the primary review pressure. Load a second reference only when the diff clearly spans multiple independent decision pressures, and name both references in the finding only if each materially shaped the review judgment.
+Prefer official Go documentation, Go Code Review Comments, module/package guidance, and repository-local patterns over generic clean-code advice; use Effective Go as core-idiom guidance rather than current authority for modules, generics, or newer stdlib behavior.
 
-Use `false-simplification-patterns.md` as broad challenge/smell triage only when no narrower positive reference owns the risk.
+## Symptom-Driven References
 
-| Reference | Symptom | Behavior Change |
-| --- | --- | --- |
-| `references/false-simplification-patterns.md` | broad cleanup, deduplication, readability, or DRY claim spans several axes and no narrower reference dominates | makes the model challenge line-count reduction and identify hidden semantics instead of accepting shorter code as simpler |
-| `references/helper-extraction-economics.md` | helpers, wrappers, interfaces, option bags, callbacks, or helper buckets were added, removed, renamed, or generalized | makes the model judge whether a helper compresses stable policy at the call site instead of treating wrappers as automatically good or bad |
-| `references/source-of-truth-extraction.md` | stable same-package policy is repeated, drifting, or moved away from its owner | makes the model choose a seam-named local owner instead of tolerating drift-prone copies or extracting to global `common` code |
-| `references/control-flow-and-temporal-coupling.md` | branching, guard clauses, sentinels, named returns, defer, cleanup, rollback, audit, or phase ordering changed | makes the model protect explicit side-effect and error precedence instead of praising flatter control flow that hides temporal coupling |
-| `references/predicate-condition-and-mode-clarity.md` | compound predicates, negative conditions, boolean clusters, raw modes, same-typed args, or option decoding make a decision hard to read | makes the model preserve call-site decision clarity instead of accepting shorter conditions or generic predicate helpers |
-| `references/error-path-simplification.md` | error handling was deduplicated, wrapped, normalized, mapped, logged, joined, or reordered | makes the model protect inspectability, status mapping, cancellation, and cleanup precedence instead of accepting generic error helpers |
-| `references/test-readability-and-proof-shape.md` | tests were simplified with tables, helpers, assertions, fixtures, or terse failure messages that may hide proof intent | makes the model protect readable setup, trigger, and assertion shape instead of approving test shortcuts that obscure what behavior is proven |
-| `references/naming-and-intent-exposure.md` | names, receiver names, helper names, comments, exported identifiers, or feature vocabulary drift obscure role, phase, ownership, or policy | makes the model treat naming as merge-risk only when it changes intent exposure instead of raising taste-only rename comments |
-| `references/go-semantic-stop-signs.md` | simplification touches clone/copy isolation, nil versus empty behavior, receiver or method-set shape, zero-value usability, cleanup ownership, or stdlib wrapper contracts | makes the model stop before flagging protective Go semantics as clutter and route deep semantic questions to `go-idiomatic-review` |
+Use broad false-simplification triage only when no narrower selector owns the pressure.
 
-## Boundaries
-Do not:
-- turn simplification review into architecture redesign or primary correctness review
-- call semantic protection "ceremony" when it preserves ownership, lifetime, cleanup, or error contracts
-- propose behavior-changing refactors as simplification without explicit escalation
-- block on taste-only comments with no merge-risk impact
-- equate shorter code with simpler code
+| Pressure | Load |
+| --- | --- |
+| Broad cleanup, DRY, deduplication, or readability claim spans several local axes. | [false-simplification-patterns.md](references/false-simplification-patterns.md) |
+| Helpers, wrappers, interfaces, callbacks, option bags, or helper buckets changed. | [helper-extraction-economics.md](references/helper-extraction-economics.md) |
+| Stable same-package policy is repeated, drifting, or moved away from its local owner. | [source-of-truth-extraction.md](references/source-of-truth-extraction.md) |
+| Branches, sentinels, named returns, defer, cleanup, rollback, audit, or phase order changed. | [control-flow-and-temporal-coupling.md](references/control-flow-and-temporal-coupling.md) |
+| Predicates, negatives, flags, modes, same-typed args, or option decoding obscure a decision. | [predicate-condition-and-mode-clarity.md](references/predicate-condition-and-mode-clarity.md) |
+| Error handling was deduplicated, normalized, mapped, logged, joined, or reordered. | [error-path-simplification.md](references/error-path-simplification.md) |
+| Tables, helpers, assertions, fixtures, or terse failures obscure test proof intent. | [test-readability-and-proof-shape.md](references/test-readability-and-proof-shape.md) |
+| Names or vocabulary obscure role, phase, ownership, or policy with merge risk. | [naming-and-intent-exposure.md](references/naming-and-intent-exposure.md) |
+| Cleanup touches alias isolation, nil/empty, receivers, zero values, lifetime, cleanup, or stdlib contracts. | [go-semantic-stop-signs.md](references/go-semantic-stop-signs.md) |
 
-## Core Defaults
-- Simpler means less reasoning required, not fewer lines.
-- Duplication can be cheaper than hiding distinct policy or error semantics behind one generic helper.
-- Repeated stable policy across several files in one package is also simplification debt; one seam-named same-package owner can be simpler than several near-copies.
-- Small Go-native code-level patterns are useful only when they shorten the reader's path. Flag both missed simplifications and imported class-oriented pattern scaffolding that makes direct Go code harder to follow.
-- Keep one clear abstraction level per function when practical.
-- Prefer local, behavior-preserving simplification over broad rewrites.
-- If a wrapper protects ownership, cleanup, or contract shape, do not remove it just because it is short.
-- Prefer the smallest change that makes intent obvious on first read.
-- Do not treat stale old-path code as harmless readability clutter when the task replaced that path; require remove/refactor/retain status and proof before calling the cleanup complete.
+## Findings And Stop
 
-## Expertise
-- Risk calibration: prioritize cleanups that merge distinct behaviors, change precedence, hide side effects, or force readers to track hidden modes.
-- Helper economics: prefer helpers that name stable policy, ownership, defaulting, cleanup scope, stdlib quirks, or error normalization; flag wrappers that only move complexity out of sight.
-- Source-of-truth extraction: flag repeated stable same-package policy that is likely to drift, but avoid global helper buckets and mode-heavy extraction.
-- Control flow: prefer guard clauses and straight-line happy paths only when side-effect ordering, cleanup, and which error wins stay explicit.
-- Predicate clarity: flag compound negatives, boolean clusters, and hidden mode decoding when the decision no longer reads at the call site.
-- API and call-site burden: flag same-typed positional parameters, raw strings with hidden meaning, `map[string]any` option blobs, and exported-surface changes that need design escalation.
-- Error paths: preserve distinct failure classes, `errors.Is`, `errors.As`, and Go 1.26+ `errors.AsType` inspectability when the module supports it, while keeping `errors.As` where a non-error interface target is intentional; preserve status mapping, context cancellation, and cleanup/audit precedence.
-- Naming and tests: suggest naming or test simplification only when it lowers future reasoning and diagnosis load.
+Each finding names the local clarity defect, branch-misread/change/maintenance risk, and whether policy is under-extracted, a vague helper is over-extracted, a local pattern adds complexity, or stale legacy remains. Name a loaded reference only when it shaped judgment. `critical` means critical behavior is too obscured for safe change; `high` means material hidden state, false simplification, API opacity, or an active replaced path.
 
-### Go-Semantic Stop-Signs
-- Do not recommend simplification that removes code protecting ownership, lifetime, or public contract just because it looks ceremonial. Load `references/go-semantic-stop-signs.md` when this risk is central to the review.
-Stop-sign examples:
-- slice or map alias isolation such as `slices.Clone`, `maps.Clone`, or copy-before-store
-- `nil` versus empty behavior that is externally observable
-- receiver or method-set changes, zero-value usability, or must-not-copy state
-- cleanup and lifetime code such as `defer cancel()`, `rows.Close`, unlock or close ordering, and rollback sequencing
-- standard-library wrapper contracts such as `http.Header`, `url.Values`, and similar types
-- You may mention the simplification risk, but hand off deep Go-semantic analysis to `go-idiomatic-review`.
-
-### Cross-Domain Handoffs
-- Hand off deep Go-semantic and standard-library contract questions to `go-idiomatic-review`.
-- Hand off design-shape and package-ownership questions to `go-design-review`.
-- Hand off concurrency, reliability, security, DB/cache, and performance depth to the corresponding review skills.
-- Hand off test-strategy completeness to `go-qa-review`.
-
-## Evidence And Shared Finding Envelope
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the simplification defect, merge/maintenance/branch-misread risk, smallest behavior-preserving correction, and whether the issue is under-extracted same-package policy, over-extracted vague helper, pattern-shaped complexity, or unexplained surviving legacy drift. Name the loaded reference when it shaped the judgment. `critical` means critical behavior is too obscured for safe change; `high` includes an executable/importable/generated/validated replaced path or material hidden-state/false-simplification/API-opacity risk. Start `Issue` with the plain-language defect.
-
-## Escalate When
-Escalate when:
-- a safe correction changes the public contract, transport behavior, or approved design (`go-design-spec`, `api-contract-designer-spec`, or `go-chi-spec`)
-- local simplification is blocked by a broader architecture or ownership problem (`go-design-spec` or `go-architect-spec`)
-- the "simplest" fix would weaken domain, security, reliability, or data guarantees owned elsewhere
-- the cleanup crosses Go-semantic stop-signs and needs deeper ownership from `go-idiomatic-review`
+Hand off package/dependency/source-of-truth ownership to `go-implementation-ownership-review`, specialist correctness to its review owner, and proof completeness to `go-test-review`. Stop and escalate to `go-implementation-ownership-spec`, `go-system-architecture-spec`, `go-api-contract-spec`, `go-chi-spec`, or the owning behavior spec when a safe simplification would define or change public, transport, design, domain, security, reliability, or data behavior.

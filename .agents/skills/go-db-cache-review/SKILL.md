@@ -1,115 +1,45 @@
 ---
 name: go-db-cache-review
-description: "Review Go code changes for SQL access discipline, transaction boundaries, context and resource safety, cache key correctness, invalidation behavior, and stampede or fallback risk."
+description: "Use when changed Go executes SQL or reads, writes, invalidates, or falls back around a cache; Own query discipline, transaction execution, DB resource safety, cache isolation, freshness, serialization, and origin protection; Skip when the primary defect is schema architecture, business policy, or broad concurrency or reliability policy."
 ---
 
 # Go DB Cache Review
 
-## Purpose
-Protect changed data-access and cache paths from consistency, isolation, timeout, invalidation, and origin-protection defects.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Review DB and cache code as correctness surfaces, not performance decorations.
-- Prioritize transaction scope, context propagation, cursor/resource cleanup, cache key dimensions, and invalidation timing.
-- Treat stale, aliased, cross-tenant, and fail-open cache behavior as merge risk when callers can observe it.
-- Hand off schema ownership, migration strategy, API semantics, and broad reliability design when local DB/cache review cannot own the fix.
+## Target And Boundary
 
-## Scope
-- review SQL query discipline and request-path round-trip amplification
-- review transaction boundaries and partial-side-effect risk
-- review DB and cache context propagation, timeout use, and resource cleanup
-- review cache key isolation, versioning, and serialization safety
-- review invalidation, update, TTL, and staleness behavior
-- review stampede suppression, fallback behavior, and origin protection
-- review test and validation signals for DB/cache-sensitive behavior
+Review changed SQL and cache paths for local correctness, isolation, cancellation, resource, freshness, fallback, and origin-protection defects. Treat cache as an accelerator rather than truth unless an accepted contract says otherwise.
 
-## Lazy Reference Loading
-Keep this `SKILL.md` as the decision guide. References are compact rubrics and example banks, not exhaustive checklists or documentation dumps. Load at most one reference by default; load multiple only when the diff clearly spans independent decision pressures, such as a transaction-boundary defect plus a cache-stampede defect.
+Do not redesign schema or data ownership, invent business acceptance or API consistency, stretch local review into distributed coordination, or own broad concurrency/reliability policy. Escalate when the smallest safe correction needs one of those decisions.
 
-Choose references by symptom and expected behavior change:
+## DB And Cache Defect Invariants
 
-| Symptom in the diff | Load | Behavior change |
+1. SQL values use bind arguments and dynamic identifiers use allowlists. Flag changed N+1 loops, repeated reads, round-trip amplification, or hidden full scans only with a concrete path and behavior-preserving local batch/query correction. Preserve `sql.ErrNoRows`, scan errors, and duplicate-row detection semantics.
+2. DB/cache calls preserve caller context and an already owned operation budget. `Rows`, iteration errors, statements, reserved connections, cursors, and transactions have explicit close/error/end paths; `QueryRowContext` errors are handled at `Scan`.
+3. Dependent DB operations that must commit together use one explicit transaction with rollback on every non-commit path. Keep external network/cache work outside the transaction, treat `Commit` failure as unknown outcome rather than success, and never infer rollback from a failed commit.
+4. Retry only approved transient classes around the whole transaction boundary. Partial-statement retry is unsafe; retried writes require the accepted idempotency protection. Do not invent retry, outbox, saga, or public idempotency policy.
+5. Queries and cache keys carry every tenant, auth, locale, feature, version, pagination, and other correctness dimension. Keys are deterministic and collision-safe; aliased payloads, payload versioning, marshal/decode errors, corrupt entries, and zero values cannot silently cross scopes or become successful data.
+6. Every cache path has an accepted freshness owner: exact post-commit invalidation/update, TTL, or deliberate hybrid. Preserve TTL on overwrite, keep stale windows explicit, and cache only authoritative misses—not transient dependency failures—as negative truth.
+7. Distinguish cache miss from cache failure. Hot misses and outage fallback are bounded against origin load; coalescing keys match cache isolation dimensions, process-local suppression is not presented as distributed protection, and expiring locks use safe ownership/release semantics. Degraded behavior remains observable and contract-aligned.
+
+## Symptom-Driven References
+
+Choose the reference whose examples change the local finding.
+
+| Symptom | Load | Distinction preserved |
 | --- | --- | --- |
-| Query construction, dynamic identifiers, value binding, query loops, `QueryContext` vs `QueryRowContext`, or cursor cleanup in the query path | `references/sql-query-and-resource-safety-review.md` | Choose a local bind/allowlist/batch/close-check finding instead of generic SQL advice, driver switching, or schema redesign. |
-| Transaction starts, moves, retries, split writes, isolation options, commit handling, or cache work around commit boundaries | `references/transaction-boundary-review.md` | Choose the atomic DB boundary and post-commit cache decision instead of stretching a transaction across Redis or inventing outbox/saga policy in review. |
-| Dropped caller context, operation timeout, missing `cancel`, prepared statement or reserved connection lifecycle, or row/transaction cleanup as the primary symptom | `references/context-timeout-and-rows-cleanup.md` | Choose caller-derived cancellation and explicit cleanup instead of `context.Background`, arbitrary global budgets, or treating `QueryContext` alone as sufficient. |
-| Cache key construction, tenant/auth/locale/feature scoping, deterministic key material, cached payload versioning, or corrupt decode behavior | `references/cache-key-isolation-and-serialization.md` | Choose complete key dimensions and safe decode/version handling instead of "just hash it" or silently treating corrupt/aliased values as misses. |
-| Write-driven invalidation, TTL behavior, negative caching, stale serving, cache-aside freshness, or Redis `SET` overwrites | `references/invalidation-ttl-and-staleness-review.md` | Choose exact freshness ownership and TTL/negative-cache correction instead of TTL-only handwaving, wildcard deletes, or caching transient failures as truth. |
-| Hot cache misses, cache outage fallback, local `singleflight`, Redis locks, stale fallback, or origin DB protection | `references/stampede-fallback-and-origin-protection.md` | Choose bounded miss/fallback behavior and correctly scoped coalescing/locks instead of unbounded origin fallback or pretending process-local coalescing is distributed protection. |
+| Dynamic SQL, binding, query loops, one-row/result handling, or cursor cleanup is primary. | [sql-query-and-resource-safety-review.md](references/sql-query-and-resource-safety-review.md) | Bind/allowlist/batch/close locally; do not switch drivers or redesign schema. |
+| Transaction scope, split writes, retries, isolation, commit handling, or cache work around commit changed. | [transaction-boundary-review.md](references/transaction-boundary-review.md) | Restore atomic DB scope and post-commit cache order; do not invent distributed policy. |
+| Caller context, timeout, cancel, statement/connection ownership, rows, or transaction cleanup is primary. | [context-timeout-and-rows-cleanup.md](references/context-timeout-and-rows-cleanup.md) | Preserve caller-derived cancellation and explicit cleanup; do not invent budgets. |
+| Key dimensions, deterministic material, tenant/auth scope, payload version, or corrupt decode changed. | [cache-key-isolation-and-serialization.md](references/cache-key-isolation-and-serialization.md) | Restore isolation and safe serialization rather than hashing incomplete keys. |
+| Write invalidation, TTL, negative caching, stale serving, cache-aside freshness, or overwrite changed. | [invalidation-ttl-and-staleness-review.md](references/invalidation-ttl-and-staleness-review.md) | Name exact freshness ownership; avoid TTL handwaving, wildcard deletes, and cached transient failures. |
+| Hot misses, cache outage, `singleflight`, locks, stale fallback, or origin load changed. | [stampede-fallback-and-origin-protection.md](references/stampede-fallback-and-origin-protection.md) | Require bounded fallback and correctly scoped protection without overstating local coordination. |
 
-Do not load a reference just because it mentions a keyword; load it when its examples would change the finding you write. Escalate instead of solving here when the smallest safe correction changes schema ownership, API-visible consistency, tenant security policy, distributed locking policy, or broad reliability policy.
+## Findings, Evidence, And Escalation
 
-## Boundaries
-Do not:
-- turn DB/cache review into a broad architecture rewrite
-- treat performance tuning as the primary task before correctness and consistency are explicit
-- accept cache behavior without a freshness or correctness contract
-- absorb primary ownership of security, concurrency, or reliability issues when DB/cache is only the symptom surface
+Each finding names the concrete DB/cache defect, accepted data/cache contract, correctness/isolation/availability impact, smallest safe correction, and focused hit/miss/stale/error/invalidation or integration proof. For concurrency-sensitive wrappers request race evidence or state the gap; for DB semantics prefer a realistic integration path over unit-only confidence.
 
-## Core Defaults
-- Correctness comes before optimization.
-- Treat cache as an accelerator, not the source of truth, unless an explicit contract says otherwise.
-- Require propagated cancellation, explicit cleanup, and operation deadlines when the caller or package owns a budget.
-- Require cache keys to encode every dimension needed for correctness and isolation.
-- Prefer the smallest safe fix that restores consistency and predictable fallback behavior.
+`critical` means a confirmed correctness, isolation, or freshness-contract breach that makes merge unsafe; `high` means strong evidence of a significant DB/cache mismatch. Cross-tenant cache exposure also requires a forced security handoff, without dropping the local key/query defect.
 
-## Expertise
-
-### Query Discipline
-- Flag `N+1`, per-item query loops, avoidable round-trip amplification, and hidden full-scan risk in changed paths.
-- Require parameterization for values and allowlisting for dynamic identifiers.
-- Flag repeated identical reads in the same flow when they can be batched or cached safely.
-- Treat hot-path query amplification as both correctness and operational risk when it can distort timeout behavior.
-
-### Transaction Boundaries And Partial Side Effects
-- Verify dependent read/write steps that must commit together stay in one explicit transaction boundary.
-- Flag partial commit risk and transactions stretched across network or cross-service calls.
-- Require retry to target the whole transaction block for approved transient classes only.
-- Require idempotency protection when retried writes can duplicate effects.
-
-### Context, Timeout, And Resource Safety
-- Require request context propagation into DB and cache calls.
-- Flag `context.Background()` in request paths unless ownership is explicit and safe.
-- Require explicit time bounds for blocking calls on critical paths.
-- Verify `rows.Close`, `rows.Err`, rollback discipline, and no leaked transactions or cursors.
-
-### Cache Key Isolation And Serialization
-- Require tenant, auth, locale, feature, or version dimensions when response shape depends on them.
-- Flag cross-tenant or cross-scope key collisions as high-severity isolation defects.
-- Require deterministic key construction and safe decode behavior on schema mismatch or corrupt cache entries.
-- Reject wildcard key scans in request paths.
-
-### Invalidation, TTL, And Staleness
-- Verify every cached path has an explicit freshness owner: invalidation, update, TTL, or a deliberate hybrid.
-- Flag TTL-only approaches when correctness requires write-driven invalidation.
-- Verify negative-cache behavior does not convert transient dependency failure into business truth.
-- Require stale windows and bypass behavior to remain explicit when contract-sensitive.
-
-### Stampede, Degradation, And Origin Protection
-- Require coalescing or equivalent suppression on hot miss paths where origin load matters.
-- Flag cache outage behavior that can overwhelm the origin or DB.
-- Verify fallback mode matches the intended read or write contract.
-- Require degraded cache behavior to stay observable and bounded.
-
-### Verification Signals
-- Review whether changed behavior is testable across hit, miss, stale, error, and invalidation paths when relevant.
-- For concurrency-sensitive cache wrappers, expect race evidence or an explicit evidence gap.
-- For integration-sensitive DB behavior, expect a realistic validation path rather than unit-only confidence.
-
-### Cross-Domain Handoffs
-- Hand off benchmark and hot-path proof questions to `go-performance-review`.
-- Hand off goroutine, lock, and `singleflight` lifecycle defects to `go-concurrency-review`.
-- Hand off timeout, retry, fallback, and overload policy defects to `go-reliability-review`.
-- Hand off tenant-isolation and sensitive-data defects to `go-security-review`.
-- Hand off broader architectural drift to `go-design-review`.
-
-## Evidence And Shared Finding Envelope
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Each finding adds the concrete DB/cache defect, correctness/isolation/availability impact, relevant data or cache contract, smallest safe correction, and focused validation. `critical` is a confirmed correctness, isolation, or stale-contract breach that makes merge unsafe; `high` is strong evidence of a significant DB/cache contract mismatch.
-
-## Escalate When
-Escalate when:
-- safe correction changes data ownership, transaction strategy, or cache contract (`go-db-cache-spec` or `go-data-architect-spec`)
-- API-visible staleness, idempotency, or error semantics must change (`api-contract-designer-spec`)
-- the right fix requires a new fallback, retry, or overload policy (`go-reliability-spec`)
-- tenant or sensitive-data handling needs a new security contract (`go-security-spec`)
-- local repair exposes broader design drift (`go-design-spec`)
+Stop and hand off changed data ownership or transaction/cache policy to `go-db-cache-spec` or `go-data-architecture-spec`; business acceptance to `go-domain-invariant-spec`; API-visible staleness, idempotency, or errors to `go-api-contract-spec`; fallback/retry/overload policy to `go-reliability-spec`; distributed locks/recovery to `go-distributed-spec`; new tenant or sensitive-data policy to `go-security-spec`; and package responsibility drift to `go-implementation-ownership-spec`. For accepted supporting contracts, hand benchmark/hot-path proof to `go-performance-review`, lock/goroutine lifecycle to `go-concurrency-review`, resilience enforcement to `go-reliability-review`, and tenant/sensitive-data enforcement to `go-security-review` without duplicating their findings.

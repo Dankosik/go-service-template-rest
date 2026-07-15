@@ -12,7 +12,7 @@ Use `direct` only when all of these are true:
 - validation is obvious and bounded;
 - durable resume state and independent evidence are unnecessary.
 
-Direct work that satisfies these conditions uses one external implementation Worker followed by root diff inspection and bounded validation. Implementation review is always root-owned: matching review skills are applied locally and no built-in reviewer or specialist lane is launched. An explicitly requested independent review of completed implementation is a separate read-only boundary after implementation, not an internal gate.
+Direct work that satisfies these conditions enters the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) with one accepted outcome. That phase owns Worker execution, root review, and bounded validation.
 
 Use `structured` for the normal non-trivial case. Keep a reviewed `spec.md` and reviewed `tasks.md`; create design and test artifacts only when their decisions must survive.
 
@@ -30,13 +30,13 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then independently review the design;
 5. complete test design when proof is non-obvious, then obtain independent QA review;
 6. complete `tasks.md` and independent task review/readiness;
-7. execute implementation through the external CLI Worker contract, one direct outcome or one ledger task at a time under root acceptance; the root reviews every Worker result and the final integrated diff, evaluates all affected lenses locally, and validates the integrated result.
+7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) with one direct outcome or one ready ledger task at a time; that phase owns Worker assignment, root acceptance, integrated review, and validation.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification, planning, and their review gates remain required.
 
 For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase and requires independent synthesis review; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
 
-Before each required review of an applicable structured or orchestrated non-implementation owning macro phase, run one autonomous read-only challenge probe before the separate reviewer. The applicable boundaries are Specification, combined Technical Design, Test Design, Planning, and an explicit `research only` boundary; run it once after the whole candidate meets its authoring bar, with Technical Design waiting for both system/integration and Go ownership. Direct work, supporting steps, and Implementation/Validation/Closeout do not run this probe. A closed candidate may return `DONE` immediately. [Autonomous Pre-Review Challenge](spec-first-workflow/shared/subagents-and-handoff.md#autonomous-pre-review-challenge) owns the exchange, authority, state, exhaustion, invalidation, and reviewer-separation contract.
+Before each required review of an applicable structured or orchestrated non-implementation owning macro phase, run one autonomous read-only challenge probe before the separate reviewer. The applicable boundaries are Specification, combined Technical Design, Test Design, Planning, and an explicit `research only` boundary; run it once after the whole candidate meets its authoring bar, with Technical Design waiting for both system/integration and Go ownership. Direct work, supporting steps, and Implementation/Validation/Closeout do not run this probe. A closed candidate may return `DONE` immediately. [Autonomous Pre-Review Challenge](spec-first-workflow/shared/autonomous-pre-review-challenge.md) owns the protocol.
 
 ## Phase Router
 
@@ -64,7 +64,7 @@ Required review is an internal method of the artifact-owning phase:
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
 For every required non-implementation review, phase movement waits for the [shared `PASS`-only convergence rule](spec-first-workflow/shared/subagents-and-handoff.md#review-independence); `CONCERNS` and `FAIL` stay inside repair, disposition, or reopen work. Implementation acceptance and closeout follow the root-owned review contract in the implementation phase.
 
-Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
+Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Autonomous Pre-Review Challenge](spec-first-workflow/shared/autonomous-pre-review-challenge.md) only for that protocol. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
 
 ## Phase Movement
 
@@ -82,7 +82,9 @@ A request authorizing end-to-end implementation may continue through the needed 
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
 
-Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation follows the phase-owned external Worker contract: the root accepts each Worker task before the next starts, reviews the final integrated diff, applies matching review methods and affected specialist lenses locally, and re-inspects Worker corrections itself. No built-in subagent lane runs inside implementation. A user-requested independent review of completed implementation is a separate read-only boundary. [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation review and handoff mechanics.
+Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [phase-owned assignment, acceptance, review, correction, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation review and handoff mechanics.
+
+At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/subagents-and-handoff.md#handoff).
 
 ## Prompt Maintenance
 

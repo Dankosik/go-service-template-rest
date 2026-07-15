@@ -28,12 +28,12 @@ Copy the boundary: the invariant applies to a local workflow task, not every tec
 ```text
 Term: canonical skill source
 Means here: `.agents/skills/<skill>` is the authoring source for repository skills.
-Does not mean: runtime mirror copies under `.claude`, `.cursor`, `.gemini`, `.github`, or `.opencode`.
-Authority source: skill source-of-truth policy and skills sync/check flow.
-Decision it affects: edits must land in `.agents/skills` first; mirror drift is a repair target, not a competing decision.
+Does not mean: generated or copied skill content outside `.agents/skills`.
+Authority source: repository skill source-of-truth policy.
+Decision it affects: edits must land in `.agents/skills`.
 ```
 
-Copy the source-of-truth distinction: derived surfaces can be checked or repaired but do not own the rule.
+Copy the source-of-truth distinction: derived content does not own the rule.
 
 ```text
 Term: owner

@@ -1,30 +1,32 @@
 ---
 name: go-reliability-spec
-description: "Design reliability requirements for Go services: timeouts, deadlines, retry budgets, overload handling, degradation, lifecycle behavior, recovery, and resilience verification."
+description: "Use when timeout and deadline budgets, retries, overload handling, degradation, readiness, startup, drain, shutdown, recovery, or rollout behavior must be decided before coding; Own end-to-end service resilience policy and proof; Skip when the primary decision is concrete synchronization, durable distributed recovery, or implementation."
 ---
 
 # Go Reliability Spec
 
-## Purpose
-Design reliability contracts for Go services before coding. The output should make failure behavior explicit, bounded, operator-visible, and testable without turning the task into low-level middleware, worker, or shutdown-hook implementation.
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
-## Specialist Stance
-- Treat reliability as a pre-coding contract: dependency criticality, deadline budgets, retry eligibility, overload containment, degradation modes, lifecycle behavior, recovery, and proof obligations.
-- Prefer smaller, testable failure contracts over broad claims like "retry with backoff" or "degrade gracefully."
-- Keep API-visible, caller-visible, and operator-visible behavior aligned: if the system rejects, times out, degrades, drains, or recovers, the spec says how that is observed.
-- Escalate service decomposition, API resource modeling, data/cache mechanics, and security policy when reliability is only a dependent concern.
-- If another domain is only affected, return the consequence as `constraint_only`, `proof_only`, or explicit `no new decision required` instead of widening the design.
+## Outcome And Boundary
 
-## Core Workflow
-1. Identify the protected user flow, invariant, or operational objective.
-2. Classify each dependency and queue by criticality, owner, safe fallback, and blast radius.
-3. Assign explicit budgets: end-to-end deadline, per-hop timeout, retry budget, queue bound, concurrency bound, drain/recovery window, and rollout checkpoint.
-4. Compare multiple options only when a real `live fork` exists for the control: fail fast, retry, throttle, bulkhead, circuit break, degrade, queue, async defer, or rollback.
-5. State the selected contract as observable behavior, not implementation mechanics.
-6. Attach verification obligations that can fail the plan before coding starts.
+Define bounded, caller/operator-visible, falsifiable behavior for dependency failure, cancellation, overload, degradation, process lifecycle, recovery, and rollout. Own end-to-end deadline/cancellation policy, retry budgets, admission/backpressure, fail-open/closed behavior, startup/readiness/liveness, drain/shutdown, recovery, and rollout proof.
 
-## Reference Files
-References are compact rubrics and example banks, not exhaustive checklists or reliability tutorials. Load at most one reference by default: choose the file matching the highest-risk independent decision pressure. Load multiple references only when the prompt clearly spans separate pressures, such as retry policy plus shutdown lifecycle.
+Do not choose concrete synchronization, durable saga recovery, security, topology, data/cache, API-resource, or placement policy. Record only forced consequences and stop on an unset upstream policy. Breaking an end-to-end deadline is reliability; a goroutine that cannot cancel and join is concurrency; replay after durable process loss is distributed.
+
+## Owned Contract
+
+- Anchor policy to a protected flow, invariant, or objective. Classify dependencies and queues by criticality, owner, blast radius, caller signal, safe fallback, and recovery owner.
+- Derive per-hop timeouts from the end-to-end budget; preserve cancellation across blocking work; require bounded async handoff before work outlives a request; include drain and recovery windows.
+- Default retries off until operation and error class are safe. Name one owner layer, eligible/never-retry classes, idempotency/dedup, attempts, jitter, combined deadline/load budget, exhaustion signal, and async terminal behavior.
+- Drive admission from a named overload signal. Bound queue depth/age, concurrency, and worker lanes; define priority, tenant/workload isolation, reject/shed/throttle/bulkhead/defer semantics, and recovery horizon without fabricated acceptance.
+- Choose fail fast, retry, breaker, stale/deferred fallback, feature-off, queue, async defer, or rollback only when correctness permits. Define degradation entry/exit, probes, staleness/expiry, lost capability, invariant safety, and visibility; critical uncertainty fails closed.
+- Separate startup, local-progress liveness, traffic-admission readiness, diagnostics, and drain. Before hard kill, stop admission and bound drain/close/flush/exclusion for ordinary, streaming, hijacked, background, and telemetry work.
+- Define recovery objectives, restore/failover evidence, mixed-version behavior, staged rollout, guardrails, observation windows, rollback triggers, and operator ownership. Prefer deterministic failure proof before chaos.
+- Use the smallest falsifying component, fault-injection, overload/load, lifecycle, recovery-drill, or canary proof. Do not invent numbers; mark unsupported targets as assumptions and planning-critical gaps as blockers.
+
+## Symptom-Driven References
+
+References are compact rubrics and example banks. Load the file matching the highest-risk reliability pressure.
 
 | Load this file | Symptom trigger | Behavior change when loaded |
 | --- | --- | --- |
@@ -38,35 +40,8 @@ References are compact rubrics and example banks, not exhaustive checklists or r
 
 If a prompt crosses many files, start with dependency criticality only when the safe failure mode is still unknown. Otherwise load the file for the highest-risk control and stop once the decision rubric has answered the question.
 
-## Decision Quality Bar
-Major reliability recommendations should make these concrete:
-- failure scenario and affected invariant
-- dependency or flow criticality
-- caller-visible behavior and status semantics where applicable
-- timeout, retry, queue, bulkhead, fallback, lifecycle, and recovery budgets
-- when a `live fork` exists, the viable options, the selected option, and why the rejected alternative does not fit
-- validation signal, fault-injection case, load condition, or rollout checkpoint that proves the contract
-- downstream decision/proof consequences only when another domain must act before the current artifact is usable
-- assumptions and reopen conditions
+## Return And Stop
 
-Do not invent numeric defaults when the workload does not justify them. Use placeholders or assumptions such as `<end-to-end budget>` and mark planning-critical missing values as blockers.
+Return failure contracts; budgets and policies; caller/operator signals; measurable proof; forced consequences; assumptions, risks, and reopen conditions. Stay at observable policy level.
 
-## Deliverable Shape
-Return reliability work in this compact shape:
-- `Failure Contracts`
-- `Timeout, Retry, And Overload Policy`
-- `Degradation And Lifecycle Behavior`
-- `Recovery And Rollout Expectations`
-- `Verification Obligations`
-- `Downstream Decision Or Proof Consequences`
-- `Assumptions And Residual Risks`
-
-## Escalate When
-Escalate or block approval when:
-- a critical dependency lacks a fail-open/fail-closed/degraded contract
-- outbound work can outlive the inbound context without an explicit async handoff
-- retry policy lacks eligibility, bounded attempts, jitter, or budget interaction
-- queues, goroutines, worker lanes, or dependency calls can grow without a bound
-- degradation lacks entry, exit, data-staleness, or invariant-preservation rules
-- readiness, liveness, startup, or shutdown behavior mixes restart and traffic-admission semantics
-- rollout or recovery assumptions materially affect correctness but remain untested
+Block on a missing critical failure mode/owner, escaped cancellation, unsafe or unbudgeted retry, unbounded work, incomplete degradation, conflated lifecycle signals, unauthorized targets, or unproved recovery/rollout assumptions that affect correctness.

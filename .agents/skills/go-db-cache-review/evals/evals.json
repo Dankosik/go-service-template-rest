@@ -3,11 +3,10 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Review the attached numbered Go snippet as a DB/cache-focused code review. Return review output in the skill's standard format, keep findings merge-risk oriented, and cite `file:line` references from the snippet.",
+      "category": "domain_defect",
+      "prompt": "Review this numbered Go snippet as a DB/cache-focused code review. Keep findings merge-risk oriented and preserve the exact `file:line` anchors.\n\n```go\n// internal/user/service.go\n10 func (s *Service) UpdateProfile(ctx context.Context, tenantID, userID, name string) error {\n11     tx, err := s.db.BeginTx(ctx, nil)\n12     if err != nil { return err }\n13     defer tx.Rollback()\n14     if _, err := tx.ExecContext(ctx, `update users set name=$1 where tenant_id=$2 and id=$3`, name, tenantID, userID); err != nil { return err }\n15     key := \"profile:\" + userID\n16     if err := s.cache.Del(ctx, key).Err(); err != nil {\n17         return err\n18     }\n19     return tx.Commit()\n20 }\n```",
       "expected_output": "A DB/cache review that catches transaction and cache correctness defects in the profile update path without drifting into unrelated cleanup.",
-      "files": [
-        "evals/files/profile_update_invalidation.txt"
-      ],
+      "files": [],
       "expectations": [
         "The review identifies that `internal/user/service.go:15` uses a tenant-unsafe cache key or otherwise misses a required scope dimension.",
         "The review identifies that cache invalidation happens before the successful commit at `internal/user/service.go:16-20`, creating a partial-side-effect or freshness risk.",
@@ -17,11 +16,10 @@
     },
     {
       "id": 2,
-      "prompt": "Review the attached numbered Go snippet as a DB/cache-focused code review. Return review output in the skill's standard format, keep findings merge-risk oriented, and cite `file:line` references from the snippet.",
+      "category": "domain_defect",
+      "prompt": "Review this numbered Go snippet as a DB/cache-focused code review. Keep findings merge-risk oriented and preserve the exact `file:line` anchors.\n\n```go\n// internal/user/repository.go\n1 func (r *Repo) ListActiveUsers(ctx context.Context) ([]User, error) {\n2     const key = \"users:active\"\n3     if cached, err := r.cache.Get(ctx, key).Bytes(); err == nil {\n4         return decodeUsers(cached)\n5     }\n6\n7     rows, err := r.db.QueryContext(context.Background(), `select id from users where active=true`)\n8     if err != nil {\n9         empty, _ := json.Marshal([]User{})\n10        // Treat a DB outage as an authoritative empty result.\n11        _ = r.metrics.MarkUnavailable(ctx)\n12        _ = r.cache.Set(ctx, key, empty, time.Minute).Err()\n13        return nil, err\n14    }\n15    var users []User\n16    for rows.Next() { var u User; if err := rows.Scan(&u.ID); err != nil { return nil, err }; users = append(users, u) }\n17    return users, nil\n18 }\n```",
       "expected_output": "A DB/cache review that catches caller-context misuse, resource-safety gaps, and invalid negative-cache behavior in a request-path repository method.",
-      "files": [
-        "evals/files/list_active_users_negative_cache.txt"
-      ],
+      "files": [],
       "expectations": [
         "The review flags request-path use of `context.Background()` at `internal/user/repository.go:7` as unsafe for DB access.",
         "The review flags missing `rows.Close` and/or `rows.Err` handling as a resource-safety defect in `internal/user/repository.go`.",
@@ -31,16 +29,51 @@
     },
     {
       "id": 3,
-      "prompt": "Review the attached numbered Go snippet as a DB/cache-focused code review. Return review output in the skill's standard format, keep findings merge-risk oriented, and cite `file:line` references from the snippet.",
+      "category": "domain_defect",
+      "prompt": "Review this numbered Go snippet as a DB/cache-focused code review. Keep findings merge-risk oriented and preserve the exact `file:line` anchors.\n\n```go\n// internal/catalog/cache.go\n1 func (s *Store) Product(ctx context.Context, tenantID, id string) (Product, error) {\n2     key := \"product:\" + id\n3     if b, err := s.cache.Get(ctx, key).Bytes(); err == nil {\n4         return decodeProduct(b)\n5     }\n6     product, err := s.repo.Product(ctx, tenantID, id)\n7     if err != nil { return Product{}, err }\n8     b, err := json.Marshal(product)\n9     if err != nil { return Product{}, err }\n10    // Every concurrent miss reaches the origin before this write.\n11\n12    go func() {\n13        _ = s.cache.Set(context.Background(), key, b, time.Minute).Err()\n14    }()\n15    return product, nil\n16 }\n```",
       "expected_output": "A DB/cache review that catches tenant-unsafe cache keys, hot-miss origin-protection risk, and non-owned async cache writes while handing off the non-primary concurrency or reliability depth.",
-      "files": [
-        "evals/files/hot_product_cache_wrapper.txt"
-      ],
+      "files": [],
       "expectations": [
         "The review identifies that `internal/catalog/cache.go:2` uses a tenant-unsafe cache key or otherwise misses a required scope dimension.",
         "The review flags the hot-miss path as lacking stampede suppression, coalescing, or other origin-protection controls.",
         "The review flags the fire-and-forget cache write at `internal/catalog/cache.go:12-14` as unsafe DB/cache behavior, not just style drift.",
         "The review includes a handoff to `go-concurrency-review` or `go-reliability-review` for the non-primary coordination or fallback-policy part of the defect."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "clean",
+      "prompt": "Review only DB/cache correctness. The code uses bound SQL values and allowlisted sort identifiers; propagates caller context; closes rows and returns iteration/scan errors; runs dependent writes in one BeginTx block with deferred rollback and checked commit; retries only the approved transient class around the whole idempotent transaction; uses tenant/version-complete cache keys; invalidates exact keys after commit; distinguishes authoritative misses from cache failures; and bounds hot-miss fallback with key-matched coalescing. Accepted freshness and fallback contracts are explicit and satisfied.",
+      "expected_output": "Return no DB/cache findings without padding, invented policy, or neighboring-domain warnings.",
+      "files": [],
+      "expectations": [
+        "Returns no DB/cache findings.",
+        "Does not invent query, isolation, retry, TTL, stale-window, or fallback requirements.",
+        "Does not pad the result with security, concurrency, reliability, or architecture findings."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "neighbor",
+      "prompt": "The changed DB/cache path is correct: tenant-scoped queries use bound values, resources close, one transaction commits dependent writes, exact cache invalidation follows commit, and fallback is bounded under the accepted policy. The service now accepts `cancelled -> completed` and sends a completion email even though approved business behavior makes `cancelled` terminal. Review owner arbitration only.",
+      "expected_output": "Name go-domain-invariant-review as the single primary owner for the forbidden transition and resulting business side effect; emit no duplicate DB/cache finding.",
+      "files": [],
+      "expectations": [
+        "Names exactly go-domain-invariant-review as the primary review owner.",
+        "Identifies the forbidden business transition or completion side effect as the decisive axis.",
+        "Emits no DB/cache finding because transaction, query, resource, freshness, and fallback behavior are stated as correct."
+      ]
+    },
+    {
+      "id": 6,
+      "category": "unresolved_policy",
+      "prompt": "A cache-aside read now has all tenant/version key dimensions, safe decoding, caller cancellation, and bounded origin access, but no accepted contract says whether Redis failure should return an error, fall back to the database, or serve stale data; no stale window, origin budget, or invalidation guarantee has been decided. Review without choosing cache policy.",
+      "expected_output": "Hand off the missing cache fallback and freshness policy to go-db-cache-spec without inventing a stale window, origin budget, or local conformance finding.",
+      "files": [],
+      "expectations": [
+        "Names go-db-cache-spec as the unresolved decision owner.",
+        "Does not choose fail-fast, origin fallback, stale serving, stale duration, or origin budget.",
+        "Does not file a DB/cache conformance finding against an unset cache contract."
       ]
     }
   ]

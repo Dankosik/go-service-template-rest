@@ -1,0 +1,54 @@
+{
+  "skill_name": "go-implementation-ownership-spec",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "All upstream decisions are accepted for a Go service: the existing orders service remains one runtime; OpenAPI owns `POST /v1/orders`; the domain package owns order invariants; Postgres is authoritative; an outbox publishes accepted events; retries and rollout behavior are fixed. The repository currently mixes generated handlers, SQL calls, and domain transitions in `internal/http/orders.go`. Produce the implementation ownership design only: package/file owners, dependency direction, generated/manual authority, call and failure sequence, change order, cleanup, tests, and proof.",
+      "expected_output": "A Go ownership design that places the accepted behavior into narrow packages and files without revising topology or policy.",
+      "files": [],
+      "expectations": [
+        "Assigns distinct transport, application/domain, persistence/outbox, and composition responsibilities without inventing a new service.",
+        "Defines inward dependency direction or narrow consumer-owned seams and rejects generated-file edits.",
+        "Orders implementation and removal of the mixed-responsibility code.",
+        "Assigns behavior, failure-path, generated-drift, and cleanup proof to concrete owners."
+      ]
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "The accepted technical design already names every changed Go package and file, dependency direction, generated source, sequence, cleanup, tests, and validation commands. The requested follow-up changes no behavior, topology, source of truth, or ownership. Apply the implementation ownership specification role.",
+      "expected_output": "No new implementation ownership decision and no padded alternative design.",
+      "files": [],
+      "expectations": [
+        "Returns `no_new_decision_required` or explicit unchanged placement constraints.",
+        "Does not add packages, interfaces, layers, or alternative mechanisms.",
+        "Retains only already accepted proof or cleanup obligations."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "Service topology, public API, domain behavior, and package ownership are accepted. The remaining question is whether customer encryption keys may be cached in process, how they are isolated by tenant, and which rotation behavior is allowed. Apply the implementation ownership specification role without deciding security policy.",
+      "expected_output": "Only the forced security owner and implementation consequence, without choosing key caching or rotation policy.",
+      "files": [],
+      "expectations": [
+        "Names `go-security-spec` as the decision owner.",
+        "Records that package/mechanism placement must preserve the eventual isolation and rotation policy.",
+        "Does not decide whether keys are cached, their lifetime, or rotation behavior."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "The team asks for a Go package and file plan for payouts, but has not decided whether payouts remain in the monolith or become a service, whether initiation is synchronous or asynchronous, or whether timeout retries represent the same client operation. Produce the implementation design so coding can begin.",
+      "expected_output": "A blocked implementation ownership specification that names system architecture and API contract owners instead of inventing topology or wire policy.",
+      "files": [],
+      "expectations": [
+        "Stops before package placement because runtime topology and sync/async flow are unresolved.",
+        "Names `go-system-architecture-spec` and `go-api-contract-spec` as required decision owners.",
+        "Does not create packages, choose a service boundary, or invent retry semantics."
+      ]
+    }
+  ]
+}

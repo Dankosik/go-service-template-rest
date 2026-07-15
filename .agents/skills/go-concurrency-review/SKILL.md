@@ -1,9 +1,11 @@
 ---
 name: go-concurrency-review
-description: "Review Go code changes for goroutine lifecycle, cancellation, channel ownership, shared-state synchronization, `sync/atomic` correctness, bounded concurrency, timer/ticker hazards, and shutdown safety. Use whenever a Go review, PR, diff, flaky-test investigation, or bug hunt touches goroutines, channels, mutexes, atomics, WaitGroups, errgroup, worker pools, background loops, or shutdown behavior, even if the request is phrased as a generic code review."
+description: "Use when changed Go touches goroutines, shared state, channels, locks, atomics, WaitGroups, timers, worker bounds, cancellation unblock, or join protocols; Own concrete happens-before and lifecycle-mechanism correctness; Skip when the primary defect is service resilience policy, durable replay, or Go context API semantics."
 ---
 
 # Go Concurrency Review
+
+Load the [shared specialist contract](../specialist-contract.md) for common selection, scope, evidence, reference, return, and handoff mechanics; apply the domain-specific rules below.
 
 ## Trigger, Scope, And Boundary
 
@@ -18,12 +20,12 @@ Use approved lifecycle/shutdown contracts as governing evidence without suppress
 3. Channel send/receive/close ownership and progress policy are explicit; buffers do not substitute for cancellation, backpressure, or one closer.
 4. Sync primitives are identity-bearing and never copied after use; lock/condition/atomic choices protect a named invariant rather than a folklore optimization.
 5. Active and queued work are bounded; full-queue behavior, cancellation, early-return unblocking, and detached sender accumulation are deliberate.
-6. Request context reaches blocking work; shutdown is idempotent and promptly unblocks waits, sends, receives, timers, workers, and result paths.
+6. Concurrent work observes its owned stop or cancellation signal at every blocking operation; shutdown is idempotent and promptly unblocks waits, sends, receives, timers, workers, and result paths before join.
 7. Race, liveness, leak, timer, and shutdown proof matches the failure mode; sleeps and scheduler luck are not correctness evidence.
 
 ## Symptom-Driven Reference Selector
 
-Load at most one reference by default and a second only for an independent pressure. State how it changes the review judgment.
+State how the selected reference changes the review judgment.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |
@@ -35,11 +37,11 @@ Load at most one reference by default and a second only for an independent press
 | Timer/ticker reset/stop, `time.After` loops, sleep polling, `AfterFunc`, fake clocks, or shutdown timing. | [timers-tickers-and-shutdown.md](references/timers-tickers-and-shutdown.md) | Review timer ownership and prompt unblock semantics with current Go behavior. |
 | Race/liveness/leak tests, deterministic coordination, `testing/synctest`, or residual proof gap. | [concurrency-review-validation.md](references/concurrency-review-validation.md) | Match proof to race, protocol, lifecycle, or timing failure instead of treating any green test as blanket safety. |
 
-## Evidence And Shared Finding Envelope
+## Evidence And Domain Finding Rules
 
-Inspect every changed launch, access, synchronization edge, close, cancellation, blocking operation, full-queue path, error return, and shutdown path. Demand an exact `file:line`, failed concurrency axis, broken invariant or missing happens-before assumption, concrete failure mode/blast radius, smallest safe correction, governing contract when present, and focused race/liveness/leak/shutdown command or evidence gap.
+Inspect every changed launch, access, synchronization edge, close, cancellation, blocking operation, full-queue path, error return, and shutdown path. Demand an exact `file:line`, failed concurrency axis, broken invariant or missing happens-before assumption, concrete failure mode/blast radius, governing contract when present, and focused race/liveness/leak/shutdown command or evidence gap.
 
-Use the [shared review finding envelope](../../../docs/subagent-contract.md#shared-review-finding-envelope). Specialist additions:
+Specialist additions:
 
 - start `Issue` with the concurrency axis when useful;
 - `critical` examples include confirmed race, deadlock, send-on-closed, negative WaitGroup path, leaked significant work, or shutdown hang;
@@ -49,4 +51,4 @@ Use the [shared review finding envelope](../../../docs/subagent-contract.md#shar
 
 Success means findings are merge-risk ordered, concurrency-specific, evidence-anchored, locally correctable or explicitly handed off, and proof recommendations match the defect class.
 
-Escalate changes to concurrency model/bounds/shutdown policy to reliability design, durable workflow/reconciliation to distributed design, caller-visible blocking/async semantics to API/chi design, DB/cache ownership to DB/cache design, and unsafe package ownership to integrated design. Stop rather than prescribe a local lock when the missing decision belongs to those owners.
+Escalate missing service lifecycle, bound, or shutdown policy to `go-reliability-spec`; durable workflow/reconciliation policy to `go-distributed-spec`; caller-visible blocking or async semantics to `go-api-contract-spec`; DB/cache ownership to `go-db-cache-spec`; and mechanism placement to `go-implementation-ownership-spec`. Stop rather than prescribe a local lock when the missing decision belongs to those owners.
