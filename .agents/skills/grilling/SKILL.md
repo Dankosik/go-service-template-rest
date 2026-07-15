@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: Stress-test a plan, decision, idea, or design one material branch at a time. Use when the user explicitly requests grilling, uses a grill trigger phrase, or the workflow invokes internal macro-phase grilling on the existing read-only challenger. Do not use for ordinary Intake clarification.
+description: "Stress-test a plan, decision, idea, or design one material branch at a time. Use when the user explicitly requests grilling, uses a grill trigger phrase, or the workflow invokes internal macro-phase grilling on the existing read-only challenger. Do not use for ordinary Intake clarification."
 ---
 
 # Grilling
