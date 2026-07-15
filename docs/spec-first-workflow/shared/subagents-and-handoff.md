@@ -1,10 +1,10 @@
 # Subagents And Handoff
 
-Use delegation and handoffs only when they reduce a real context, independence, coordination, or resume problem.
+Use built-in subagents and session handoffs only when they reduce a real context, independence, coordination, or resume problem.
 
 ## Read When
 
-- Considering research, review, challenge, or implementation delegation.
+- Distinguishing a built-in subagent lane from an external implementation Worker.
 - Requiring an independent verdict.
 - Resuming a task or handing it to another session.
 
@@ -12,7 +12,7 @@ Use delegation and handoffs only when they reduce a real context, independence, 
 
 - One accepted goal or one concrete review question.
 - The smallest artifact and source bundle needed to answer it.
-- Clear read/write and external-action boundaries.
+- Clear read-only and external-action boundaries.
 
 ## Outputs
 
@@ -22,13 +22,13 @@ Use delegation and handoffs only when they reduce a real context, independence, 
 
 ## Stop Rule
 
-Do not delegate work that is sequential, tightly coupled to the root's reasoning, or cheaper to do locally. Do not create a handoff when the current session can safely finish.
+Do not create a built-in subagent lane for work that is sequential, tightly coupled to the root's reasoning, or cheaper to do locally. Do not create a session handoff when the current session can safely finish.
 
 ## Delegation Decision
 
-Skills define method; subagents provide separate context and independence. At the start of each active macro phase, identify materially affected domains and apply matching skills locally by default. Delegate only one concrete bounded question when independent evidence, separate context, parallelism, or review independence can change the result. A domain name, matching keyword, skill handoff, or desire for more confidence alone never creates a lane.
+Skills define method; subagents provide separate context and independence. At the start of each non-implementation macro phase, identify materially affected domains and apply matching skills locally by default. Delegate only one concrete bounded question when independent evidence, separate context, parallelism, or review independence can change the result. During implementation/validation/closeout, the root applies every matching review skill locally and launches no built-in subagent lane. A domain name, matching keyword, skill handoff, or desire for more confidence alone never creates a lane.
 
-If no separate lane helps, keep the work local and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record. Required independent reviews still use a separate read-only reviewer.
+If no separate read-only lane helps, keep the reasoning in the root and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record. Required independent reviews still use a separate read-only reviewer.
 
 Use a subagent when all are true:
 
@@ -37,13 +37,13 @@ Use a subagent when all are true:
 - separate context or review independence materially improves the result;
 - the output can be checked and synthesized by the root.
 
-Good lanes include independent source research, one specialist design question, or review of a fixed revision. Bad research/review lanes include broad “review everything,” duplicate lenses, and tiny lookups. Dependency-ordered implementation tasks use the worker loop below rather than being treated as evidence or review lanes.
+Good lanes include independent source research, one specialist design question, or review of a fixed non-implementation revision. Bad lanes include broad “review everything,” duplicate lenses, tiny lookups, and any implementation review, acceptance, specialist analysis, re-review, or repair.
 
-The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Research and review lanes are read-only. Implementation workers may write only inside their assigned task boundary; use isolation when risky experiments justify it, not by default.
+The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Built-in subagents are read-only research, challenge, or review lanes; they never implement or repair code, config, docs, or tests. External CLI Workers are not subagents and follow the [implementation phase contract](../phases/implementation-validation-closeout.md#cli-worker-launch-and-resume).
 
-Default to at most three concurrent research/review lanes, one bounded wave, and no nested delegation. Additional sequential research/review lanes still require distinct decision-changing questions that could not be covered locally or in the first wave. The one-at-a-time implementation worker loop is separate from that limit. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
+Default to at most three concurrent research/review lanes, one bounded wave, and no nested delegation. Additional sequential lanes still require distinct decision-changing questions that could not be covered locally or in the first wave. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
 
-Choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error. Do not hard-code a dated model catalog in repository instructions or assume the largest setting is best. Re-review should be at least as capable as the review that found the issue.
+For read-only subagents, choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error. Re-review should be at least as capable as the review that found the issue. The implementation phase separately pins the external Worker runtime.
 
 ## Lane Brief
 
@@ -53,20 +53,12 @@ Keep the brief outcome-first:
 Question: <one decision or falsification target>
 Context: <accepted facts and minimal artifact paths>
 Evidence boundary: <what to inspect and what counts>
-Constraints: <read-only/write boundary, non-goals, external-action limits>
+Constraints: <read-only boundary, non-goals, external-action limits>
 Output: <finding/evidence/recommendation shape>
 Stop: <missing input, conflict, or completion condition>
 ```
 
 Do not copy the repository workflow, generic strictness language, or unrelated artifact summaries into every brief.
-
-## Implementation Worker Loop
-
-When an accepted ledger exists, the root selects one ready task in dependency order and assigns only that task to one implementation worker. That worker remains the task owner across corrections until the root accepts the integrated task diff and proof or a genuine upstream blocker reopens another owner.
-
-The worker returns the exact diff, acceptance-criteria mapping, commands/results, and blockers. It does not mark the task complete, start another task, spawn a reviewer, or approve its own work. The root inspects that return against the task boundary and accepted proof. If anything required is missing, the root returns concrete gaps to the same worker and does not advance the ledger or repair the task itself. If the task is accepted, the root records its checkbox and evidence, then assigns the next ready task to a fresh worker. Reuse the previous worker only for corrections to its own task.
-
-This root acceptance is the required review of worker output; it is orchestration, not a separate review lane. A final independent reviewer is optional and risk-triggered under Review Independence below, and never substitutes for accepting each task before advancing.
 
 ## Autonomous Pre-Review Challenge
 
@@ -150,7 +142,7 @@ Use the shared [Review Finding
 Envelope](../../subagent-contract.md#shared-review-finding-envelope) for every
 review return.
 
-Structured and orchestrated work requires an independent reviewer for a standalone `research only` synthesis, the completed specification, any triggered technical design or test design, and the completed implementation ledger. During implementation, the root instead accepts every worker task before advancing. The final integrated diff adds an independent reviewer only when the user explicitly requests it or a concrete trigger makes the integrated change broad, hard to reverse, materially high-impact, ambiguous, cross-task-sensitive, protected-domain-sensitive, or poorly falsified by the root alone. Small direct work uses root diff inspection and bounded validation under the same trigger rule. Code change, Goal closeout, skill availability, domain keywords, and generic confidence are not review triggers. A required gate reviewer is any separate read-only subagent following the phase review method; named specialist profiles add depth but do not own the root's final gate decision.
+Structured and orchestrated work requires an independent reviewer for a standalone `research only` synthesis, the completed specification, any triggered technical design or test design, and the completed task ledger before implementation. These non-implementation gates use a separate read-only subagent following the owning phase review method. Implementation/validation/closeout never launches a built-in subagent: the root reviews and accepts every Worker result, applies matching review skills and specialist lenses locally, reviews the final integrated diff, and re-inspects corrections. An explicitly requested independent review of completed implementation is a separate read-only boundary after implementation, not an internal gate.
 
 The reviewer:
 
@@ -160,13 +152,13 @@ The reviewer:
 - distinguishes blockers, bounded concerns/proof obligations, and non-blocking observations;
 - states the evidence boundary and disposition of every materially affected lens: covered, delegated to a named specialist result, or not triggered with a concrete reason.
 
-When an independent gate is required, one whole-artifact or whole-diff reviewer is the default. That reviewer applies compatible matching methods locally in one coherence pass and accounts for every materially affected lens. Run a specialist before that gate only for one concrete high-impact question the root cannot credibly cover locally. If the gate reviewer discovers such an uncovered question, run one bounded specialist follow-up and return only that disposition for a focused verdict update; do not repeat an unchanged whole revision. A domain label, generic handoff, or desire for more confidence does not justify another reviewer.
+When a non-implementation independent gate is required, one whole-artifact reviewer is the default. That reviewer applies compatible matching methods locally in one coherence pass and accounts for every materially affected lens. Run a specialist before that gate only for one concrete high-impact question the root cannot credibly cover locally. If the gate reviewer discovers such an uncovered question, run one bounded specialist follow-up and return only that disposition for a focused verdict update; do not repeat an unchanged whole revision. A domain label, generic handoff, or desire for more confidence does not justify another reviewer.
 
-The root collects all in-scope actionable findings for the fixed revision. For worker-owned implementation, return the findings to the worker that owns the affected task; that worker repairs them as one coherent batch where dependencies allow. The root repairs only direct work and root-owned artifacts, then reruns affected proof. The same gate reviewer performs focused re-review of the repair and any transitively affected behavior, contract, ownership, or proof decision. Reuse unaffected lens dispositions by default; use full affected-surface re-review only when the repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue.
+The root collects all in-scope actionable findings for the fixed non-implementation revision. The owning author repairs them, and the same gate reviewer performs focused re-review of the repair and any transitively affected behavior, contract, ownership, or proof decision. Reuse unaffected lens dispositions by default; use full affected-surface re-review only when the repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue. Implementation findings instead follow the root-owned Worker correction loop in the implementation phase.
 
-A macro phase reaches review convergence only when its latest required review returns `PASS` and finds no blocker, known current-phase defect, unowned question, uncovered materially affected lens, or unresolved cross-lens contradiction. `CONCERNS` is non-terminal: a bounded risk or downstream proof obligation still needs disposition in the owning phase, and it never permits phase movement or closeout. The owning author repairs it; for worker-owned implementation, the root returns it to that worker. The root records authorized acceptance with evidence, owner, and reopen condition, or splits/reopens scope, then obtains focused fresh review; `PASS` means every concern has a disposition, not that no residual risk exists. `FAIL` blocks movement and requires repair or reopening before focused fresh review. Non-blocking observations do not prevent `PASS`. Repeat only while a concrete new finding or semantic repair changes readiness. If closure needs unavailable evidence, authority, or an upstream decision, mark the phase blocked and reopen that owner. Do not repeat an unchanged `PASS` revision or launch speculative lenses merely to collect confidence.
+A non-implementation macro phase reaches review convergence only when its latest required review returns `PASS` and finds no blocker, known current-phase defect, unowned question, uncovered materially affected lens, or unresolved cross-lens contradiction. `CONCERNS` is non-terminal: a bounded risk or downstream proof obligation still needs disposition in the owning phase, and it never permits phase movement. The owning author repairs it. The root records authorized acceptance with evidence, owner, and reopen condition, or splits/reopens scope, then obtains focused fresh review; `PASS` means every concern has a disposition, not that no residual risk exists. `FAIL` blocks movement and requires repair or reopening before focused fresh review. Non-blocking observations do not prevent `PASS`. Repeat only while a concrete new finding or semantic repair changes readiness. If closure needs unavailable evidence, authority, or an upstream decision, mark the phase blocked and reopen that owner. Do not repeat an unchanged `PASS` revision or launch speculative lenses merely to collect confidence.
 
-A semantic mutation after review to the reviewed artifact, implementation diff, generated outputs, tests, or proof evidence invalidates convergence only for affected lenses. Finalize ledger checkboxes and evidence before review; chat, Goal, and other status-only closeout updates after `PASS` are outside the candidate and do not invalidate it. Revalidate affected proof and obtain focused fresh review before closeout.
+A semantic mutation after review to the reviewed non-implementation artifact invalidates convergence only for affected lenses. Revalidate affected proof and obtain focused fresh review before phase movement.
 
 ## Fan-In
 
@@ -193,12 +185,16 @@ If those sources disagree, the task is blocked until the narrowest owner reconci
 
 A next-session handoff is permitted only when work intentionally stops at a true macro-phase boundary and the next outcome belongs to a later macro phase, including when the user explicitly requests that macro-phase handoff, or when a stop condition in [Phase Movement](../../spec-first-workflow.md#phase-movement) prevents the current root from continuing without an earlier-owner decision, user authority, external evidence/action, or required tooling. Crossing a macro phase inside the same authorized request does not itself require a prompt, and requesting a separate session for an internal checkpoint does not make it eligible.
 
-Required research-synthesis challenge, specification review, technical-design review, test-design QA review, task-readiness review, post-code review, in-scope repair, fresh re-review, validation, and closeout are internal checkpoints of their owning macro phase. The root launches the required read-only lane, repairs authoritative work, obtains any required fresh verdict, and continues automatically in the same session. A durable review record is only a carrier; it does not create a user-started phase or a next-session prompt.
+Required research-synthesis challenge, specification review, technical-design review, test-design QA review, and task-readiness review are internal checkpoints of their non-implementation owning macro phase. The root launches the required read-only lane, repairs authoritative work, obtains any required fresh verdict, and continues automatically in the same session. Implementation acceptance, Worker repair, root re-inspection, validation, and closeout are root-owned internal checkpoints with no built-in subagent lanes. A durable review record is only a carrier; it does not create a user-started phase or a next-session prompt.
 
 An explicitly user-requested standalone review remains read-only: return the
 complete review result and stop at the requested review boundary. It gains no
 repair, implementation, or workflow-handoff authority unless the user separately
 grants it.
+
+When that request independently reviews completed implementation, it begins only
+after implementation/validation/closeout has ended and never retroactively becomes
+an implementation acceptance or closeout gate.
 
 An allowed handoff to a non-implementation macro phase contains:
 

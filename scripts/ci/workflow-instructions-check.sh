@@ -106,9 +106,9 @@ require_text \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'an explicit request must not turn an internal checkpoint into a handoff'
 require_text \
-  'are internal checkpoints of their owning macro phase' \
+  'are internal checkpoints of their non-implementation owning macro phase' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'internal review must remain inside its owning macro phase'
+  'internal non-implementation review must remain inside its owning macro phase'
 require_text \
   'An explicitly user-requested standalone review remains read-only' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
@@ -130,17 +130,370 @@ require_text \
   AGENTS.md \
   'pre-implementation macro phases must not create or continue a Codex Goal'
 require_text \
-  'On entering implementation/validation/closeout, create or continue exactly one root-thread Codex Goal' \
+  'On entering implementation/validation/closeout, the root creates or continues exactly one root-thread Codex Goal' \
   AGENTS.md \
   'implementation entry must establish exactly one root Codex Goal'
 require_text \
-  'A small direct change does not need an independent reviewer merely because a Goal exists.' \
+  'root acceptance of every Worker result, root review of the final integrated diff, and fresh validation evidence' \
   AGENTS.md \
-  'Goal closeout must not trigger review for small direct work'
+  'Goal closeout must require root-owned implementation review'
 require_text \
-  'after acceptance, a fresh worker owns the next task' \
+  'never launches a built-in subagent lane' \
   AGENTS.md \
-  'repository authority must require a fresh worker per accepted ledger task'
+  'repository authority must forbid built-in subagent lanes during implementation'
+require_text \
+  'An implementation Worker is a separate OS process launched with `codex exec` in an isolated Git worktree.' \
+  AGENTS.md \
+  'repository authority must define an external CLI Worker'
+require_text \
+  'It is never a built-in subagent, `spawn_agent`, `agent_type="worker"`, or another in-process role.' \
+  AGENTS.md \
+  'repository authority must reject built-in implementation workers'
+require_text \
+  'Every authorized implementation outcome is produced by an external Worker' \
+  AGENTS.md \
+  'repository authority must route direct and ledger implementation through external Workers'
+require_text \
+  'the root never authors or repairs Worker-owned implementation' \
+  AGENTS.md \
+  'the root must remain orchestration-only for implementation patches'
+require_text \
+  'is the sole owner of Worker assignment, lifecycle, launch and resume, brief, evidence, acceptance, and integration mechanics' \
+  AGENTS.md \
+  'repository authority must leave Worker mechanics to the implementation phase'
+require_text \
+  'Use this exact locally validated runtime contract:' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker runtime contract must be identified as locally validated'
+require_text \
+  'They never implement or repair code, config, docs, or tests.' \
+  AGENTS.md \
+  'built-in subagents must remain read-only'
+require_text \
+  'Clear read-only and external-action boundaries.' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'subagent inputs must define an explicit read-only boundary'
+require_text \
+  'Constraints: <read-only boundary, non-goals, external-action limits>' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md \
+  'the canonical lane brief must remain read-only'
+require_text \
+  '<read-only boundary, non-goals, external-action limits>' \
+  docs/subagent-brief-template.md \
+  'the portable subagent brief must remain read-only'
+if grep -Eq -- 'read/write|read-only/write' \
+  docs/spec-first-workflow/shared/subagents-and-handoff.md docs/subagent-brief-template.md; then
+  echo 'workflow instruction check failed: a built-in subagent brief still permits writes'
+  exit 1
+fi
+require_text \
+  'CLI Worker Launch And Resume' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the implementation phase must own CLI Worker mechanics'
+require_text \
+  'The exact allowlisted Worker models are `gpt-5.6-terra` and `gpt-5.6-sol`, validated against the OpenAI latest-model guide and native Codex catalog on 2026-07-15.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker model allowlist must record its current official authority and validation date'
+require_text \
+  'Before launch, the root sets and records `WORKER_MODEL` from observable characteristics of the accepted outcome; never inherit a default, use the floating `gpt-5.6` alias, or select another model.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker model selection must be explicit, recorded, exact, and task-specific'
+require_text \
+  'Terra is the normal efficiency choice only when the outcome is clear, bounded and local, low consequence, free of unresolved design or ownership judgment, covered by relevant automated proof, and readily inspectable and falsifiable by the root.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker contract must define the conditional Terra route'
+require_text \
+  'Sol is required for material uncertainty or an ambiguous, open-ended, difficult-to-debug, cross-boundary or cross-cutting outcome; material architecture or product judgment; a protected or high-consequence domain named by repository authority; a large evidence, tool, or context load; or a result that is difficult for the root to falsify locally.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker contract must define the complexity and risk Sol route'
+require_text \
+  'Before the next Worker launch after either a Codex CLI upgrade or a change in the latest-model guide' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker model allowlist must be revalidated after either freshness trigger'
+require_text \
+  'revalidate and coordinate updates to the exact model allowlist, catalog transformation, and instruction checks.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'model freshness changes must update all coupled contract surfaces'
+require_text \
+  'If the selected model is unavailable, freshness validation fails, or the effective model differs, stop; never silently fall back or substitute another model.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'model selection must fail closed without fallback'
+require_text \
+  'WORKER_MODEL_CATALOG="$(mktemp -t codex-worker-model-catalog.XXXXXX.json)"' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker model catalog must be transient'
+require_text \
+  '/opt/homebrew/bin/rtk proxy codex debug models | /opt/homebrew/bin/rtk proxy jq -e --arg worker_model "$WORKER_MODEL"' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker catalog must derive from the native full catalog through raw RTK proxy mode'
+require_text \
+  "type == \"object\" and (.models | type == \"array\")" \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the derived Worker catalog must be validated as raw JSON before launch'
+require_text \
+  'RTK filtering corrupts this large JSON stream; both commands must use raw proxy mode.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker catalog must not use RTK-filtered JSON output'
+require_text \
+  '(["gpt-5.6-terra", "gpt-5.6-sol"] | index($worker_model)) as $allowlisted' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must allow only the exact Terra and Sol slugs'
+require_text \
+  '([.models[] | select(.slug == $worker_model)] | length) as $matches' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must count the pinned model exactly'
+require_text \
+  '| if $allowlisted == null then' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must fail unless the selected model is allowlisted'
+require_text \
+  'elif $matches != 1 then' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must fail unless exactly one selected model exists'
+require_text \
+  'error("expected exactly one selected Worker model")' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must fail closed on a model-count mismatch'
+require_text \
+  '.models |= map(' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must preserve the full model list'
+require_text \
+  'if .slug == $worker_model then .multi_agent_version = null else . end' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog derivation must mutate only the pinned model multi-agent field'
+require_text \
+  'Retain this exact file unchanged for the whole Worker session, pass it again on every resume' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'launch and resume must reuse the exact derived catalog'
+require_text \
+  'Do not regenerate it between launch and resume, persist it as a workflow artifact, copy a pinned catalog into the repository, or mutate user/global Codex configuration.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'catalog override must remain transient and session-scoped'
+if ! awk '
+  BEGIN {
+    required[1] = "--model \"$WORKER_MODEL\""
+    required[2] = "model_catalog_json=\\\"$WORKER_MODEL_CATALOG\\\""
+    required[3] = "model_reasoning_effort=\\\"$WORKER_REASONING_EFFORT\\\""
+    required[4] = "features.multi_agent=false"
+    required[5] = "features.multi_agent_v2.enabled=false"
+    required[6] = "features.multi_agent_v2.max_concurrent_threads_per_session=1"
+    required[7] = "--cd \"$WORKTREE\""
+    required[8] = "--sandbox workspace-write"
+    required[9] = "--ask-for-approval never"
+    required[10] = "--strict-config"
+    required[11] = "--json"
+    required[12] = "--output-schema \"$WORKER_SCHEMA\""
+    required[13] = "-o \"$WORKER_FINAL\""
+    required[14] = "--disable chronicle"
+    required[15] = "--disable goals"
+    required[16] = "--disable memories"
+    required[17] = "--enable hooks"
+    required[18] = "${WORKER_CAPABILITY_CONFIG[@]}"
+    required[19] = "${WORKER_CODEGRAPH_CONFIG[@]}"
+    required[20] = "2> \"$WORKER_STDERR\""
+    required[21] = "notify=[]"
+    required[22] = "check_for_update_on_startup=false"
+  }
+  /^### CLI Worker Launch And Resume$/ { section = 1; next }
+  section && /^```bash$/ {
+    candidate = 1
+    next
+  }
+  section && candidate && /^```$/ {
+    candidate = 0
+    next
+  }
+  section && candidate && /^\/opt\/homebrew\/bin\/rtk proxy codex \\$/ {
+    block = 1
+    blocks++
+    candidate = 0
+    for (i = 1; i <= 22; i++) count[i] = 0
+    next
+  }
+  section && block && /^```$/ {
+    for (i = 1; i <= 22; i++) {
+      if (count[i] != 1) {
+        printf "worker command block %d requires exactly one %s; found %d\n", blocks, required[i], count[i] > "/dev/stderr"
+        failed = 1
+      }
+    }
+    block = 0
+    next
+  }
+  section && block {
+    for (i = 1; i <= 22; i++) {
+      if (index($0, required[i])) count[i]++
+    }
+  }
+  END { if (blocks != 2 || block || failed) exit 1 }
+' docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  echo 'workflow instruction check failed: launch and resume must each contain every CLI Worker contract item exactly once'
+  exit 1
+fi
+require_text \
+  '- `WORKER_CAPABILITY_CONFIG`: task-gated optional-capability baseline.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the transient optional-capability baseline must be defined'
+require_text \
+  'The root removes or replaces only the matching baseline override when the accepted task or its automated proof requires that capability' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'optional capabilities must be task-gated and recorded'
+require_text \
+  'prefer a specific documentation MCP over broad web or shell access.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the capability policy must prefer a narrow documentation source'
+require_text \
+  'Hooks are a Worker readiness dependency: before launch, root verifies active command-hook definitions are reviewed and trusted; a changed or untrusted hook stops for review instead of using `--dangerously-bypass-hook-trust`.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker hooks must be reviewed and trusted before launch'
+if grep -Fq -- '--disable hooks' docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  echo 'workflow instruction check failed: Worker hooks must remain enabled'
+  exit 1
+fi
+if grep -F -- '--dangerously-bypass-hook-trust' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  | grep -Fvx 'Hooks are a Worker readiness dependency: before launch, root verifies active command-hook definitions are reviewed and trusted; a changed or untrusted hook stops for review instead of using `--dangerously-bypass-hook-trust`.' \
+  >/dev/null; then
+  echo 'workflow instruction check failed: Worker hooks must not bypass trust'
+  exit 1
+fi
+require_text \
+  "If it fails or reports \`Not initialized\`, set \`WORKER_CODEGRAPH_CONFIG=(-c 'mcp_servers.codegraph.enabled=false')\`" \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'uninitialized CodeGraph must be disabled for Worker launch and resume'
+require_text \
+  'record the raw-navigation fallback in the Worker brief' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the CodeGraph fallback must be recorded in the Worker brief'
+require_text \
+  'Worker setup never initializes or reindexes CodeGraph.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker setup must not initialize or reindex CodeGraph'
+require_text \
+  'Both allowlisted models permit only `low`, `medium`, `high`, `xhigh`, or `max`; reject `ultra` because it requests automatic task delegation.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker reasoning effort must exclude the automatic-delegation mode'
+require_text \
+  'Select model and reasoning effort separately: do not compensate for a Sol-shaped task by maximizing Terra.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker model and reasoning effort selection must remain independent'
+require_text \
+  'Choose effort from task complexity, ambiguity, consequence of error, evidence/tool load, and latency/cost, and calibrate both routing and effort on representative local evals; do not assume the highest effort is best.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker reasoning effort must be workload-selected and eval-calibrated'
+require_text \
+  '`low` for mechanical, well-specified, low-risk work; `medium` as the ordinary implementation baseline; `high` or `xhigh` for complex or ambiguous work when representative evals show a material quality gain; and `max` only for the hardest quality-first work.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker reasoning effort levels must have explicit selection guidance'
+require_text \
+  'The command snippets are exact raw RTK proxy invocations; execute them as shown.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker launch commands must retain the exact raw RTK proxy invocation'
+for worker_variable in WORKTREE WORKER_MODEL WORKER_BRIEF WORKER_SCHEMA WORKER_FINAL WORKER_EVENTS WORKER_STDERR; do
+  require_text \
+    "- \`${worker_variable}\`:" \
+    docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+    "the transient Worker variable ${worker_variable} must be defined"
+done
+require_text \
+  'Use distinct `WORKER_EVENTS`, `WORKER_FINAL`, and `WORKER_STDERR` paths for the initial launch and every resume attempt; never overwrite prior Worker evidence.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker launch and resume evidence paths must remain distinct'
+require_text \
+  'An `item.completed` event with `item.type="error"` is non-terminal by shape: inspect its message rather than treating it as automatic failure or ignoring it.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'JSONL error-shaped items must receive semantic intake rather than automatic failure or suppression'
+require_text \
+  'Do not globally filter stderr or warning events.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker diagnostics must not be globally filtered'
+require_text \
+  'Technical success requires exit status zero, exactly one session ID, a completed turn, a schema-valid structured final result, the selected model with no reroute or substitution, and no unresolved permission or contract violation.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker intake must enforce the complete technical-success contract'
+require_text \
+  'Preserve and inspect `WORKER_STDERR`; benign diagnostics alone do not fail an otherwise complete run.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'stderr must remain evidence without making benign diagnostics terminal'
+require_text \
+  'required repository skills when applicable' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the outcome-first Worker brief must name required repository skills'
+require_text \
+  'top-level `--add-dir "$TASK_WRITABLE_PATH"` after `--cd` and before `exec`' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'read-only task paths must use a narrow top-level add-dir before exec'
+require_text \
+  'Grant only that path, keep `workspace-write` and approval `never`, and never broaden the whole sandbox.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'read-only path recovery must preserve the narrow sandbox'
+if grep -Eq -- 'model_reasoning_effort=.*(low|medium|high|xhigh|max|ultra)' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md docs/spec-first-workflow-evals.md; then
+  echo 'workflow instruction check failed: Worker reasoning effort is hard-coded'
+  exit 1
+fi
+if ! awk '
+  /^  --disable chronicle/ { chronicle_line = NR; next }
+  /^  --ask-for-approval never/ { approval_line = NR; next }
+  /^  exec([[:space:]]|$)/ {
+    if (!chronicle_line || chronicle_line > NR || !approval_line || approval_line > NR) exit 1
+    pairs++
+    chronicle_line = 0
+    approval_line = 0
+  }
+  END { if (pairs != 2) exit 1 }
+' docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  echo 'workflow instruction check failed: deterministic disables and --ask-for-approval must precede exec for launch and resume'
+  exit 1
+fi
+require_text \
+  'exec resume "$WORKER_SESSION_ID"' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'bounded corrections must use codex exec resume with the recorded session'
+require_text \
+  'After launch, read `WORKER_SESSION_ID` from the first `thread.started.thread_id` event in `WORKER_EVENTS`.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker intake must deterministically capture the launched session ID'
+require_text \
+  'A missing, blank, or ambiguous ID is a launch/intake failure; do not start a replacement Worker.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker intake failure must not create a replacement Worker'
+require_text \
+  'resume the same Worker with the same `WORKER_MODEL`, reasoning effort, unchanged catalog file, worktree, sandbox, approval policy, output schema, and multi-agent-disabled flags; never reroute the session or reselect its model' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker correction resumes must preserve the full launch invariant'
+require_text \
+  'Because `codex exec --json` may omit the model, verify the effective model from persisted session or turn metadata whenever the event stream does not establish it.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker intake must verify the effective model from authoritative metadata when needed'
+require_text \
+  'explicitly selects `gpt-5.6-terra` unless inspection discovers a concrete Terra-disqualifying fact from the canonical criteria' \
+  docs/spec-first-workflow-evals.md \
+  'E02 must expect Terra for the clear local reversible case'
+if grep -Fq -- 'Use it for every implementation Worker; model selection is not task-specific.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  echo 'workflow instruction check failed: Worker instructions still blanket-pin Sol'
+  exit 1
+fi
+if grep -Eiq -- '(always (use|choose|select)|use for every|required for (all|every))[^.]*gpt-5\.6-sol|gpt-5\.6-sol[^.]*(always|required for (all|every)|use for every)' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  echo 'workflow instruction check failed: Worker instructions blanket-route outcomes to Sol'
+  exit 1
+fi
+if grep -E -- '^  --model ' docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  | grep -Fvx -- '  --model "$WORKER_MODEL" \' >/dev/null; then
+  echo 'workflow instruction check failed: Worker command inherits, floats, or hard-codes a model'
+  exit 1
+fi
+require_text \
+  'Do not use `--ephemeral` or `--skip-git-repo-check`.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'task-bearing Worker sessions must remain resumable and Git-bound'
+require_text \
+  'must not create, continue, or complete a Goal; delegate; self-accept; update task or workflow status; start another task; or claim repository completion' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker brief must preserve root-only authority'
 require_text \
   'completion covers the full affected deployment graph' \
   AGENTS.md \
@@ -262,9 +615,9 @@ require_text \
   .agents/skills/codex-goal-prompt-composer/SKILL.md \
   'the Goal composer must reject internal-checkpoint handoffs'
 require_text \
-  'A Goal does not itself trigger independent review for small direct work.' \
+  'Implementation launches no built-in subagent lanes.' \
   .agents/skills/codex-goal-prompt-composer/SKILL.md \
-  'the Goal composer must not turn small direct work into reviewed work'
+  'the Goal composer must keep implementation review root-owned'
 require_text \
   '**Objective:** the requested action and outcome' \
   .agents/skills/agent-prompt-composer/SKILL.md \
@@ -312,6 +665,26 @@ require_text \
   'T07 remains open and T08 does not start' \
   docs/spec-first-workflow-evals.md \
   'the worker loop must block advancement until root acceptance'
+require_text \
+  'exactly one external `codex exec` Worker in an isolated Git worktree' \
+  docs/spec-first-workflow-evals.md \
+  'the direct-work eval must require an external CLI Worker'
+require_text \
+  'explicit non-inherited reasoning effort for the workload without assuming the highest setting' \
+  docs/spec-first-workflow-evals.md \
+  'the direct-work eval must exercise explicit workload-selected reasoning effort'
+require_text \
+  'resumes the same session in the same worktree with concrete gaps' \
+  docs/spec-first-workflow-evals.md \
+  'the ledger correction eval must resume the owning Worker session'
+require_text \
+  'adds only top-level `--add-dir "$TASK_WRITABLE_PATH"` before `exec`, preserving `workspace-write` and approval `never`' \
+  docs/spec-first-workflow-evals.md \
+  'the ledger correction eval must recover one read-only task path without sandbox escalation'
+require_text \
+  '`spawn_agent(agent_type="worker")` or any built-in subagent is used for implementation, acceptance, review, specialist analysis, re-review, or repair' \
+  docs/spec-first-workflow-evals.md \
+  'the behavior evals must reject every built-in implementation lane'
 require_text \
   'independently review the fixed synthesis to a fresh `PASS`' \
   docs/spec-first-workflow-evals.md \
@@ -717,11 +1090,11 @@ require_text \
   docs/spec-first-workflow-evals.md \
   'the implementation closeout eval must detect omitted accepted work'
 require_text \
-  'remove the unrelated helper' \
+  'unrelated helper, and proof-surface regressions to their owning external Worker sessions for bounded repair' \
   docs/spec-first-workflow-evals.md \
-  'the implementation closeout eval must remove unrelated implementation work'
+  'the implementation closeout eval must return unrelated implementation work to its owning Worker'
 require_text \
-  'reject green obtained by weakening or removing an oracle or bypassing a triggered gate' \
+  'Reject green obtained by weakening or removing an oracle or bypassing a triggered gate' \
   docs/spec-first-workflow-evals.md \
   'the implementation closeout eval must reject proof-surface greenwashing'
 require_text \
@@ -757,6 +1130,38 @@ require_text \
   .agents/skills/go-coder/SKILL.md \
   'go-coder must preserve fail-before proof for regressions'
 require_text \
+  'Quality bar: produce the smallest complete change that a maintainer can understand from the code and tests.' \
+  .agents/skills/go-coder/SKILL.md \
+  'go-coder must preserve the maintainer-readable quality bar'
+require_text \
+  'Avoid speculative abstractions, hidden coupling, duplicated policy, and comments that restate the code.' \
+  .agents/skills/go-coder/SKILL.md \
+  'go-coder must reject speculative and obscuring implementation choices'
+require_text \
+  'Tests must prove observable behavior and material failure paths.' \
+  .agents/skills/go-coder/SKILL.md \
+  'go-coder must require behavior-level proof of material failures'
+require_text \
+  'Before returning, remove replaced code and adjacent stale tests/config/docs, check the local diff for defects and scope drift across errors/context/resources, concurrency, generated drift, cleanup, and unapproved decisions, and report any trade-off or proof gap.' \
+  .agents/skills/go-coder/SKILL.md \
+  'go-coder must require cleanup, local defect and scope-drift checking, and honest closeout reporting'
+require_text \
+  'This check is task-local implementation feedback, not acceptance. Return the exact diff, criteria traceability, commands and raw results, and blockers to the root.' \
+  .agents/skills/go-coder/SKILL.md \
+  'go-coder must return deterministic feedback and traceability without self-acceptance'
+require_text \
+  'Worker checking is task-local deterministic implementation feedback, not acceptance: the Worker runs relevant automated checks, including behavior tests where relevant, and reports commands and raw results; its criteria mapping is traceability only.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'Worker checking must remain deterministic task-local feedback rather than acceptance'
+require_text \
+  'The root independently judges business completeness, code quality, test adequacy, scope, and final acceptance.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the root alone must own qualitative judgment and final acceptance'
+require_text \
+  'The structured return contains status, summary, changed files, criteria traceability, commands/results, and blockers.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'the Worker structured return must use criteria traceability'
+require_text \
   'fix the narrowest owning surface whose contract the reproducer proves is violated' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
   'implementation must fix the narrowest owning contract surface rather than one reported entry point'
@@ -789,47 +1194,42 @@ require_text \
   .agents/skills/go-verification-before-completion/SKILL.md \
   'verification helper failure must return to active implementation repair'
 require_text \
-  'returns worker-owned failures to their task worker, and repairs only direct work' \
+  'resumes the external Worker that owns the direct outcome or task for repair' \
   .agents/skills/go-verification-before-completion/SKILL.md \
-  'verification repair routing must preserve worker task ownership'
+  'verification repair routing must preserve external Worker ownership'
 if grep -Fq -- 'In standalone use this ends' \
   .agents/skills/go-verification-before-completion/SKILL.md; then
   echo 'workflow instruction check failed: verification stop boundary is duplicated'
   exit 1
 fi
 require_text \
-  'If the task is accepted, update its checkbox and evidence immediately' \
+  'After acceptance, the root records task evidence and launches a fresh Worker/session for the next ready task.' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
   'ledger progress must be durable after root task acceptance'
 require_text \
-  'Direct work that satisfies these conditions uses root diff inspection and bounded validation, not an independent reviewer.' \
+  'Implementation review is always root-owned: matching review skills are applied locally and no built-in reviewer or specialist lane is launched.' \
   docs/spec-first-workflow.md \
-  'the direct path must skip independent review by default'
+  'the direct path must keep implementation review root-owned'
 require_text \
-  'Small direct work uses root diff inspection and bounded validation under the same trigger rule.' \
+  'Implementation/validation/closeout never launches a built-in subagent' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'the shared review contract must skip independent review for small direct work'
+  'the shared review contract must forbid implementation subagent lanes'
 require_text \
-  'Small direct work follows the same explicit-or-risk trigger rule.' \
+  'Never launch a built-in subagent, reviewer, specialist, or re-review lane anywhere inside implementation/validation/closeout.' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'implementation closeout must skip independent review for small direct work'
+  'implementation closeout must forbid every built-in review lane'
 require_text \
-  'Do not launch an independent reviewer, workflow artifacts' \
+  'unrequested workflow/review ceremony' \
   docs/spec-first-workflow-evals.md \
   'the small direct eval must reject review ceremony'
 require_text \
-  'inspect the resulting diff, run the focused proof' \
+  'inspects the returned diff and proof' \
   docs/spec-first-workflow-evals.md \
   'the small direct eval must inspect the final diff before closeout'
 require_text \
-  'any required post-code review or focused re-review' \
+  'Validation, in-scope Worker repair, root re-inspection, revalidation, and closeout run automatically' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'implementation closeout must run review only when required or triggered'
-if grep -Fq -- 'Validation, post-code review, in-scope repair, revalidation, fresh re-review, and closeout run automatically' \
-  docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
-  echo 'workflow instruction check failed: implementation closeout still mandates review for every change'
-  exit 1
-fi
+  'implementation closeout must keep correction review with the root'
 require_text \
   'Inspect current workspace and Git status' \
   docs/spec-first-workflow/shared/artifact-model.md \
@@ -839,15 +1239,15 @@ require_text \
   docs/spec-first-workflow/shared/artifact-model.md \
   'resume must refresh the narrow proof that detects drift for the next task'
 require_text \
-  'repair every in-scope implementation-owned finding, revalidate, and re-review the revised diff to `PASS`; only then' \
+  'return every in-scope implementation-owned finding to its owning external Worker, revalidate, and have the root re-inspect the revised diff and affected lenses' \
   docs/spec-first-workflow-evals.md \
-  'the honest-blocker eval must repair local findings before external handoff'
+  'the honest-blocker eval must preserve Worker repair and root re-inspection before external handoff'
 require_text \
   'was available at readiness becomes unavailable only after an external provider-state change' \
   docs/spec-first-workflow-evals.md \
   'the honest-blocker eval must not normalize a known pre-implementation gate'
 require_text \
-  'Implementation-owned gaps return to their task worker and cannot be relabeled as `blocked` or handed to the user.' \
+  'Implementation-owned gaps return to their Worker session and cannot be relabeled as `blocked` or handed to the user.' \
   docs/spec-first-workflow-evals.md \
   'the phase-spine eval must reject implementation-owned blocker handoffs'
 require_text \
@@ -863,25 +1263,25 @@ require_text \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'delegation must distinguish a skill method from a separate specialist context'
 require_text \
-  'When an independent gate is required, one whole-artifact or whole-diff reviewer is the default.' \
+  'When a non-implementation independent gate is required, one whole-artifact reviewer is the default.' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'triggered independent review must default to one coherence reviewer'
+  'non-implementation independent review must default to one coherence reviewer'
 require_text \
   'Repeat only while a concrete new finding or semantic repair changes readiness.' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'review convergence must continue only for concrete readiness-changing work'
 require_text \
-  'The one-at-a-time implementation worker loop is separate from that limit.' \
+  'External CLI Workers are not subagents and follow the [implementation phase contract]' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'delegation limits must not block the sequential implementation worker loop'
+  'subagent limits must not govern the external implementation Worker'
 require_text \
   'applies compatible matching methods locally in one coherence pass' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'the default reviewer must cover compatible lenses in one pass'
+  'the non-implementation reviewer must cover compatible lenses in one pass'
 require_text \
-  'A macro phase reaches review convergence only when' \
+  'A non-implementation macro phase reaches review convergence only when' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'the canonical review-convergence exit condition is missing'
+  'the non-implementation review-convergence exit condition is missing'
 require_text \
   '`CONCERNS` is non-terminal' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
@@ -899,21 +1299,20 @@ require_text \
   docs/spec-first-workflow.md \
   'the router must expose PASS-only phase movement'
 require_text \
-  'Only a fresh `PASS` permits the next macro phase or closeout' \
+  'Required non-implementation reviews need a fresh `PASS`' \
   README.md \
-  'the user-facing workflow summary must expose PASS-only movement'
+  'the user-facing workflow summary must expose PASS-only non-implementation movement'
 
 for concerns_phase in \
   docs/spec-first-workflow/phases/research.md \
   docs/spec-first-workflow/phases/specification-review.md \
   docs/spec-first-workflow/phases/technical-design-review.md \
   docs/spec-first-workflow/phases/test-design.md \
-  docs/spec-first-workflow/phases/task-review-readiness.md \
-  docs/spec-first-workflow/phases/implementation-validation-closeout.md; do
+  docs/spec-first-workflow/phases/task-review-readiness.md; do
   require_text \
     'disposition and fresh review' \
     "${concerns_phase}" \
-    'every phase-local CONCERNS verdict must remain non-terminal'
+    'every non-implementation phase-local CONCERNS verdict must remain non-terminal'
 done
 
 for pass_only_phase in \
@@ -922,12 +1321,11 @@ for pass_only_phase in \
   docs/spec-first-workflow/phases/system-integration-design.md \
   docs/spec-first-workflow/phases/go-code-ownership-design.md \
   docs/spec-first-workflow/phases/test-design.md \
-  docs/spec-first-workflow/phases/planning.md \
-  docs/spec-first-workflow/phases/implementation-validation-closeout.md; do
+  docs/spec-first-workflow/phases/planning.md; do
   require_text \
     'returned `PASS`' \
     "${pass_only_phase}" \
-    'every macro-phase movement or closeout rule must require PASS'
+    'every non-implementation macro-phase movement rule must require PASS'
 done
 
 require_text \
@@ -1003,90 +1401,81 @@ require_text \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
   'semantic post-review mutations must invalidate affected convergence evidence'
 require_text \
-  'assign exactly that one task to one worker' \
+  'Ledger work assigns exactly one ready task to one Worker' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'ledger implementation must assign one task per worker'
+  'ledger implementation must assign one task per Worker'
 require_text \
-  'then launch a fresh worker for the next ready task' \
+  'launches a fresh Worker/session for the next ready task' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'each accepted task must be followed by a fresh worker for the next task'
+  'each accepted task must be followed by a fresh Worker for the next task'
 require_text \
-  'return the same task to the same worker with concrete bounded gaps' \
+  'resumes the same Worker session in the same worktree with concrete bounded gaps' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'the root must return incomplete work to its task worker'
+  'the root must resume incomplete work with its owning Worker session'
 require_text \
-  'do not repair it in the root or start the next task' \
+  'the root resumes the same Worker session in the same worktree with concrete bounded gaps and does not author the repair' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'the root must not bypass worker task ownership or acceptance order'
+  'the root must not bypass Worker ownership or acceptance order'
 require_text \
   'Every ledger task receives root acceptance review before the next task starts.' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  'every worker task must receive root acceptance before advancement'
+  'every Worker task must receive root acceptance before advancement'
 require_text \
-  'implement one worker task at a time under root acceptance' \
+  'execute implementation through the external CLI Worker contract, one direct outcome or one ledger task at a time under root acceptance' \
   docs/spec-first-workflow.md \
-  'the top-level router must use task-by-task worker acceptance'
+  'the top-level router must use the external Worker contract'
 require_text \
-  'add independent final-diff review only when explicitly requested or concretely risk-triggered' \
+  'the root reviews every Worker result and the final integrated diff, evaluates all affected lenses locally' \
   docs/spec-first-workflow.md \
-  'the top-level router must keep final implementation review conditional'
-if grep -Fq -- 'implement, validate, independently review the candidate final diff and evidence' \
-  docs/spec-first-workflow.md; then
-  echo 'workflow instruction check failed: the top-level router still mandates final review for every implementation'
-  exit 1
-fi
+  'the top-level router must keep implementation review root-owned'
 require_text \
-  'then assigns the next ready task to a fresh worker' \
-  docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'the shared worker loop must use a fresh worker for the next task'
-require_text \
-  'For worker-owned implementation, return the findings to the worker that owns the affected task' \
-  docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'review findings must preserve implementation worker ownership'
+  'Return every implementation-owned finding to the Worker session that owns the affected direct outcome or task.' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  'review findings must preserve external Worker ownership'
 require_text \
   'Every review return also names the exact revision or diff' \
   docs/subagent-contract.md \
   'the shared reviewer envelope must preserve revision and affected-lens coverage'
 require_text \
-  'assigns exactly one ready task to one worker' \
+  'assigns exactly one ready task to one external `codex exec` Worker/session' \
   docs/spec-first-workflow-evals.md \
-  'the worker-loop eval must enforce one task per worker'
+  'the Worker-loop eval must enforce one task per Worker'
 require_text \
-  'returns concrete gaps to the same worker' \
+  'resumes the same session in the same worktree with concrete gaps' \
   docs/spec-first-workflow-evals.md \
-  'the worker-loop eval must preserve worker ownership across correction'
+  'the Worker-loop eval must preserve session ownership across correction'
 require_text \
-  'reuses the T07 worker for T08' \
+  'the T07 session is replaced for correction or reused for T08' \
   docs/spec-first-workflow-evals.md \
-  'the worker-loop eval must reject worker reuse across tasks'
+  'the Worker-loop eval must reject session replacement across correction and reuse across tasks'
 require_text \
   'Compatible lenses fit one coherence review' \
   docs/spec-first-workflow-evals.md \
-  'the delegation eval must keep compatible lenses in one reviewer'
+  'the non-implementation delegation eval must keep compatible lenses in one reviewer'
 require_text \
   'run only the one bounded security specialist' \
   docs/spec-first-workflow-evals.md \
-  'the delegation eval must reject speculative specialist waves'
+  'the non-implementation delegation eval must reject speculative specialist waves'
 require_text \
-  'launches a reviewer after a worker return' \
+  'any built-in subagent is used for implementation, acceptance, review, specialist analysis, re-review, or repair' \
   docs/spec-first-workflow-evals.md \
-  'the worker-loop eval must reject per-task reviewer lanes'
+  'the worker-loop eval must reject all implementation subagent lanes'
 require_text \
-  'produces a final diff with one concrete high-impact security question known before the final implementation gate' \
+  'has one concrete high-impact security question at the technical-design gate' \
   docs/spec-first-workflow-evals.md \
-  'specialist routing must identify the concrete question before the final gate'
+  'specialist routing must identify the concrete question at a non-implementation gate'
 require_text \
-  'runs one bounded security specialist before the implementation gate' \
+  'runs one bounded security specialist before the non-implementation technical-design gate' \
   docs/spec-first-workflow-evals.md \
-  'specialist routing must fan in before one whole-diff review'
+  'specialist routing must fan in before one whole-artifact review'
 require_text \
-  'A semantic post-review mutation requires revalidation and focused affected-lens review.' \
+  'The root applies matching review skills and all affected specialist lenses locally, re-inspects Worker corrections' \
   docs/spec-first-workflow-evals.md \
-  'post-review implementation mutations must trigger only affected focused review'
+  'implementation correction review must stay with the root'
 require_text \
-  'it never permits phase movement or closeout' \
+  'it never permits phase movement' \
   docs/spec-first-workflow/shared/subagents-and-handoff.md \
-  'CONCERNS must remain non-terminal even without a current-phase defect'
+  'non-implementation CONCERNS must remain non-terminal even without a current-phase defect'
 require_text \
   'When decision-changing research depends on conflicting sources' \
   docs/spec-first-workflow/phases/research.md \
@@ -1160,13 +1549,13 @@ require_text \
   docs/spec-first-workflow/phases/test-design.md \
   'test design must route through independent QA review'
 require_text \
-  'Own only that task until the root accepts it or returns concrete gaps' \
+  'Own only that outcome or task until the root accepts it or resumes this session with concrete gaps' \
   .agents/skills/go-coder/SKILL.md \
-  'the implementation worker must retain one task through corrections'
+  'the implementation Worker must retain one outcome or task through corrections'
 require_text \
-  'root acceptance, not worker self-approval or a separate reviewer, decides when the next task starts' \
+  'do not create or change a Goal, update workflow status, self-accept, start another task, delegate, or claim repository completion' \
   .agents/skills/go-coder/SKILL.md \
-  'the coder must return task acceptance authority to the root'
+  'the coder must preserve root-only authority'
 require_text \
   '`research only` is the structured/orchestrated macro-phase boundary' \
   .agents/skills/research-session/SKILL.md \
@@ -1234,25 +1623,51 @@ if grep -Eq -- 'plausible incorrect implementation|Missing test code or fixtures
   exit 1
 fi
 require_text \
-  'Accept the task and start the next worker only when its criteria and proof pass' \
+  'resume the same Worker session with concrete gaps and do not author the repair' \
   .agents/skills/validation-closeout-session/SKILL.md \
-  'validation closeout must enforce root task acceptance before advancement'
+  'validation closeout must return implementation repair to the owning external Worker'
+require_text \
+  'Apply matching review skills and affected specialist lenses locally; do not launch a built-in subagent lane.' \
+  .agents/skills/validation-closeout-session/SKILL.md \
+  'validation closeout must keep implementation review methods and lenses with the root'
+require_text \
+  'The same authorized root session may continue into that boundary, but the review never becomes an implementation acceptance or closeout gate.' \
+  .agents/skills/validation-closeout-session/SKILL.md \
+  'validation closeout must allow same-session standalone review without making it an implementation gate'
 require_text \
   'go-structural-quality-review' \
   .codex/agents/quality-agent.toml \
   'the quality reviewer must expose structural-quality review'
 require_text \
-  'The one-at-a-time implementation task loop is separate from that lane limit.' \
+  'External implementation Workers are separate `codex exec` processes' \
   docs/subagent-contract.md \
-  'the runtime lane contract must distinguish task workers from review lanes'
+  'the runtime lane contract must distinguish CLI Workers from subagents'
 require_text \
-  'one worker owns one task until the root accepts its diff and proof or returns concrete gaps' \
+  'Every implementation is produced by an external `codex exec` Worker in an isolated Git worktree' \
   README.md \
-  'the user-facing workflow summary must describe worker task acceptance'
+  'the user-facing workflow summary must describe external Worker execution'
 require_text \
-  'Small direct work uses root diff inspection and bounded validation without an independent reviewer unless the user or a concrete risk trigger requires one.' \
+  'one Worker for direct work, or one fresh Worker per ledger task with same-session correction until root acceptance' \
   README.md \
-  'the user-facing workflow summary must skip review for small direct work'
+  'the user-facing workflow summary must cover direct and ledger Worker ownership'
+
+root_local_implementation="$(grep -RInE -- \
+  'The root may implement direct work locally|Implementation may be local or delegated|root repairs only direct work' \
+  AGENTS.md README.md docs/spec-first-workflow.md docs/spec-first-workflow .agents/skills || true)"
+if [[ -n "${root_local_implementation}" ]]; then
+  echo 'workflow instruction check failed: root-local implementation wording remains'
+  printf '%s\n' "${root_local_implementation}" | sed 's/^/  /'
+  exit 1
+fi
+
+implementation_subagent_review="$(grep -RInE -- \
+  'risk-triggered independent review|add independent final-diff review|independent final-diff review runs|Independent whole-diff review|same gate reviewer when independent review was triggered|required post-code review|one fresh final-diff review to|focused fresh review only for invalidated lenses|runs one bounded security specialist before the implementation gate|one read-only whole-diff reviewer|concretely triggered independent review' \
+  AGENTS.md README.md docs/spec-first-workflow.md docs/spec-first-workflow docs/spec-first-workflow-evals.md .agents/skills || true)"
+if [[ -n "${implementation_subagent_review}" ]]; then
+  echo 'workflow instruction check failed: built-in implementation review lane wording remains'
+  printf '%s\n' "${implementation_subagent_review}" | sed 's/^/  /'
+  exit 1
+fi
 
 for convergence_skill in \
   .agents/skills/technical-design-session/SKILL.md \

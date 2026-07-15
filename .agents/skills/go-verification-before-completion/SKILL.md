@@ -40,7 +40,7 @@ Load at most one reference by default; use more only for independent proof press
 
 ## Boundaries
 
-Standalone verification is evidence-only: do not debug or repair the failure, author process artifacts, force unrelated repository-wide checks for a narrow claim, or treat review findings as verified implementation evidence. Inside an active implementation/validation/closeout request, return the failure signal to the root; the root follows the phase contract, returns worker-owned failures to their task worker, and repairs only direct work before revalidation and closeout. If the proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report that as the proof gap.
+Standalone verification is evidence-only: do not debug or repair the failure, author process artifacts, force unrelated repository-wide checks for a narrow claim, or treat review findings as verified implementation evidence. Inside an active implementation/validation/closeout request, return the failure signal to the root; the root follows the phase contract and resumes the external Worker that owns the direct outcome or task for repair before revalidation and closeout. If the proving command is unclear, inspect `Makefile`, CI, and `docs/build-test-and-development-commands.md`; if it remains unclear, report that as the proof gap.
 
 ## Output
 

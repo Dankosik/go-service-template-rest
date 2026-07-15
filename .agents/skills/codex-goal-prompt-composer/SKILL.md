@@ -9,7 +9,7 @@ Use only when entering the implementation/validation/closeout macro phase: direc
 
 Do not use during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts. If the user explicitly asks for a Codex Goal before implementation is ready, state that it starts only on entry to implementation and return no Goal.
 
-Compose one root-thread Goal covering implementation, root diff inspection, any risk-triggered independent review and repair, validation, and closeout. A Goal does not itself trigger independent review for small direct work. Do not create separate Goals for subagents, workers, individual tasks, or internal checkpoints. Those are internal next actions, not handoffs.
+Compose one root-thread Goal covering implementation, root acceptance of every Worker result, root review of the final integrated diff and affected lenses, Worker repair, validation, and closeout. Implementation launches no built-in subagent lanes. Do not create separate Goals for workers, individual tasks, or internal checkpoints. Those are internal next actions, not handoffs.
 
 Read the accepted inline outcome or ready `tasks.md` first. Read [the handoff contract](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md) only for a next-session handoff. Add another artifact only when the accepted source points to a non-obvious constraint that must appear in the Goal.
 

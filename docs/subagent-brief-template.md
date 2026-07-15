@@ -13,7 +13,7 @@ Evidence boundary:
 - enough evidence: <threshold>
 
 Constraints:
-- <read-only/write boundary, non-goals, external-action limits>
+- <read-only boundary, non-goals, external-action limits>
 
 Output:
 - <required finding/evidence/recommendation shape>
