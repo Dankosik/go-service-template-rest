@@ -1,0 +1,164 @@
+{
+  "skill_name": "go-db-cache",
+  "evals": [
+    {
+      "id": 1,
+      "category": "domain_defect",
+      "prompt": "Review this numbered Go snippet as a DB/cache-focused code review. Keep findings merge-risk oriented and preserve the exact `file:line` anchors.\n\n```go\n// internal/user/service.go\n10 func (s *Service) UpdateProfile(ctx context.Context, tenantID, userID, name string) error {\n11     tx, err := s.db.BeginTx(ctx, nil)\n12     if err != nil { return err }\n13     defer tx.Rollback()\n14     if _, err := tx.ExecContext(ctx, `update users set name=$1 where tenant_id=$2 and id=$3`, name, tenantID, userID); err != nil { return err }\n15     key := \"profile:\" + userID\n16     if err := s.cache.Del(ctx, key).Err(); err != nil {\n17         return err\n18     }\n19     return tx.Commit()\n20 }\n```",
+      "expected_output": "A DB/cache review that catches transaction and cache correctness defects in the profile update path without drifting into unrelated cleanup.",
+      "files": [],
+      "expectations": [
+        "The review identifies that `internal/user/service.go:15` uses a tenant-unsafe cache key or otherwise misses a required scope dimension.",
+        "The review identifies that cache invalidation happens before the successful commit at `internal/user/service.go:16-20`, creating a partial-side-effect or freshness risk.",
+        "The review suggests a fix that preserves freshness only after commit or through another deliberate post-commit strategy.",
+        "The review output cites `internal/user/service.go` with line references rather than giving only generic advice."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "domain_defect",
+      "prompt": "Review this numbered Go snippet as a DB/cache-focused code review. Keep findings merge-risk oriented and preserve the exact `file:line` anchors.\n\n```go\n// internal/user/repository.go\n1 func (r *Repo) ListActiveUsers(ctx context.Context) ([]User, error) {\n2     const key = \"users:active\"\n3     if cached, err := r.cache.Get(ctx, key).Bytes(); err == nil {\n4         return decodeUsers(cached)\n5     }\n6\n7     rows, err := r.db.QueryContext(context.Background(), `select id from users where active=true`)\n8     if err != nil {\n9         empty, _ := json.Marshal([]User{})\n10        // Treat a DB outage as an authoritative empty result.\n11        _ = r.metrics.MarkUnavailable(ctx)\n12        _ = r.cache.Set(ctx, key, empty, time.Minute).Err()\n13        return nil, err\n14    }\n15    var users []User\n16    for rows.Next() { var u User; if err := rows.Scan(&u.ID); err != nil { return nil, err }; users = append(users, u) }\n17    return users, nil\n18 }\n```",
+      "expected_output": "A DB/cache review that catches caller-context misuse, resource-safety gaps, and invalid negative-cache behavior in a request-path repository method.",
+      "files": [],
+      "expectations": [
+        "The review flags request-path use of `context.Background()` at `internal/user/repository.go:7` as unsafe for DB access.",
+        "The review flags missing `rows.Close` and/or `rows.Err` handling as a resource-safety defect in `internal/user/repository.go`.",
+        "The review flags caching a DB failure as `[]` at `internal/user/repository.go:12` as an invalid negative-cache or business-truth bug.",
+        "The review suggests keeping DB access caller-aware and bounded instead of detached from the inbound context."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "domain_defect",
+      "prompt": "Review this numbered Go snippet as a DB/cache-focused code review. Keep findings merge-risk oriented and preserve the exact `file:line` anchors.\n\n```go\n// internal/catalog/cache.go\n1 func (s *Store) Product(ctx context.Context, tenantID, id string) (Product, error) {\n2     key := \"product:\" + id\n3     if b, err := s.cache.Get(ctx, key).Bytes(); err == nil {\n4         return decodeProduct(b)\n5     }\n6     product, err := s.repo.Product(ctx, tenantID, id)\n7     if err != nil { return Product{}, err }\n8     b, err := json.Marshal(product)\n9     if err != nil { return Product{}, err }\n10    // Every concurrent miss reaches the origin before this write.\n11\n12    go func() {\n13        _ = s.cache.Set(context.Background(), key, b, time.Minute).Err()\n14    }()\n15    return product, nil\n16 }\n```",
+      "expected_output": "A DB/cache review that catches tenant-unsafe cache keys, hot-miss origin-protection risk, and non-owned async cache writes while handing off the non-primary concurrency or reliability depth.",
+      "files": [],
+      "expectations": [
+        "The review identifies that `internal/catalog/cache.go:2` uses a tenant-unsafe cache key or otherwise misses a required scope dimension.",
+        "The review flags the hot-miss path as lacking stampede suppression, coalescing, or other origin-protection controls.",
+        "The review flags the fire-and-forget cache write at `internal/catalog/cache.go:12-14` as unsafe DB/cache behavior, not just style drift.",
+        "The review includes a handoff to `go-concurrency` or `go-reliability` for the non-primary coordination or fallback-policy part of the defect."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "clean",
+      "prompt": "Review only DB/cache correctness. The code uses bound SQL values and allowlisted sort identifiers; propagates caller context; closes rows and returns iteration/scan errors; runs dependent writes in one BeginTx block with deferred rollback and checked commit; retries only the approved transient class around the whole idempotent transaction; uses tenant/version-complete cache keys; invalidates exact keys after commit; distinguishes authoritative misses from cache failures; and bounds hot-miss fallback with key-matched coalescing. Accepted freshness and fallback contracts are explicit and satisfied.",
+      "expected_output": "Return no DB/cache findings without padding, invented policy, or neighboring-domain warnings.",
+      "files": [],
+      "expectations": [
+        "Returns no DB/cache findings.",
+        "Does not invent query, isolation, retry, TTL, stale-window, or fallback requirements.",
+        "Does not pad the result with security, concurrency, reliability, or architecture findings."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "neighbor",
+      "prompt": "The changed DB/cache path is correct: tenant-scoped queries use bound values, resources close, one transaction commits dependent writes, exact cache invalidation follows commit, and fallback is bounded under the accepted policy. The service now accepts `cancelled -> completed` and sends a completion email even though approved business behavior makes `cancelled` terminal. Review owner arbitration only.",
+      "expected_output": "Name go-domain-invariant as the single primary owner for the forbidden transition and resulting business side effect; emit no duplicate DB/cache finding.",
+      "files": [],
+      "expectations": [
+        "Names exactly go-domain-invariant as the primary review owner.",
+        "Identifies the forbidden business transition or completion side effect as the decisive axis.",
+        "Emits no DB/cache finding because transaction, query, resource, freshness, and fallback behavior are stated as correct."
+      ]
+    },
+    {
+      "id": 6,
+      "category": "unresolved_policy",
+      "prompt": "A cache-aside read now has all tenant/version key dimensions, safe decoding, caller cancellation, and bounded origin access, but no accepted contract says whether Redis failure should return an error, fall back to the database, or serve stale data; no stale window, origin budget, or invalidation guarantee has been decided. Review without choosing cache policy.",
+      "expected_output": "Hand off the missing cache fallback and freshness policy to go-db-cache without inventing a stale window, origin budget, or local conformance finding.",
+      "files": [],
+      "expectations": [
+        "Names go-db-cache as the unresolved decision owner.",
+        "Does not choose fail-fast, origin fallback, stale serving, stale duration, or origin budget.",
+        "Does not file a DB/cache conformance finding against an unset cache contract."
+      ]
+    },
+    {
+      "id": 100,
+      "category": "domain_defect",
+      "prompt": "We have a Go commerce API on PostgreSQL. `GET /v1/catalog/{slug}` and category pages are causing heavy DB load during product launches, and the team wants Redis. Writes happen in the same service from an admin panel. Stock counts can change every few seconds, marketing copy changes a few times per day, and tenant-specific price rules plus locale change the response shape. Write compact DB/cache spec content for `spec.md`, not code. Call out whether whole-response caching is safe, how query/access discipline should look, key shape, invalidation, stale-data behavior, and any downstream handoffs.",
+      "expected_output": "A section-ready DB/cache spec that distinguishes cacheable vs strong-consistency paths, defines key safety and invalidation, and names required handoffs.",
+      "files": [],
+      "expectations": [
+        "The spec explicitly separates strong-consistency stock or admin-sensitive reads from cacheable catalog content instead of treating the whole response as one cache class.",
+        "The cache-key design includes tenant, locale, price-rule dimensions or an equivalent complete set of response-shaping dimensions.",
+        "The output defines an invalidation, refresh, or ownership mechanism for both catalog content and stock-sensitive data.",
+        "The output includes at least one downstream handoff caused by API-visible freshness, async coordination, or source-of-truth ownership.",
+        "The output is section-ready spec content rather than generic advice."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 101,
+      "category": "domain_defect",
+      "prompt": "We run a Go billing API on PostgreSQL. `GET /accounts/{id}/invoices?status=open` got slower after adding filters, and somebody suggested putting Redis in front of it. Right now we only have one p95 latency screenshot and no query breakdown, no EXPLAIN, and no hit-rate estimate. Write the DB/cache spec content that decides whether cache is justified, what SQL access contract must be defined first, which missing facts should be marked as assumptions or blockers, and what validation evidence would be required before approving cache rollout.",
+      "expected_output": "A DB/cache spec that does not rubber-stamp Redis, defines the query-path contract first, surfaces missing evidence, and sets measurable proof obligations.",
+      "files": [],
+      "expectations": [
+        "The output does not approve Redis by default and states that cache approval is blocked or conditional on missing evidence.",
+        "The output defines a SQL access contract for the invoices query path before adding cache.",
+        "Missing facts are surfaced as assumptions or blockers rather than invented specifics.",
+        "The output defines validation evidence or acceptance boundaries required before cache rollout.",
+        "The output stays DB/cache-spec focused instead of turning into implementation code or benchmark instructions."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 102,
+      "category": "domain_defect",
+      "prompt": "We have a Go SaaS app using PostgreSQL plus Redis. User profile reads are cached today. A new feature will let users rotate API keys and permissions from a separate worker after an audit event. The admin UI for the same tenant must reflect permission changes immediately, but the public profile page can be stale for up to 30 seconds. Write compact DB/cache spec content for `spec.md` that covers transaction scope, invalidation or update publication, strong vs eventual read paths, degraded-mode behavior if Redis is down, and any API/reliability/data handoffs this design creates.",
+      "expected_output": "A section-ready DB/cache spec that makes freshness classes, invalidation linkage, degraded behavior, and cross-domain handoffs explicit.",
+      "files": [],
+      "expectations": [
+        "The output differentiates immediately consistent admin permission reads from 30-second-stale public profile reads.",
+        "The output defines how invalidation or update publication links to the write path instead of relying on best-effort dual writes.",
+        "The output defines degraded-mode behavior for Redis outage.",
+        "The output names at least one API, reliability, or data handoff caused by the split freshness contract.",
+        "The output makes transaction ownership or boundary explicit."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 103,
+      "category": "clean",
+      "prompt": "The accepted DB/cache spec already fixes named SQL queries, transaction ownership, context/resource handling, retry and commit-uncertainty rules, cache topology, keys, values, TTL, invalidation, stampede control, degraded mode, telemetry, and tests. A follow-up only renames a Go repository package without changing runtime behavior. Apply the go-db-cache role.",
+      "expected_output": "No new DB/cache decision, with the accepted runtime access contract unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns `no_new_decision_required` or explicit unchanged DB/cache constraints.",
+        "Does not redesign queries, transactions, retries, cache, fallback, or proof.",
+        "Leaves package naming to implementation ownership without padding."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 104,
+      "category": "neighbor",
+      "prompt": "The local profile write transaction and cache contract are accepted: the write records one invalidation intent atomically, public reads may be stale for 30 seconds, and admin reads bypass cache. The remaining question is how another service delivers, orders, redrives, and reconciles those durable invalidation messages after process loss. Apply the go-db-cache role without designing the distributed flow.",
+      "expected_output": "Only the forced distributed owner and the cache consequence that durable invalidation must preserve the accepted freshness split, without choosing delivery recovery topology.",
+      "files": [],
+      "expectations": [
+        "Names `go-distributed` as owner of delivery, ordering, redrive, and reconciliation across the durable boundary.",
+        "Carries only the accepted atomic invalidation intent and admin/public freshness constraints.",
+        "Does not choose a broker, outbox relay, ordering strategy, redrive, or reconciliation design."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 105,
+      "category": "unresolved_policy",
+      "prompt": "Approve Redis and choose TTL, stale fallback, and fail-open behavior now, but product and the API owner have not decided whether users may observe stale entitlement data, security has not classified the cached value, and there is no query-plan, origin-load, or hit-rate evidence. Produce the final cache contract so coding can start.",
+      "expected_output": "A blocked DB/cache specification that names the unresolved API/product and security owners plus missing runtime evidence, without inventing cache semantics.",
+      "files": [],
+      "expectations": [
+        "Stops on missing client-visible freshness, security classification, and bottleneck evidence.",
+        "Names `go-api-contract` and `go-security` as required policy owners.",
+        "Does not approve Redis or invent TTL, stale fallback, fail-open behavior, or hit-rate assumptions."
+      ],
+      "trial_class": "standard"
+    }
+  ]
+}

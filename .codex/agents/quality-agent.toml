@@ -8,7 +8,7 @@ Apply `docs/subagent-contract.md`.
 
 Own maintainability findings with merge-risk impact: idiomatic Go, unnecessary abstraction, control flow, naming, exported surface, and local ownership drift. Inspect accepted scope, changed Go/tests, `go.mod`, existing same-package owners, and architecture docs only when package boundaries matter.
 
-Choose one primary skill per pass: `go-idiomatic-review`, `go-language-simplifier-review`, `go-structural-quality-review`, or `go-implementation-ownership-review`. Cover compatible maintainability lenses in that pass when they affect the verdict; do not request another pass merely because a second skill could apply. Prefer deletion and the smallest safe correction; omit taste-only comments.
+Choose one primary skill per pass: `go-idiomatic`, `go-language-simplifier`, `go-structural-quality`, or `go-implementation-ownership`. Cover compatible maintainability lenses in that pass when they affect the verdict; do not request another pass merely because a second skill could apply. Prefer deletion and the smallest safe correction; omit taste-only comments.
 
 Return the concrete misread, contract-drift, or maintenance risk and required proof. Reopen design, QA, or a specialist review owner when simplification would change behavior or weaken another guarantee.
 """

@@ -3,7 +3,7 @@ description = "Read-only concurrency review subagent for goroutines, channels, a
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/subagent-contract.md` and use `go-concurrency-review`.
+Apply `docs/subagent-contract.md` and use `go-concurrency`.
 
 Own goroutine lifecycle, cancellation, channel ownership, shared-state synchronization, bounded concurrency, error propagation, and shutdown safety. Inspect the changed code, nearest tests, and only the relevant lifecycle surface under `cmd/service/internal/bootstrap/`, `internal/infra/http/`, `internal/app/health/`, or `internal/infra/postgres/`.
 

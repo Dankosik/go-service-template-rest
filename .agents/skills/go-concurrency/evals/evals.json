@@ -1,0 +1,106 @@
+{
+  "skill_name": "go-concurrency",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Review the Go change for concurrency-specific merge blockers only. The accepted shutdown contract says Close must cancel and join every worker before returning. Focus on findings, forced handoffs, residual risks, and validation.\n\n```go\ntype Service struct {\n    wg sync.WaitGroup\n    jobs chan Job\n}\nfunc (s *Service) Start(ctx context.Context) {\n    s.wg.Add(1)\n    go func() {\n        defer s.wg.Done()\n        for job := range s.jobs {\n            _ = process(context.Background(), job)\n        }\n    }()\n}\nfunc (s *Service) Close() { s.wg.Wait() }\n```",
+      "expected_output": "The review should catch the worker's lost cancellation/unblock path and resulting shutdown join hang, tied to the accepted shutdown contract.",
+      "assertions": [
+        "Identifies that replacing the owned context prevents the worker from observing cancellation",
+        "Identifies the Close or Wait shutdown hang because no path closes jobs or otherwise unblocks the worker",
+        "References the accepted shutdown contract as governing evidence",
+        "Keeps the finding in concurrency because the violated contract is the goroutine cancellation-unblock and join mechanism"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 1,
+      "category": "domain_defect",
+      "prompt": "Review only concurrency risks in this startup cache warmer. If an overload-policy decision is also missing, distinguish that handoff from the local mechanism defect.\n\n```go\nfunc Warm(ctx context.Context, keys []string) error {\n    resultCh := make(chan error)\n    for _, key := range keys {\n        go func() { resultCh <- load(ctx, key) }()\n    }\n    for range keys {\n        if err := <-resultCh; err != nil { return err }\n    }\n    return nil\n}\n```",
+      "expected_output": "The review should catch unbounded goroutine fan-out and blocked sender accumulation while separating any unresolved global overload policy.",
+      "assertions": [
+        "Identifies unbounded goroutine fan-out or missing execution and queued-work bounds",
+        "Identifies blocked sends or abandoned sender goroutines after the first error return",
+        "Names go-reliability only if a broader overload or shedding policy is genuinely unresolved",
+        "Does not replace the concrete concurrency finding with a reliability finding"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 2,
+      "category": "domain_defect",
+      "prompt": "Review this broker and test for concurrency correctness. Treat the test as evidence, not proof.\n\n```go\ntype Broker struct { subs map[int]chan string }\nfunc (b *Broker) Publish(v string) {\n    for _, ch := range b.subs { go func() { ch <- v }() }\n}\nfunc (b *Broker) Unsubscribe(id int) { close(b.subs[id]); delete(b.subs, id) }\nfunc TestBroker(t *testing.T) {\n    b := &Broker{subs: map[int]chan string{1: make(chan string, 1)}}\n    go b.Publish(\"x\")\n    time.Sleep(time.Millisecond)\n    b.Unsubscribe(1)\n}\n```",
+      "expected_output": "The review should catch unsynchronized map access, send-on-closed risk, and weak sleep-based evidence.",
+      "assertions": [
+        "Identifies unsynchronized shared-state access or concurrent map mutation on subs",
+        "Identifies the publish versus unsubscribe send-on-closed race",
+        "Calls out the sleep-based test as weak evidence and recommends deterministic race-focused validation"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 3,
+      "category": "domain_defect",
+      "prompt": "Review this dispatcher for concurrency-specific merge blockers only.\n\n```go\nfunc (d *Dispatcher) Start() {\n    go func() {\n        d.wg.Add(1)\n        defer d.wg.Done()\n        ticker := time.NewTicker(time.Second)\n        for {\n            select {\n            case <-ticker.C: d.flush()\n            default:\n            }\n        }\n    }()\n}\n```",
+      "expected_output": "The review should catch WaitGroup lifecycle misuse, busy spinning, and the unowned ticker/stop path.",
+      "assertions": [
+        "Identifies WaitGroup.Add after goroutine launch as a lifecycle misuse",
+        "Identifies the select default loop as a busy spin without a blocking progress policy",
+        "Identifies the missing ticker stop and missing goroutine stop path"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 4,
+      "category": "domain_defect",
+      "prompt": "Review this poller for subtle synchronization and time-based coordination defects.\n\n```go\ntype Poller struct { wg sync.WaitGroup; stop chan struct{} }\nfunc (p Poller) Start() {\n    p.wg.Add(1)\n    go func() {\n        defer p.wg.Done()\n        for {\n            select {\n            case <-time.After(time.Hour): poll()\n            case <-p.stop: return\n            }\n        }\n    }()\n}\nfunc (p *Poller) Stop() { close(p.stop); p.wg.Wait() }\n```",
+      "expected_output": "The review should catch the copied WaitGroup and resulting Stop/Wait join mismatch while judging the timer by current ownership and shutdown semantics.",
+      "assertions": [
+        "Identifies that the value receiver copies a WaitGroup-containing Poller",
+        "Explains the Stop or Wait mismatch caused by split synchronization identity",
+        "Reviews time.After in the loop as timer churn or coordination risk without relying on stale leak folklore"
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "category": "clean",
+      "prompt": "Review for concurrency defects only. The worker count and queue size are accepted policy.\n\n```go\ntype Pool struct { cancel context.CancelFunc; wg sync.WaitGroup; jobs chan Job }\nfunc (p *Pool) worker(ctx context.Context) {\n    defer p.wg.Done()\n    for {\n        select {\n        case <-ctx.Done(): return\n        case job, ok := <-p.jobs:\n            if !ok { return }\n            process(ctx, job)\n        }\n    }\n}\nfunc (p *Pool) Close() { p.cancel(); p.wg.Wait() }\n```\nAll workers are added before launch, only the producer closes jobs, sends select on ctx.Done, and Close is guarded by sync.Once in the omitted constructor-owned code.",
+      "expected_output": "Return no concurrency findings and do not add speculative warnings or unrelated policy work.",
+      "assertions": [
+        "Returns no concurrency findings without padding",
+        "Does not invent a bound, close-owner, or shutdown-policy defect contradicted by the prompt"
+      ],
+      "files": []
+    },
+    {
+      "id": 6,
+      "category": "neighbor",
+      "prompt": "The accepted HTTP contract requires a synchronous dependency call to stop on inbound cancellation and remain inside the end-to-end deadline. There are no goroutines, channels, locks, timers, or join paths in the change.\n\n```go\nfunc (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {\n    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)\n    defer cancel()\n    _ = h.db.QueryRowContext(ctx, query).Scan(&out)\n}\n```\nReview owner arbitration only.",
+      "expected_output": "Name go-reliability as the single primary owner because caller-context replacement violates the accepted end-to-end cancellation/deadline contract; emit no concurrency finding.",
+      "assertions": [
+        "Names exactly go-reliability as the primary review owner",
+        "Explains that the violated contract is end-to-end deadline or cancellation behavior",
+        "Emits no duplicate concurrency finding"
+      ],
+      "files": []
+    },
+    {
+      "id": 7,
+      "category": "unresolved_policy",
+      "prompt": "A new service-owned worker pool uses one owner goroutine, one closer, cancellation-aware sends, and a proven join path. The repository has no accepted service policy for worker count, queue capacity, whether full queues block or reject, or maximum shutdown drain time. Review only what can be concluded without inventing policy.",
+      "expected_output": "Hand off the missing service bound, queue, and shutdown policy to go-reliability without inventing values or filing a concurrency defect against the mechanically safe protocol.",
+      "assertions": [
+        "Names go-reliability as the specification owner",
+        "Does not invent worker, queue, rejection, or drain values",
+        "Emits no concurrency defect for the stated mechanically safe protocol"
+      ],
+      "files": []
+    }
+  ]
+}

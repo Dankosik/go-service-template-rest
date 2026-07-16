@@ -33,7 +33,7 @@ For each material mechanism decision, record the selected mechanism, accepted de
 
 ## Architecture Rule
 
-When a material boundary, topology, runtime, source-of-truth, completion/finality, consistency, sync/async, projection/provider, migration, resilience, or extraction decision is live, apply `go-system-architecture-spec` and its Required Evidence/Deliverable and Stop Conditions; otherwise keep this phase compact.
+When a material boundary, topology, runtime, source-of-truth, completion/finality, consistency, sync/async, projection/provider, migration, resilience, or extraction decision is live, apply `go-system-architecture` and its Required Evidence/Deliverable and Stop Conditions; otherwise keep this phase compact.
 
 ## Contract Rule
 

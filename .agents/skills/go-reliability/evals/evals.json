@@ -1,0 +1,124 @@
+{
+  "skill_name": "go-reliability",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Review only violations of the accepted reliability contract. Contract: synchronous dependency work preserves the inbound context and one 3-second end-to-end budget; invoice creation retries only transient failures for at most three total attempts with one stable idempotency key; readiness turns false before a bounded HTTP drain and dependencies close afterward; optional recommendations degrade explicitly; a missing feature flag keeps the old path.\n\nChanged code:\n```go\nfunc Handle(ctx context.Context, in Invoice) error {\n    depCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)\n    defer cancel()\n    for {\n        if err := createInvoice(depCtx, in, newKey()); err == nil { return nil }\n        time.Sleep(time.Second)\n    }\n}\nfunc Shutdown() { db.Close(); go server.Shutdown(context.Background()) }\nfunc Recommendations(ctx context.Context) ([]Item, error) { return nil, nil }\nfunc NewPathEnabled(raw string) bool { enabled, _ := strconv.ParseBool(raw); return enabled || raw == \"\" }\n```",
+      "expected_output": "Report the accepted end-to-end context/budget, retry/idempotency, readiness-drain ordering, hidden degradation, and rollback-safe default violations as reliability findings without duplicating concurrency or distributed owners.",
+      "assertions": [
+        "Owns caller-context replacement on the synchronous blocking path because it violates the accepted end-to-end deadline and cancellation contract",
+        "Finds the unbounded cancellation-blind retry loop and changing idempotency key against the accepted three-attempt contract",
+        "Finds dependency teardown and fire-and-forget drain against the accepted readiness and shutdown order",
+        "Finds the indistinguishable empty recommendations fallback and missing-config enablement against accepted degradation and rollout behavior",
+        "Does not reclassify these accepted service-policy violations as concurrency or distributed findings"
+      ],
+      "files": []
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "Review only reliability-contract conformance. Accepted behavior and code agree: each blocking dependency derives its child deadline from the caller's remaining end-to-end budget; retries are limited to two transient read failures, stop on ctx cancellation, and use capped jitter; queue admission rejects immediately with the documented overload error; liveness is process-local while readiness gates required dependencies; shutdown marks not-ready, completes a bounded drain, then closes dependencies; optional enrichment returns the documented Degraded flag and metric; feature flags default to the old path and mixed versions accept both wire shapes. No durable message flow or local synchronization change is present.",
+      "expected_output": "Return no reliability findings without padding, invented policy, or neighboring-domain warnings.",
+      "assertions": [
+        "Returns no reliability findings",
+        "Does not invent timeout values, retry classes, degradation semantics, or rollout requirements",
+        "Does not pad the result with concurrency or distributed warnings"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "The accepted service policy is already satisfied: readiness flips false before shutdown, a 10-second drain budget is enforced, and process-loss recovery is out of scope. The changed local shutdown mechanism launches a worker before wg.Add, closes its jobs channel from both producer and receiver, and waits on the WaitGroup after cancellation. Review owner arbitration only.",
+      "expected_output": "Name go-concurrency as the single primary owner for the WaitGroup, channel-close, cancellation-unblock, and join protocol defects; emit no duplicate reliability finding.",
+      "assertions": [
+        "Names exactly go-concurrency as the primary review owner",
+        "Identifies the decisive axis as concrete WaitGroup, channel ownership, cancellation-unblock, or join mechanics",
+        "Emits no duplicate reliability finding because accepted readiness and drain policy is not violated"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "A change adds a bounded admission queue and returns promptly when it is full, but no accepted contract says whether overload should block, reject, shed, or degrade; no caller-visible error/status, retry budget, queue capacity, readiness effect, or rollout threshold has been decided. The local channel and goroutine protocol is race-free, cancellation-aware, single-owner, and joined. Review without choosing policy.",
+      "expected_output": "Hand off the missing overload and caller-visible resilience policy to go-reliability without inventing values or filing a policy-conformance defect.",
+      "assertions": [
+        "Names go-reliability as the unresolved decision owner",
+        "Does not invent queue capacity, wait duration, overload response, retry behavior, or rollout threshold",
+        "Does not file a reliability conformance finding when no accepted overload contract exists",
+        "Does not duplicate a concurrency finding against the stated safe mechanism"
+      ],
+      "files": []
+    },
+    {
+      "id": 100,
+      "category": "domain_defect",
+      "prompt": "Use go-reliability to define the resilience policy for a synchronous checkout endpoint. Product has accepted that payment authorization is critical and must fail closed, recommendations are optional and may be omitted, and a successful response must complete within a 900 ms end-to-end deadline. The payment read is idempotent and documents 502, 503, 504, timeout, 429 with Retry-After, validation, authorization, and conflict outcomes. Traffic has a 4x burst for 30 seconds; checkout and bulk imports currently share an unbounded worker queue. Kubernetes gives 30 seconds from SIGTERM to hard kill, ordinary requests should drain within 15 seconds, and streams may last minutes. Releases use a 5%-25%-100% canary, but no retry, overload, readiness, stream-drain, fallback-exit, rollback-trigger, or fault-proof policy exists. Write the compact reliability contract without choosing goroutine/channel mechanics or a durable saga design.",
+      "expected_output": "A bounded reliability specification covering criticality, deadline and cancellation, retry eligibility and budget, overload admission, degradation, lifecycle, recovery, rollout, and falsifiable proof without concrete synchronization design.",
+      "files": [],
+      "expectations": [
+        "Classifies payment as fail-closed and recommendations as optional fail-open while preserving caller and operator signals.",
+        "Derives per-hop work and retries from the 900 ms end-to-end deadline and preserves caller cancellation or an explicit bounded handoff.",
+        "Names retry-eligible transient classes, never-retry classes, one retry owner, bounded attempts, jitter, idempotency, exhaustion, and Retry-After budget interaction.",
+        "Replaces the unbounded shared queue with named admission, queue age/depth, concurrency or bulkhead, rejection, and burst behavior.",
+        "Separates startup, liveness, readiness, diagnostics, ordinary drain, long-stream handling, telemetry flush, and the 30-second hard-kill boundary.",
+        "Defines degradation entry and exit plus canary guardrails, rollback triggers, observation windows, and focused fault, overload, and lifecycle proof.",
+        "Does not choose concrete goroutine, channel, lock, join, or durable replay mechanisms."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 101,
+      "category": "clean",
+      "prompt": "The accepted reliability contract already fixes dependency criticality, fail-open and fail-closed behavior, end-to-end and per-hop deadlines, cancellation and async handoff, retry eligibility and budget, queue and concurrency bounds, overload rejection, degradation entry and exit, startup, liveness, readiness, drain and long-stream shutdown, recovery drills, canary guardrails, rollback triggers, operator signals, and falsifiable proof. A follow-up only renames an internal Go helper without changing any observable or lifecycle behavior. Apply go-reliability.",
+      "expected_output": "No new reliability decision, with the accepted resilience and lifecycle contract unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required or explicit unchanged reliability constraints.",
+        "Does not redesign deadlines, retries, overload, degradation, lifecycle, recovery, or rollout.",
+        "Leaves helper naming and placement to implementation ownership without padding."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 102,
+      "category": "neighbor",
+      "prompt": "The accepted service lifecycle policy already says readiness fails before admission stops, ordinary requests drain for at most 15 seconds, long streams receive a close signal and 10-second grace period, telemetry flush is bounded, and the process exits before a 30-second hard kill. The only remaining work is choosing the exact goroutine ownership, channel-close order, WaitGroup joins, mutex protection, and package placement that implement this accepted policy. Apply go-reliability and route by the decision being made.",
+      "expected_output": "No new reliability policy; preserve the accepted lifecycle constraints and leave concrete synchronization to implementation with go-concurrency and placement to go-implementation-ownership.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required for reliability or only constraint_only lifecycle consequences.",
+        "Identifies goroutine, channel, WaitGroup, mutex, cancellation-unblock, and join correctness as the go-concurrency axis.",
+        "Names go-implementation-ownership only for package or mechanism placement.",
+        "Does not invent or prescribe the concrete synchronization protocol."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 103,
+      "category": "unresolved_policy",
+      "prompt": "Write the final reliability contract for purchase approval now. The business owner has not decided whether a timed-out fraud check may create a pending order, whether stale approval may ever authorize capture, or whether duplicate attempts are the same purchase. No caller latency objective, dependency criticality, safe fallback, recovery owner, or accepted completion semantics exists. Choose fail-open versus fail-closed, numeric deadlines, retries, degradation, and rollout so coding can start.",
+      "expected_output": "A blocked reliability specification that names the unresolved business-policy owner and refuses to invent failure semantics, budgets, retry safety, or recovery behavior.",
+      "files": [],
+      "expectations": [
+        "Stops on missing purchase invariants, retry identity, completion meaning, criticality, fallback safety, and target authority.",
+        "Names go-domain-invariant as owner of pending, stale-approval, duplicate-action, and completion meaning.",
+        "Does not choose fail-open or fail-closed behavior, numeric deadlines, retry eligibility, degradation, or rollout around invented policy."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 302,
+      "category": "neighbor",
+      "prompt": "A changed accepted retry budget violates reliability policy; no other axis changes.",
+      "expected_output": "Select only go-reliability.",
+      "assertions": [
+        "Selects go-reliability and rejects neighboring owners."
+      ],
+      "files": [],
+      "trial_class": "standard"
+    }
+  ]
+}

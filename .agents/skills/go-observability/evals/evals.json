@@ -1,0 +1,140 @@
+{
+  "skill_name": "go-observability",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Review only violations of the accepted observability contract. Contract: route metrics use route templates plus bounded outcome/error labels; logs are structured and exclude credentials, bodies, and raw tenant/user identifiers; W3C trace context and allowlisted baggage cross synchronous boundaries while async retries/redrives preserve lineage; invoice processing distinguishes attempts, durable handoff, final logical completion, DLQ depth/oldest age, and reconciliation; the completion SLI pages only after its event floor and links an owned dashboard/runbook; pprof is internal-only; shutdown performs a bounded exporter flush. Changed behavior uses r.URL.Path, X-Tenant-ID, and err.Error() as metric labels; logs Authorization and the raw body; replaces the outbound context with context.Background without propagation; increments the final-completion failure SLI on every retry; registers pprof on the public default mux; and shuts down the server without exporter flush. The new page fires on any failure sample and has no event floor, owner, dashboard, or runbook; DLQ and reconciliation expose retry counts only.",
+      "expected_output": "Report the bounded-label/privacy, trace-correlation, attempt-versus-logical-outcome and async visibility, alert actionability, debug exposure, and exporter-flush violations as observability findings.",
+      "assertions": [
+        "Finds raw path, tenant ID, and error text as unsafe or unbounded metric labels and credential/body logging as a privacy violation",
+        "Finds lost caller trace propagation or correlation across the outbound boundary",
+        "Finds retry attempts misclassified as final logical failures and missing DLQ age/redrive/reconciliation outcome visibility",
+        "Finds the alert's missing event floor, owner, dashboard, or runbook against the accepted policy",
+        "Finds public debug exposure and missing bounded exporter flush proof",
+        "Keeps corrections on observability conformance and does not redesign reliability, security, or delivery policy"
+      ],
+      "files": []
+    },
+    {
+      "id": 1,
+      "category": "clean",
+      "prompt": "Review only accepted observability behavior. Each changed path names an operator decision and uses stable structured logs, bounded metrics, safe trace/context propagation, coherent resource identity, and privacy-approved correlation. Attempt, durable handoff, retry, final logical outcome, freshness, DLQ/redrive, and reconciliation are distinct. SLIs measure the accepted promise; alerts have event floors, owners, dashboards, runbooks, and actions. Diagnostics are internal and access-controlled. Sampling, retention, label growth, and cost are bounded. Shutdown records drain and a bounded successful exporter flush. No telemetry policy is missing or changed.",
+      "expected_output": "Return no observability findings without padding, invented signal policy, or neighboring-domain warnings.",
+      "assertions": [
+        "Returns no observability findings",
+        "Does not invent signals, labels, SLO thresholds, alert policy, sampling, retention, or cost limits",
+        "Does not pad the result with security, reliability, performance, or delivery findings"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "The accepted observability contract remains fully satisfied: attempts and final outcomes are distinct, all bounded signals and alert/runbook pivots remain intact, correlation is safe, and shutdown flushes telemetry. The changed request path replaces the inbound context with context.Background, retries every failure forever without a deadline, and ignores the accepted three-attempt end-to-end budget. Review owner arbitration only.",
+      "expected_output": "Name go-reliability as the single primary owner for the accepted deadline, cancellation, and retry-policy violations; emit no duplicate observability finding.",
+      "assertions": [
+        "Names exactly go-reliability as the primary review owner",
+        "Identifies the decisive axis as accepted end-to-end context, deadline, cancellation, and retry behavior",
+        "Emits no duplicate observability finding because telemetry conformance is stated as preserved"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "category": "unresolved_policy",
+      "prompt": "A new asynchronous settlement flow emits technically valid structured logs, metrics, and spans, but no accepted observability contract defines the operator decisions, logical success boundary, SLI good/total events, alert response, allowed labels or forensic identifiers, sampling/retention budget, DLQ/redrive signals, or shutdown flush obligation. No concrete leak or unbounded mechanism is shown. Review without choosing policy.",
+      "expected_output": "Hand off the missing signal, outcome, SLI/alert, privacy/cardinality, async, and flush policy to go-observability without inventing it or filing a conformance defect.",
+      "assertions": [
+        "Names go-observability as the unresolved decision owner",
+        "Does not invent operator questions, success semantics, labels, SLOs, alerts, sampling, retention, async signals, or flush budgets",
+        "Does not report an observability conformance finding against policy that has not been accepted"
+      ],
+      "files": []
+    },
+    {
+      "id": 100,
+      "category": "domain_defect",
+      "prompt": "Write the observability section for a Go billing API spec. Context: chi-based REST service. `POST /v1/payouts` writes a Postgres transaction, calls a fraud gRPC service with a 700ms deadline, writes a Redis idempotency key, and if the gRPC call times out it returns `202 Accepted` and schedules an async retry job. Clients poll `GET /v1/payouts/{id}` and some use `GET /v1/payouts/{id}/events` as an SSE stream. Multi-tenant SaaS, no raw tenant IDs in metrics. We need spec.md-ready guidance for logs, metrics, traces, correlation, SLOs, alerting, retry/fallback visibility, shutdown semantics, and safe debugging.",
+      "expected_output": "A spec-ready observability section that separates logical outcome from retries and covers synchronous plus asynchronous payout states without misleading SLIs.",
+      "files": [],
+      "expectations": [
+        "Separates logical request outcome from attempt-level retries or fallbacks instead of treating them as one flat success/failure signal.",
+        "Defines distinct observability treatment for `202 Accepted`, downstream completion, and SSE or long-lived stream behavior instead of one generic request latency view.",
+        "Makes the fraud gRPC timeout plus async retry path visible in logs, metrics, and traces.",
+        "Includes cardinality or privacy controls such as route templates over raw paths and avoids tenant IDs as default metric labels.",
+        "Specifies health, shutdown, or debug endpoint behavior beyond generic 'add logs/metrics/traces'."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 101,
+      "category": "domain_defect",
+      "prompt": "Design the observability section for a Go Kafka invoice consumer. Each message may contain up to 500 invoice lines; the consumer batches lines by customer, deduplicates by `invoice_id`, writes Postgres with optimistic concurrency, emits webhook events, and sends poison messages to a DLQ after 5 attempts. Operators can see consumer lag but not whether the backlog is old or whether duplicates are being dropped. Produce a spec.md-ready observability section covering logs, metrics, traces, correlation, SLOs, alerting, redrive, and reconciliation telemetry.",
+      "expected_output": "A technically credible async observability contract covering batch semantics, lag and backlog age, idempotency, retries, DLQ, and completion-oriented SLIs.",
+      "files": [],
+      "expectations": [
+        "Separates producer/consumer/processing/retry/DLQ or batch/item boundaries instead of collapsing the whole flow into one worker metric.",
+        "Defines both backlog depth and oldest-age or lag semantics, not just a single lag graph.",
+        "Makes deduplication/idempotency and optimistic-concurrency retry outcomes observable.",
+        "Uses explicit async correlation guidance, such as message or correlation IDs preserved across retries, DLQ, or redrive, and span links when lineage is not single-parent.",
+        "Defines completion or workflow SLIs that reflect asynchronous success, not only consumer throughput."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 102,
+      "category": "domain_defect",
+      "prompt": "Review and rewrite this draft observability plan for a Go reconciliation service:\n- add more logs everywhere\n- metric labels: `tenant_id`, `user_id`, `request_path`\n- trace every retry and use `trace_id` as a metric label so we can pivot\n- readiness and liveness can both just check DB ping\n- pager on any 5xx > 0 in 5 minutes\n- expose pprof on the public admin port during incidents\nContext: the service runs scheduled reconciliation every minute, also exposes `POST /reconcile/{accountId}` for manual replays, fans out to 30 partner APIs, stores snapshots in S3, and emits a completion event when drift is resolved. Multi-region, low QPS, expensive incidents. Produce a corrected observability section with explicit rejected options.",
+      "expected_output": "A rewrite that rejects unsafe or misleading observability choices and replaces them with low-cardinality, low-traffic-safe, multi-region-aware guidance.",
+      "files": [],
+      "expectations": [
+        "Explicitly rejects unsafe metric labels or trace-as-metric-label proposals and replaces them with bounded alternatives.",
+        "Improves the paging strategy for low-QPS service behavior instead of keeping a naive 'any 5xx' page.",
+        "Differentiates readiness, liveness, startup, shutdown, or debug access semantics instead of one DB ping check.",
+        "Covers scheduled reconciliation, manual replay, fan-out attempts, and completion-event visibility with logical-versus-attempt boundaries.",
+        "Names rejected options or anti-patterns rather than only providing a clean-room replacement."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 103,
+      "category": "clean",
+      "prompt": "The accepted observability contract already fixes service/resource identity, semantic conventions, structured log fields and redaction, bounded metrics, traces and correlation, completion-oriented SLIs/SLOs, burn-rate alerts, dashboards/runbooks, runtime diagnostics, async retry/DLQ/reconciliation visibility, sampling, retention, cost, and validation evidence. A follow-up only renames an internal exporter helper with byte-identical emitted telemetry. Apply go-observability.",
+      "expected_output": "No new observability decision, with the accepted telemetry contract explicitly unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required or an explicit unchanged observability constraint.",
+        "Does not invent new signals, labels, SLOs, alerts, dashboards, diagnostics, sampling, retention, or cost policy.",
+        "Leaves helper naming and instrumentation placement to implementation ownership without padding."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 104,
+      "category": "neighbor",
+      "prompt": "The accepted observability contract already distinguishes logical payout completion from attempts, preserves trace correlation across retries, records bounded retry outcome metrics, and fixes the completion SLI and alert. The remaining decisions are the fraud-call deadline, retry count and backoff, overload behavior, degradation response, and shutdown recovery policy. Apply go-observability only.",
+      "expected_output": "Only the forced telemetry constraints, with go-reliability owning deadline, retry, overload, degradation, and lifecycle behavior.",
+      "files": [],
+      "expectations": [
+        "Names go-reliability as owner of deadline, retry/backoff, overload, degradation, and shutdown recovery policy.",
+        "Carries only the accepted logical-versus-attempt, correlation, retry-outcome, SLI, and alert constraints that reliability behavior must preserve.",
+        "Does not choose timeout values, retry count, backoff, overload response, degradation mode, or recovery semantics."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 105,
+      "category": "unresolved_policy",
+      "prompt": "Write the final payout observability contract now. Product and the domain owner have not decided whether `202 Accepted` is the user-visible success, when a payout is logically complete, whether cancellation after provider acceptance is failure, or which terminal outcomes count as good. Choose the completion SLI, SLO target, error-budget treatment, and paging policy so coding can start.",
+      "expected_output": "A blocked observability specification that names the missing domain outcome policy and refuses to invent SLI event semantics or targets.",
+      "files": [],
+      "expectations": [
+        "Stops on the unset logical completion, success/failure, cancellation, and terminal-outcome semantics.",
+        "Names go-domain-invariant or the authoritative product/domain owner needed before the SLI contract can be completed.",
+        "Does not invent good/total events, exclusions, an SLO target, error-budget treatment, or paging thresholds."
+      ],
+      "trial_class": "standard"
+    }
+  ]
+}

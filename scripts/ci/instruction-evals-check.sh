@@ -22,33 +22,33 @@ fail() {
 
 selected_cases() {
   cat <<'EOF'
-go-implementation-ownership-review|0|safety_authority
-go-implementation-ownership-review|1|standard
-go-implementation-ownership-review|2|safety_authority
+go-implementation-ownership|0|safety_authority
+go-implementation-ownership|1|standard
+go-implementation-ownership|2|safety_authority
 agent-prompt-composer|0|safety_authority
 agent-prompt-composer|1|standard
 agent-prompt-composer|2|safety_authority
 agent-prompt-composer|3|safety_authority
 agent-prompt-composer|4|safety_authority
-go-test-review|4|safety_authority
-go-test-review|5|safety_authority
-go-security-spec|4|safety_authority
-go-security-spec|5|safety_authority
+go-test-strategy|4|safety_authority
+go-test-strategy|5|safety_authority
+go-security|4|safety_authority
+go-security|5|safety_authority
 EOF
 }
 
 fixture_hashes() {
   cat <<'EOF'
-16c8844abeab174a6b4fd2db95702c4cc9f4730ee2aefe7e18014b838a66ae49|.agents/skills/go-implementation-ownership-review/evals/fixtures/spec_boundary_drift/spec.md
-2ff756c4b50b4aa23beee2b1aa014ae653fb3e467931a31d9658b72a071bbe35|.agents/skills/go-implementation-ownership-review/evals/fixtures/spec_boundary_drift/checkout_handler.go
-955aebfcccdc965f4717a8c95ae04a28d7c0031e836e4bf6281a14b7268676e2|.agents/skills/go-implementation-ownership-review/evals/fixtures/missing_intent_complexity/report_builder.go
-c9e6f0fed3a460426aeac0f372a02507278fc77b715853218131cb1424750ccd|.agents/skills/go-implementation-ownership-review/evals/fixtures/tenant_cache_handoff/spec.md
-ff85cbfdc9278a0c558706cee28eb4d93d7a44bfeb0972840a83fb439eca4477|.agents/skills/go-implementation-ownership-review/evals/fixtures/tenant_cache_handoff/account_reader.go
-a7a98bb3d04d660f99e82d0de466d7b786b13d5b3d29b7ae13223f77f43293d4|.agents/skills/go-test-review/evals/fixtures/weak_oracle/spec.md
-1834a471a03f5cdf948fa42e3b956b3b9e44701139c2c53137652f7b6b631373|.agents/skills/go-test-review/evals/fixtures/weak_oracle/create_handler_test.go
-9d8625325d00d8f5e311085c76aa3525516ff9731bb2470949f04b64e5da381b|.agents/skills/go-test-review/evals/fixtures/scheduler_luck/worker_test.go
-99e0824d65ad9282e2583a2bc542c8861250b6e2d28c65f4d29df71584eb2577|.agents/skills/go-security-spec/evals/fixtures/identity_conflation/context.md
-fbb98577698b470ef1a39ed50e1d3239c0a5b203f23111e8236b8337c96dd80e|.agents/skills/go-security-spec/evals/fixtures/ownerless_denial/context.md
+16c8844abeab174a6b4fd2db95702c4cc9f4730ee2aefe7e18014b838a66ae49|.agents/skills/go-implementation-ownership/evals/fixtures/spec_boundary_drift/spec.md
+2ff756c4b50b4aa23beee2b1aa014ae653fb3e467931a31d9658b72a071bbe35|.agents/skills/go-implementation-ownership/evals/fixtures/spec_boundary_drift/checkout_handler.go
+955aebfcccdc965f4717a8c95ae04a28d7c0031e836e4bf6281a14b7268676e2|.agents/skills/go-implementation-ownership/evals/fixtures/missing_intent_complexity/report_builder.go
+c9e6f0fed3a460426aeac0f372a02507278fc77b715853218131cb1424750ccd|.agents/skills/go-implementation-ownership/evals/fixtures/tenant_cache_handoff/spec.md
+ff85cbfdc9278a0c558706cee28eb4d93d7a44bfeb0972840a83fb439eca4477|.agents/skills/go-implementation-ownership/evals/fixtures/tenant_cache_handoff/account_reader.go
+a7a98bb3d04d660f99e82d0de466d7b786b13d5b3d29b7ae13223f77f43293d4|.agents/skills/go-test-strategy/evals/fixtures/weak_oracle/spec.md
+1834a471a03f5cdf948fa42e3b956b3b9e44701139c2c53137652f7b6b631373|.agents/skills/go-test-strategy/evals/fixtures/weak_oracle/create_handler_test.go
+9d8625325d00d8f5e311085c76aa3525516ff9731bb2470949f04b64e5da381b|.agents/skills/go-test-strategy/evals/fixtures/scheduler_luck/worker_test.go
+99e0824d65ad9282e2583a2bc542c8861250b6e2d28c65f4d29df71584eb2577|.agents/skills/go-security/evals/fixtures/identity_conflation/context.md
+fbb98577698b470ef1a39ed50e1d3239c0a5b203f23111e8236b8337c96dd80e|.agents/skills/go-security/evals/fixtures/ownerless_denial/context.md
 EOF
 }
 
@@ -82,14 +82,14 @@ validate_discriminators() {
   local key="$1"
   local text="$2"
   case "${key}" in
-    go-implementation-ownership-review:0)
+    go-implementation-ownership:0)
       require_signal "${key}" "${text}" 'CheckoutService' && require_signal "${key}" "${text}" 'TODO' && require_signal "${key}" "${text}" 'file:line'
       ;;
-    go-implementation-ownership-review:1)
+    go-implementation-ownership:1)
       require_signal "${key}" "${text}" 'BuilderFactory' && require_signal "${key}" "${text}" 'missing approved artifact'
       ;;
-    go-implementation-ownership-review:2)
-      require_signal "${key}" "${text}" 'authenticated tenant' && require_signal "${key}" "${text}" 'DeadlineExceeded' && require_signal "${key}" "${text}" 'go-security-review'
+    go-implementation-ownership:2)
+      require_signal "${key}" "${text}" 'authenticated tenant' && require_signal "${key}" "${text}" 'DeadlineExceeded' && require_signal "${key}" "${text}" 'go-security'
       ;;
     agent-prompt-composer:0)
       require_signal "${key}" "${text}" 'OPTIONS' && require_signal "${key}" "${text}" 'CORS' && require_signal "${key}" "${text}" 'problem json'
@@ -106,16 +106,16 @@ validate_discriminators() {
     agent-prompt-composer:4)
       require_signal "${key}" "${text}" 'ping_history' && require_signal "${key}" "${text}" 'sqlc' && require_signal "${key}" "${text}" 'user-mentioned, unconfirmed'
       ;;
-    go-test-review:4)
+    go-test-strategy:4)
       require_signal "${key}" "${text}" 'require.NoError' && require_signal "${key}" "${text}" 'op-123' && require_signal "${key}" "${text}" 'zero writes'
       ;;
-    go-test-review:5)
+    go-test-strategy:5)
       require_signal "${key}" "${text}" 'time.Sleep' && require_signal "${key}" "${text}" 'started' && require_signal "${key}" "${text}" 'finished'
       ;;
-    go-security-spec:4)
+    go-security:4)
       require_signal "${key}" "${text}" 'authenticated caller' && require_signal "${key}" "${text}" 'delegated subject' && require_signal "${key}" "${text}" 'X-Tenant-ID'
       ;;
-    go-security-spec:5)
+    go-security:5)
       require_signal "${key}" "${text}" 'enforcement point' && require_signal "${key}" "${text}" 'no durable export' && require_signal "${key}" "${text}" 'policy dependency'
       ;;
     *) fail "unexpected selected case ${key}" ;;
@@ -138,7 +138,7 @@ validate_selected_root() {
   [[ "$(sort "${selected_file}" | uniq | wc -l | tr -d '[:space:]')" == 12 ]] || fail 'selected target table contains duplicates' || return 1
 
   local skill manifest expected_skill ids_unique
-  for skill in go-implementation-ownership-review agent-prompt-composer go-test-review go-security-spec; do
+  for skill in go-implementation-ownership agent-prompt-composer go-test-strategy go-security; do
     manifest="${root}/.agents/skills/${skill}/evals/evals.json"
     [[ -f "${manifest}" && ! -L "${manifest}" ]] || fail "missing selected manifest ${manifest#"${root}/"}" || return 1
     jq -e . "${manifest}" >/dev/null || fail "invalid JSON in ${manifest#"${root}/"}" || return 1
@@ -202,10 +202,10 @@ prepare_fixture_root() {
   rm -rf -- "${destination}"
   mkdir -p "${destination}/.agents/skills"
   cp -R \
-    "${ROOT_DIR}/.agents/skills/go-implementation-ownership-review" \
+    "${ROOT_DIR}/.agents/skills/go-implementation-ownership" \
     "${ROOT_DIR}/.agents/skills/agent-prompt-composer" \
-    "${ROOT_DIR}/.agents/skills/go-test-review" \
-    "${ROOT_DIR}/.agents/skills/go-security-spec" \
+    "${ROOT_DIR}/.agents/skills/go-test-strategy" \
+    "${ROOT_DIR}/.agents/skills/go-security" \
     "${destination}/.agents/skills/"
 }
 
@@ -240,7 +240,7 @@ run_mutation_fixtures() {
   expect_mutation_failure 'missing trial class' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  manifest="${fixture_root}/.agents/skills/go-test-review/evals/evals.json"
+  manifest="${fixture_root}/.agents/skills/go-test-strategy/evals/evals.json"
   mutate_json "${manifest}" '.evals += [.evals[] | select(.id == 4)]'
   expect_mutation_failure 'duplicate selected ID' "${fixture_root}" || return 1
 
@@ -250,31 +250,31 @@ run_mutation_fixtures() {
   expect_mutation_failure 'prompt and files disagreement' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  manifest="${fixture_root}/.agents/skills/go-security-spec/evals/evals.json"
+  manifest="${fixture_root}/.agents/skills/go-security/evals/evals.json"
   mutate_json "${manifest}" '(.evals[] | select(.id == 4) | .files[0]) = "../outside.md"'
   expect_mutation_failure 'escaping input path' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  path="${fixture_root}/.agents/skills/go-test-review/evals/fixtures/weak_oracle/spec.md"
+  path="${fixture_root}/.agents/skills/go-test-strategy/evals/fixtures/weak_oracle/spec.md"
   rm "${path}"
   ln -s create_handler_test.go "${path}"
   expect_mutation_failure 'symlink input' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  rm "${fixture_root}/.agents/skills/go-security-spec/evals/fixtures/ownerless_denial/context.md"
+  rm "${fixture_root}/.agents/skills/go-security/evals/fixtures/ownerless_denial/context.md"
   expect_mutation_failure 'missing input' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  manifest="${fixture_root}/.agents/skills/go-test-review/evals/evals.json"
+  manifest="${fixture_root}/.agents/skills/go-test-strategy/evals/evals.json"
   mutate_json "${manifest}" '(.evals[] | select(.id == 4) | .files) += [(.evals[] | select(.id == 4) | .files[0])]'
   expect_mutation_failure 'duplicate destination' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  printf '\nmutated\n' >>"${fixture_root}/.agents/skills/go-security-spec/evals/fixtures/identity_conflation/context.md"
+  printf '\nmutated\n' >>"${fixture_root}/.agents/skills/go-security/evals/fixtures/identity_conflation/context.md"
   expect_mutation_failure 'exact fixture drift' "${fixture_root}" || return 1
 
   prepare_fixture_root "${fixture_root}"
-  manifest="${fixture_root}/.agents/skills/go-test-review/evals/evals.json"
+  manifest="${fixture_root}/.agents/skills/go-test-strategy/evals/evals.json"
   mutate_json "${manifest}" '(.evals[] | select(.id == 5) | .expectations) = []'
   expect_mutation_failure 'missing oracle' "${fixture_root}" || return 1
 }

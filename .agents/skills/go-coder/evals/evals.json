@@ -29,10 +29,10 @@
       "id": "coder-neighbor",
       "category": "neighbor",
       "prompt": "Use the go-coder skill. Do not edit repository files. The request is only to perform a read-only review of a Go diff for nil, context, error-wrapping, and resource-lifetime defects; no implementation outcome or accepted repair is authorized. Return only the forced owner and consequence.",
-      "expected_output": "Route the read-only language and standard-library contract review to go-idiomatic-review and make no implementation change.",
+      "expected_output": "Route the read-only language and standard-library contract review to go-idiomatic and make no implementation change.",
       "files": [],
       "assertions": [
-        "The response names go-idiomatic-review as the owner of the requested read-only defect review.",
+        "The response names go-idiomatic as the owner of the requested read-only defect review.",
         "The response states that go-coder makes no edits because no repair is accepted or authorized.",
         "The response does not produce review findings, duplicate the review, or broaden the handoff."
       ]
@@ -41,10 +41,10 @@
       "id": "coder-unresolved-policy",
       "category": "unresolved_policy",
       "prompt": "Use the go-coder skill. Do not edit repository files. Implement POST /exports idempotency, but the accepted artifacts do not decide whether a reused key with a different payload returns 409 or 422, which response body is public, or whether the original operation is returned. Existing code has no established behavior for this case. Return the execution outcome.",
-      "expected_output": "Block implementation on the missing API-contract decision and name go-api-contract-spec without inventing status, representation, or replay behavior.",
+      "expected_output": "Block implementation on the missing API-contract decision and name go-api-contract without inventing status, representation, or replay behavior.",
       "files": [],
       "assertions": [
-        "The response identifies the unresolved client-visible idempotency behavior as an API-contract decision owned by go-api-contract-spec.",
+        "The response identifies the unresolved client-visible idempotency behavior as an API-contract decision owned by go-api-contract.",
         "The response makes no speculative production or test patch.",
         "The response names the exact missing decision and does not choose 409, 422, a response shape, or replay semantics."
       ]

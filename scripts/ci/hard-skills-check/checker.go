@@ -90,22 +90,23 @@ func validateStage2Metadata(data []byte, promptSHA256, commit string, explicitOn
 	if len(metadata.ExplicitSkillMentions) != 0 || len(metadata.ForcedSkills) != 0 {
 		return errors.New("stage 2 metadata reports explicit routing")
 	}
-	router := false
+	domainCount := 0
 	seen := map[string]bool{}
 	for _, selected := range metadata.SelectedSkills {
 		if selected.Name == "" || selected.Source != "implicit" || seen[selected.Name] {
 			return errors.New("stage 2 metadata has invalid selected skill")
 		}
 		seen[selected.Name] = true
-		if selected.Name == "go-specialist-router" && selected.Source == "implicit" {
-			router = true
-		}
 		if explicitOnly[selected.Name] {
 			return fmt.Errorf("stage 2 metadata selected explicit-only specialist %s", selected.Name)
 		}
+		if !slices.Contains(domainSkills, selected.Name) {
+			return fmt.Errorf("stage 2 metadata selected non-domain skill %s", selected.Name)
+		}
+		domainCount++
 	}
-	if !router {
-		return errors.New("stage 2 metadata omits implicit go-specialist-router")
+	if domainCount == 0 {
+		return errors.New("stage 2 metadata omits an implicit domain specialist")
 	}
 	return nil
 }
@@ -196,7 +197,7 @@ func validateSkill(root, name string) []string {
 	}
 	problems = append(problems, validateDescription(name, doc.Description)...)
 	problems = append(problems, validateMarkdownLinks(root, path, doc.Body)...)
-	if !executionSkills[name] && name != "go-specialist-router" {
+	if !executionSkills[name] {
 		problems = append(problems, validateDirectSharedLink(root, path, doc.Body)...)
 	}
 	bundle, err := readEvalBundle(root, name)
@@ -240,74 +241,14 @@ func validateCatalog(root string) []string {
 	return problems
 }
 
-func specialistNames(root string) ([]string, []string) {
-	entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills"))
-	if err != nil {
-		return nil, []string{fmt.Sprintf("read skill catalog: %v", err)}
-	}
-	var names []string
-	var problems []string
-	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == "go-specialist-router" {
-			continue
-		}
-		path := filepath.Join(root, ".agents", "skills", entry.Name(), "SKILL.md")
-		data, err := os.ReadFile(path)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			problems = append(problems, fmt.Sprintf("read %s: %v", relativePath(root, path), err))
-			continue
-		}
-		if len(validateDirectSharedLink(root, path, data)) == 0 {
-			names = append(names, entry.Name())
-		}
-	}
-	slices.Sort(names)
-	return names, problems
-}
-
 func validateImplicitPolicies(root string) []string {
-	names, problems := specialistNames(root)
-	expected := make(map[string]bool, len(names))
-	for _, name := range names {
-		expected[name] = true
-	}
-	entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills"))
-	if err != nil {
-		return append(problems, fmt.Sprintf("read skill catalog: %v", err))
-	}
-	var found []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
+	var problems []string
+	for _, name := range domainSkills {
 		path := filepath.Join(root, ".agents", "skills", name, "agents", "openai.yaml")
-		data, err := os.ReadFile(path)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			problems = append(problems, fmt.Sprintf("read policy %s: %v", name, err))
-			continue
-		}
-		if string(data) != "policy:\n  allow_implicit_invocation: false\n" {
-			problems = append(problems, fmt.Sprintf("%s: invalid explicit-only policy", name))
-			continue
-		}
-		found = append(found, name)
-	}
-	if len(found) == 0 {
-		return problems
-	}
-	if len(found) != len(names) {
-		problems = append(problems, "explicit-only policies must cover exactly every shared-contract specialist")
-	}
-	for _, name := range found {
-		if !expected[name] {
-			problems = append(problems, fmt.Sprintf("%s: router or non-specialist must remain implicitly eligible", name))
+		if _, err := os.Lstat(path); err == nil {
+			problems = append(problems, fmt.Sprintf("%s: domain specialist must remain implicitly invocable", name))
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			problems = append(problems, fmt.Sprintf("inspect policy %s: %v", name, err))
 		}
 	}
 	return problems

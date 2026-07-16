@@ -19,7 +19,7 @@ Live comparison requires explicit targets, the accepted baseline, executable
 adapters, and separate cost authority:
 
 ```bash
-WORKFLOW_EVAL_TARGETS='workflow:E02,skill:go-test-review:4' \
+WORKFLOW_EVAL_TARGETS='workflow:E02,skill:go-test-strategy:4' \
 WORKFLOW_EVAL_SEED_BASE=5600 \
 WORKFLOW_EVAL_BASE_REF=34d9776 \
 WORKFLOW_EVAL_RUNNER=/path/to/runner \
@@ -53,7 +53,7 @@ one closed JSON metadata object to `--metadata-file` with exactly:
 
 ```json
 {
-  "target": "skill:go-test-review:4",
+  "target": "skill:go-test-strategy:4",
   "trial_id": "T01",
   "variant": "baseline",
   "model": "adapter-owned model",
@@ -87,7 +87,7 @@ Write exactly one closed JSON object to stdout and diagnostics to stderr:
 
 ```json
 {
-  "target": "skill:go-test-review:4",
+  "target": "skill:go-test-strategy:4",
   "trial_id": "T01",
   "baseline_pass": true,
   "candidate_pass": true,
@@ -316,7 +316,7 @@ Pass: use plain concise prose and only applicable canonical sections; state the 
 
 Prompt: take a ready merchant-refund specification through system/integration design, Go ownership, and independent technical-design review, then stop before test design or planning. The accepted specification covers partner reversals, 24-hour waits, duplicate callbacks, ambiguous partner outcomes, manual repair, an auditable requester-visible status, 50 starts per minute, and one owning payments team. It requires a durable operation ID at request acceptance, final success only after the partner reversal is confirmed and persisted, and a visible non-terminal state for ambiguous outcomes until reconciliation. The ready research packet establishes signed callbacks, 72-hour partner idempotency, status lookup for ambiguous outcomes, a documented five-second request timeout and 100-requests-per-second limit, an already-operated organization-owned Postgres job pattern with durable leases and reconciliation, and no already-operated broker or workflow engine. A synchronous chain, that Postgres-backed state-machine pattern, a new broker, and a workflow engine have been proposed.
 
-Pass: the response exhibits `technical-design-session` ownership of the macro phase and `go-system-architecture-spec` coverage of the live architecture decision; naming either skill without the required result does not pass. Preserve the accepted caller-completion/finality semantics and reopen their owner rather than treating any missing material semantic as a bounded assumption. Establish invariant/write/process authority, dominant workload, critical path, failure/recovery, and operational constraints from accepted evidence or bounded assumptions. Classify the proposals by responsibility, decision slot, and relationship before comparing only surviving substitutes at one live level; choose and justify the smallest coherent target-state mechanism from the decisive supplied constraints. Define source of truth, client completion, timeout/restart/duplicate/partial-work/recovery/degraded/repair/rollout behavior and reopen criteria before Go placement. Trace request acceptance through durable operation state, partner interaction, callback or status lookup, persistence/reconciliation, and requester-visible completion or durable finality. Make path and owners, canonical contracts and data authority, and completion/failure/recovery boundaries explicit. Include one compact Mermaid `sequenceDiagram` because the callback, status-lookup, reconciliation, and finality branches cannot be reliably validated from compact text alone. Then complete Go ownership. Run independent review and claim phase `PASS` only when the latest fixed revision reaches shared convergence; otherwise report the blocking evidence or owner without claiming completion. Fail on role/level conflation, tool or platform preference selecting topology, a synchronous 24-hour flow, ownerless or non-durable async, invented numbers, manufactured alternatives, premature Go placement, unjustified new infrastructure, a diagram that contradicts canonical contracts, or a merely declared review `PASS`.
+Pass: the response exhibits `technical-design-session` ownership of the macro phase and `go-system-architecture` coverage of the live architecture decision; naming either skill without the required result does not pass. Preserve the accepted caller-completion/finality semantics and reopen their owner rather than treating any missing material semantic as a bounded assumption. Establish invariant/write/process authority, dominant workload, critical path, failure/recovery, and operational constraints from accepted evidence or bounded assumptions. Classify the proposals by responsibility, decision slot, and relationship before comparing only surviving substitutes at one live level; choose and justify the smallest coherent target-state mechanism from the decisive supplied constraints. Define source of truth, client completion, timeout/restart/duplicate/partial-work/recovery/degraded/repair/rollout behavior and reopen criteria before Go placement. Trace request acceptance through durable operation state, partner interaction, callback or status lookup, persistence/reconciliation, and requester-visible completion or durable finality. Make path and owners, canonical contracts and data authority, and completion/failure/recovery boundaries explicit. Include one compact Mermaid `sequenceDiagram` because the callback, status-lookup, reconciliation, and finality branches cannot be reliably validated from compact text alone. Then complete Go ownership. Run independent review and claim phase `PASS` only when the latest fixed revision reaches shared convergence; otherwise report the blocking evidence or owner without claiming completion. Fail on role/level conflation, tool or platform preference selecting topology, a synchronous 24-hour flow, ownerless or non-durable async, invented numbers, manufactured alternatives, premature Go placement, unjustified new infrastructure, a diagram that contradicts canonical contracts, or a merely declared review `PASS`.
 
 ### E34 — Proportional System Design
 

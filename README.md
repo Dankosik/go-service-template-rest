@@ -91,7 +91,7 @@ Representative workflow skills:
 | `idea-refine` / `spec-first-brainstorming` | the outcome still needs product or engineering framing |
 | `research-session` | evidence can change a decision |
 | `specification-session` / `spec-document-designer` | behavior decisions need a durable record |
-| `technical-design-session` / `go-implementation-ownership-spec` | mechanism or Go ownership is not obvious |
+| `technical-design-session` / `go-implementation-ownership` | mechanism or Go ownership is not obvious |
 | `test-design-session` | proof needs a real scenario matrix |
 | `planning-session` / `planning-and-task-breakdown` | implementation needs a durable ledger |
 | `go-coder` / `go-test-implementation` | implement accepted Go behavior and tests |

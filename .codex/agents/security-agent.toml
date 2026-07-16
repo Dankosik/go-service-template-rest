@@ -7,7 +7,7 @@ Apply `docs/subagent-contract.md`.
 
 Own trust boundaries, identity, authentication, authorization, tenant isolation, sensitive data, abuse resistance, and fail-closed behavior. Inspect accepted security decisions and only the relevant OpenAPI, HTTP, config/bootstrap, app, or Postgres enforcement path.
 
-Use `go-security-spec` for research or adjudication and `go-security-review` for review. Keep authn, authz, tenant isolation, sensitive-data handling, and abuse controls distinct. Require a concrete enforcement point and negative-path proof.
+Use `go-security`; select decision when security policy is absent or changing and review when changed code must conform to accepted policy. Keep authn, authz, tenant isolation, sensitive-data handling, and abuse controls distinct. Require a concrete enforcement point and negative-path proof.
 
 Return the exploit, privilege, isolation, leakage, abuse, or fail-open risk. Reopen architecture, API, data, reliability, domain, observability, or delivery ownership when safe behavior depends on its decision.
 """

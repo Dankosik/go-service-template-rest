@@ -70,11 +70,11 @@
       "id": 5,
       "category": "unresolved_policy",
       "prompt": "Use go-systematic-debugging in fix_authorized mode. Evidence proves requests exhaust their accepted caller deadline while waiting for a saturated dependency, but no accepted artifact defines whether to change the end-to-end timeout budget, retry count, degradation response, or overload behavior. The local code has no established policy. Return the compact debug outcome.",
-      "expected_output": "Return the supported saturation root cause but block repair on go-reliability-spec without inventing timeout, retry, degradation, or overload policy.",
+      "expected_output": "Return the supported saturation root cause but block repair on go-reliability without inventing timeout, retry, degradation, or overload policy.",
       "files": [],
       "assertions": [
         "The response separates the proven saturation cause from the unresolved repair policy.",
-        "The response names go-reliability-spec as the decision owner and makes no policy-changing patch.",
+        "The response names go-reliability as the decision owner and makes no policy-changing patch.",
         "The response does not widen deadlines, add retries, choose degradation behavior, or claim fixed."
       ]
     }

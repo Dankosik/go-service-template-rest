@@ -1,0 +1,135 @@
+{
+  "skill_name": "go-distributed",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "We are adding a place-order flow in a Go-based commerce platform. `order-service` owns the order record and public API. `payment-service` can authorize and later void a payment authorization. `inventory-service` can reserve stock and reservations expire automatically after 15 minutes. `shipping-service` can buy a carrier label, and once the carrier accepts it we cannot fully undo the charge. The API should return quickly and let clients poll operation status instead of waiting for everything. Write a distributed-consistency spec for this flow. I need the orchestration vs choreography choice, process owner, pivot, compensation vs forward recovery, outbox/inbox/idempotency rules, and reconciliation strategy. Also call out what the client-visible success state really means.",
+      "expected_output": "A distributed-consistency spec that chooses a coordination model, defines process ownership and pivot, distinguishes compensable and irreversible steps, and makes API-visible async semantics, idempotency, and reconciliation explicit.",
+      "files": [],
+      "expectations": [
+        "The spec names the source-of-truth owner for payment authorization, inventory reservation, shipment or label purchase, and overall process state.",
+        "The spec compares at least two viable coordination options and states a chosen path with at least one rejection reason.",
+        "The spec defines a durable state model with a pivot and explicit compensation or forward-recovery behavior for pre-pivot and post-pivot steps.",
+        "The spec defines API-visible async semantics such as `202 + operation resource`, client completion expectations, or equivalent operation-status behavior.",
+        "The spec defines outbox/inbox, idempotency, dedup, and reconciliation behavior for side-effecting distributed steps."
+      ]
+    },
+    {
+      "id": 1,
+      "category": "domain_defect",
+      "prompt": "We need a distributed design for refunds in a Go service estate. `billing-service` owns the immutable money ledger and publishes refund events. `loyalty-service` subtracts points when a refund is finalized. `notification-service` sends the customer email. We had a real bug where duplicate Kafka deliveries reversed loyalty points twice because the retry came through with a different message envelope ID. Product still wants the customer API to return `refund accepted` synchronously, but finance says only the billing ledger is authoritative. Write the distributed-consistency spec. I care about invariant ownership, what 'accepted' vs 'completed' means, message dedup vs business idempotency, replay/ordering assumptions, and how reconciliation should detect and repair drift.",
+      "expected_output": "A distributed-consistency spec that distinguishes client acceptance from completion, separates message-envelope dedup from business idempotency, and defines replay-safe repair and reconciliation around the billing ledger as source of truth.",
+      "files": [],
+      "expectations": [
+        "The spec distinguishes transport-envelope dedup from stable business or step idempotency for refund retries or duplicate deliveries.",
+        "The spec defines what client-visible `refund accepted` means and what later completion or failure states are possible.",
+        "The spec names the authoritative source used for reconciliation and drift repair.",
+        "The spec defines replay, ordering, or competing-flow controls for loyalty reversal and other side effects.",
+        "The spec compares at least two viable distributed designs and explains why the chosen one is safer."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "domain_defect",
+      "prompt": "We're redesigning tenant provisioning for a B2B Go platform. `org-service` owns the tenant record. Today workspace creation synchronously calls `auth-service` to create the owner account, `billing-service` to open the subscription shell, and `email-service` to send the welcome email. Product wants a faster API. Engineering is split: some want a saga, some want to keep more work local to `org-service` and push only non-invariant work async. We cannot rely on coordinated deploys, and some read models lag by a few seconds. Write the distributed-consistency spec. First prove whether this workflow should stay local or become distributed. Then define the chosen boundary, invariants, completion semantics, and any reconciliation or handoff requirements.",
+      "expected_output": "A distributed-consistency spec that first proves whether the boundary really needs to be distributed, then defines the chosen ownership/transaction model, completion semantics, and reconciliation or handoff needs without relying on coordinated deploys.",
+      "files": [],
+      "expectations": [
+        "The spec explicitly evaluates whether tenant provisioning should stay local or become a distributed flow before choosing saga mechanics.",
+        "The spec explains the chosen ownership or transaction boundary and rejects at least one alternative with a concrete reason.",
+        "If the flow is distributed, the spec defines process state, idempotency, and reconciliation; if kept more local, it explicitly limits async work to non-invariant side effects.",
+        "The spec addresses read-model lag and coordinated-deploy avoidance in the chosen design.",
+        "The spec includes explicit assumptions or open questions and downstream handoffs where detailed API, data, or reliability work is still needed."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "clean",
+      "prompt": "The accepted distributed spec already fixes the process owner, eventual-consistency contract, durable states, outbox/inbox linkage, business step idempotency, ordering, pivot, compensation, forward recovery, redrive, reconciliation, and mixed-version event behavior. A follow-up only renames an internal consumer package. Apply the go-distributed role.",
+      "expected_output": "No new distributed decision, with the accepted durable-flow contract unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns `no_new_decision_required` or explicit unchanged distributed constraints.",
+        "Does not redesign coordination, delivery, replay, recovery, or reconciliation.",
+        "Leaves package naming to implementation ownership without padding."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "neighbor",
+      "prompt": "The cross-service flow is accepted: order-service owns durable process state, state and outbox intent commit atomically, consumers use stable step keys, and reconciliation owns missed delivery. The remaining questions are the exact sqlc queries, use-case transaction helper, transient SQL retry classes, and cache TTL for the local order repository. Apply the go-distributed role only.",
+      "expected_output": "Only the forced DB/cache owner and the accepted atomicity/idempotency constraints, without designing local SQL or cache mechanics.",
+      "files": [],
+      "expectations": [
+        "Names `go-db-cache` as owner of concrete query, transaction, retry, and cache behavior.",
+        "Carries only the accepted local state/outbox atomicity and stable step identity constraints.",
+        "Does not choose sqlc queries, transaction helpers, retry classes, or TTL values."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "unresolved_policy",
+      "prompt": "Design a shipment saga now, but the domain owner has not decided whether carrier label purchase is the irreversible business point, whether a late cancellation may still succeed, or whether a captured fee must be compensated. Choose the pivot, terminal states, compensation, and forward-recovery policy so implementation can begin.",
+      "expected_output": "A blocked distributed specification that names the unresolved domain owner and refuses to invent pivot or recovery semantics.",
+      "files": [],
+      "expectations": [
+        "Stops on the missing irreversibility, cancellation, and compensation meanings.",
+        "Names `go-domain-invariant` as the required business-policy owner.",
+        "Does not choose a pivot, saga terminal states, compensation, or forward recovery."
+      ]
+    },
+    {
+      "id": 200,
+      "category": "domain_defect",
+      "prompt": "Review this durable order flow against the accepted at-least-once contract. Completion must survive process loss, consumers must be idempotent, and redrive may replay any message.\n\n```go\nfunc Complete(ctx context.Context, id string) error {\n    if err := orders.MarkComplete(ctx, id); err != nil { return err }\n    return broker.Publish(ctx, OrderCompleted{ID: id})\n}\nfunc Consume(ctx context.Context, msg Message) error {\n    msg.Ack()\n    return projections.Apply(ctx, msg.OrderID)\n}\n```",
+      "expected_output": "Find the dual-write crash window, ack-before-durable-effect loss, and missing replay idempotency as distributed defects with process-loss scenarios.",
+      "assertions": [
+        "Identifies that state commit and message intent lack one durable success boundary",
+        "Identifies ack before the local projection effect is durable",
+        "Requires stable idempotency or dedup behavior for replay and redrive",
+        "Explains concrete process-loss duplicate or lost-work scenarios"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 201,
+      "category": "clean",
+      "prompt": "Review only distributed-flow correctness. The accepted at-least-once flow writes aggregate state and an outbox record in one transaction; the relay deletes only after broker confirmation; the consumer commits its effect and inbox marker atomically before ack; the stable business-scoped event ID is retained beyond the redrive horizon; transitions reject stale sequence numbers; stored v1 and v2 events are both readable; poison messages enter an observable DLQ with owned redrive and reconciliation. No contrary code is shown.",
+      "expected_output": "Return no distributed findings without padding or speculative redesign.",
+      "assertions": [
+        "Returns no distributed findings",
+        "Does not invent exactly-once, compensation, ordering, or retention defects contradicted by the prompt"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 202,
+      "category": "neighbor",
+      "prompt": "A synchronous in-process HTTP client call has no messages, durable queue, process handoff, persisted workflow state, replay, or reconciliation. It replaces the caller context and retries every error forever despite an accepted 2-second end-to-end deadline and two-attempt retry budget. Review owner arbitration only.",
+      "expected_output": "Name go-reliability as the single primary owner for the accepted deadline and retry-budget violations; emit no distributed finding.",
+      "assertions": [
+        "Names exactly go-reliability as the primary review owner",
+        "Explains that no durable process or service boundary exists",
+        "Emits no duplicate distributed finding"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    },
+    {
+      "id": 203,
+      "category": "unresolved_policy",
+      "prompt": "A durable multi-service workflow can receive PaymentCaptured after OrderCancelled and can lose a process after the payment pivot. The repository has no accepted ordering key or stale-event rule, no compensation versus forward-recovery decision, and no owner or completion rule for redrive and reconciliation. Review without designing the workflow.",
+      "expected_output": "Hand off the missing ordering, post-pivot recovery, redrive, and reconciliation contract to go-distributed without inventing policy or filing an implementation defect.",
+      "assertions": [
+        "Names go-distributed as the unresolved decision owner",
+        "Does not invent ordering, compensation, forward-recovery, redrive, or reconciliation policy",
+        "Does not file a distributed implementation finding when the governing contract is absent"
+      ],
+      "files": [],
+      "trial_class": "standard"
+    }
+  ]
+}

@@ -1,16 +1,90 @@
 package main
 
+var domainSkills = []string{
+	"go-api-contract",
+	"go-chi",
+	"go-concurrency",
+	"go-data-architecture",
+	"go-db-cache",
+	"go-delivery-platform",
+	"go-distributed",
+	"go-domain-invariant",
+	"go-idiomatic",
+	"go-implementation-ownership",
+	"go-language-simplifier",
+	"go-observability",
+	"go-performance",
+	"go-reliability",
+	"go-security",
+	"go-structural-quality",
+	"go-system-architecture",
+	"go-test-strategy",
+}
+
 var targetSkills = []string{
+	"go-api-contract",
+	"go-chi",
+	"go-coder",
+	"go-concurrency",
+	"go-data-architecture",
+	"go-db-cache",
+	"go-delivery-platform",
+	"go-distributed",
+	"go-domain-invariant",
+	"go-idiomatic",
+	"go-implementation-ownership",
+	"go-language-simplifier",
+	"go-observability",
+	"go-performance",
+	"go-reliability",
+	"go-security",
+	"go-structural-quality",
+	"go-system-architecture",
+	"go-systematic-debugging",
+	"go-test-implementation",
+	"go-test-strategy",
+	"go-verification-before-completion",
+}
+
+var baselineSkills = map[string][]string{
+	"go-api-contract":             {"go-api-contract-spec"},
+	"go-chi":                      {"go-chi-review", "go-chi-spec"},
+	"go-concurrency":              {"go-concurrency-review"},
+	"go-data-architecture":        {"go-data-architecture-spec"},
+	"go-db-cache":                 {"go-db-cache-review", "go-db-cache-spec"},
+	"go-delivery-platform":        {"go-delivery-platform-review", "go-delivery-platform-spec"},
+	"go-distributed":              {"go-distributed-review", "go-distributed-spec"},
+	"go-domain-invariant":         {"go-domain-invariant-review", "go-domain-invariant-spec"},
+	"go-idiomatic":                {"go-idiomatic-review"},
+	"go-implementation-ownership": {"go-implementation-ownership-review", "go-implementation-ownership-spec"},
+	"go-language-simplifier":      {"go-language-simplifier-review"},
+	"go-observability":            {"go-observability-review", "go-observability-spec"},
+	"go-performance":              {"go-performance-review", "go-performance-spec"},
+	"go-reliability":              {"go-reliability-review", "go-reliability-spec"},
+	"go-security":                 {"go-security-review", "go-security-spec"},
+	"go-structural-quality":       {"go-structural-quality-review"},
+	"go-system-architecture":      {"go-system-architecture-spec"},
+	"go-test-strategy":            {"go-test-design", "go-test-review"},
+}
+
+var retiredSkills = []string{
+	"api-contract-designer-spec",
 	"go-api-contract-spec",
+	"go-architect-spec",
 	"go-chi-review",
 	"go-chi-spec",
-	"go-coder",
 	"go-concurrency-review",
+	"go-data-architect-spec",
 	"go-data-architecture-spec",
 	"go-db-cache-review",
 	"go-db-cache-spec",
 	"go-delivery-platform-review",
 	"go-delivery-platform-spec",
+	"go-design-review",
+	"go-design-spec",
+	"go-devops-review",
+	"go-devops-spec",
+	"go-distributed-architect-spec",
 	"go-distributed-review",
 	"go-distributed-spec",
 	"go-domain-invariant-review",
@@ -19,49 +93,35 @@ var targetSkills = []string{
 	"go-implementation-ownership-review",
 	"go-implementation-ownership-spec",
 	"go-language-simplifier-review",
+	"go-observability-engineer-spec",
 	"go-observability-review",
 	"go-observability-spec",
 	"go-performance-review",
 	"go-performance-spec",
+	"go-qa-review",
+	"go-qa-tester",
+	"go-qa-tester-spec",
 	"go-reliability-review",
 	"go-reliability-spec",
 	"go-security-review",
 	"go-security-spec",
+	"go-specialist-router",
 	"go-structural-quality-review",
 	"go-system-architecture-spec",
-	"go-systematic-debugging",
 	"go-test-design",
-	"go-test-implementation",
 	"go-test-review",
-	"go-verification-before-completion",
-	"go-specialist-router",
-}
-
-var renamedSkills = map[string]string{
-	"go-api-contract-spec":               "api-contract-designer-spec",
-	"go-system-architecture-spec":        "go-architect-spec",
-	"go-data-architecture-spec":          "go-data-architect-spec",
-	"go-implementation-ownership-spec":   "go-design-spec",
-	"go-implementation-ownership-review": "go-design-review",
-	"go-distributed-spec":                "go-distributed-architect-spec",
-	"go-observability-spec":              "go-observability-engineer-spec",
-	"go-delivery-platform-spec":          "go-devops-spec",
-	"go-delivery-platform-review":        "go-devops-review",
-	"go-test-design":                     "go-qa-tester-spec",
-	"go-test-implementation":             "go-qa-tester",
-	"go-test-review":                     "go-qa-review",
 }
 
 var selectedSkills = []string{
-	"go-reliability-review",
-	"go-security-spec",
-	"go-observability-review",
+	"go-reliability",
+	"go-security",
+	"go-observability",
 	"go-coder",
 	"go-verification-before-completion",
-	"go-security-review",
-	"go-implementation-ownership-review",
+	"go-implementation-ownership",
 	"go-systematic-debugging",
-	"go-specialist-router",
+	"go-concurrency",
+	"go-test-strategy",
 }
 
 var evalCategories = []string{
@@ -79,16 +139,16 @@ var executionSkills = map[string]bool{
 }
 
 func targetSkillSet() map[string]bool {
-	result := make(map[string]bool, len(targetSkills))
-	for _, name := range targetSkills {
-		result[name] = true
-	}
-	return result
+	return stringSet(targetSkills)
 }
 
 func retiredSkillSet() map[string]bool {
-	result := make(map[string]bool, len(renamedSkills))
-	for _, name := range renamedSkills {
+	return stringSet(retiredSkills)
+}
+
+func stringSet(names []string) map[string]bool {
+	result := make(map[string]bool, len(names))
+	for _, name := range names {
 		result[name] = true
 	}
 	return result

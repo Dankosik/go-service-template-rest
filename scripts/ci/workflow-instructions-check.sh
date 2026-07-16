@@ -30,7 +30,7 @@ skill_files=(
   .agents/skills/spec-document-designer/SKILL.md
   .agents/skills/spec-clarification-challenge/SKILL.md
   .agents/skills/specification-review/SKILL.md
-  .agents/skills/go-implementation-ownership-spec/SKILL.md
+  .agents/skills/go-implementation-ownership/SKILL.md
   .agents/skills/go-coder/SKILL.md
   .agents/skills/grilling/SKILL.md
   .agents/skills/codex-goal-prompt-composer/SKILL.md
@@ -809,7 +809,7 @@ if grep -Fq -- 'In standalone use this ends' \
 fi
 
 if grep -Eq -- 'implementation_with_accepted_risks|readiness = WAIVED' \
-  .agents/skills/go-domain-invariant-spec/references/state-machine-and-transition-rules.md; then
+  .agents/skills/go-domain-invariant/references/decision/state-machine-and-transition-rules.md; then
   echo 'workflow instruction check failed: lifecycle example still bypasses PASS-only readiness'
   exit 1
 fi
@@ -820,12 +820,12 @@ if grep -Fq -- 'Use only for a ready spec revision' .agents/skills/specification
 fi
 
 if grep -Eq -- 'proof_only|follow_up_only|no new decision required in' \
-  .agents/skills/go-test-design/SKILL.md; then
+  .agents/skills/go-test-strategy/SKILL.md; then
   echo 'workflow instruction check failed: test strategy uses an ambiguous disposition label'
   exit 1
 fi
 if grep -Eq -- 'plausible incorrect implementation|Missing test code or fixtures are a valid fail-before signal' \
-  docs/spec-first-workflow/phases/test-design.md .agents/skills/go-test-design/SKILL.md; then
+  docs/spec-first-workflow/phases/test-design.md .agents/skills/go-test-strategy/SKILL.md; then
   echo 'workflow instruction check failed: test design retains implementation-mirroring or false RED wording'
   exit 1
 fi

@@ -53,10 +53,10 @@
       "id": 4,
       "category": "neighbor",
       "prompt": "Use the go-test-implementation skill. Do not edit repository files. The request is solely to review the existing Go tests for assertion strength, determinism, scenario traceability, and missing fail paths; no new test implementation is authorized. Return only the forced owner and consequence.",
-      "expected_output": "Route the read-only test assessment to go-test-review and make no test or production change.",
+      "expected_output": "Route the read-only test assessment to go-test-strategy and make no test or production change.",
       "files": [],
       "expectations": [
-        "The response names go-test-review as the owner of the requested read-only assessment.",
+        "The response names go-test-strategy as the owner of the requested read-only assessment.",
         "The response makes no test or production edits.",
         "The response does not duplicate review findings or broaden beyond the forced handoff."
       ]
@@ -65,10 +65,10 @@
       "id": 5,
       "category": "unresolved_policy",
       "prompt": "Use the go-test-implementation skill. Do not edit repository files. Add contract tests for a reused idempotency key with a different payload, but accepted artifacts do not decide the status code, public error representation, or whether the original operation remains visible. Nearby code and tests establish no behavior. Return the test-implementation outcome.",
-      "expected_output": "Block test implementation on go-api-contract-spec and avoid encoding guessed client-visible idempotency behavior.",
+      "expected_output": "Block test implementation on go-api-contract and avoid encoding guessed client-visible idempotency behavior.",
       "files": [],
       "expectations": [
-        "The response identifies go-api-contract-spec as the missing behavior owner.",
+        "The response identifies go-api-contract as the missing behavior owner.",
         "The response creates no test that freezes a guessed status, body, or operation response.",
         "The response names the exact unresolved API behavior and makes no production change or gate weakening."
       ]

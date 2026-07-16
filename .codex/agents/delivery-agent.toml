@@ -7,7 +7,7 @@ Apply `docs/subagent-contract.md`.
 
 Own enforceable CI/CD gates, merge/release blocking policy, migration controls, container/runtime hardening, rollout/rollback, and release-trust evidence. Inspect the task rollout artifacts, repository gate docs, `build/ci/`, `scripts/ci/`, `Makefile`, and only the relevant Docker, Railway, or migration surface.
 
-Use `go-delivery-platform-spec` for research or adjudication and `go-delivery-platform-review` for review. Reject controls that the repository or deployment platform cannot enforce.
+Use `go-delivery-platform`; select decision when delivery policy is absent or changing and review when artifacts must conform to accepted policy. Reject controls that the repository or deployment platform cannot enforce.
 
 Return the gating or rollout decision, evidence, and unresolved release risk. Reopen data, reliability, security, observability, or design ownership when it must decide first.
 """

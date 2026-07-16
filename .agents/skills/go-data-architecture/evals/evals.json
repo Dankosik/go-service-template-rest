@@ -1,0 +1,83 @@
+{
+  "skill_name": "go-data-architecture",
+  "evals": [
+    {
+      "id": 1,
+      "category": "domain_defect",
+      "prompt": "Use the go-data-architecture skill. We are adding prepaid USD credits and refunds to an AI API gateway written in Go. Current proposal: one mutable accounts.balance column in Postgres, usage events emitted asynchronously after the provider responds, and a nightly invoice rebuild job. Requirements: customer-visible balance must never go negative; requests may stream for minutes and provider failure can happen after partial output; refunds and manual corrections must be explainable to finance; provider callbacks may arrive twice and out of order; teams and sub-accounts share a workspace budget; support needs to replay a date range after pricing bugs; product analytics can lag. Write the data-architecture section for the spec: options, chosen model, authoritative tables/facts, concurrency/idempotency rules, migration path, retention/deletion, and recovery risks.",
+      "expected_output": "A senior data architecture recommendation for credits and refunds that distinguishes authoritative financial facts from derived analytics and makes replay, idempotency, and lifecycle behavior explicit.",
+      "files": [],
+      "expectations": [
+        "The output distinguishes authoritative financial facts from derived analytics, reporting, or projections.",
+        "The output defines a state model or equivalent separation for pending vs committed and reversal/refund behavior.",
+        "The output specifies duplicate callback or replay handling through idempotency keys, immutable entries, or an equivalent data-level mechanism.",
+        "The output rejects or explicitly tightly justifies a single mutable balance column as the only source of truth.",
+        "The output includes migration and recovery considerations, not only steady-state schema recommendations."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "domain_defect",
+      "prompt": "Use the go-data-architecture skill. We run a ticketing service in Go with Postgres today. The team wants to use Redis holds plus an eventual write to Postgres because seat drops create hot contention. Requirements: one seat can be sold once; checkout holds last 10 minutes; the payment provider may time out after capture; users open multiple tabs; operators need manual repair tools; search and list pages can lag a few seconds; ticket emails and PDF generation are retryable. Write the data-architecture section for the spec and recommend the data model, source-of-truth boundary, hold/lease behavior, concurrency mechanism, projection strategy, migration/cutover notes, and explicit rejected options.",
+      "expected_output": "A senior reservation data design that maps scarce-resource invariants to concrete mechanisms and keeps derived read models separate from authoritative allocation state.",
+      "files": [],
+      "expectations": [
+        "The output defines an explicit hold, lease, or reservation record model and names who owns expiry or release behavior.",
+        "The output maps the seat-allocation invariant to a concrete mechanism such as uniqueness, exclusion, versioning, or locking instead of generic advice.",
+        "The output keeps search or list views as derived surfaces with an explicit lag or staleness allowance.",
+        "The output covers payment timeout, duplicate side effects, or manual repair as data and idempotency concerns.",
+        "The output includes at least one explicit rejection reason for Redis-first or eventual-write allocation truth."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "domain_defect",
+      "prompt": "Use the go-data-architecture skill. We store product activity for usage-based billing and analytics in a Go SaaS platform. Product wants flexible JSON events in Postgres forever. Finance wants monthly billable usage recomputation after pricing fixes. Legal needs GDPR deletion for personal data plus 2-year retention for billing evidence. Queries include per-tenant daily usage, monthly invoicing, anomaly investigation, and customer-visible quota counters. Volume is hundreds of millions of events per month and late events happen. Write the data-architecture section for the spec: authoritative stores, OLTP vs append/projection split, identity and dedupe model, late/out-of-order policy, partitioning/retention, deletion boundaries, replay/backfill strategy, and datastore trade-offs with rejections.",
+      "expected_output": "A senior event-and-billing data architecture that separates raw facts, operational truth, and derived analytics while handling lifecycle, partitioning, and replay correctly.",
+      "files": [],
+      "expectations": [
+        "The output separates OLTP truth, raw immutable usage facts, and derived billing or analytics projections instead of collapsing them into one store.",
+        "The output defines a dedupe key or equivalent identity model for event ingestion and addresses late or out-of-order arrivals.",
+        "The output addresses retention and GDPR deletion across authoritative and derived stores, not only the primary table.",
+        "The output evaluates datastore fit and rejects at least one plausible but weaker option.",
+        "The output covers replay, recomputation, backfill, or partitioning strategy in a concrete way."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "clean",
+      "prompt": "The accepted data architecture already fixes the authoritative Postgres tables, derived projections, tenant keys, exact money types, constraints and indexes, local transaction semantics, mixed-version migration, retention, and restore policy. A follow-up only renames an internal Go query helper without changing SQL shape or any data behavior. Apply the go-data-architecture role.",
+      "expected_output": "No new data-architecture decision, with accepted data authority and lifecycle constraints left unchanged.",
+      "files": [],
+      "expectations": [
+        "Returns `no_new_decision_required` or explicit unchanged data constraints.",
+        "Does not redesign tables, indexes, transactions, projections, migration, or retention.",
+        "Leaves the internal helper placement to implementation ownership without padding."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "neighbor",
+      "prompt": "The refund ledger owner, tables, exact money representation, constraints, indexes, and migration are accepted. Product has not decided whether a retry after a provider timeout is the same refund business action or when the refund becomes irreversible. Apply the go-data-architecture role without inventing business acceptance rules.",
+      "expected_output": "Only the forced domain owner and the consequence that the accepted business identity and lifecycle must be representable, without choosing refund semantics.",
+      "files": [],
+      "expectations": [
+        "Names `go-domain-invariant` as owner of refund sameness and irreversible lifecycle meaning.",
+        "Records only that the data model must preserve the eventual stable business identity and states.",
+        "Does not decide whether the retry is the same refund or when irreversibility occurs."
+      ]
+    },
+    {
+      "id": 6,
+      "category": "unresolved_policy",
+      "prompt": "Design the final billing schema and cutover now, but finance has not decided whether provider usage events or the internal ledger are authoritative, legal has not decided whether invoice evidence survives customer erasure, and no owner has accepted the retention period. Choose the source of truth, tables, deletion policy, and backfill so coding can start.",
+      "expected_output": "A blocked data-architecture specification that names the unresolved finance/legal data-policy owners and refuses to invent authority or lifecycle policy.",
+      "files": [],
+      "expectations": [
+        "Stops on unresolved authoritative truth and retention/deletion policy.",
+        "Names the finance/legal or data-policy owners whose decisions are required.",
+        "Does not choose tables, cutover, erasure behavior, or a backfill around invented policy."
+      ]
+    }
+  ]
+}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,27 +17,22 @@ import (
 
 func TestInventoryContract(t *testing.T) {
 	t.Parallel()
-	if len(targetSkills) != 34 {
-		t.Fatalf("target inventory has %d skills, want 34", len(targetSkills))
+	if len(targetSkills) != 22 {
+		t.Fatalf("target inventory has %d skills, want 22", len(targetSkills))
 	}
-	wantRenames := map[string]string{
-		"go-api-contract-spec":               "api-contract-designer-spec",
-		"go-system-architecture-spec":        "go-architect-spec",
-		"go-data-architecture-spec":          "go-data-architect-spec",
-		"go-implementation-ownership-spec":   "go-design-spec",
-		"go-implementation-ownership-review": "go-design-review",
-		"go-distributed-spec":                "go-distributed-architect-spec",
-		"go-observability-spec":              "go-observability-engineer-spec",
-		"go-delivery-platform-spec":          "go-devops-spec",
-		"go-delivery-platform-review":        "go-devops-review",
-		"go-test-design":                     "go-qa-tester-spec",
-		"go-test-implementation":             "go-qa-tester",
-		"go-test-review":                     "go-qa-review",
+	if len(domainSkills) != 18 {
+		t.Fatalf("domain inventory has %d skills, want 18", len(domainSkills))
 	}
-	if !maps.Equal(renamedSkills, wantRenames) {
-		t.Fatalf("rename mapping = %#v, want %#v", renamedSkills, wantRenames)
+	if len(executionSkills) != 4 {
+		t.Fatalf("execution inventory has %d skills, want 4", len(executionSkills))
 	}
-	wantSelected := []string{"go-reliability-review", "go-security-spec", "go-observability-review", "go-coder", "go-verification-before-completion", "go-security-review", "go-implementation-ownership-review", "go-systematic-debugging", "go-specialist-router"}
+	if got, want := baselineSkills["go-chi"], []string{"go-chi-review", "go-chi-spec"}; !slices.Equal(got, want) {
+		t.Fatalf("go-chi baseline mapping = %v, want %v", got, want)
+	}
+	if !retiredSkillSet()["go-specialist-router"] {
+		t.Fatal("retired router identifier is not guarded")
+	}
+	wantSelected := []string{"go-reliability", "go-security", "go-observability", "go-coder", "go-verification-before-completion", "go-implementation-ownership", "go-systematic-debugging", "go-concurrency", "go-test-strategy"}
 	if !slices.Equal(selectedSkills, wantSelected) {
 		t.Fatalf("selected skills = %v, want %v", selectedSkills, wantSelected)
 	}
@@ -48,30 +42,42 @@ func TestStage2MetadataIsClosedAndDormant(t *testing.T) {
 	t.Parallel()
 	prompt := strings.Repeat("a", 64)
 	commit := strings.Repeat("b", 40)
-	valid := fmt.Sprintf(`{"schema_version":1,"prompt_sha256":%q,"repository_commit":%q,"routing_mode":"implicit","explicit_skill_mentions":[],"forced_skills":[],"selected_skills":[{"name":"go-specialist-router","source":"implicit"}],"provenance_source":"runtime_events"}`, prompt, commit)
-	if err := validateStage2Metadata([]byte(valid), prompt, commit, map[string]bool{"go-security-review": true}); err != nil {
+	valid := fmt.Sprintf(`{"schema_version":1,"prompt_sha256":%q,"repository_commit":%q,"routing_mode":"implicit","explicit_skill_mentions":[],"forced_skills":[],"selected_skills":[{"name":"go-security","source":"implicit"},{"name":"go-reliability","source":"implicit"}],"provenance_source":"runtime_events"}`, prompt, commit)
+	if err := validateStage2Metadata([]byte(valid), prompt, commit, nil); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct{ name, metadata string }{
 		{"wrong digest", strings.Replace(valid, prompt, strings.Repeat("c", 64), 1)},
 		{"wrong commit", strings.Replace(valid, commit, strings.Repeat("c", 40), 1)},
 		{"wrong mode", strings.Replace(valid, `"routing_mode":"implicit"`, `"routing_mode":"explicit"`, 1)},
-		{"explicit list", strings.Replace(valid, `"explicit_skill_mentions":[]`, `"explicit_skill_mentions":["go-specialist-router"]`, 1)},
-		{"forced list", strings.Replace(valid, `"forced_skills":[]`, `"forced_skills":["go-specialist-router"]`, 1)},
-		{"omitted router", strings.Replace(valid, `[{"name":"go-specialist-router","source":"implicit"}]`, `[{"name":"agent-prompt-composer","source":"implicit"}]`, 1)},
-		{"explicit-only specialist", strings.Replace(valid, `"go-specialist-router"`, `"go-security-review"`, 1)},
+		{"explicit list", strings.Replace(valid, `"explicit_skill_mentions":[]`, `"explicit_skill_mentions":["go-security"]`, 1)},
+		{"forced list", strings.Replace(valid, `"forced_skills":[]`, `"forced_skills":["go-security"]`, 1)},
+		{"non-domain skill", strings.Replace(valid, `[{"name":"go-security","source":"implicit"},{"name":"go-reliability","source":"implicit"}]`, `[{"name":"go-coder","source":"implicit"}]`, 1)},
 		{"non-implicit source", strings.Replace(valid, `"source":"implicit"`, `"source":"explicit"`, 1)},
-		{"duplicate selection", strings.Replace(valid, `[{"name":"go-specialist-router","source":"implicit"}]`, `[{"name":"go-specialist-router","source":"implicit"},{"name":"go-specialist-router","source":"implicit"}]`, 1)},
-		{"empty selection", strings.Replace(valid, `[{"name":"go-specialist-router","source":"implicit"}]`, `[]`, 1)},
+		{"duplicate selection", strings.Replace(valid, `[{"name":"go-security","source":"implicit"},{"name":"go-reliability","source":"implicit"}]`, `[{"name":"go-security","source":"implicit"},{"name":"go-security","source":"implicit"}]`, 1)},
+		{"empty selection", strings.Replace(valid, `[{"name":"go-security","source":"implicit"},{"name":"go-reliability","source":"implicit"}]`, `[]`, 1)},
 		{"unknown key", strings.Replace(valid, `"runtime_events"}`, `"runtime_events","extra":true}`, 1)},
 		{"non-runtime provenance", strings.Replace(valid, `"runtime_events"`, `"adapter_claim"`, 1)},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := validateStage2Metadata([]byte(test.metadata), prompt, commit, map[string]bool{"go-security-review": true}); err == nil {
+			if err := validateStage2Metadata([]byte(test.metadata), prompt, commit, nil); err == nil {
 				t.Fatal("invalid stage 2 metadata passed")
 			}
 		})
+	}
+	if err := validateStage2Metadata([]byte(valid), prompt, commit, map[string]bool{"go-security": true}); err == nil {
+		t.Fatal("explicit-only domain specialist passed")
+	}
+}
+
+func TestStage2MetadataAcceptsOneImplicitDomain(t *testing.T) {
+	t.Parallel()
+	prompt := strings.Repeat("a", 64)
+	commit := strings.Repeat("b", 40)
+	metadata := fmt.Sprintf(`{"schema_version":1,"prompt_sha256":%q,"repository_commit":%q,"routing_mode":"implicit","explicit_skill_mentions":[],"forced_skills":[],"selected_skills":[{"name":"go-security","source":"implicit"}],"provenance_source":"runtime_events"}`, prompt, commit)
+	if err := validateStage2Metadata([]byte(metadata), prompt, commit, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -84,8 +90,8 @@ func TestCatalogAndPolicyMutations(t *testing.T) {
 		}
 	})
 	for _, test := range []struct{ name, path, body string }{
-		{"nested selector link", ".agents/skills/go-chi-review/references/index.md", "[missing](missing.md)\n"},
-		{"router arbitration link", ".agents/skills/go-specialist-router/references/index.md", "[arbitration](../../missing-arbitration.md)\n"},
+		{"review selector link", ".agents/skills/go-chi/references/review/index.md", "[missing](missing.md)\n"},
+		{"decision selector link", ".agents/skills/go-chi/references/decision/index.md", "[missing](missing.md)\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := makeValidRepository(t)
@@ -95,60 +101,33 @@ func TestCatalogAndPolicyMutations(t *testing.T) {
 			}
 		})
 	}
-	makePolicies := func(t *testing.T) (string, []string) {
-		root := makeValidRepository(t)
-		names, problems := specialistNames(root)
-		if len(problems) != 0 || len(names) != 29 {
-			t.Fatalf("derived specialists = %d, %v", len(names), problems)
-		}
-		for _, name := range names {
-			mustWriteFile(t, filepath.Join(root, ".agents/skills", name, "agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
-		}
-		return root, names
-	}
 	t.Run("zero policies", func(t *testing.T) {
-		if got := validateImplicitPolicies(makeValidRepository(t)); len(got) != 0 {
-			t.Fatal(got)
-		}
-	})
-	t.Run("exact derived policies", func(t *testing.T) {
-		root, _ := makePolicies(t)
+		root := makeValidRepository(t)
 		if got := validateImplicitPolicies(root); len(got) != 0 {
 			t.Fatal(got)
 		}
 	})
-	for _, test := range []struct {
-		name   string
-		mutate func(*testing.T, string, []string)
-	}{
-		{"partial policies", func(t *testing.T, root string, names []string) {
-			mustRemoveAll(t, filepath.Join(root, ".agents/skills", names[0], "agents"))
-		}},
-		{"extra non-specialist", func(t *testing.T, root string, _ []string) {
-			writeSkill(t, root, "grilling", "grilling", validDescription(), "# Body\n")
-			mustWriteFile(t, filepath.Join(root, ".agents/skills/grilling/agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
-		}},
-		{"router false", func(t *testing.T, root string, _ []string) {
-			mustWriteFile(t, filepath.Join(root, ".agents/skills/go-specialist-router/agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
-		}},
-		{"malformed policy", func(t *testing.T, root string, names []string) {
-			mustWriteFile(t, filepath.Join(root, ".agents/skills", names[0], "agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: true\n"))
-		}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			root, names := makePolicies(t)
-			test.mutate(t, root, names)
-			if got := validateImplicitPolicies(root); len(got) == 0 {
-				t.Fatal("invalid policy state passed")
-			}
-		})
-	}
+	t.Run("non-domain shared-contract link is not a domain policy", func(t *testing.T) {
+		root := makeValidRepository(t)
+		writeSkill(t, root, "grilling", "grilling", validDescription(), "# Skill\n\n[Shared contract](../specialist-contract.md)\n")
+		mustWriteFile(t, filepath.Join(root, ".agents/skills/grilling/agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
+		if got := validateImplicitPolicies(root); len(got) != 0 {
+			t.Fatalf("non-domain policy was classified as a domain policy: %v", got)
+		}
+	})
+	t.Run("domain explicit-only policy", func(t *testing.T) {
+		root := makeValidRepository(t)
+		mustWriteFile(t, filepath.Join(root, ".agents/skills/go-security/agents/openai.yaml"), []byte("policy:\n  allow_implicit_invocation: false\n"))
+		if got := validateImplicitPolicies(root); len(got) != 1 || !strings.Contains(got[0], "must remain implicitly invocable") {
+			t.Fatalf("explicit-only domain policy passed: %v", got)
+		}
+	})
 }
 
 func TestTrialClassMatrixAndManifestStability(t *testing.T) {
 	t.Parallel()
 	root := makeValidRepository(t)
-	bundle := validEvalBundle("go-reliability-review")
+	bundle := validEvalBundle("go-reliability")
 	if problems := validateEvalBundle(bundle.SkillName, bundle); len(problems) != 0 {
 		t.Fatalf("empty core trial_class rejected: %v", problems)
 	}
@@ -208,9 +187,9 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			name: "missing inventory entry",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				mustRemoveAll(t, filepath.Join(root, ".agents/skills/go-chi-review"))
+				mustRemoveAll(t, filepath.Join(root, ".agents/skills/go-chi"))
 			},
-			want: "missing canonical hard skill: go-chi-review",
+			want: "missing canonical hard skill: go-chi",
 		},
 		{
 			name: "unknown hard skill",
@@ -266,7 +245,7 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			name: "missing shared link",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				writeSkill(t, root, "go-chi-review", "go-chi-review", validDescription(), "# Body\n")
+				writeSkill(t, root, "go-chi", "go-chi", validDescription(), "# Body\n")
 			},
 			want: "missing direct link",
 		},
@@ -283,7 +262,7 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
 				body := "# Body\n\n[contract](../specialist-contract.md)\n[missing](references/missing.md#part)\n"
-				writeSkill(t, root, "go-chi-review", "go-chi-review", validDescription(), body)
+				writeSkill(t, root, "go-chi", "go-chi", validDescription(), body)
 			},
 			want: "unresolved local Markdown link",
 		},
@@ -291,19 +270,19 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			name: "stale eval skill name",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				bundle := validEvalBundle("go-chi-review")
-				bundle.SkillName = "go-chi-spec"
-				writeEvalBundle(t, root, "go-chi-review", bundle)
+				bundle := validEvalBundle("go-chi")
+				bundle.SkillName = "go-db-cache"
+				writeEvalBundle(t, root, "go-chi", bundle)
 			},
-			want: "eval skill_name is \"go-chi-spec\"",
+			want: "eval skill_name is \"go-db-cache\"",
 		},
 		{
 			name: "duplicate eval id",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				bundle := validEvalBundle("go-chi-review")
+				bundle := validEvalBundle("go-chi")
 				bundle.Evals[1].ID = bundle.Evals[0].ID
-				writeEvalBundle(t, root, "go-chi-review", bundle)
+				writeEvalBundle(t, root, "go-chi", bundle)
 			},
 			want: "duplicate id",
 		},
@@ -311,9 +290,9 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			name: "missing category",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				bundle := validEvalBundle("go-chi-review")
+				bundle := validEvalBundle("go-chi")
 				bundle.Evals = bundle.Evals[:3]
-				writeEvalBundle(t, root, "go-chi-review", bundle)
+				writeEvalBundle(t, root, "go-chi", bundle)
 			},
 			want: "missing eval category unresolved_policy",
 		},
@@ -321,9 +300,9 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			name: "empty prompt",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				bundle := validEvalBundle("go-chi-review")
+				bundle := validEvalBundle("go-chi")
 				bundle.Evals[0].Prompt = " "
-				writeEvalBundle(t, root, "go-chi-review", bundle)
+				writeEvalBundle(t, root, "go-chi", bundle)
 			},
 			want: "prompt is empty",
 		},
@@ -331,9 +310,9 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			name: "selected file input",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				bundle := validEvalBundle("go-reliability-review")
+				bundle := validEvalBundle("go-reliability")
 				bundle.Evals[0].Files = []string{"inputs/code.go"}
-				writeEvalBundle(t, root, "go-reliability-review", bundle)
+				writeEvalBundle(t, root, "go-reliability", bundle)
 			},
 			want: "selected eval must be self-contained",
 		},
@@ -371,19 +350,19 @@ func TestCheckRepositoryValidation(t *testing.T) {
 func TestScopedCheckIsolationAndSelection(t *testing.T) {
 	t.Parallel()
 	root := makeValidRepository(t)
-	broken := validEvalBundle("go-security-review")
+	broken := validEvalBundle("go-security")
 	broken.Evals = broken.Evals[:3]
-	writeEvalBundle(t, root, "go-security-review", broken)
+	writeEvalBundle(t, root, "go-security", broken)
 
-	if err := checkRepository(root, []string{"go-reliability-review"}, true); err != nil {
+	if err := checkRepository(root, []string{"go-reliability"}, true); err != nil {
 		t.Fatalf("unrelated sibling escaped scoped isolation: %v", err)
 	}
-	if err := checkRepository(root, targetSkills, false); err == nil || !strings.Contains(err.Error(), "go-security-review") {
+	if err := checkRepository(root, targetSkills, false); err == nil || !strings.Contains(err.Error(), "go-security") {
 		t.Fatalf("global check did not find sibling defect: %v", err)
 	}
 
-	writeSkill(t, root, "go-reliability-review", "go-reliability-review", validDescription(), "# No contract\n")
-	if err := checkRepository(root, []string{"go-reliability-review"}, true); err == nil || !strings.Contains(err.Error(), "missing direct link") {
+	writeSkill(t, root, "go-reliability", "go-reliability", validDescription(), "# No contract\n")
+	if err := checkRepository(root, []string{"go-reliability"}, true); err == nil || !strings.Contains(err.Error(), "missing direct link") {
 		t.Fatalf("scoped check hid selected defect: %v", err)
 	}
 
@@ -393,7 +372,7 @@ func TestScopedCheckIsolationAndSelection(t *testing.T) {
 	}{
 		{"", "must not be empty"},
 		{"go-coder,", "empty or non-exact"},
-		{"go-coder, go-chi-review", "empty or non-exact"},
+		{"go-coder, go-chi", "empty or non-exact"},
 		{"go-coder,go-coder", "duplicate"},
 		{"go-design-spec", "retired"},
 		{"go-not-real", "unknown"},
@@ -403,7 +382,7 @@ func TestScopedCheckIsolationAndSelection(t *testing.T) {
 			t.Errorf("parseSkillScope(%q) error = %v, want %q", test.raw, err, test.want)
 		}
 	}
-	want := []string{"go-coder", "go-chi-review"}
+	want := []string{"go-coder", "go-chi"}
 	got, err := parseSkillScope(strings.Join(want, ","))
 	if err != nil || !slices.Equal(got, want) {
 		t.Fatalf("valid scope = %v, %v", got, err)
@@ -478,14 +457,14 @@ func TestEmitSelectedEvalsDeterministically(t *testing.T) {
 			t.Fatalf("manifest line %d malformed: %q", index, line)
 		}
 	}
-	expectedPath := filepath.Join(first, "cases/go-reliability-review/domain_defect/expected.txt")
-	if got, want := string(mustReadFile(t, expectedPath)), "expected go-reliability-review domain_defect\nassert go-reliability-review domain_defect\n"; got != want {
+	expectedPath := filepath.Join(first, "cases/go-reliability/domain_defect/expected.txt")
+	if got, want := string(mustReadFile(t, expectedPath)), "expected go-reliability domain_defect\nassert go-reliability domain_defect\n"; got != want {
 		t.Fatalf("expected payload = %q, want %q", got, want)
 	}
 
-	bundle := validEvalBundle("go-security-spec")
+	bundle := validEvalBundle("go-security")
 	bundle.Evals[0].Category = "clean"
-	writeEvalBundle(t, root, "go-security-spec", bundle)
+	writeEvalBundle(t, root, "go-security", bundle)
 	if err := emitSelectedEvals(root, filepath.Join(t.TempDir(), "bad")); err == nil {
 		t.Fatal("selected category mismatch unexpectedly emitted")
 	}
@@ -512,7 +491,7 @@ func TestSizeReportAccounting(t *testing.T) {
 			t.Errorf("per-skill row missing: %s", skill)
 		}
 	}
-	for _, family := range []string{"shared-contract-specialist", "direct-execution-method", "specialist-router", "workflow-session"} {
+	for _, family := range []string{"shared-contract-specialist", "direct-execution-method", "workflow-session"} {
 		row, ok := rows["FAMILY:"+family]
 		if !ok || row[1] != family {
 			t.Errorf("family row missing or wrong: %s", family)
@@ -524,18 +503,22 @@ func TestSizeReportAccounting(t *testing.T) {
 			familyCount++
 		}
 	}
-	if familyCount != 4 {
-		t.Fatalf("family row count = %d, want 4", familyCount)
+	if familyCount != 3 {
+		t.Fatalf("family row count = %d, want 3", familyCount)
 	}
-	api := rows["go-api-contract-spec"]
-	if api[2] != "api-contract-designer-spec" {
+	api := rows["go-api-contract"]
+	if api[2] != "go-api-contract-spec" {
 		t.Fatalf("rename mapping = %q", api[2])
 	}
-	reliability := rows["go-reliability-review"]
+	if got := rows["go-chi"][2]; got != "go-chi-review+go-chi-spec" {
+		t.Fatalf("merged baseline mapping = %q", got)
+	}
+	reliability := rows["go-reliability"]
 	sharedBytes := len([]byte("shared contract words\n"))
+	baselineSharedBytes := len([]byte("baseline shared\n"))
+	chi := rows["go-chi"]
+	assertBaselineEffectiveBytes(t, "merged specialist baseline", chi, mustAtoi(t, chi[5])+2*baselineSharedBytes)
 	assertEffectiveBytes(t, "specialist", reliability, mustAtoi(t, reliability[9])+sharedBytes)
-	router := rows["go-specialist-router"]
-	assertEffectiveBytes(t, "router", router, mustAtoi(t, router[9])+sharedBytes)
 	assertEffectiveBytes(t, "direct execution", rows["go-coder"], mustAtoi(t, rows["go-coder"][9]))
 	assertEffectiveBytes(t, "workflow/session", rows["planning-session"], mustAtoi(t, rows["planning-session"][9]))
 	if _, ok := rows["CATALOG"]; !ok {
@@ -543,6 +526,13 @@ func TestSizeReportAccounting(t *testing.T) {
 	}
 	if err := writeSizeReport(root, "missing", &bytes.Buffer{}); err == nil {
 		t.Fatal("missing baseline ref unexpectedly passed")
+	}
+}
+
+func assertBaselineEffectiveBytes(t *testing.T, label string, row []string, want int) {
+	t.Helper()
+	if got := mustAtoi(t, row[13]); got != want {
+		t.Fatalf("%s effective bytes = %d, want %d", label, got, want)
 	}
 }
 
@@ -630,7 +620,7 @@ func TestHarnessIsolationAndAdapterSymmetry(t *testing.T) {
 	fixture := makeHarnessFixture(t)
 	artifactDir := filepath.Join(t.TempDir(), "artifacts")
 	env := fixture.runEnv()
-	env["FAKE_REQUIRE_CANDIDATE_FILE"] = ".agents/skills/go-reliability-review/references/untracked-authority.md"
+	env["FAKE_REQUIRE_CANDIDATE_FILE"] = ".agents/skills/go-reliability/references/untracked-authority.md"
 	env["FAKE_FORBID_FILE"] = "unrelated-sentinel.txt"
 	env["FAKE_ASSERT_SEALED"] = "true"
 	output, err := runHarness(t, fixture, []string{"run", artifactDir}, env)
@@ -779,8 +769,8 @@ func makeHarnessFixture(t *testing.T) harnessFixture {
 	runGit(t, root, "add", "--all")
 	runGit(t, root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "baseline")
 	baseline := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
-	writeSkill(t, root, "go-reliability-review", "go-reliability-review", validDescription(), "# Candidate reliability\n")
-	mustWriteFile(t, filepath.Join(root, ".agents/skills/go-reliability-review/references/untracked-authority.md"), []byte("authoritative\n"))
+	writeSkill(t, root, "go-reliability", "go-reliability", validDescription(), "# Candidate reliability\n")
+	mustWriteFile(t, filepath.Join(root, ".agents/skills/go-reliability/references/untracked-authority.md"), []byte("authoritative\n"))
 	mustWriteFile(t, filepath.Join(root, "unrelated-sentinel.txt"), []byte("exclude me\n"))
 
 	checker := filepath.Join(parent, "hard-skills-check")
@@ -950,7 +940,7 @@ func validEvalBundle(skill string) evalBundle {
 func TestSelectedEvalBundleAllowsAuxiliaryTrialCases(t *testing.T) {
 	t.Parallel()
 
-	bundle := validEvalBundle("go-security-spec")
+	bundle := validEvalBundle("go-security")
 	bundle.Evals = append(bundle.Evals, evalCase{
 		ID:             json.RawMessage(`"auxiliary-safety-case"`),
 		Category:       "domain_defect",
@@ -961,7 +951,7 @@ func TestSelectedEvalBundleAllowsAuxiliaryTrialCases(t *testing.T) {
 		Files:          []string{"evals/fixtures/context.md"},
 	})
 
-	if problems := validateEvalBundle("go-security-spec", bundle); len(problems) != 0 {
+	if problems := validateEvalBundle("go-security", bundle); len(problems) != 0 {
 		t.Fatalf("selected bundle rejected an auxiliary trial case: %v", problems)
 	}
 }
@@ -990,11 +980,13 @@ func makeSizeRepository(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
 	for _, skill := range targetSkills {
-		baselineSkill := skill
-		if old, ok := renamedSkills[skill]; ok {
-			baselineSkill = old
+		baselineNames := baselineSkills[skill]
+		if len(baselineNames) == 0 {
+			baselineNames = []string{skill}
 		}
-		writeSkill(t, root, baselineSkill, baselineSkill, validDescription(), "baseline "+baselineSkill+"\n")
+		for _, baselineSkill := range baselineNames {
+			writeSkill(t, root, baselineSkill, baselineSkill, validDescription(), "baseline "+baselineSkill+"\n")
+		}
 	}
 	writeSkill(t, root, "planning-session", "planning-session", validDescription(), "baseline planning-session\n")
 	mustWriteFile(t, filepath.Join(root, filepath.FromSlash(sharedContractPath)), []byte("baseline shared\n"))
@@ -1003,7 +995,7 @@ func makeSizeRepository(t *testing.T) (string, string) {
 	runGit(t, root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "baseline")
 	baseline := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
 	for _, skill := range targetSkills {
-		if old, ok := renamedSkills[skill]; ok {
+		for _, old := range baselineSkills[skill] {
 			mustRemoveAll(t, filepath.Join(root, ".agents/skills", old))
 		}
 		body := "candidate " + skill + "\n"

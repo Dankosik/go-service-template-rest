@@ -41,11 +41,11 @@
       "id": "verification-unresolved-policy",
       "category": "unresolved_policy",
       "prompt": "Use the go-verification-before-completion skill. The requested claim is that a staged rollout is ready, but no accepted artifact defines the required canary duration, rollback trigger, migration ordering, or blocking release gate, and the repository has no command encoding those criteria. Return the verification outcome without inventing policy.",
-      "expected_output": "Block the readiness claim on go-delivery-platform-spec because no accepted rollout and release-gate criteria exist to verify.",
+      "expected_output": "Block the readiness claim on go-delivery-platform because no accepted rollout and release-gate criteria exist to verify.",
       "files": [],
       "assertions": [
         "The response reports the readiness claim as not verified because its acceptance criteria are unresolved.",
-        "The response names go-delivery-platform-spec as the missing policy owner.",
+        "The response names go-delivery-platform as the missing policy owner.",
         "The response invents no canary duration, rollback threshold, migration sequence, release gate, or substitute command."
       ]
     }
