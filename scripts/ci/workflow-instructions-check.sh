@@ -165,13 +165,25 @@ t02_check_app_worker_model_policy() {
     'never inherit an App default' \
     'task identity, selected model and effort, and a short basis' \
     'basis names the exact eval artifact and compared model/effort configuration' \
-    '`gpt-5.6-terra` with `medium` as the normal implementation baseline' \
-    '`gpt-5.6-luna` with `low` only for bounded low-risk mechanical work' \
-    'named representative workflow eval artifact shows retained task success and evidence completeness' \
-    '`gpt-5.6-sol` when material difficulty, ambiguity, reversibility, or consequence of error requires frontier capability' \
-    'risk signals, not automatic Sol triggers' \
-    'Use `high`, `xhigh`, or `max` only when a named representative workflow eval artifact' \
-    'Same-task corrections keep their selected model and effort unless failure evidence justifies an explicit escalation'; do
+    'Choose model and effort independently from the App' \
+    'task difficulty, ambiguity or evidence volume, latency/cost, reversibility, and consequence of error' \
+    '[official Codex model guide](https://learn.chatgpt.com/docs/models#choosing-sol-terra-and-luna)' \
+    '`gpt-5.6-sol` for complex, open-ended, ambiguous, difficult, or high-value coding, research, or security work' \
+    '`gpt-5.6-terra` for pragmatic everyday work needing strong reasoning and tool use' \
+    '`gpt-5.6-luna` for clear, specific, repeatable, high-volume work with a known result' \
+    'These are task-specific guides, not mandatory keyword routing or a Terra default' \
+    'Use the lowest effort likely to produce the required result' \
+    '`low` for quick, well-scoped work' \
+    '`medium` for more planning and a speed/depth balance' \
+    '`high` or `xhigh` for difficult work with multiple steps, sources, or tradeoffs' \
+    '`max` for the hardest single quality-first task' \
+    '`Ultra` is subagent parallelism, not more single-task reasoning' \
+    'this Worker cannot delegate, so do not route this single-Worker phase to Ultra' \
+    'There is no fixed model/effort baseline' \
+    'risk signals, not automatic Sol or highest-effort triggers' \
+    'Evals may inform the basis when already available, but are never a prerequisite' \
+    'do not pause dispatch or create/run an eval solely to justify a model or effort choice' \
+    'Same-task model and effort may change when remaining work or observed Worker evidence justifies it, without an eval prerequisite'; do
     t02_require_machine_token "${file}" "${token}" || return 1
   done
   if grep -Eiq -- 'Omit model and reasoning-effort overrides|model or effort pinning without the user' "${file}"; then
@@ -561,8 +573,13 @@ for token in \
   'future turn' \
   "active turn's effective model or effort" \
   '### E45 — Explicit App Worker Model And Effort Routing' \
-  'named representative eval artifact' \
-  '`gpt-5.6-terra` with `medium`' \
+  '`gpt-5.6-luna` with `low` is a valid T01 choice' \
+  '`gpt-5.6-terra` with `medium` is a valid T02 choice' \
+  '`gpt-5.6-sol` with `high` is a valid T03 choice' \
+  '`high`/`xhigh` difficult multi-step, source, or tradeoff work' \
+  '`max` only the hardest single quality-first task' \
+  'Do not route these single-Worker tasks to `Ultra`' \
+  'Evals may inform a basis if already available, but do not request, create, run, or pause dispatch for one' \
   'Do not claim that this manifest check proves live benchmark superiority'; do
   t02_require_machine_token docs/spec-first-workflow-evals.md "${token}"
 done
