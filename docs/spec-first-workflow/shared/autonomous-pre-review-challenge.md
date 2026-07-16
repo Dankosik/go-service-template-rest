@@ -29,7 +29,7 @@ Explicit user-requested grilling remains a root-to-user dialogue; the internal
 challenger never relays those questions.
 
 The challenger inspects repository facts rather than asking for them, then
-selects the highest-impact unresolved material branch. It may apply a materially triggered specialist method locally but never delegates recursively. Each turn
+selects the highest-impact unresolved material branch. That branch owns the exchange until the root records `ACCEPT`, `OVERRIDE`, `RECLASSIFY`, `WAIT_HUMAN`, or `REOPEN_OWNER`; only then may the challenger select a sibling branch. Emitting `QUESTION` does not close the branch. The challenger may apply a materially triggered specialist method locally but never delegates recursively. Each turn
 returns exactly one event: `QUESTION`, `HUMAN_REQUIRED`, `REOPEN`, or `DONE`.
 Do not emit a questionnaire or a readiness verdict.
 
@@ -79,8 +79,9 @@ the root from answering for the user or hiding an upstream gap.
 For `HUMAN_REQUIRED` or `REOPEN`, record the deduplicated item in the existing
 owner, then respond with `CONTINUE_INDEPENDENT`, `WAIT_HUMAN`, or `REOPEN_OWNER`,
 plus its destination, exact latest revision, and relevant open items.
-`CONTINUE_INDEPENDENT` permits only branches that do not depend on the recorded
-item; the other responses wait for the human answer or owner repair.
+`CONTINUE_INDEPENDENT` permits only work outside the unresolved challenger branch;
+it does not close that branch or permit sibling-branch selection. The other
+responses wait for the human answer or owner repair.
 
 Continue dependent turns through the same challenger with the exact latest candidate.
 The owning candidate is authoritative; the child transcript is not. If the
@@ -89,8 +90,7 @@ exact latest candidate and named open items rather than remembered chat. Do not 
 
 ## Exhaustion And Invalidation
 
-There is no question quota. Return `DONE` when no new or evidence-reopened
-material current-phase decision remains; repeated dispositions, generic
+There is no question quota. `DONE` means no new, evidence-reopened, or readiness-changing current-phase decision remains. A dependent blocked branch retains `HUMAN_REQUIRED` or `REOPEN` until its owner resolves it. Repeated dispositions, generic
 category coverage, and questions with no affected choice are no progress.
 Wording-only edits and repairs that apply an existing disposition reuse
 completion. New evidence or a material change to a decision, assumption,

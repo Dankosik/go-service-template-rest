@@ -40,12 +40,15 @@ Verdict consequences:
 
 ## Review Method
 
+Review the fixed candidate through one kernel: reconstruct -> falsify -> disposition -> verdict.
+
 Reconstruct the affected behavior surface independently from the accepted
 brief, relevant research, current runtime/generated contracts, and repository
 or consumer surfaces the accepted outcome can affect.
 Do not treat omission from the spec as evidence that a lens is not triggered.
-Apply the shared covered/delegated/not-triggered disposition to every materially
-affected lens.
+Falsify it with the smallest decision-changing questions below, then apply the
+shared covered/delegated/not-triggered disposition to every materially affected
+lens and issue one evidence-bounded verdict on that exact revision.
 
 Try to falsify the spec with the smallest decision-changing questions:
 
@@ -67,7 +70,7 @@ Try to falsify the spec with the smallest decision-changing questions:
 
 Report only findings that can change readiness or required proof. Do not block
 on writing style, optional detail, or a lens independently shown not to be
-triggered.
+triggered. The review stays read-only; repairs belong to the owning author.
 
 ## Stop Rule
 

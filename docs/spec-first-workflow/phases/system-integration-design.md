@@ -1,6 +1,6 @@
 # System / Integration Design
 
-Choose the smallest coherent target-state runtime mechanism that satisfies the accepted behavior and invariants under the accepted workload, failure, security, operability, and rollout constraints. Close every material system choice that implementation would otherwise have to invent.
+Trace each material flow from actor or trigger through caller-visible completion or durable finality, then choose the smallest coherent target-state runtime mechanism that satisfies the accepted behavior and invariants. Close decisions where they occur along the flow so implementation does not invent system behavior.
 
 ## Read When
 
@@ -15,6 +15,10 @@ Choose the smallest coherent target-state runtime mechanism that satisfies the a
 - Current provider contracts, OpenAPI/event/schema sources, generated-source owners, and relevant runtime code.
 - Decision-relevant current-state evidence for invariant/write/process ownership, runtime and data flow, workload and critical path, operators, external dependencies, and mixed-version constraints.
 - Research that can change the mechanism.
+
+## Method
+
+Reconstruct every material flow, then trace actor/trigger -> ingress/producer -> ordered runtime hops -> storage/broker -> affected consumers and side effects -> caller-visible completion or durable finality. Activate only the triggered architecture, contract, exact-byte, release-graph, and fan-out branches below.
 
 ## Outputs
 
@@ -33,7 +37,7 @@ For each material mechanism decision, record the selected mechanism, accepted de
 
 ## Architecture Rule
 
-When a material boundary, topology, runtime, source-of-truth, completion/finality, consistency, sync/async, projection/provider, migration, resilience, or extraction decision is live, apply `go-system-architecture` and its Required Evidence/Deliverable and Stop Conditions; otherwise keep this phase compact.
+When one of those system decisions is live, apply `go-system-architecture` to the affected boundary and satisfy its completion criterion. Otherwise keep this phase compact.
 
 ## Contract Rule
 
@@ -73,7 +77,7 @@ An unverified cross-region or otherwise remote latency-sensitive path is a block
 
 ## Fan-Out And Review
 
-At phase entry, identify the materially affected domains: architecture/topology, domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Apply each matching skill locally or delegate under the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision). Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
+At phase entry, identify the materially affected domains: architecture/topology, domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Apply each matching method locally by default. A separate lane is triggered only for one concrete bounded independent question that can change a material design decision or its required evidence, under the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision). Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
 
 Parallelize only concrete bounded questions that can be answered independently and can change a material design decision or its required evidence; keep dependent decisions sequential and synthesize all results before selecting the mechanism.
 
@@ -81,4 +85,4 @@ For structured or orchestrated work, run [Technical Design Review](technical-des
 
 ## Stop Rule
 
-Continue to Go ownership only when every material flow is traceable and package/file placement will not reopen a material decision about system boundaries/topology, invariant/write/process authority, critical path, completion/consistency/failure/recovery semantics, projection authority, or rollout constraints. Continue to test design or planning only after Go ownership is complete and the required technical-design review has returned `PASS`. Reopen the narrowest upstream evidence or decision owner when a missing fact, unset decision, or untraceable material flow can change accepted behavior, ownership, mechanism choice, or proof feasibility; when that owner is external, report the blocker and narrow the completion claim.
+Continue to Go ownership only when every material flow is traceable in order from actor/trigger through owners, contracts and data authority, runtime sequence, and failure/recovery to caller-visible completion or durable finality, and package/file placement will not reopen a material system decision. Continue to test design or planning only after Go ownership is complete and the required technical-design review has returned `PASS`. Reopen the narrowest upstream evidence or decision owner when a missing fact, unset decision, or untraceable material flow can change accepted behavior, ownership, mechanism choice, or proof feasibility; when that owner is external, report the blocker and narrow the completion claim.

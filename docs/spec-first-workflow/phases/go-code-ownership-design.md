@@ -14,17 +14,22 @@ Place the accepted mechanism in Go packages and files without changing behavior.
 - `docs/repo-architecture.md` and current package/file responsibilities.
 - Relevant callers, siblings, composition root, generated sources, tests, and any replaced or compatibility paths.
 
+## Method
+
+Reconstruct the complete changed-responsibility set from current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths. For each responsibility, select one clear implementation/source owner with current evidence and state why that owner stays or changes. Separately disposition its package/file placement, dependency/composition, generated authority, cleanup owner, and test/proof owner.
+
 ## Outputs
 
-A compact ownership section in `design/overview.md` or `design/go-code-ownership.md` covering:
+A compact ownership section in `design/overview.md` or `design/go-code-ownership.md`, grouped by affected responsibility:
 
-- current file/symbol evidence for the existing owner and selected owner package and file placement for each changed responsibility; only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead; include why the owner stays or changes and what stays, moves, is added, or is removed;
-- dependency direction, composition boundary, and, when planning would otherwise choose it, the owner and minimum required shape of each introduced or changed cross-package type, error, mapping, constructor, or exported symbol;
-- generated source of truth and its hand-written change or regeneration point;
+- source: implementation/source owner, current file/symbol evidence, why that owner stays or changes, selected package/file placement, and what stays, moves, is added, or is removed; only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead;
+- dependency/composition: dependency direction, composition boundary, and the owner and minimum required shape of each introduced or changed cross-package type, error, mapping, constructor, or exported symbol that planning would otherwise choose;
+- authority: generated source of truth and its hand-written change or regeneration point;
 - concrete types by default; when a present consumer must substitute implementations or direct coupling would violate dependency direction, use the smallest interface in the consumer package and name its composition-root wiring;
-- keep/split rationale for each hand-written owner whose responsibility changes; add a file, package, or seam only when keeping the change in the current owner would mix distinct present responsibilities or violate a required dependency or generated/manual boundary;
-- disposition of each replaced or compatibility path and every now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition;
-- test owner and proof entrypoint.
+- cleanup: keep/split rationale plus the disposition of each replaced or compatibility path and every now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition;
+- test and proof: test owner and proof entrypoint.
+
+Add a file, package, or seam only when the selected responsibility owner cannot preserve the required responsibility, dependency direction, or generated/manual boundary in the current surface.
 
 Keep symbols unexported and code with its current owner unless the selected responsibility or dependency direction requires a move. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count alone, or test convenience alone do not justify a new interface, package, helper, factory, or seam. Keep owner-specific behavior out of generic helper buckets, one-product factories, and speculative extension points.
 

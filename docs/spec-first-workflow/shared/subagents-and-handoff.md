@@ -47,7 +47,7 @@ For read-only subagents, choose the currently available model and reasoning effo
 
 ## Lane Brief
 
-Keep the brief outcome-first:
+One lane owns one question, one evidence boundary, and one root disposition. Keep the brief outcome-first:
 
 ```text
 Question: <one decision or falsification target>
@@ -82,7 +82,7 @@ The reviewer:
 
 When a non-implementation independent gate is required, one whole-artifact reviewer is the default. That reviewer applies compatible matching methods locally in one coherence pass and accounts for every materially affected lens. Run a specialist before that gate only for one concrete high-impact question the root cannot credibly cover locally. If the gate reviewer discovers such an uncovered question, run one bounded specialist follow-up and return only that disposition for a focused verdict update; do not repeat an unchanged whole revision. A domain label, generic handoff, or desire for more confidence does not justify another reviewer.
 
-The root collects all in-scope actionable findings for the fixed non-implementation revision. The owning author repairs them, and the same gate reviewer performs focused re-review of the repair and any transitively affected behavior, contract, ownership, or proof decision. Reuse unaffected lens dispositions by default; use full affected-surface re-review only when the repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue. Implementation findings instead follow the root-owned Worker correction loop in the implementation phase.
+For each applicable required non-implementation boundary, canonical review convergence is: authoring bar -> required challenge `DONE` -> exact fixed candidate -> independent findings and verdict -> owning-author repair or upstream reopen -> focused fresh re-review of changed and transitively affected lenses -> `PASS`. The root collects all in-scope actionable findings for that fixed revision; the same gate reviewer re-reviews repairs and reuses unaffected lens dispositions by default. Use full affected-surface re-review only when the repair changes shared assumptions or crosses a domain boundary. Re-review must be at least as capable as the review that found the issue. Implementation findings instead follow the root-owned Worker correction loop in the implementation phase.
 
 A non-implementation macro phase reaches review convergence only when its latest required review returns `PASS` and finds no blocker, known current-phase defect, unowned question, uncovered materially affected lens, or unresolved cross-lens contradiction. `CONCERNS` is non-terminal: a bounded risk or downstream proof obligation still needs disposition in the owning phase, and it never permits phase movement. The owning author repairs it. The root records authorized acceptance with evidence, owner, and reopen condition, or splits/reopens scope, then obtains focused fresh review; `PASS` means every concern has a disposition, not that no residual risk exists. `FAIL` blocks movement and requires repair or reopening before focused fresh review. Non-blocking observations do not prevent `PASS`. Repeat only while a concrete new finding or semantic repair changes readiness. If closure needs unavailable evidence, authority, or an upstream decision, mark the phase blocked and reopen that owner. Do not repeat an unchanged `PASS` revision or launch speculative lenses merely to collect confidence.
 
@@ -111,6 +111,8 @@ If those sources disagree, the task is blocked until the narrowest owner reconci
 
 ## Handoff
 
+Treat handoff as a chain of custody: name the accepted source, movement evidence, next owner, authority boundary, proof obligation, next executable action, and exact stop/reopen owner and condition so the receiver can continue without reconstructing chat.
+
 When the current request stops at a true macro-phase boundary and a next macro phase or external/upstream reopen owner exists, the final chat response MUST end with a copy-pastable next-session prompt; this is the default and needs no separate user request. Crossing a macro phase inside the same authorized request does not require a prompt. Do not emit one for an internal checkpoint or when the workflow is honestly complete with no next phase or reopen owner.
 
 Required research-synthesis challenge, specification review, technical-design review, test-design QA review, and task-readiness review are internal checkpoints of their non-implementation owning macro phase. The root launches the required read-only lane, repairs authoritative work, obtains any required fresh verdict, and continues automatically in the same session. A durable review record is only a carrier; it does not create a user-started phase or a next-session prompt.
@@ -130,7 +132,9 @@ An allowed handoff to a non-implementation macro phase contains:
 Objective: <one next outcome>
 Read first: <one owning artifact, then only non-obvious context>
 Constraints: <only task-specific boundaries not recoverable from AGENTS.md>
+Movement evidence: <current closure and required PASS>
 Proof: <required evidence or owning ledger section>
+Next action: <first executable action>
 Stop/reopen: <exact blocker behavior and owner>
 ```
 
@@ -141,7 +145,9 @@ Goal: <one durable outcome>
 Completion: <root acceptance, final integrated review, and fresh proof>
 Read first: <accepted inline outcome or ready tasks.md, plus minimal context>
 Constraints: <task-specific boundaries>
+Movement evidence: <accepted input or ready ledger and current proof>
 Proof: <required evidence or ledger section>
+Next action: <first executable action>
 Stop/reopen: <exact blocker behavior and owner>
 ```
 

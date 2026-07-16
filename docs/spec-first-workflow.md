@@ -1,8 +1,10 @@
 # Spec-First Workflow
 
-Stable router for repository work. `AGENTS.md` owns authorization and global invariants; this file owns execution-path selection, phase order, review routing, and movement between phases.
+Stable router for repository work. `AGENTS.md` owns authorization and global invariants; this file owns execution-path selection, phase order, review routing, and movement between phases. Closure is the global execution model: choose the smallest sufficient path, close the current owner's decisions and the next owner's inputs before movement, and reopen only the smallest owner when evidence breaks that closure.
 
 ## Choose A Path
+
+Choose the smallest path that can close the accepted outcome; add workflow only when risk, durable decisions, independent evidence, or coordination requires it.
 
 Use `direct` only when all of these are true:
 
@@ -68,7 +70,7 @@ Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for per
 
 ## Phase Movement
 
-Move forward when the next phase can work without inventing a decision owned by the current phase. Reopen the smallest owner when that is not true.
+Close before movement: move forward only when the current owner has dispositioned every triggered decision and the next phase can work from closed inputs without inventing meaning, mechanism, ownership, or proof strategy. When new evidence invalidates closure, reopen the smallest owner of the broken decision or input and preserve unaffected dispositions.
 
 ### Implementation-Input Closure
 

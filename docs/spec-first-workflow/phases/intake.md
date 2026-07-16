@@ -1,6 +1,6 @@
 # Intake
 
-Turn raw input into enough shared understanding to act or route. Intake is a short clarification step, not an interview ritual.
+Make the request routing-sufficient: reconstruct enough shared understanding to select `direct`, `structured`, or `orchestrated` work. Intake is a short clarification step, not an interview ritual.
 
 ## Read When
 
@@ -8,7 +8,7 @@ Turn raw input into enough shared understanding to act or route. Intake is a sho
 - Scope, outcome, authorization, or success cannot yet be stated safely.
 - A later phase discovers that it is relying on an untested assumption about user intent.
 
-Skip when the request already supplies a clear outcome, scope, constraints, and success signal.
+Skip when the request already supplies a clear outcome, scope, authority, constraints, and success signal.
 
 ## Inputs
 
@@ -20,25 +20,25 @@ Skip when the request already supplies a clear outcome, scope, constraints, and 
 
 A brief, usually in chat:
 
-- outcome and why it matters;
+- outcome, why it matters, and the authority granted;
 - in-scope and out-of-scope work;
-- confirmed affected surfaces and material constraints;
+- confirmed affected surfaces, current repository owners relevant to routing, and material constraints;
 - success/proof signal;
 - bounded assumptions and what would invalidate them;
 - next useful phase or direct action.
 
 ## Method
 
-1. Reconstruct the likely brief before asking anything.
-2. Resolve repository facts by inspection.
-3. Ask one question only when its answer would materially change behavior, scope, ownership, safety, authorization, or proof and no safe bounded assumption exists.
-4. State safe assumptions with their reopen condition and continue.
-5. Stop once the brief is sufficient to choose `direct`, `structured`, or `orchestrated` work.
+1. Reconstruct the likely outcome, scope, authority, success signal, and affected surfaces before asking anything.
+2. Resolve repository facts, current owners relevant to routing, and current constraints by bounded inspection; leave target ownership and placement to the owning design phase.
+3. State safe assumptions with their boundary and reopen condition.
+4. Ask the smallest single user-owned blocking question only when its answer would materially change behavior, scope, ownership, safety, authorization, or proof and no safe bounded assumption exists.
+5. Close intake once the brief makes `direct`, `structured`, or `orchestrated` selectable.
 
 Use `grilling` only when the user explicitly requests an exhaustive stress test or interview. Repetition in the user's input is a priority signal, not a reason to expand the questionnaire.
 
 ## Stop Rule
 
-Continue to the next needed phase when the outcome, scope, constraints, success signal, and material assumptions are clear enough. Stop and ask the smallest blocking question when guessing would change correctness or authority.
+Continue to the selected path when the outcome, scope, authority, constraints, success signal, affected surfaces, and material assumptions are clear enough. Stop and ask the smallest user-owned blocking question when guessing would change correctness or authority.
 
 Do not research broadly, design, plan, or implement merely to avoid resolving a genuinely blocking intent decision.

@@ -1,6 +1,6 @@
 # Workflow Artifact Model
 
-Use this file when information must survive the current reasoning pass. Artifacts are communication tools, not phase receipts.
+Persist only what must survive the current reasoning pass. Stop at the smallest artifact set that lets the next actor act, prove the result, and identify the reopen owner without chat archaeology; artifacts are communication tools, not phase receipts.
 
 ## Read When
 

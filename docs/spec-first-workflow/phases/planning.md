@@ -16,6 +16,14 @@ Direct changes may use an inline plan.
 - Current source owners, generated/mirror commands, and repository validation commands.
 - Accepted risks and proof obligations.
 
+## Method
+
+1. Inventory every in-scope accepted obligation across the ready inputs; separate implementation work from rationale, rejected alternatives, non-normative examples, and future ideas.
+2. Express the smallest coherent task outcomes that can each end in a valid, reviewable, provable state while keeping coupled source/generated/test/doc changes together.
+3. Reconcile both directions: every obligation maps to tasks and adequate proof or an evidence-backed no-implementation disposition, and every task and proof traces back to an accepted obligation without duplicated deltas.
+4. Put tasks in the earliest safe planned waves; use multi-task waves only when current evidence positively establishes pairwise independence.
+5. Cold-walk every mandatory dependency path and wave from closed root inputs through final validation. Repair or reopen the first edge a fresh implementer could not execute without chat history or a new decision.
+
 ## Outputs
 
 A compact `tasks.md`:
@@ -59,9 +67,7 @@ Planning must make these explicit where relevant:
 - earliest-safe planned waves with a positive independence basis;
 - one successful completion condition distinct from blocked stop.
 
-Before drafting tasks, identify every in-scope accepted obligation across the ready inputs. Treat rationale, rejected alternatives, non-normative examples, and future ideas as context, not implementation work. Preserve an accepted example or scenario when it defines required behavior or proof. Use local obligation keys only when dense inputs cannot otherwise be audited from narrow source anchors.
-
-After drafting, map each accepted obligation to one or more tasks and adequate proofs, or record an evidence-backed no-implementation disposition. A no-implementation disposition must cite either current authoritative evidence that the obligation is already satisfied or an accepted upstream decision that no implementation change is required, plus its proving surface or objective recheck condition. Then verify the reverse direction: every task must trace to an accepted obligation, every proof to its task's claim, and no implementation delta may be duplicated or fall between task boundaries; merge duplicated deltas. An obligation may span multiple tasks when each carries the relevant constraint and states its distinct delta and proof obligation, plus any actual interface or handoff. Keep this reconciliation inline unless the mapping is too dense to audit without a compact table; do not create a separate traceability artifact by default.
+Preserve an accepted example or scenario when it defines required behavior or proof. Use local obligation keys only when dense inputs cannot otherwise be audited from narrow source anchors. A no-implementation disposition must cite either current authoritative evidence that the obligation is already satisfied or an accepted upstream decision that no implementation change is required, plus its proving surface or objective recheck condition. An obligation may span multiple tasks when each carries the relevant constraint and states its distinct delta and proof obligation, plus any actual interface or handoff. Keep reconciliation inline unless the mapping is too dense to audit without a compact table; do not create a separate traceability artifact by default.
 
 Before readiness, cold-walk every mandatory dependency path and planned wave from each dependency root through final validation. Each root task must be startable from canonical, mechanically derivable, or currently available external inputs; each downstream task and required proof must become startable and completable from those inputs plus the accepted outputs of its completed dependencies. Every task must appear in exactly one wave, wave order must respect real dependencies, and each multi-task wave must retain its positive independence basis under the accepted inputs. A known unavailable external gate may remain only when its dependent task and claim are excluded from the current completion and routed to a later ledger; it may not sit on a path to final validation. Never approve `PASS subject to gates` for a mandatory path.
 
@@ -75,4 +81,4 @@ Task review, planning-owned repair, and fresh re-review are internal checkpoints
 
 ## Stop Rule
 
-Implementation may start when every mandatory path through the completion condition is dependency-ordered, owned, traceable, provable, executable from current inputs, grouped into reviewed earliest-safe planned waves, and the required readiness review has returned `PASS`. Do not start implementation merely because a draft ledger exists.
+The ledger is cold-start ready when every dependency root is startable from cited closed inputs and every downstream task and proof becomes executable and completable in dependency order without chat history or a new behavior, mechanism, ownership, proof, or concurrency decision. Every mandatory path must remain owned, traceable, provable, grouped into reviewed earliest-safe planned waves, and backed by a required readiness review of `PASS`. Only then may implementation start.

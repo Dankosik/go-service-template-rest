@@ -15,9 +15,13 @@ Turn risky behavior into explicit proof obligations before implementation. Keep 
 - Existing nearby tests, fixtures, contract/drift checks, and repository validation commands.
 - Existing test plan for repair work.
 
-## Outputs
+## Method
 
 Before writing scenarios, disposition every material acceptance claim, invariant, state transition, failure mode, and protected side effect affected by the change as existing sufficient proof, existing proof to strengthen, one or more `TD-*` scenarios, a named non-test proof that can falsify the claim, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition. Omission is not disposition. Derive this proof surface from approved behavior and affected contract, runtime, state, trust, and lifecycle boundaries, not from existing test names or implementation branches.
+
+For each resulting proof obligation, design the smallest falsifier: a controlled setup/action/failure trigger plus an oracle that rejects a plausible incorrect observable result, state, emission, or side effect. Then select the narrowest complementary proving level and runnable command that can establish that oracle.
+
+## Outputs
 
 When a durable matrix is unnecessary, return a compact inline proof handoff for Planning. Otherwise create `test-plan.md` with the canonical row shape:
 
@@ -49,6 +53,6 @@ When test design owns that review, findings return to the owning root for same-s
 
 ## Stop Rule
 
-Continue to planning when every material risk has an owner plus an executable check, a dispositioned downstream obligation, or an authorized recorded residual-risk acceptance with evidence and reopen condition, and the required review has returned `PASS`. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
+Continue to planning when every material acceptance claim, invariant, transition, failure mode, and protected side effect is dispositioned as sufficient existing proof, an owned executable proof path, a named non-test falsifier, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition, and the required review has returned `PASS`. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
 
 Do not create a test plan whose only content is headings or generic “add coverage” tasks.

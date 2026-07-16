@@ -1,6 +1,6 @@
 # Specification
 
-Define what must be true before deciding how to implement it. Preserve the
+Define meaning before mechanism: what must be true before deciding how to implement it. Preserve the
 user/operator-visible outcome, material constraints, available evidence, and
 completion bar while keeping the spec as small as the decision surface allows.
 
@@ -41,12 +41,16 @@ current compatibility owner, evidence for retention, and exit condition.
 
 ## Method
 
+Specification owns observable scope, behavior, policy, authority, and source-of-truth semantics. Technical design owns runtime mechanism, sequence, and package/file placement unless a mechanism is itself an accepted external constraint. Close this boundary before detailing rules so downstream work cannot silently turn a mechanism choice into product meaning.
+
 Derive the affected behavior surface from the accepted brief, relevant
 research, current runtime/generated contracts, and repository or consumer
 surfaces the accepted outcome can affect; do not infer coverage only from what
 an existing spec already mentions. For each material lens, decide whether it
-needs a current decision, preserves an unchanged invariant, carries only a
-constraint or proof consequence, or is not triggered for a concrete reason.
+is decided now, preserves an unchanged invariant, carries a named constraint or
+proof consequence, is not triggered for a concrete reason, or is blocked by a
+named evidence or decision owner. A blocked disposition is non-ready and follows
+the existing reopen rules; it cannot satisfy the Decision Bar.
 Persist this inventory only when it changes an action, verdict, handoff, or
 resume decision.
 
@@ -79,11 +83,6 @@ assumptions, and expose missing or conflicting evidence. Missing support
 narrows the claim or blocks/reopens its owner; it is not evidence of absence.
 Keep raw evidence in research.
 
-Specification owns observable scope, behavior, policy, authority, and
-source-of-truth semantics. Technical design owns runtime mechanism, sequence,
-and package/file placement unless a mechanism is itself an accepted external
-constraint.
-
 ## Decision Bar
 
 The spec is ready when:
@@ -102,7 +101,7 @@ The spec is ready when:
   risk-acceptance alternative owned by Specification remains;
 - live mechanism or placement alternatives are handed to design with their
   decision drivers;
-- design and planning can proceed without choosing product meaning;
+- design and planning can proceed without inventing product meaning;
 - no material `TBD` remains.
 
 Only uncertainty about proving an already accepted rule may carry as a

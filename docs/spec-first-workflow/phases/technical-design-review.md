@@ -23,6 +23,14 @@ Ranked anchored findings and one verdict:
 - `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit planning.
 - `FAIL`: specification or design must change first.
 
+## Review Method
+
+Trace each accepted behavior through mechanism -> material flow -> source of truth -> package/file owner -> closed implementation input -> proving surface. Record the earliest unsupported edge for each material behavior trace and suppress downstream noise only behind that edge. Continue across every other trace and materially affected lens to collect the complete compatible finding set before issuing the verdict.
+
+### Implementation-Input Closure Gate
+
+Inventory every input-bearing design surface on the current completion path. Materialize one representative of each materially distinct contract, record, configuration, migration input, or proof setup from approved sources without choosing semantics; for byte- or signature-sensitive behavior, also reproduce each required golden vector. A gap here is a design or upstream reopen finding, not implementation discovery.
+
 ## Review Questions
 
 - Are source of truth, contracts, runtime sequence, failure behavior, data/consistency, rollout, and proof explicit where relevant?
@@ -31,7 +39,6 @@ Ranked anchored findings and one verdict:
 - Are package/file ownership, dependency direction, generated/manual authority, cleanup, and test ownership clear?
 - Are viable alternatives genuinely closed, or has implementation been left a live fork?
 - Can planning name task owners, files, tests, and evidence without deciding design?
-- Can the reviewer inventory every input-bearing design surface on the current implementation completion path and materialize one representative of each materially distinct contract, record, configuration, migration input, or proof setup from approved sources without choosing semantics? When byte- or signature-sensitive behavior applies, can the reviewer also reproduce each required golden vector?
 - Does the design add abstraction, dependency, or machinery without a present requirement?
 
 Do not block on local naming or task order after the owning design decision is clear.

@@ -1,6 +1,6 @@
 # Research
 
-Resolve evidence gaps that can change a task decision. Research supports later decisions; it does not become a source dump or a mandatory phase.
+Resolve only evidence gaps that can change a task decision. Research closes decision-changing questions rather than accumulating sources.
 
 ## Read When
 
@@ -23,16 +23,19 @@ Resolve evidence gaps that can change a task decision. Research supports later d
 
 ## Method
 
-Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item as an evidence question, target/policy/risk-tolerance decision, downstream design choice, or later proof obligation. Research only evidence questions; route the rest to their owner, and do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Map only materially affected evidence lenses, marking each researched, established by current authoritative evidence, or not triggered with a concrete reason.
+Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item and route it to its smallest owner: research an evidence question; route a target, policy, or risk-tolerance choice to its decision owner; route a mechanism choice to design; or carry a later proof obligation to test design. Do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Map only materially affected evidence lenses, marking each researched, established by current authoritative evidence, or not triggered with a concrete reason.
 
 For each question, state:
 
 - the decision, owner, driver, or observable criterion it can change;
 - the leading hypothesis or live alternatives and what evidence would falsify them, when present;
-- the most authoritative practical source;
+- the smallest evidence that could falsify the leading implication;
+- the authoritative source boundary and most authoritative practical source within it;
 - the minimum evidence needed;
 - how absence, conflict, or staleness will be handled;
 - when to stop searching.
+
+Choose the smallest triggered research branch: current-state or semantic baseline; current external contract; solution discovery and comparison; representative empirical probe; or conflicting or freshness-sensitive evidence. Add another branch only for an independent evidence pressure that can change the named decision.
 
 Use independent read-only lanes only for separable questions where parallel context materially helps.
 
@@ -68,4 +71,4 @@ The owning root repairs and re-reviews under the shared [Review Independence](..
 
 ## Stop Rule
 
-Finish when every decision-changing question is answered, honestly bounded, or assigned a blocker/reopen owner, and the next owner can distinguish established, uncertain, and freshness-sensitive material without repeating the same search or inventing missing evidence. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. When a required `research only` synthesis review applies, it must have returned `PASS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.
+Finish when every decision-changing question is supported, honestly bounded, or blocked with a reopen owner, and the next owner can distinguish established, uncertain, and freshness-sensitive material without repeating the same search or inventing missing evidence. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. When a required `research only` synthesis review applies, it must have returned `PASS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.
