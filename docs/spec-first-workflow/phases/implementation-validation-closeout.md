@@ -22,7 +22,20 @@ On entering this macro phase, and only then, the root establishes the single Cod
 - Review findings and repairs proportionate to risk.
 - Fresh validation evidence and an evidence-clamped final claim.
 
+### Acceptance Loop
+
+These labels summarize the existing sections below; they are not new workflow states, statuses, artifacts, receipts, or checkpoints.
+
+- **Assignment gate:** the single active root Codex Goal, accepted input, App task and managed base, model and effort, constraints, and success criteria are explicit.
+- **Candidate gate:** one bounded Worker diff returns criteria disposition, proof, and every unmet item.
+- **Acceptance gate:** the root independently accepts only after every evidence-backed gap is closed; otherwise it returns the complete compatible finding set to the owning Worker.
+- **Wave gate:** when ledger work has a wave, it is the acceptance unit; every member passes on the frozen combined candidate, then atomic promotion commits the accepted delta to the authoritative integration branch before any later task is dispatched, and every later Worker starts from that resulting commit/ref.
+- **Validation gate:** terminal fresh evidence proves the unchanged integrated frozen candidate.
+- **Claim gate:** the final claim is no broader than the accepted outcome and terminal fresh evidence.
+
 ## Implement
+
+Implement surgically: make the smallest complete change at the earliest valid owner, including required proof and cleanup, without touching unrelated surfaces.
 
 1. Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing.
 2. For a defect, fix the narrowest owning surface whose contract the reproducer proves is violated; do not patch only the reported entry point when sibling callers share that contract.
@@ -36,7 +49,7 @@ On entering this macro phase, and only then, the root establishes the single Cod
 
 #### Shared Execution Mindset
 
-The root and Worker jointly own the shortest evidence-backed path from the assigned outcome to root acceptance, not a low turn count or first-pass appearance. Correctness, maintainability, and adequate proof are non-negotiable. Remove coordination only when it cannot improve the candidate, decision, or proof. Review and correction are means, not deliverables. Each correction has terminal intent: close every currently known compatible gap and return a candidate intended to be accepted, not another partial role handoff.
+The root and Worker jointly own the shortest evidence-backed path from the assigned outcome to root acceptance, not a low turn count or first-pass appearance. Correctness, maintainability, and adequate proof are non-negotiable. Remove coordination only when it cannot improve the candidate, decision, or proof. Review and correction are means, not deliverables. Each correction has terminal intent: close every currently known compatible gap and return a candidate intended to be accepted, not another partial role handoff. The acceptance frontier must shrink: every correction closes known compatible gaps or materially changes the supported causal model or recovery route; an unchanged frontier does not justify another identical loop.
 
 Every authorized implementation change is produced by one native Codex App task for the repository project in a managed-worktree environment backed by a dedicated Codex-managed Git worktree ([official Worktrees](https://learn.chatgpt.com/docs/environments/git-worktrees)). Direct work assigns one accepted outcome to one Worker. Ledger work assigns one ready task to one Worker and normally dispatches the next planned wave concurrently. At most one write Worker is active for a task; separate positively independent tasks may run in parallel, each in its own worktree, until root acceptance, a genuine upstream blocker, or the evidence-backed replacement decision below.
 
@@ -56,7 +69,7 @@ An ordinary implementation-owned gap returns to the same App task and managed wo
 
 Do not replace the App task merely because a same-task correction remains. When the root detects evidence-backed no progress, a repeated material correction state, oscillation, an exhausted repair hypothesis, or an invalidated worktree base after fan-in, it preserves the cumulative evidence frontier and launches a fresh replacement native App Worker for the same direct outcome or ledger task through a materially different recovery route. The replacement brief names the exact candidate state; concrete open, closed, and reopened findings; failing proof observables; attempted and falsified repair hypotheses where applicable; affected constraints and lenses; success criteria; and the different route or updated integrated base. Keep only one write Worker active for that task, retain the full replacement history, and require root acceptance. Change model or effort only when observed failure evidence justifies it.
 
-Wave results may return in any order. The root reviews each bounded result, then assembles provisionally suitable deltas in a disposable wave candidate, in a controlled order, without adding unaccepted work to the authoritative integration state. No wave task reaches root acceptance while another member is unresolved. On the frozen combined candidate, map claims to their exact commands and run each identical command once; one result may prove multiple mapped claims, but commands with different arguments, environment, state preconditions, or required observables are not identical. After every member passes root review and its proof on the combined candidate, promote only the bounded accepted wave delta by committing it to one authoritative integration branch and record every task's evidence. Commit before dispatching any later task; every later App task starts from that resulting commit/ref, never an accepted uncommitted working-tree snapshot. If the repository default/main is explicitly that authoritative integration branch and the accepted wave leaves it valid, fast-forward it after acceptance. If a conflict, invalidated assumption, or combined-proof failure appears, hold the whole wave, preserve unaffected results as provisional, and repair the affected task against the current wave candidate through its owning App task when that worktree can be updated safely or through same-task replacement recovery otherwise. Reassemble and re-prove the whole wave. Reopen an upstream owner only for a genuinely missing or changed decision, not for the execution schedule or an implementation-owned integration repair.
+Wave results may return in any order. Individual results are provisional; root acceptance applies only to the atomic wave's frozen combined candidate. The root reviews each bounded result, then assembles provisionally suitable deltas in a disposable wave candidate, in a controlled order, without adding unaccepted work to the authoritative integration state. No wave task reaches root acceptance while another member is unresolved. On the frozen combined candidate, map claims to their exact commands and run each identical command once; one result may prove multiple mapped claims, but commands with different arguments, environment, state preconditions, or required observables are not identical. After every member passes root review and its proof on the combined candidate, promote only the bounded accepted wave delta by committing it to one authoritative integration branch and record every task's evidence. Commit before dispatching any later task; every later App task starts from that resulting commit/ref, never an accepted uncommitted working-tree snapshot. If the repository default/main is explicitly that authoritative integration branch and the accepted wave leaves it valid, fast-forward it after acceptance. If a conflict, invalidated assumption, or combined-proof failure appears, hold the whole wave, preserve unaffected results as provisional, and repair the affected task against the current wave candidate through its owning App task when that worktree can be updated safely or through same-task replacement recovery otherwise. Reassemble and re-prove the whole wave. Reopen an upstream owner only for a genuinely missing or changed decision, not for the execution schedule or an implementation-owned integration repair.
 
 After atomically accepting and integrating the adjusted current wave, advance to the next planned or adjusted wave and recheck only seams affected by the integrated changes. Use a fresh App task in a fresh managed worktree for each later task; never reuse an accepted task's Worker for another task.
 
@@ -112,7 +125,7 @@ Validation, in-scope Worker repair, root re-inspection, revalidation, and closeo
 
 ## Validate
 
-Run focused proof while implementing, then one terminal fresh evidence set for the frozen candidate. Do not rerun an unchanged command unless a new patch, finding, or required final bundle changes what it proves. The terminal set covers the claim with:
+Run focused proof while implementing, then one terminal fresh evidence set for the frozen candidate. Map terminal validation commands to claims and run them on one unchanged integrated state. Do not rerun an unchanged command unless a new patch, finding, or required final bundle changes what it proves. The terminal set covers the claim with:
 
 - targeted tests for changed behavior;
 - build, type, lint, race, integration, or repository gates relevant to affected packages;
@@ -135,7 +148,7 @@ Mark a task complete only after its proof passes. The final response states:
 - remaining risk, unavailable proof, or blocker;
 - the exact reopen owner when unfinished.
 
-Use `complete`, `fixed`, `ready`, or equivalent only when fresh evidence supports the full claim. A blocker is a valid outcome, not successful completion.
+Clamp completion language to terminal fresh evidence: use `complete`, `fixed`, `ready`, or equivalent only when that evidence supports the full claim. A blocker is a valid outcome, not successful completion.
 
 ## Stop Rule
 
