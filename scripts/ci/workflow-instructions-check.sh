@@ -646,6 +646,10 @@ for token in \
   'disposable wave candidate' \
   'No wave task reaches root acceptance' \
   'hold the whole wave' \
+  'authoritative integration branch' \
+  'Commit before dispatching any later task' \
+  'never an accepted uncommitted working-tree snapshot' \
+  'fast-forward it after acceptance' \
   'combined candidate' \
   'run each identical command once' \
   'compact self-check' \
@@ -679,6 +683,7 @@ for token in \
   t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
 done
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E46 — Dirty Local Handoff Recovery'
+t02_require_machine_token docs/spec-first-workflow-evals.md 'fast-forward the valid default/main after acceptance'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E47 — Same-Task Worker Recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E48 — Planned Wave Dispatch And Drift Recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E49 — Convergence-First Worker Correction'
