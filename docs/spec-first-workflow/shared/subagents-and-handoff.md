@@ -134,6 +134,17 @@ Proof: <required evidence or owning ledger section>
 Stop/reopen: <exact blocker behavior and owner>
 ```
 
-When the next outcome enters implementation/validation/closeout, use `codex-goal-prompt-composer` and its `Goal:` shape instead. `Goal:` is reserved for that implementation handoff; earlier macro-phase handoffs use `Objective:` and never create or continue a Codex Goal.
+An implementation/validation/closeout handoff contains:
+
+```text
+Goal: <one durable outcome>
+Completion: <root acceptance, final integrated review, and fresh proof>
+Read first: <accepted inline outcome or ready tasks.md, plus minimal context>
+Constraints: <task-specific boundaries>
+Proof: <required evidence or ledger section>
+Stop/reopen: <exact blocker behavior and owner>
+```
+
+Reserve `Goal:` for implementation handoffs. Earlier macro phases use `Objective:` and never create or continue a Codex Goal.
 
 Keep prompts in chat unless the user asks for a standalone prompt artifact. Do not include worker command manuals, model catalogs, full repository summaries, repeated authorization policy, or empty headings.

@@ -510,7 +510,7 @@ Bootstrap shortcuts:
   - Makes no external model calls.
 
 - `make workflow-behavior-evals-check`
-  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E49, a prompt and pass condition for each case, and the required invariant set.
+  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E59, a prompt and pass condition for each case, and the required invariant set.
   - Makes no model calls and is not behavioral proof.
 
 - `WORKFLOW_EVAL_TARGETS=<targets> WORKFLOW_EVAL_BASE_REF=34d9776 WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_COST_AUTHORIZED=true make workflow-behavior-evals`

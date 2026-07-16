@@ -10,7 +10,8 @@
         "The skill activates because the user explicitly asks to grill and challenge every material branch.",
         "The output asks exactly one question and waits for the answer instead of emitting a questionnaire.",
         "The question names the plan or build choice it can change and includes a recommended answer with a tradeoff.",
-        "The interview is defined to stop when no unresolved decision remains that can materially change the plan or build choice."
+        "The interview is defined to stop when every material branch is answered, repository-resolved, assigned to an owner, or explicitly deferred with its consequence.",
+        "Before action, the output summarizes decisions, assumptions, and residual risks and waits for explicit user confirmation."
       ]
     },
     {

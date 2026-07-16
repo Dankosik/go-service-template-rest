@@ -97,7 +97,6 @@ Representative workflow skills:
 | `go-coder` / `go-test-implementation` | implement accepted Go behavior and tests |
 | `go-systematic-debugging` | diagnose a bug, flake, hang, or build failure |
 | `go-verification-before-completion` | map completion claims to fresh evidence |
-| `workflow-status` | report status and next action from one task path |
 
 Domain spec and review skills cover API/chi, data/cache, distributed consistency, domain invariants, security, reliability, concurrency, observability, performance, delivery, QA, and Go maintainability. Load only the skill that maps to the current decision or symptom.
 

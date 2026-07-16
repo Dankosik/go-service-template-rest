@@ -10,7 +10,8 @@
       "expectations": [
         "The response covers missing idempotency key behavior, same-key same-payload equivalence, and same-key different-payload conflict handling.",
         "The response covers async API semantics including `202 Accepted` and operation-resource lifecycle, plus `429` retry guidance when rate limiting is described.",
-        "The response includes strict boundary parsing cases such as unknown fields, trailing JSON, or request size/status-split behavior, and it names concrete validation commands."
+        "The response includes strict boundary parsing cases such as unknown fields, trailing JSON, or request size/status-split behavior, and it names concrete validation commands.",
+        "Every accepted API obligation is dispositioned to executable proof with an independent oracle or a named blocker rather than summarized as generic coverage."
       ]
     },
     {
@@ -22,7 +23,8 @@
       "expectations": [
         "The response covers cache hit or miss behavior, fail-open degradation, tenant-safe key isolation, and stampede or coalescing behavior under parallel requests.",
         "The response covers migration or backfill safety including mixed-version compatibility, read fallback during transition, and idempotent or resumable backfill behavior.",
-        "The response names stronger validation commands appropriate for cache or migration risk, such as race, integration, migration, or full-check commands."
+        "The response names stronger validation commands appropriate for cache or migration risk, such as race, integration, migration, or full-check commands.",
+        "Every accepted cache and migration obligation is dispositioned to an executable proving layer and independent oracle or to a named blocker."
       ]
     },
     {
@@ -34,7 +36,8 @@
       "expectations": [
         "The response explicitly covers `errors.Is` or `errors.As` and recognizability of `context.Canceled` or `context.DeadlineExceeded`.",
         "The response covers worker or goroutine shutdown, unblock-on-cancel behavior, and deterministic coordination instead of sleep-based synchronization.",
-        "The response includes race-aware validation commands and does not treat concurrency testing as just `did not panic` or happy-path execution."
+        "The response includes race-aware validation commands and does not treat concurrency testing as just `did not panic` or happy-path execution.",
+        "Every accepted error, cancellation, and lifecycle obligation is dispositioned to executable proof with an independent oracle or a named blocker."
       ]
     },
     {

@@ -11,7 +11,8 @@
         "Uses a repeated or shuffled go test command rather than a single vague test run",
         "Calls out the flake as coordination, lifecycle, or shared-state sensitive instead of simply saying 'timing issue'",
         "Recommends condition-based waiting or explicit completion instead of only raising sleep or timeout values",
-        "Includes a concrete verification command or evidence plan"
+        "Includes a concrete verification command or evidence plan",
+        "Orders discriminating experiments one at a time and keeps diagnosis open until a causal chain is supported or a named blocker prevents the next experiment"
       ]
     },
     {
@@ -51,7 +52,8 @@
       "assertions": [
         "The response makes no implementation or test change and does not claim the historical issue fixed.",
         "The response records the current clean reproduction evidence and the differing revision as the key constraint.",
-        "The response gives one concrete next falsifying experiment without speculative patch lists."
+        "The response gives one concrete next falsifying experiment without speculative patch lists.",
+        "Missing causal proof remains an explicit open diagnosis rather than a reason to repair or declare completion."
       ]
     },
     {

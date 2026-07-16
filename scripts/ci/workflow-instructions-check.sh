@@ -33,8 +33,6 @@ skill_files=(
   .agents/skills/go-implementation-ownership/SKILL.md
   .agents/skills/go-coder/SKILL.md
   .agents/skills/grilling/SKILL.md
-  .agents/skills/codex-goal-prompt-composer/SKILL.md
-  .agents/skills/workflow-status/SKILL.md
   .agents/skills/workflow-plan-adequacy-challenge/SKILL.md
 )
 
@@ -467,8 +465,6 @@ t02_require_files \
   docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md \
   .agents/skills/grilling/SKILL.md \
   .agents/skills/go-coder/SKILL.md \
-  .agents/skills/codex-goal-prompt-composer/SKILL.md \
-  .agents/skills/validation-closeout-session/SKILL.md \
   .codex/agents/challenger-agent.toml
 
 t02_require_absent_paths \
@@ -494,8 +490,6 @@ t02_link_rows=(
   'docs/subagent-contract.md|spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance'
   'docs/subagent-contract.md|spec-first-workflow/shared/autonomous-pre-review-challenge.md'
   '.agents/skills/go-coder/SKILL.md|../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md'
-  '.agents/skills/codex-goal-prompt-composer/SKILL.md|../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md'
-  '.agents/skills/validation-closeout-session/SKILL.md|../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md'
 )
 for row in "${t02_link_rows[@]}"; do
   IFS='|' read -r file target <<<"${row}"
@@ -543,7 +537,14 @@ for token in \
   'Absence of dependency edges alone is not proof'; do
   t02_require_machine_token docs/spec-first-workflow/phases/task-review-readiness.md "${token}"
 done
-t02_require_machine_token docs/spec-first-workflow/shared/artifact-model.md 'compact `Active wave` block'
+for token in \
+  'compact `Active wave` block' \
+  'Status inspection is read-only' \
+  'current workspace and Git drift' \
+  'status, owner, evidence, next action, and readiness' \
+  'without changing files or status'; do
+  t02_require_machine_token docs/spec-first-workflow/shared/artifact-model.md "${token}"
+done
 
 for heading in \
   '## Delegation Decision' \
@@ -554,7 +555,17 @@ for heading in \
   '## Handoff'; do
   t02_require_heading docs/spec-first-workflow/shared/subagents-and-handoff.md "${heading}"
 done
-for token in '`PASS`' '`CONCERNS`' '`FAIL`' 'Objective:' '`Goal:`'; do
+for token in \
+  '`PASS`' \
+  '`CONCERNS`' \
+  '`FAIL`' \
+  'Objective: <one next outcome>' \
+  'Goal: <one durable outcome>' \
+  'Completion: <root acceptance, final integrated review, and fresh proof>' \
+  'Read first: <accepted inline outcome or ready tasks.md, plus minimal context>' \
+  'Constraints: <task-specific boundaries>' \
+  'Proof: <required evidence or ledger section>' \
+  'Stop/reopen: <exact blocker behavior and owner>'; do
   t02_require_machine_token docs/spec-first-workflow/shared/subagents-and-handoff.md "${token}"
 done
 t02_require_heading docs/subagent-contract.md '## Shared Review Finding Envelope'
@@ -672,6 +683,38 @@ t02_require_machine_token docs/spec-first-workflow-evals.md '### E47 — Same-Ta
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E48 — Planned Wave Dispatch And Drift Recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E49 — Convergence-First Worker Correction'
 for token in \
+  'Material with no independent trigger or steps is not a skill' \
+  'observed premature completion' \
+  'must-have pointer is missed' \
+  'Treat invocation and no-op claims as model-relative' \
+  'structural checks prove shape, not behavior' \
+  'report the claim as unproven'; do
+  t02_require_machine_token docs/skill-authoring.md "${token}"
+done
+for token in \
+  '### E50 — Delegated Candidate Spec Authoring' \
+  '### E51 — Root Specification Convergence' \
+  '### E52 — Delegated Task Ledger Authoring' \
+  '### E53 — Root Planning Readiness' \
+  '### E54 — Isolated Approval Question' \
+  '### E55 — Fixed Specification Review' \
+  '### E56 — Current-Source Research Boundary' \
+  '### E57 — Non-Obvious Test Design Boundary' \
+  '### E58 — Workflow Plan Authoring Boundary' \
+  '### E59 — Workflow Plan Challenge Boundary' \
+  'exhibits `spec-document-designer` ownership through faithful candidate authoring' \
+  'exhibits `specification-session` ownership of the root phase' \
+  'exhibits `planning-and-task-breakdown` ownership through faithful ledger authoring' \
+  'exhibits `planning-session` ownership of the root phase' \
+  'exhibits `spec-clarification-challenge` ownership' \
+  'exhibits `specification-review` ownership' \
+  'exhibits `research-session` ownership' \
+  'exhibits `test-design-session` ownership' \
+  'exhibits `workflow-planning-session` ownership' \
+  'exhibits `workflow-plan-adequacy-challenge` ownership'; do
+  t02_require_machine_token docs/spec-first-workflow-evals.md "${token}"
+done
+for token in \
   'share a mutable test database and fixed port' \
   'distinct owners, failure/recovery, rollback, and proof domains' \
   'Worker rereads T07' \
@@ -733,17 +776,33 @@ for file in \
   t02_check_no_challenge_protocol_copy "${file}"
 done
 
+for heading in \
+  '## Explicit user mode' \
+  '## Internal challenger mode'; do
+  t02_require_heading .agents/skills/grilling/SKILL.md "${heading}"
+done
+for token in \
+  'every material branch is answered, repository-resolved, assigned to an owner, or explicitly deferred with its consequence' \
+  'docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md'; do
+  t02_require_machine_token .agents/skills/grilling/SKILL.md "${token}"
+done
+
+for row in \
+  '.agents/skills/go-systematic-debugging/SKILL.md|continue until one causal chain is supported' \
+  '.agents/skills/go-systematic-debugging/SKILL.md|Missing causal proof keeps diagnosis open' \
+  '.agents/skills/go-test-implementation/SKILL.md|every accepted proof obligation has executable proof or a named blocker' \
+  '.agents/skills/go-test-implementation/SKILL.md|Return obligation dispositions'; do
+  IFS='|' read -r file token <<<"${row}"
+  t02_require_machine_token "${file}" "${token}"
+done
+
 for file in \
-  .agents/skills/go-coder/SKILL.md \
-  .agents/skills/codex-goal-prompt-composer/SKILL.md \
-  .agents/skills/validation-closeout-session/SKILL.md; do
+  .agents/skills/go-coder/SKILL.md; do
   t02_check_no_cli_worker_fallback "${file}"
   t02_check_forbidden_legacy "${file}"
 done
 
 t02_require_heading .agents/skills/go-coder/SKILL.md '# Go Coder'
-t02_require_heading .agents/skills/codex-goal-prompt-composer/SKILL.md '# Codex Goal Prompt Composer'
-t02_require_heading .agents/skills/validation-closeout-session/SKILL.md '# Validation Closeout Session'
 
 for token in \
   'sandbox_mode = "read-only"' \
@@ -848,22 +907,28 @@ if [[ -n "${implementation_subagent_review}" ]]; then
   exit 1
 fi
 
-for reference in .agents/skills/go-coder/references/*.md; do
-  reference_link="references/$(basename "${reference}")"
-  if ! grep -Fq -- "](${reference_link})" .agents/skills/go-coder/SKILL.md; then
-    echo "workflow instruction check failed: go-coder reference is not routed"
-    echo "  reference: ${reference}"
+for skill in go-coder go-test-implementation; do
+  skill_file=".agents/skills/${skill}/SKILL.md"
+  reference_root=".agents/skills/${skill}/references"
+  reference_index="${reference_root}/index.md"
+  if ! grep -Fq -- '](references/index.md)' "${skill_file}"; then
+    echo "workflow instruction check failed: ${skill} body does not route through its reference selector"
     exit 1
   fi
-done
-
-for reference in .agents/skills/go-test-implementation/references/*.md; do
-  reference_link="references/$(basename "${reference}")"
-  if ! grep -Fq -- "](${reference_link})" .agents/skills/go-test-implementation/SKILL.md; then
-    echo "workflow instruction check failed: go-test-implementation reference is not routed"
-    echo "  reference: ${reference}"
-    exit 1
-  fi
+  for reference in "${reference_root}"/*.md; do
+    [[ "${reference}" == "${reference_index}" ]] && continue
+    reference_link="$(basename "${reference}")"
+    if ! grep -Fq -- "](${reference_link})" "${reference_index}"; then
+      echo "workflow instruction check failed: ${skill} reference is not routed by its selector"
+      echo "  reference: ${reference}"
+      exit 1
+    fi
+    if grep -Fq -- "](references/${reference_link})" "${skill_file}"; then
+      echo "workflow instruction check failed: ${skill} body duplicates selector-owned reference routing"
+      echo "  reference: ${reference}"
+      exit 1
+    fi
+  done
 done
 
 forbidden_internal_target_pattern='next[_ -]?phase[=: ]+(research[-_ ]?synthesis[-_ ]?(challenge|review)|specification[-_ ]?review|technical[-_ ]?design[-_ ]?review|test[-_ ]?design([-_ ]?qa)?[-_ ]?review|task[-_ ]?(review([/_ -]?readiness)?|readiness[-_ ]?review)|readiness[-_ ]?review|post[-_ ]?code[-_ ]?review|validation|closeout)'

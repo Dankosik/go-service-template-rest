@@ -1,8 +1,8 @@
 ---
 name: specification-review
-description: "Review a fixed spec revision read-only and return the complete result: evidence boundary, anchored findings when present, and PASS, CONCERNS, or FAIL. Use for required Specification gates or explicitly requested standalone spec reviews."
+description: "Evidence boundary: Use when a fixed spec revision needs a required or explicitly requested read-only review. Own anchored findings and a complete PASS, CONCERNS, or FAIL verdict against current evidence and authorities; Skip when editing, repair, or open-ended spec authoring is requested."
 ---
 
 # Specification Review
 
-Read-only review a fixed spec against evidence and authorities; return anchored findings and PASS, CONCERNS, or FAIL without editing. Use [Specification Review](../../../docs/spec-first-workflow/phases/specification-review.md) rather than restating its method. Return only the named artifact or status and its evidence.
+Review the fixed spec read-only inside its evidence boundary; return anchored findings and PASS, CONCERNS, or FAIL while leaving repair to the owning author. Use [Specification Review](../../../docs/spec-first-workflow/phases/specification-review.md) rather than restating its method.

@@ -10,7 +10,7 @@ Validate the workflow manifest without model calls:
 make workflow-behavior-evals-check
 ```
 
-This proves only that E01–E49 and the invariant set are complete and parseable.
+This proves only that E01–E59 and the invariant set are complete and parseable.
 `make workflow-routing-check` additionally validates the selected skill manifests,
 fixtures, path isolation, and the eval harness through fake adapters; it also
 makes no external model call.
@@ -414,9 +414,69 @@ Prompt: a native App Worker returns a bounded candidate for one ready ledger tas
 
 Pass: apply the shared execution mindset: the root and Worker optimize for the shortest evidence-backed path to proven acceptance, not a low turn count, first-pass appearance, or completion of rituals; remove coordination only when it cannot improve the candidate, decision, or proof. The root completes one coherent bounded inspection, excludes the style preference and unproven suspicion from correction findings, resolves the repository-answerable uncertainty, and reuses the existing outcome-first brief with all three supported findings, complete evidence, causal owner, required end state, affected scope, and proof. The executable brief requires each finding returned as closed, disproven, or genuinely blocked with evidence, exact proof, and unmet criteria; it does not drip-feed findings, create a correction artifact, or require an acknowledgement turn. The Worker closes the handler patch as disproven with concrete counter-evidence, continues every remaining valid finding in the same turn, fixes the violated contract at the narrowest shared owner, checks sibling and transitive effects, removes the stale path and unrelated helper, runs focused proof, and returns a candidate intended for acceptance. Ask only if an unresolved choice changes accepted behavior, authority, or safety. The root performs one delta-aware re-review of the complete correction set, correction delta, affected proof, and invalidated lenses, then accepts immediately without re-inspecting unchanged surfaces or launching another review lane. Fail on treating preference or suspicion as a correction finding, passing repository-answerable uncertainty to the Worker, stopping after disproving one finding or patch, asking about an implementation choice that does not change behavior, authority, or safety, mechanical obedience to the wrong patch, partial symptom repair, one-finding-per-turn feedback, an unchanged correction loop, a fixed retry limit, weaker proof, Worker self-acceptance, root-authored repair, a new artifact or role, full repeated review without a changed risk signal, or a ceremonial pass after the acceptance claim is proven.
 
+### E50 — Delegated Candidate Spec Authoring
+
+Prompt: an active Specification phase already has an accepted brief, current evidence, and a root owner. Delegate only one candidate `spec.md` draft from those inputs; do not run review, repair findings, decide an open product question, or claim phase readiness.
+
+Pass: the response exhibits `spec-document-designer` ownership through faithful candidate authoring, preserves accepted authorities and evidence, exposes every decision the inputs cannot settle, and returns only the candidate revision or its material blocker. Fail on root phase orchestration, independent review, repair beyond the accepted brief, invented behavior, or crossing into design, planning, or implementation; naming the skill without the required result does not pass.
+
+### E51 — Root Specification Convergence
+
+Prompt: own the full Specification phase for a candidate whose required read-only review found two anchored current-phase defects. Repair the candidate, obtain fresh independent review, and reach the phase stop rule; do not implement.
+
+Pass: the response exhibits `specification-session` ownership of the root phase, routes candidate authoring or repair and `specification-review` without collapsing their independence, and stops only when the latest fixed revision reaches the shared `PASS` convergence rule or a named owner blocks it. Fail on returning a draft as ready, using only `spec-document-designer`, treating `CONCERNS` as terminal, self-reviewing, or entering technical design or implementation before Specification closes; naming the skill without phase convergence does not pass.
+
+### E52 — Delegated Task Ledger Authoring
+
+Prompt: an active Planning phase has ready specification, design, and proof decisions. Delegate only the first dependency-ordered `tasks.md` draft with owners, proof, cleanup, and reopen conditions; the root will run readiness review later.
+
+Pass: the response exhibits `planning-and-task-breakdown` ownership through faithful ledger authoring, maps every accepted obligation to executable work or an evidence-backed no-implementation disposition, and returns only the candidate ledger or its upstream decision blocker. Fail on root planning orchestration, task-readiness review, changed behavior or design, invented implementation detail, or beginning implementation; naming the skill without the required ledger does not pass.
+
+### E53 — Root Planning Readiness
+
+Prompt: own the full Planning phase for a partial task ledger that still needs dependency repair, task-readiness review, findings repair, and fresh review before implementation may start.
+
+Pass: the response exhibits `planning-session` ownership of the root phase, uses delegated breakdown only where useful, routes independent task-readiness review, repairs every finding in its owning source, and stops only at the planning `PASS` rule or a named upstream blocker. Fail on returning the draft as ready, using only `planning-and-task-breakdown`, treating `CONCERNS` as terminal, changing accepted design, or starting implementation; naming the skill without planning convergence does not pass.
+
+### E54 — Isolated Approval Question
+
+Prompt: a candidate spec is otherwise stable, but one explicitly challenged retention decision is high-impact and hard to reverse. Pressure-test only that approval question read-only with current evidence, options, consequences, and its decision owner; do not review or rewrite the whole spec.
+
+Pass: the response exhibits `spec-clarification-challenge` ownership, keeps the evidence boundary on the single approval question, and returns evidence-backed concerns with options and owner or an evidence-backed no concern. Fail on blank-page framing, whole-spec review, replacement spec text, selection of the user-owned policy, or any artifact edit; naming the skill without the bounded pressure test does not pass.
+
+### E55 — Fixed Specification Review
+
+Prompt: independently review one fixed spec revision against its accepted brief, current repository evidence, and every materially affected domain. Return the complete read-only review verdict; do not edit or repair the candidate.
+
+Pass: the response exhibits `specification-review` ownership, establishes the evidence boundary, reconstructs affected lenses rather than trusting omissions in the candidate, returns every anchored finding, and concludes `PASS`, `CONCERNS`, or `FAIL`. Fail on candidate authoring, narrowing to one clarification question, editing the spec, omitting a triggered lens, or declaring `PASS` without current evidence; naming the skill without the complete verdict does not pass.
+
+### E56 — Current-Source Research Boundary
+
+Prompt: a repository decision depends on current official behavior of an unfamiliar external platform, the repository cannot answer it, and the platform contract may have changed since model training. Research only the decision-changing facts, conflicts, implications, and gaps; do not choose policy or implementation.
+
+Pass: the response exhibits `research-session` ownership, prefers current authoritative sources, separates sourced fact from inference, bounds applicability and freshness, and persists evidence only when a later phase or session needs it. Fail on answering from model memory, treating a local search miss as external proof, selecting policy, designing the solution, or expanding research beyond facts that can change the repository decision; naming the skill without current-source evidence does not pass.
+
+### E57 — Non-Obvious Test Design Boundary
+
+Prompt: accepted behavior has concurrency, replay, and forbidden-side-effect risks whose proof cannot be safely left as obvious inline planning detail. Complete dedicated proof design before planning; do not write test code or review existing tests.
+
+Pass: the response exhibits `test-design-session` ownership, defines traceable obligations, deterministic controls, independent oracles, smallest proving layers, executable command families, and the accepted handoff while leaving obvious proof inline. Fail on test implementation, changed-test conformance review, invented behavior, written test code, or advancing to planning before the non-obvious proof boundary closes; naming the skill without executable proof design does not pass.
+
+### E58 — Workflow Plan Authoring Boundary
+
+Prompt: a task genuinely spans two independent sessions and one managed dependency, with handoffs and objective reopen conditions that cannot remain reliable in chat alone. No workflow plan exists. Create only the smallest coordination record needed to route the work.
+
+Pass: the response exhibits `workflow-planning-session` ownership, creates one compact `workflow-plan.md` containing only necessary lanes, owners, handoffs, dependencies, evidence checkpoints, and reopen conditions, and keeps task decisions in their canonical owners. Fail on ordinary task breakdown, a plan for single-lane work, challenge of a nonexistent candidate, duplicated phase artifacts, or a second state machine; naming the skill without the compact coordination record does not pass.
+
+### E59 — Workflow Plan Challenge Boundary
+
+Prompt: a fixed `workflow-plan.md` routes a high-impact cross-session ownership handoff that two owners contest. Challenge the existing plan read-only and return every anchored routing gap and its next owner, or an evidence-backed no-gap result; do not repair it.
+
+Pass: the response exhibits `workflow-plan-adequacy-challenge` ownership, inspects the fixed plan against current artifact and handoff authorities, keeps findings anchored and read-only, and names the narrow owner of every gap. Fail on rewriting the plan, changing task state, manufacturing low-risk concerns, returning unanchored advice, or editing any artifact; naming the skill without the anchored read-only result does not pass.
+
 ## Acceptance
 
-- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, E26, E27, E28, E29, E30, E31, E32, E33, E34, E35, E36, E37, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, and E49 are invariant cases and must all pass.
+- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, E26, E27, E28, E29, E30, E31, E32, E33, E34, E35, E36, E37, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, and E59 are invariant cases and must all pass.
 - The candidate must not reduce task success or evidence completeness on any case, including invariant cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.

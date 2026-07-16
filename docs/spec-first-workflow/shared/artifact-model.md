@@ -67,6 +67,8 @@ When review is required, only `PASS` can move an artifact to `ready` or permit `
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 
+Status inspection is read-only: inspect the current workspace and Git drift, then report status, owner, evidence, next action, and readiness without changing files or status.
+
 ## Compact Shapes
 
 A useful `spec.md` follows the canonical shape and adaptive authoring method in
