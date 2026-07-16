@@ -5,4 +5,4 @@ description: "Non-obvious proof: Use when accepted behavior needs dedicated test
 
 # Test Design Session
 
-Design non-obvious proof before planning; retain obvious proof inline and stop at an accepted test-design handoff. Use [Test Design](../../../docs/spec-first-workflow/phases/test-design.md) rather than restating its method.
+Must read [Test Design](../../../docs/spec-first-workflow/phases/test-design.md); it owns proof disposition, review, and the planning boundary. Build a falsifier for every non-obvious obligation after reconstructing every affected acceptance claim, invariant, transition, failure mode, and protected side effect; retain obvious proof inline. Required Review begins only after every obligation has Test Design's canonical disposition; repair closes or reopens each finding before fresh Review. Stop only when that canonical boundary permits planning or reopens specification or design.

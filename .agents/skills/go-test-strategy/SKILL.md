@@ -5,11 +5,11 @@ description: "Test strategy: Use when accepted behavior needs risk scenarios, pr
 
 # Go Test Strategy
 
-Load the [shared specialist contract](../specialist-contract.md). Keep scenario traceability, proof levels, fail-before discriminators, deterministic controls, stable oracles, fixtures, commands, cleanup proof, and residual gaps coherent.
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
 
 ## Choose The Branch
 
-- **Decision** — select when proof policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing risk. Complete when every accepted obligation maps to a scenario, oracle, proving layer, command, fail-before signal, and reopen condition.
-- **Review** — select when changed tests or validation evidence must conform to accepted proof policy. Load the [review selector](references/review/index.md) for the concrete false-pass or flake risk. Complete when every affected proof obligation is dispositioned as a finding or no finding with the smallest deterministic correction and focused command; missing proof policy stays in the decision branch.
+- **Decision** — select when proof policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing risk. Return one shared Decision disposition per obligation; completion requires a falsifier and reopen condition for every obligation needing proof.
+- **Review** — select when changed tests or validation evidence must conform to accepted proof policy. Load the [review selector](references/review/index.md) for the concrete false-pass or flake risk. Return one shared finding-envelope disposition per obligation, naming any outside boundary or proof blocker with the smallest deterministic correction and focused command. Missing proof policy ends this run with a named Proof Decision handoff; conformance Review begins separately after acceptance.
 
 Hand unresolved behavior to its domain skill, executable test code to `go-test-implementation`, and completion claims to `go-verification-before-completion`.

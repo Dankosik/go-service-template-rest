@@ -5,11 +5,11 @@ description: "Reliability: Use when timeouts, retries, overload, degradation, re
 
 # Go Reliability
 
-Load the [shared specialist contract](../specialist-contract.md). Keep dependency criticality, end-to-end budgets, retries, overload/degradation, readiness/liveness, startup/drain/shutdown, recovery, and rollout coherent.
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct affected dependencies and lifecycle stages from accepted behavior, changed call paths and configuration, startup/shutdown wiring, and rollout topology. Classify criticality, then trace failure through each stage, binding end-to-end budgets, timeout, retry, overload, degradation, readiness/liveness, recovery, evidence, and rollout behavior.
 
 ## Choose The Branch
 
-- **Decision** — select when resilience policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when budgets, failure behavior, recovery, proof, rollout consequences, and blockers are explicit.
-- **Review** — select when changed Go must conform to accepted resilience policy. Load the [review selector](references/review/index.md) for the violated contract. Complete when every affected dependency and lifecycle path is dispositioned as a finding or no finding with the smallest correction and focused proof; missing policy stays in the decision branch.
+- **Decision** — select when resilience policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when shared Decision dispositions cover every dependency and lifecycle stage with failure, recovery, and rollout consequences explicit.
+- **Review** — select when changed Go must conform to accepted resilience policy. Load the [review selector](references/review/index.md) for the violated contract. Trace every affected failure path into the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing policy ends this run with a named Resilience Decision handoff; conformance Review begins separately after acceptance.
 
 Hand concrete synchronization to `go-concurrency`, durable recovery to `go-distributed`, and context API misuse to `go-idiomatic`.

@@ -5,6 +5,6 @@ description: "Go idiom: Use when changed Go may violate language or standard-lib
 
 # Go Idiomatic
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: inspect context lifetime, nil/zero values, errors/resources, receiver/method sets, exported APIs, and mutable-value aliasing. It is complete when every affected Go contract is dispositioned as a finding or no finding with forced consequence and focused proof, and unset behavior is handed to its domain skill.
+Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct semantic obligations from changed symbols, callers, exported APIs, context/resource lifetimes, nil/zero states, errors, receiver/method sets, and mutable-value aliasing, then inspect Go semantics rather than style. Complete when the shared finding envelope accounts for every obligation; name any outside boundary or proof blocker with its forced consequence and focused proof. Unset behavior ends with a named domain Decision handoff; conformance Review resumes separately after acceptance.
 
 Load the [review selector](references/index.md) for one violated contract by default. Hand placement to `go-implementation-ownership` and behavior-preserving readability to `go-language-simplifier`.

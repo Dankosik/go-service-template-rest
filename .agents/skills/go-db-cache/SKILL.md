@@ -5,11 +5,11 @@ description: "DB/cache: Use when runtime SQL, transactions, cache role, freshnes
 
 # Go DB Cache
 
-Load the [shared specialist contract](../specialist-contract.md). Keep query and transaction ownership, DB resource lifetime, tenant-complete cache keys, serialization, freshness, invalidation, fallback, and origin protection coherent.
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct affected data paths from changed callers, queries, transactions, cache/config surfaces, fallbacks, and origin access; trace each through DB resource lifetime while preserving tenant identity, serialization, freshness, invalidation, and origin protection.
 
 ## Choose The Branch
 
-- **Decision** — select when DB/cache policy is absent or changing. Load the [decision selector](references/decision/index.md) only when a pressure can change the result. Complete when the policy, forced consequences, focused proof, and blockers are explicit; a cache without measured need is rejected.
-- **Review** — select when changed SQL or cache code must conform to accepted policy. Load the [review selector](references/review/index.md) for the violated contract. Complete when every affected path is dispositioned as a finding or no finding with the smallest safe correction and proof; unresolved policy stays in the decision branch.
+- **Decision** — select when DB/cache policy is absent or changing. Load the [decision selector](references/decision/index.md) only when a pressure can change the result. Complete when shared Decision dispositions cover every affected data path, forced consequence, and focused proof; a cache without measured need is rejected.
+- **Review** — select when changed SQL or cache code must conform to accepted policy. Load the [review selector](references/review/index.md) for the violated contract. Account for every affected path through the shared finding envelope, naming any outside boundary or proof blocker with the smallest safe correction and proof. Missing policy ends this run with a named DB/cache Decision handoff; conformance Review begins separately after acceptance.
 
 Hand authoritative models to `go-data-architecture` and durable recovery to `go-distributed`.

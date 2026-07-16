@@ -5,4 +5,4 @@ description: "Approval question: Use when one candidate-spec decision is high-im
 
 # Spec Clarification Challenge
 
-Pressure-test the approval question read-only; return evidence-backed concerns with options and owner, or an evidence-backed no concern, not a replacement spec. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) rather than restating its method.
+Must read [Specification](../../../docs/spec-first-workflow/phases/specification.md); it owns the decision boundary and Decision Bar. Treat the approval question as a one-way door: reconstruct its material consequences from the fixed candidate, accepted evidence, affected owners, alternatives, blast radius, exit cost, and reversibility, then test each read-only. Return every consequence as an anchored concern, evidence-backed no concern, outside boundary, or proof blocked. A missing rule ends with its named Specification Decision owner; otherwise stop after the options and owner, leaving authoring and approval separate.

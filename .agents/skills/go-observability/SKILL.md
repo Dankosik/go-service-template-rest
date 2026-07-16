@@ -5,11 +5,11 @@ description: "Observability: Use when logs, metrics, traces, SLI/SLOs, alerts, d
 
 # Go Observability
 
-Load the [shared specialist contract](../specialist-contract.md). Keep signal identity, correlation, privacy, cardinality, diagnostics, SLI/SLO math, and alert actionability coherent.
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct operator questions and signals from accepted operability outcomes, changed runtime paths, existing telemetry, dashboards, alerts, and SLI/SLO surfaces; require each signal to support a named decision within correlation, privacy, cardinality, diagnostic, and cost bounds.
 
 ## Choose The Branch
 
-- **Decision** — select when telemetry policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when the signal contract, forced consequences, operator proof, cost/privacy bounds, and blockers are explicit.
-- **Review** — select when changed telemetry must conform to accepted policy. Load the [review selector](references/review/index.md) for the changed signal. Complete when every affected signal is dispositioned as a finding or no finding with the smallest correction and focused proof; missing policy stays in the decision branch.
+- **Decision** — select when telemetry policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when shared Decision dispositions cover every operator question and signal with cost/privacy bounds explicit.
+- **Review** — select when changed telemetry must conform to accepted policy. Load the [review selector](references/review/index.md) for the changed signal. Account for every affected signal through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing policy ends this run with a named Telemetry Decision handoff; conformance Review begins separately after acceptance.
 
 Hand resilience behavior to `go-reliability` and performance budgets to `go-performance`.

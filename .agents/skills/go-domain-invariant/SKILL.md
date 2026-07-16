@@ -5,11 +5,11 @@ description: "Domain invariants: Use when business terms, transitions, acceptanc
 
 # Go Domain Invariant
 
-Load the [shared specialist contract](../specialist-contract.md). Keep terms, invariant ownership, legal transitions, acceptance/rejection meaning, effect boundaries, false cases, and mixed-version behavior coherent.
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct affected invariants and transitions from accepted behavior, current accepting paths, state/effect owners, rejection surfaces, replay, and mixed-version constraints; state each in accepted terms with its false cases.
 
 ## Choose The Branch
 
-- **Decision** — select when business policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when every invariant, transition, violation outcome, forced consequence, proof obligation, and blocker is explicit.
-- **Review** — select when changed Go must preserve accepted domain policy. Load the [review selector](references/review/index.md) for the affected accepting path. Complete when every affected transition and side effect is dispositioned as a finding or no finding with falsifying proof; missing policy stays in the decision branch.
+- **Decision** — select when business policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when shared Decision dispositions cover every invariant and transition with rejection, effect boundary, forced consequence, and proof obligation explicit.
+- **Review** — select when changed Go must preserve accepted domain policy. Load the [review selector](references/review/index.md) for the affected accepting path. Follow every affected accepting path into the shared finding envelope, naming any outside boundary or proof blocker with falsifying proof. Missing policy ends this run with a named Domain Decision handoff; conformance Review begins separately after acceptance.
 
 Hand API representation to `go-api-contract`, data mechanics to `go-data-architecture`, and durable coordination to `go-distributed`.

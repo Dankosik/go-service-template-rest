@@ -5,6 +5,6 @@ description: "Go readability: Use when behaviorally correct, locally owned Go is
 
 # Go Language Simplifier
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: expose intent, flatten control flow, remove temporal coupling, clarify predicates and names, and delete helpers whose indirection costs more than it saves without changing behavior. It is complete when every affected readability pressure is dispositioned as a finding or no finding with the smallest behavior-preserving correction and focused proof.
+Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct affected intent paths from the changed control flow, predicates, names, temporal coupling, and helper call sites under accepted behavior; make intent direct by flattening or deleting indirection without changing semantics. Complete when the shared finding envelope accounts for every path, naming any outside boundary or proof blocker with the smallest behavior-preserving correction and focused proof. Missing behavior policy ends with a named domain Decision handoff; Review resumes separately after acceptance.
 
 Load the [review selector](references/index.md) for one concrete pressure by default. Hand semantic defects to `go-idiomatic`, ownership to `go-implementation-ownership`, and explicit cross-file overbuild to `go-structural-quality`.

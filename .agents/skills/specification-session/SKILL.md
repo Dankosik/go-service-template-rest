@@ -5,4 +5,4 @@ description: "Spec readiness: Use when the whole root specification phase must c
 
 # Specification Session
 
-Drive spec readiness through candidate spec, review, and repair routing; stop at accepted specification readiness and hand the result to its named next owner. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) rather than restating its method.
+Must read [Specification](../../../docs/spec-first-workflow/phases/specification.md); it owns the Decision Bar, required review, repair, and stop rule. Drive spec closure over every affected behavior decision and anchored finding. Required Review becomes available only after the candidate meets the Decision Bar; each finding is repaired or routed to its upstream owner, and a repaired candidate receives fresh Review. Stop only when Specification permits design or planning, or names the owner to reopen.

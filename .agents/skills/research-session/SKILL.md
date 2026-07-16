@@ -5,4 +5,4 @@ description: "Research: Use when current external or repository evidence could c
 
 # Research Session
 
-Research only current evidence that can change a repository decision; return sourced findings, implications, conflicts, and gaps while leaving policy selection to its owner. Use [Research](../../../docs/spec-first-workflow/phases/research.md) rather than restating its method.
+Must read [Research](../../../docs/spec-first-workflow/phases/research.md); it owns the method, review, and stop rule. Reconstruct every decision-changing evidence question and affected lens from the accepted outcome, named decisions, current repository state, and required external authorities. Keep only evidence that changes, constrains, or closes a named decision while leaving policy selection to its owner. Return one sourced `supported`, `contradicted`, `bounded-uncertain`, `unavailable`, or `irrelevant` disposition per question, with implications and conflicts, only when Research's Stop Rule is met.

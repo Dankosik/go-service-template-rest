@@ -5,6 +5,6 @@ description: "API contract: Use when client-visible REST resources, representati
 
 # Go API Contract
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one decision branch: define resource representations, validation, error behavior, compatibility, idempotency, and `202` recovery. It is complete when every client-visible choice, forced consequence, focused proof, and blocker is explicit.
+Load the [shared specialist contract](../specialist-contract.md). This skill has one decision branch: reconstruct every client-visible representation, validation rule, error, compatibility rule, idempotency rule, and `202` recovery behavior as a contract clause from accepted behavior, current runtime/generated contracts, and affected consumers. The contract is complete when every observable clause reaches a shared Decision disposition with its forced consequence and focused proof.
 
 When a concrete API pressure can change the decision, load its [decision selector](references/index.md), then one matching reference by default. Hand router composition to `go-chi`, topology to `go-system-architecture`, data truth to `go-data-architecture`, and trust policy to `go-security`.

@@ -5,4 +5,4 @@ description: "Evidence boundary: Use when a fixed spec revision needs a required
 
 # Specification Review
 
-Review the fixed spec read-only inside its evidence boundary; return anchored findings and PASS, CONCERNS, or FAIL while leaving repair to the owning author. Use [Specification Review](../../../docs/spec-first-workflow/phases/specification-review.md) rather than restating its method.
+Must read [Specification Review](../../../docs/spec-first-workflow/phases/specification-review.md); it owns the evidence boundary, verdict consequences, and stop rule. Falsify the fixed revision read-only after independently reconstructing every affected behavior lens from the accepted brief, research, runtime/generated contracts, and repository or consumer surfaces. Give each lens a finding, no finding, outside-boundary, or proof-blocked disposition while seeking contradiction, omission, ambiguity, unsupported claims, and unprovable outcomes. Missing policy ends with a named Specification Decision handoff; conformance Review starts separately after acceptance. Stop with the complete anchored set and `PASS`, `CONCERNS`, or `FAIL`; leave repair to the owning author.
