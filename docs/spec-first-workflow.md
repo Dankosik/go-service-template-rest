@@ -30,7 +30,7 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then independently review the design;
 5. complete test design when proof is non-obvious, then obtain independent QA review;
 6. complete `tasks.md` and independent task review/readiness;
-7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) with one direct outcome or one ready ledger task at a time; that phase owns Worker assignment, root acceptance, integrated review, and validation.
+7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) with one direct outcome or the next ready planned ledger wave; that phase owns Worker assignment, root acceptance, integrated review, adaptation to execution drift, and validation.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification, planning, and their review gates remain required.
 

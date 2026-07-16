@@ -1,8 +1,8 @@
 ---
 name: go-domain-invariant-review
-description: "Use when changed Go can alter business rules, lifecycle transitions, acceptance outcomes, violation behavior, or side effects; Own preservation of accepted domain invariants and meaning; Skip when the primary defect is transport, data/cache mechanics, security enforcement, or test structure."
+description: "Review changed Go that can alter business rules, lifecycle transitions, acceptance or rejection meaning, or effect ordering. Preserve accepted domain invariants; skip transport, data/cache mechanics, security enforcement, and test-structure reviews."
 ---
 
 # Go Domain Invariant Review
 
-Load the [shared specialist contract](../specialist-contract.md) for selection, evidence, return, and handoff. Review every accepting path, legal transitions, pre-effect validation, domain errors, and focused negative proof. Load [the reference selector](references/index.md) only when its pressure changes the result, and another reference only for an independent pressure. Escalate changed business policy to `go-domain-invariant-spec`. Return the owned decision or evidence-backed finding, forced consequence, and focused proof; stop rather than inventing another owner’s policy.
+Load the [shared specialist contract](../specialist-contract.md) for selection, evidence, return, and handoff. Review affected accepting paths, legal transitions, pre-effect guards, acceptance or rejection semantics, and falsifying negative proof. Load [the reference selector](references/index.md) only when its pressure changes the result, and another reference only for an independent pressure. Hand missing or changed business policy to `go-domain-invariant-spec`. Return the owned decision or evidence-backed finding, forced consequence, and focused proof; stop when another owner’s policy is required.

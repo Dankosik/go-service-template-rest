@@ -1,6 +1,6 @@
 ---
 name: go-performance-review
-description: "Use when a Go diff affects hot paths, batching, serialization, fan-out, query count, caching, allocation, contention, `sync.Pool`, or benchmark/profile evidence; Own measurable performance-regression risk and proof quality; Skip when budgets are unset or correctness belongs to concurrency, DB/cache, reliability, or domain review."
+description: "Use when a Go diff affects hot paths, batching, serialization, fan-out, query count, caching, allocation, contention, `sync.Pool`, or benchmark/profile evidence; Own measurable performance-regression risk and proof quality; Skip when no performance question remains after concurrency, DB/cache correctness, reliability, or domain review takes the primary axis."
 ---
 
 # Go Performance Review

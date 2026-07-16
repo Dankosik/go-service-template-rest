@@ -513,7 +513,37 @@ done
 for token in 'Codex Goal' 'Codex App' '`spawn_agent`' '`agent_type="worker"`'; do
   t02_require_machine_token AGENTS.md "${token}"
 done
+for token in \
+  'Goal spans the full accepted direct outcome or ledger' \
+  'Keep it active through recoverable implementation and integration failures' \
+  'no safe in-scope route remains'; do
+  t02_require_machine_token AGENTS.md "${token}"
+done
 t02_require_machine_token README.md 'native App Worker'
+
+for token in \
+  'Global constraints:' \
+  'Planned waves:' \
+  'Owner/surface/resources:' \
+  'Handoff:' \
+  'oversized-task preflight' \
+  'file count, estimated minutes, or desired Worker count' \
+  'earliest safe planned wave' \
+  'positively established as pairwise safe' \
+  'one-task wave' \
+  'size waves to assumed App capacity'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/planning.md "${token}"
+done
+for token in \
+  '`Global constraints`' \
+  '`Owner/surface/resources`' \
+  'databases, ports, environments' \
+  'Split that oversized outcome' \
+  'every task appear exactly once in the earliest safe planned wave' \
+  'Absence of dependency edges alone is not proof'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/task-review-readiness.md "${token}"
+done
+t02_require_machine_token docs/spec-first-workflow/shared/artifact-model.md 'compact `Active wave` block'
 
 for heading in \
   '## Delegation Decision' \
@@ -555,7 +585,7 @@ for token in \
   "active turn's effective model or effort" \
   'same App task' \
   'fresh App task' \
-  'Goal / context:' \
+  'Outcome / context:' \
   'Constraints:' \
   'Evidence:' \
   'Success:' \
@@ -563,6 +593,112 @@ for token in \
   'Stop:'; do
   t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
 done
+for token in \
+  'Handoff to Local is optional' \
+  'Dirty Local' \
+  'failed Handoff' \
+  'Do not stash or commit unrelated user changes' \
+  'Worker worktree' \
+  'task-owned branch' \
+  'clean integration worktree and branch' \
+  'integrate only the bounded accepted Worker delta' \
+  'mark the root Goal blocked only when no safe in-scope route remains'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
+done
+for token in \
+  'ordinary implementation-owned gap' \
+  'one causal class' \
+  'violated invariant and owning surface' \
+  'symptom-by-symptom patches' \
+  'evidence-backed no progress' \
+  'repeated material correction state' \
+  'oscillation' \
+  'exhausted repair hypothesis' \
+  'cumulative evidence frontier' \
+  'fresh replacement native App Worker' \
+  'same direct outcome or ledger task' \
+  'failing proof observables' \
+  'attempted and falsified repair hypotheses' \
+  'affected constraints and lenses' \
+  'materially different recovery route' \
+  'observed failure evidence justifies it' \
+  'Replacement history does not reset' \
+  'Implementation non-convergence does not block the root Goal'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
+done
+for token in \
+  'next planned wave concurrently' \
+  'At most one write Worker is active for a task' \
+  'one lightweight check' \
+  'same current integrated base' \
+  'Do not create another schedule artifact or reopen planning solely' \
+  'disposable wave candidate' \
+  'No wave task reaches root acceptance' \
+  'hold the whole wave' \
+  'combined candidate' \
+  'run each identical command once' \
+  'compact self-check' \
+  'compact `Active wave` state' \
+  'next safe planned wave'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
+done
+for token in \
+  '#### Shared Execution Mindset' \
+  'shortest evidence-backed path' \
+  'not a low turn count or first-pass appearance' \
+  'cannot improve the candidate, decision, or proof' \
+  'Review and correction are means, not deliverables' \
+  'Each correction has terminal intent' \
+  'root-suggested patch is a hypothesis' \
+  'concrete counter-evidence' \
+  'Only evidence-backed acceptance gaps are correction findings' \
+  'style preference, equally valid implementation choice, or unproven suspicion' \
+  'resolves repository-answerable uncertainty' \
+  'Make it executable as written' \
+  'continue every remaining valid finding in the same turn' \
+  'changes accepted behavior, authority, or safety' \
+  'closed, disproven, or genuinely blocked with evidence' \
+  'one coherent pass' \
+  'all currently detectable compatible findings' \
+  'acknowledgement turn' \
+  'Re-review is delta-aware' \
+  'previously detectable omission' \
+  'open frontier must shrink' \
+  'fixed correction-count limit'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
+done
+t02_require_machine_token docs/spec-first-workflow-evals.md '### E46 — Dirty Local Handoff Recovery'
+t02_require_machine_token docs/spec-first-workflow-evals.md '### E47 — Same-Task Worker Recovery'
+t02_require_machine_token docs/spec-first-workflow-evals.md '### E48 — Planned Wave Dispatch And Drift Recovery'
+t02_require_machine_token docs/spec-first-workflow-evals.md '### E49 — Convergence-First Worker Correction'
+for token in \
+  'share a mutable test database and fixed port' \
+  'distinct owners, failure/recovery, rollback, and proof domains' \
+  'Worker rereads T07' \
+  'shared causal class' \
+  'run the identical repository command once' \
+  'shortest evidence-backed path to proven acceptance' \
+  'style preference and unproven suspicion' \
+  'resolves the repository-answerable uncertainty' \
+  'closed, disproven, or genuinely blocked with evidence' \
+  'continues every remaining valid finding in the same turn' \
+  'changes accepted behavior, authority, or safety' \
+  'one-finding-per-turn feedback' \
+  'full repeated review without a changed risk signal'; do
+  t02_require_machine_token docs/spec-first-workflow-evals.md "${token}"
+done
+if grep -Fq -- 'Goal / context:' docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  t02_error 'Worker brief still overloads Goal terminology'
+fi
+if grep -Fq -- 'Never replace the App task for a same-task correction' docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  t02_error 'same-task Worker recovery remains prohibited'
+fi
+if grep -Fq -- 'Only one write Worker runs at a time' docs/spec-first-workflow/phases/implementation-validation-closeout.md; then
+  t02_error 'implementation still globally serializes safe ledger tasks'
+fi
+if grep -Fq -- 'one ready ledger task at a time' docs/spec-first-workflow.md; then
+  t02_error 'workflow router still globally serializes ready ledger tasks'
+fi
 t02_check_app_worker_model_policy docs/spec-first-workflow/phases/implementation-validation-closeout.md
 for token in \
   '`turn/started`' \
@@ -789,7 +925,7 @@ for stale_example in \
   fi
 done
 stale_matches="$(grep -RInE -- "${stale_pattern}" \
-  AGENTS.md README.md SOUL.md \
+  AGENTS.md README.md \
   docs/spec-first-workflow.md \
   docs/spec-first-workflow-evals.md \
   docs/spec-first-workflow \

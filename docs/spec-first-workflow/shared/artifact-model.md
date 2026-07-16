@@ -43,7 +43,7 @@ Otherwise keep the result inline.
 | `spec.md` | Required for structured/orchestrated work; direct work uses it only when decisions must survive. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
 | `design/overview.md` or focused `design/*` | Implementation would otherwise choose architecture, contract, data, failure, rollout, or package ownership. | Selected mechanism and ownership decisions. | Task progress. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations, observables, proof levels, residual gaps. | Test implementation. |
-| `tasks.md` | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, owners, evidence, progress, completion condition. | New product or design decisions. |
+| `tasks.md` | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, planned waves, owners, evidence, progress, completion condition. | New product or design decisions. |
 | `research/*.md` | Evidence must be reused, audited, or refreshed. | Findings, source limits, conflicts, decision impact. | Final task decisions. |
 | `rollout.md` | Deployment, migration, backfill, compatibility, or rollback has a non-trivial sequence. | Operational order, gates, rollback/failback, observables. | Product scope. |
 | `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action. | Duplicate spec/design/task content. |
@@ -73,11 +73,23 @@ A useful `spec.md` follows the canonical shape and adaptive authoring method in
 [Specification](../phases/specification.md). This file owns artifact
 persistence and status, not a second Specification template.
 
-A useful `tasks.md` row usually needs:
+A useful `tasks.md` usually needs:
 
-```text
-- [ ] ID: outcome; owner/surface; dependencies; proof; reopen condition
+```markdown
+Global constraints: <exact constraints shared by multiple tasks; omit when none>
+Planned waves:
+- W1: T01, T02 — <positive independence basis>
+
+- [ ] ID: outcome
+  - Source: <narrow anchors>
+  - Owner/surface/resources: <writable owner; execution-exclusive resources or none>
+  - Depends on: <IDs or none>
+  - Handoff: <exact consumes/produces contract; omit when none>
+  - Proof: <claim; check; expected observable>
+  - Reopen if: <objective invalidation condition; omit when none>
 ```
+
+When an active wave must survive compaction, interruption, or session handoff, add one compact `Active wave` block to this same ledger with the adjusted member IDs, accepted integration base, task-to-App-task/worktree state, disposable candidate identity when one exists, and next root action or open causal class. Update it only at a material transition and remove or collapse it into task evidence after atomic wave acceptance; do not create a scheduler file or reconstruct it from chat.
 
 A useful `workflow-plan.md` usually needs:
 

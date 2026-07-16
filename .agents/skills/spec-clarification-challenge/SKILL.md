@@ -5,4 +5,4 @@ description: "Read-only pressure test of a candidate spec when a concrete approv
 
 # Spec Clarification Challenge
 
-Read-only challenge a concrete high-impact approval question; return evidence-backed concerns, options, and owner, not a replacement spec. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) rather than restating its method. Return only the named artifact or status and its evidence.
+Read-only challenge a concrete high-impact approval question; return evidence-backed concerns with options and owner, or an evidence-backed no concern, not a replacement spec. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) rather than restating its method.

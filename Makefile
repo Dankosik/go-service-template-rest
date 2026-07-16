@@ -65,7 +65,7 @@ help:
 	@echo "  make modernize-check         # informational modern Go suggestions"
 	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
 	@echo "  make workflow-routing-check  # workflow/skill instructions and deterministic eval harness"
-	@echo "  make workflow-behavior-evals-check # validate the E01-E45 eval manifest (no model calls)"
+	@echo "  make workflow-behavior-evals-check # validate the E01-E49 eval manifest (no model calls)"
 	@echo "  make workflow-behavior-evals # run explicitly targeted matched trials through authorized adapters"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"

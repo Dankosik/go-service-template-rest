@@ -1,8 +1,8 @@
 ---
 name: go-db-cache-review
-description: "Use when changed Go executes SQL or reads, writes, invalidates, or falls back around a cache; Own query discipline, transaction execution, DB resource safety, cache isolation, freshness, serialization, and origin protection; Skip when the primary defect is schema architecture, business policy, or broad concurrency or reliability policy."
+description: "Review changed Go SQL or cache paths for query, transaction, DB-resource, cache-isolation, freshness, serialization, and origin-protection defects. Skip schema architecture, business policy, and broad concurrency or reliability review."
 ---
 
 # Go Db Cache Review
 
-Load the [shared specialist contract](../specialist-contract.md) for selection, evidence, return, and handoff. Review bind/allowlist safety, transaction boundaries, retry scope, tenant-complete keys, and the freshness owner for every cache path. Load [the reference selector](references/index.md) only when its pressure changes the result, and another reference only for an independent pressure. Escalate changed DB/cache policy to `go-db-cache-spec` and data truth to `go-data-architecture-spec`. Return the owned decision or evidence-backed finding, forced consequence, and focused proof; stop rather than inventing another owner’s policy.
+Load the [shared specialist contract](../specialist-contract.md) for selection, evidence, return, and handoff. Review bind/allowlist safety, transaction boundaries and retry scope, and DB resource lifetime; for cache paths, review tenant-complete keys, serialization, freshness ownership, and origin protection. When a concrete pressure appears, load its reference from [the reference selector](references/index.md); load one further reference only for an independent pressure. Hand off unresolved DB/cache policy to `go-db-cache-spec` and data truth to `go-data-architecture-spec`. Return the owned decision, an evidence-backed finding with its forced consequence and focused proof, or no DB/cache findings.

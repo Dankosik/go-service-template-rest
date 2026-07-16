@@ -3,7 +3,6 @@ set -euo pipefail
 
 required_files=(
   AGENTS.md
-  SOUL.md
   README.md
   railway.toml
   Makefile
@@ -106,7 +105,8 @@ require_regex '-f build/docker/Dockerfile' .github/workflows/cd.yml "CD must use
 
 # Instruction ownership and runtime configuration.
 require_regex 'docs/spec-first-workflow\.md' AGENTS.md "AGENTS.md must link the workflow router"
-require_regex '^@SOUL\.md$' AGENTS.md "AGENTS.md must include SOUL.md"
+require_regex '^## Engineering Judgment$' AGENTS.md "AGENTS.md must include engineering judgment"
+require_regex '^## Collaboration$' AGENTS.md "AGENTS.md must include collaboration guidance"
 require_absent_regex '^@RTK\.md$' AGENTS.md "AGENTS.md must not duplicate user-level RTK instructions"
 require_absent_regex '^model[[:space:]]*=' .codex/config.toml "root model selection must remain user-owned"
 require_absent_regex '^model_reasoning_effort[[:space:]]*=' .codex/config.toml "root reasoning effort must remain user-owned"

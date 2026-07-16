@@ -5,4 +5,4 @@ description: "Pressure-test a candidate synthesis before specification or planni
 
 # Pre Spec Challenge
 
-Pressure-test a synthesis with only discriminating questions about assumptions, owners, and irreversible consequences; return a concise challenge or no concern. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) and load [the reference selector](references/index.md) only when its seam changes the challenge. Return the challenge, evidence, and next owner.
+Pressure-test a synthesis with only discriminating questions about assumptions, owners, and irreversible consequences. Use [Specification](../../../docs/spec-first-workflow/phases/specification.md) and load [the reference selector](references/index.md) only when its seam changes the challenge. Return a concise challenge or evidence-backed no concern, and the next owner.

@@ -3,20 +3,50 @@
 
 Repository-wide contract for producing reliable Go-service changes with the least workflow needed.
 
+## Engineering Judgment
+
+Own the result as the engineer who will operate this service: preserve user
+intent and invariants, choose the smallest change that can be proved, and leave
+failures easier to diagnose.
+
+- Evidence beats confidence. Use the narrowest current signal that can prove or
+  falsify the next material claim; tighten it before expanding the process.
+- Reuse before inventing: current owner and repository pattern, Go standard
+  library, existing dependency, maintained OSS, then custom machinery.
+- Keep behavior, failure handling, and proof local to their narrowest owner;
+  expose only what consumers need to know.
+- Prefer explicit control flow and concrete types. Introduce a consumer-owned
+  interface only for real variation or a stable seam.
+- Treat cancellation, deadlines, retries, partial work, cleanup, and shutdown
+  as first-class behavior whenever the task touches them.
+- An abstraction earns its place when deleting it would spread present
+  complexity or duplication back across callers.
+- Use accepted repository terms consistently across prose, code, and tests;
+  surface material ambiguity before introducing another term.
+
+## Collaboration
+
+- Lead with the conclusion; scale explanation to risk and reversibility.
+- Separate established facts, inferences, trade-offs, and proof gaps.
+- Challenge a design with concrete consequences and a viable smaller
+  alternative.
+- When choices are otherwise comparable, prefer clearer ownership, failure
+  signals, and recovery.
+
 ## Authority And Loading
 
 - Explicit user, system, and developer instructions win.
 - This file owns request authorization and repository-wide invariants.
+- Skills provide methods; they do not override this contract or task-local decisions.
 - [docs/spec-first-workflow.md](docs/spec-first-workflow.md) is the workflow router. Read only the current phase file and any shared file needed for the decision at hand.
 - Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
-- `SOUL.md` is lower-precedence engineering and communication guidance. Skills provide methods; neither overrides this contract or task-local decisions.
 
 ## Authorization
 
 - `answer`, `explain`, `review`, `diagnose`, and `plan` authorize inspection and reporting, not implementation.
 - `change`, `build`, and `fix` authorize in-scope local edits and relevant non-destructive validation.
 - A Codex Goal is an execution control for the implementation/validation/closeout macro phase only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts. Direct work enters implementation immediately.
-- On entering implementation/validation/closeout, the root creates or continues exactly one root-thread Codex Goal immediately before launching the first implementation Worker, regardless of task size, and completes it only after root acceptance of every Worker result, root review of the final integrated diff, and fresh validation evidence. Reuse a matching active Goal; do not create separate Goals for Workers, tasks, or internal checkpoints. If an unrelated Goal is active, ask the user to pause or clear it. A workflow opt-out does not waive this execution control.
+- On entering implementation/validation/closeout, the root creates or continues exactly one root-thread Codex Goal immediately before launching the first implementation Worker, regardless of task size. That Goal spans the full accepted direct outcome or ledger and completes only after root acceptance of every Worker result, root review of the final integrated diff, and fresh validation evidence. Keep it active through recoverable implementation and integration failures; do not create separate Goals for Workers, tasks, or internal checkpoints. Mark it blocked only when the accepted outcome cannot progress because required user or external authority or state is unavailable and no safe in-scope route remains. If an unrelated Goal is active, ask the user to pause or clear it. A workflow opt-out does not waive this execution control.
 - Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary repository reads, in-scope edits, or tests.
 - Respect an explicit boundary such as `read-only`, `docs-only`, `research only`, or a named phase.
 
@@ -49,5 +79,3 @@ Repository-wide contract for producing reliable Go-service changes with the leas
 - Keep built-in subagent delegation, review independence, and handoff rules in `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 - Keep task-specific decisions in task-local artifacts.
 - When two surfaces repeat a rule, retain the narrowest canonical owner and replace the other copy with a link.
-
-@SOUL.md

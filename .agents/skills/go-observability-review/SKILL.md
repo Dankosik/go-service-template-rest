@@ -5,4 +5,4 @@ description: "Use when changed Go or operational artifacts affect logs, metrics,
 
 # Go Observability Review
 
-Load the [shared specialist contract](../specialist-contract.md) for selection, evidence, return, and handoff. Review bounded identity, correlation, privacy, cardinality, diagnostics, and actionable alerts. Load [the paired-spec selector](references/index.md) only when its pressure changes the finding. Escalate changed signal or SLO policy to `go-observability-spec`. Return the owned decision or evidence-backed finding, forced consequence, and focused proof; stop rather than inventing another owner’s policy.
+Load the [shared specialist contract](../specialist-contract.md) for selection, evidence, return, and handoff. Review bounded identity, correlation, privacy, cardinality, diagnostics, and actionable alerts. When a changed surface matches a [paired-spec selector](references/index.md) symptom, load its matching reference. Hand missing or changed telemetry policy to `go-observability-spec`. Return an evidence-backed finding with the smallest safe correction and focused proof, or no findings; keep the result within observability conformance.
