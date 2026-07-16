@@ -191,6 +191,13 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			t.Fatalf("valid repository failed: %v", err)
 		}
 	})
+	t.Run("plain scalar description", func(t *testing.T) {
+		root := makeValidRepository(t)
+		mustWriteFile(t, skillPath(root, "go-coder"), []byte("---\nname: go-coder\ndescription: Use when testing. Own behavior; Skip when outside scope.\n---\n# Body\n"))
+		if err := checkRepository(root, targetSkills, false); err != nil {
+			t.Fatalf("plain scalar description failed: %v", err)
+		}
+	})
 
 	tests := []struct {
 		name   string
@@ -231,13 +238,13 @@ func TestCheckRepositoryValidation(t *testing.T) {
 			want: "frontmatter must contain exactly one one-line name, got 2",
 		},
 		{
-			name: "unquoted description",
+			name: "empty description",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
 				path := skillPath(root, "go-coder")
-				mustWriteFile(t, path, []byte("---\nname: go-coder\ndescription: Use when testing. Own behavior; Skip when outside scope.\n---\n# Body\n"))
+				mustWriteFile(t, path, []byte("---\nname: go-coder\ndescription:\n---\n# Body\n"))
 			},
-			want: "description must be a quoted one-line value",
+			want: "description must be a non-empty one-line value",
 		},
 		{
 			name: "third description sentence",

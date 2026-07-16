@@ -347,7 +347,7 @@ func parseSkillDocument(data []byte, path string) (skillDocument, error) {
 			name = strings.TrimSpace(value)
 		case "description":
 			descriptionCount++
-			parsed, err := parseQuotedDescription(strings.TrimSpace(value))
+			parsed, err := parseDescription(strings.TrimSpace(value))
 			if err != nil {
 				return skillDocument{}, err
 			}
@@ -366,9 +366,9 @@ func parseSkillDocument(data []byte, path string) (skillDocument, error) {
 	return skillDocument{Name: name, Description: description, Body: body, Path: path}, nil
 }
 
-func parseQuotedDescription(value string) (string, error) {
-	if len(value) < 2 {
-		return "", errors.New("frontmatter description must be a quoted one-line value")
+func parseDescription(value string) (string, error) {
+	if value == "" {
+		return "", errors.New("frontmatter description must be a non-empty one-line value")
 	}
 	if value[0] == '"' && value[len(value)-1] == '"' {
 		parsed, err := strconv.Unquote(value)
@@ -384,7 +384,10 @@ func parseQuotedDescription(value string) (string, error) {
 		}
 		return parsed, nil
 	}
-	return "", errors.New("frontmatter description must be a quoted one-line value")
+	if value[0] == '"' || value[0] == '\'' {
+		return "", errors.New("frontmatter description must be a valid quoted one-line value")
+	}
+	return value, nil
 }
 
 func validateDescription(name, description string) []string {

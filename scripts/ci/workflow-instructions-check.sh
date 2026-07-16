@@ -481,7 +481,6 @@ t02_link_rows=(
   'docs/subagent-contract.md|../AGENTS.md#working-contract'
   'docs/subagent-contract.md|spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance'
   'docs/subagent-contract.md|spec-first-workflow/shared/autonomous-pre-review-challenge.md'
-  '.agents/skills/grilling/SKILL.md|../../../docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md'
   '.agents/skills/go-coder/SKILL.md|../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md'
   '.agents/skills/codex-goal-prompt-composer/SKILL.md|../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md'
   '.agents/skills/validation-closeout-session/SKILL.md|../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md'
@@ -589,12 +588,6 @@ for file in \
   t02_check_forbidden_legacy "${file}"
 done
 
-for heading in \
-  '# Grilling' \
-  '## Explicit user mode' \
-  '## Internal challenger mode'; do
-  t02_require_heading .agents/skills/grilling/SKILL.md "${heading}"
-done
 t02_require_heading .agents/skills/go-coder/SKILL.md '# Go Coder'
 t02_require_heading .agents/skills/codex-goal-prompt-composer/SKILL.md '# Codex Goal Prompt Composer'
 t02_require_heading .agents/skills/validation-closeout-session/SKILL.md '# Validation Closeout Session'

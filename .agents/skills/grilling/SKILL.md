@@ -1,14 +1,12 @@
 ---
 name: grilling
-description: "Stress-test a plan, decision, idea, or design one material branch at a time. Use when the user explicitly requests grilling, uses a grill trigger phrase, or the workflow invokes internal macro-phase grilling on the existing read-only challenger. Do not use for ordinary Intake clarification."
+description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
 ---
 
-# Grilling
+Interview me relentlessly about every aspect of this until we reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
 
-## Explicit user mode
+Ask the questions one at a time, waiting for feedback on each question before continuing. Asking multiple questions at once is bewildering.
 
-For explicit user grilling, ask one material root-to-user question at a time and wait for the answer.
+If a *fact* can be found by exploring the environment (filesystem, tools, etc.), look it up rather than asking me. The *decisions*, though, are mine — put each one to me and wait for my answer.
 
-## Internal challenger mode
-
-For internal autonomous challenge only, use [the autonomous pre-review challenge](../../../docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) and return exactly its allowed event. Stop when another question would invent scope.
+Do not act on it until I confirm we have reached a shared understanding.
