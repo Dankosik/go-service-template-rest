@@ -37,6 +37,11 @@ These labels summarize the existing sections below; they are not new workflow st
 
 Implement surgically: make the smallest complete change at the earliest valid owner, including required proof and cleanup, without touching unrelated surfaces.
 
+Before every production Go edit, apply `go-coder`. Route an unknown-cause
+defect first to `go-systematic-debugging`, and test-only implementation to
+`go-test-implementation`. The selected skill reconstructs the Go Change Surface
+and loads only the references matching its triggered pressures.
+
 1. Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing.
 2. For a defect, fix the narrowest owning surface whose contract the reproducer proves is violated; do not patch only the reported entry point when sibling callers share that contract.
 3. Preserve accepted behavior, ownership, failure, cleanup, rollout, and proof decisions.
@@ -113,6 +118,12 @@ Always inspect the final diff for:
 
 The root reviews every App Worker result and its proof before acceptance. Its first acceptance inspection is one coherent pass over the bounded outcome, all acceptance criteria, the proof, and every materially affected lens. Only evidence-backed acceptance gaps are correction findings; a style preference, equally valid implementation choice, or unproven suspicion is not. The root resolves repository-answerable uncertainty before briefing the Worker, then returns all currently detectable compatible findings in one evidence-backed batch rather than drip-feeding one finding per turn. Apply every matching review skill locally in that same inspection. A review skill supplies a method, not a subagent lane. Never launch a built-in subagent, reviewer, specialist, or re-review lane anywhere inside implementation/validation/closeout.
 
+For changed Go, classify each changed symbol only across triggered package,
+export, or method-set; context or error; resource or transaction; mutable
+ownership; concurrency or lifecycle; generated-authority; and proof pressures.
+Apply one matching review method per independent pressure; untriggered
+categories create no work.
+
 Every ledger task receives root acceptance review on the combined wave candidate, and no wave member is accepted while another remains unresolved. Dependent or conflicting tasks wait for atomic wave acceptance; independent members of one planned wave need not wait for one another to run. After every task is accepted, generated outputs and task evidence are current, and terminal validation is complete, the root reviews the final integrated diff against the accepted outcome and every affected lens.
 
 Return every implementation-owned finding to the App task that owns the affected direct outcome or ledger task. Continue that task in its managed worktree and rerun affected proof. Re-review is delta-aware: verify the complete correction set, the correction delta, its proof, and every transitively invalidated lens; do not repeat inspection of unchanged surfaces without a changed risk signal. When those checks pass, accept the task without another review lane or ceremonial pass.
@@ -126,6 +137,9 @@ Validation, in-scope Worker repair, root re-inspection, revalidation, and closeo
 ## Validate
 
 Run focused proof while implementing, then one terminal fresh evidence set for the frozen candidate. Map terminal validation commands to claims and run them on one unchanged integrated state. Do not rerun an unchanged command unless a new patch, finding, or required final bundle changes what it proves. The terminal set covers the claim with:
+
+Apply `go-verification-before-completion` to terminal claims. Include race,
+integration, generation, contract, sqlc, or migration proof only when triggered.
 
 - targeted tests for changed behavior;
 - build, type, lint, race, integration, or repository gates relevant to affected packages;

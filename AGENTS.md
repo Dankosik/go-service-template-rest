@@ -69,6 +69,17 @@ failures easier to diagnose.
 8. Skills define the method. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns built-in subagent eligibility, review independence, and handoff; [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) owns its challenge protocol; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) owns App Worker review and correction. The root owns synthesis and decisions.
 9. Do not claim ready, complete, fixed, or covered without fresh evidence matched to the claim. Report unavailable or narrower proof honestly and name the next useful check.
 
+## Go Change Surface
+
+When work can change Go, classify only the triggered pressures: package owner,
+import direction, composition, or exported surface; method sets, nil/zero,
+errors, or context; resource or transaction lifetime; mutable ownership,
+aliasing, concurrency, or lifecycle; canonical, generated, or hand-written
+authority; and repository-native proof. Activate only the matching existing Go
+methods; untriggered categories create no work. Close every triggered category
+with its phase or skill owner, or name the owner and condition that must reopen
+it.
+
 ## Instruction Ownership
 
 - Keep global rules here.

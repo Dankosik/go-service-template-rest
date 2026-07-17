@@ -53,6 +53,12 @@ Place every ledger task in its earliest safe planned wave. Tasks in one wave mus
 
 Cite the narrowest stable source anchor and state enough of the relevant accepted obligation in the task outcome to make execution unambiguous; do not copy source prose. State the verifiable postcondition and only execution-changing accepted constraints, including preserved or forbidden behavior and any accepted state-transition, data-flow, failure/recovery, privacy, or security boundary. Do not prescribe discretionary coding steps; name an exact method or order only when accepted design, generated-source, migration, rollout, or proof dependencies fix it. Do not make implementation recover an execution-critical constraint, invariant, non-goal, exact value, interface, or proof expectation from a broad document link or chat history. `Owner/surface/resources` names the concrete writable owner or bounded discovery rule and every mutable, exclusive, or non-concurrent external or proof resource that can affect execution, such as a database, port, environment, migration target, destructive fixture, lock, or generated pair; use `none` when there is no such resource. Use `Handoff` only when another task consumes an exact produced contract; name both sides without copying implementation steps. Use a discovery boundary only when the exact files cannot be known before execution; bound what may be inspected and name the deterministic placement rule or canonical source that resolves the file choice.
 
+Every Go implementation task carries the owning package or a bounded discovery
+rule, the canonical source and any derived generated surfaces, accepted Go
+semantic constraints, and the narrowest repository-native proof command with
+its expected observable. Do not make the Worker rediscover these from broad
+context.
+
 A known decision-changing ambiguity or missing input required by a mandatory path through the current completion condition belongs in `Blocked stop` and blocks readiness now. `Reopen if` is optional and records only a concrete objective future condition that would invalidate an input accepted at readiness; omit it when none exists, and do not use it to defer a known question to implementation.
 
 Name the claim before its check. A command is not proof unless its expected observable can establish that claim. Prefer the smallest repository-native automated check unless the accepted proof strategy requires manual observation or automation cannot establish the required observable.

@@ -16,7 +16,7 @@ Place the accepted mechanism in Go packages and files without changing behavior.
 
 ## Method
 
-Reconstruct the complete changed-responsibility set from current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths. For each responsibility, select one clear implementation/source owner with current evidence and state why that owner stays or changes. Separately disposition its package/file placement, dependency/composition, generated authority, cleanup owner, and test/proof owner.
+Reconstruct the complete changed-responsibility set from current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths. For each responsibility, select one clear implementation/source owner with current evidence and state why that owner stays or changes. Separately disposition its package/file placement, dependency/composition, generated authority, cleanup owner, and test/proof owner. Validate every selected owner against the actual Go import graph, `internal` visibility, generated/manual boundary, and acyclicity. Do not add a producer-owned interface used only to reverse an invalid dependency; repair the owner or dependency direction instead.
 
 ## Outputs
 

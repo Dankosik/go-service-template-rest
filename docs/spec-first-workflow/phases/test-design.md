@@ -21,6 +21,15 @@ Before writing scenarios, disposition every material acceptance claim, invariant
 
 For each resulting proof obligation, design the smallest falsifier: a controlled setup/action/failure trigger plus an oracle that rejects a plausible incorrect observable result, state, emission, or side effect. Then select the narrowest complementary proving level and runnable command that can establish that oracle.
 
+Route non-obvious Go proving decisions through `go-test-strategy`; this phase
+still owns the complete obligation matrix and Planning handoff. Map only
+triggered failure classes: language or package behavior to a focused package
+test; parser or input space to table or fuzz proof; shared state or lifecycle to
+deterministic coordination plus triggered race, liveness, or leak proof; HTTP,
+OpenAPI, or generated behavior to boundary or drift proof; SQL, cache,
+migration, or durable state to stateful integration or rehearsal; and
+repository completion only to triggered repository-native gates.
+
 ## Outputs
 
 When a durable matrix is unnecessary, return a compact inline proof handoff for Planning. Otherwise create `test-plan.md` with the canonical row shape:

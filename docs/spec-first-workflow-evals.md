@@ -10,7 +10,7 @@ Validate the workflow manifest without model calls:
 make workflow-behavior-evals-check
 ```
 
-This proves only that E01–E59 and the invariant set are complete and parseable.
+This proves only that E01–E66 and the invariant set are complete and parseable.
 `make workflow-routing-check` additionally validates the selected skill manifests,
 fixtures, path isolation, and the eval harness through fake adapters; it also
 makes no external model call.
@@ -474,9 +474,51 @@ Prompt: a fixed `workflow-plan.md` routes a high-impact cross-session ownership 
 
 Pass: the response exhibits `workflow-plan-adequacy-challenge` ownership, inspects the fixed plan against current artifact and handoff authorities, keeps findings anchored and read-only, and names the narrow owner of every gap. Fail on rewriting the plan, changing task state, manufacturing low-risk concerns, returning unanchored advice, or editing any artifact; naming the skill without the anchored read-only result does not pass.
 
+### E60 — Go Context And Error Identity Across Layers
+
+Prompt: implement a chi request path through `internal/app` into a pgx repository. The handler has a request deadline, the application layer wraps domain not-found and conflict errors, the repository can return cancellation or deadline errors, and current wrapping may destroy identity. Preserve caller-visible HTTP semantics and prove the path.
+
+Pass: detect only the context-budget and cross-layer error-identity pressures, route their design and review to the matching `go-idiomatic`, HTTP, and database methods, and carry explicit propagation/wrapping and `errors.Is`-compatible mapping constraints into the owning packages before `go-coder` edits them. Prove the focused package mappings plus a repository-backed cancellation/deadline path when triggered; do not invent retries or a new error framework. If required pgx integration evidence is unavailable, report the narrower package proof and block the full claim under the integration-proof owner.
+
+### E61 — OpenAPI Canonical Source And Generated Go
+
+Prompt: change an OpenAPI response and generated Go types used by two chi handlers and another service client. A proposed shortcut edits `openapi.gen.go` directly and runs only handler unit tests. Mixed-version compatibility and generated drift have not been addressed.
+
+Pass: detect the contract, generated-authority, affected-consumer, compatibility, and proof pressures; route caller-visible semantics to `go-api-contract`, transport wiring to `go-chi`, and package/generated placement to Go Code / Ownership Design. Change the canonical OpenAPI source before regeneration, identify and update or evidence-close every affected handler and consumer, carry compatibility constraints into implementation, and run the repository OpenAPI generation, drift, runtime-contract, and affected-consumer proof. Reject direct generated edits and keep completion blocked when a mandatory consumer or compatibility proof is unavailable.
+
+### E62 — sqlc Transaction And Resource Lifetime
+
+Prompt: add a sqlc-backed operation that opens rows inside a transaction, performs two ordered effects, and must commit or roll back correctly. The draft edits generated sqlc Go, defers `rows.Close` and `rows.Err`, and can return after the first effect without an owned rollback path.
+
+Pass: detect transaction, rows, effect-order, generated-authority, and stateful-proof pressures; route runtime SQL and transaction semantics to `go-db-cache`, generated/manual placement to Go Code / Ownership Design, and non-obvious proof to `go-test-strategy`. Keep SQL/query sources canonical, regenerate sqlc, make rollback/commit ownership and every early-return path explicit, check rows close and terminal error, preserve accepted effect ordering, and carry these constraints into the `go-coder` task. Require focused package proof, sqlc generation/drift proof, and a stateful integration oracle for commit, rollback, partial-effect absence, and rows errors; narrow the claim if the mandatory database surface cannot run.
+
+### E63 — Goroutine And Background Worker Lifecycle
+
+Prompt: add a background worker started from the composition root. The proposal launches an unbounded goroutine, closes a shared client from the worker, and has cancellation but no demonstrated unblock or join path during shutdown.
+
+Pass: detect only the goroutine bound, owner, stop, unblock, join, close-ownership, and shutdown-proof pressures; route lifecycle design and review to `go-concurrency` and matching reliability ownership, while exact package wiring stays with Go Code / Ownership Design. Carry bounds, cancellation propagation, blocking-operation unblocking, one close owner, and join-before-exit semantics into the composition-root and worker tasks before `go-coder` edits them. Require deterministic coordination proof plus triggered race, liveness/leak, and shutdown proof; do not add a worker framework, and do not claim shutdown closure when any mandatory observable is unavailable.
+
+### E64 — Go API Semantic Traps
+
+Prompt: review and implement a small Go API change containing four risks: a typed nil returned as an interface, a value receiver on a struct containing synchronization state, a returned mutable slice alias, and a public JSON field whose nil-versus-empty representation is caller-visible.
+
+Pass: detect each independent method-set, nil/zero, mutable-aliasing, synchronization, and public-representation pressure and route it to `go-idiomatic`, with `go-concurrency` added only for the synchronization-bearing copy risk and `go-api-contract` only for the nil/empty caller contract. Place each correction at the narrow owning symbol, carry the accepted nil/empty semantic choice and no-alias/copy constraints into `go-coder`, and prove typed-nil behavior, receiver/copy safety, mutation isolation, and exact public representation with focused package or boundary tests. Do not manufacture unrelated lifecycle work or claim the API safe if the caller-visible representation remains undecided.
+
+### E65 — chi Route Tree And Middleware Contract
+
+Prompt: change a chi route tree that mixes generated and manual registration, moves middleware across a subtree, and affects 404, 405, HEAD, OPTIONS, CORS, and route-label behavior. The proposed proof calls only the new happy-path handler.
+
+Pass: detect route composition, middleware scope/order, generated/manual authority, fallback/method semantics, bounded-label, and runtime-contract proof pressures; route them to `go-chi`, with caller-visible semantics sent to `go-api-contract` and generated/manual placement to Go Code / Ownership Design. Carry the accepted route tree, registration owner, middleware boundary, and compatibility behavior into `go-coder`, prevent generated/manual overlap, and prove the affected route plus 404, 405, HEAD, OPTIONS, CORS, and bounded-label behavior through focused runtime contract checks and generation/drift gates when triggered. Do not add a router abstraction or claim transport closure from handler-only tests.
+
+### E66 — Mixed-Version Migration And Backfill Closure
+
+Prompt: implement a stored-field migration and backfill across old and new service versions. The desired release uses expand-contract, must resume after interruption, and needs rollback or failback, but the rehearsal environment and one mandatory mixed-version consumer proof may be unavailable.
+
+Pass: detect schema authority, mixed-version compatibility, backfill checkpoint/resumability, rollout order, rollback/failback, rehearsal, and completion-proof pressures; route data decisions to `go-data-architecture`, release controls to `go-delivery-platform`, runtime recovery to matching reliability methods, and affected Go placement/proof into the ledger. Carry expand-before-use, resumable idempotent backfill, consumer compatibility, contract/removal gates, and failure recovery into dependency-ordered implementation tasks with migration and application owners. Require migration rehearsal, backfill restart/convergence, mixed-version integration, rollback/failback, and repository-native gates; when any mandatory environment or consumer proof is unavailable, keep the release claim blocked under its exact owner rather than calling the code complete.
+
 ## Acceptance
 
-- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, E26, E27, E28, E29, E30, E31, E32, E33, E34, E35, E36, E37, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, and E59 are invariant cases and must all pass.
+- E02, E04, E05, E06, E09, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24, E25, E26, E27, E28, E29, E30, E31, E32, E33, E34, E35, E36, E37, E38, E39, E40, E41, E42, E43, E44, E45, E46, E47, E48, E49, E50, E51, E52, E53, E54, E55, E56, E57, E58, E59, E60, E61, E62, E63, E64, E65, and E66 are invariant cases and must all pass.
 - The candidate must not reduce task success or evidence completeness on any case, including invariant cases.
 - Compare the same reasoning effort and one lower effort for new model generations.
 - Keep prompt changes only when the measured quality/resource tradeoff is favorable.

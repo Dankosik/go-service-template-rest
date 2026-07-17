@@ -501,6 +501,7 @@ t02_check_no_semantic_exact_text_api scripts/ci/workflow-instructions-check.sh
 for heading in \
   '## Authorization' \
   '## Working Contract' \
+  '## Go Change Surface' \
   '## Instruction Ownership'; do
   t02_require_heading AGENTS.md "${heading}"
 done
@@ -514,6 +515,21 @@ for token in \
   t02_require_machine_token AGENTS.md "${token}"
 done
 t02_require_machine_token README.md 'native App Worker'
+
+for row in \
+  'AGENTS.md|untriggered categories create no work' \
+  'docs/spec-first-workflow/phases/research.md|current repository Go version' \
+  'docs/spec-first-workflow/phases/system-integration-design.md|## Go Runtime Closure' \
+  'docs/spec-first-workflow/phases/system-integration-design.md|error identity across layers' \
+  'docs/spec-first-workflow/phases/go-code-ownership-design.md|actual Go import graph' \
+  'docs/spec-first-workflow/phases/go-code-ownership-design.md|producer-owned interface' \
+  'docs/spec-first-workflow/phases/test-design.md|`go-test-strategy`' \
+  'docs/spec-first-workflow/phases/test-design.md|complete obligation matrix' \
+  'docs/spec-first-workflow/phases/planning.md|Every Go implementation task' \
+  'docs/spec-first-workflow/phases/planning.md|repository-native proof command'; do
+  IFS='|' read -r file token <<<"${row}"
+  t02_require_machine_token "${file}" "${token}"
+done
 
 for token in \
   'Global constraints:' \
@@ -578,6 +594,16 @@ for heading in \
   '## Close Out' \
   '## Stop Rule'; do
   t02_require_heading docs/spec-first-workflow/phases/implementation-validation-closeout.md "${heading}"
+done
+for token in \
+  '`go-coder`' \
+  '`go-systematic-debugging`' \
+  '`go-test-implementation`' \
+  'reconstructs the Go Change Surface' \
+  'each changed symbol only across triggered' \
+  'one matching review method per independent pressure' \
+  '`go-verification-before-completion`'; do
+  t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
 done
 for token in \
   'Codex-managed Git worktree' \
@@ -717,6 +743,23 @@ for token in \
   'exhibits `test-design-session` ownership' \
   'exhibits `workflow-planning-session` ownership' \
   'exhibits `workflow-plan-adequacy-challenge` ownership'; do
+  t02_require_machine_token docs/spec-first-workflow-evals.md "${token}"
+done
+for token in \
+  '### E60 — Go Context And Error Identity Across Layers' \
+  '### E61 — OpenAPI Canonical Source And Generated Go' \
+  '### E62 — sqlc Transaction And Resource Lifetime' \
+  '### E63 — Goroutine And Background Worker Lifecycle' \
+  '### E64 — Go API Semantic Traps' \
+  '### E65 — chi Route Tree And Middleware Contract' \
+  '### E66 — Mixed-Version Migration And Backfill Closure' \
+  'pgx repository' \
+  'canonical OpenAPI source before regeneration' \
+  'rollback/commit ownership' \
+  'join-before-exit' \
+  'typed nil' \
+  '404, 405, HEAD, OPTIONS, CORS' \
+  'expand-before-use'; do
   t02_require_machine_token docs/spec-first-workflow-evals.md "${token}"
 done
 for token in \

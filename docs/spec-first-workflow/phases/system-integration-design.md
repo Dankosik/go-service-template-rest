@@ -20,6 +20,15 @@ Trace each material flow from actor or trigger through caller-visible completion
 
 Reconstruct every material flow, then trace actor/trigger -> ingress/producer -> ordered runtime hops -> storage/broker -> affected consumers and side effects -> caller-visible completion or durable finality. Activate only the triggered architecture, contract, exact-byte, release-graph, and fan-out branches below.
 
+## Go Runtime Closure
+
+For a material flow entering or changing Go runtime code, classify only the
+triggered pressures: mechanism- or proof-changing context budgets; goroutine
+owner, stop, unblock, and join; error identity across layers; body, rows, file,
+transaction, timer, or shutdown lifetime; mutable publication; and canonical or
+generated authority. Apply the matching Go methods to close those pressures.
+Exact package and file placement remains owned by Go Code / Ownership Design.
+
 ## Outputs
 
 When the shared [persistence trigger](../shared/artifact-model.md#when-to-persist) applies, use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
