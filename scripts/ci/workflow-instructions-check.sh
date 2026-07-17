@@ -6,6 +6,7 @@ workflow_files=(
   README.md
   docs/spec-first-workflow.md
   docs/spec-first-workflow-evals.md
+  scripts/dev/codex-worktree-preflight.sh
   docs/spec-first-workflow/shared/artifact-model.md
   docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md
   docs/spec-first-workflow/shared/subagents-and-handoff.md
@@ -473,6 +474,101 @@ t02_require_absent_paths \
   scripts/dev/worker-result.schema.json \
   scripts/ci/worker-session-check.sh
 
+t02_check_codex_worktree_preflight() {
+  local fixture_root repo fake_bin before after output
+  fixture_root="$(mktemp -d -t codex-worktree-preflight.XXXXXX)"
+  repo="${fixture_root}/repo"
+  mkdir -p "${repo}"
+  git -C "${repo}" init --quiet
+  git -C "${repo}" config user.name 'Workflow Check'
+  git -C "${repo}" config user.email 'workflow-check@example.invalid'
+  printf 'tracked\n' >"${repo}/tracked"
+  printf '*.ignored\n' >"${repo}/.gitignore"
+  git -C "${repo}" add tracked .gitignore
+  git -C "${repo}" commit --quiet -m baseline
+
+  fake_bin="${fixture_root}/gnu-stat"
+  mkdir -p "${fake_bin}"
+  cat >"${fake_bin}/stat" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == '-f' ]]; then
+  exit 1
+fi
+if [[ "$1" == '-c' && "$2" == '%s' ]]; then
+  bytes="$(/usr/bin/stat -f '%z' "$3" 2>/dev/null)"
+  if [[ "${bytes}" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "${bytes}"
+    exit 0
+  fi
+  /usr/bin/stat -c '%s' "$3"
+  exit $?
+fi
+exit 1
+EOF
+  chmod +x "${fake_bin}/stat"
+
+  printf 'small\n' >"${repo}/small"
+  dd if=/dev/zero of="${repo}/large.ignored" bs=1024 count=65537 2>/dev/null
+  before="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  output="$(PATH="${fake_bin}:${PATH}" bash scripts/dev/codex-worktree-preflight.sh "${repo}")" \
+    || t02_error 'small dirty preflight unexpectedly failed' || return 1
+  [[ "${output}" == PASS:* ]] \
+    || t02_error 'small dirty preflight did not report PASS' || return 1
+  after="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  [[ "${before}" == "${after}" ]] \
+    || t02_error 'preflight mutated small dirty fixture state' || return 1
+
+  mkdir "${repo}/subdir"
+  t02_expect_fixture_failure 'non-top-level preflight target' \
+    bash scripts/dev/codex-worktree-preflight.sh "${repo}/subdir" || return 1
+  rm -rf "${repo}/small" "${repo}/large.ignored" "${repo}/subdir"
+
+  dd if=/dev/urandom of="${repo}/tracked" bs=1024 count=32769 2>/dev/null
+  before="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  if output="$(PATH="${fake_bin}:${PATH}" bash scripts/dev/codex-worktree-preflight.sh "${repo}" 2>&1)"; then
+    t02_error 'oversized tracked patch unexpectedly passed'
+    return 1
+  fi
+  [[ "${output}" == *'tracked patch is'* && "${output}" == *'tracked input: tracked'* ]] \
+    || t02_error 'oversized tracked patch did not identify the input' || return 1
+  after="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  [[ "${before}" == "${after}" ]] \
+    || t02_error 'preflight mutated oversized tracked fixture state' || return 1
+  git -C "${repo}" checkout -- tracked
+
+  dd if=/dev/zero of="${repo}/large-untracked" bs=1024 count=65536 2>/dev/null
+  before="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  if output="$(PATH="${fake_bin}:${PATH}" bash scripts/dev/codex-worktree-preflight.sh "${repo}" 2>&1)"; then
+    t02_error 'oversized untracked inputs unexpectedly passed'
+    return 1
+  fi
+  [[ "${output}" == *'working-tree transfer inputs total at least'* && "${output}" == *'large-untracked (67108864 bytes)'* ]] \
+    || t02_error 'oversized untracked inputs did not identify the input and size' || return 1
+  after="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  [[ "${before}" == "${after}" ]] \
+    || t02_error 'preflight mutated oversized untracked fixture state' || return 1
+  rm -f "${repo}/large-untracked"
+
+  dd if=/dev/urandom of="${repo}/tracked" bs=1024 count=16384 2>/dev/null
+  dd if=/dev/zero of="${repo}/mixed-untracked" bs=1024 count=49152 2>/dev/null
+  before="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  if output="$(PATH="${fake_bin}:${PATH}" bash scripts/dev/codex-worktree-preflight.sh "${repo}" 2>&1)"; then
+    t02_error 'aggregate tracked and untracked inputs unexpectedly passed'
+    return 1
+  fi
+  [[ "${output}" == *'working-tree transfer inputs total at least'* && \
+    "${output}" == *'tracked input: tracked'* && \
+    "${output}" == *'mixed-untracked (50331648 bytes)'* ]] \
+    || t02_error 'aggregate transfer block did not identify exact contributors' || return 1
+  after="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all --ignored=matching)"
+  [[ "${before}" == "${after}" ]] \
+    || t02_error 'preflight mutated aggregate fixture state' || return 1
+
+  rm -rf "${fixture_root}"
+}
+
+t02_check_codex_worktree_preflight
+
 t02_link_rows=(
   'AGENTS.md|docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance'
   'AGENTS.md|docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md'
@@ -612,6 +708,11 @@ for token in \
   'omit the optional starting state' \
   'select an existing branch' \
   'select the working tree only when required accepted changes are uncommitted' \
+  'Before creating a new App task with `startingState: working-tree`' \
+  'codex-worktree-preflight.sh <selected-git-top-level>' \
+  'Do not run this preflight for an ordinary same-task correction' \
+  '64 MiB of total working-tree transfer input' \
+  'current conservative guards, not an eternal App product contract' \
   'returned App task, thread, and managed-worktree identity' \
   '`turn/started`' \
   '`item/*`' \
