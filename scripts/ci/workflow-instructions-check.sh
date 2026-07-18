@@ -745,6 +745,11 @@ for token in \
 done
 for token in \
   'ordinary implementation-owned gap' \
+  'recoverable execution fault, not a user blocker' \
+  'no `turn/started` and no `item/*` progress' \
+  'one continuation request produces no new turn or item' \
+  'stops the stale App task before any replacement' \
+  'Do not ask the user to stop, restart, or authorize this recovery' \
   'one causal class' \
   'violated invariant and owning surface' \
   'symptom-by-symptom patches' \
@@ -812,6 +817,7 @@ done
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E46 — Dirty Local Handoff Recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md 'fast-forward the valid default/main after acceptance'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E47 — Same-Task Worker Recovery'
+t02_require_machine_token docs/spec-first-workflow-evals.md 'user-managed Worker recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E48 — Planned Wave Dispatch And Drift Recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E49 — Convergence-First Worker Correction'
 for token in \
