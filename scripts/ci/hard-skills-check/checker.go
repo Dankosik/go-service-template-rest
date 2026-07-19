@@ -90,9 +90,12 @@ func validateStage2Metadata(data []byte, promptSHA256, commit string, explicitOn
 	if len(metadata.ExplicitSkillMentions) != 0 || len(metadata.ForcedSkills) != 0 {
 		return errors.New("stage 2 metadata reports explicit routing")
 	}
-	domainCount := 0
+	return validateStage2Selections(metadata.SelectedSkills, explicitOnly)
+}
+
+func validateStage2Selections(selectedSkills []stage2Selection, explicitOnly map[string]bool) error {
 	seen := map[string]bool{}
-	for _, selected := range metadata.SelectedSkills {
+	for _, selected := range selectedSkills {
 		if selected.Name == "" || selected.Source != "implicit" || seen[selected.Name] {
 			return errors.New("stage 2 metadata has invalid selected skill")
 		}
@@ -103,9 +106,8 @@ func validateStage2Metadata(data []byte, promptSHA256, commit string, explicitOn
 		if !slices.Contains(domainSkills, selected.Name) {
 			return fmt.Errorf("stage 2 metadata selected non-domain skill %s", selected.Name)
 		}
-		domainCount++
 	}
-	if domainCount == 0 {
+	if len(selectedSkills) == 0 {
 		return errors.New("stage 2 metadata omits an implicit domain specialist")
 	}
 	return nil
@@ -178,7 +180,7 @@ func validateSharedContract(root string) []string {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return []string{fmt.Sprintf("inspect triggerable shared contract path: %v", err)}
 	}
-	data, err := os.ReadFile(contract)
+	data, err := readRootFile(root, contract)
 	if err != nil {
 		return []string{fmt.Sprintf("read shared specialist contract: %v", err)}
 	}
@@ -188,7 +190,7 @@ func validateSharedContract(root string) []string {
 func validateSkill(root, name string) []string {
 	var problems []string
 	path := filepath.Join(root, ".agents", "skills", name, "SKILL.md")
-	doc, err := readSkillDocument(path)
+	doc, err := readSkillDocument(root, path)
 	if err != nil {
 		return []string{fmt.Sprintf("%s: %v", name, err)}
 	}
@@ -220,7 +222,7 @@ func validateCatalog(root string) []string {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".md") {
 			return nil
 		}
-		data, readErr := os.ReadFile(path)
+		data, readErr := readRootFile(root, path)
 		if readErr != nil {
 			problems = append(problems, fmt.Sprintf("read %s: %v", relativePath(root, path), readErr))
 			return nil
@@ -228,11 +230,12 @@ func validateCatalog(root string) []string {
 		problems = append(problems, validateMarkdownLinks(root, path, data)...)
 		if entry.Name() == "SKILL.md" {
 			doc, parseErr := parseSkillDocument(data, path)
-			if parseErr != nil {
+			switch {
+			case parseErr != nil:
 				problems = append(problems, fmt.Sprintf("%s: %v", relativePath(root, path), parseErr))
-			} else if strings.TrimSpace(doc.Description) == "" {
+			case strings.TrimSpace(doc.Description) == "":
 				problems = append(problems, fmt.Sprintf("%s: description is empty", doc.Name))
-			} else if doc.Name != filepath.Base(filepath.Dir(path)) {
+			case doc.Name != filepath.Base(filepath.Dir(path)):
 				problems = append(problems, fmt.Sprintf("%s: frontmatter name %q does not match directory", relativePath(root, path), doc.Name))
 			}
 		}
@@ -254,8 +257,8 @@ func validateImplicitPolicies(root string) []string {
 	return problems
 }
 
-func readSkillDocument(path string) (skillDocument, error) {
-	data, err := os.ReadFile(path)
+func readSkillDocument(root, path string) (skillDocument, error) {
+	data, err := readRootFile(root, path)
 	if err != nil {
 		return skillDocument{}, fmt.Errorf("read SKILL.md: %w", err)
 	}
@@ -418,7 +421,7 @@ func resolveRelativeLink(source, raw string) (string, bool) {
 
 func readEvalBundle(root, name string) (evalBundle, error) {
 	path := filepath.Join(root, ".agents", "skills", name, "evals", "evals.json")
-	data, err := os.ReadFile(path)
+	data, err := readRootFile(root, path)
 	if err != nil {
 		return evalBundle{}, fmt.Errorf("read eval bundle: %w", err)
 	}
@@ -550,7 +553,7 @@ func validateRetiredIdentifiers(root string) []string {
 			return nil
 		}
 		seen[rel] = true
-		data, readErr := os.ReadFile(path)
+		data, readErr := readRootFile(root, path)
 		if readErr != nil {
 			problems = append(problems, fmt.Sprintf("scan %s: %v", rel, readErr))
 			return nil
@@ -587,4 +590,21 @@ func relativePath(root, path string) string {
 		return path
 	}
 	return rel
+}
+
+func readRootFile(root, path string) ([]byte, error) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve repository-relative path: %w", err)
+	}
+	repository, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open repository root: %w", err)
+	}
+	defer func() { _ = repository.Close() }()
+	data, err := repository.ReadFile(rel)
+	if err != nil {
+		return nil, fmt.Errorf("read repository file: %w", err)
+	}
+	return data, nil
 }

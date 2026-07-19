@@ -12,12 +12,16 @@ func emitSelectedEvals(root, outputDir string) error {
 	if strings.TrimSpace(outputDir) == "" {
 		return fmt.Errorf("--output-dir is required")
 	}
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
 	}
+	outputRoot, err := os.OpenRoot(outputDir)
+	if err != nil {
+		return fmt.Errorf("open output directory: %w", err)
+	}
+	defer func() { _ = outputRoot.Close() }()
 
-	manifestPath := filepath.Join(outputDir, "manifest.tsv")
-	manifest, err := os.Create(manifestPath)
+	manifest, err := outputRoot.OpenFile("manifest.tsv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("create selected eval manifest: %w", err)
 	}
@@ -44,14 +48,13 @@ func emitSelectedEvals(root, outputDir string) error {
 		for _, category := range evalCategories {
 			eval := byCategory[category]
 			caseDirRel := filepath.Join("cases", skill, category)
-			caseDir := filepath.Join(outputDir, caseDirRel)
-			if err := os.MkdirAll(caseDir, 0o755); err != nil {
+			if err := outputRoot.MkdirAll(caseDirRel, 0o750); err != nil {
 				_ = manifest.Close()
 				return fmt.Errorf("create selected eval case directory: %w", err)
 			}
 			promptRel := filepath.Join(caseDirRel, "prompt.txt")
 			expectedRel := filepath.Join(caseDirRel, "expected.txt")
-			if err := os.WriteFile(filepath.Join(outputDir, promptRel), []byte(eval.Prompt+"\n"), 0o644); err != nil {
+			if err := outputRoot.WriteFile(promptRel, []byte(eval.Prompt+"\n"), 0o600); err != nil {
 				_ = manifest.Close()
 				return fmt.Errorf("write selected eval prompt: %w", err)
 			}
@@ -62,7 +65,7 @@ func emitSelectedEvals(root, outputDir string) error {
 				expected.WriteString(assertion)
 				expected.WriteByte('\n')
 			}
-			if err := os.WriteFile(filepath.Join(outputDir, expectedRel), []byte(expected.String()), 0o644); err != nil {
+			if err := outputRoot.WriteFile(expectedRel, []byte(expected.String()), 0o600); err != nil {
 				_ = manifest.Close()
 				return fmt.Errorf("write selected eval expectation: %w", err)
 			}

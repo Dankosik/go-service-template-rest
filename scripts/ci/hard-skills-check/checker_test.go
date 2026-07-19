@@ -529,6 +529,32 @@ func TestSizeReportAccounting(t *testing.T) {
 	}
 }
 
+func TestSizeReportDoesNotInterpretBaselineRef(t *testing.T) {
+	t.Parallel()
+	root, _ := makeSizeRepository(t)
+	marker := filepath.Join(root, "command-injection")
+	if err := writeSizeReport(root, "HEAD;touch "+marker, &bytes.Buffer{}); err == nil {
+		t.Fatal("command-like baseline ref unexpectedly resolved")
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("command-like baseline ref created marker: %v", err)
+	}
+}
+
+func TestReadRootFileRejectsEscapingSymlink(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside")
+	mustWriteFile(t, outside, []byte("outside\n"))
+	link := filepath.Join(root, "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("create symlink: %v", err)
+	}
+	if _, err := readRootFile(root, link); err == nil {
+		t.Fatal("root-scoped read followed symlink outside repository")
+	}
+}
+
 func assertBaselineEffectiveBytes(t *testing.T, label string, row []string, want int) {
 	t.Helper()
 	if got := mustAtoi(t, row[13]); got != want {

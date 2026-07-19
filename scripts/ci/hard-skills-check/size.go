@@ -38,7 +38,7 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 		return fmt.Errorf("resolve baseline ref %q: %w", baselineRef, err)
 	}
 	baselineCommit = strings.TrimSpace(baselineCommit)
-	shared, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(sharedContractPath)))
+	shared, err := readRootFile(root, filepath.Join(root, filepath.FromSlash(sharedContractPath)))
 	if err != nil {
 		return fmt.Errorf("read shared specialist contract: %w", err)
 	}
@@ -48,53 +48,9 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 		return fmt.Errorf("read baseline shared specialist contract: %w", err)
 	}
 	baselineSharedMetrics := measure(baselineShared)
-	skills, err := catalogSkillNames(root)
+	rows, err := buildSizeRows(root, baselineCommit, baselineSharedMetrics, sharedMetrics)
 	if err != nil {
 		return err
-	}
-	rows := make([]sizeRow, 0, len(skills))
-	for _, skill := range skills {
-		baselineNames := baselineSkills[skill]
-		if len(baselineNames) == 0 {
-			baselineNames = []string{skill}
-		}
-		var baselineBody sizeMetrics
-		for _, baselineSkill := range baselineNames {
-			baselineData, baselineErr := gitBytes(root, "show", baselineCommit+":.agents/skills/"+baselineSkill+"/SKILL.md")
-			if baselineErr != nil {
-				return fmt.Errorf("read baseline skill %s: %w", baselineSkill, baselineErr)
-			}
-			baselineDoc, parseErr := parseSkillDocument(baselineData, baselineSkill)
-			if parseErr != nil {
-				baselineDoc = skillDocument{Body: skillBody(baselineData)}
-			}
-			baselineBody = addMetrics(baselineBody, measure(baselineDoc.Body))
-		}
-		candidateDoc, err := readSkillDocument(filepath.Join(root, ".agents", "skills", skill, "SKILL.md"))
-		if err != nil {
-			return fmt.Errorf("read candidate skill %s: %w", skill, err)
-		}
-		candidateBody := measure(candidateDoc.Body)
-		family := skillFamily(root, skill, candidateDoc)
-		baselineEffective := baselineBody
-		if slices.Contains(domainSkills, skill) {
-			for range baselineNames {
-				baselineEffective = addMetrics(baselineEffective, baselineSharedMetrics)
-			}
-		}
-		candidateEffective := candidateBody
-		if loadsSharedContract(root, candidateDoc) {
-			candidateEffective = addMetrics(candidateEffective, sharedMetrics)
-		}
-		rows = append(rows, sizeRow{
-			Skill:              skill,
-			Family:             family,
-			BaselineSkill:      strings.Join(baselineNames, "+"),
-			BaselineBody:       baselineBody,
-			CandidateBody:      candidateBody,
-			BaselineEffective:  baselineEffective,
-			CandidateEffective: candidateEffective,
-		})
 	}
 
 	if _, err := fmt.Fprintf(output, "baseline_ref\t%s\n", baselineRef); err != nil {
@@ -141,6 +97,58 @@ func writeSizeReport(root, baselineRef string, output io.Writer) error {
 	return writeSizeRow(output, total)
 }
 
+func buildSizeRows(root, baselineCommit string, baselineSharedMetrics, sharedMetrics sizeMetrics) ([]sizeRow, error) {
+	skills, err := catalogSkillNames(root)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]sizeRow, 0, len(skills))
+	for _, skill := range skills {
+		baselineNames := baselineSkills[skill]
+		if len(baselineNames) == 0 {
+			baselineNames = []string{skill}
+		}
+		var baselineBody sizeMetrics
+		for _, baselineSkill := range baselineNames {
+			baselineData, baselineErr := gitBytes(root, "show", baselineCommit+":.agents/skills/"+baselineSkill+"/SKILL.md")
+			if baselineErr != nil {
+				return nil, fmt.Errorf("read baseline skill %s: %w", baselineSkill, baselineErr)
+			}
+			baselineDoc, parseErr := parseSkillDocument(baselineData, baselineSkill)
+			if parseErr != nil {
+				baselineDoc = skillDocument{Body: skillBody(baselineData)}
+			}
+			baselineBody = addMetrics(baselineBody, measure(baselineDoc.Body))
+		}
+		candidateDoc, err := readSkillDocument(root, filepath.Join(root, ".agents", "skills", skill, "SKILL.md"))
+		if err != nil {
+			return nil, fmt.Errorf("read candidate skill %s: %w", skill, err)
+		}
+		candidateBody := measure(candidateDoc.Body)
+		family := skillFamily(root, skill, candidateDoc)
+		baselineEffective := baselineBody
+		if slices.Contains(domainSkills, skill) {
+			for range baselineNames {
+				baselineEffective = addMetrics(baselineEffective, baselineSharedMetrics)
+			}
+		}
+		candidateEffective := candidateBody
+		if loadsSharedContract(root, candidateDoc) {
+			candidateEffective = addMetrics(candidateEffective, sharedMetrics)
+		}
+		rows = append(rows, sizeRow{
+			Skill:              skill,
+			Family:             family,
+			BaselineSkill:      strings.Join(baselineNames, "+"),
+			BaselineBody:       baselineBody,
+			CandidateBody:      candidateBody,
+			BaselineEffective:  baselineEffective,
+			CandidateEffective: candidateEffective,
+		})
+	}
+	return rows, nil
+}
+
 func skillBody(data []byte) []byte {
 	if !bytes.HasPrefix(data, []byte("---\n")) {
 		return data
@@ -154,7 +162,7 @@ func skillBody(data []byte) []byte {
 func catalogSkillNames(root string) ([]string, error) {
 	entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read skill catalog: %w", err)
 	}
 	var names []string
 	for _, entry := range entries {
@@ -222,7 +230,9 @@ func gitOutput(root string, args ...string) (string, error) {
 }
 
 func gitBytes(root string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(context.Background(), "git", append([]string{"-C", root}, args...)...)
+	command := exec.CommandContext(context.Background(), "git")
+	command.Args = append(command.Args, args...)
+	command.Dir = root
 	data, err := command.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(data)))

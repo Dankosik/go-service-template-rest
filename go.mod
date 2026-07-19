@@ -1,6 +1,6 @@
 module github.com/example/go-service-template-rest
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/felixge/httpsnoop v1.1.0
