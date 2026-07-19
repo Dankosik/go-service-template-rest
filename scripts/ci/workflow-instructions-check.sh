@@ -779,9 +779,15 @@ for token in \
   'No wave task reaches root acceptance' \
   'hold the whole wave' \
   'authoritative integration branch' \
+  'local repository default/main' \
+  'unless the user explicitly names another persistent integration branch' \
   'Commit before dispatching any later task' \
   'never an accepted uncommitted working-tree snapshot' \
-  'fast-forward it after acceptance' \
+  'Prefer a fast-forward when valid' \
+  'Remote push is outside this integration rule' \
+  'safe recoverable conflict' \
+  'terminal fresh validation on that resulting integrated state' \
+  'before acceptance or any later task is dispatched' \
   'combined candidate' \
   'run each identical command once' \
   'compact self-check' \
@@ -815,7 +821,14 @@ for token in \
   t02_require_machine_token docs/spec-first-workflow/phases/implementation-validation-closeout.md "${token}"
 done
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E46 — Dirty Local Handoff Recovery'
-t02_require_machine_token docs/spec-first-workflow-evals.md 'fast-forward the valid default/main after acceptance'
+for token in \
+  'The user has not named another persistent integration branch' \
+  'local repository default/main as the authoritative integration branch' \
+  'leaving accepted work only on a managed-worktree, task, or integration branch' \
+  'acceptance or Goal completion before authoritative integration and terminal fresh validation' \
+  'Remote push is not required'; do
+  t02_require_machine_token docs/spec-first-workflow-evals.md "${token}"
+done
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E47 — Same-Task Worker Recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md 'user-managed Worker recovery'
 t02_require_machine_token docs/spec-first-workflow-evals.md '### E48 — Planned Wave Dispatch And Drift Recovery'
