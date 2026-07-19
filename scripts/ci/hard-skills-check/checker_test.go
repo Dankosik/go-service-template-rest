@@ -492,8 +492,8 @@ func TestSizeReportAccounting(t *testing.T) {
 		}
 	}
 	for _, family := range []string{"shared-contract-specialist", "direct-execution-method", "workflow-session"} {
-		row, ok := rows["FAMILY:"+family]
-		if !ok || row[1] != family {
+		row := requireSizeRow(t, rows, "FAMILY:"+family)
+		if row[1] != family {
 			t.Errorf("family row missing or wrong: %s", family)
 		}
 	}
@@ -506,21 +506,23 @@ func TestSizeReportAccounting(t *testing.T) {
 	if familyCount != 3 {
 		t.Fatalf("family row count = %d, want 3", familyCount)
 	}
-	api := rows["go-api-contract"]
+	api := requireSizeRow(t, rows, "go-api-contract")
 	if api[2] != "go-api-contract-spec" {
 		t.Fatalf("rename mapping = %q", api[2])
 	}
-	if got := rows["go-chi"][2]; got != "go-chi-review+go-chi-spec" {
+	chi := requireSizeRow(t, rows, "go-chi")
+	if got := chi[2]; got != "go-chi-review+go-chi-spec" {
 		t.Fatalf("merged baseline mapping = %q", got)
 	}
-	reliability := rows["go-reliability"]
+	reliability := requireSizeRow(t, rows, "go-reliability")
 	sharedBytes := len([]byte("shared contract words\n"))
 	baselineSharedBytes := len([]byte("baseline shared\n"))
-	chi := rows["go-chi"]
 	assertBaselineEffectiveBytes(t, "merged specialist baseline", chi, mustAtoi(t, chi[5])+2*baselineSharedBytes)
 	assertEffectiveBytes(t, "specialist", reliability, mustAtoi(t, reliability[9])+sharedBytes)
-	assertEffectiveBytes(t, "direct execution", rows["go-coder"], mustAtoi(t, rows["go-coder"][9]))
-	assertEffectiveBytes(t, "workflow/session", rows["planning-session"], mustAtoi(t, rows["planning-session"][9]))
+	coder := requireSizeRow(t, rows, "go-coder")
+	assertEffectiveBytes(t, "direct execution", coder, mustAtoi(t, coder[9]))
+	planning := requireSizeRow(t, rows, "planning-session")
+	assertEffectiveBytes(t, "workflow/session", planning, mustAtoi(t, planning[9]))
 	if _, ok := rows["CATALOG"]; !ok {
 		t.Fatal("aggregate row missing")
 	}
@@ -555,14 +557,25 @@ func TestReadRootFileRejectsEscapingSymlink(t *testing.T) {
 	}
 }
 
-func assertBaselineEffectiveBytes(t *testing.T, label string, row []string, want int) {
+func requireSizeRow(t *testing.T, rows map[string][]string, name string) [19]string {
+	t.Helper()
+	row, ok := rows[name]
+	if !ok || len(row) != 19 {
+		t.Fatalf("size report row %q has %d fields, want 19", name, len(row))
+	}
+	var fields [19]string
+	copy(fields[:], row)
+	return fields
+}
+
+func assertBaselineEffectiveBytes(t *testing.T, label string, row [19]string, want int) {
 	t.Helper()
 	if got := mustAtoi(t, row[13]); got != want {
 		t.Fatalf("%s effective bytes = %d, want %d", label, got, want)
 	}
 }
 
-func assertEffectiveBytes(t *testing.T, label string, row []string, want int) {
+func assertEffectiveBytes(t *testing.T, label string, row [19]string, want int) {
 	t.Helper()
 	if got := mustAtoi(t, row[17]); got != want {
 		t.Fatalf("%s effective bytes = %d, want %d", label, got, want)

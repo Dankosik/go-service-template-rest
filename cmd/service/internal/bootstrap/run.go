@@ -39,10 +39,15 @@ const (
 	postgresStartupAttempts = 2
 )
 
-type overlayPathsFlag []string
+type overlayPathsFlag struct {
+	paths []string
+}
 
 func (f *overlayPathsFlag) String() string {
-	return strings.Join(*f, ",")
+	if f == nil {
+		return ""
+	}
+	return strings.Join(f.paths, ",")
 }
 
 func (f *overlayPathsFlag) Set(value string) error {
@@ -50,7 +55,7 @@ func (f *overlayPathsFlag) Set(value string) error {
 	if trimmed == "" {
 		return fmt.Errorf("config overlay path cannot be empty")
 	}
-	*f = append(*f, trimmed)
+	f.paths = append(f.paths, trimmed)
 	return nil
 }
 
@@ -220,7 +225,7 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 
 	return config.LoadOptions{
 		ConfigPath:     strings.TrimSpace(*configPath),
-		ConfigOverlays: overlays,
+		ConfigOverlays: overlays.paths,
 		Strict:         *configStrict,
 	}, nil
 }

@@ -11,6 +11,11 @@ import (
 func TestOverlayPathsFlagSetAndString(t *testing.T) {
 	t.Parallel()
 
+	var nilFlag *overlayPathsFlag
+	if got := nilFlag.String(); got != "" {
+		t.Fatalf("nil String() = %q, want empty", got)
+	}
+
 	var f overlayPathsFlag
 	if err := f.Set("  a.yaml  "); err != nil {
 		t.Fatalf("Set() error = %v, want nil", err)

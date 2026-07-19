@@ -23,7 +23,7 @@ DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
 
 .PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full pr-check \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check agents-check workflow-routing-check workflow-behavior-evals-check workflow-behavior-evals migration-validate gh-protect gh-protect-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
@@ -61,6 +61,8 @@ help:
 	@echo "  make go-security             # govulncheck + gosec"
 	@echo "  make govulncheck             # Go vulnerability reachability scan"
 	@echo "  make gosec                   # Go security static scan"
+	@echo "  make deadcode                # unreachable Go code scan (tests + integration tag)"
+	@echo "  make nilaway                 # first-party nil-flow scan (production + tests)"
 	@echo "  make secret-scan             # gitleaks secret scan"
 	@echo "  make modernize-check         # informational modern Go suggestions"
 	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
@@ -349,6 +351,17 @@ docker-test-integration:
 lint:
 	go tool golangci-lint config verify
 	go tool golangci-lint run --timeout=3m
+	$(MAKE) deadcode
+	$(MAKE) nilaway
+
+deadcode:
+	go tool deadcode -test -tags=integration ./...
+
+nilaway:
+	@set -eu; \
+	module_path="$$(go list -m)"; \
+	printf 'go tool nilaway -include-pkgs=%s -test ./...\n' "$$module_path"; \
+	go tool nilaway -include-pkgs="$$module_path" -test ./...
 
 modernize-check:
 	go tool golangci-lint run --enable-only=modernize --timeout=3m

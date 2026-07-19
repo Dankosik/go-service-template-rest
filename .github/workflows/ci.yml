@@ -14,7 +14,6 @@ permissions:
 
 env:
   GOFLAGS: -mod=readonly
-  GOLANGCI_LINT_VERSION: v2.10.1
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
   COVERAGE_MIN: "80.0"
 
@@ -83,39 +82,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
-          install-only: true
-
-      - name: Verify golangci-lint config (15s schema timeout)
-        run: |
-          SCHEMA_VERSION="$(echo "${GOLANGCI_LINT_VERSION#v}" | cut -d. -f1,2)"
-          SCHEMA_URL="https://golangci-lint.run/jsonschema/golangci.v${SCHEMA_VERSION}.jsonschema.json"
-          SCHEMA_FILE="$(mktemp)"
-
-          curl \
-            --fail \
-            --show-error \
-            --location \
-            --retry 3 \
-            --retry-all-errors \
-            --retry-delay 2 \
-            --connect-timeout 15 \
-            --max-time 15 \
-            "${SCHEMA_URL}" \
-            --output "${SCHEMA_FILE}"
-
-          golangci-lint config verify --schema "${SCHEMA_FILE}"
-
       - name: Lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          install-mode: none
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
-          verify: false
-          args: --timeout=3m
+        run: make lint
 
   openapi-contract:
     runs-on: ubuntu-latest

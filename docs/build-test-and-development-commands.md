@@ -233,13 +233,15 @@ Bootstrap shortcuts:
 - `make lint`
   - Runs:
     - `go tool golangci-lint config verify`
-    - `go tool golangci-lint run --timeout=3m`
-  - Note: local lint now matches CI behavior by validating `.golangci.yml` schema before running linters.
+    - `go tool golangci-lint run --timeout=3m`, including `iface` with `identical`, `unused`, `opaque`, and `unexported`
+    - `make deadcode`: pinned `deadcode` across tests and integration-tagged code
+    - `make nilaway`: pinned NilAway across first-party production and test code
+  - Note: local, Docker, PR CI, nightly, and release-preflight lint all route through this fail-closed target.
   - Error boundary policy: `wrapcheck` is CI-blocking. Local cancellation probes may return `ctx.Err()` directly when cancellation is the signal being propagated; package, dependency, and HTTP startup boundaries that add operation context must wrap cancellation and deadline errors with `%w` so callers can still use `errors.Is` with `context.Canceled` and `context.DeadlineExceeded`.
-  - Version rule: keep the `golangci-lint` tool version in `go.mod` aligned with workflow `GOLANGCI_LINT_VERSION` values; `make guardrails-check` enforces that alignment.
+  - Version rule: Go tool versions, including deadcode and NilAway, are pinned by `go.mod`. `make guardrails-check` enforces the mandatory command and coverage shape.
 
 - `make docker-lint`
-  - Docker equivalent of `make lint`.
+  - Docker equivalent of the complete `make lint` target, including iface, deadcode, and NilAway.
 
 - `make modernize-check`
   - Runs: `go tool golangci-lint run --enable-only=modernize --timeout=3m`
@@ -679,6 +681,7 @@ Zero-setup wrappers:
 
 Nightly workflow: `.github/workflows/nightly.yml`
 - Adds heavier reliability checks:
+  - fail-closed `make lint`, including iface, deadcode, and NilAway
   - `make test-flake-smoke`
   - `make test-fuzz-smoke FUZZ_TIME=60s`
   - `make test-race`

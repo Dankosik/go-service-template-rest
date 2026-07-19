@@ -439,7 +439,7 @@ sqlc-check)
 	generated_drift_check sqlc
 	;;
 lint)
-	run_lint "config verify && GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint go tool golangci-lint run --timeout=3m"
+	run_go "GOLANGCI_LINT_CACHE=/workspace/.cache/golangci-lint make lint"
 	;;
 modernize-check)
 	run_lint "run --enable-only=modernize --timeout=3m"
