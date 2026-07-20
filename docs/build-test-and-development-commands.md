@@ -1,713 +1,189 @@
 # Build, Test, and Development Commands
 
-This document is the detailed command reference for local development in `go-service-template-rest`.
-
-## Scope
-
-Commands in this document come from:
-- `Makefile` (primary interface)
-- `go` toolchain commands used by make targets
-- Docker and compose commands used for local environment
-- Docker-based zero-setup wrapper script (`scripts/dev/docker-tooling.sh`)
+The `Makefile` is the command index. Scripts exist only when they own behavior
+that would be awkward or misleading inside a recipe.
 
 ## Prerequisites
 
-This template supports two onboarding modes.
-
-### Native mode
-
-Required:
-- Go toolchain installed (version from `go.mod`)
-- GNU Make
-- Git
-
-Optional:
-- Node/npm (`npx`) for OpenAPI lint and OpenAPI checks
-- Docker daemon (for integration tests, compose, container build/run)
-- GitHub CLI (`gh`) for `make gh-protect` and `make gh-protect-check`
-
-### Zero-setup docker mode
-
-Required:
-- Git
-- Docker CLI + running Docker daemon
-
-Optional:
-- GNU Make (recommended)
-- local Go/Node toolchain (not required in this mode)
-- GitHub CLI (`gh`) for `make gh-protect` and `make gh-protect-check`
-
-Bootstrap shortcuts:
-- `make bootstrap` (recommended onboarding shortcut; minimal local prep)
-- focused package proof plus `make lint-fast` when useful (recommended everyday loop)
-- `make check-full` (full CI-like local validation)
-- `make pr-check` (strict pre-PR parity; requires Docker and base/head refs)
-- `make template-init` (required once after cloning this template into a new service repo)
-
-## Command Groups
-
-### Bootstrap and environment checks
-
-- `make help`
-  - Purpose: print minimal onboarding command set, common workflows, and feature validation shortcuts such as `openapi-check`, `sqlc-check`, `migration-validate`, generated-helper drift checks, `test-integration`, and Docker equivalents.
-
-- `make bootstrap`
-  - Purpose: clone-and-go onboarding entrypoint with minimum side effects.
-  - Includes:
-    - create `.env` from `env/.env.example` when missing,
-    - `go mod download` when local `go` is available,
-    - otherwise pre-pull Docker tooling images when Docker daemon is reachable.
-  - Does not run template/admin rewiring (`go.mod` module init or CODEOWNERS replacement).
-
-- `make check`
-  - Purpose: broad local baseline, not the default edit loop.
-  - Behavior:
-    - with local Go toolchain: runs `fmt-check`, `lint`, `test`;
-    - without local Go but with Docker daemon: runs `docker-fmt-check`, `docker-lint`, `docker-test`.
-
-- `make docker-check`
-  - Purpose: quick pinned Docker validation for daily feature work.
-  - Runs: `docker-fmt-check`, `docker-lint`, `docker-test`.
-  - Use when host Go exists but you want the quick loop to use the pinned Docker Go tooling image.
-
-- `make check-full`
-  - Purpose: full CI-like local validation.
-  - Behavior:
-    - with Docker daemon: runs `make docker-ci`;
-    - without Docker daemon: runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
-
-- `make pr-check BASE_REF=<base_ref> HEAD_REF=<head_ref>`
-  - Purpose: strict pre-PR parity for users who want local evidence closer to required PR checks than `make check-full`.
-  - Requires:
-    - Docker CLI + reachable Docker daemon,
-    - `BASE_REF` and `HEAD_REF`.
-  - Runs:
-    - `make docker-ci BASE_REF=<base_ref> HEAD_REF=<head_ref>`,
-    - `make docker-openapi-breaking` against `BASE_REF:api/openapi/service.yaml` when the base OpenAPI file exists.
-  - Notes:
-    - fails early when Docker or base/head refs are missing instead of silently falling back to partial native proof;
-    - if the base OpenAPI file does not exist, it prints that fact and runs the strict checks that can be proven from available PR inputs, matching the first-introduction case where no base contract exists.
-
-- `make template-init`
-  - Runs: `bash ./scripts/dev/setup.sh`
-  - Purpose: template/admin initialization for newly cloned repositories.
-  - Mode choice:
-    - prefers zero-setup Docker mode when Docker daemon is reachable;
-    - falls back to native mode when Docker is unavailable and local `go` exists;
-    - if native initialization fails and Docker is available, switches to Docker mode.
-  - Includes:
-    - module path auto-init from `git remote origin` when needed,
-    - CODEOWNERS placeholder auto-replacement (with origin inference or explicit `CODEOWNER`),
-    - environment doctor checks.
-
-- `make template-init-strict`
-  - Runs: `bash ./scripts/dev/setup.sh --strict`
-  - Purpose: same initialization behavior as `make template-init`, but strict native mode requires healthy coverage tooling.
-  - Strict behavior:
-    - when native coverage sanity fails, native initialization exits non-zero;
-    - in auto mode, setup falls back to Docker mode when Docker is available.
-
-- `make template-init-native`
-  - Runs: `bash ./scripts/dev/setup.sh --native`
-  - Includes:
-    - create `.env` from `env/.env.example` when missing,
-    - module path auto-init (when clone origin differs from template module),
-    - `go mod download`,
-    - `make doctor-native`.
-
-- `make template-init-native-strict`
-  - Runs: `bash ./scripts/dev/setup.sh --native --strict`
-  - Includes:
-    - everything from `make template-init-native`;
-    - strict native coverage sanity check (`go test -covermode=atomic -run '^$' ./internal/api`) as a blocking step.
-
-- `make template-init-docker`
-  - Runs: `bash ./scripts/dev/setup.sh --docker`
-  - Includes:
-    - create `.env` from `env/.env.example` when missing,
-    - pull pinned tool images,
-    - module path auto-init in Docker mode (when clone origin differs from template module),
-    - `make doctor-docker`.
-
-- `make doctor`
-  - Runs: `bash ./scripts/dev/doctor.sh --mode auto`
-  - Purpose: check local readiness for the selected mode.
-
-- `make doctor-native`
-  - Runs: `bash ./scripts/dev/doctor.sh --mode native`
-  - Highlights:
-    - validates local Go prerequisites;
-    - reports Node/npx as optional (required only for OpenAPI lint/check commands);
-    - validates Go version against `go.mod`;
-    - performs Go compile sanity check (required);
-    - performs Go coverage compile sanity check (optional warning-only).
-
-- `make doctor-docker`
-  - Runs: `bash ./scripts/dev/doctor.sh --mode docker`
-  - Highlights:
-    - validates `git`, `docker`, and Docker daemon reachability;
-    - confirms zero-setup path is available.
-
-- `make docker-pull-tools`
-  - Runs: `bash ./scripts/dev/docker-tooling.sh pull-images`
-  - Purpose: pre-pull Docker images used by zero-setup commands.
-  - Image references are sourced from `build/docker/tooling-images.Dockerfile`.
-  - Go toolchain rule: keep the Go patch line in `go.mod`, `build/docker/Dockerfile`, and `build/docker/tooling-images.Dockerfile` aligned so native CI and Docker-based flows resolve the same minimum toolchain.
-
-### Dependency and module maintenance
-
-- `make init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
-  - Runs: `bash ./scripts/init-module.sh [module-path]`
-  - Purpose: manual fallback/override for module bootstrap after clone; updates `go.mod`, internal Go imports, and optionally replaces CODEOWNERS placeholder.
-  - If `MODULE` is omitted, script auto-detects module path from `git remote origin`.
-  - Includes: `go mod tidy` at the end.
-  - Module-path invariant: keep `go.mod` and Go import prefixes aligned to the same module path. Do not manually point runtime code at another service module.
-  - Note: script no longer requires Perl.
-
-- `make docker-init-module [MODULE=<module_path>] [CODEOWNER=@org/team]`
-  - Runs in Docker tooling container with the same behavior as `make init-module`.
-
-- `make gh-protect BRANCH=<branch>`
-  - Runs: `bash ./scripts/dev/configure-branch-protection.sh <branch>`
-  - Purpose: apply required branch protection and CI status checks for production usage.
-  - Notes:
-    - `.github/CODEOWNERS` must not contain template placeholder (`@your-org/your-team`);
-    - `make template-init` usually prepares CODEOWNERS automatically via origin-based CODEOWNER inference;
-    - requires `gh auth login`;
-    - requires admin/maintainer permissions.
-
-- `make gh-protect-check BRANCH=<branch>`
-  - Runs: `bash ./scripts/dev/configure-branch-protection.sh --check <branch>`
-  - Purpose: read-only audit that compares live branch-protection required status contexts with the template context list.
-  - Notes:
-    - does not mutate branch protection;
-    - checks required status contexts only, not reviews, admins, CODEOWNERS, force-push policy, or conversation resolution;
-    - requires `gh auth login` and repository permissions that can read branch protection settings.
-
-- `make tidy`
-  - Runs: `go mod tidy`
-
-- `make mod-check`
-  - Runs:
-    - `go mod tidy -diff`
-    - `go mod verify`
-
-- `make docker-mod-check`
-  - Docker equivalent of `make mod-check`.
-
-- Adding a new Go developer tool (`go tool` baseline)
-  - Add/pin with: `go get -tool <module-path>@<version>`.
-  - Run via `go tool <binary-name>` in `Makefile` and `go:generate` (do not reintroduce `go run ...@` for migrated scope).
-  - Run `go mod tidy` and `make mod-check`.
-  - For codegen tools, regenerate artifacts and commit drift in the same change.
-
-- `make vendor`
-  - Runs: `go mod vendor`
-
-### Formatting and static quality
-
-- `make fmt`
-  - Runs:
-    - `go tool goimports -w` on Go files outside `vendor/` and local tool caches under `.cache/`;
-    - `go tool gofumpt -w` on hand-written Go files, excluding known generated OpenAPI and sqlc outputs.
-
-- `make docker-fmt`
-  - Docker equivalent of `make fmt`.
-
-- `make fmt-check`
-  - Fails when:
-    - `go tool goimports -l` reports unformatted Go files outside `vendor/` and local tool caches under `.cache/`;
-    - `go tool gofumpt -l` reports hand-written Go files that need stricter formatting.
-
-- `make docker-fmt-check`
-  - Docker equivalent of `make fmt-check` (same `goimports` + `gofumpt` behavior).
-
-- `make lint`
-  - Runs:
-    - `go tool golangci-lint config verify`
-    - `go tool golangci-lint run --timeout=3m`, including `iface` with `identical`, `unused`, `opaque`, and `unexported`
-    - `make deadcode`: pinned `deadcode` across tests and integration-tagged code
-    - `make nilaway`: pinned NilAway across first-party production and test code
-  - Note: local, Docker, PR CI, nightly, and release-preflight lint all route through this fail-closed target.
-  - Error boundary policy: `wrapcheck` is CI-blocking. Local cancellation probes may return `ctx.Err()` directly when cancellation is the signal being propagated; package, dependency, and HTTP startup boundaries that add operation context must wrap cancellation and deadline errors with `%w` so callers can still use `errors.Is` with `context.Canceled` and `context.DeadlineExceeded`.
-  - Version rule: Go tool versions, including deadcode and NilAway, are pinned by `go.mod`. `make guardrails-check` enforces the mandatory command and coverage shape.
-
-- `make lint-fast [LINT_BASE_REF=origin/main] [LINT_CONCURRENCY=4]`
-  - Runs: `go tool golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m`
-  - Purpose: fast changed-code lint during local iteration. It does not replace the full blocking `make lint` target.
-
-- `make docker-lint`
-  - Docker equivalent of the complete `make lint` target, including iface, deadcode, and NilAway.
-
-- `make modernize-check`
-  - Runs: `go tool golangci-lint run --enable-only=modernize --timeout=3m`
-  - Purpose: informational modern Go cleanup suggestions for maintainers.
-  - Note: this is intentionally separate from PR-blocking `make lint`; nightly runs it with `continue-on-error`. It does not replace task-specific legacy cleanup proof for retired identifiers, old routes, stale fixtures, generated outputs, docs, skills, or mirrors.
-
-- `make docker-modernize-check`
-  - Docker equivalent of `make modernize-check`.
-
-- `make test-parallelism-check`
-  - Runs: `go tool golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0`
-  - Purpose: informational suggestions for tests that can safely call `t.Parallel()`.
-  - Note: this stays separate from PR-blocking `make lint` until serial tests have reviewable policy coverage and the baseline is stable.
-
-- `make docker-test-parallelism-check`
-  - Docker equivalent of `make test-parallelism-check`.
-
-### Unit and integration testing
-
-- `make test`
-  - Runs: `go test ./...`
-
-- `make docker-test`
-  - Docker equivalent of `make test`.
-
-- `make test-summary`
-  - Runs: `go tool gotestsum --format=pkgname-and-test-fails -- ./...`
-  - Purpose: concise unit-test output for local troubleshooting while keeping `make test` as the stable raw `go test ./...` path.
-
-- `make test-watch`
-  - Runs: `go tool gotestsum --watch --format=pkgname-and-test-fails`
-  - Purpose: watch changed-package tests without forcing an all-package `./...` run on every edit.
-
-- `make docker-test-summary`
-  - Docker equivalent of `make test-summary`.
-
-- `make vet`
-  - Runs: `go vet ./...`
-
-- `make docker-vet`
-  - Docker equivalent of `make vet`.
-
-- `make test-race`
-  - Runs: `go test -race ./...`
-
-- `make docker-test-race`
-  - Docker equivalent of `make test-race`.
-
-- `make test-cover`
-  - Runs:
-    - `GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...`
-    - `go tool cover -func=coverage.out`
-
-- `make test-report [COVERAGE_MIN=80.0]`
-  - Runs `gotestsum` over `go test` with:
-    - coverage profile output (`coverage.out`),
-    - JUnit XML artifact (`.artifacts/test/junit.xml`),
-    - raw `test2json` artifact (`.artifacts/test/test2json.json`).
-  - Then runs `make coverage-check`.
-  - This is the closest local equivalent to the CI `test-coverage` job.
-  - Clears ambient `GOCOVERDIR` before coverage collection so local experiment settings do not contaminate the report.
-
-- `make coverage-check [COVERAGE_MIN=80.0]`
-  - Fails if coverage from `coverage.out` is below the configured threshold.
-  - Coverage threshold excludes:
-    - generated OpenAPI artifact (`internal/api/openapi.gen.go`),
-    - generated SQLC artifacts (`internal/infra/postgres/sqlcgen/`) when SQL query sources exist,
-    - binary composition root entrypoints (`cmd/service/main.go`, `cmd/migrate/main.go`).
-
-- `make test-fuzz-smoke [FUZZ_TIME=45s]`
-  - Runs a short fuzzing pass (`go test -fuzz`) when fuzz targets exist.
-  - Fails package discovery or listing errors.
-  - Skips with success only when no `Fuzz*` tests are present.
-
-- `make docker-test-fuzz-smoke [FUZZ_TIME=45s]`
-  - Docker equivalent of `make test-fuzz-smoke`.
-
-- `make test-flake-smoke`
-  - Runs: `go test -count=5 -shuffle=on ./...`
-  - Purpose: local mirror of the nightly shuffled repeat smoke check.
-
-- `make docker-test-flake-smoke`
-  - Docker equivalent of `make test-flake-smoke`.
-
-- `make test-cover-local`
-  - Runs same coverage flow as `test-cover`, but degrades to warning only for known local Go coverage-toolchain mismatch (`does not match go tool version`).
-  - Any other coverage failure remains blocking.
-  - Intended for focused local troubleshooting when native coverage tooling is flaky; it is not full CI coverage-threshold proof.
-
-- `make docker-test-cover`
-  - Docker equivalent of `make test-cover`.
-
-- `make docker-test-report`
-  - Docker tooling equivalent of `make test-report`.
-  - Produces `coverage.out`, `.artifacts/test/junit.xml`, and `.artifacts/test/test2json.json`, then enforces `COVERAGE_MIN`.
-  - Uses the pinned Go tooling image from `build/docker/tooling-images.Dockerfile`.
-
-- `make test-integration`
-  - Runs: `go test -tags=integration ./test/...`
-  - Local behavior:
-    - skips when Docker daemon is unavailable.
-  - CI behavior:
-    - `REQUIRE_DOCKER=1` enforces failure when Docker is unavailable.
-
-- `make docker-test-integration`
-  - Docker tooling equivalent of integration tests.
-  - Uses Docker socket passthrough when available.
-
-### SQL query generation workflow
-
-- `make sqlc-generate`
-  - Runs: `go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml`
-  - Purpose: regenerate sqlc query code from migration-backed schema and infra-local SQL query files. Skips when no `queries/*.sql` files exist.
-
-- `make sqlc-check`
-  - Runs `sqlc-generate`, then verifies:
-    - tracked/untracked drift in `internal/infra/postgres/sqlcgen` when SQL query sources exist,
-    - one-to-one mapping between `queries/*.sql` and generated `sqlcgen/*.sql.go` stems.
-  - Fails when generated artifacts are stale or when stale generated query files remain after query removal/rename.
-  - Operational rule: when `env/migrations/*.up.sql` or `internal/infra/postgres/queries/*.sql` changes, run `make sqlc-generate` and commit any `internal/infra/postgres/sqlcgen/*` changes in the same PR.
-
-### OpenAPI and API contract workflow
-
-- `make openapi-generate`
-  - Runs: `go generate ./internal/api`
-
-- `make openapi-drift-check`
-  - Checks tracked and untracked codegen drift in `internal/api/openapi.gen.go`.
-
-- `make openapi-runtime-contract-check`
-  - Runs: `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1`
-  - Purpose: run the HTTP runtime contract guardrail tests selected by the Makefile target. Keep this target aligned with generated-route ownership, fallback, manual-route exception, and route-label policy tests as those tests evolve.
-
-- `make openapi-lint`
-  - Runs: `npx @redocly/cli@2.20.3 lint --config .redocly.yaml api/openapi/service.yaml`
-
-- `make openapi-validate`
-  - Runs: `go tool validate -- api/openapi/service.yaml`
-
-- `make openapi-breaking`
-  - Runs `go tool oasdiff breaking` against `BASE_OPENAPI` and current spec.
-  - Purpose: check OpenAPI breaking-change compatibility against an explicit base contract. This requires `BASE_OPENAPI=<base>` and is intentionally separate from `make openapi-check`.
-
-- `make docker-openapi-breaking BASE_OPENAPI=<base>`
-  - Docker equivalent of `make openapi-breaking`.
-
-- `make openapi-check`
-  - Composite target:
-    - `openapi-generate`
-    - `openapi-drift-check`
-    - `go test ./internal/api`
-    - `openapi-runtime-contract-check`
-    - `openapi-lint`
-    - `openapi-validate`
-  - Purpose: prove OpenAPI generation, generated-artifact drift, generated package compileability, runtime contract guardrails, lint, and schema validation. It does not run breaking-change compatibility checks; use `BASE_OPENAPI=<base> make openapi-breaking` for that proof.
-
-- `make docker-openapi-check`
-  - Docker equivalent of `make openapi-check`.
-
-### Security and CI-like local checks
-
-- `make check`
-  - Broad local baseline:
-    - native: `fmt-check`, `lint`, `test`;
-    - Docker fallback (when native Go is unavailable): `docker-fmt-check`, `docker-lint`, `docker-test`.
-
-- `make check-full`
-  - Full CI-like local check:
-    - runs `make docker-ci` when Docker daemon is reachable;
-    - otherwise runs native partial CI-like checks through `make ci-local` and warns that Docker-only checks may be skipped.
-
-- `make pr-check BASE_REF=<base_ref> HEAD_REF=<head_ref>`
-  - Strict pre-PR check:
-    - requires Docker and base/head refs;
-    - runs the Docker CI bundle;
-    - additionally checks OpenAPI breaking-change compatibility against the base OpenAPI spec when that base file exists.
-
-- `make go-security`
-  - Aggregate target that runs `make govulncheck` and `make gosec`.
-  - This remains the single Go security context used by CI and branch protection.
-
-- `make govulncheck`
-  - Runs: `go tool govulncheck ./...`
-  - Purpose: Go vulnerability reachability scan.
-
-- `make gosec`
-  - Runs `go tool gosec -exclude-generated -exclude-dir=.cache ./...` with an isolated Go build cache for the scan.
-  - Purpose: Go security static analysis.
-
-- `make secret-scan`
-  - Runs native `go tool gitleaks` scan over repository git history with `.gitleaks.baseline.json` for the known redacted historical finding.
-
-- `make ci-local`
-  - Native composite check for CI-like local parity:
-    - `mod-check`
-    - `workflow-routing-check`
-    - `guardrails-check`
-    - `fmt-check`
-    - `lint`
-    - `test`
-    - `vet`
-    - `test-race`
-    - `test-report`
-    - `sqlc-check`
-    - `openapi-check`
-    - `go-security`
-    - `secret-scan`
-  - When Docker daemon is reachable, also runs:
-    - `test-integration` (`REQUIRE_DOCKER=1`)
-    - `docker-migration-validate`
-    - `docker-container-security`
-  - When Docker is unavailable, docker-only checks are skipped with a clear message; that skipped output is not integration, migration, or container-scan proof.
-
-- `make docker-go-security`
-  - Runs `govulncheck` and `gosec` through Docker tooling container.
-
-- `make docker-govulncheck`
-  - Docker equivalent of `make govulncheck`.
-
-- `make docker-gosec`
-  - Docker equivalent of `make gosec`, also using an isolated Go build cache inside the tooling container.
-
-- `make docker-secret-scan`
-  - Runs `gitleaks` through Docker tooling wrapper with the same `.gitleaks.baseline.json` as native mode.
-
-- `make docker-guardrails-check`
-  - Runs required repository guardrails check in Docker mode wrapper.
-
-- `make docker-migration-validate`
-  - Runs migration rehearsal (`up`, `down 1`, `up 1`) on ephemeral Docker Postgres.
-
-- `make docker-container-security`
-  - Builds `service:ci` image and runs Trivy scan (`HIGH,CRITICAL`).
-
-- `make docker-ci`
-  - Zero-setup composite check (closest local equivalent to CI gates):
-    - `mod-check`
-    - `workflow-routing-check`
-    - `guardrails-check`
-    - `fmt-check`
-    - `lint`
-    - `test`
-    - `vet`
-    - `test-race`
-    - `test-report`
-    - `sqlc-check`
-    - `test-integration` (`REQUIRE_DOCKER=1`)
-    - `openapi-check`
-    - `go-security`
-    - `secret-scan`
-    - `migration-validate`
-    - `container-security`
-  - Uses pinned tooling images from `build/docker/tooling-images.Dockerfile` for Go, Node, Postgres, migrate, and Trivy; Docker lint runs `go tool golangci-lint` inside the pinned Go image so package loading has a Go toolchain.
-
-### CI policy helper checks
-
-- `make workflow-routing-check`
-  - Runs the hard-skills checker and fast deterministic workflow-instruction structural checks.
-  - It does not run model, fake-adapter, or mutation coverage.
-  - Makes no external model calls.
-
-- `make instruction-evals-harness`
-  - Runs the slower fake-adapter and mutation harness.
-  - Use only when its implementation or selected fixtures change, or in a targeted/nightly validation lane.
-
-- `make workflow-behavior-evals-check`
-  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E66, a prompt and pass condition for each case, and the required invariant set.
-  - Makes no model calls and is not behavioral proof.
-
-- `WORKFLOW_EVAL_TARGETS=<targets> WORKFLOW_EVAL_BASE_REF=34d9776 WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_COST_AUTHORIZED=true make workflow-behavior-evals`
-  - Runs only the unique explicit workflow/skill targets as matched five- or ten-trial comparisons; seed base defaults to `5600`.
-  - Materializes candidate-extracted answer-key-free inputs identically into isolated baseline/candidate snapshots and rejects untracked source, metadata/config drift, input drift, or adapter mutation.
-  - Saves prompts, outputs, closed metadata/judgments, per-trial evidence, Wilson bounds, resource coverage, and acceptance labels under `.artifacts/workflow-evals/`.
-  - The full adapter ABI and deterministic safety/standard/Pareto gates are defined in `docs/spec-first-workflow-evals.md`; no live execution is part of repository checks.
-
-- `make guardrails-check`
-  - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce derived Go/Docker toolchain, analyzer, migration-image, branch-protection, and architecture import invariants.
-
-- `make migration-validate [MIGRATION_DSN=<postgres_dsn>]`
-  - Behavior:
-    - when `MIGRATION_DSN` is provided, runs native `go tool migrate` against `env/migrations` (`up`, `down 1`, `up 1`);
-    - when `MIGRATION_DSN` is empty and Docker daemon is available, falls back to `make docker-migration-validate`;
-    - when both `MIGRATION_DSN` and Docker daemon are unavailable, prints warning and skips with success.
-
-### Run and build
-
-- `make run`
-  - Runs: `go run ./cmd/service` with `.env` auto-loaded when the file exists.
-
-- `make build`
-  - Builds static binary:
-    - output: `bin/service`
-    - flags: `CGO_ENABLED=0`, `-trimpath`, `-ldflags='-s -w'`
-
-### Container and local environment
-
-- `make docker-build`
-  - Runs: `docker build -f build/docker/Dockerfile -t service:local .`
-
-- `make docker-run`
-  - Runs: `docker run --rm -p 8080:8080 --env-file .env service:local`
-
-- `make compose-up`
-  - Runs: `docker compose -f env/docker-compose.yml up -d --wait`
-  - Purpose: start reusable local dependencies and wait until their Compose health/readiness state is available.
-
-- `make compose-down`
-  - Runs: `docker compose -f env/docker-compose.yml down -v`
-
-### Fast local iteration
-
-1. Start reusable dependencies once with `make compose-up`; leave them running while iterating.
-2. Use `make test-watch` for changed-package test feedback and `make lint-fast` for changed-code lint feedback.
-3. Before handoff, use the task-appropriate terminal proof such as full `make lint`, `make test`, race, coverage, or an explicit container rebuild/teardown when those checks are required.
-
-Keep Go, Docker build, and volume caches during ordinary iteration. To investigate cache or disk behavior, run:
-
-```sh
-GODEBUG=gocachetest=1 go test ./...
-docker system df
-docker buildx du
-docker volume ls
+- Go at the version declared in `go.mod`.
+- Node.js and `npx` for the pinned Redocly OpenAPI lint command.
+- Docker only for container-backed integration tests, migration rehearsal,
+  runtime-image build and scan, Compose, real-PostgreSQL benchmarks, and k6 HTTP
+  benchmarks.
+
+Go tools are pinned through the `tool` block in `go.mod`. Container tools and
+test dependencies are digest-pinned at their owning command or test seam.
+There is no second containerized Go toolchain.
+
+## Initialize a derived service
+
+```bash
+make template-init \
+  MODULE=github.com/acme/orders \
+  CODEOWNER=@acme/backend
+make template-init-check
 ```
 
-Cache and volume cleanup is manual: it can slow later cold runs or delete local data. `docker system prune -a` is not a routine speed fix.
+`template-init` is the only onboarding mutation. It validates the module and
+owner before editing, rewrites Go/proto imports and module-qualified lint
+configuration, updates CODEOWNERS, preserves an existing `.env`, and runs
+`go mod tidy`.
 
-## Recommended Local Workflows
+The template source checkout may run the command without arguments for normal
+local setup; it keeps the template module and CODEOWNERS unchanged while
+creating a missing `.env` and tidying the module. A derived checkout must
+provide a real module path and an owner in `@user` or `@org/team` form.
 
-### First run after clone (recommended)
+## Everyday validation
 
-1. `make bootstrap`
-2. `make check` (broad baseline after bootstrap)
-3. `make run`
-4. Optional full validation: `make check-full`
-
-### First run after clone (template/admin initialization)
-
-1. `make template-init`
-2. If module path was not inferred automatically:
-   `make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team`
-3. Optional strict native coverage sanity:
-   `make template-init-strict` or `make template-init-native-strict`
-4. Optional repo-hardening step (admin):
-   `make gh-protect BRANCH=main`
-5. Optional read-only branch-protection audit after setup:
-   `make gh-protect-check BRANCH=main`
-
-### Everyday, pre-push, and PR parity
-
-Use the smallest check that matches the decision you are about to make:
-
-| When | Run | Notes |
-| --- | --- | --- |
-| Everyday edit loop | focused package test plus `make lint-fast` when useful | Match the changed package and claim; avoid full lint and full tests while iterating. |
-| Everyday pinned Docker edit loop | focused Docker test target | Use the smallest matching Docker target when a pinned environment is needed. |
-| Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make pr-check` | Strict pre-PR parity. Requires Docker and base/head refs, runs the Docker CI bundle, and checks OpenAPI breaking compatibility when the base spec exists. Replace `origin/main` with the branch or SHA GitHub will compare against. |
-| Full local baseline with fallback | `make check-full` | Broad local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local` and may skip Docker-only checks. |
-| Closest local CI parity | `make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
-| Native fallback | `make ci-local` | Requires host Go, GNU Make, Git, and Node/npx for OpenAPI lint. Docker-backed integration, migration, and container scan checks run only when Docker is reachable. |
-
-Targeted parity checks:
-
-| Surface | Command |
+| Command | Meaning |
 | --- | --- |
-| OpenAPI generation, drift, runtime contract, lint, schema validation | `make openapi-check` or `make docker-openapi-check` |
-| OpenAPI breaking-change check against a PR base | `git show origin/main:api/openapi/service.yaml > /tmp/openapi-base.yaml`, then `BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking` or `BASE_OPENAPI=/tmp/openapi-base.yaml make docker-openapi-breaking` |
-| SQLC generation and stale query artifact drift | `make sqlc-check` or `make docker-sqlc-check` |
-| Migration rehearsal | `make migration-validate MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'` or `make docker-migration-validate` |
-| Integration tests | `REQUIRE_DOCKER=1 make test-integration` or `make docker-test-integration` |
-| Go security and secret scans | `make govulncheck`, `make gosec`, `make go-security`, `make secret-scan`, `make docker-govulncheck`, `make docker-gosec`, `make docker-go-security`, or `make docker-secret-scan` |
-| Modern Go cleanup suggestions | `make modernize-check` or `make docker-modernize-check` |
-| Test parallelism suggestions | `make test-parallelism-check` or `make docker-test-parallelism-check` |
-| Legacy cleanup replacement proof | Targeted `rg`/read checks for retired identifiers, old routes, stale configs, fixtures, generated artifacts, docs, skills, agents, and mirrors; record removed, refactored, retained with owner/reason/proof/exit condition, or not-applicable status in the task ledger or closeout artifact. |
-| Container image scan | `make docker-container-security` |
-| Branch-protection required status context audit | `make gh-protect-check BRANCH=main` |
-| Nightly-only flake and fuzz smoke | `make test-flake-smoke` and `make test-fuzz-smoke FUZZ_TIME=60s` |
+| `make check` | `fmt-check`, `lint`, and ordinary unit tests |
+| `make ci-local` | Host-toolchain CI aggregate: module, init contract, format, lint, race, coverage report, generated contracts, Go security, and secret scan |
+| `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
+| `make pr-check BASE_REF=origin/main` | `check-full` plus OpenAPI breaking comparison when the base contains the spec |
 
-### Common local failures
+`check-full` fails immediately when Docker is unavailable. It never converts a
+missing container runtime into a successful skip.
 
-- Formatting failure: run `make fmt`, then rerun `make fmt-check` or the focused proof.
-- Lint failure: read the linter name in the output, fix that package, then rerun `make lint`. Use `make docker-lint` when local Go or linter behavior looks host-specific.
-- Native full-check OpenAPI lint failure with missing Node/npm: install Node/npm for native mode, or run `make docker-ci` with Docker for pinned Node tooling.
-- Docker unavailable: start Docker Desktop/Engine and rerun the Docker target. Use `make doctor-docker` when Docker commands fail before tests start.
-- Coverage tooling mismatch in native mode: use `make test-cover-local` for a warning-only local diagnosis, or use `make docker-test-report` for pinned coverage tooling.
-- Generated drift failure: run the matching generate target (`make openapi-generate` or `make sqlc-generate`), review the diff, then rerun the matching drift check.
-- GitHub CLI auth or permission failure: run `gh auth status`, then `gh auth login` if needed. `make gh-protect-check` also needs repository permissions that can read branch-protection settings.
+## Tests
 
-### Feature implementation (native)
+```bash
+make test
+make test-summary
+make test-watch
+make test-race
+make test-cover
+make test-report
+make test-fuzz-smoke
+make test-flake-smoke
+make test-integration
+```
 
-Choose the package and test location from [Project Structure & Module Organization](./project-structure-and-module-organization.md#4-where-to-put-new-code) before running this checklist. Green commands prove the surfaces they execute; they do not by themselves prove architecture, ownership, or rollout readiness.
+Unit tests use `go test ./...`. The coverage job also executes the ordinary
+test suite, so CI does not carry a duplicate standalone test job. `lint` owns
+the configured Go analyzers, including vet-class checks.
 
-1. `make fmt`
-2. `make test`
-3. `make vet`
-4. `make lint`
-5. If API contract changed: `make openapi-check`
-6. If integration behavior changed: `make test-integration`
-7. If SQL queries/migrations changed: `make sqlc-check`
-8. If migrations changed: `make migration-validate`
+Integration tests use the `integration` build tag. Local focused execution may
+skip an unavailable container dependency according to the test contract;
+`REQUIRE_DOCKER=1 make test-integration` makes Docker availability mandatory,
+as full CI does.
 
-### Feature implementation (zero-setup)
+## Formatting and analysis
 
-Choose the package and test location from [Project Structure & Module Organization](./project-structure-and-module-organization.md#4-where-to-put-new-code) before running this checklist. A green Docker command is still scoped proof, not a substitute for placement and design review when the change is architectural.
-For the usual quick fmt/lint/test loop, run `make docker-check`; use the stepwise targets below when you need separate evidence.
+```bash
+make fmt
+make fmt-check
+make mod-check
+make lint
+make lint-fast LINT_BASE_REF=origin/main
+make deadcode
+make nilaway
+make modernize-check
+make test-parallelism-check
+```
 
-1. `make docker-fmt-check`
-2. `make docker-test`
-3. `make docker-vet`
-4. `make docker-lint`
-5. If API contract changed: `make docker-openapi-check`
-6. If integration behavior changed: `make docker-test-integration`
-7. If SQL queries/migrations changed: `make docker-sqlc-check`
-8. If migrations changed: `make docker-migration-validate`
+`make lint` runs golangci-lint with `.golangci.yml`, then the repository's
+separate dead-code and NilAway analyzers. The linter's real config load is the
+oracle; a second schema-download check would make local lint depend on network
+availability without proving more. Use the focused targets only when their
+narrower evidence is the claim.
 
-## CI Mapping
+## OpenAPI, SQLC, and generated drift
 
-Main CI workflow: `.github/workflows/ci.yml`
+```bash
+make openapi-generate
+make openapi-drift-check
+make openapi-runtime-contract-check
+make openapi-lint
+make openapi-validate
+make openapi-check
 
-Local commands map directly to CI jobs:
-- `make mod-check` + `make workflow-routing-check` + `make guardrails-check` + `make fmt-check` + `make sqlc-check` -> `repo-integrity`
-- `make lint` -> `lint`
-- `make openapi-check` -> `openapi-contract`
-- `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
-- `BASE_REF=<base_sha> HEAD_REF=<head_sha> make pr-check` -> strict local pre-PR bundle, including `docker-ci` and base OpenAPI breaking compatibility when available
-- `make test` + `make vet` -> `test`
-- `make test-race` -> `test-race`
-- `make test-report COVERAGE_MIN=<value>` -> `test-coverage`
-- `REQUIRE_DOCKER=1 make test-integration` -> `test-integration`
-- `make migration-validate` -> `migration-validate` (only when migrations changed)
-- `make govulncheck` + `make gosec` through the aggregate `go-security` job -> `go-security`
-- `make secret-scan` -> `secret-scan`
-- Trivy image scan -> `container-security`
-- Dependency Review -> PR-only informational `dependency-review`, not branch-protection-required
+make sqlc-generate
+make sqlc-check
+```
 
-Zero-setup wrappers:
-- `make docker-check` runs quick fmt/lint/test validation through pinned Docker tooling.
-- `make docker-ci` runs the closest local CI baseline without local Go/Node installs.
-- `make docker-openapi-check`, `make docker-openapi-breaking`, `make docker-sqlc-check`, `make docker-go-security`, `make docker-govulncheck`, `make docker-gosec`, `make docker-secret-scan`, `make docker-modernize-check`, `make docker-test-*`, and `make docker-container-security` mirror native/CI checks.
+`api/openapi/service.yaml` and SQL query sources are authoritative. The shared
+generated-drift script only compares their derived output; it does not act as
+a general repository-policy checker.
 
-Nightly workflow: `.github/workflows/nightly.yml`
-- Adds heavier reliability checks:
-  - fail-closed `make lint`, including iface, deadcode, and NilAway
-  - `make test-flake-smoke`
-  - `make test-fuzz-smoke FUZZ_TIME=60s`
-  - `make test-race`
-  - `make test-integration`
-  - full OpenAPI/security/container checks
-  - `make modernize-check` as informational modern Go cleanup guidance
-  - informational Trivy repository filesystem/config scan in `repository-security`, separate from required container image scanning
+For a PR comparison:
 
-CD workflow: `.github/workflows/cd.yml`
-- `publish-main`: after successful `ci` on `main`, builds/scans/signs/publishes image to GHCR with `main` and `sha-*` tags.
-- `release-preflight`: on tag `v*`, reruns PR-equivalent repository guardrails, generated drift checks, lint, unit/vet/race/integration tests, coverage threshold, migration validation, OpenAPI checks, Go security, and secret scan before publish.
-- `publish-release`: on tag `v*`, runs only after `release-preflight`, then builds/scans/signs/publishes `v*`, `latest`, and `sha-*` tags, uploads CycloneDX SBOM, and pushes provenance attestation.
+```bash
+git show origin/main:api/openapi/service.yaml > /tmp/service-base.yaml
+make openapi-breaking BASE_OPENAPI=/tmp/service-base.yaml
+```
 
-### Local parity limits
+## Security
 
-Local checks intentionally get close to CI, but they do not replace GitHub event evidence:
+```bash
+make govulncheck
+make gosec
+make go-security
+make secret-scan
+make container-security CONTAINER_IMAGE=service:ci
+```
 
-- PR-only `openapi-breaking` depends on `github.event.pull_request.base.sha`; locally, extract the base spec yourself and pass `BASE_OPENAPI`.
-- Migration change detection in CI uses GitHub's PR base SHA or push `before` SHA.
-- `migration-validate` runs conditionally in CI only when `env/migrations/` changes. `make docker-ci` runs the rehearsal unconditionally, which is stricter and avoids local change-detection drift.
-- `make ci-local` uses host Go, Node, npm, and Docker. Prefer `make docker-ci` when host tooling differs from CI or when you want pinned tooling images.
-- Docker container scans require a reachable Docker daemon and Docker socket. If the socket is unavailable, `make docker-container-security` fails instead of silently claiming scan proof.
-- `make gh-protect-check` requires GitHub CLI authentication and permissions to read branch protection; without that GitHub-owned context, local validation can only prove script wiring and static context alignment.
-- Dependency Review is PR-only and informational on first introduction. It is not required by branch protection and is not part of local Go quality proof.
-- The nightly Trivy repository filesystem/config scan is informational on first introduction and separate from the required CI container image Trivy scan.
-- GitHub Actions runner image details, action versions, caches, uploaded artifacts, branch protection status reporting, concurrency cancellation, and PR/push event payloads are GitHub-owned context.
-- CD publish behavior is only partially reproducible locally. You can build and scan with `make docker-build` and `make docker-container-security`, and you can run release-preflight-style quality gates with `make docker-ci`, but GHCR login/push, `GITHUB_TOKEN`, OIDC keyless Cosign signing, provenance attestation, SBOM artifact upload, and `workflow_run`/tag trigger conditions remain GitHub-only release evidence.
+The first four commands use pinned Go tools. `container-security` scans the
+actual runtime image with digest-pinned Trivy and requires Docker.
 
-Repository settings checklist for hard enforcement:
-- `docs/ci-cd-production-ready.md`
+## Migrations and containers
+
+```bash
+make migration-validate
+make docker-build
+make docker-run
+make compose-up
+make compose-down
+```
+
+`migration-validate` rehearses `up`, `down 1`, and `up 1`. With
+`MIGRATION_DSN`, it uses that database. Otherwise it creates an isolated
+Compose project on a dynamic host port, exercises the host migration tool,
+then runs the runtime image's `/migrate` entrypoint on the Compose network.
+Cleanup is registered before the rehearsal begins.
+
+`docker-build` and `docker-run` operate on the production Dockerfile. Compose
+exists for runtime dependencies, not to emulate every native Make target.
+
+## Run and build
+
+```bash
+make run
+make build
+make vendor
+```
+
+`run` loads `.env` when present. `build` writes `bin/service`.
+
+## Benchmarking
+
+```bash
+make bench
+make bench-baseline
+make bench-compare
+make bench-profile
+
+make bench-db BENCH_DB_WORKLOAD_ID=fixture-10k-warm
+make bench-db-baseline BENCH_DB_WORKLOAD_ID=fixture-10k-warm
+make bench-db-compare
+
+make bench-http
+make bench-http-inspect
+make benchmark-infra-check
+```
+
+Go and in-process HTTP benchmarks run on the host toolchain. Database
+benchmarks use the existing Testcontainers seam. External HTTP load uses the
+digest-pinned k6 image owned by `scripts/dev/benchmark.sh`. Workload,
+comparison, and evidence rules are in [Benchmarking](benchmarking.md).
+
+## CI and repository settings
+
+`.github/workflows/ci.yml` owns the current CI job graph and exact status
+context names. GitHub Rulesets or organization policy own merge admission and
+required checks. Review the workflow when configuring those settings; do not
+use a repository script to rewrite its own protection policy.
+
+`.github/workflows/cd.yml` owns release validation and runtime image
+publication. `railway.toml` owns Railway's non-secret deployment profile.

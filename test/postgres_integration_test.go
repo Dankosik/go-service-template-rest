@@ -15,6 +15,8 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
+const postgresTestImage = "postgres:17@sha256:2cd82735a36356842d5eb1ef80db3ae8f1154172f0f653db48fde079b2a0b7f7"
+
 func TestPostgresReadinessProbe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -70,7 +72,7 @@ func runPostgresContainer(ctx context.Context) (container *tcpostgres.PostgresCo
 
 	container, err = tcpostgres.Run(
 		ctx,
-		"postgres:17-alpine",
+		postgresTestImage,
 		tcpostgres.WithDatabase("app"),
 		tcpostgres.WithUsername("app"),
 		tcpostgres.WithPassword("app"),

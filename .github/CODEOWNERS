@@ -1,4 +1,4 @@
-# Replace @Dankosik before enabling "Require review from Code Owners".
+# Template users must replace the owner below before requiring code-owner review.
 # Example: * @acme/backend-platform
 * @Dankosik
 

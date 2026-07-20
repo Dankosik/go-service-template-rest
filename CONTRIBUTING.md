@@ -1,100 +1,89 @@
 # Contributing
 
-This repository is a Go REST service template optimized for beginners and AI-assisted workflows. Keep changes deterministic, reviewable, and production-oriented.
+Keep changes deterministic, reviewable, and owned by the narrowest package or
+repository surface that can prove them.
 
-## Quick Start for Contributors
+## Start a derived service
 
-1. Bootstrap local environment:
-
-```bash
-make bootstrap
-```
-
-2. Run quick checks before opening a PR:
+Run the template initializer once, before the first service change:
 
 ```bash
-make check
+make template-init \
+  MODULE=github.com/your-org/your-service \
+  CODEOWNER=@your-org/backend
 ```
 
-3. Run full CI-like checks when needed:
+The command rewrites the Go module and module-qualified lint rules, updates
+CODEOWNERS, preserves an existing `.env`, creates it from `.env.example` only
+when absent, and rejects invalid input before mutation. Verify that contract
+with `make template-init-check`.
+
+## Validate a change
+
+Use the smallest command that proves the claim:
 
 ```bash
-make check-full
+make check          # format, lint, unit tests
+make ci-local       # broad host-toolchain CI aggregate
+make check-full     # ci-local plus Docker-backed integration and image gates
+make pr-check BASE_REF=origin/main
 ```
 
-Use `make docker-check` when you want the quick fmt/lint/test loop through pinned Docker tooling instead of host Go.
-Use `make test-report` or CI `test-coverage` evidence when coverage changed or the PR risk is non-trivial.
-
-4. If this repository was cloned as a new service, run template rewiring before the first PR (module path/CODEOWNERS/skills mirrors):
-
-```bash
-make template-init
-# optional explicit modes:
-make template-init-native
-make template-init-docker
-# manual fallback:
-make init-module MODULE=github.com/your-org/your-service CODEOWNER=@your-org/your-team
-```
-
-5. Apply required branch protection/status checks (repo admin):
-
-```bash
-make gh-protect BRANCH=main
-```
-
-If this fails due placeholder CODEOWNERS, run `make template-init` with explicit `CODEOWNER=@your-org/your-team`.
-
-If your change is concurrency- or integration-sensitive, also run:
+Focused commands remain available:
 
 ```bash
 make test-race
 make test-integration
+make test-report
+make openapi-check
+make sqlc-check
+make migration-validate
+make go-security
+make secret-scan
 ```
 
-## Railway Deployment Policy Changes
+`make check-full` and the Docker-backed focused commands require a reachable
+Docker daemon. Do not describe a host-only result as full container or
+migration evidence.
 
-- Treat `railway.toml` as the deployment policy source of truth.
-- Keep secrets out of `railway.toml`; use Railway variables/secrets.
-- Any deployment policy change must be PR-reviewed and traceable.
-- Run before PR:
+For performance work, follow
+[Benchmarking](docs/benchmarking.md) and run only the benchmark level that
+matches the claim. When benchmark infrastructure changes, run
+`make benchmark-infra-check`.
 
-```bash
-make guardrails-check
-```
+## Pull requests and repository policy
 
-- If you need to change locked rollout/capacity policy values (`180s`, `45s`, `30s`, `5 retries`, replica/capacity baseline), reopen spec first.
-
-## Pull Request Rules
-
-- Use the PR template and fill all required sections.
 - Keep PR scope focused and reversible.
-- Include concrete test evidence in PR description.
-- Update docs in the same PR when behavior, contract, CI policy, or operations change.
+- Include exact validation evidence and any unverified remainder.
+- Update docs with behavior, contract, CI, or operational changes.
+- Configure required reviews and status checks with GitHub Rulesets or
+  organization policy. The repository does not mutate its own GitHub settings.
+- Treat `.github/workflows/ci.yml` as the source of truth for current check
+  names instead of copying a permanent list into scripts or docs.
 
-## Commit and Code Style Expectations
+For Railway policy changes:
 
-- Go formatting is mandatory (`goimports` via `make fmt`/`make fmt-check`).
-- Prefer explicit, readable Go code over framework-heavy abstractions.
-- Before adding production feature code, use the placement guide in [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code). The local boundary bullets below are only a summary, not the full placement rule set.
-- Keep module boundaries intact:
-  - business logic and consumer-owned ports: `internal/app/<feature>`
-  - HTTP mapping and generated-route policy: `internal/infra/http`
-  - data adapters and SQLC mapping: `internal/infra/postgres`
-  - config snapshot policy: `internal/config`
-  - broad integration scenarios: `test/`
-- Do not merge generated drift:
-  - run `make openapi-generate`
-  - verify with `make openapi-drift-check`
-  - when SQL queries or migrations change, run `make sqlc-generate`
-  - verify with `make sqlc-check`
+- keep `railway.toml` non-secret and PR-reviewed;
+- keep the canonical build path in `build/docker/Dockerfile`;
+- validate the affected migration, runtime-image, and deployment surfaces;
+- reopen the relevant design before changing rollout timing, retry, replica, or
+  capacity policy.
 
-## Security and Disclosure
+## Code and generated sources
 
-- Do not open public issues for undisclosed vulnerabilities.
-- Follow the process in `SECURITY.md`.
+- Format Go through `make fmt`; verify with `make fmt-check`.
+- Prefer explicit Go and existing repository seams over new framework layers.
+- Use the placement guide in
+  [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code).
+- Keep business logic in `internal/app/<feature>`, HTTP mapping in
+  `internal/infra/http`, persistence adapters in `internal/infra/postgres`,
+  configuration in `internal/config`, and composition in
+  `cmd/service/internal/bootstrap`.
+- Regenerate OpenAPI and SQLC output through their owning targets. Never edit
+  generated output by hand.
 
-## Ownership
+## Security and ownership
 
-Critical paths are owner-protected via `.github/CODEOWNERS`.
-
-After cloning this template into a new repository, verify CODEOWNERS points to real owners before enabling required code owner reviews.
+Do not open public issues for undisclosed vulnerabilities; follow
+`SECURITY.md`. Before enabling required code-owner reviews in a derived
+repository, confirm `.github/CODEOWNERS` names real users or teams with access.

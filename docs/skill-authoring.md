@@ -24,4 +24,9 @@ Give every meaning one source of truth. Link the canonical workflow or shared co
 
 Treat invocation and no-op claims as model-relative. Compare realistic should-trigger and near-miss prompts against the previous version; structural checks prove shape, not behavior. When live evaluation is unavailable, report the claim as unproven.
 
-Preserve existing eval prompts, fixtures, assertions, and accepted behavior when changing a skill. Rename or rehome them with the skill; change an oracle only for an accepted behavior reason, never to make a gate green. Budgets remain review heuristics: 50--150 words for session/index skills, 100--250 for specialists, and 250--500 only for a named non-obvious method or failure mode.
+Preserve accepted behavior and the realistic examples that explain it when
+changing a skill. If an externally owned live evaluation system exists, change
+its oracle only for an accepted behavior reason, never to make a gate green.
+Otherwise report invocation and no-op claims as unproven. Budgets remain review
+heuristics: 50--150 words for session/index skills, 100--250 for specialists,
+and 250--500 only for a named non-obvious method or failure mode.

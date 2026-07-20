@@ -137,11 +137,8 @@ jobs:
       - name: Verify module integrity
         run: make mod-check
 
-      - name: Verify required repository guardrails
-        run: make guardrails-check
-
-      - name: Verify workflow instructions
-        run: make workflow-routing-check
+      - name: Verify template initialization contract
+        run: make template-init-check
 
       - name: Verify formatting drift
         run: make fmt-check
@@ -151,12 +148,6 @@ jobs:
 
       - name: Lint
         run: make lint
-
-      - name: Unit tests
-        run: make test
-
-      - name: Go vet
-        run: make vet
 
       - name: Coverage + JUnit + JSON
         run: make test-report COVERAGE_MIN=${{ env.COVERAGE_MIN }}

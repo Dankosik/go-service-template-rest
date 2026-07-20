@@ -1,8 +1,7 @@
 SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
-OPENAPI_GENERATED_FILES := internal/api/openapi.gen.go
-GO_FILES := $(filter-out vendor/% .cache/%,$(shell git ls-files --cached --others --exclude-standard -- '*.go'))
+GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 GOFUMPT_FILES := $(filter-out internal/api/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
 REDOCLY_CLI_VERSION := 2.20.3
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
@@ -15,185 +14,102 @@ COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)internal/infr
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
+
+BENCH_PACKAGE ?= ./...
+BENCH_PATTERN ?= .
+BENCH_COUNT ?= 10
+BENCH_TIME ?= 1s
+BENCH_TAGS ?=
+BENCH_OUTPUT ?= .artifacts/bench/current.txt
+BENCH_BASELINE ?= .artifacts/bench/baseline.txt
+BENCH_CURRENT ?= .artifacts/bench/current.txt
+BENCH_COMPARE_OUTPUT ?= .artifacts/bench/comparison.txt
+BENCH_PROFILE ?= cpu
+BENCH_PROFILE_DIR ?= .artifacts/bench/profiles
+BENCH_WORKLOAD_ID ?= go-benchmark
+BENCH_DB_PACKAGE ?= ./test/...
+BENCH_DB_PATTERN ?= .
+BENCH_DB_OUTPUT ?= .artifacts/bench/db/current.txt
+BENCH_DB_BASELINE ?= .artifacts/bench/db/baseline.txt
+BENCH_DB_CURRENT ?= .artifacts/bench/db/current.txt
+BENCH_DB_COMPARE_OUTPUT ?= .artifacts/bench/db/comparison.txt
+BENCH_DB_WORKLOAD_ID ?=
+POSTGRES_TEST_IMAGE := $(shell sed -n 's/^const postgresTestImage = "\(.*\)"$$/\1/p' test/postgres_integration_test.go)
+HTTP_BENCH_SCRIPT ?= test/performance/http/single-flow.js
+HTTP_BENCH_ARTIFACT_DIR ?= .artifacts/bench/http
+HTTP_BENCH_ENV_FILE ?= .env.bench
+HTTP_BENCH_DOCKER_NETWORK ?=
+HTTP_BENCH_RAW_SAMPLES ?= 0
+
+TRIVY_IMAGE ?= aquasec/trivy:0.69.2@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
-GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
-BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
-DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
+BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap check docker-check check-full pr-check \
-	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	doctor init-module tidy fmt vet test test-summary test-watch test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
-	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check guardrails-check workflow-routing-check instruction-evals-harness workflow-behavior-evals-check workflow-behavior-evals migration-validate gh-protect gh-protect-check \
-	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-ci \
-	docker-guardrails-check docker-workflow-routing-check docker-migration-validate docker-container-security \
-	sqlc-generate sqlc-check
+.PHONY: help template-init template-init-check check check-full pr-check \
+	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration \
+	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check \
+	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
+	sqlc-generate sqlc-check openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
+	migration-validate container-security run build docker-build docker-run compose-up compose-down vendor
 
 help:
-	@echo "Quick onboarding commands:"
-	@echo "  make bootstrap      # prepare local environment (.env + dependencies)"
-	@echo "  make check          # broad local baseline (fmt/lint/test)"
-	@echo "  make docker-check   # quick checks through pinned Docker tooling"
-	@echo "  make check-full     # full local baseline (prefers docker-ci)"
-	@echo "  make pr-check       # strict pre-PR parity (requires Docker + BASE_REF/HEAD_REF)"
-	@echo "  make doctor         # diagnose local Go/Docker readiness"
-	@echo "  make run            # run service locally"
+	@echo "Setup and everyday development:"
+	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
+	@echo "  make check              # formatting, lint, and unit tests"
+	@echo "  make ci-local           # deterministic native CI aggregate"
+	@echo "  make check-full         # native aggregate plus Docker-backed gates"
+	@echo "  make pr-check BASE_REF=origin/main"
+	@echo "  make run"
 	@echo ""
-	@echo "Template/admin commands:"
-	@echo "  make template-init          # module/CODEOWNERS/skills initialization"
-	@echo "  make template-init-native   # force native template initialization"
-	@echo "  make template-init-docker   # force docker template initialization"
+	@echo "Focused validation:"
+	@echo "  make test | test-race | test-report | test-integration"
+	@echo "  make lint | lint-fast | go-security | secret-scan"
+	@echo "  make openapi-check | sqlc-check | migration-validate"
+	@echo "  make docker-build | container-security"
 	@echo ""
-	@echo "Advanced validation commands:"
-	@echo "  make ci-local       # native CI-like checks"
-	@echo "  make docker-ci      # closest zero-setup CI parity"
-	@echo "  make doctor-native  # diagnose native toolchain readiness"
-	@echo "  make doctor-docker  # diagnose Docker tooling readiness"
-	@echo "  make openapi-check  # OpenAPI generation, lint, validation, and runtime contract"
-	@echo "  make sqlc-check     # SQLC generation and drift checks"
-	@echo "  make test-integration        # integration tests"
-	@echo "  make test-summary            # concise unit test summary"
-	@echo "  make test-watch              # watch changed-package tests"
-	@echo "  make lint-fast               # fast lint for changes from LINT_BASE_REF"
-	@echo "  make test-report             # coverage report and threshold"
-	@echo "  make test-flake-smoke        # shuffled repeat test smoke"
-	@echo "  make migration-validate      # migration rehearsal"
-	@echo "  make go-security             # govulncheck + gosec"
-	@echo "  make govulncheck             # Go vulnerability reachability scan"
-	@echo "  make gosec                   # Go security static scan"
-	@echo "  make deadcode                # unreachable Go code scan (tests + integration tag)"
-	@echo "  make nilaway                 # first-party nil-flow scan (production + tests)"
-	@echo "  make secret-scan             # gitleaks secret scan"
-	@echo "  make modernize-check         # informational modern Go suggestions"
-	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
-	@echo "  make workflow-routing-check  # fast workflow/skill instruction checks"
-	@echo "  make instruction-evals-harness # opt-in fake-adapter/mutation harness"
-	@echo "  make workflow-behavior-evals-check # validate the E01-E66 eval manifest (no model calls)"
-	@echo "  make workflow-behavior-evals # run explicitly targeted matched trials through authorized adapters"
-	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
-	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"
-	@echo "  make docker-sqlc-check       # Docker SQLC validation"
-	@echo "  make docker-test-summary     # Docker concise unit test summary"
-	@echo "  make docker-test-integration # Docker integration tests"
-	@echo "  make docker-test-flake-smoke # Docker shuffled repeat test smoke"
-	@echo "  make docker-migration-validate  # Docker migration rehearsal"
-	@echo "  make docker-go-security      # Docker govulncheck + gosec"
-	@echo "  make docker-govulncheck      # Docker Go vulnerability scan"
-	@echo "  make docker-gosec            # Docker Go security static scan"
-	@echo "  make docker-secret-scan      # Docker gitleaks secret scan"
-	@echo "  make docker-modernize-check  # Docker informational modern Go suggestions"
-	@echo "  make docker-container-security  # Docker image scan"
-	@echo "  make gh-protect BRANCH=main       # apply branch protection"
-	@echo "  make gh-protect-check BRANCH=main # audit required status contexts"
+	@echo "Benchmarking:"
+	@echo "  make bench | bench-baseline | bench-compare | bench-profile"
+	@echo "  make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state> | bench-db-baseline | bench-db-compare"
+	@echo "  make bench-http | bench-http-inspect | benchmark-infra-check"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
-bootstrap:
-	@if [ ! -f .env ]; then \
-		cp env/.env.example .env; \
-		echo "Created .env from env/.env.example"; \
-	fi
-	@if command -v go >/dev/null 2>&1; then \
-		echo "go toolchain detected: downloading Go modules"; \
-		go mod download; \
-	elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		echo "go toolchain missing: preparing Docker tooling images"; \
-		$(MAKE) docker-pull-tools; \
+template-init:
+	@if [ -n "$(MODULE)" ]; then \
+		CODEOWNER="$(CODEOWNER)" bash ./scripts/init-module.sh "$(MODULE)"; \
 	else \
-		echo "bootstrap requires either a local Go toolchain or Docker daemon"; \
-		exit 1; \
-	fi
-	@echo "Bootstrap complete. Next steps: make check && make run"
-
-check:
-	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		if command -v go >/dev/null 2>&1; then \
-			echo "go toolchain detected: running quick local checks"; \
-			$(MAKE) fmt-check lint test; \
-		else \
-			echo "go toolchain missing: running quick checks in docker mode"; \
-			$(MAKE) docker-fmt-check docker-lint docker-test; \
-		fi; \
-	elif command -v go >/dev/null 2>&1; then \
-		echo "go toolchain detected: running quick local checks"; \
-		$(MAKE) fmt-check lint test; \
-	else \
-		echo "quick checks require either local Go toolchain or Docker daemon"; \
-		exit 1; \
+		CODEOWNER="$(CODEOWNER)" bash ./scripts/init-module.sh; \
 	fi
 
-docker-check: docker-fmt-check docker-lint docker-test
+template-init-check:
+	bash ./scripts/ci/template-init-check.sh
+
+check: fmt-check lint test
+
+ci-local:
+	$(MAKE) mod-check template-init-check fmt-check lint test-race test-report sqlc-check openapi-check go-security secret-scan
 
 check-full:
-	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		echo "docker daemon detected: running zero-setup CI checks"; \
-		$(MAKE) docker-ci; \
-	else \
-		echo "docker daemon unavailable: running native partial CI-like checks"; \
-		echo "Docker-only integration, migration, and container checks may be skipped; start Docker and run 'make docker-ci' for closest parity"; \
-		echo "Native ci-local also needs Node/npm for OpenAPI lint; run 'make doctor-native' for diagnostics"; \
-		$(MAKE) ci-local; \
-	fi
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	$(MAKE) ci-local
+	REQUIRE_DOCKER=1 $(MAKE) test-integration
+	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):ci .
+	$(MAKE) migration-validate RUNTIME_IMAGE=$(SERVICE_NAME):ci
+	$(MAKE) container-security CONTAINER_IMAGE=$(SERVICE_NAME):ci
 
 pr-check:
-	@test -n "$(BASE_REF)" || (echo "BASE_REF is required, for example BASE_REF=origin/main"; exit 1)
-	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required, for example HEAD_REF=HEAD"; exit 1)
-	@command -v docker >/dev/null 2>&1 || (echo "Docker is required for strict pre-PR parity"; exit 1)
-	@docker info >/dev/null 2>&1 || (echo "Docker daemon is not reachable; start Docker and retry"; exit 1)
+	@test -n "$(BASE_REF)" || { echo "BASE_REF is required, for example BASE_REF=origin/main"; exit 1; }
+	$(MAKE) check-full
 	@mkdir -p .cache
 	@base_openapi="$$(mktemp .cache/openapi-base.XXXXXX)"; \
 	trap 'rm -f "$$base_openapi"' EXIT; \
-	if git show "$(BASE_REF):$(OPENAPI_FILE)" > "$$base_openapi" 2>/dev/null; then \
-		echo "base OpenAPI spec found at $(BASE_REF):$(OPENAPI_FILE)"; \
-		$(MAKE) docker-ci || exit $$?; \
-		$(MAKE) docker-openapi-breaking BASE_OPENAPI="$$base_openapi"; \
+	if git show "$(BASE_REF):$(OPENAPI_FILE)" >"$$base_openapi" 2>/dev/null; then \
+		$(MAKE) openapi-breaking BASE_OPENAPI="$$base_openapi"; \
 	else \
-		echo "base OpenAPI spec not found at $(BASE_REF):$(OPENAPI_FILE); running strict checks that match available PR inputs"; \
-		$(MAKE) docker-ci; \
-	fi
-
-template-init:
-	bash ./scripts/dev/setup.sh
-
-template-init-strict:
-	bash ./scripts/dev/setup.sh --strict
-
-template-init-native:
-	bash ./scripts/dev/setup.sh --native
-
-template-init-native-strict:
-	bash ./scripts/dev/setup.sh --native --strict
-
-template-init-docker:
-	bash ./scripts/dev/setup.sh --docker
-
-doctor:
-	bash ./scripts/dev/doctor.sh --mode auto
-
-doctor-native:
-	bash ./scripts/dev/doctor.sh --mode native
-
-doctor-docker:
-	bash ./scripts/dev/doctor.sh --mode docker
-
-init-module:
-	@if [ -n "$(MODULE)" ]; then \
-		bash ./scripts/init-module.sh "$(MODULE)"; \
-	else \
-		bash ./scripts/init-module.sh; \
-	fi
-
-docker-pull-tools:
-	$(DOCKER_TOOLING_SCRIPT) pull-images
-
-docker-init-module:
-	@if [ -n "$(MODULE)" ]; then \
-		CODEOWNER="$(CODEOWNER)" $(DOCKER_TOOLING_SCRIPT) init-module "$(MODULE)"; \
-	else \
-		CODEOWNER="$(CODEOWNER)" $(DOCKER_TOOLING_SCRIPT) init-module; \
+		echo "No base OpenAPI spec at $(BASE_REF):$(OPENAPI_FILE); breaking check not applicable"; \
 	fi
 
 tidy:
@@ -207,30 +123,21 @@ mod-check:
 	GOFLAGS= go mod tidy -diff
 	go mod verify
 
-docker-mod-check:
-	$(DOCKER_TOOLING_SCRIPT) mod-check
-
 fmt-check:
 	@unformatted="$$(go tool goimports -l $(GO_FILES))"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \
-		echo "run 'make fmt' to update Go formatting and imports"; \
+		echo "run 'make fmt'"; \
 		exit 1; \
 	fi
 	@gofumpt_unformatted="$$(go tool gofumpt -l $(GOFUMPT_FILES))"; \
 	if [ -n "$$gofumpt_unformatted" ]; then \
 		echo "gofumpt required for:"; \
 		echo "$$gofumpt_unformatted"; \
-		echo "run 'make fmt' to update Go formatting"; \
+		echo "run 'make fmt'"; \
 		exit 1; \
 	fi
-
-docker-fmt:
-	$(DOCKER_TOOLING_SCRIPT) fmt
-
-docker-fmt-check:
-	$(DOCKER_TOOLING_SCRIPT) fmt-check
 
 test:
 	go test ./...
@@ -240,9 +147,6 @@ test-summary:
 
 test-watch:
 	go tool gotestsum --watch --format=pkgname-and-test-fails
-
-vet:
-	go vet ./...
 
 test-race:
 	go test -race ./...
@@ -258,15 +162,12 @@ test-report:
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 
 coverage-check:
-	@test -f coverage.out || (echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1)
+	@test -f coverage.out || { echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1; }
 	@filtered_cov="$$(mktemp)"; \
-	grep -Ev '$(COVERAGE_EXCLUDE_REGEX)' coverage.out > "$$filtered_cov"; \
+	grep -Ev '$(COVERAGE_EXCLUDE_REGEX)' coverage.out >"$$filtered_cov"; \
 	total="$$(GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func="$$filtered_cov" | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
 	rm -f "$$filtered_cov"; \
-	if [ -z "$$total" ]; then \
-		echo "failed to parse total coverage from coverage.out"; \
-		exit 1; \
-	fi; \
+	test -n "$$total" || { echo "failed to parse total coverage"; exit 1; }; \
 	awk -v total="$$total" -v minimum="$(COVERAGE_MIN)" 'BEGIN { \
 		if ((total + 0) < (minimum + 0)) { \
 			printf "coverage %.2f%% is below threshold %.2f%%\n", total, minimum; \
@@ -282,67 +183,50 @@ test-fuzz-smoke:
 		fuzz_targets="$$(go test "$$pkg" -list '^Fuzz' 2>&1)" || { status=$$?; printf '%s\n' "$$fuzz_targets"; exit $$status; }; \
 		if printf '%s\n' "$$fuzz_targets" | grep -q '^Fuzz'; then \
 			found=1; \
-			echo "running fuzz smoke for $$pkg"; \
 			go test "$$pkg" -run '^$$' -fuzz=Fuzz -fuzztime=$(FUZZ_TIME) || exit $$?; \
 		fi; \
 	done; \
-	if [ "$$found" -eq 0 ]; then \
-		echo "no fuzz targets found; skipping fuzz smoke run"; \
-	fi
+	if [ "$$found" -eq 0 ]; then echo "no fuzz targets found; skipping fuzz smoke run"; fi
 
 test-flake-smoke:
 	go test -count=5 -shuffle=on ./...
 
-test-cover-local:
-	@coverage_log="$$(mktemp)"; \
-	if GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./... >"$$coverage_log" 2>&1; then \
-		cat "$$coverage_log"; \
-		GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out; \
-	else \
-		cat "$$coverage_log"; \
-		if grep -Eq 'does not match go tool version' "$$coverage_log"; then \
-			echo "coverage check skipped: local coverage tooling is unhealthy"; \
-			echo "run 'make doctor-native' for diagnostics or use 'make docker-test-cover'"; \
-		else \
-			rm -f "$$coverage_log"; \
-			exit 1; \
-		fi; \
-	fi; \
-	rm -f "$$coverage_log"
-
-docker-test:
-	$(DOCKER_TOOLING_SCRIPT) test
-
-docker-test-summary:
-	$(DOCKER_TOOLING_SCRIPT) test-summary
-
-docker-vet:
-	$(DOCKER_TOOLING_SCRIPT) vet
-
-docker-test-race:
-	$(DOCKER_TOOLING_SCRIPT) test-race
-
-docker-test-cover:
-	$(DOCKER_TOOLING_SCRIPT) test-cover
-
-docker-test-report:
-	COVERAGE_MIN="$(COVERAGE_MIN)" $(DOCKER_TOOLING_SCRIPT) test-report
-
-docker-test-fuzz-smoke:
-	FUZZ_TIME="$(FUZZ_TIME)" $(DOCKER_TOOLING_SCRIPT) test-fuzz-smoke
-
-docker-test-flake-smoke:
-	$(DOCKER_TOOLING_SCRIPT) test-flake-smoke
-
 test-integration:
 	go test -tags=integration ./test/...
 
-docker-test-integration:
-	$(DOCKER_TOOLING_SCRIPT) test-integration
+bench:
+	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_OUTPUT="$(BENCH_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) run
+
+bench-baseline:
+	$(MAKE) bench BENCH_OUTPUT="$(BENCH_BASELINE)"
+
+bench-compare:
+	BENCH_BASELINE="$(BENCH_BASELINE)" BENCH_CURRENT="$(BENCH_CURRENT)" BENCH_COMPARE_OUTPUT="$(BENCH_COMPARE_OUTPUT)" $(BENCHMARK_SCRIPT) compare
+
+bench-profile:
+	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_PROFILE="$(BENCH_PROFILE)" BENCH_PROFILE_DIR="$(BENCH_PROFILE_DIR)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) profile
+
+bench-db:
+	@test -n "$(BENCH_DB_WORKLOAD_ID)" || { echo "BENCH_DB_WORKLOAD_ID is required, for example fixture-10k-warm"; exit 1; }
+	REQUIRE_DOCKER=1 BENCH_PACKAGE="$(BENCH_DB_PACKAGE)" BENCH_PATTERN="$(BENCH_DB_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS=integration BENCH_OUTPUT="$(BENCH_DB_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_DB_WORKLOAD_ID)" BENCH_DEPENDENCY_IMAGE="$(POSTGRES_TEST_IMAGE)" BENCH_SCHEMA_PATH=env/migrations $(BENCHMARK_SCRIPT) run
+
+bench-db-baseline:
+	$(MAKE) bench-db BENCH_DB_OUTPUT="$(BENCH_DB_BASELINE)"
+
+bench-db-compare:
+	BENCH_BASELINE="$(BENCH_DB_BASELINE)" BENCH_CURRENT="$(BENCH_DB_CURRENT)" BENCH_COMPARE_OUTPUT="$(BENCH_DB_COMPARE_OUTPUT)" $(BENCHMARK_SCRIPT) compare
+
+bench-http:
+	HTTP_BENCH_SCRIPT="$(HTTP_BENCH_SCRIPT)" HTTP_BENCH_ARTIFACT_DIR="$(HTTP_BENCH_ARTIFACT_DIR)" HTTP_BENCH_ENV_FILE="$(HTTP_BENCH_ENV_FILE)" HTTP_BENCH_DOCKER_NETWORK="$(HTTP_BENCH_DOCKER_NETWORK)" HTTP_BENCH_RAW_SAMPLES="$(HTTP_BENCH_RAW_SAMPLES)" $(BENCHMARK_SCRIPT) http
+
+bench-http-inspect:
+	HTTP_BENCH_SCRIPT="$(HTTP_BENCH_SCRIPT)" HTTP_BENCH_ARTIFACT_DIR="$(HTTP_BENCH_ARTIFACT_DIR)" HTTP_BENCH_ENV_FILE="$(HTTP_BENCH_ENV_FILE)" HTTP_BENCH_DOCKER_NETWORK="$(HTTP_BENCH_DOCKER_NETWORK)" HTTP_BENCH_RAW_SAMPLES=0 $(BENCHMARK_SCRIPT) http-inspect
+
+benchmark-infra-check:
+	$(BENCHMARK_SCRIPT) check
 
 lint:
-	go tool golangci-lint config verify
-	go tool golangci-lint run --timeout=3m
+	go tool golangci-lint run --allow-parallel-runners --timeout=3m
 	$(MAKE) deadcode
 	$(MAKE) nilaway
 
@@ -353,8 +237,7 @@ deadcode:
 	go tool deadcode -test -tags=integration ./...
 
 nilaway:
-	@set -eu; \
-	module_path="$$(go list -m)"; \
+	@module_path="$$(go list -m)"; \
 	printf 'go tool nilaway -include-pkgs=%s -test ./...\n' "$$module_path"; \
 	go tool nilaway -include-pkgs="$$module_path" -test ./...
 
@@ -368,35 +251,14 @@ govulncheck:
 	go tool govulncheck ./...
 
 gosec:
-	gosec_cache="$$(mktemp -d)"; \
+	@gosec_cache="$$(mktemp -d)"; \
 	trap 'rm -rf "$$gosec_cache"' EXIT; \
-	GOCACHE="$$gosec_cache" go tool gosec -exclude-generated -exclude-dir=.cache -exclude-dir=.artifacts ./...
+	GOCACHE="$$gosec_cache" go tool gosec -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 go-security: govulncheck gosec
 
 secret-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
-
-ci-local:
-	$(MAKE) mod-check workflow-routing-check guardrails-check fmt-check lint test vet test-race test-report sqlc-check openapi-check go-security secret-scan
-	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
-		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
-		$(MAKE) docker-migration-validate; \
-		$(MAKE) docker-container-security; \
-	else \
-		echo "docker daemon is unavailable: skipping integration, migration rehearsal, and container scan"; \
-		echo "start Docker and run 'make docker-ci' for full CI parity"; \
-	fi
-
-docker-lint:
-	$(DOCKER_TOOLING_SCRIPT) lint
-
-docker-modernize-check:
-	$(DOCKER_TOOLING_SCRIPT) modernize-check
-
-docker-test-parallelism-check:
-	$(DOCKER_TOOLING_SCRIPT) test-parallelism-check
 
 sqlc-generate:
 	@if [ -z "$$(find internal/infra/postgres/queries -type f -name '*.sql' -print -quit)" ]; then \
@@ -426,84 +288,55 @@ openapi-validate:
 	go tool validate -- $(OPENAPI_FILE)
 
 openapi-breaking:
-	@test -n "$(BASE_OPENAPI)" || (echo "BASE_OPENAPI is required"; exit 1)
+	@test -n "$(BASE_OPENAPI)" || { echo "BASE_OPENAPI is required"; exit 1; }
 	go tool oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
 
 openapi-check: openapi-generate openapi-drift-check
 	go test ./internal/api
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
 
-docker-openapi-check:
-	$(DOCKER_TOOLING_SCRIPT) openapi-check
-
-docker-openapi-breaking:
-	@test -n "$(BASE_OPENAPI)" || (echo "BASE_OPENAPI is required"; exit 1)
-	$(DOCKER_TOOLING_SCRIPT) openapi-breaking "$(BASE_OPENAPI)"
-
-docker-sqlc-check:
-	$(DOCKER_TOOLING_SCRIPT) sqlc-check
-
-guardrails-check:
-	$(GUARDRAILS_CHECK_SCRIPT)
-
-workflow-routing-check:
-	go run ./scripts/ci/hard-skills-check
-	bash scripts/ci/workflow-instructions-check.sh
-
-instruction-evals-harness:
-	bash scripts/ci/instruction-evals-check.sh
-
-workflow-behavior-evals-check:
-	bash scripts/dev/workflow-behavior-evals.sh check
-
-workflow-behavior-evals:
-	bash scripts/dev/workflow-behavior-evals.sh run
-
-docker-govulncheck:
-	$(DOCKER_TOOLING_SCRIPT) govulncheck
-
-docker-gosec:
-	$(DOCKER_TOOLING_SCRIPT) gosec
-
-docker-go-security:
-	$(DOCKER_TOOLING_SCRIPT) go-security
-
-docker-secret-scan:
-	$(DOCKER_TOOLING_SCRIPT) secret-scan
-
-docker-guardrails-check:
-	$(DOCKER_TOOLING_SCRIPT) guardrails-check
-
-docker-workflow-routing-check:
-	$(DOCKER_TOOLING_SCRIPT) workflow-routing-check
-
-docker-migration-validate:
-	$(DOCKER_TOOLING_SCRIPT) migration-validate
-
-docker-container-security:
-	$(DOCKER_TOOLING_SCRIPT) container-security
-
-docker-ci:
-	$(DOCKER_TOOLING_SCRIPT) ci
-
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \
-		go tool migrate -path env/migrations -database "$(MIGRATION_DSN)" up; \
-		go tool migrate -path env/migrations -database "$(MIGRATION_DSN)" down 1; \
-		go tool migrate -path env/migrations -database "$(MIGRATION_DSN)" up 1; \
-	elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		echo "MIGRATION_DSN is empty: running docker-migration-validate"; \
-		$(MAKE) docker-migration-validate; \
+		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$(MIGRATION_DSN)" up; \
+		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$(MIGRATION_DSN)" down 1; \
+		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$(MIGRATION_DSN)" up 1; \
 	else \
-		echo "MIGRATION_DSN is empty and docker daemon is unavailable: skipping migration validation"; \
-		echo "set MIGRATION_DSN or start Docker to run migration rehearsal"; \
+		command -v docker >/dev/null 2>&1 || { echo "MIGRATION_DSN or Docker is required"; exit 1; }; \
+		docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }; \
+		project="$${MIGRATION_PROJECT:-service-migration-$$(date +%s)-$$$$}"; \
+		compose() { POSTGRES_PORT=0 docker compose -p "$$project" -f env/docker-compose.yml "$$@"; }; \
+		cleanup() { compose down -v --remove-orphans >/dev/null 2>&1 || true; }; \
+		trap cleanup EXIT INT TERM; \
+		compose up -d --wait postgres; \
+		address="$$(compose port postgres 5432)"; \
+		port="$${address##*:}"; \
+		test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
+		dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
+		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$$dsn" up; \
+		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$$dsn" down 1; \
+		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$$dsn" up 1; \
+		image="$(RUNTIME_IMAGE)"; \
+		if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
+		docker run --rm --network "$${project}_default" \
+			-e APP__POSTGRES__ENABLED=true \
+			-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
+			--entrypoint /migrate "$$image"; \
 	fi
 
-gh-protect:
-	$(BRANCH_PROTECTION_SCRIPT) "$${BRANCH:-main}"
-
-gh-protect-check:
-	$(BRANCH_PROTECTION_SCRIPT) --check "$${BRANCH:-main}"
+container-security:
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@image="$(CONTAINER_IMAGE)"; \
+	if [ -z "$$image" ]; then image="$(SERVICE_NAME):ci"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
+	docker run --rm \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-e DOCKER_HOST=unix:///var/run/docker.sock \
+		"$(TRIVY_IMAGE)" image \
+		--severity HIGH,CRITICAL \
+		--ignore-unfixed \
+		--exit-code 1 \
+		--format table \
+		"$$image"
 
 run:
 	@set -a; \

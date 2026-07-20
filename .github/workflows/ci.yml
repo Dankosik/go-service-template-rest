@@ -35,12 +35,6 @@ jobs:
       - name: Verify module integrity
         run: make mod-check
 
-      - name: Verify required repository guardrails
-        run: make guardrails-check
-
-      - name: Verify workflow instructions
-        run: make workflow-routing-check
-
       - name: Verify formatting drift
         run: make fmt-check
 
@@ -62,6 +56,9 @@ jobs:
 
       - name: Lint
         run: make lint
+
+      - name: Verify template initialization contract
+        run: make template-init-check
 
   openapi-contract:
     runs-on: ubuntu-latest
@@ -130,25 +127,6 @@ jobs:
       - name: Check OpenAPI breaking changes
         if: env.BASE_SPEC_FOUND == 'true'
         run: BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking
-
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Unit tests
-        run: make test
-
-      - name: Go vet
-        run: make vet
 
   test-race:
     runs-on: ubuntu-latest

@@ -60,13 +60,9 @@ Use `status: draft | ready | blocked | done` when durable status is useful. Do n
 
 `.codex/agents/*.toml` contains project-scoped read-only specialist roles. `.agents/skills` is the canonical Codex-native skill set.
 
-Useful commands:
-
-```bash
-make workflow-behavior-evals-check
-```
-
-The behavior-eval check validates the E01–E66 manifest only. The slower adapter/mutation harness remains opt-in through `make instruction-evals-harness`; both are documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The repository ships the runtime agent and skill guidance used by Codex. It
+does not ship a model-evaluation runner, fake adapters, or a second CI system
+for validating that guidance.
 
 In non-implementation macro phases, evaluate whether concrete, independent, bounded research or review lanes improve evidence or review independence. Use only useful read-only subagent lanes and keep tightly coupled reasoning local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns those lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) retains its current optional Worker and root-review boundary.
 
@@ -124,9 +120,8 @@ The short version: frame the outcome, persist only decisions another actor needs
 ### Human Quickstart
 
 ```bash
-make bootstrap
-make template-init   # run when creating a new repository from the template
-make check       # broad baseline after bootstrap
+make template-init CODEOWNER=@your-user-or-org/team
+make check
 make run
 ```
 
@@ -142,23 +137,19 @@ git remote rename origin upstream
 git remote add origin git@github.com:<your-user>/<your-repo>.git
 # or: git remote add origin https://github.com/<your-user>/<your-repo>.git
 
-make bootstrap
-make template-init
-make check       # broad baseline before initial publication
+make template-init CODEOWNER=@your-user-or-org/team
+make check
 
 git add .
 git commit -m "chore: initialize service from template"
 git push -u origin main
 ```
 
-`origin` should point to your repository and `upstream` to this template. If SSH fails, switch `origin` to HTTPS. Repositories created with GitHub's “Use this template” should still run `make bootstrap` and `make template-init`.
+`origin` should point to your repository and `upstream` to this template. If SSH fails, switch `origin` to HTTPS. Repositories created with GitHub's “Use this template” should still run `make template-init CODEOWNER=@...`.
 
-For production-style GitHub setup after the first push:
-
-```bash
-gh auth login
-make gh-protect BRANCH=main
-```
+After the first push, configure a GitHub Ruleset or organization policy that
+requires the blocking jobs currently defined in `.github/workflows/ci.yml`.
+GitHub settings are administrative state and are not mutated by this template.
 
 ### Agent Quickstart
 
@@ -213,14 +204,21 @@ See [`go.mod`](go.mod) and [`go.sum`](go.sum) for the full dependency graph.
 Useful entry points:
 
 - `make check` — broad local baseline (fmt, full lint, full tests)
-- `make docker-check` — quick checks through pinned Docker tooling
-- `BASE_REF=origin/main HEAD_REF=HEAD make check-full` — full pre-push baseline
-- `make ci-local` — native CI-style flow
-- `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` — Docker CI parity flow
+- `make ci-local` — deterministic native CI aggregate
+- `make check-full` — native aggregate plus Docker-backed integration, migration, and image scan
+- `BASE_REF=origin/main make pr-check` — full local checks plus OpenAPI breaking analysis
 - `make openapi-check` — OpenAPI generation, drift, runtime, lint, and schema checks
 - `BASE_OPENAPI=<base> make openapi-breaking` — compatibility check
 - `make sqlc-check` — SQL generation drift
 - `make migration-validate` — migration rehearsal
 - `make test-integration` — integration tests
+- `make bench` / `make bench-compare` — repeatable Go benchmark capture and `benchstat` comparison
+- `make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state>` / `make bench-db-compare` — real PostgreSQL benchmarks with pinned server/schema/workload provenance
+- `make bench-http` — thresholded steady, stress, spike, or soak HTTP load with digest-pinned k6 and `.env.bench`
+- `make benchmark-infra-check` — executable smoke for Go capture, benchstat, PostgreSQL provenance, and both k6 executor modes
 
-Migration targets may skip when no `MIGRATION_DSN` is provided and Docker is unavailable; skip output is not migration proof. See [Build, Test, and Development Commands](docs/build-test-and-development-commands.md#everyday-pre-push-and-pr-parity) and `.github/workflows/` for exact gates.
+`make migration-validate` requires either `MIGRATION_DSN` or a reachable Docker
+daemon; it never reports a missing proof path as a successful skip. See
+[Benchmarking](docs/benchmarking.md), [Build, Test, and Development
+Commands](docs/build-test-and-development-commands.md), and
+`.github/workflows/` for exact gates.

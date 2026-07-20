@@ -9,6 +9,7 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow.
 - Treat cancellation, deadlines, partial work, cleanup, shutdown, generated authority, and mutable ownership as first-class only when the change touches them.
 - During iteration, use cached focused checks and keep reusable local dependencies running. Reserve uncached tests, race, coverage, full lint, rebuilds, and teardown for a triggered claim or publication evidence; do not clean caches as a speed technique.
+- For performance changes, follow [Benchmarking](docs/benchmarking.md): choose the narrowest matching Go, in-process HTTP, real-PostgreSQL, or external HTTP proof; define workload and budget before measuring; preserve raw baseline/candidate evidence where comparison applies; and keep correctness proof independent. Run `make benchmark-infra-check` when benchmark tooling or scenario infrastructure changes. Persistent history or blocking automation requires a stable dedicated testbed and a named threshold owner.
 
 ## Collaboration
 
@@ -89,6 +90,7 @@ Use the smallest matching check:
 | Docs or instructions | `git diff --check` and the relevant instruction gate |
 | Local Go behavior | Focused package/test proof; changed-code lint when useful |
 | Concurrency/lifecycle | Focused behavior plus race/liveness proof |
+| Performance claim | The matching [benchmark level](docs/benchmarking.md), equivalent workload/testbed evidence, and independent correctness proof |
 | OpenAPI, sqlc, migration, generated source | Canonical generation/drift and affected runtime proof |
 | Security, deployment, cross-service or release | The matching protected-domain and integrated proof |
 | Publication, CI parity, or broad cross-cutting change | `check-full`, `ci-local`, `pr-check`, container, or security suites only when the claim needs them |

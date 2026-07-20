@@ -34,7 +34,12 @@ For direct work, the root edits the assigned checkout, performs one coherent sel
 
 Keep a clear sequential outcome root-local even when it is long-running or spans multiple files. Use a native Codex App Worker and managed worktree only when resumability, dirty-checkout isolation, safe parallelism, or materially separate context outweighs dispatch, worktree, fan-in, and acceptance cost, or when the user explicitly delegates implementation. Create one root Goal only for a genuinely multi-step or resumable outcome.
 
-Before dispatching from uncommitted accepted input, run `bash scripts/dev/codex-worktree-preflight.sh <selected-git-top-level>` against the selected checkout. It is read-only and fails closed on oversized transfer input; do not stash, clean, ignore, or mutate user changes to pass it. Keep one write Worker per outcome. A Worker receives an outcome-first brief with editable boundaries, current facts, success criteria, focused proof, and a real stop condition.
+Before dispatching from uncommitted accepted input, record the selected
+physical checkout, base/tree/ref, current status, and authorized paths. Do not
+stash, clean, ignore, or mutate user changes to manufacture acceptable input.
+Keep one write Worker per outcome. A Worker receives an outcome-first brief
+with editable boundaries, current facts, success criteria, focused proof, and
+a real stop condition.
 
 For every Worker task, the root explicitly selects and passes the best-suited available model and reasoning effort through supported App controls; never inherit an App default or ask the user to choose when those controls exist. This is the user's standing request. Choose model and effort independently: Luna for clear mechanical work, Terra for ordinary implementation, and Sol for complex or high-consequence work, using the lowest effort likely to succeed. Existing eval evidence may inform the choice but is never a dispatch prerequisite.
 
@@ -69,9 +74,17 @@ Map each claim to current proof of equal scope. Use the smallest matching valida
 | Docs/instructions | `git diff --check` and the relevant instruction gate |
 | Local Go behavior | Focused package or regression proof; changed-code lint when useful |
 | Concurrency/lifecycle | Focused behavior plus race/liveness proof |
+| Performance | The matching level from [Benchmarking](../../benchmarking.md), equivalent workload/testbed evidence, and independent correctness proof |
 | API, sqlc, migrations, generated source | Canonical generation/drift plus affected runtime proof |
 | Security, deployment, cross-service | Matching protected-domain and integrated proof |
 | Publication, CI parity, broad cross-cutting work | `check-full`, `ci-local`, `pr-check`, container, or security suites only when that claim requires them |
+
+Performance validation is triggered by an accepted performance claim, budget,
+or materially affected hot path; it is not a ceremony for every change. If the
+workload, measured boundary, fixture shape, testbed, or budget is still absent,
+reopen the narrow Performance Decision owner instead of inventing a benchmark
+after implementation. Use the repository commands and artifact conventions in
+[Benchmarking](../../benchmarking.md) once those inputs exist.
 
 Do not use Worker prose, stale logs, unrelated green checks, or a broad command that misses the changed behavior as proof. When a required check cannot run, record the command, reason, narrower evidence, and unverified remainder.
 

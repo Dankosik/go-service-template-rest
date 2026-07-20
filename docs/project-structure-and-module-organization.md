@@ -9,6 +9,7 @@ This document explains the `go-service-template-rest` repository layout: what is
 ├── .agents/                    # canonical project skill sources
 ├── .codex/                      # Codex project-agent configuration
 ├── .github/                     # CI, release, and repository policy
+├── .artifacts/bench/            # generated local benchmark evidence, not source
 ├── .artifacts/test/             # generated local test reports, not source
 ├── api/
 │   ├── openapi/service.yaml     # REST contract source of truth
@@ -32,14 +33,15 @@ This document explains the `go-service-template-rest` repository layout: what is
 │       └── telemetry/           # shared metrics and tracing setup
 ├── scripts/                     # developer and CI helper scripts
 ├── specs/                       # spec-first task records and implementation history
-├── test/                        # integration and broad scenario tests
+├── test/                        # integration tests and external performance scenarios
+│   └── performance/http/        # feature-owned k6 HTTP load scenarios
 ├── Makefile
 ├── README.md
 ├── go.mod
 └── go.sum
 ```
 
-Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*` when SQLC queries exist, coverage files, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
+Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*` when SQLC queries exist, coverage files, `.artifacts/bench/*` evidence, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
 
 ## 2) Layer and Folder Responsibilities
 
@@ -103,26 +105,34 @@ Why: everything needed for local reproducible runs is versioned and kept togethe
 
 Migrations are deterministic by default: use plain `CREATE` / `DROP` statements so unexpected schema drift fails loudly. Use `IF NOT EXISTS` / `IF EXISTS` only for an explicitly reviewed repair or idempotent migration.
 
-Online production safety is a separate question from deterministic local rehearsal. Prefer additive expand-first migrations for online systems. Destructive changes, type rewrites, large backfills, new constraints, and new indexes need an explicit lock/backfill/mixed-version rollout plan sized to the table and traffic shape. `make migration-validate` and `make docker-migration-validate` rehearse migration mechanics; they do not prove production lock safety, backfill safety, or mixed-version compatibility. Escalate schema ownership, retention, backfill, and rollout questions to data-architecture design before coding.
+Online production safety is a separate question from deterministic local rehearsal. Prefer additive expand-first migrations for online systems. Destructive changes, type rewrites, large backfills, new constraints, and new indexes need an explicit lock/backfill/mixed-version rollout plan sized to the table and traffic shape. `make migration-validate` rehearses migration mechanics; it does not prove production lock safety, backfill safety, or mixed-version compatibility. Escalate schema ownership, retention, backfill, and rollout questions to data-architecture design before coding.
 
 ### `test/`
-Integration/e2e tests and larger test scenarios (separate from unit tests in `internal/...`).  
-Why: fast unit tests stay close to code, while heavier scenarios run separately with the `integration` tag.
+Integration/e2e tests, real-PostgreSQL benchmarks, and external performance
+scenarios (separate from unit tests and in-process benchmarks in
+`internal/...`).
+Why: fast local proof stays close to its owner, while Testcontainers-backed
+benchmarks use the `integration` tag and deployed-service k6 scenarios remain
+explicit workload definitions under `test/performance/http/`.
 
 ### `build/`
 Build and delivery assets: Dockerfile, CI notes, related build files.  
 Why: separates runtime code from build/deploy concerns and keeps `internal/` focused.
 
 ### `scripts/`
-Developer and CI helper scripts.  
-Why: standard commands for local work and CI without repeating long command lines.
+Repository automation is deliberately small.
 
-Key scripts:
-- `scripts/dev/setup.sh`: onboarding bootstrap (native or docker mode), `.env` creation, module auto-initialization from `git remote origin`, CODEOWNER inference from origin, and optional strict native coverage sanity (`--strict`).
-- `scripts/dev/doctor.sh`: readiness checks for native/docker prerequisites and template placeholders.
-- `scripts/dev/module-origin.sh`: shared parser for deriving a Go module path from `git remote origin`.
-- `scripts/init-module.sh`: manual fallback for module path and CODEOWNERS initialization after clone.
-- `scripts/dev/docker-tooling.sh`: zero-setup wrappers for test/lint/OpenAPI/security/CI flows without host Go/Node toolchain; tooling image references are read from `build/docker/tooling-images.Dockerfile`.
+Current owners:
+- `scripts/init-module.sh`: the single template initialization mutation.
+- `scripts/ci/template-init-check.sh`: isolated contract proof for initialization.
+- `scripts/ci/generated-drift-check.sh`: OpenAPI and SQLC derived-output comparison.
+- `scripts/dev/benchmark.sh`: benchmark execution, metadata, comparison, and
+  digest-pinned k6 HTTP load.
+
+The Makefile owns composition. Go and Node checks use the host toolchain;
+Docker remains only for runtime dependencies, integration and migration proof,
+runtime images, container scanning, real-PostgreSQL benchmarks, and external
+HTTP load.
 
 ### `docs/`
 Engineering documentation, including this document and the stable repository architecture baseline.
@@ -221,7 +231,10 @@ New Postgres persistence:
 6. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter.
 7. Wire the concrete repository in `cmd/service/internal/bootstrap`.
 8. Clamp bounded list limits before values reach SQL `LIMIT`; the API/app contract or repository must define the upper bound instead of trusting caller input.
-9. Validate with `make sqlc-check`, repository unit tests, `make test-integration`, and `make migration-validate` when migration-backed behavior changed. Use `make docker-migration-validate` when the native migration toolchain is unavailable.
+9. Validate with `make sqlc-check`, repository unit tests,
+   `make test-integration`, and `make migration-validate` when
+   migration-backed behavior changed. `migration-validate` uses an explicit
+   `MIGRATION_DSN` or provisions its own isolated Docker-backed rehearsal.
 
 Transaction recipe:
 1. Start the transaction with the caller context.

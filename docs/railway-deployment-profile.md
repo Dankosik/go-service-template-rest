@@ -58,18 +58,18 @@ The repository already provides the required push-triggered CI workflow in `.git
 ## Governance And Drift Policy
 
 - Policy changes must be PR-reviewed and traceable in git history.
-- `make guardrails-check` is fail-closed and blocks drift in:
-  - required repository guardrail files,
-  - `railway.toml` policy fields,
-  - pre-deploy migration ownership (`/migrate` plus runtime image contents),
-  - canonical CD Dockerfile build path,
-  - CI job contexts vs branch-protection required checks.
+- `railway.toml` owns non-secret Railway policy.
+- The runtime Dockerfile and release workflow own `/migrate`, migration assets,
+  and the canonical image build path.
+- GitHub Rulesets or organization policy own required status contexts; review
+  them when CI jobs change.
 - UI-only Railway policy edits are non-compliant until reconciled back into `railway.toml` via PR.
 
 ## Change Procedure
 
 1. Update `railway.toml` in a PR.
-2. Run `make guardrails-check` locally.
+2. Run `make check-full` when the claim includes migration and runtime-image
+   readiness, or run and report the narrower affected gates.
 3. Include rollout evidence in PR/release packet:
    - `railway.toml` diff,
    - linked review trail,

@@ -92,4 +92,8 @@ At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/suba
 
 Current reference: OpenAI's [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model) and [Prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6).
 
-Preserve outcome, permission boundaries, success criteria, proof, and stop conditions. Change one instruction group at a time, run the [workflow behavior evals](spec-first-workflow-evals.md), and keep reductions only when task success and evidence completeness do not regress.
+Preserve outcome, permission boundaries, success criteria, proof, and stop
+conditions. Change one instruction group at a time and review realistic
+trigger, near-miss, and completion cases. This repository does not own a fake
+agent runner or judge; without an externally owned live evaluation system,
+invocation and model-behavior claims remain explicitly unproven.
