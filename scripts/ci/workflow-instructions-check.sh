@@ -160,8 +160,11 @@ t02_check_app_worker_model_policy() {
   local file="$1"
   local token
   for token in \
-    'explicitly selects and passes both the model and reasoning effort' \
+    'explicitly selects and passes the best-suited available model and reasoning effort' \
     'never inherit an App default' \
+    "This repository instruction is the user's standing request for task-specific model selection" \
+    'no separate per-task confirmation is required' \
+    'When supported controls exist, do not ask the user to choose the model or effort' \
     'task identity, selected model and effort, and a short basis' \
     'basis names the exact eval artifact and compared model/effort configuration' \
     'Choose model and effort independently from the App' \
@@ -923,6 +926,10 @@ for token in \
   '`gpt-5.6-luna` with `low` is a valid T01 choice' \
   '`gpt-5.6-terra` with `medium` is a valid T02 choice' \
   '`gpt-5.6-sol` with `high` is a valid T03 choice' \
+  "This repository instruction is the user's standing request for task-specific model selection" \
+  'without separate per-task confirmation' \
+  'do not ask the user to choose the model or effort' \
+  'asking the user to choose despite supported launch controls' \
   '`high`/`xhigh` difficult multi-step, source, or tradeoff work' \
   '`max` only the hardest single quality-first task' \
   'Do not route these single-Worker tasks to `Ultra`' \
