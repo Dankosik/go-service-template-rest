@@ -71,13 +71,13 @@ Reject when the metric still has unbounded or policy-sensitive cardinality.
 ## Validation Shape
 - Add tests that raw secret-like values are absent from errors, logs, traces, and client responses.
 - Add metrics tests that labels use route templates and bounded error classes rather than raw paths or identifiers.
-- Run `make secrets-scan` after touching config, docs, CI, deployment, examples, or fixtures.
+- Run `make secret-scan` after touching config, docs, CI, deployment, examples, or fixtures.
 - Run `make go-security` when telemetry or config code changed.
 
 ## Repo-Local Anchors
 - `docs/configuration-source-policy.md` requires non-secret YAML and secret values from `APP__...` environment variables.
 - `internal/config/load_koanf.go` rejects secret-like YAML keys and hardens non-local file config.
 - `railway.toml` is non-secret deployment policy; Railway variables/secrets hold secrets.
-- `Makefile` provides `make secrets-scan` with gitleaks redaction.
+- `Makefile` provides `make secret-scan` with gitleaks redaction.
 - `internal/infra/http/problem.go` uses sanitized problem details and request IDs.
 - `internal/infra/telemetry/metrics.go` uses low-cardinality HTTP labels.

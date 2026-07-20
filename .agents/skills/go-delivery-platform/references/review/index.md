@@ -4,7 +4,7 @@
 | --- | --- |
 | Required CI tiers, status semantics, local parity, merge/release blocking, or cancelled/skipped evidence changes. | [ci-gate-matrix-and-blocking-policy.md](../decision/ci-gate-matrix-and-blocking-policy.md) |
 | Branch protection, required reviews/checks, CODEOWNERS, bypass actors, rulesets, or merge queue changes. | [branch-protection-and-pr-governance.md](../decision/branch-protection-and-pr-governance.md) |
-| OpenAPI/sqlc generation, compatibility checks, tracked output, or docs drift changes. | [codegen-contract-and-docs-drift.md](../decision/codegen-contract-and-docs-drift.md) |
+| OpenAPI/sqlc generation, compatibility checks, or tracked output changes. | [codegen-contract-and-generated-drift.md](../decision/codegen-contract-and-generated-drift.md) |
 | Migration rehearsal, rollback class, mixed-version windows, backfill, sequencing, or migrator ownership changes. | [migration-release-safety.md](../decision/migration-release-safety.md) |
 | Dockerfile/image contents, runtime user, secrets, digest pinning, scan gates, or runtime hardening changes. | [container-runtime-hardening.md](../decision/container-runtime-hardening.md) |
 | Railway placement, health, overlap/draining, restart, capacity, promotion, rollback, or config drift changes. | [railway-release-runtime-policy.md](../decision/railway-release-runtime-policy.md) |

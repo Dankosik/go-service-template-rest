@@ -279,7 +279,7 @@ auto)
 			setup_docker
 		else
 			echo "native setup failed and docker fallback is unavailable"
-			echo "fix native issues with 'make doctor-native' or start Docker and rerun 'make setup-docker'"
+			echo "fix native issues with 'make doctor-native' or start Docker and rerun 'make template-init-docker'"
 			exit 1
 		fi
 	elif command -v docker >/dev/null 2>&1; then

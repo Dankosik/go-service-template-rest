@@ -22,13 +22,13 @@ func (value *trackedString) Set(next string) error {
 }
 
 func main() {
-	if err := runCLI(os.Args[1:], os.Stdout); err != nil {
+	if err := runCLI(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "hard skills check failed:", err)
 		os.Exit(1)
 	}
 }
 
-func runCLI(args []string, output *os.File) error {
+func runCLI(args []string) error {
 	root, err := repositoryRoot()
 	if err != nil {
 		return err
@@ -57,30 +57,8 @@ func runCLI(args []string, output *os.File) error {
 			return err
 		}
 		return checkRepository(root, skills, true)
-	case "emit-selected-evals":
-		flags := flag.NewFlagSet("emit-selected-evals", flag.ContinueOnError)
-		flags.SetOutput(os.Stderr)
-		outputDir := flags.String("output-dir", "", "directory for emitted manifest and case files")
-		if err := flags.Parse(args[1:]); err != nil {
-			return fmt.Errorf("parse emit-selected-evals flags: %w", err)
-		}
-		if flags.NArg() != 0 {
-			return fmt.Errorf("emit-selected-evals accepts no positional arguments")
-		}
-		return emitSelectedEvals(root, *outputDir)
-	case "size-report":
-		flags := flag.NewFlagSet("size-report", flag.ContinueOnError)
-		flags.SetOutput(os.Stderr)
-		baselineRef := flags.String("baseline-ref", "", "immutable baseline commit")
-		if err := flags.Parse(args[1:]); err != nil {
-			return fmt.Errorf("parse size-report flags: %w", err)
-		}
-		if flags.NArg() != 0 {
-			return fmt.Errorf("size-report accepts no positional arguments")
-		}
-		return writeSizeReport(root, *baselineRef, output)
 	default:
-		return fmt.Errorf("usage: hard-skills-check [check [--skills names] | emit-selected-evals --output-dir dir | size-report --baseline-ref commit]")
+		return fmt.Errorf("usage: hard-skills-check [check [--skills names]]")
 	}
 }
 

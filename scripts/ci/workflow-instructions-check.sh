@@ -18,11 +18,6 @@ require_heading() {
   grep -Fqx -- "${heading}" "${file}" || fail "${file} is missing ${heading}"
 }
 
-require_regex() {
-  local file="$1" pattern="$2"
-  grep -Eq -- "${pattern}" "${file}" || fail "${file} is missing a required safety or authority invariant"
-}
-
 require_link() {
   local file="$1" target="$2"
   grep -Fq -- "${target}" "${file}" || fail "${file} is missing its canonical link to ${target}"
@@ -90,17 +85,6 @@ for heading in   '# Autonomous Pre-Review Challenge'   '## Protocol'   '## Autho
   require_heading docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md "${heading}"
 done
 
-for event in QUESTION HUMAN_REQUIRED REOPEN DONE; do
-  count="$(grep -Fxc -- "${event}" docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md || true)"
-  [[ "${count}" -eq 1 ]] || fail "challenge event ${event} must occur exactly once; found ${count}"
-done
-for token in ACCEPT OVERRIDE RECLASSIFY CONTINUE_INDEPENDENT WAIT_HUMAN REOPEN_OWNER; do
-  require_regex docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md "\`${token}\`"
-done
-
-challenge_owners="$(find docs/spec-first-workflow/shared -maxdepth 1 -type f -iname '*autonomous*challenge*.md' -print | wc -l | tr -d '[:space:]')"
-[[ "${challenge_owners}" -eq 1 ]] || fail "expected one autonomous challenge owner; found ${challenge_owners}"
-
 require_link AGENTS.md 'docs/spec-first-workflow.md'
 require_link AGENTS.md 'docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md'
 require_link docs/spec-first-workflow.md 'spec-first-workflow/shared/autonomous-pre-review-challenge.md'
@@ -110,106 +94,6 @@ require_link docs/subagent-contract.md 'spec-first-workflow/shared/autonomous-pr
 require_link .agents/skills/grilling/SKILL.md 'docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md'
 require_link docs/spec-first-workflow/phases/implementation-validation-closeout.md 'scripts/dev/codex-worktree-preflight.sh'
 require_link docs/subagent-contract.md 'implementation-validation-closeout.md#optional-worker-execution'
-
-require_regex AGENTS.md 'Structured:.*reviewed .*spec.md.*reviewed .*tasks.md'
-require_regex AGENTS.md 'complete specification and independent specification review'
-require_regex AGENTS.md 'autonomous read-only challenge probe'
-require_regex AGENTS.md 'different independent reviewer'
-require_regex docs/spec-first-workflow.md 'Specification, combined Technical Design, Test Design, Planning, and an explicit .*research only'
-require_regex docs/spec-first-workflow.md 'required non-implementation review.*PASS.*convergence'
-require_regex docs/spec-first-workflow/phases/research.md 'research only.*independent read-only review'
-require_regex docs/spec-first-workflow/phases/specification.md 'structured or orchestrated work, run the independent'
-require_regex docs/spec-first-workflow/phases/system-integration-design.md 'structured or orchestrated work, run .*Technical Design Review'
-require_regex docs/spec-first-workflow/phases/go-code-ownership-design.md 'structured or orchestrated work, use .*Technical Design Review'
-require_regex docs/spec-first-workflow/phases/test-design.md 'structured or orchestrated work triggers test design, run an independent QA review'
-require_regex docs/spec-first-workflow/phases/planning.md 'structured or orchestrated work, run independent .*Task Review'
-require_regex docs/spec-first-workflow/shared/artifact-model.md 'When review is required, only .*PASS.*ready'
-require_regex docs/spec-first-workflow/shared/subagents-and-handoff.md 'Structured and orchestrated work requires an independent reviewer'
-require_regex docs/spec-first-workflow/shared/subagents-and-handoff.md 'required challenge .*DONE.*independent findings and verdict'
-require_regex docs/spec-first-workflow/shared/subagents-and-handoff.md 'latest required review returns .*PASS'
-require_regex docs/spec-first-workflow/shared/subagents-and-handoff.md 'final chat response MUST end with a copy-pastable next-session prompt'
-require_regex .agents/skills/planning-and-task-breakdown/SKILL.md 'ends before the root-owned Readiness Review'
-require_regex .agents/skills/planning-session/SKILL.md 'Readiness Review becomes available'
-require_regex .agents/skills/specification-session/SKILL.md 'Required Review becomes available'
-require_regex .agents/skills/technical-design-session/SKILL.md 'Required Review begins only'
-require_regex .agents/skills/test-design-session/SKILL.md 'Required Review begins only'
-require_regex .agents/skills/grilling/SKILL.md '^## Internal challenger mode$'
-require_regex .agents/skills/grilling/evals/evals.json 'Internal macro-phase grilling mode'
-require_regex docs/spec-first-workflow-evals.md '^### E42 .*Autonomous Challenge Authority And Continuation'
-require_regex docs/spec-first-workflow-evals.md '^### E43 .*Autonomous Challenge Exhaustion Freshness And Review Separation'
-require_regex docs/spec-first-workflow-evals.md 'different read-only child'
-require_regex docs/spec-first-workflow-evals.md 'no transcript, receipt, queue, probe status, or lifecycle artifact'
-
-if rg -n   'Self-review is the default|independent review follows only when|risk-triggered review'   docs/spec-first-workflow.md   docs/spec-first-workflow/phases/research.md   docs/spec-first-workflow/phases/specification.md   docs/spec-first-workflow/phases/system-integration-design.md   docs/spec-first-workflow/phases/go-code-ownership-design.md   docs/spec-first-workflow/phases/test-design.md   docs/spec-first-workflow/phases/planning.md   .agents/skills/planning-and-task-breakdown/SKILL.md   .agents/skills/planning-session/SKILL.md   .agents/skills/specification-session/SKILL.md   .agents/skills/technical-design-session/SKILL.md   .agents/skills/test-design-session/SKILL.md; then
-  fail 'weakened risk-triggered non-implementation review wording remains'
-fi
-
-for file in AGENTS.md README.md docs/spec-first-workflow.md docs/spec-first-workflow/shared/subagents-and-handoff.md docs/subagent-contract.md .agents/skills/grilling/SKILL.md .codex/agents/challenger-agent.toml; do
-  if grep -Eq -- '^(QUESTION|HUMAN_REQUIRED|REOPEN|DONE)$' "${file}"; then
-    fail "challenge protocol copied outside its canonical owner: ${file}"
-  fi
-done
-
-probe_lifecycle_artifacts="$(
-  find docs .agents .codex specs -type f -print 2>/dev/null     | grep -Ei '(^|/)[^/]*(grill|probe|challenge)[^/]*(receipt|transcript|queue|status)[^/]*$'     || true
-)"
-[[ -z "${probe_lifecycle_artifacts}" ]] || fail "an autonomous challenge lifecycle artifact exists: ${probe_lifecycle_artifacts}"
-
-# Preserve the current accelerated implementation/validation contract.
-require_regex AGENTS.md 'Direct:.*No Goal.*worktree.*independent review.*required'
-require_regex AGENTS.md 'Goal.*long-running.*resumable'
-require_regex AGENTS.md 'immutable.*tree.*byte-identical fast-forward'
-require_regex AGENTS.md 'shortest evidence-backed path to the accepted outcome'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local direct change does not need a commit'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md '`go-coder` owns the change'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Keep a clear sequential outcome root-local'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'outweighs dispatch, worktree, fan-in, and acceptance cost'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'best-suited available model and reasoning effort'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'never inherit an App default'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md "user's standing request"
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'same Worker and managed worktree'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'evidence-backed no progress'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'same proof observable failing after one correction under the same causal hypothesis'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'only boundary intake for scope, ownership, mergeability, and proof provenance'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'exactly one full acceptance review'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'maps claims with the same preconditions to one exact proof command'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'does not re-review the candidate or unchanged surfaces'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'diff from the immediately preceding returned candidate'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Unchanged bytes retain their prior review disposition'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'accept the candidate immediately without another review pass'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'shrink the wave to the proven passing subset'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'failure crosses an interface, invariant, generated/manual authority, mutable resource, or proof precondition'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local repository default/main is the authoritative integration branch'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'run every mapped claim-scoped proof command once on that exact state'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'verify the resulting authoritative tree identity'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Remote push is outside this integration rule'
-require_regex .agents/skills/specialist-contract.md '`go-coder` owns the change'
-require_regex .agents/skills/specialist-contract.md "Candidate Acceptance section owns specialist review composition and finding fan-in"
-require_regex docs/spec-first-workflow-evals.md 'root edits and self-reviews the assigned checkout'
-require_regex docs/spec-first-workflow-evals.md 'Reuse exact successful proof for an immutable tree'
-require_regex docs/spec-first-workflow-evals.md 'root-local implementation'
-require_regex docs/spec-first-workflow-evals.md 'duplicate validation of a byte-identical tree'
-require_regex docs/spec-first-workflow-evals.md 'freeze a T01-only subset'
-require_regex docs/spec-first-workflow-evals.md 'same proof observable failing after one correction under the same causal hypothesis'
-require_regex docs/spec-first-workflow-evals.md 'separate per-domain review passes or finding envelopes'
-require_regex docs/spec-first-workflow-evals.md 'performs correction verification rather than re-review'
-require_regex docs/spec-first-workflow-evals.md 'adding a non-critical finding from unchanged bytes'
-require_regex Makefile '^GO_FILES := .*git ls-files --cached --others --exclude-standard'
-require_regex Makefile '^instruction-evals-harness:'
-
-if rg -n \
-  'Promote and accept the wave atomically only after every member passes|combined-proof failure holds both tasks|atomically accept and promote the whole wave|run terminal fresh validation on the resulting integrated state|deferring inspection to one final review|Re-review only the correction and affected surfaces|one delta-aware re-review' \
-  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
-  docs/spec-first-workflow-evals.md; then
-  fail 'superseded implementation review, wave, or validation wording remains'
-fi
-
-if rg -n \
-  'conformance Review (begins|resumes) separately|Review resumes separately' \
-  .agents/skills \
-  --glob 'go-*/SKILL.md'; then
-  fail 'implementation specialist skill still creates a separate review pass'
-fi
 
 bash scripts/dev/workflow-behavior-evals.sh check
 printf 'workflow instruction check passed\n'

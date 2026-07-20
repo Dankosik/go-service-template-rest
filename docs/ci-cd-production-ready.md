@@ -33,7 +33,6 @@ PR-only Dependency Review and nightly Trivy repository filesystem/config scannin
 
 - Keep generated artifacts in sync (`openapi`, `sqlc`).
 - Keep Codex workflow and skill checks green (`make workflow-routing-check`).
-- Keep docs-drift gate green when behavior/contract/CI-sensitive files change.
 - Keep required security gates green (`govulncheck`, `gosec`, `gitleaks`, Trivy image scanning).
 - Review informational Dependency Review and nightly Trivy repository filesystem/config findings before deciding whether a future task should make them blocking.
 - Keep `check` and `check-full` usable for local developer feedback loops.

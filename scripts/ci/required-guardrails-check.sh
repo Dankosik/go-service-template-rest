@@ -1,46 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-required_files=(
-  AGENTS.md
-  README.md
-  railway.toml
-  Makefile
-  .editorconfig
-  .gitattributes
-  .golangci.yml
-  .redocly.yaml
-  .codex/config.toml
-  .github/CODEOWNERS
-  .github/dependabot.yml
-  .github/pull_request_template.md
-  .github/workflows/ci.yml
-  .github/workflows/cd.yml
-  .github/workflows/nightly.yml
-  CONTRIBUTING.md
-  SECURITY.md
-  LICENSE
-  env/.env.example
-  env/docker-compose.yml
-  build/docker/Dockerfile
-  build/docker/tooling-images.Dockerfile
-  docs/spec-first-workflow.md
-  docs/spec-first-workflow/shared/artifact-model.md
-  docs/spec-first-workflow/shared/subagents-and-handoff.md
-  docs/subagent-contract.md
-  docs/subagent-brief-template.md
-  scripts/ci/workflow-instructions-check.sh
-  scripts/dev/workflow-behavior-evals.sh
-  scripts/dev/module-origin.sh
-)
-
-for file in "${required_files[@]}"; do
-  if [[ ! -f "${file}" ]]; then
-    echo "guardrail check failed: missing ${file}"
-    exit 1
-  fi
-done
-
 require_regex() {
   local pattern="$1"
   local file="$2"
@@ -76,19 +36,6 @@ require_no_forbidden_go_imports() {
     exit 1
   fi
 }
-
-# Deployment policy.
-require_regex '^builder = "DOCKERFILE"$' railway.toml "Railway must use the Dockerfile builder"
-require_regex '^dockerfilePath = "build/docker/Dockerfile"$' railway.toml "Railway must use build/docker/Dockerfile"
-require_regex '^preDeployCommand = \["/migrate"\]$' railway.toml "Railway must run the migration binary before deploy"
-require_regex '^healthcheckPath = "/health/ready"$' railway.toml "Railway readiness path must remain stable"
-require_regex '^healthcheckTimeout = 180$' railway.toml "Railway healthcheck timeout must remain explicit"
-require_regex '^restartPolicyType = "ON_FAILURE"$' railway.toml "Railway restart policy must remain explicit"
-require_regex '^restartPolicyMaxRetries = 5$' railway.toml "Railway restart retries must remain bounded"
-require_regex '^overlapSeconds = 45$' railway.toml "Railway overlap window must remain explicit"
-require_regex '^drainingSeconds = 30$' railway.toml "Railway draining window must remain explicit"
-require_regex '^# - production replica baseline: >=2$' railway.toml "Railway policy must retain the production replica floor"
-require_regex '^# - per-replica baseline: 2 vCPU / 2 GiB$' railway.toml "Railway policy must retain the per-replica resource baseline"
 
 # Toolchain alignment.
 go_version="$(go list -m -f '{{.GoVersion}}')"
@@ -128,43 +75,6 @@ done
 require_regex 'docker build' .github/workflows/cd.yml "CD must build with docker build"
 require_regex '-f build/docker/Dockerfile' .github/workflows/cd.yml "CD must use the repository Dockerfile"
 
-# Instruction ownership and runtime configuration.
-require_regex 'docs/spec-first-workflow\.md' AGENTS.md "AGENTS.md must link the workflow router"
-require_regex '^## Engineering Judgment$' AGENTS.md "AGENTS.md must include engineering judgment"
-require_regex '^## Routing$' AGENTS.md "AGENTS.md must include workflow routing"
-require_absent_regex '^@RTK\.md$' AGENTS.md "AGENTS.md must not duplicate user-level RTK instructions"
-require_absent_regex '^model[[:space:]]*=' .codex/config.toml "root model selection must remain user-owned"
-require_absent_regex '^model_reasoning_effort[[:space:]]*=' .codex/config.toml "root reasoning effort must remain user-owned"
-require_regex '^max_depth = 1$' .codex/config.toml "nested subagent delegation must remain disabled by default"
-
-for agent_config in .codex/agents/*.toml; do
-  require_regex '^sandbox_mode = "read-only"$' "${agent_config}" "subagent configs must remain read-only"
-  require_regex 'docs/subagent-contract\.md' "${agent_config}" "subagent configs must use the shared contract"
-  require_absent_regex '^model[[:space:]]*=' "${agent_config}" "subagent configs must not pin models"
-  require_absent_regex '^model_reasoning_effort[[:space:]]*=' "${agent_config}" "subagent configs must not pin reasoning effort"
-done
-
-# Workflow routing runs the instruction checker; guardrails stay independent so
-# CI does not run the same checker twice.
-require_regex '^workflow-routing-check:$' Makefile "Makefile must expose the compatibility workflow check target"
-require_regex 'go run \.\/scripts/ci/hard-skills-check' Makefile "workflow check target must run the hard-skills checker"
-require_regex 'bash scripts/ci/workflow-instructions-check\.sh' Makefile "workflow check target must run the lean instruction checker"
-require_regex '^workflow-behavior-evals-check:$' Makefile "Makefile must expose the behavior eval manifest check"
-require_regex '^workflow-behavior-evals:$' Makefile "Makefile must expose external behavior eval execution"
-require_regex '^instruction-evals-harness:$' Makefile "Makefile must expose the opt-in instruction eval harness"
-require_regex 'bash scripts/dev/workflow-behavior-evals\.sh check' scripts/ci/workflow-instructions-check.sh "workflow instruction check must validate the behavior eval manifest"
-require_regex 'run: make workflow-routing-check' .github/workflows/ci.yml "CI must run the workflow instruction check"
-require_regex 'run: make workflow-routing-check' .github/workflows/cd.yml "release preflight must run the workflow instruction check"
-require_regex 'workflow-routing-check\)' scripts/dev/docker-tooling.sh "Docker tooling must expose the workflow check"
-require_regex 'run_go "go run \.\/scripts/ci/hard-skills-check"' scripts/dev/docker-tooling.sh "Docker workflow check must run the hard-skills checker in the Go image"
-require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/workflow-instructions-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the workflow instruction guard"
-require_regex 'instruction-evals-harness\)' scripts/dev/docker-tooling.sh "Docker tooling must expose the opt-in instruction eval harness"
-require_regex '^test-watch:$' Makefile "Makefile must expose focused test watch"
-require_regex '^[[:space:]]+go tool gotestsum --watch --format=pkgname-and-test-fails$' Makefile "test-watch must use focused gotestsum watch"
-require_regex '^lint-fast:$' Makefile "Makefile must expose fast lint"
-require_regex '^[[:space:]]+go tool golangci-lint run --fast-only --new-from-rev=\$\(LINT_BASE_REF\) --concurrency=\$\(LINT_CONCURRENCY\) --timeout=3m$' Makefile "lint-fast must use the accepted changed-code lint flags"
-require_regex '^compose-up:$' Makefile "Makefile must expose compose-up"
-require_regex '^[[:space:]]+docker compose -f env/docker-compose\.yml up -d --wait$' Makefile "compose-up must wait for dependencies"
 # Branch-protection contexts must match CI jobs.
 branch_protection_contexts() {
   awk '

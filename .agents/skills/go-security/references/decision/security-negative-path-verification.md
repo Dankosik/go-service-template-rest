@@ -12,7 +12,7 @@ Load this when turning security requirements into validation obligations before 
 - Test BOLA with two accounts or tenants, multiple HTTP methods, object IDs in path/query/header/body, and bulk/list endpoints when those surfaces exist.
 - Test no-side-effect behavior, not only status code: repository mutation, cache write, job enqueue, provider call, emitted secret, telemetry field, and audit/security event when relevant.
 - Use scanners for known-vulnerability and secret-detection classes, not as proof of authorization, tenant isolation, business-flow abuse, or privacy rules.
-- Tie code/config changes to repo gates when applicable: unit/integration tests, `make go-security`, `make secrets-scan`, OpenAPI checks, and targeted contract tests.
+- Tie code/config changes to repo gates when applicable: unit/integration tests, `make go-security`, `make secret-scan`, OpenAPI checks, and targeted contract tests.
 
 ## Imitate
 - "For each protected endpoint, missing auth returns `401`; valid auth with wrong tenant/object/property returns `403` or approved concealment; assertions prove no repository mutation, cache write, or job enqueue occurred." Copy the denial plus no-side-effect proof.
@@ -35,10 +35,10 @@ Load this when turning security requirements into validation obligations before 
 - Auth matrix: unauthenticated -> malformed -> authenticated wrong role/scope -> wrong tenant -> wrong object -> wrong property -> allowed.
 - Abuse matrix: body/batch/page/concurrency/retry/provider-cost dimensions -> limit -> expected denial -> no-side-effect assertion.
 - Secret/privacy proof: config rejection, raw-secret redaction, no secrets in logs or problem responses, and no sensitive data in URL/query strings.
-- Repo gates: `make go-security` for `govulncheck` and `gosec`; `make secrets-scan` for `gitleaks`; targeted Go/OpenAPI tests for behavior.
+- Repo gates: `make go-security` for `govulncheck` and `gosec`; `make secret-scan` for `gitleaks`; targeted Go/OpenAPI tests for behavior.
 
 ## Repo-Local Anchors
 - `internal/infra/http/router_test.go` includes fail-closed CORS preflight, security header, request framing, request ID, and body-limit tests.
 - `internal/config/config_test.go` includes secret policy and raw-secret redaction tests.
-- `Makefile` provides `go-security`, `secrets-scan`, `openapi-check`, `test`, and `test-race` proof commands.
+- `Makefile` provides `go-security`, `secret-scan`, `openapi-check`, `test`, and `test-race` proof commands.
 - `scripts/ci/required-guardrails-check.sh` tracks required guardrails including security policy and CI checks.

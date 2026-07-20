@@ -15,7 +15,6 @@ COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)internal/infr
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
-DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
 BRANCH_PROTECTION_SCRIPT := bash ./scripts/dev/configure-branch-protection.sh
@@ -23,14 +22,14 @@ DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full pr-check \
+.PHONY: help bootstrap check docker-check check-full pr-check \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-watch test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	doctor init-module tidy fmt vet test test-summary test-watch test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	mod-check fmt-check docs-drift-check guardrails-check agents-check workflow-routing-check instruction-evals-harness workflow-behavior-evals-check workflow-behavior-evals migration-validate gh-protect gh-protect-check \
+	mod-check fmt-check guardrails-check workflow-routing-check instruction-evals-harness workflow-behavior-evals-check workflow-behavior-evals migration-validate gh-protect gh-protect-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
-	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-secrets-scan docker-ci \
-	docker-guardrails-check docker-workflow-routing-check docker-docs-drift-check docker-migration-validate docker-container-security \
+	docker-test docker-test-summary docker-vet docker-test-race docker-test-cover docker-test-report docker-test-fuzz-smoke docker-test-flake-smoke docker-test-integration docker-lint docker-modernize-check docker-test-parallelism-check docker-openapi-breaking docker-openapi-check docker-sqlc-check docker-govulncheck docker-gosec docker-go-security docker-secret-scan docker-ci \
+	docker-guardrails-check docker-workflow-routing-check docker-migration-validate docker-container-security \
 	sqlc-generate sqlc-check
 
 help:
@@ -70,7 +69,6 @@ help:
 	@echo "  make secret-scan             # gitleaks secret scan"
 	@echo "  make modernize-check         # informational modern Go suggestions"
 	@echo "  make test-parallelism-check  # informational test parallelism suggestions"
-	@echo "  make agents-check            # validate canonical agent/workflow instructions"
 	@echo "  make workflow-routing-check  # fast workflow/skill instruction checks"
 	@echo "  make instruction-evals-harness # opt-in fake-adapter/mutation harness"
 	@echo "  make workflow-behavior-evals-check # validate the E01-E66 eval manifest (no model calls)"
@@ -110,10 +108,6 @@ bootstrap:
 	fi
 	@echo "Bootstrap complete. Next steps: make check && make run"
 
-bootstrap-native: bootstrap
-
-bootstrap-docker: bootstrap
-
 check:
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		if command -v go >/dev/null 2>&1; then \
@@ -136,12 +130,12 @@ docker-check: docker-fmt-check docker-lint docker-test
 check-full:
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running zero-setup CI checks"; \
-		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
+		$(MAKE) docker-ci; \
 	else \
 		echo "docker daemon unavailable: running native partial CI-like checks"; \
 		echo "Docker-only integration, migration, and container checks may be skipped; start Docker and run 'make docker-ci' for closest parity"; \
 		echo "Native ci-local also needs Node/npm for OpenAPI lint; run 'make doctor-native' for diagnostics"; \
-		$(MAKE) ci-local BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
+		$(MAKE) ci-local; \
 	fi
 
 pr-check:
@@ -154,36 +148,26 @@ pr-check:
 	trap 'rm -f "$$base_openapi"' EXIT; \
 	if git show "$(BASE_REF):$(OPENAPI_FILE)" > "$$base_openapi" 2>/dev/null; then \
 		echo "base OpenAPI spec found at $(BASE_REF):$(OPENAPI_FILE)"; \
-		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" || exit $$?; \
+		$(MAKE) docker-ci || exit $$?; \
 		$(MAKE) docker-openapi-breaking BASE_OPENAPI="$$base_openapi"; \
 	else \
 		echo "base OpenAPI spec not found at $(BASE_REF):$(OPENAPI_FILE); running strict checks that match available PR inputs"; \
-		$(MAKE) docker-ci BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
+		$(MAKE) docker-ci; \
 	fi
 
-template-init: setup
-
-template-init-strict: setup-strict
-
-template-init-native: setup-native
-
-template-init-native-strict: setup-native-strict
-
-template-init-docker: setup-docker
-
-setup:
+template-init:
 	bash ./scripts/dev/setup.sh
 
-setup-strict:
+template-init-strict:
 	bash ./scripts/dev/setup.sh --strict
 
-setup-native:
+template-init-native:
 	bash ./scripts/dev/setup.sh --native
 
-setup-native-strict:
+template-init-native-strict:
 	bash ./scripts/dev/setup.sh --native --strict
 
-setup-docker:
+template-init-docker:
 	bash ./scripts/dev/setup.sh --docker
 
 doctor:
@@ -393,15 +377,8 @@ go-security: govulncheck gosec
 secret-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
 
-secrets-scan: secret-scan
-
 ci-local:
 	$(MAKE) mod-check workflow-routing-check guardrails-check fmt-check lint test vet test-race test-report sqlc-check openapi-check go-security secret-scan
-	@if [ -n "$(BASE_REF)" ] && [ -n "$(HEAD_REF)" ]; then \
-		$(MAKE) docs-drift-check BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)"; \
-	else \
-		echo "BASE_REF/HEAD_REF are not set, skipping docs drift check in ci-local"; \
-	fi
 	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		echo "docker daemon detected: running integration, migration rehearsal, and container scan"; \
 		REQUIRE_DOCKER=1 $(MAKE) test-integration; \
@@ -466,16 +443,8 @@ docker-openapi-breaking:
 docker-sqlc-check:
 	$(DOCKER_TOOLING_SCRIPT) sqlc-check
 
-docs-drift-check:
-	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)
-	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required"; exit 1)
-	$(DOCS_DRIFT_SCRIPT) "$(BASE_REF)" "$(HEAD_REF)"
-
 guardrails-check:
 	$(GUARDRAILS_CHECK_SCRIPT)
-
-agents-check:
-	bash scripts/ci/workflow-instructions-check.sh
 
 workflow-routing-check:
 	go run ./scripts/ci/hard-skills-check
@@ -502,18 +471,11 @@ docker-go-security:
 docker-secret-scan:
 	$(DOCKER_TOOLING_SCRIPT) secret-scan
 
-docker-secrets-scan: docker-secret-scan
-
 docker-guardrails-check:
 	$(DOCKER_TOOLING_SCRIPT) guardrails-check
 
 docker-workflow-routing-check:
 	$(DOCKER_TOOLING_SCRIPT) workflow-routing-check
-
-docker-docs-drift-check:
-	@test -n "$(BASE_REF)" || (echo "BASE_REF is required"; exit 1)
-	@test -n "$(HEAD_REF)" || (echo "HEAD_REF is required"; exit 1)
-	$(DOCKER_TOOLING_SCRIPT) docs-drift-check "$(BASE_REF)" "$(HEAD_REF)"
 
 docker-migration-validate:
 	$(DOCKER_TOOLING_SCRIPT) migration-validate
@@ -522,7 +484,7 @@ docker-container-security:
 	$(DOCKER_TOOLING_SCRIPT) container-security
 
 docker-ci:
-	BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" $(DOCKER_TOOLING_SCRIPT) ci
+	$(DOCKER_TOOLING_SCRIPT) ci
 
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \

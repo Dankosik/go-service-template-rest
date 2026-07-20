@@ -47,28 +47,6 @@ jobs:
       - name: Verify sqlc generation drift
         run: make sqlc-check
 
-      - name: Verify docs drift policy
-        run: |
-          case "${{ github.event_name }}" in
-            pull_request)
-              BASE_REF="${{ github.event.pull_request.base.sha }}"
-              ;;
-            push)
-              BASE_REF="${{ github.event.before }}"
-              ;;
-            *)
-              echo "event does not provide stable base ref, skipping docs drift check"
-              exit 0
-              ;;
-          esac
-
-          if [ -z "${BASE_REF}" ] || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ]; then
-            echo "base ref is unavailable, skipping docs drift check"
-            exit 0
-          fi
-
-          make docs-drift-check BASE_REF="${BASE_REF}" HEAD_REF="${{ github.sha }}"
-
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10

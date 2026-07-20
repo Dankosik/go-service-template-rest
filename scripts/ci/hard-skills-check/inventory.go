@@ -46,27 +46,6 @@ var targetSkills = []string{
 	"go-verification-before-completion",
 }
 
-var baselineSkills = map[string][]string{
-	"go-api-contract":             {"go-api-contract-spec"},
-	"go-chi":                      {"go-chi-review", "go-chi-spec"},
-	"go-concurrency":              {"go-concurrency-review"},
-	"go-data-architecture":        {"go-data-architecture-spec"},
-	"go-db-cache":                 {"go-db-cache-review", "go-db-cache-spec"},
-	"go-delivery-platform":        {"go-delivery-platform-review", "go-delivery-platform-spec"},
-	"go-distributed":              {"go-distributed-review", "go-distributed-spec"},
-	"go-domain-invariant":         {"go-domain-invariant-review", "go-domain-invariant-spec"},
-	"go-idiomatic":                {"go-idiomatic-review"},
-	"go-implementation-ownership": {"go-implementation-ownership-review", "go-implementation-ownership-spec"},
-	"go-language-simplifier":      {"go-language-simplifier-review"},
-	"go-observability":            {"go-observability-review", "go-observability-spec"},
-	"go-performance":              {"go-performance-review", "go-performance-spec"},
-	"go-reliability":              {"go-reliability-review", "go-reliability-spec"},
-	"go-security":                 {"go-security-review", "go-security-spec"},
-	"go-structural-quality":       {"go-structural-quality-review"},
-	"go-system-architecture":      {"go-system-architecture-spec"},
-	"go-test-strategy":            {"go-test-design", "go-test-review"},
-}
-
 var retiredSkills = []string{
 	"api-contract-designer-spec",
 	"go-api-contract-spec",

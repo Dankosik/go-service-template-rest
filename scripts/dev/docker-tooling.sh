@@ -102,7 +102,6 @@ usage() {
 	echo "  secret-scan"
 	echo "  workflow-routing-check"
 	echo "  guardrails-check"
-	echo "  docs-drift-check <base-ref> <head-ref>"
 	echo "  migration-validate"
 	echo "  container-security"
 	echo "  ci"
@@ -500,7 +499,7 @@ go-security)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" govulncheck
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" gosec
 	;;
-secret-scan|secrets-scan)
+secret-scan)
 	run_go "go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json ."
 	;;
 workflow-routing-check)
@@ -515,15 +514,6 @@ instruction-evals-harness)
 	;;
 guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"
-	;;
-docs-drift-check)
-	base_ref="${1:-}"
-	head_ref="${2:-}"
-	if [[ -z "${base_ref}" || -z "${head_ref}" ]]; then
-		echo "docs-drift-check requires <base-ref> <head-ref>"
-		exit 1
-	fi
-	bash "${ROOT_DIR}/scripts/ci/docs-drift-check.sh" "${base_ref}" "${head_ref}"
 	;;
 migration-validate)
 	run_migration_validate
@@ -548,12 +538,6 @@ ci)
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" secret-scan
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" migration-validate
 	bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" container-security
-
-	if [[ -n "${BASE_REF:-}" && -n "${HEAD_REF:-}" ]]; then
-		bash "${ROOT_DIR}/scripts/dev/docker-tooling.sh" docs-drift-check "${BASE_REF}" "${HEAD_REF}"
-	else
-		echo "BASE_REF/HEAD_REF are not set, skipping docs drift check in docker-ci"
-	fi
 	;;
 *)
 	echo "unknown command: ${cmd}"

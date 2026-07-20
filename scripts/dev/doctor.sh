@@ -145,7 +145,7 @@ check_template_placeholders() {
 		if [[ "${origin_module}" == "${template_source_origin}" ]]; then
 			:
 		elif [[ -n "${origin_module}" && "${origin_module}" != "${template_module}" ]]; then
-			fail_optional "go.mod still uses template module path while origin points to '${origin_module}'. Run 'make init-module' (or 'make setup') to initialize module path."
+			fail_optional "go.mod still uses template module path while origin points to '${origin_module}'. Run 'make init-module' (or 'make template-init') to initialize module path."
 		else
 			fail_optional "go.mod still uses template module path. Run 'make init-module' (auto-detect) or pass MODULE explicitly."
 		fi
@@ -187,7 +187,7 @@ check_native_go() {
 		ok "Go coverage compile sanity check passed"
 	else
 		if grep -Eq 'does not match go tool version' "${coverage_check_log}"; then
-			fail_optional "Go coverage tooling mismatch detected. Run 'go clean -cache -testcache', unset GOCOVERDIR, or use 'make setup-docker'."
+			fail_optional "Go coverage tooling mismatch detected. Run 'go clean -cache -testcache', unset GOCOVERDIR, or use 'make template-init-docker'."
 		else
 			fail_optional "Go coverage compile sanity check failed. Run 'go test -covermode=atomic -run \"^$\" ./internal/api' for details."
 		fi

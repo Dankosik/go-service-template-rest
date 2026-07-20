@@ -61,7 +61,7 @@ Load this file only when a durable repository fact could change the handoff's ow
 - OpenAPI verification: `make openapi-check`
 - sqlc drift check: `make sqlc-check`
 - Integration tests: `make test-integration`
-- Security scans: `make go-security`, `make secrets-scan`
+- Security scans: `make go-security`, `make secret-scan`
 - Migration rehearsal: `make migration-validate`
 - Workflow and skill instructions: `make workflow-routing-check`
 

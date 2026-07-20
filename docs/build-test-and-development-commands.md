@@ -89,33 +89,25 @@ Bootstrap shortcuts:
     - if the base OpenAPI file does not exist, it prints that fact and runs the strict checks that can be proven from available PR inputs, matching the first-introduction case where no base contract exists.
 
 - `make template-init`
-  - Alias of `make setup`.
+  - Runs: `bash ./scripts/dev/setup.sh`
   - Purpose: template/admin initialization for newly cloned repositories.
+  - Mode choice:
+    - prefers zero-setup Docker mode when Docker daemon is reachable;
+    - falls back to native mode when Docker is unavailable and local `go` exists;
+    - if native initialization fails and Docker is available, switches to Docker mode.
   - Includes:
     - module path auto-init from `git remote origin` when needed,
     - CODEOWNERS placeholder auto-replacement (with origin inference or explicit `CODEOWNER`),
     - environment doctor checks.
 
-- `make setup`
-  - Runs: `bash ./scripts/dev/setup.sh`
-  - Purpose: template/admin initialization with mode auto-detection.
-  - Mode choice:
-    - prefers zero-setup Docker mode when Docker daemon is reachable;
-    - falls back to native mode when Docker is unavailable and local `go` exists;
-    - if native initialization fails and Docker is available, switches to Docker mode.
-  - Additional behavior:
-    - auto-initializes module path from `git remote origin` when template module is still present in `go.mod`;
-    - auto-infers `CODEOWNER` from `git remote origin` when `.github/CODEOWNERS` still has template placeholder values;
-    - applies `CODEOWNER` placeholder replacement when `CODEOWNER=@org/team` is provided explicitly.
-
-- `make template-init-strict` / `make setup-strict`
+- `make template-init-strict`
   - Runs: `bash ./scripts/dev/setup.sh --strict`
   - Purpose: same initialization behavior as `make template-init`, but strict native mode requires healthy coverage tooling.
   - Strict behavior:
     - when native coverage sanity fails, native initialization exits non-zero;
     - in auto mode, setup falls back to Docker mode when Docker is available.
 
-- `make template-init-native` / `make setup-native`
+- `make template-init-native`
   - Runs: `bash ./scripts/dev/setup.sh --native`
   - Includes:
     - create `.env` from `env/.env.example` when missing,
@@ -123,13 +115,13 @@ Bootstrap shortcuts:
     - `go mod download`,
     - `make doctor-native`.
 
-- `make template-init-native-strict` / `make setup-native-strict`
+- `make template-init-native-strict`
   - Runs: `bash ./scripts/dev/setup.sh --native --strict`
   - Includes:
     - everything from `make template-init-native`;
     - strict native coverage sanity check (`go test -covermode=atomic -run '^$' ./internal/api`) as a blocking step.
 
-- `make template-init-docker` / `make setup-docker`
+- `make template-init-docker`
   - Runs: `bash ./scripts/dev/setup.sh --docker`
   - Includes:
     - create `.env` from `env/.env.example` when missing,
@@ -437,7 +429,6 @@ Bootstrap shortcuts:
 
 - `make secret-scan`
   - Runs native `go tool gitleaks` scan over repository git history with `.gitleaks.baseline.json` for the known redacted historical finding.
-  - Compatibility alias: `make secrets-scan`.
 
 - `make ci-local`
   - Native composite check for CI-like local parity:
@@ -454,7 +445,6 @@ Bootstrap shortcuts:
     - `openapi-check`
     - `go-security`
     - `secret-scan`
-  - If `BASE_REF` and `HEAD_REF` are provided, also runs docs drift check.
   - When Docker daemon is reachable, also runs:
     - `test-integration` (`REQUIRE_DOCKER=1`)
     - `docker-migration-validate`
@@ -472,13 +462,9 @@ Bootstrap shortcuts:
 
 - `make docker-secret-scan`
   - Runs `gitleaks` through Docker tooling wrapper with the same `.gitleaks.baseline.json` as native mode.
-  - Compatibility alias: `make docker-secrets-scan`.
 
 - `make docker-guardrails-check`
   - Runs required repository guardrails check in Docker mode wrapper.
-
-- `make docker-docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
-  - Runs docs drift policy check through Docker mode wrapper.
 
 - `make docker-migration-validate`
   - Runs migration rehearsal (`up`, `down 1`, `up 1`) on ephemeral Docker Postgres.
@@ -489,6 +475,7 @@ Bootstrap shortcuts:
 - `make docker-ci`
   - Zero-setup composite check (closest local equivalent to CI gates):
     - `mod-check`
+    - `workflow-routing-check`
     - `guardrails-check`
     - `fmt-check`
     - `lint`
@@ -503,23 +490,13 @@ Bootstrap shortcuts:
     - `secret-scan`
     - `migration-validate`
     - `container-security`
-  - If `BASE_REF` and `HEAD_REF` are provided, also runs docs drift check.
   - Uses pinned tooling images from `build/docker/tooling-images.Dockerfile` for Go, Node, Postgres, migrate, and Trivy; Docker lint runs `go tool golangci-lint` inside the pinned Go image so package loading has a Go toolchain.
 
 ### CI policy helper checks
 
-- `make agents-check`
-  - Runs the existing canonical workflow instruction checker; this is an alias, not a separate checker or model evaluation.
-
-- `bash scripts/dev/hard-skills-evals.sh check`
-  - Emits and validates the deterministic nine-skill, 36-core-case manifest without calling adapters.
-
-- `WORKFLOW_EVAL_BASE_REF=<immutable-commit> WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_COST_AUTHORIZED=true bash scripts/dev/hard-skills-evals.sh run [artifact-dir]`
-  - Runs the cost-authorized comparison only after sealing every manifest-selected eval bundle from both runner snapshots. This is Stage 1 comparison plumbing, not proof of implicit router provenance or Stage 2 activation.
-
 - `make workflow-routing-check`
   - Runs the hard-skills checker and fast deterministic workflow-instruction structural checks.
-  - The compatibility target name is retained for CI stability; it does not run model, fake-adapter, or mutation coverage.
+  - It does not run model, fake-adapter, or mutation coverage.
   - Makes no external model calls.
 
 - `make instruction-evals-harness`
@@ -538,12 +515,7 @@ Bootstrap shortcuts:
 
 - `make guardrails-check`
   - Runs: `bash ./scripts/ci/required-guardrails-check.sh`
-  - Purpose: enforce required repository files, deployment/toolchain alignment, instruction ownership links, read-only subagent configuration, branch-protection context alignment, and core architecture import boundaries.
-
-- `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>`
-  - Runs: `bash ./scripts/ci/docs-drift-check.sh`
-  - Exception: isolated updates to `build/docker/tooling-images.Dockerfile` are ignored by docs-drift policy.
-  - If `build/docker/Dockerfile` changes, update docs in the same change set because the canonical container build path is CI-sensitive and reviewable by policy.
+  - Purpose: enforce derived Go/Docker toolchain, analyzer, migration-image, branch-protection, and architecture import invariants.
 
 - `make migration-validate [MIGRATION_DSN=<postgres_dsn>]`
   - Behavior:
@@ -623,11 +595,9 @@ Use the smallest check that matches the decision you are about to make:
 | Everyday edit loop | focused package test plus `make lint-fast` when useful | Match the changed package and claim; avoid full lint and full tests while iterating. |
 | Everyday pinned Docker edit loop | focused Docker test target | Use the smallest matching Docker target when a pinned environment is needed. |
 | Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make pr-check` | Strict pre-PR parity. Requires Docker and base/head refs, runs the Docker CI bundle, and checks OpenAPI breaking compatibility when the base spec exists. Replace `origin/main` with the branch or SHA GitHub will compare against. |
-| Full local baseline with fallback | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Broad local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local` and may skip Docker-only checks. |
-| Closest local CI parity | `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
-| Native fallback | `BASE_REF=origin/main HEAD_REF=HEAD make ci-local` | Requires host Go, GNU Make, Git, and Node/npx for OpenAPI lint. Docker-backed integration, migration, and container scan checks run only when Docker is reachable. |
-
-Set `BASE_REF` and `HEAD_REF` when you want the local docs-drift gate to behave like the PR/push gate. If the comparison base is not available locally, fetch it first, for example `git fetch origin main`.
+| Full local baseline with fallback | `make check-full` | Broad local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local` and may skip Docker-only checks. |
+| Closest local CI parity | `make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
+| Native fallback | `make ci-local` | Requires host Go, GNU Make, Git, and Node/npx for OpenAPI lint. Docker-backed integration, migration, and container scan checks run only when Docker is reachable. |
 
 Targeted parity checks:
 
@@ -642,7 +612,6 @@ Targeted parity checks:
 | Modern Go cleanup suggestions | `make modernize-check` or `make docker-modernize-check` |
 | Test parallelism suggestions | `make test-parallelism-check` or `make docker-test-parallelism-check` |
 | Legacy cleanup replacement proof | Targeted `rg`/read checks for retired identifiers, old routes, stale configs, fixtures, generated artifacts, docs, skills, agents, and mirrors; record removed, refactored, retained with owner/reason/proof/exit condition, or not-applicable status in the task ledger or closeout artifact. |
-| Docs drift | `BASE_REF=origin/main HEAD_REF=HEAD make docs-drift-check` or `BASE_REF=origin/main HEAD_REF=HEAD make docker-docs-drift-check` |
 | Container image scan | `make docker-container-security` |
 | Branch-protection required status context audit | `make gh-protect-check BRANCH=main` |
 | Nightly-only flake and fuzz smoke | `make test-flake-smoke` and `make test-fuzz-smoke FUZZ_TIME=60s` |
@@ -689,7 +658,7 @@ For the usual quick fmt/lint/test loop, run `make docker-check`; use the stepwis
 Main CI workflow: `.github/workflows/ci.yml`
 
 Local commands map directly to CI jobs:
-- `make mod-check` + `make workflow-routing-check` + `make guardrails-check` + `make fmt-check` + `make sqlc-check` + `make docs-drift-check BASE_REF=<base_sha> HEAD_REF=<head_sha>` -> `repo-integrity`
+- `make mod-check` + `make workflow-routing-check` + `make guardrails-check` + `make fmt-check` + `make sqlc-check` -> `repo-integrity`
 - `make lint` -> `lint`
 - `make openapi-check` -> `openapi-contract`
 - `BASE_OPENAPI=... make openapi-breaking` -> `openapi-breaking` (PR only)
@@ -730,7 +699,7 @@ CD workflow: `.github/workflows/cd.yml`
 Local checks intentionally get close to CI, but they do not replace GitHub event evidence:
 
 - PR-only `openapi-breaking` depends on `github.event.pull_request.base.sha`; locally, extract the base spec yourself and pass `BASE_OPENAPI`.
-- Docs drift and migration change detection in CI use GitHub's PR base SHA or push `before` SHA. Locally, pass `BASE_REF` and `HEAD_REF`; if they are omitted, `ci-local` and `docker-ci` skip docs drift with a message.
+- Migration change detection in CI uses GitHub's PR base SHA or push `before` SHA.
 - `migration-validate` runs conditionally in CI only when `env/migrations/` changes. `make docker-ci` runs the rehearsal unconditionally, which is stricter and avoids local change-detection drift.
 - `make ci-local` uses host Go, Node, npm, and Docker. Prefer `make docker-ci` when host tooling differs from CI or when you want pinned tooling images.
 - Docker container scans require a reachable Docker daemon and Docker socket. If the socket is unavailable, `make docker-container-security` fails instead of silently claiming scan proof.

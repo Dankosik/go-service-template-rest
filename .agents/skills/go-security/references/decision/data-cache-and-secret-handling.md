@@ -43,4 +43,4 @@ Load this when requirements touch sensitive data, privacy, data minimization, re
 - `internal/config/load_koanf.go` enforces secret-like key rejection, allowed roots, symlink rejection, write-permission checks, and config size limits outside local mode.
 - `internal/config/config_test.go` includes negative tests for secret policy, raw secret-like parse errors, symlink paths, world-writable configs, and outside-root configs.
 - `railway.toml` is documented as non-secret deployment policy; Railway variables hold secrets.
-- `Makefile` defines `go-security` using `govulncheck` and `gosec`, plus `secrets-scan` using `gitleaks`.
+- `Makefile` defines `go-security` using `govulncheck` and `gosec`, plus `secret-scan` using `gitleaks`.
