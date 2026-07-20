@@ -240,6 +240,10 @@ Bootstrap shortcuts:
   - Error boundary policy: `wrapcheck` is CI-blocking. Local cancellation probes may return `ctx.Err()` directly when cancellation is the signal being propagated; package, dependency, and HTTP startup boundaries that add operation context must wrap cancellation and deadline errors with `%w` so callers can still use `errors.Is` with `context.Canceled` and `context.DeadlineExceeded`.
   - Version rule: Go tool versions, including deadcode and NilAway, are pinned by `go.mod`. `make guardrails-check` enforces the mandatory command and coverage shape.
 
+- `make lint-fast [LINT_BASE_REF=origin/main] [LINT_CONCURRENCY=4]`
+  - Runs: `go tool golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m`
+  - Purpose: fast changed-code lint during local iteration. It does not replace the full blocking `make lint` target.
+
 - `make docker-lint`
   - Docker equivalent of the complete `make lint` target, including iface, deadcode, and NilAway.
 
@@ -270,6 +274,10 @@ Bootstrap shortcuts:
 - `make test-summary`
   - Runs: `go tool gotestsum --format=pkgname-and-test-fails -- ./...`
   - Purpose: concise unit-test output for local troubleshooting while keeping `make test` as the stable raw `go test ./...` path.
+
+- `make test-watch`
+  - Runs: `go tool gotestsum --watch --format=pkgname-and-test-fails`
+  - Purpose: watch changed-package tests without forcing an all-package `./...` run on every edit.
 
 - `make docker-test-summary`
   - Docker equivalent of `make test-summary`.
@@ -558,10 +566,28 @@ Bootstrap shortcuts:
   - Runs: `docker run --rm -p 8080:8080 --env-file .env service:local`
 
 - `make compose-up`
-  - Runs: `docker compose -f env/docker-compose.yml up -d`
+  - Runs: `docker compose -f env/docker-compose.yml up -d --wait`
+  - Purpose: start reusable local dependencies and wait until their Compose health/readiness state is available.
 
 - `make compose-down`
   - Runs: `docker compose -f env/docker-compose.yml down -v`
+
+### Fast local iteration
+
+1. Start reusable dependencies once with `make compose-up`; leave them running while iterating.
+2. Use `make test-watch` for changed-package test feedback and `make lint-fast` for changed-code lint feedback.
+3. Before handoff, use the task-appropriate terminal proof such as full `make lint`, `make test`, race, coverage, or an explicit container rebuild/teardown when those checks are required.
+
+Keep Go, Docker build, and volume caches during ordinary iteration. To investigate cache or disk behavior, run:
+
+```sh
+GODEBUG=gocachetest=1 go test ./...
+docker system df
+docker buildx du
+docker volume ls
+```
+
+Cache and volume cleanup is manual: it can slow later cold runs or delete local data. `docker system prune -a` is not a routine speed fix.
 
 ## Recommended Local Workflows
 

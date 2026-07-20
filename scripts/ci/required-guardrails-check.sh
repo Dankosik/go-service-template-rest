@@ -156,6 +156,12 @@ require_regex 'workflow-routing-check\)' scripts/dev/docker-tooling.sh "Docker t
 require_regex 'run_go "go run \.\/scripts/ci/hard-skills-check"' scripts/dev/docker-tooling.sh "Docker workflow check must run the hard-skills checker in the Go image"
 require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/instruction-evals-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the instruction eval guard"
 require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/workflow-instructions-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the workflow instruction guard"
+require_regex '^test-watch:$' Makefile "Makefile must expose focused test watch"
+require_regex '^[[:space:]]+go tool gotestsum --watch --format=pkgname-and-test-fails$' Makefile "test-watch must use focused gotestsum watch"
+require_regex '^lint-fast:$' Makefile "Makefile must expose fast lint"
+require_regex '^[[:space:]]+go tool golangci-lint run --fast-only --new-from-rev=\$\(LINT_BASE_REF\) --concurrency=\$\(LINT_CONCURRENCY\) --timeout=3m$' Makefile "lint-fast must use the accepted changed-code lint flags"
+require_regex '^compose-up:$' Makefile "Makefile must expose compose-up"
+require_regex '^[[:space:]]+docker compose -f env/docker-compose\.yml up -d --wait$' Makefile "compose-up must wait for dependencies"
 # Branch-protection contexts must match CI jobs.
 branch_protection_contexts() {
   awk '

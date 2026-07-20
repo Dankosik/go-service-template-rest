@@ -23,6 +23,7 @@ failures easier to diagnose.
   complexity or duplication back across callers.
 - Use accepted repository terms consistently across prose, code, and tests;
   surface material ambiguity before introducing another term.
+- During implementation iteration, prefer cached focused checks and keep reusable local dependencies running; reserve `-count=1`, race, coverage, full lint, container rebuild/teardown for terminal validation or specifically triggered proof, and do not routinely clean caches as a speed technique.
 
 ## Collaboration
 

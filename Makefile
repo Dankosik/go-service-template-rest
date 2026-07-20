@@ -13,6 +13,8 @@ COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
 COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 FUZZ_TIME ?= 45s
+LINT_BASE_REF ?= origin/main
+LINT_CONCURRENCY ?= 4
 DOCS_DRIFT_SCRIPT := bash ./scripts/ci/docs-drift-check.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 GUARDRAILS_CHECK_SCRIPT := bash ./scripts/ci/required-guardrails-check.sh
@@ -23,7 +25,7 @@ DOCKER_TOOLING_SCRIPT := bash ./scripts/dev/docker-tooling.sh
 
 .PHONY: help bootstrap bootstrap-native bootstrap-docker check docker-check check-full pr-check \
 	template-init template-init-strict template-init-native template-init-native-strict template-init-docker \
-	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
+	setup setup-strict setup-native setup-native-strict setup-docker doctor init-module tidy fmt vet test test-summary test-watch test-race test-cover test-cover-local test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secrets-scan ci-local run build docker-build docker-run compose-up compose-down vendor \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	mod-check fmt-check docs-drift-check guardrails-check agents-check workflow-routing-check workflow-behavior-evals-check workflow-behavior-evals migration-validate gh-protect gh-protect-check \
 	doctor-native doctor-docker docker-pull-tools docker-init-module docker-mod-check docker-fmt docker-fmt-check \
@@ -55,6 +57,8 @@ help:
 	@echo "  make sqlc-check     # SQLC generation and drift checks"
 	@echo "  make test-integration        # integration tests"
 	@echo "  make test-summary            # concise unit test summary"
+	@echo "  make test-watch              # watch changed-package tests"
+	@echo "  make lint-fast               # fast lint for changes from LINT_BASE_REF"
 	@echo "  make test-report             # coverage report and threshold"
 	@echo "  make test-flake-smoke        # shuffled repeat test smoke"
 	@echo "  make migration-validate      # migration rehearsal"
@@ -249,6 +253,9 @@ test:
 test-summary:
 	go tool gotestsum --format=pkgname-and-test-fails -- ./...
 
+test-watch:
+	go tool gotestsum --watch --format=pkgname-and-test-fails
+
 vet:
 	go vet ./...
 
@@ -353,6 +360,9 @@ lint:
 	go tool golangci-lint run --timeout=3m
 	$(MAKE) deadcode
 	$(MAKE) nilaway
+
+lint-fast:
+	go tool golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 deadcode:
 	go tool deadcode -test -tags=integration ./...
@@ -547,7 +557,7 @@ docker-run:
 	docker run --rm -p 8080:8080 --env-file .env $(SERVICE_NAME):local
 
 compose-up:
-	docker compose -f env/docker-compose.yml up -d
+	docker compose -f env/docker-compose.yml up -d --wait
 
 compose-down:
 	docker compose -f env/docker-compose.yml down -v
