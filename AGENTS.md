@@ -72,6 +72,7 @@ Before structured or orchestrated work designs against an external platform, unf
 
 ## Implementation And Evidence
 
+- During implementation, optimize for the shortest evidence-backed path to the accepted outcome. Quality means satisfying the accepted criteria with matching proof, not maximizing analysis, findings, or review passes. Review, correction, delegation, and artifacts are means, not progress by themselves; continue a loop only while it closes a criterion, resolves evidence required for acceptance, or exposes a real blocker.
 - The root may implement direct local work. Use a native Codex App Worker and managed worktree only when the routing triggers above apply or the user explicitly delegates implementation.
 - A Codex Goal is for genuinely long-running, multi-step, or resumable implementation; one root Goal spans that outcome. Do not create one for ordinary direct work or non-implementation reasoning.
 - Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. Fix defects at the narrowest shared owner proved by the reproducer.

@@ -159,6 +159,7 @@ probe_lifecycle_artifacts="$(
 require_regex AGENTS.md 'Direct:.*No Goal.*worktree.*independent review.*required'
 require_regex AGENTS.md 'Goal.*long-running.*resumable'
 require_regex AGENTS.md 'immutable.*tree.*byte-identical fast-forward'
+require_regex AGENTS.md 'shortest evidence-backed path to the accepted outcome'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local direct change does not need a commit'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md '`go-coder` owns the change'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Keep a clear sequential outcome root-local'
@@ -170,8 +171,12 @@ require_regex docs/spec-first-workflow/phases/implementation-validation-closeout
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'evidence-backed no progress'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'same proof observable failing after one correction under the same causal hypothesis'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'only boundary intake for scope, ownership, mergeability, and proof provenance'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'one full acceptance review on the frozen candidate'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'exactly one full acceptance review'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'maps claims with the same preconditions to one exact proof command'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'does not re-review the candidate or unchanged surfaces'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'diff from the immediately preceding returned candidate'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Unchanged bytes retain their prior review disposition'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'accept the candidate immediately without another review pass'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'shrink the wave to the proven passing subset'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'failure crosses an interface, invariant, generated/manual authority, mutable resource, or proof precondition'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local repository default/main is the authoritative integration branch'
@@ -187,11 +192,13 @@ require_regex docs/spec-first-workflow-evals.md 'duplicate validation of a byte-
 require_regex docs/spec-first-workflow-evals.md 'freeze a T01-only subset'
 require_regex docs/spec-first-workflow-evals.md 'same proof observable failing after one correction under the same causal hypothesis'
 require_regex docs/spec-first-workflow-evals.md 'separate per-domain review passes or finding envelopes'
+require_regex docs/spec-first-workflow-evals.md 'performs correction verification rather than re-review'
+require_regex docs/spec-first-workflow-evals.md 'adding a non-critical finding from unchanged bytes'
 require_regex Makefile '^GO_FILES := .*git ls-files --cached --others --exclude-standard'
 require_regex Makefile '^instruction-evals-harness:'
 
 if rg -n \
-  'Promote and accept the wave atomically only after every member passes|combined-proof failure holds both tasks|atomically accept and promote the whole wave|run terminal fresh validation on the resulting integrated state|deferring inspection to one final review' \
+  'Promote and accept the wave atomically only after every member passes|combined-proof failure holds both tasks|atomically accept and promote the whole wave|run terminal fresh validation on the resulting integrated state|deferring inspection to one final review|Re-review only the correction and affected surfaces|one delta-aware re-review' \
   docs/spec-first-workflow/phases/implementation-validation-closeout.md \
   docs/spec-first-workflow-evals.md; then
   fail 'superseded implementation review, wave, or validation wording remains'
