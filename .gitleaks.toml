@@ -9,4 +9,4 @@ description = "HTTP Idempotency-Key documentation examples in skill references"
 condition = "AND"
 regexTarget = "line"
 regexes = ['''Idempotency-Key:\s*"?[A-Za-z0-9_-]+''']
-paths = ['''^\.agents/skills/go-api-contract/references/(async-operations-and-webhooks|idempotency-preconditions-retries)\.md$''']
+paths = ['''^(\.agents/skills/go-api-contract|\.(agents|claude|cursor|gemini|github|opencode)/skills/api-contract-designer[-]spec)/references/(async-operations-and-webhooks|idempotency-preconditions-retries)\.md$''']

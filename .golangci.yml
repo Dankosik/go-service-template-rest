@@ -33,6 +33,7 @@ linters:
     - cyclop
     - gocritic
     - gocognit
+    - iface
     - loggercheck
     - makezero
     - musttag
@@ -77,6 +78,12 @@ linters:
           - gocognit
           - nestif
   settings:
+    iface:
+      enable:
+        - identical
+        - unused
+        - opaque
+        - unexported
     depguard:
       rules:
         app_domain_no_adapters:

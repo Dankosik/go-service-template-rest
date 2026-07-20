@@ -100,6 +100,29 @@ require_regex '^!env/migrations$' .dockerignore "Docker context must include mig
 require_regex '^!env/migrations/\*\*$' .dockerignore "Docker context must include nested migration files"
 require_absent_regex 'golangci/golangci-lint:' build/docker/tooling-images.Dockerfile "Docker lint must use the Go toolchain dependency"
 
+require_regex '^[[:space:]]+- iface$' .golangci.yml "golangci-lint must enable iface"
+for analyzer in identical unused opaque unexported; do
+  require_regex "^[[:space:]]+- ${analyzer}$" .golangci.yml "iface must enable ${analyzer}"
+done
+require_regex '^lint:$' Makefile "Makefile must expose the required lint target"
+require_regex '^[[:space:]]+\$\(MAKE\) deadcode$' Makefile "lint must run deadcode"
+require_regex '^[[:space:]]+\$\(MAKE\) nilaway$' Makefile "lint must run NilAway"
+require_regex '^deadcode:$' Makefile "Makefile must expose deadcode"
+require_regex 'go tool deadcode -test -tags=integration \./\.\.\.' Makefile "deadcode must cover tests and integration-tagged code"
+require_regex '^nilaway:$' Makefile "Makefile must expose NilAway"
+require_regex 'module_path="\$\$\(go list -m\)"' Makefile "NilAway must derive the first-party package prefix from go.mod"
+require_regex 'go tool nilaway -include-pkgs="\$\$module_path" -test \./\.\.\.' Makefile "NilAway must cover current-module production and test code"
+require_absent_regex 'go tool nilaway -include-pkgs=github\.com/example/go-service-template-rest' Makefile "NilAway must not retain the template module path"
+require_absent_regex 'exclude-test-files|-test=false' Makefile "NilAway test analysis must not be disabled"
+require_regex '^[[:space:]]+golang\.org/x/tools/cmd/deadcode$' go.mod "go.mod must register deadcode as a Go tool"
+require_regex '^[[:space:]]+go\.uber\.org/nilaway/cmd/nilaway$' go.mod "go.mod must register NilAway as a Go tool"
+require_regex '^[[:space:]]+go\.uber\.org/nilaway v0\.0\.0-20260717202641-aacdd5a364bf // indirect$' go.mod "NilAway must stay pinned to the accepted revision"
+require_regex 'run_go "GOLANGCI_LINT_CACHE=/workspace/\.cache/golangci-lint make lint"' scripts/dev/docker-tooling.sh "Docker lint must route through make lint"
+for workflow in .github/workflows/ci.yml .github/workflows/nightly.yml .github/workflows/cd.yml; do
+  require_regex 'run: make lint' "${workflow}" "${workflow} must run the fail-closed repository lint target"
+  require_absent_regex 'golangci/golangci-lint-action' "${workflow}" "${workflow} must not bypass the repository lint target"
+done
+
 require_regex 'docker build' .github/workflows/cd.yml "CD must build with docker build"
 require_regex '-f build/docker/Dockerfile' .github/workflows/cd.yml "CD must use the repository Dockerfile"
 
