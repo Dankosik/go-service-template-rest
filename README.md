@@ -33,21 +33,23 @@ intake -> research -> specification -> system/integration design -> Go ownership
 The workflow chooses among three paths:
 
 - `direct`: clear, small, reversible work with obvious ownership and proof;
-- `structured`: work that needs a durable decision, proof design, or ledger; it creates only that artifact;
-- `orchestrated`: work that genuinely needs resumable coordination, isolation, parallelism, or separate context.
+- `structured`: the normal non-trivial case, with reviewed `spec.md` and `tasks.md` plus only the design/test artifacts that carry live decisions;
+- `orchestrated`: broad, hard-to-reverse, multi-owner, evidence-heavy, explicitly multi-agent, or multi-session work.
 
 Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require full-depth work or a durable artifact in every phase.
 
-Direct work is local: the root may edit the assigned checkout, self-review the bounded diff, and run focused proof without a Goal, Worker, worktree, durable artifact, or independent review. Structured work applies only the phases whose decisions are live. Independent review is triggered only by an explicit request or a high-impact, hard-to-reverse, cross-owner, or weakly falsifiable decision; otherwise self-review is sufficient. An App Worker/worktree and a Goal are optional execution tools for real isolation, parallelism, dirty-checkout conflict, separate context, or long-running resumable work. Explicit user grilling is a root-to-user dialogue, not a workflow gate.
+Structured and orchestrated work evaluates every phase boundary in order. The owning macro phases are specification, technical design, test design, planning, and implementation/validation/closeout; intake and research support the owning phase unless the user names `research only`, which makes the fixed synthesis its own independently reviewed macro-phase outcome. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Required non-implementation reviews need a fresh `PASS`; `CONCERNS` stays for disposition/re-review and `FAIL` for repair/reopen. Implementation retains the current local/direct and optional Worker contract in [AGENTS.md](AGENTS.md#implementation-and-evidence) and [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md). An explicitly requested independent review of completed implementation is a separate read-only request. A next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
+
+Before each applicable non-implementation review, the root runs one autonomous read-only grilling probe against the completed candidate, records material dispositions in that candidate, and then uses a different child for the required review. This applies once to Specification, combined Technical Design, Test Design, Planning, and explicit `research only`; it does not add probes to supporting steps, direct work, or Implementation. Explicit user-requested grilling remains a root-to-user dialogue. See [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md).
 
 ### Artifacts
 
 | Artifact | Use when | Owns |
 | --- | --- | --- |
-| `spec.md` | A behavior or authority decision must survive into later work. | Outcome, behavior, invariants, constraints, risks, proof expectations. |
+| `spec.md` | Required for structured/orchestrated work; optional for direct work. | Outcome, behavior, invariants, constraints, risks, proof expectations. |
 | `design/` | Implementation would otherwise choose mechanism or ownership. | Contracts, source of truth, sequence/failures, data, rollout, Go package/file ownership. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations and observables. |
-| `tasks.md` | Multiple steps, owners, or a later session need an executable ledger. | Executable order, owners, proof, progress, completion condition. |
+| `tasks.md` | Required for structured/orchestrated work; direct work may plan inline. | Executable order, owners, proof, progress, completion condition. |
 | `research/` | Evidence must be reused, refreshed, or audited. | Findings, limits, conflicts, decision impact. |
 | `rollout.md` | Deployment/migration/backfill has a real sequence. | Operational gates, rollback/failback, observables. |
 | `workflow-plan.md` | Cross-session or multi-lane resume needs a control point. | Goal, current phase, active artifacts, blocker, next action. |
@@ -64,9 +66,9 @@ Useful commands:
 make workflow-behavior-evals-check
 ```
 
-The behavior-eval check validates the E01–E17 manifest only. The slower adapter/mutation harness is opt-in through `make instruction-evals-harness`; both are documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The behavior-eval check validates the E01–E66 manifest only. The slower adapter/mutation harness remains opt-in through `make instruction-evals-harness`; both are documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
-Use a read-only subagent lane only when it improves a concrete research or review question. Keep tightly coupled reasoning local. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns optional handoff lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) owns optional Worker execution and root diff inspection.
+In non-implementation macro phases, evaluate whether concrete, independent, bounded research or review lanes improve evidence or review independence. Use only useful read-only subagent lanes and keep tightly coupled reasoning local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns those lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) retains its current optional Worker and root-review boundary.
 
 Representative agents:
 
@@ -80,7 +82,7 @@ Representative agents:
 | `reliability-agent` | timeouts, retries, overload, lifecycle |
 | `qa-agent` | test obligations and validation readiness |
 | `quality-agent` | idiomatic Go and structural simplification |
-| `challenger-agent` | focused challenge when explicitly useful |
+| `challenger-agent` | focused challenge or internal pre-review grilling probe |
 
 Representative workflow skills:
 

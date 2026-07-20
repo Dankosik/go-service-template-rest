@@ -1,12 +1,13 @@
 # Technical Design Review
 
-Apply the shared [Review Independence](../shared/subagents-and-handoff.md#independent-review) contract. This file supplies only design-specific falsification lenses and verdict consequences; it does not define another workflow phase.
+Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract. This file supplies only design-specific falsification lenses and verdict consequences; it does not define another workflow phase.
 
 ## Read When
 
 - The user requests independent design review.
+- Structured or orchestrated work has triggered and completed technical design.
 - Design is high-impact, hard to reverse, cross-owner, or difficult for the author to falsify.
-- A semantic repair after prior independent findings needs confirmation that a prior blocker is closed.
+- A repaired design needs confirmation that a prior blocker is closed.
 
 ## Inputs
 

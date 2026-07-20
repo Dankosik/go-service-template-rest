@@ -1,6 +1,6 @@
 # Subagent Contract
 
-Optional subagents answer narrow read-only research, challenge, and review questions. The root owns task scope, synthesis, integration, task acceptance, and final claims. The root may implement directly; a Worker is an optional isolated execution lane described by the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution).
+Built-in subagents answer narrow read-only research, challenge, and review questions outside implementation/validation/closeout. The root owns task scope, synthesis, integration, task acceptance, and final claims. Direct implementation remains root-local by default; a Worker is an optional isolated execution lane described by the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution). An explicitly requested independent review of completed implementation is a separate read-only boundary after that macro phase.
 
 ## Use
 
@@ -14,7 +14,7 @@ Default to at most three concurrent lanes, one bounded wave, and no nested deleg
 - No built-in subagent lane runs inside implementation/validation/closeout for acceptance, final-diff review, specialist analysis, or re-review.
 - A lane does not broaden scope, invent missing policy, edit workflow authority, approve its own repair, or claim task completion.
 - Missing input returns to the root with the smallest useful question or reopen owner.
-- Grilling is used only when explicitly requested; it does not create a workflow gate or verdict authority.
+- Internal macro-phase grilling follows the canonical [Autonomous Pre-Review Challenge](spec-first-workflow/shared/autonomous-pre-review-challenge.md); this contract adds no second protocol or verdict authority.
 
 ## Evidence
 

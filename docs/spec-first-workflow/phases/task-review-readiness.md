@@ -1,12 +1,13 @@
 # Task Review / Readiness
 
-Apply the shared [Review Independence](../shared/subagents-and-handoff.md#independent-review) contract. This file supplies only ledger-specific falsification lenses and verdict consequences; it does not define another workflow phase.
+Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract. This file supplies only ledger-specific falsification lenses and verdict consequences; it does not define another workflow phase.
 
 ## Read When
 
 - The user requests independent plan/readiness review.
+- Structured or orchestrated work has a completed implementation ledger.
 - Implementation is high-impact, broad, delegated, hard to reverse, or otherwise difficult for the planner to falsify.
-- A semantic repair after prior independent findings needs confirmation that a prior blocker is closed.
+- A repaired ledger needs confirmation that a prior blocker is closed.
 
 ## Inputs
 

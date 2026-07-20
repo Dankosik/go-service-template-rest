@@ -46,9 +46,9 @@ Load this file only when a durable repository fact could change the handoff's ow
   - canonical local skill source
 
 ## Workflow Facts That Often Matter
-- Route work directly, structurally, or through orchestration only when its real ownership, persistence, isolation, or coordination need requires it.
+- Non-trivial work is orchestrator-first and spec-first.
 - Subagents are read-only research/review lanes.
-- Create a ledger only for dependency order or resume; direct work may plan inline.
+- Planning should be explicit before coding.
 - Validation claims need current claim-scoped evidence; exact immutable-tree proof remains reusable when its relevant preconditions are unchanged.
 - Generated artifacts are first-class and drift-checked.
 
