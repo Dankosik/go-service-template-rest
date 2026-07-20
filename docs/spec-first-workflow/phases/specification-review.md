@@ -1,7 +1,7 @@
 # Specification Review
 
 Apply the shared [Review
-Independence](../shared/subagents-and-handoff.md#review-independence) contract.
+Independence](../shared/subagents-and-handoff.md#independent-review) contract.
 That shared contract owns the generic review envelope and convergence; this file
 supplies only Specification-specific affected-surface reconstruction,
 falsification lenses, finding fields, and verdict consequences.
@@ -9,10 +9,10 @@ falsification lenses, finding fields, and verdict consequences.
 ## Read When
 
 - The user requests an independent spec review.
-- Structured or orchestrated work has a completed specification.
 - The spec is high-impact, hard to reverse, ambiguous, cross-owner, or otherwise
   difficult for its author to falsify credibly.
-- A repaired spec needs confirmation that a prior blocker is closed.
+- A semantic repair after prior independent findings needs confirmation that a
+  blocker is closed.
 
 ## Inputs
 

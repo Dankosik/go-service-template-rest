@@ -86,7 +86,7 @@ An unverified cross-region or otherwise remote latency-sensitive path is a block
 
 ## Fan-Out And Review
 
-At phase entry, identify the materially affected domains: architecture/topology, domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Apply each matching method locally by default. A separate lane is triggered only for one concrete bounded independent question that can change a material design decision or its required evidence, under the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision). Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
+At phase entry, identify the materially affected domains: architecture/topology, domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Apply each matching method locally by default. A separate lane is triggered only for one concrete bounded independent question that can change a material design decision or its required evidence, under the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation). Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
 
 Parallelize only concrete bounded questions that can be answered independently and can change a material design decision or its required evidence; keep dependent decisions sequential and synthesize all results before selecting the mechanism.
 

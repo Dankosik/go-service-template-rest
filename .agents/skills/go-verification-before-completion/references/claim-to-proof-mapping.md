@@ -9,10 +9,10 @@ Load this for fuzzy positive claims such as "fixed", "tests pass", "green", "rea
 ## Decision Rubric
 - First quote the exact positive claim you are about to make.
 - Bind its nouns to a proof dimension: focused behavior, package behavior, repository tests, build, lint, vet, race detector, or composite readiness.
-- Choose the smallest command that directly proves that dimension for the named scope.
+- Default to focused changed-surface proof; choose a broad command only when the named claim needs its broader scope.
 - For "ready", "merge", "handoff", or "green" claims, use the union of changed-surface checks. A readiness claim is rarely proven by one command.
 - If the command proves only part of the claim, either run the missing proof or narrow the conclusion.
-- Use `-count=1` when freshness requires executed test bodies, not merely a cache-valid package result.
+- Use `-count=1` only when freshness requires executed test bodies, not merely a cache-valid package result.
 
 ## Imitate
 | Claim | Choose | Copy this behavior |
@@ -36,7 +36,7 @@ Load this for fuzzy positive claims such as "fixed", "tests pass", "green", "rea
 ## Agent Traps
 - `go test` without `./...` can only prove the current package context.
 - `go test ./...` output may include cached packages. That can support a cache-valid broad test claim, but not a claim that every test body just executed.
-- `make check` proves this repo's quick fmt, lint, and test set. It is not the same as generated API, migration, security, or full CI-like proof.
+- `make check` proves this repo's broad local fmt, lint, and test baseline. It is not the same as generated API, migration, security, or full CI-like proof.
 - `make check-full` can still print local skip messages for Docker-backed checks when Docker is unavailable. Carry those gaps into the conclusion.
 - If command names feel stale, inspect `Makefile` and `docs/build-test-and-development-commands.md` instead of guessing.
 

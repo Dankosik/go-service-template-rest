@@ -122,7 +122,7 @@ Review](specification-review.md) only when the user requests it or the decision
 is high-impact, hard to reverse, cross-owner, or weakly falsifiable.
 
 Use the shared [Review
-Independence](../shared/subagents-and-handoff.md#review-independence) contract for
+Independence](../shared/subagents-and-handoff.md#independent-review) contract for
 disposition, repair, and convergence.
 
 ## Stop Rule

@@ -38,6 +38,10 @@ Move when the next action can proceed without inventing behavior, ownership, mec
 
 An authorized end-to-end request may cross any needed steps in one session. Stop only for a named boundary, missing user or external authority, a decision-changing contradiction, or a real need for durable coordination not yet recorded. Use [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence or resume; use [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only when a separate read-only lane or handoff is useful. Explicit user grilling uses the `grilling` skill; it is not a default review stage.
 
+## Implementation Input Closure
+
+A decision-changing external, configuration, or proof input on the current completion path must be canonical, mechanically derivable, or currently available. Otherwise narrow the current outcome or mark it blocked, naming its owner, source, required shape, and earliest checkpoint. This fail-closed rule does not itself create an artifact, lane, or review.
+
 ## Prompt Maintenance
 
 Preserve outcome, authority, success criteria, proof, and stop conditions. Change one instruction group at a time and run the fast instruction checks. Run model or mutation harnesses only when their implementation or selected fixtures change.

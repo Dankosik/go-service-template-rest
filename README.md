@@ -66,7 +66,7 @@ make workflow-behavior-evals-check
 
 The behavior-eval check validates the E01–E12 manifest only. The slower adapter/mutation harness is opt-in through `make instruction-evals-harness`; both are documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
-Use a read-only subagent lane only when it improves a concrete research or review question. Keep tightly coupled reasoning local. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns optional handoff lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) owns optional Worker execution and root diff inspection.
+Use a read-only subagent lane only when it improves a concrete research or review question. Keep tightly coupled reasoning local. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns optional handoff lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) owns optional Worker execution and root diff inspection.
 
 Representative agents:
 
@@ -100,7 +100,7 @@ Domain spec and review skills cover API/chi, data/cache, distributed consistency
 
 ## Orchestrator Model
 
-The root owns orchestration and final claims under [AGENTS.md](AGENTS.md); the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) owns optional Worker execution and the root acceptance boundary.
+The root owns orchestration and final claims under [AGENTS.md](AGENTS.md); the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) owns optional Worker execution and the root acceptance boundary.
 
 For multi-session work, a compact task bundle may look like:
 

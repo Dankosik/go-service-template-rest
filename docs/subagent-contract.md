@@ -1,6 +1,6 @@
 # Subagent Contract
 
-Optional subagents answer narrow read-only research, challenge, and review questions. The root owns task scope, synthesis, integration, task acceptance, and final claims. The root may implement directly; a Worker is an optional isolated execution lane described by the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution).
+Optional subagents answer narrow read-only research, challenge, and review questions. The root owns task scope, synthesis, integration, task acceptance, and final claims. The root may implement directly; a Worker is an optional isolated execution lane described by the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution).
 
 ## Use
 

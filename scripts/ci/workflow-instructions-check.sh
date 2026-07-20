@@ -54,7 +54,7 @@ require_link AGENTS.md 'docs/spec-first-workflow.md'
 require_link docs/spec-first-workflow.md 'spec-first-workflow/shared/artifact-model.md'
 require_link docs/spec-first-workflow.md 'spec-first-workflow/shared/subagents-and-handoff.md'
 require_link docs/spec-first-workflow/phases/implementation-validation-closeout.md 'scripts/dev/codex-worktree-preflight.sh'
-require_link docs/subagent-contract.md 'implementation-validation-closeout.md#worker-execution'
+require_link docs/subagent-contract.md 'implementation-validation-closeout.md#optional-worker-execution'
 
 # These patterns protect authority and fail-closed boundaries without pinning
 # explanatory prose or phase-specific implementation detail.

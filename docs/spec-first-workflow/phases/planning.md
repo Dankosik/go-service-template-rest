@@ -84,7 +84,7 @@ Use focused self-review by default. Trigger independent [Task Review / Readiness
 
 Repair planning-owned findings directly. Reopen an earlier owner when a task would need to choose product behavior, source of truth, runtime mechanism, package ownership, test strategy, or rollout policy.
 
-Task review, planning-owned repair, and fresh re-review are internal checkpoints in the same root session. They do not produce a next-session prompt.
+When independent review is triggered, its planning-owned repair and any needed fresh re-review are internal checkpoints in the same root session. Otherwise focused self-review closes the plan. Neither path produces a next-session prompt.
 
 ## Stop Rule
 
