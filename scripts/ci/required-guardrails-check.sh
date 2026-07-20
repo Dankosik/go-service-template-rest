@@ -105,6 +105,8 @@ for analyzer in identical unused opaque unexported; do
   require_regex "^[[:space:]]+- ${analyzer}$" .golangci.yml "iface must enable ${analyzer}"
 done
 require_regex '^lint:$' Makefile "Makefile must expose the required lint target"
+require_regex '^GO_FILES := .*git ls-files --cached --others --exclude-standard' Makefile "Go file discovery must avoid walking ignored work directories during every make invocation"
+require_absent_regex '^GO_FILES := .*find \.' Makefile "Go file discovery must not recursively scan the whole checkout"
 require_regex '^[[:space:]]+\$\(MAKE\) deadcode$' Makefile "lint must run deadcode"
 require_regex '^[[:space:]]+\$\(MAKE\) nilaway$' Makefile "lint must run NilAway"
 require_regex '^deadcode:$' Makefile "Makefile must expose deadcode"
