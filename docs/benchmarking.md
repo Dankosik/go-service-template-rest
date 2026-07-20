@@ -30,6 +30,100 @@ appears. Give each evidence set a stable workload identifier: a short name for
 the fixture, state, and operation that can be compared without recording
 secrets.
 
+## Choose the execution environment
+
+Prefer DigitalOcean when `doctl` is already installed and its selected context
+is authorized. If either condition is false, stop the remote path and run the
+matching local command: `make bench*` for Go and in-process HTTP,
+`make bench-db*` for real PostgreSQL, or `make bench-http` for external HTTP.
+Do not install `doctl`, start authentication, create an account, or provision a
+Droplet unless the user explicitly asks. An unavailable DigitalOcean account
+is an expected local-fallback condition, not a successful remote proof. Local
+Docker or service prerequisites still fail closed when the chosen benchmark
+requires them.
+
+## Remote execution on DigitalOcean
+
+Use `scripts/dev/benchmark-remote.sh` when the laptop is unsuitable or a stable
+Linux execution environment is required. The script provisions an ephemeral
+CPU-Optimized DigitalOcean Droplet, protects SSH with a caller-CIDR Cloud
+Firewall attached by tag at Droplet creation, transfers tracked and non-ignored
+local source without `.git` or ignored secrets, executes the existing benchmark
+targets, downloads `.artifacts/bench`, and deletes the billable resource. It
+never uploads source to GitHub and never sends the DigitalOcean token to the
+Droplet.
+
+Run the read-only preflight before any paid operation:
+
+```bash
+make benchmark-remote-check
+scripts/dev/benchmark-remote.sh list
+scripts/dev/benchmark-remote.sh image-list
+```
+
+`list` reports the Team-wide count of existing `bench-...` runners in every
+power state, because powering off does not stop billing. It is a
+capacity check, not a scheduler: every `create` or `run` provisions a new
+Droplet. Give each concurrent session its own `DO_BENCH_STATE_FILE`; one state
+file owns one Droplet, firewall, and tag. Different repository working
+directories have distinct default paths, while concurrent sessions in one
+working directory must set distinct paths and must never operate another
+service's state. See the runner skill for the canonical ownership and resource
+limit procedure.
+
+When repeated fresh-Droplet startup time matters, build the optional reusable
+snapshot once and source its generated, non-secret image reference before
+preflight or execution:
+
+```bash
+DO_BENCH_CONTEXT=benchmarks-image-builder make benchmark-remote-image
+source .artifacts/bench/remote/golden-image.env
+export DO_BENCH_CONTEXT=benchmarks
+make benchmark-remote-check
+```
+
+The snapshot contains only generic OS benchmark dependencies; source, module
+caches, environment files, and API credentials are removed or never uploaded.
+It skips repeated package installation but does not change the benchmark
+harness or permit comparison across different Droplets. Snapshot creation and
+retention are paid external writes and require the token and lifecycle
+procedure in the runner skill. A temporary least-privilege builder context is
+recommended; an existing Full Access context also works when the user
+explicitly authorizes that broader credential. The public Ubuntu path remains
+the automatic fallback when no snapshot is configured.
+
+For one remote result:
+
+```bash
+scripts/dev/benchmark-remote.sh run -- \
+  make bench BENCH_PACKAGE=./internal/app/orders \
+  BENCH_PATTERN=BenchmarkCalculateTotal \
+  BENCH_WORKLOAD_ID=orders-100-lines
+```
+
+For a before/after claim, retain one Droplet and use `create`, `sync`, `exec`,
+`fetch`, and `destroy`; run both sides on that Droplet. `sync` preserves remote
+benchmark artifacts while replacing source, and remote metadata retains the
+local revision, dirty state, and exact SHA-256 transferred-source fingerprint
+without copying `.git`. Do not compare raw results from different ephemeral
+Droplets even when their size slug matches.
+
+For decision-grade external HTTP capacity, use two same-region/VPC runners with
+different `DO_BENCH_STATE_FILE` values: one target and one k6 generator. Allow
+the target port only from the generator private IP with `allow-from-state`, and
+monitor both hosts. The pinned scenario retains p95 and p99 trend statistics;
+declare the percentile thresholds that decide acceptance before the run. One
+shared host is sufficient only for scenario wiring or
+bounded low load because the service and generator contend for the same CPU and
+network.
+
+The canonical operational procedure, least-privilege token scopes, SSH setup,
+cost model, two-host HTTP sequence, evidence boundary, failure recovery, and
+cleanup commands live in the
+[`digitalocean-benchmark-runner`](../.agents/skills/digitalocean-benchmark-runner/SKILL.md)
+skill. Creating or retaining a Droplet is an external paid write. Powering it
+off does not stop billing; `destroy` does.
+
 ## Go and in-process HTTP benchmarks
 
 Put `BenchmarkXxx` beside the package and code it measures. Use `B.Loop` for
@@ -88,6 +182,12 @@ make bench \
   BENCH_TIME=2s
 ```
 
+The command performs an untimed compile-only warm-up before capture and resolves
+the pinned `benchstat` tool before writing a comparison. A first run may take
+longer while Go downloads modules or the tool, but those messages do not enter
+the raw benchmark or comparison artifacts. This does not warm application or
+dependency state; declare and prepare that state as part of the workload.
+
 Capture both sides on the same testbed:
 
 ```bash
@@ -110,7 +210,8 @@ workload identity, dependency image, schema fingerprint, CPU identity/count, or
 `.artifacts/bench/`:
 
 - `baseline.txt` and `current.txt`: raw Go benchmark output;
-- adjacent `.meta` files: revision, dirty state, settings, and Go environment;
+- adjacent `.meta` files: revision, dirty state, exact source fingerprint,
+  settings, and Go environment;
 - `comparison.txt`: the `benchstat` report.
 
 `BENCH_COUNT=10` is a comparison-ready default, not an acceptance policy.
@@ -185,6 +286,7 @@ The repository pins Grafana k6 by version and image digest and provides
 - applies an explicit request timeout;
 - fails on the configured latency percentile, error-rate, correctness, or
   dropped-iteration budget;
+- retains p95 and p99 trend statistics in the aggregate result;
 - discards response bodies after the HTTP layer has consumed them;
 - writes the aggregate summary, console log, and run metadata under
   `.artifacts/bench/http/`.
@@ -320,11 +422,19 @@ When benchmark infrastructure itself changes, run:
 make benchmark-infra-check
 ```
 
-This fail-closed smoke executes the Go capture and pinned `benchstat` comparison
+This fail-closed smoke executes a hermetic create/sync/reconcile/destroy test of
+the DigitalOcean lifecycle, the Go capture and pinned `benchstat` comparison
 path, verifies PostgreSQL image provenance, then has pinned k6 inspect both the
 steady and ramping scenario configurations. It proves wiring and validation
 only; its deliberately tiny stdlib samples are not performance evidence and it
-does not need a running service.
+does not create cloud resources or need a running service.
+
+Before relying on a benchmark level in a derived service, run one bounded live
+smoke for that level. In particular, verify that Testcontainers can start the
+real PostgreSQL dependency, that each profile type the service will use can be
+opened by the matching Go tool, and that k6 can reach a real disposable target.
+This adoption smoke is not a CI gate and its results are not service performance
+evidence.
 
 ## References
 

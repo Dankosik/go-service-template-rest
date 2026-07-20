@@ -123,11 +123,17 @@ Why: separates runtime code from build/deploy concerns and keeps `internal/` foc
 Repository automation is deliberately small.
 
 Current owners:
+
 - `scripts/init-module.sh`: the single template initialization mutation.
 - `scripts/ci/template-init-check.sh`: isolated contract proof for initialization.
 - `scripts/ci/generated-drift-check.sh`: OpenAPI and SQLC derived-output comparison.
 - `scripts/dev/benchmark.sh`: benchmark execution, metadata, comparison, and
   digest-pinned k6 HTTP load.
+- `scripts/dev/benchmark-remote.sh`: ephemeral DigitalOcean provisioning,
+  reusable snapshot creation, safe source transfer, remote execution, evidence
+  return, and paid-resource cleanup.
+- `scripts/dev/benchmark-remote-check.sh`: hermetic remote lifecycle, snapshot,
+  and recovery proof without cloud writes.
 
 The Makefile owns composition. Go and Node checks use the host toolchain;
 Docker remains only for runtime dependencies, integration and migration proof,

@@ -200,6 +200,7 @@ if (config.stages === null) {
 
 export const options = {
   discardResponseBodies: true,
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)', 'count'],
   scenarios: {
     single_flow: scenario,
   },

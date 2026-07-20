@@ -216,6 +216,27 @@ Useful entry points:
 - `make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state>` / `make bench-db-compare` — real PostgreSQL benchmarks with pinned server/schema/workload provenance
 - `make bench-http` — thresholded steady, stress, spike, or soak HTTP load with digest-pinned k6 and `.env.bench`
 - `make benchmark-infra-check` — executable smoke for Go capture, benchstat, PostgreSQL provenance, and both k6 executor modes
+- `make benchmark-remote-check` — read-only DigitalOcean/doctl, SSH key, region, image, size, and current-price preflight
+- `make benchmark-remote-image` — explicitly paid one-time build of a reusable DigitalOcean snapshot for faster Droplet startup
+- `scripts/dev/benchmark-remote.sh` — ephemeral CPU-Optimized Droplet execution for private local source, including same-host comparison and two-host HTTP load
+
+DigitalOcean is the preferred benchmark environment only when `doctl` is
+already installed and authorized. Otherwise do not install it, start login, or
+create an account automatically; use the matching local `make bench*` command.
+Local execution is the supported fallback for template users without a
+DigitalOcean account. Missing local prerequisites such as Docker remain an
+explicit blocker for the benchmark level that needs them.
+
+Users who explicitly opt in can follow the tested
+[DigitalOcean account, `doctl`, SSH/Keychain, Tier 1 smoke, and cleanup
+onboarding](.agents/skills/digitalocean-benchmark-runner/references/digitalocean.md#account-and-workstation-onboarding).
+The guide separates human-only token/passphrase entry from commands an agent
+may run, and never treats Shared-CPU smoke numbers as performance evidence.
+Its optional [golden snapshot
+path](.agents/skills/digitalocean-benchmark-runner/references/digitalocean.md#reusable-golden-snapshot)
+preinstalls the stable OS dependencies once. The normal public Ubuntu image
+remains the fallback; building or retaining a snapshot is never required for
+local users and is never performed without explicit paid-write authorization.
 
 `make migration-validate` requires either `MIGRATION_DSN` or a reachable Docker
 daemon; it never reports a missing proof path as a successful skip. See

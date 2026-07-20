@@ -82,20 +82,58 @@ schema_fingerprint() {
 	} | git hash-object --stdin
 }
 
+repository_files() {
+	local file
+
+	while IFS= read -r -d '' file; do
+		if [[ -e "${file}" || -L "${file}" ]]; then
+			printf '%s\0' "${file}"
+		fi
+	done < <(git ls-files --cached --others --exclude-standard -z)
+}
+
+repository_fingerprint() {
+	local file mode object_id
+
+	{
+		while IFS= read -r -d '' file; do
+			if mode="$(stat -f '%Lp' -- "${file}" 2>/dev/null)"; then
+				:
+			else
+				mode="$(stat -c '%a' -- "${file}")"
+			fi
+			object_id="$(git hash-object --no-filters -- "${file}")"
+			printf '%s\0%s\0%s\0' "${mode}" "${object_id}" "${file}"
+		done < <(repository_files)
+	} | shasum -a 256 | awk '{ print $1 }'
+}
+
 write_run_metadata() {
 	local output="$1"
-	local revision dirty benchmark_cpu logical_cpus benchmark_schema_fingerprint
+	local revision dirty source_fingerprint benchmark_cpu logical_cpus benchmark_schema_fingerprint
 
-	revision="$(git rev-parse --verify HEAD 2>/dev/null || echo unknown)"
+	revision="${BENCH_SOURCE_REVISION:-$(git rev-parse --verify HEAD 2>/dev/null || echo unknown)}"
 	benchmark_cpu="$(awk '/^cpu:/ { sub(/^cpu:[[:space:]]*/, ""); print; exit }' "${output}")"
 	logical_cpus="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
 	if [[ -z "${logical_cpus}" ]] && command -v sysctl >/dev/null 2>&1; then
 		logical_cpus="$(sysctl -n hw.logicalcpu 2>/dev/null || true)"
 	fi
-	if [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
+	if [[ -n "${BENCH_SOURCE_DIRTY:-}" ]]; then
+		dirty="${BENCH_SOURCE_DIRTY}"
+	elif [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
 		dirty=true
 	else
 		dirty=false
+	fi
+	require_metadata_value BENCH_SOURCE_REVISION "${revision}"
+	if [[ "${dirty}" != "true" && "${dirty}" != "false" ]]; then
+		echo "BENCH_SOURCE_DIRTY must be true or false, got '${dirty}'"
+		exit 1
+	fi
+	source_fingerprint="${BENCH_SOURCE_FINGERPRINT:-$(repository_fingerprint)}"
+	if [[ ! "${source_fingerprint}" =~ ^[0-9a-f]{64}$ ]]; then
+		echo "BENCH_SOURCE_FINGERPRINT must be a lowercase SHA-256 digest"
+		exit 1
 	fi
 	benchmark_schema_fingerprint="$(schema_fingerprint "${BENCH_SCHEMA_PATH}")"
 
@@ -103,6 +141,7 @@ write_run_metadata() {
 		printf 'recorded_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 		printf 'git_revision=%s\n' "${revision}"
 		printf 'git_dirty=%s\n' "${dirty}"
+		printf 'source_fingerprint=%s\n' "${source_fingerprint}"
 		printf 'benchmark_package=%s\n' "${BENCH_PACKAGE}"
 		printf 'benchmark_pattern=%s\n' "${BENCH_PATTERN}"
 		printf 'benchmark_count=%s\n' "${BENCH_COUNT}"
@@ -123,7 +162,7 @@ write_run_metadata() {
 
 run_benchmark() {
 	local output_dir temporary_output status
-	local -a go_test_args
+	local -a go_test_args warm_args
 
 	require_positive_integer BENCH_COUNT "${BENCH_COUNT}"
 	require_metadata_value BENCH_WORKLOAD_ID "${BENCH_WORKLOAD_ID}"
@@ -142,6 +181,11 @@ run_benchmark() {
 	if [[ -n "${BENCH_TAGS}" ]]; then
 		go_test_args+=(-tags="${BENCH_TAGS}")
 	fi
+	warm_args=(-run='^$' -bench='^$')
+	if [[ -n "${BENCH_TAGS}" ]]; then
+		warm_args+=(-tags="${BENCH_TAGS}")
+	fi
+	go test "${warm_args[@]}" "${BENCH_PACKAGE}" >/dev/null
 
 	if go test "${go_test_args[@]}" "${BENCH_PACKAGE}" >"${temporary_output}" 2>&1; then
 		status=0
@@ -200,6 +244,7 @@ compare_benchmarks() {
 
 	output_dir="$(dirname "${BENCH_COMPARE_OUTPUT}")"
 	mkdir -p "${output_dir}"
+	go tool benchstat -h >/dev/null 2>&1
 	temporary_output="$(mktemp "${output_dir}/.benchstat.XXXXXX")"
 	if ! go tool benchstat "${BENCH_BASELINE}" "${BENCH_CURRENT}" >"${temporary_output}" 2>&1; then
 		rm -f "${temporary_output}"
@@ -410,18 +455,31 @@ run_http_benchmark() {
 		return
 	fi
 
-	local revision dirty script_digest
-	revision="$(git -C "${ROOT_DIR}" rev-parse --verify HEAD 2>/dev/null || echo unknown)"
-	if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null || true)" ]]; then
+	local revision dirty source_fingerprint script_digest
+	revision="${BENCH_SOURCE_REVISION:-$(git -C "${ROOT_DIR}" rev-parse --verify HEAD 2>/dev/null || echo unknown)}"
+	if [[ -n "${BENCH_SOURCE_DIRTY:-}" ]]; then
+		dirty="${BENCH_SOURCE_DIRTY}"
+	elif [[ -n "$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null || true)" ]]; then
 		dirty=true
 	else
 		dirty=false
+	fi
+	require_metadata_value BENCH_SOURCE_REVISION "${revision}"
+	if [[ "${dirty}" != "true" && "${dirty}" != "false" ]]; then
+		echo "BENCH_SOURCE_DIRTY must be true or false, got '${dirty}'"
+		exit 1
+	fi
+	source_fingerprint="${BENCH_SOURCE_FINGERPRINT:-$(repository_fingerprint)}"
+	if [[ ! "${source_fingerprint}" =~ ^[0-9a-f]{64}$ ]]; then
+		echo "BENCH_SOURCE_FINGERPRINT must be a lowercase SHA-256 digest"
+		exit 1
 	fi
 	script_digest="$(shasum -a 256 "${ROOT_DIR}/${script_path}" | awk '{print $1}')"
 	{
 		printf 'recorded_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 		printf 'git_revision=%s\n' "${revision}"
 		printf 'git_dirty=%s\n' "${dirty}"
+		printf 'source_fingerprint=%s\n' "${source_fingerprint}"
 		printf 'k6_image=%s\n' "${K6_IMAGE}"
 		printf 'scenario=%s\n' "${script_path}"
 		printf 'scenario_sha256=%s\n' "${script_digest}"
@@ -467,8 +525,27 @@ run_infrastructure_check() {
 		echo "PostgreSQL benchmark image must be versioned and digest-pinned"
 		exit 1
 	fi
+	[[ -r "scripts/dev/benchmark-remote.sh" ]] || {
+		echo "DigitalOcean benchmark runner is missing"
+		exit 1
+	}
+	[[ -r "scripts/dev/benchmark-remote-check.sh" ]] || {
+		echo "DigitalOcean benchmark lifecycle check is missing"
+		exit 1
+	}
+	[[ -r ".agents/skills/digitalocean-benchmark-runner/SKILL.md" ]] || {
+		echo "DigitalOcean benchmark runner skill is missing"
+		exit 1
+	}
+	[[ -r ".agents/skills/digitalocean-benchmark-runner/references/digitalocean.md" ]] || {
+		echo "DigitalOcean benchmark runner runbook is missing"
+		exit 1
+	}
 
 	bash -n "${BASH_SOURCE[0]}"
+	bash -n scripts/dev/benchmark-remote.sh
+	bash -n scripts/dev/benchmark-remote-check.sh
+	bash scripts/dev/benchmark-remote-check.sh
 	BENCH_WORKLOAD_ID=infra-check-stdlib \
 		BENCH_PACKAGE=crypto/sha256 \
 		BENCH_PATTERN='BenchmarkHash8Bytes$' \
@@ -505,6 +582,7 @@ run_infrastructure_check() {
 		bash "${BASH_SOURCE[0]}" http-inspect
 	grep -Fq '"executor": "constant-arrival-rate"' "${artifact_root}/http-steady/inspect.json"
 	grep -Fq '"flow_duration{flow:single_flow}"' "${artifact_root}/http-steady/inspect.json"
+	grep -Fq '"p(99)"' "${artifact_root}/http-steady/inspect.json"
 
 	HTTP_BENCH_ENV_FILE= \
 		HTTP_BENCH_ARTIFACT_DIR="${artifact_root}/http-ramping" \

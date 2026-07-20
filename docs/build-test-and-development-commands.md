@@ -171,12 +171,49 @@ make bench-db-compare
 make bench-http
 make bench-http-inspect
 make benchmark-infra-check
+make benchmark-remote-check
+# Optional paid one-time DigitalOcean snapshot build:
+DO_BENCH_CONTEXT=benchmarks-image-builder make benchmark-remote-image
 ```
 
 Go and in-process HTTP benchmarks run on the host toolchain. Database
 benchmarks use the existing Testcontainers seam. External HTTP load uses the
 digest-pinned k6 image owned by `scripts/dev/benchmark.sh`. Workload,
 comparison, and evidence rules are in [Benchmarking](benchmarking.md).
+
+`make benchmark-remote-check` is a read-only preflight for the optional
+DigitalOcean executor. Paid lifecycle commands intentionally remain explicit:
+
+```bash
+scripts/dev/benchmark-remote.sh list
+scripts/dev/benchmark-remote.sh image-list
+scripts/dev/benchmark-remote.sh run -- make bench
+
+scripts/dev/benchmark-remote.sh create
+scripts/dev/benchmark-remote.sh sync
+scripts/dev/benchmark-remote.sh exec make bench-baseline
+# Change to the candidate source, then sync and measure again on this Droplet.
+scripts/dev/benchmark-remote.sh sync
+scripts/dev/benchmark-remote.sh exec make bench
+scripts/dev/benchmark-remote.sh exec make bench-compare
+scripts/dev/benchmark-remote.sh fetch
+scripts/dev/benchmark-remote.sh destroy
+```
+
+For faster fresh-Droplet startup, source the non-secret reference produced by
+`benchmark-remote-image`, then return to the normal least-privilege context:
+
+```bash
+source .artifacts/bench/remote/golden-image.env
+export DO_BENCH_CONTEXT=benchmarks
+make benchmark-remote-check
+```
+
+Read the repository
+[`digitalocean-benchmark-runner`](../.agents/skills/digitalocean-benchmark-runner/SKILL.md)
+skill before provisioning. It owns one-time `doctl`/SSH setup, Cloud Firewall,
+current pricing checks, private source transfer, separate HTTP generator/target
+topology, host telemetry, recovery, and mandatory cleanup.
 
 ## CI and repository settings
 

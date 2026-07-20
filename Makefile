@@ -1,7 +1,7 @@
 SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
-GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
+GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 GOFUMPT_FILES := $(filter-out internal/api/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
 REDOCLY_CLI_VERSION := 2.20.3
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
@@ -44,12 +44,13 @@ HTTP_BENCH_RAW_SAMPLES ?= 0
 TRIVY_IMAGE ?= aquasec/trivy:0.69.2@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
+BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 
 .DEFAULT_GOAL := help
 
 .PHONY: help template-init template-init-check check check-full pr-check \
 	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration \
-	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check \
+	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
 	sqlc-generate sqlc-check openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	migration-validate container-security run build docker-build docker-run compose-up compose-down vendor
@@ -72,7 +73,7 @@ help:
 	@echo "Benchmarking:"
 	@echo "  make bench | bench-baseline | bench-compare | bench-profile"
 	@echo "  make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state> | bench-db-baseline | bench-db-compare"
-	@echo "  make bench-http | bench-http-inspect | benchmark-infra-check"
+	@echo "  make bench-http | bench-http-inspect | benchmark-infra-check | benchmark-remote-check | benchmark-remote-image"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
@@ -224,6 +225,12 @@ bench-http-inspect:
 
 benchmark-infra-check:
 	$(BENCHMARK_SCRIPT) check
+
+benchmark-remote-check:
+	$(BENCHMARK_REMOTE_SCRIPT) check
+
+benchmark-remote-image:
+	$(BENCHMARK_REMOTE_SCRIPT) image-build
 
 lint:
 	go tool golangci-lint run --allow-parallel-runners --timeout=3m

@@ -2,6 +2,7 @@ bin/
 coverage.out
 .artifacts/test/
 .artifacts/bench/
+.artifacts/skill-evals/
 .env
 .env.bench
 .cache/
