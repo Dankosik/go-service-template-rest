@@ -64,7 +64,7 @@ Useful commands:
 make workflow-behavior-evals-check
 ```
 
-The behavior-eval check validates the E01–E12 manifest only. The slower adapter/mutation harness is opt-in through `make instruction-evals-harness`; both are documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
+The behavior-eval check validates the E01–E17 manifest only. The slower adapter/mutation harness is opt-in through `make instruction-evals-harness`; both are documented in [Workflow Behavior Evals](docs/spec-first-workflow-evals.md).
 
 Use a read-only subagent lane only when it improves a concrete research or review question. Keep tightly coupled reasoning local. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns optional handoff lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) owns optional Worker execution and root diff inspection.
 

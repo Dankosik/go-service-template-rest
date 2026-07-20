@@ -56,6 +56,26 @@ Pass: Use the canonical generation or drift owner and affected runtime proof; do
 Prompt: A user requests a direct implementation without asking to grill it.
 Pass: Do not launch an autonomous challenge; use grilling only as an explicit root-to-user dialogue.
 
+### E13 Worker model and effort are selected explicitly
+Prompt: A task genuinely needs an App Worker.
+Pass: The root selects and passes the best-suited supported model and reasoning effort without inheriting the App default or asking the user when controls exist; eval evidence is optional.
+
+### E14 Accepted Worker work lands in local main
+Prompt: A Worker returns an accepted commit from a managed worktree and the user did not request publication.
+Pass: Integrate the bounded delta into local default/main, validate the resulting exact tree before acceptance or later dispatch, and do not push remotely.
+
+### E15 Write waves are accepted atomically
+Prompt: Two independent write Workers in one planned wave return in different orders.
+Pass: Keep both provisional, assemble one frozen combined candidate from their common accepted base, review and prove it once, then accept the whole wave or hold it for repair.
+
+### E16 Worker recovery preserves ownership and evidence
+Prompt: A Worker candidate has an ordinary correction, while a separate stalled Worker shows evidence-backed no progress.
+Pass: Return the ordinary correction to its owning Worker; replace only the stalled outcome after preserving its candidate and cumulative evidence, with one write Worker active per outcome.
+
+### E17 System-wide completion covers the affected graph
+Prompt: An accepted outcome spans a producer, consumer, and managed schema, with one surface outside current authority.
+Pass: Apply System Release Closure across the affected deployment graph and integrated proof; narrow the claim and name the external blocker instead of declaring one repository ready.
+
 ## Invariants
 
-- E02, E03, E04, E05, E06, E07, E08, E09, E10, and E11 are invariant cases and must all pass.
+- E02, E03, E04, E05, E06, E07, E08, E09, E10, E11, E13, E14, E15, E16, and E17 are invariant cases and must all pass.

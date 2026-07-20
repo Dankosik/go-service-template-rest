@@ -39,6 +39,7 @@ require_file docs/spec-first-workflow-evals.md
 require_file scripts/dev/workflow-behavior-evals.sh
 
 require_heading AGENTS.md '## Routing'
+require_heading AGENTS.md '## Collaboration'
 require_heading AGENTS.md '## Validation Matrix'
 require_heading docs/spec-first-workflow.md '## Choose A Path'
 require_heading docs/spec-first-workflow.md '### Direct'
@@ -51,6 +52,7 @@ require_heading docs/spec-first-workflow/shared/artifact-model.md '## When To Pe
 require_heading docs/spec-first-workflow/shared/subagents-and-handoff.md '## Independent Review'
 
 require_link AGENTS.md 'docs/spec-first-workflow.md'
+require_link AGENTS.md 'docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure'
 require_link docs/spec-first-workflow.md 'spec-first-workflow/shared/artifact-model.md'
 require_link docs/spec-first-workflow.md 'spec-first-workflow/shared/subagents-and-handoff.md'
 require_link docs/spec-first-workflow/phases/implementation-validation-closeout.md 'scripts/dev/codex-worktree-preflight.sh'
@@ -59,6 +61,8 @@ require_link docs/subagent-contract.md 'implementation-validation-closeout.md#op
 # These patterns protect authority and fail-closed boundaries without pinning
 # explanatory prose or phase-specific implementation detail.
 require_regex AGENTS.md 'external writes.*destructive actions'
+require_regex AGENTS.md 'facts.*inferences.*proof gaps'
+require_regex AGENTS.md 'do not clean caches as a speed technique'
 require_regex AGENTS.md 'Direct:.*No Goal.*worktree.*independent review.*required'
 require_regex AGENTS.md 'Goal.*long-running.*resumable'
 require_regex AGENTS.md 'immutable.*tree.*byte-identical fast-forward'
@@ -66,6 +70,14 @@ require_regex docs/spec-first-workflow.md 'Self-review.*default'
 require_regex docs/spec-first-workflow.md 'grilling.*not a default review stage'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'root inspects.*delegated diff.*proof'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local direct change.*not need a commit'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'best-suited available model.*reasoning effort'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'never inherit an App default'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md "user's standing request"
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'same Worker.*managed worktree'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'evidence-backed no progress'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'frozen combined candidate'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local repository default/main.*authoritative integration branch'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Remote push is outside this integration rule'
 require_regex docs/spec-first-workflow/shared/artifact-model.md 'Persist a result only when'
 
 if rg -n --glob '!scripts/ci/workflow-instructions-check.sh' \

@@ -73,7 +73,7 @@ help:
 	@echo "  make agents-check            # validate canonical agent/workflow instructions"
 	@echo "  make workflow-routing-check  # fast workflow/skill instruction checks"
 	@echo "  make instruction-evals-harness # opt-in fake-adapter/mutation harness"
-	@echo "  make workflow-behavior-evals-check # validate the E01-E12 eval manifest (no model calls)"
+	@echo "  make workflow-behavior-evals-check # validate the E01-E17 eval manifest (no model calls)"
 	@echo "  make workflow-behavior-evals # run explicitly targeted matched trials through authorized adapters"
 	@echo "  make docker-openapi-check    # Docker OpenAPI validation"
 	@echo "  make docker-openapi-breaking # Docker OpenAPI breaking-change check"

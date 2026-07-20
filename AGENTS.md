@@ -8,7 +8,12 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - Reuse the current owner, repository pattern, standard library, and installed dependencies before adding machinery.
 - Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow.
 - Treat cancellation, deadlines, partial work, cleanup, shutdown, generated authority, and mutable ownership as first-class only when the change touches them.
-- During iteration, use cached focused checks and reusable dependencies. Reserve uncached tests, race, coverage, full lint, rebuilds, and teardown for a triggered claim or publication evidence.
+- During iteration, use cached focused checks and keep reusable local dependencies running. Reserve uncached tests, race, coverage, full lint, rebuilds, and teardown for a triggered claim or publication evidence; do not clean caches as a speed technique.
+
+## Collaboration
+
+- Lead with the conclusion. Separate established facts, inferences, trade-offs, and proof gaps.
+- Challenge a design with concrete consequences and a viable smaller alternative; when choices are comparable, prefer clearer ownership, failure signals, and recovery.
 
 ## Authorization And Boundaries
 
@@ -25,7 +30,7 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - **Structured:** persist only a decision, proof design, or ledger that another phase, actor, or later session needs. Use independent review only when the user requests it or a high-impact, hard-to-reverse, cross-owner, or weakly falsifiable decision needs it.
 - **Orchestrated:** use a Goal, App Worker/worktree, durable coordination, or parallel waves only for real long-running, resumable, isolation, dirty-checkout, parallelism, separate-context, or coordination needs.
 
-Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite.
+Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
 
 ## Implementation And Evidence
 

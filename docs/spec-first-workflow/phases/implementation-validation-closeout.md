@@ -36,6 +36,14 @@ Use a native Codex App Worker and managed worktree only when the work is long-ru
 
 Before dispatching from uncommitted accepted input, run `bash scripts/dev/codex-worktree-preflight.sh <selected-git-top-level>` against the selected checkout. It is read-only and fails closed on oversized transfer input; do not stash, clean, ignore, or mutate user changes to pass it. Keep one write Worker per outcome. A Worker receives an outcome-first brief with editable boundaries, current facts, success criteria, focused proof, and a real stop condition.
 
+For every Worker task, the root explicitly selects and passes the best-suited available model and reasoning effort through supported App controls; never inherit an App default or ask the user to choose when those controls exist. This is the user's standing request. Choose model and effort independently: Luna for clear mechanical work, Terra for ordinary implementation, and Sol for complex or high-consequence work, using the lowest effort likely to succeed. Existing eval evidence may inform the choice but is never a dispatch prerequisite.
+
+Ordinary implementation-owned findings return together to the same Worker and managed worktree. Replace it only after evidence-backed no progress, a stalled turn, oscillation, an exhausted repair route, or an invalidated base; preserve its candidate and cumulative evidence before replacement, and keep only one write Worker active for the outcome. Follow native completion and status events instead of actively polling or narrating unchanged state.
+
+For a planned write wave, every member starts from the same accepted integrated base and every returned result remains provisional. The root assembles only the bounded deltas into one frozen combined candidate, reviews the whole affected surface, and runs each identical proof command once on that exact tree. Promote and accept the wave atomically only after every member passes; otherwise hold the wave, preserve unaffected results, repair the affected outcome, and reassemble.
+
+The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Integrate only the accepted delta, prefer a fast-forward when valid, and do not mutate unrelated dirty state to force integration. Run terminal validation on the resulting integrated tree before acceptance or later Worker dispatch. Remote push is outside this integration rule and requires separate authorization.
+
 The root inspects every delegated diff and proof before accepting it. Return all currently detectable evidence-backed compatible findings together. Re-review only the correction and affected surfaces; do not repeat an unchanged correction loop or launch a ceremonial reviewer.
 
 ### Immutable Evidence
