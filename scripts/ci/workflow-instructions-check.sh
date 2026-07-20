@@ -159,21 +159,50 @@ probe_lifecycle_artifacts="$(
 require_regex AGENTS.md 'Direct:.*No Goal.*worktree.*independent review.*required'
 require_regex AGENTS.md 'Goal.*long-running.*resumable'
 require_regex AGENTS.md 'immutable.*tree.*byte-identical fast-forward'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'root inspects every delegated diff and proof'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local direct change does not need a commit'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md '`go-coder` owns the change'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Keep a clear sequential outcome root-local'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'outweighs dispatch, worktree, fan-in, and acceptance cost'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'best-suited available model and reasoning effort'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'never inherit an App default'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md "user's standing request"
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'same Worker and managed worktree'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'evidence-backed no progress'
-require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'frozen combined candidate'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'same proof observable failing after one correction under the same causal hypothesis'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'only boundary intake for scope, ownership, mergeability, and proof provenance'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'one full acceptance review on the frozen candidate'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'maps claims with the same preconditions to one exact proof command'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'shrink the wave to the proven passing subset'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'failure crosses an interface, invariant, generated/manual authority, mutable resource, or proof precondition'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'local repository default/main is the authoritative integration branch'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'run every mapped claim-scoped proof command once on that exact state'
+require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'verify the resulting authoritative tree identity'
 require_regex docs/spec-first-workflow/phases/implementation-validation-closeout.md 'Remote push is outside this integration rule'
+require_regex .agents/skills/specialist-contract.md '`go-coder` owns the change'
+require_regex .agents/skills/specialist-contract.md "Candidate Acceptance section owns specialist review composition and finding fan-in"
 require_regex docs/spec-first-workflow-evals.md 'root edits and self-reviews the assigned checkout'
 require_regex docs/spec-first-workflow-evals.md 'Reuse exact successful proof for an immutable tree'
 require_regex docs/spec-first-workflow-evals.md 'root-local implementation'
+require_regex docs/spec-first-workflow-evals.md 'duplicate validation of a byte-identical tree'
+require_regex docs/spec-first-workflow-evals.md 'freeze a T01-only subset'
+require_regex docs/spec-first-workflow-evals.md 'same proof observable failing after one correction under the same causal hypothesis'
+require_regex docs/spec-first-workflow-evals.md 'separate per-domain review passes or finding envelopes'
 require_regex Makefile '^GO_FILES := .*git ls-files --cached --others --exclude-standard'
 require_regex Makefile '^instruction-evals-harness:'
+
+if rg -n \
+  'Promote and accept the wave atomically only after every member passes|combined-proof failure holds both tasks|atomically accept and promote the whole wave|run terminal fresh validation on the resulting integrated state|deferring inspection to one final review' \
+  docs/spec-first-workflow/phases/implementation-validation-closeout.md \
+  docs/spec-first-workflow-evals.md; then
+  fail 'superseded implementation review, wave, or validation wording remains'
+fi
+
+if rg -n \
+  'conformance Review (begins|resumes) separately|Review resumes separately' \
+  .agents/skills \
+  --glob 'go-*/SKILL.md'; then
+  fail 'implementation specialist skill still creates a separate review pass'
+fi
 
 bash scripts/dev/workflow-behavior-evals.sh check
 printf 'workflow instruction check passed\n'

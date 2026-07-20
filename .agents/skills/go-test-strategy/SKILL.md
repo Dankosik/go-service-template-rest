@@ -10,6 +10,6 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct ev
 ## Choose The Branch
 
 - **Decision** — select when proof policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing risk. Return one shared Decision disposition per obligation; completion requires a falsifier and reopen condition for every obligation needing proof.
-- **Review** — select when changed tests or validation evidence must conform to accepted proof policy. Load the [review selector](references/review/index.md) for the concrete false-pass or flake risk. Return one shared finding-envelope disposition per obligation, naming any outside boundary or proof blocker with the smallest deterministic correction and focused command. Missing proof policy ends this run with a named Proof Decision handoff; conformance Review begins separately after acceptance.
+- **Review** — select when changed tests or validation evidence must conform to accepted proof policy. Load the [review selector](references/review/index.md) for the concrete false-pass or flake risk. Return one shared finding-envelope disposition per obligation, naming any outside boundary or proof blocker with the smallest deterministic correction and focused command. Missing proof policy returns to the named Proof Decision owner.
 
 Hand unresolved behavior to its domain skill, executable test code to `go-test-implementation`, and completion claims to `go-verification-before-completion`.

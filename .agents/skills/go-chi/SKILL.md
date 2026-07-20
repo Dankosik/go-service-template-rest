@@ -10,6 +10,6 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct th
 ## Choose The Branch
 
 - **Decision** — select when transport policy is absent or changing. Load the [decision selector](references/decision/index.md) only for a pressure that can change the result. Complete when shared Decision dispositions cover every affected route node, forced consequence, and focused proof.
-- **Review** — select when changed chi code must conform to accepted transport policy. Load the [review selector](references/review/index.md) for the changed runtime judgment. Complete when the shared finding envelope accounts for every affected node; name any outside boundary or proof blocker with the smallest safe correction and proof. Missing policy ends this run with a named transport Decision handoff; conformance Review begins separately after the rule is accepted.
+- **Review** — select when changed chi code must conform to accepted transport policy. Load the [review selector](references/review/index.md) for the changed runtime judgment. Complete when the shared finding envelope accounts for every affected node; name any outside boundary or proof blocker with the smallest safe correction and proof. Missing policy returns to the named transport Decision owner.
 
 Hand resource or status semantics to `go-api-contract` and system topology to `go-system-architecture`.

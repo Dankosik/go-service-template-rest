@@ -29,7 +29,7 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary reads, in-scope edits, or tests.
 - Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
 - A Codex Goal is an execution control for implementation only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts.
-- For ordinary non-interactive shell calls, set `login: false`; use a login shell only when it materially needs initialization.
+- For ordinary non-interactive shell calls, avoid shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
 
 ## Routing
 

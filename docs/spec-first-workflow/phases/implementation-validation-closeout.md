@@ -24,7 +24,7 @@ Implement the accepted outcome at its narrowest owner, then make only the claim 
 
 Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. For a defect, repair the narrowest shared owner proved by the reproducer. Preserve accepted behavior, cleanup, authority, and protected-domain constraints; remove replaced paths only when compatibility does not require them.
 
-Before a production Go edit, apply `go-coder`; route an unknown cause to `go-systematic-debugging` and test-only work to `go-test-implementation`. Apply only the Go, contract, data, lifecycle, or delivery methods triggered by the changed surface.
+Before a production Go edit, apply `go-coder`; route an unknown cause to `go-systematic-debugging` and test-only work to `go-test-implementation`. During implementation, `go-coder` owns the change. Apply only the Go, contract, data, lifecycle, or delivery methods triggered by the changed surface as review lenses under Candidate Acceptance below. Missing accepted policy reopens its narrow upstream decision owner.
 
 ### Local Execution
 
@@ -32,19 +32,23 @@ For direct work, the root edits the assigned checkout, performs one coherent sel
 
 ### Optional Worker Execution
 
-Use a native Codex App Worker and managed worktree only when the work is long-running, resumable, isolated from a dirty checkout, independently parallelizable, needs separate context, or the user explicitly delegates it. Create one root Goal only for that genuinely multi-step or resumable outcome.
+Keep a clear sequential outcome root-local even when it is long-running or spans multiple files. Use a native Codex App Worker and managed worktree only when resumability, dirty-checkout isolation, safe parallelism, or materially separate context outweighs dispatch, worktree, fan-in, and acceptance cost, or when the user explicitly delegates implementation. Create one root Goal only for a genuinely multi-step or resumable outcome.
 
 Before dispatching from uncommitted accepted input, run `bash scripts/dev/codex-worktree-preflight.sh <selected-git-top-level>` against the selected checkout. It is read-only and fails closed on oversized transfer input; do not stash, clean, ignore, or mutate user changes to pass it. Keep one write Worker per outcome. A Worker receives an outcome-first brief with editable boundaries, current facts, success criteria, focused proof, and a real stop condition.
 
 For every Worker task, the root explicitly selects and passes the best-suited available model and reasoning effort through supported App controls; never inherit an App default or ask the user to choose when those controls exist. This is the user's standing request. Choose model and effort independently: Luna for clear mechanical work, Terra for ordinary implementation, and Sol for complex or high-consequence work, using the lowest effort likely to succeed. Existing eval evidence may inform the choice but is never a dispatch prerequisite.
 
-Ordinary implementation-owned findings return together to the same Worker and managed worktree. Replace it only after evidence-backed no progress, a stalled turn, oscillation, an exhausted repair route, or an invalidated base; preserve its candidate and cumulative evidence before replacement, and keep only one write Worker active for the outcome. Follow native completion and status events instead of actively polling or narrating unchanged state.
+Ordinary implementation-owned findings return together to the same Worker and managed worktree. Each correction brief contains the complete current finding set and requires every finding to return closed, disproved, or genuinely blocked with evidence. A repeated material candidate, an acknowledgement-only correction, or the same proof observable failing after one correction under the same causal hypothesis establishes evidence-backed no progress: preserve the candidate and cumulative evidence, then replace the Worker or switch to a materially different repair route. Treat an `inProgress` task that produces no new turn or item after one continuation as stalled. Oscillation, an exhausted repair route, or an invalidated base likewise requires replacement or rerouting. Keep only one write Worker active for the outcome and follow native completion and status events instead of actively polling or narrating unchanged state.
 
-For a planned write wave, every member starts from the same accepted integrated base and every returned result remains provisional. The root assembles only the bounded deltas into one frozen combined candidate, reviews the whole affected surface, and runs each identical proof command once on that exact tree. Promote and accept the wave atomically only after every member passes; otherwise hold the wave, preserve unaffected results, repair the affected outcome, and reassemble.
+For a planned write wave, every member starts from the same accepted integrated base and every returned result remains provisional. Assemble only bounded deltas into a frozen candidate.
 
-The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Integrate only the accepted delta, prefer a fast-forward when valid, and do not mutate unrelated dirty state to force integration. Run terminal validation on the resulting integrated tree before acceptance or later Worker dispatch. Remote push is outside this integration rule and requires separate authorization.
+When a failure is isolated and the reviewed independence basis still holds, shrink the wave to the proven passing subset. Review, prove, integrate, and accept that subset while the failed member and its dependents remain provisional. Keep coupled members together when the failure crosses an interface, invariant, generated/manual authority, mutable resource, or proof precondition. Start later work only from an accepted commit or tree whose accepted subset satisfies its dependencies.
 
-The root inspects every delegated diff and proof before accepting it. Return all currently detectable evidence-backed compatible findings together. Re-review only the correction and affected surfaces; do not repeat an unchanged correction loop or launch a ceremonial reviewer.
+### Candidate Acceptance
+
+On each Worker return, the root performs only boundary intake for scope, ownership, mergeability, and proof provenance. The root performs one full acceptance review on the frozen candidate across all triggered lenses, returns one combined set of currently detectable evidence-backed compatible findings, and maps claims with the same preconditions to one exact proof command. Re-review only the correction and affected surfaces; an unchanged surface keeps its prior disposition unless new evidence changes its risk.
+
+The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Freeze the reviewed candidate as a commit or tree and run every mapped claim-scoped proof command once on that exact state. Integrate only the accepted delta, prefer a byte-identical fast-forward when valid, verify the resulting authoritative tree identity, and then accept it or dispatch later work. If integration changes the tree, treat it as a new candidate and validate the affected claims before acceptance. Do not mutate unrelated dirty state to force integration. Remote push is outside this integration rule and requires separate authorization.
 
 ### Immutable Evidence
 

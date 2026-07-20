@@ -10,6 +10,6 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct op
 ## Choose The Branch
 
 - **Decision** — select when telemetry policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when shared Decision dispositions cover every operator question and signal with cost/privacy bounds explicit.
-- **Review** — select when changed telemetry must conform to accepted policy. Load the [review selector](references/review/index.md) for the changed signal. Account for every affected signal through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing policy ends this run with a named Telemetry Decision handoff; conformance Review begins separately after acceptance.
+- **Review** — select when changed telemetry must conform to accepted policy. Load the [review selector](references/review/index.md) for the changed signal. Account for every affected signal through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing policy returns to the named Telemetry Decision owner.
 
 Hand resilience behavior to `go-reliability` and performance budgets to `go-performance`.

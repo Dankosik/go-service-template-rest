@@ -10,6 +10,6 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct ch
 ## Choose The Branch
 
 - **Decision** — select when accepted behavior exists but implementation placement is absent or changing. Stop on any unresolved prerequisite; otherwise complete when shared Decision dispositions cover every responsibility and path with forced consequences explicit.
-- **Review** — select when changed Go must conform to accepted placement. Load the [review selector](references/review/index.md) for one violated boundary. Account for every affected owner and competing path through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing placement ends this run with a named Ownership Decision handoff; conformance Review begins separately after acceptance.
+- **Review** — select when changed Go must conform to accepted placement. Load the [review selector](references/review/index.md) for one violated boundary. Account for every affected owner and competing path through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing placement returns to the named Ownership Decision owner.
 
 Hand runtime topology to `go-system-architecture` and behavior policy to its domain skill.
