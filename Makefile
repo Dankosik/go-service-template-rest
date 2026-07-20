@@ -370,7 +370,7 @@ govulncheck:
 gosec:
 	gosec_cache="$$(mktemp -d)"; \
 	trap 'rm -rf "$$gosec_cache"' EXIT; \
-	GOCACHE="$$gosec_cache" go tool gosec -exclude-generated -exclude-dir=.cache ./...
+	GOCACHE="$$gosec_cache" go tool gosec -exclude-generated -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 go-security: govulncheck gosec
 
