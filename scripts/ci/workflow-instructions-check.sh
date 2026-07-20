@@ -604,7 +604,7 @@ for heading in \
   '## Instruction Ownership'; do
   t02_require_heading AGENTS.md "${heading}"
 done
-for token in 'Codex Goal' 'Codex App' '`spawn_agent`' '`agent_type="worker"`'; do
+for token in 'Codex Goal' 'Codex App' '`spawn_agent`' '`agent_type="worker"`' 'For ordinary non-interactive shell calls, set `login: false`'; do
   t02_require_machine_token AGENTS.md "${token}"
 done
 for token in \
