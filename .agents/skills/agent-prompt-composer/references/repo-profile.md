@@ -53,7 +53,7 @@ Load this file only when a durable repository fact could change the handoff's ow
 - Generated artifacts are first-class and drift-checked.
 
 ## Commands Worth Mentioning When Relevant
-- Quick local baseline: `make check`
+- Everyday loop: focused package proof plus `make lint-fast` when useful; `make check` is a broad local baseline
 - Full CI-like baseline: `make check-full`
 - Unit tests: `make test`
 - Race detector: `make test-race`

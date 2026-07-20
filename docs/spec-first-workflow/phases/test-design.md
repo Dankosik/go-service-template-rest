@@ -50,7 +50,7 @@ An honestly unavailable target, budget, fixture, command, environment, or other 
 
 ## Review
 
-When structured or orchestrated work triggers test design, run an independent QA review before planning. Direct work uses one only when the user or risk requires it. The reviewer falsifies the Outputs above, including bidirectional traceability, existing-proof disposition, scenario normalization, setup derivability, oracle discrimination, command-to-oracle coupling, determinism/isolation, proof-boundary sufficiency, fail-before expectations, command feasibility, and residual gaps. It does not write tests or change behavior.
+Use focused self-review by default. Trigger an independent QA review only when the user requests it or the proof design is high-impact, hard to reverse, cross-owner, or weakly falsifiable. The reviewer falsifies the Outputs above, including bidirectional traceability, existing-proof disposition, scenario normalization, setup derivability, oracle discrimination, command-to-oracle coupling, determinism/isolation, proof-boundary sufficiency, fail-before expectations, command feasibility, and residual gaps. It does not write tests or change behavior.
 
 The reviewer returns one verdict under the shared convergence contract:
 
@@ -62,6 +62,6 @@ When test design owns that review, findings return to the owning root for same-s
 
 ## Stop Rule
 
-Continue to planning when every material acceptance claim, invariant, transition, failure mode, and protected side effect is dispositioned as sufficient existing proof, an owned executable proof path, a named non-test falsifier, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition, and the required review has returned `PASS`. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
+Continue to planning when every material acceptance claim, invariant, transition, failure mode, and protected side effect is dispositioned as sufficient existing proof, an owned executable proof path, a named non-test falsifier, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition, and any triggered review is resolved. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
 
 Do not create a test plan whose only content is headings or generic “add coverage” tasks.

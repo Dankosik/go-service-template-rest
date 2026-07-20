@@ -1,94 +1,60 @@
 # AGENTS.md
 
-
-Repository-wide contract for producing reliable Go-service changes with the least workflow needed.
+Repository-wide contract for reliable Go-service changes with the least workflow that can prove them.
 
 ## Engineering Judgment
 
-Own the result as the engineer who will operate this service: preserve user
-intent and invariants, choose the smallest change that can be proved, and leave
-failures easier to diagnose.
+- Use the narrowest current evidence that can prove or falsify the next claim.
+- Reuse the current owner, repository pattern, standard library, and installed dependencies before adding machinery.
+- Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow.
+- Treat cancellation, deadlines, partial work, cleanup, shutdown, generated authority, and mutable ownership as first-class only when the change touches them.
+- During iteration, use cached focused checks and reusable dependencies. Reserve uncached tests, race, coverage, full lint, rebuilds, and teardown for a triggered claim or publication evidence.
 
-- Evidence beats confidence. Use the narrowest current signal that can prove or
-  falsify the next material claim; tighten it before expanding the process.
-- Reuse before inventing: current owner and repository pattern, Go standard
-  library, existing dependency, maintained OSS, then custom machinery.
-- Keep behavior, failure handling, and proof local to their narrowest owner;
-  expose only what consumers need to know.
-- Prefer explicit control flow and concrete types. Introduce a consumer-owned
-  interface only for real variation or a stable seam.
-- Treat cancellation, deadlines, retries, partial work, cleanup, and shutdown
-  as first-class behavior whenever the task touches them.
-- An abstraction earns its place when deleting it would spread present
-  complexity or duplication back across callers.
-- Use accepted repository terms consistently across prose, code, and tests;
-  surface material ambiguity before introducing another term.
-- During implementation iteration, prefer cached focused checks and keep reusable local dependencies running; reserve `-count=1`, race, coverage, full lint, container rebuild/teardown for terminal validation or specifically triggered proof, and do not routinely clean caches as a speed technique.
+## Authorization And Boundaries
 
-## Collaboration
+- `answer`, `explain`, `review`, `diagnose`, and `plan` authorize inspection and reporting only. `change`, `build`, and `fix` authorize in-scope local edits and non-destructive validation.
+- Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary reads, in-scope edits, or tests.
+- Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
+- For ordinary non-interactive shell calls, set `login: false`; use a login shell only when it materially needs initialization.
 
-- Lead with the conclusion; scale explanation to risk and reversibility.
-- Separate established facts, inferences, trade-offs, and proof gaps.
-- Challenge a design with concrete consequences and a viable smaller
-  alternative.
-- When choices are otherwise comparable, prefer clearer ownership, failure
-  signals, and recovery.
+## Routing
 
-## Authority And Loading
+`docs/spec-first-workflow.md` owns path selection. Start with the smallest path that preserves correctness:
 
-- Explicit user, system, and developer instructions win.
-- This file owns request authorization and repository-wide invariants.
-- Skills provide methods; they do not override this contract or task-local decisions.
-- [docs/spec-first-workflow.md](docs/spec-first-workflow.md) is the workflow router. Read only the current phase file and any shared file needed for the decision at hand.
-- Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
+- **Direct:** the request is clear, local, reversible, has one owner, bounded proof, and no unresolved protected-domain decision. The root may edit the assigned checkout, self-review the bounded diff, and run focused proof. No Goal, App Worker, worktree, durable artifact, independent review, or workflow opt-out is required.
+- **Structured:** persist only a decision, proof design, or ledger that another phase, actor, or later session needs. Use independent review only when the user requests it or a high-impact, hard-to-reverse, cross-owner, or weakly falsifiable decision needs it.
+- **Orchestrated:** use a Goal, App Worker/worktree, durable coordination, or parallel waves only for real long-running, resumable, isolation, dirty-checkout, parallelism, separate-context, or coordination needs.
 
-## Authorization
+Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite.
 
-- `answer`, `explain`, `review`, `diagnose`, and `plan` authorize inspection and reporting, not implementation.
-- `change`, `build`, and `fix` authorize in-scope local edits and relevant non-destructive validation.
-- A Codex Goal is an execution control for the implementation/validation/closeout macro phase only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts. Direct work enters implementation immediately.
-- On entering implementation/validation/closeout, the root creates or continues exactly one root-thread Codex Goal immediately before launching the first implementation Worker, regardless of task size. That Goal spans the full accepted direct outcome or ledger and completes only after root acceptance of every Worker result, root review of the final integrated diff, and fresh validation evidence. Keep it active through recoverable implementation and integration failures; do not create separate Goals for Workers, tasks, or internal checkpoints. Mark it blocked only when the accepted outcome cannot progress because required user or external authority or state is unavailable and no safe in-scope route remains. If an unrelated Goal is active, ask the user to pause or clear it. A workflow opt-out does not waive this execution control.
-- Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary repository reads, in-scope edits, or tests.
-- For ordinary non-interactive shell calls, set `login: false`; use a login shell only when the command materially depends on login or interactive shell initialization.
-- Respect an explicit boundary such as `read-only`, `docs-only`, `research only`, or a named phase.
+## Implementation And Evidence
 
-## Explicit Workflow Opt-Out
+- The root may implement direct local work. Use a native Codex App Worker and managed worktree only when the routing triggers above apply or the user explicitly delegates implementation.
+- A Codex Goal is for genuinely long-running, multi-step, or resumable implementation; one root Goal spans that outcome. Do not create one for ordinary direct work or non-implementation reasoning.
+- Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. Fix defects at the narrowest shared owner proved by the reproducer.
+- Review only changed and transitively affected surfaces. Return all evidence-backed compatible findings together; do not create ceremonial re-review loops.
+- Map every completion claim to current proof of equal scope. Proof for an immutable commit/tree remains valid after a byte-identical fast-forward; rerun only when the tree, relevant environment or preconditions, claim scope, provenance, or risk surface changed.
+- Never claim complete, fixed, ready, or covered beyond current evidence. State unavailable proof and the reopen owner.
 
-- Honor a workflow opt-out when the implementation request is clear enough to act on and the user explicitly says the workflow may be skipped or bypassed and asks to proceed to implementation.
-- A valid opt-out overrides the normal path and phase routing for that request. Proceed directly to implementation; do not first require or run workflow-start checks, phase/readiness gates, workflow artifacts, or workflow-only delegation and review. Do not create a record merely to document the opt-out.
-- The opt-out waives process, not scope, safety, permission, or proof. Preserve explicit boundaries, ask before external or destructive actions, inspect the affected code before editing, do not invent a materially unresolved behavior or ownership decision, and run fresh validation proportionate to the change.
-- If implementation exposes a genuinely blocking decision, ask only for that decision. After it is resolved, continue directly unless the user withdraws the opt-out or requests workflow artifacts.
+## Validation Matrix
 
-## Working Contract
+Use the smallest matching check:
 
-1. Reconstruct the intended outcome before acting. Inspect repository facts instead of asking the user for facts the repository can answer. Ask only for a decision that would materially change scope, behavior, ownership, safety, or proof; otherwise state a bounded assumption and continue.
-2. Describe the outcome, constraints, success criteria, and stop conditions. Do not prescribe steps the model can choose reliably, repeat rules across files, or create artifacts solely to prove that process happened.
-3. Choose the smallest path that preserves correctness. Direct work may proceed without workflow artifacts; otherwise use [the workflow router](docs/spec-first-workflow.md), which owns path selection, phase order, review gates, and movement rules. Respect a user-named phase boundary.
-4. Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof, but not automatically full-depth work or a durable artifact in every phase. When the accepted outcome spans multiple deployables, repositories, or managed dependencies, completion covers the full affected deployment graph; apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure), and narrow the claim or report the external blocker when any required surface is outside current authority or proof.
-5. Evidence before invention. Prefer current Go stdlib and established repository patterns. Before structured/orchestrated work designs against an external platform, unfamiliar mechanism, new infrastructure/dependency, or non-trivial architecture choice, research current official docs/source and credible real implementations or engineering writeups. Treat official sources as contract authority, use real-world sources for proven patterns and operational pitfalls, and do not rely on model memory for current external behavior. Add custom machinery only when viable researched options do not fit, and record why.
-6. Keep ownership explicit. Put substantial code in the narrow owning package/file, preserve generated-source discipline, and remove replaced code and adjacent stale artifacts unless current compatibility evidence justifies retention.
-7. Every authorized implementation outcome is produced by the native Codex App Worker defined in [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance); the root never authors or repairs Worker-owned implementation. A built-in subagent, `spawn_agent`, `agent_type="worker"`, or another in-process role is never that Worker. The phase owns Worker assignment, App task and managed-worktree lifecycle, brief, evidence, acceptance, and integration mechanics.
-8. Skills define the method. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns built-in subagent eligibility, review independence, and handoff; [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) owns its challenge protocol; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-assignment-and-acceptance) owns App Worker review and correction. The root owns synthesis and decisions.
-9. Do not claim ready, complete, fixed, or covered without fresh evidence matched to the claim. Report unavailable or narrower proof honestly and name the next useful check.
+| Changed surface | Default proof |
+| --- | --- |
+| Docs or instructions | `git diff --check` and the relevant instruction gate |
+| Local Go behavior | Focused package/test proof; changed-code lint when useful |
+| Concurrency/lifecycle | Focused behavior plus race/liveness proof |
+| OpenAPI, sqlc, migration, generated source | Canonical generation/drift and affected runtime proof |
+| Security, deployment, cross-service or release | The matching protected-domain and integrated proof |
+| Publication, CI parity, or broad cross-cutting change | `check-full`, `ci-local`, `pr-check`, container, or security suites only when the claim needs them |
 
-## Go Change Surface
+`make check` is a broad local baseline, not the default edit loop. Do not run service tests for docs-only work or broad suites merely because they exist.
 
-When work can change Go, classify only the triggered pressures: package owner,
-import direction, composition, or exported surface; method sets, nil/zero,
-errors, or context; resource or transaction lifetime; mutable ownership,
-aliasing, concurrency, or lifecycle; canonical, generated, or hand-written
-authority; and repository-native proof. Activate only the matching existing Go
-methods; untriggered categories create no work. Close every triggered category
-with its phase or skill owner, or name the owner and condition that must reopen
-it.
+## Ownership
 
-## Instruction Ownership
-
-- Keep global rules here.
-- [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
-- Keep path selection, phase order, review routing, and movement rules in `docs/spec-first-workflow.md`.
-- Keep phase-specific method in `docs/spec-first-workflow/phases/`.
-- Keep artifact persistence and status rules in `docs/spec-first-workflow/shared/artifact-model.md`.
-- Keep built-in subagent delegation, review independence, and handoff rules in `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
-- Keep task-specific decisions in task-local artifacts.
-- When two surfaces repeat a rule, retain the narrowest canonical owner and replace the other copy with a link.
+- `docs/spec-first-workflow.md` owns routing and movement.
+- Phase files own unique decision methods; `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns optional read-only lanes and handoff.
+- Skills provide methods; they do not create work or override accepted decisions.
+- Task-local artifacts own accepted task decisions. Runtime and generated authorities named there win over derived prose.
+- Keep a rule in its narrowest owner; replace duplicates with links or delete them.

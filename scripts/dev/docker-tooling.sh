@@ -508,8 +508,10 @@ workflow-routing-check)
 	# use host jq and filesystem semantics; the base Go image intentionally does
 	# not bundle those tools.
 	run_go "go run ./scripts/ci/hard-skills-check"
-	bash "${ROOT_DIR}/scripts/ci/instruction-evals-check.sh"
 	bash "${ROOT_DIR}/scripts/ci/workflow-instructions-check.sh"
+	;;
+instruction-evals-harness)
+	bash "${ROOT_DIR}/scripts/ci/instruction-evals-check.sh"
 	;;
 guardrails-check)
 	run_go "bash ./scripts/ci/required-guardrails-check.sh"

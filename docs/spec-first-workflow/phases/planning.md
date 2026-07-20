@@ -26,7 +26,8 @@ Direct changes may use an inline plan.
 
 ## Outputs
 
-A compact `tasks.md`:
+A compact `tasks.md` only when multiple steps, owners, or a later session need
+an executable ledger:
 
 ```markdown
 # Goal
@@ -79,7 +80,7 @@ Before readiness, cold-walk every mandatory dependency path and planned wave fro
 
 ## Readiness Review
 
-For structured or orchestrated work, run independent [Task Review / Readiness](task-review-readiness.md) before implementation. Direct work needs only its inline plan and focused self-check unless the user or risk requires independent review.
+Use focused self-review by default. Trigger independent [Task Review / Readiness](task-review-readiness.md) only when the user requests it or the plan is high-impact, hard to reverse, cross-owner, or weakly falsifiable.
 
 Repair planning-owned findings directly. Reopen an earlier owner when a task would need to choose product behavior, source of truth, runtime mechanism, package ownership, test strategy, or rollout policy.
 
@@ -87,4 +88,4 @@ Task review, planning-owned repair, and fresh re-review are internal checkpoints
 
 ## Stop Rule
 
-The ledger is cold-start ready when every dependency root is startable from cited closed inputs and every downstream task and proof becomes executable and completable in dependency order without chat history or a new behavior, mechanism, ownership, proof, or concurrency decision. Every mandatory path must remain owned, traceable, provable, grouped into reviewed earliest-safe planned waves, and backed by a required readiness review of `PASS`. Only then may implementation start.
+The ledger is cold-start ready when every dependency root is startable from cited closed inputs and every downstream task and proof becomes executable and completable in dependency order without chat history or a new behavior, mechanism, ownership, proof, or concurrency decision. Every declared path remains owned, traceable, and provable; any triggered review is resolved before implementation starts.

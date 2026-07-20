@@ -35,8 +35,8 @@ Keep symbols unexported and code with its current owner unless the selected resp
 
 ## Review
 
-For structured or orchestrated work, use [Technical Design Review](technical-design-review.md) with system design before planning. It is an internal checkpoint: the owning root repairs and re-reviews in the same root session. Direct work uses it only when the user or risk requires it.
+Use focused self-review by default. Trigger [Technical Design Review](technical-design-review.md) with system design before planning only when the user requests it or the decision is high-impact, hard to reverse, cross-owner, or weakly falsifiable.
 
 ## Stop Rule
 
-This phase is complete when accepted behavior is preserved, every changed responsibility has an evidence-backed owner and file placement or deterministic implementation-local rule, planning has no material ownership, dependency, generated/manual, or exported-surface decision left to make, and any required technical-design review has returned `PASS`. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.
+This phase is complete when accepted behavior is preserved, every changed responsibility has an evidence-backed owner and file placement or deterministic implementation-local rule, planning has no material ownership, dependency, generated/manual, or exported-surface decision left to make, and any triggered technical-design review is resolved. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.

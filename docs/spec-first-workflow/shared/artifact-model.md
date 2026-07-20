@@ -40,10 +40,10 @@ Otherwise keep the result inline.
 
 | Artifact | Create when | Owns | Does not own |
 | --- | --- | --- | --- |
-| `spec.md` | Required for structured/orchestrated work; direct work uses it only when decisions must survive. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
+| `spec.md` | A behavior or authority decision must survive into later work. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
 | `design/overview.md` or focused `design/*` | Implementation would otherwise choose architecture, contract, data, failure, rollout, or package ownership. | Selected mechanism and ownership decisions. | Task progress. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations, observables, proof levels, residual gaps. | Test implementation. |
-| `tasks.md` | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, planned waves, owners, evidence, progress, completion condition. | New product or design decisions. |
+| `tasks.md` | Multiple steps, owners, or a later session need an executable ledger. | Executable order, planned waves, owners, evidence, progress, completion condition. | New product or design decisions. |
 | `research/*.md` | Evidence must be reused, audited, or refreshed. | Findings, source limits, conflicts, decision impact. | Final task decisions. |
 | `rollout.md` | Deployment, migration, backfill, compatibility, or rollback has a non-trivial sequence. | Operational order, gates, rollback/failback, observables. | Product scope. |
 | `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action. | Duplicate spec/design/task content. |
@@ -59,11 +59,9 @@ status: draft | ready | blocked | done
 ```
 
 - `draft`: still being authored or repaired.
-- `ready`: the artifact has closed every decision or input it owns for the accepted completion condition, and its next consumer can use them without semantic invention. A ready `tasks.md` additionally satisfies [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure) for every mandatory task and proof path through that completion; a known-unavailable input on such a path requires `blocked`.
+- `ready`: the artifact has closed every decision or input it owns for the accepted completion condition, and its next consumer can use them without semantic invention. A ready `tasks.md` additionally satisfies [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure) for every task and proof path it declares; a known-unavailable input on such a path requires `blocked`.
 - `blocked`: name the missing decision/evidence and reopen owner.
 - `done`: use for execution/closeout state, not as a substitute for evidence.
-
-When review is required, only `PASS` can move an artifact to `ready` or permit `done`; `CONCERNS` keeps it `draft` while the owner dispositions the concern and obtains fresh review, and `FAIL` requires repair or reopening.
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 

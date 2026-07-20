@@ -19,8 +19,8 @@ completion bar while keeping the spec as small as the decision surface allows.
 
 ## Outputs
 
-For structured/orchestrated work, a compact `spec.md`; direct work may keep the
-same decisions inline. Use only applicable sections:
+When a behavior or authority decision must survive into later work, a compact
+`spec.md`; otherwise keep the same decisions inline. Use only applicable sections:
 
 ```markdown
 # <User/operator-visible outcome>
@@ -117,9 +117,9 @@ scope. Do not add exhaustive sections for unaffected concerns.
 
 ## Review
 
-For structured or orchestrated work, run the independent [Specification
-Review](specification-review.md) before leaving this phase. Direct work uses
-focused self-review unless the user or risk requires independent review.
+Use focused self-review by default. Trigger an independent [Specification
+Review](specification-review.md) only when the user requests it or the decision
+is high-impact, hard to reverse, cross-owner, or weakly falsifiable.
 
 Use the shared [Review
 Independence](../shared/subagents-and-handoff.md#review-independence) contract for
@@ -127,7 +127,7 @@ disposition, repair, and convergence.
 
 ## Stop Rule
 
-Continue to design or planning when the Decision Bar is met and the required
-review has returned `PASS`. Reopen intake, research, or a user/specialist
+Continue to design or planning when the Decision Bar is met and any triggered
+review has been resolved. Reopen intake, research, or a user/specialist
 decision when the missing answer belongs there. Do not start implementation
 from a blocked spec.

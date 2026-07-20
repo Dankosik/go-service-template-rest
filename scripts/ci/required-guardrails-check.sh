@@ -129,7 +129,7 @@ require_regex '-f build/docker/Dockerfile' .github/workflows/cd.yml "CD must use
 # Instruction ownership and runtime configuration.
 require_regex 'docs/spec-first-workflow\.md' AGENTS.md "AGENTS.md must link the workflow router"
 require_regex '^## Engineering Judgment$' AGENTS.md "AGENTS.md must include engineering judgment"
-require_regex '^## Collaboration$' AGENTS.md "AGENTS.md must include collaboration guidance"
+require_regex '^## Routing$' AGENTS.md "AGENTS.md must include workflow routing"
 require_absent_regex '^@RTK\.md$' AGENTS.md "AGENTS.md must not duplicate user-level RTK instructions"
 require_absent_regex '^model[[:space:]]*=' .codex/config.toml "root model selection must remain user-owned"
 require_absent_regex '^model_reasoning_effort[[:space:]]*=' .codex/config.toml "root reasoning effort must remain user-owned"
@@ -142,20 +142,21 @@ for agent_config in .codex/agents/*.toml; do
   require_absent_regex '^model_reasoning_effort[[:space:]]*=' "${agent_config}" "subagent configs must not pin reasoning effort"
 done
 
-# Workflow checks keep structure and links deterministic without locking prose.
-bash scripts/ci/workflow-instructions-check.sh
+# Workflow routing runs the instruction checker; guardrails stay independent so
+# CI does not run the same checker twice.
 require_regex '^workflow-routing-check:$' Makefile "Makefile must expose the compatibility workflow check target"
 require_regex 'go run \.\/scripts/ci/hard-skills-check' Makefile "workflow check target must run the hard-skills checker"
 require_regex 'bash scripts/ci/workflow-instructions-check\.sh' Makefile "workflow check target must run the lean instruction checker"
 require_regex '^workflow-behavior-evals-check:$' Makefile "Makefile must expose the behavior eval manifest check"
 require_regex '^workflow-behavior-evals:$' Makefile "Makefile must expose external behavior eval execution"
+require_regex '^instruction-evals-harness:$' Makefile "Makefile must expose the opt-in instruction eval harness"
 require_regex 'bash scripts/dev/workflow-behavior-evals\.sh check' scripts/ci/workflow-instructions-check.sh "workflow instruction check must validate the behavior eval manifest"
 require_regex 'run: make workflow-routing-check' .github/workflows/ci.yml "CI must run the workflow instruction check"
 require_regex 'run: make workflow-routing-check' .github/workflows/cd.yml "release preflight must run the workflow instruction check"
 require_regex 'workflow-routing-check\)' scripts/dev/docker-tooling.sh "Docker tooling must expose the workflow check"
 require_regex 'run_go "go run \.\/scripts/ci/hard-skills-check"' scripts/dev/docker-tooling.sh "Docker workflow check must run the hard-skills checker in the Go image"
-require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/instruction-evals-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the instruction eval guard"
 require_regex 'bash "\$\{ROOT_DIR\}/scripts/ci/workflow-instructions-check\.sh"' scripts/dev/docker-tooling.sh "Docker workflow check must run the workflow instruction guard"
+require_regex 'instruction-evals-harness\)' scripts/dev/docker-tooling.sh "Docker tooling must expose the opt-in instruction eval harness"
 require_regex '^test-watch:$' Makefile "Makefile must expose focused test watch"
 require_regex '^[[:space:]]+go tool gotestsum --watch --format=pkgname-and-test-fails$' Makefile "test-watch must use focused gotestsum watch"
 require_regex '^lint-fast:$' Makefile "Makefile must expose fast lint"

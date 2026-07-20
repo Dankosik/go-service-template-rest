@@ -18,7 +18,7 @@ Load for CI gate matrices, required status checks, local/CI command parity, time
 - Treat timed-out, cancelled, missing, or path-filter-skipped required checks as blocking delivery evidence until rerun or covered by exception governance.
 - Distinguish workflow-level skip from job-level skip: GitHub keeps required checks pending when a workflow is skipped by path/branch filters or skip markers, but a job skipped by a conditional can report success. Required aggregate jobs that depend on other jobs need `if: always()` or equivalent failure propagation.
 - If merge queue is enabled, required-check workflows must also run on `merge_group`; otherwise required checks may never report for the merge group.
-- Use `make check` for fast local confidence; require `make check-full` or `make docker-ci` when Docker-backed integration, migration rehearsal, or image scanning evidence matters.
+- Use focused package proof plus `make lint-fast` when useful for the edit loop; `make check` is a broad local baseline. Require `make check-full` or `make docker-ci` when Docker-backed integration, migration rehearsal, or image scanning evidence matters.
 - Treat nightly failures as release blockers only when they affect a changed path, reveal an active regression, or the release policy explicitly promotes nightly reliability evidence into a hard gate.
 
 ## Imitate

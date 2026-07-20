@@ -39,7 +39,7 @@ Optional:
 
 Bootstrap shortcuts:
 - `make bootstrap` (recommended onboarding shortcut; minimal local prep)
-- `make check` (recommended quick quality shortcut for everyday development)
+- focused package proof plus `make lint-fast` when useful (recommended everyday loop)
 - `make check-full` (full CI-like local validation)
 - `make pr-check` (strict pre-PR parity; requires Docker and base/head refs)
 - `make template-init` (required once after cloning this template into a new service repo)
@@ -60,7 +60,7 @@ Bootstrap shortcuts:
   - Does not run template/admin rewiring (`go.mod` module init or CODEOWNERS replacement).
 
 - `make check`
-  - Purpose: quick local validation for daily feature work.
+  - Purpose: broad local baseline, not the default edit loop.
   - Behavior:
     - with local Go toolchain: runs `fmt-check`, `lint`, `test`;
     - without local Go but with Docker daemon: runs `docker-fmt-check`, `docker-lint`, `docker-test`.
@@ -408,7 +408,7 @@ Bootstrap shortcuts:
 ### Security and CI-like local checks
 
 - `make check`
-  - Quick daily check:
+  - Broad local baseline:
     - native: `fmt-check`, `lint`, `test`;
     - Docker fallback (when native Go is unavailable): `docker-fmt-check`, `docker-lint`, `docker-test`.
 
@@ -518,12 +518,16 @@ Bootstrap shortcuts:
   - Runs the cost-authorized comparison only after sealing every manifest-selected eval bundle from both runner snapshots. This is Stage 1 comparison plumbing, not proof of implicit router provenance or Stage 2 activation.
 
 - `make workflow-routing-check`
-  - Runs the hard-skills checker, selected instruction-eval manifest/fixture and fake-adapter harness checks, and workflow-instruction structural checks.
-  - The compatibility target name is retained for CI stability; it no longer evaluates a custom workflow state machine or enforces an aggregate word limit.
+  - Runs the hard-skills checker and fast deterministic workflow-instruction structural checks.
+  - The compatibility target name is retained for CI stability; it does not run model, fake-adapter, or mutation coverage.
   - Makes no external model calls.
 
+- `make instruction-evals-harness`
+  - Runs the slower fake-adapter and mutation harness.
+  - Use only when its implementation or selected fixtures change, or in a targeted/nightly validation lane.
+
 - `make workflow-behavior-evals-check`
-  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E66, a prompt and pass condition for each case, and the required invariant set.
+  - Validates that `docs/spec-first-workflow-evals.md` contains exactly E01–E12, a prompt and pass condition for each case, and the required invariant set.
   - Makes no model calls and is not behavioral proof.
 
 - `WORKFLOW_EVAL_TARGETS=<targets> WORKFLOW_EVAL_BASE_REF=34d9776 WORKFLOW_EVAL_RUNNER=/path/to/runner WORKFLOW_EVAL_JUDGE=/path/to/judge WORKFLOW_EVAL_COST_AUTHORIZED=true make workflow-behavior-evals`
@@ -594,7 +598,7 @@ Cache and volume cleanup is manual: it can slow later cold runs or delete local 
 ### First run after clone (recommended)
 
 1. `make bootstrap`
-2. `make check`
+2. `make check` (broad baseline after bootstrap)
 3. `make run`
 4. Optional full validation: `make check-full`
 
@@ -616,8 +620,8 @@ Use the smallest check that matches the decision you are about to make:
 
 | When | Run | Notes |
 | --- | --- | --- |
-| Everyday edit loop | `make check` | Quick confidence only: formatting, lint, and unit tests through native tools or Docker fallback. |
-| Everyday pinned Docker edit loop | `make docker-check` | Same quick confidence scope as `make check`, but always through Docker tooling. |
+| Everyday edit loop | focused package test plus `make lint-fast` when useful | Match the changed package and claim; avoid full lint and full tests while iterating. |
+| Everyday pinned Docker edit loop | focused Docker test target | Use the smallest matching Docker target when a pinned environment is needed. |
 | Before opening a PR or pushing a risky branch | `BASE_REF=origin/main HEAD_REF=HEAD make pr-check` | Strict pre-PR parity. Requires Docker and base/head refs, runs the Docker CI bundle, and checks OpenAPI breaking compatibility when the base spec exists. Replace `origin/main` with the branch or SHA GitHub will compare against. |
 | Full local baseline with fallback | `BASE_REF=origin/main HEAD_REF=HEAD make check-full` | Broad local baseline. With Docker running this calls `make docker-ci`; without Docker it calls `make ci-local` and may skip Docker-only checks. |
 | Closest local CI parity | `BASE_REF=origin/main HEAD_REF=HEAD make docker-ci` | Preferred when Docker is available because it uses pinned Docker tooling images and runs Go-native tools inside the pinned Go image where needed. |
@@ -645,7 +649,7 @@ Targeted parity checks:
 
 ### Common local failures
 
-- Formatting failure: run `make fmt`, then rerun `make fmt-check` or `make check`.
+- Formatting failure: run `make fmt`, then rerun `make fmt-check` or the focused proof.
 - Lint failure: read the linter name in the output, fix that package, then rerun `make lint`. Use `make docker-lint` when local Go or linter behavior looks host-specific.
 - Native full-check OpenAPI lint failure with missing Node/npm: install Node/npm for native mode, or run `make docker-ci` with Docker for pinned Node tooling.
 - Docker unavailable: start Docker Desktop/Engine and rerun the Docker target. Use `make doctor-docker` when Docker commands fail before tests start.
