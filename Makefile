@@ -53,7 +53,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
 	sqlc-generate sqlc-check openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	migration-validate container-security run build docker-build docker-run compose-up compose-down vendor
+	migration-validate container-security run build docker-build docker-run compose-up compose-down vendor claude-skills-sync
 
 help:
 	@echo "Setup and everyday development:"
@@ -86,6 +86,12 @@ template-init:
 
 template-init-check:
 	bash ./scripts/ci/template-init-check.sh
+
+claude-skills-sync:
+	@mkdir -p .claude/skills
+	@find .claude/skills -maxdepth 1 -type l -delete
+	@set -e; for d in .agents/skills/*/; do n=$$(basename "$$d"); ln -s "../../.agents/skills/$$n" ".claude/skills/$$n"; done
+	@echo ".claude/skills: $$(ls .claude/skills | wc -l | tr -d ' ') skill links"
 
 check: fmt-check lint test
 

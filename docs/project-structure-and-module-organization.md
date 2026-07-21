@@ -154,7 +154,7 @@ Canonical source of project Codex subagent definitions.
 Why: these standalone TOML files are loaded through `.codex/config.toml`.
 
 ### `.claude/`
-Claude Code project configuration: `.claude/agents/*.md` mirrors the `.codex/agents/*.toml` specialist roles, `.claude/skills` is a symlink to the canonical `.agents/skills/`, and `CLAUDE.md` at the repository root imports `AGENTS.md`. `settings.local.json` is personal and gitignored.
+Claude Code project configuration: `.claude/agents/*.md` mirrors the `.codex/agents/*.toml` specialist roles, `.claude/skills/` holds per-skill symlinks into the canonical `.agents/skills/` (resync with `make claude-skills-sync`), and `CLAUDE.md` at the repository root imports `AGENTS.md`. `settings.local.json` is personal and gitignored.
 Why: this is the Claude Code counterpart of `.codex/`; [docs/agent-harness.md](agent-harness.md) owns the mapping between the two harnesses' native controls and the wiring rules.
 
 ### `.github/`

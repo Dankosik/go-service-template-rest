@@ -43,7 +43,7 @@ Load this file only when a durable repository fact could change the handoff's ow
 - `specs/`
   - spec-first work artifacts
 - `.agents/skills/`
-  - canonical local skill source (Claude Code reads it via the `.claude/skills` symlink)
+  - canonical local skill source (Claude Code reads it via per-skill symlinks in `.claude/skills/`; `make claude-skills-sync` resyncs)
 - `.codex/agents/` and `.claude/agents/`
   - the same specialist subagent roles for the Codex App and Claude Code
 

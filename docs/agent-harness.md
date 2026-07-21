@@ -65,9 +65,10 @@ The repository ships both harness configurations pre-wired; a fresh clone needs 
 
 - `CLAUDE.md` at the repository root imports `AGENTS.md` (`@AGENTS.md`), so Claude Code loads the same contract the Codex App reads directly.
 - `.codex/agents/*.toml` and `.claude/agents/*.md` define the same specialist roles for their harnesses. When changing a role, mirror the change in both files; neither file owns the other.
-- `.agents/skills/` is the canonical skill source. Claude Code discovers it through the `.claude/skills` symlink; do not fork skill content into `.claude/`.
+- `.agents/skills/` is the canonical skill source. Claude Code discovers each skill through a per-skill symlink `.claude/skills/<name>` → `../../.agents/skills/<name>` — the officially documented pattern (a skill *entry* may be a symlink); do not fork skill content into `.claude/`, and do not replace the per-skill links with one whole-directory symlink (that variant has a history of discovery regressions).
+- Adding or removing a skill in `.agents/skills/` requires resyncing the links: run `make claude-skills-sync`.
 - `.claude/settings.local.json` is personal and gitignored. Commit shared Claude Code policy only when it must apply to every clone.
-- Windows checkouts need symlink support (`git config core.symlinks true` with Developer Mode or an elevated shell) for `.claude/skills`; otherwise recreate the link manually after cloning.
+- Windows checkouts need symlink support (`git config core.symlinks true` with Developer Mode or an elevated shell) for the `.claude/skills/*` links; otherwise run `make claude-skills-sync` (or recreate the links manually) after cloning.
 
 ## Programmatic Runs
 

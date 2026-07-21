@@ -58,7 +58,7 @@ Use `status: draft | ready | blocked | done` when durable status is useful. Do n
 
 ## Agents And Skills
 
-`.codex/agents/*.toml` and `.claude/agents/*.md` contain the same project-scoped read-only specialist roles for the Codex App and Claude Code respectively. `.agents/skills` is the canonical skill set, exposed to Claude Code through the `.claude/skills` symlink. `CLAUDE.md` imports `AGENTS.md`, so both harnesses load one contract; [docs/agent-harness.md](docs/agent-harness.md) owns the mapping between their native controls (workers, subagents, models, reasoning effort).
+`.codex/agents/*.toml` and `.claude/agents/*.md` contain the same project-scoped read-only specialist roles for the Codex App and Claude Code respectively. `.agents/skills` is the canonical skill set, exposed to Claude Code through per-skill symlinks in `.claude/skills/` (`make claude-skills-sync` resyncs them). `CLAUDE.md` imports `AGENTS.md`, so both harnesses load one contract; [docs/agent-harness.md](docs/agent-harness.md) owns the mapping between their native controls (workers, subagents, models, reasoning effort).
 
 The repository ships the runtime agent and skill guidance used by Codex and
 Claude Code. It does not ship a model-evaluation runner, fake adapters, or a
