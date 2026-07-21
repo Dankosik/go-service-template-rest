@@ -39,7 +39,16 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 - Claude Code accepts the aliases `haiku`, `sonnet`, `opus`, and `fable` on the `Agent` tool and in agent frontmatter; the exact model IDs are for SDK and API dispatch.
 - **Defaults are fallbacks, overrides are the contract.** The `model:` frontmatter in `.claude/agents/*.md` records each role's tier default; it never substitutes for the per-dispatch choice. Claude Code resolves a lane's model as: `CLAUDE_CODE_SUBAGENT_MODEL` env var → the `model` parameter on the `Agent` tool call → the definition's `model` frontmatter → the session model. The root passes a dispatch-time `model` whenever task difficulty, evidence volume, latency/cost, or consequence departs from the role default; the parameter also sticks for follow-up messages to that lane.
 - Reasoning effort has no per-dispatch parameter. It resolves as: `CLAUDE_CODE_EFFORT_LEVEL` env var → the definition's `effort` frontmatter → the session effort → the model default. Roles whose consequence fixes their effort declare it in frontmatter (`critical-reviewer-agent` and `critical-adjudicator-agent`: `xhigh`; `evidence-agent`: `low`); all other roles leave `effort` unset so the root steers them through the session effort level.
-- Map Anthropic reasoning effort to lane consequence, not habit: `low` for mechanical lanes and small lookups, `medium`/`high` for ordinary implementation and review, `xhigh` for complex agentic implementation, `max` only when correctness outweighs latency and cost.
+- Map Anthropic reasoning effort to the task, not habit ([official guidance](https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings)):
+
+| Effort | Use for |
+| --- | --- |
+| `low` / `medium` | Routine mechanical work: small lookups, summaries, drift checks, minor text or code edits. Fastest and cheapest. |
+| `high` (default) | Most work: ordinary implementation, review lanes, document analysis. The balance point — start here. |
+| `xhigh` | Long agentic and coding outcomes: refactoring, complex debugging, multi-step file work. Deeper than `high`, cheaper than `max`. |
+| `max` | Hardest reasoning only: architecture decisions, research- or math-grade problems, or escalation after `high`/`xhigh` produced a wrong result. Slowest and most token-hungry. |
+
+- The practical rule: hold `high`; raise to `xhigh`/`max` only when the model errs or the task is genuinely hard; drop to `low`/`medium` for trivia when limits matter. Escalation after a wrong result is a legitimate trigger — a wrong answer at `high` justifies one retry at `xhigh`/`max` before rerouting.
 - Re-review remains at least as capable (model and effort) as the review that found the issue.
 
 ## Claude Code Worker Mechanics
