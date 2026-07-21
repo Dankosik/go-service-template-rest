@@ -90,7 +90,7 @@ At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/suba
 
 ## Prompt Maintenance
 
-Current reference: OpenAI's [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model) and [Prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6).
+Current references: for Codex sessions, OpenAI's [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model) and [Prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6); for Claude Code sessions, Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [Claude prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview). [Agent Harness](agent-harness.md) owns which harness's native controls apply.
 
 Preserve outcome, permission boundaries, success criteria, proof, and stop
 conditions. Change one instruction group at a time and review realistic

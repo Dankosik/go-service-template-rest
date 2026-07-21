@@ -29,16 +29,16 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - `answer`, `explain`, `review`, `diagnose`, and `plan` authorize inspection and reporting only. `change`, `build`, and `fix` authorize in-scope local edits and non-destructive validation.
 - Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary reads, in-scope edits, or tests.
 - Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
-- A Codex Goal is an execution control for implementation only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts.
+- A durable execution control (a Codex Goal in the Codex App; the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) is for implementation only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts.
 - For ordinary non-interactive shell calls, avoid shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
 
 ## Routing
 
 `docs/spec-first-workflow.md` owns path selection. Choose the smallest path that can close the accepted outcome:
 
-- **Direct:** the request is clear, local, reversible, has one owner, bounded proof, and no unresolved protected-domain decision. The root may edit the assigned checkout, self-review the bounded diff, and run focused proof. No Goal, App Worker, worktree, durable artifact, independent review, or workflow opt-out is required.
+- **Direct:** the request is clear, local, reversible, has one owner, bounded proof, and no unresolved protected-domain decision. The root may edit the assigned checkout, self-review the bounded diff, and run focused proof. No durable execution control, native worker, worktree, durable artifact, independent review, or workflow opt-out is required.
 - **Structured:** the normal non-trivial case. Keep a reviewed `spec.md` and reviewed `tasks.md`; create design and test artifacts only when their decisions must survive.
-- **Orchestrated:** use durable coordination, parallel lanes, or optional Goal and App Worker/worktree execution only when broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution makes coordination real.
+- **Orchestrated:** use durable coordination, parallel lanes, or optional durable-control and native worker/worktree execution only when broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution makes coordination real.
 
 Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
 
@@ -74,8 +74,8 @@ Before structured or orchestrated work designs against an external platform, unf
 ## Implementation And Evidence
 
 - During implementation, optimize for the shortest evidence-backed path to the accepted outcome. Quality means satisfying the accepted criteria with matching proof, not maximizing analysis, findings, or review passes. Review, correction, delegation, and artifacts are means, not progress by themselves; continue a loop only while it closes a criterion, resolves evidence required for acceptance, or exposes a real blocker.
-- The root may implement direct local work. Use a native Codex App Worker and managed worktree only when the routing triggers above apply or the user explicitly delegates implementation.
-- A Codex Goal is for genuinely long-running, multi-step, or resumable implementation; one root Goal spans that outcome. Do not create one for ordinary direct work or non-implementation reasoning.
+- The root may implement direct local work. Use the current harness's native implementation worker and isolated worktree ([Agent Harness](docs/agent-harness.md): a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation) only when the routing triggers above apply or the user explicitly delegates implementation.
+- A durable execution control (Codex Goal or Claude Code task list) is for genuinely long-running, multi-step, or resumable implementation; one root control spans that outcome. Do not create one for ordinary direct work or non-implementation reasoning.
 - Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. Fix defects at the narrowest shared owner proved by the reproducer.
 - Review only changed and transitively affected surfaces. Return all evidence-backed compatible findings together; do not create ceremonial re-review loops.
 - Map every completion claim to current proof of equal scope. Proof for an immutable commit/tree remains valid after a byte-identical fast-forward; rerun only when the tree, relevant environment or preconditions, claim scope, provenance, or risk surface changed.
@@ -111,6 +111,7 @@ it.
 ## Instruction Ownership
 
 - Keep global rules here.
+- [docs/agent-harness.md](docs/agent-harness.md) owns harness detection and the mapping from workflow concepts to native Codex App and Claude Code controls: durable execution controls, workers, subagent lanes, model selection, and reasoning effort.
 - [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - `docs/spec-first-workflow.md` owns routing and movement.
 - Keep phase-specific method in `docs/spec-first-workflow/phases/`.

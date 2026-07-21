@@ -3,7 +3,7 @@
 Load this file only when a durable repository fact could change the handoff's owner, source-of-truth guidance, starting surface, or proof command. Skip it when the source task is already repository-grounded.
 
 ## What This Repository Is
-- This repo is a Codex-native Go REST service template.
+- This repo is a harness-portable Go REST service template; it runs natively in both the Codex App and Claude Code (`docs/agent-harness.md` owns the control mapping).
 - It is not a business-specific product repo with one fixed domain model.
 - The sample service is intentionally thin; do not overfit prompts to `ping` or `ping_history` unless the request actually points there.
 
@@ -43,7 +43,9 @@ Load this file only when a durable repository fact could change the handoff's ow
 - `specs/`
   - spec-first work artifacts
 - `.agents/skills/`
-  - canonical local skill source
+  - canonical local skill source (Claude Code reads it via the `.claude/skills` symlink)
+- `.codex/agents/` and `.claude/agents/`
+  - the same specialist subagent roles for the Codex App and Claude Code
 
 ## Workflow Facts That Often Matter
 - Non-trivial work is orchestrator-first and spec-first.
@@ -63,7 +65,7 @@ Load this file only when a durable repository fact could change the handoff's ow
 - Integration tests: `make test-integration`
 - Security scans: `make go-security`, `make secret-scan`
 - Migration rehearsal: `make migration-validate`
-- Workflow and skill instructions: `make workflow-routing-check`
+- Workflow and skill instructions: `git diff --check`
 
 ## Context Rules For This Skill
 - Do not inject this profile as a standard project summary.

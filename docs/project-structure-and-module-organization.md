@@ -7,6 +7,7 @@ This document explains the `go-service-template-rest` repository layout: what is
 ```text
 .
 ├── .agents/                    # canonical project skill sources
+├── .claude/                     # Claude Code project configuration
 ├── .codex/                      # Codex project-agent configuration
 ├── .github/                     # CI, release, and repository policy
 ├── .artifacts/bench/            # generated local benchmark evidence, not source
@@ -146,11 +147,15 @@ Why: development rules and structure should be explicit and versioned, not scatt
 
 ### `.agents/skills`
 Canonical source of runnable `SKILL.md` definitions.  
-Why: this is the Codex-native authoring and runtime source for repository skills.
+Why: this is the authoring and runtime source for repository skills, loaded by both supported harnesses.
 
 ### `.codex/agents`
 Canonical source of project Codex subagent definitions.
 Why: these standalone TOML files are loaded through `.codex/config.toml`.
+
+### `.claude/`
+Claude Code project configuration: `.claude/agents/*.md` mirrors the `.codex/agents/*.toml` specialist roles, `.claude/skills` is a symlink to the canonical `.agents/skills/`, and `CLAUDE.md` at the repository root imports `AGENTS.md`. `settings.local.json` is personal and gitignored.
+Why: this is the Claude Code counterpart of `.codex/`; [docs/agent-harness.md](agent-harness.md) owns the mapping between the two harnesses' native controls and the wiring rules.
 
 ### `.github/`
 CI workflow and dependency update automation (Dependabot).  

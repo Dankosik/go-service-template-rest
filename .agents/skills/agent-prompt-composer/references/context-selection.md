@@ -18,7 +18,7 @@ Common signals in rough user input:
 - plan/spec/design
   - `spec`, `plan`, `design`, `architecture`, `спека`, `план`, `diseño`
 - prompt/tooling/skills
-  - `skill`, `prompt`, `agent`, `workflow`, `codex`
+  - `skill`, `prompt`, `agent`, `workflow`, `codex`, `claude`
 
 If the input mixes several modes, choose the one that best matches the requested outcome.
 If the same mode appears several times through repeated wording, treat that as emphasis rather than separate tasks.
@@ -79,19 +79,20 @@ Validation to mention:
 
 ### Skills / Prompts / Agents / Workflow Tooling
 Signals:
-- `skill`, `prompt`, `agent`, `workflow`, `codex`
+- `skill`, `prompt`, `agent`, `workflow`, `codex`, `claude`
 
 Inspect first:
 - `.agents/skills/`
 - `.codex/agents/`
+- `.claude/agents/`
+- `docs/agent-harness.md`
 - `AGENTS.md`
 - `docs/spec-first-workflow.md`
 - `docs/subagent-contract.md`
 - `docs/subagent-brief-template.md`
 
 Validation to mention:
-- `go test ./scripts/ci/hard-skills-check`
-- `make workflow-routing-check`
+- `git diff --check`
 - `git diff --check` when files are created or edited
 
 ### Tests / Flakes / Race / CI

@@ -1,6 +1,6 @@
 # Go Service Template REST
 
-Codex-native Go REST template for solo developers who want Codex to work inside real Go, API, data, and operational constraints without carrying a heavyweight process prompt.
+Agent-native Go REST template for solo developers who want Codex or Claude Code to work inside real Go, API, data, and operational constraints without carrying a heavyweight process prompt. Both harnesses are pre-wired: clone the repository and either agent picks up the same instructions, specialist subagents, and skills with no setup.
 
 The repository combines:
 
@@ -58,11 +58,11 @@ Use `status: draft | ready | blocked | done` when durable status is useful. Do n
 
 ## Agents And Skills
 
-`.codex/agents/*.toml` contains project-scoped read-only specialist roles. `.agents/skills` is the canonical Codex-native skill set.
+`.codex/agents/*.toml` and `.claude/agents/*.md` contain the same project-scoped read-only specialist roles for the Codex App and Claude Code respectively. `.agents/skills` is the canonical skill set, exposed to Claude Code through the `.claude/skills` symlink. `CLAUDE.md` imports `AGENTS.md`, so both harnesses load one contract; [docs/agent-harness.md](docs/agent-harness.md) owns the mapping between their native controls (workers, subagents, models, reasoning effort).
 
-The repository ships the runtime agent and skill guidance used by Codex. It
-does not ship a model-evaluation runner, fake adapters, or a second CI system
-for validating that guidance.
+The repository ships the runtime agent and skill guidance used by Codex and
+Claude Code. It does not ship a model-evaluation runner, fake adapters, or a
+second CI system for validating that guidance.
 
 In non-implementation macro phases, evaluate whether concrete, independent, bounded research or review lanes improve evidence or review independence. Use only useful read-only subagent lanes and keep tightly coupled reasoning local; record a local-only reason in an existing artifact or handoff instead of creating a gate file. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns those lanes; the [implementation phase](docs/spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) retains its current optional Worker and root-review boundary.
 

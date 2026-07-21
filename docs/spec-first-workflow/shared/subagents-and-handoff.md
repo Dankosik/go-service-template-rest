@@ -4,7 +4,7 @@ Use built-in subagents and session handoffs only when they reduce a real context
 
 ## Read When
 
-- Distinguishing a built-in subagent lane from the native App implementation Worker.
+- Distinguishing a built-in subagent lane from the harness-native implementation Worker.
 - Requiring an independent verdict.
 - Resuming a task or handing it to another session.
 
@@ -39,11 +39,11 @@ Use a subagent when all are true:
 
 Good lanes include independent source research, one specialist design question, or review of a fixed non-implementation revision. Bad lanes include broad “review everything,” duplicate lenses, tiny lookups, and any implementation review, acceptance, specialist analysis, re-review, or repair.
 
-The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Built-in subagents are read-only research, challenge, or review lanes; they never implement or repair code, config, docs, or tests. The native App Worker is outside this contract and follows the [implementation phase](../phases/implementation-validation-closeout.md#optional-worker-execution).
+The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Built-in subagents are read-only research, challenge, or review lanes; they never implement or repair code, config, docs, or tests. In the Codex App a lane is a project subagent; in Claude Code it is an `Agent` tool lane ([Agent Harness](../../agent-harness.md#control-map)). The harness-native implementation Worker is outside this contract and follows the [implementation phase](../phases/implementation-validation-closeout.md#optional-worker-execution).
 
 Default to at most three concurrent research/review lanes, one bounded wave, and no nested delegation. Additional sequential lanes still require distinct decision-changing questions that could not be covered locally or in the first wave. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
 
-For read-only subagents, choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error. Re-review should be at least as capable as the review that found the issue. The implementation phase separately owns optional App Worker execution.
+For read-only subagents, choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error, using the [harness model map](../../agent-harness.md#model-and-effort-selection). Re-review should be at least as capable as the review that found the issue. The implementation phase separately owns optional native Worker execution.
 
 ## Lane Brief
 
@@ -151,6 +151,6 @@ Next action: <first executable action>
 Stop/reopen: <exact blocker behavior and owner>
 ```
 
-Use `Goal:` only when that implementation Goal actually exists. Earlier macro phases use `Objective:` and never create or continue a Codex Goal.
+Use `Goal:` only when that implementation execution control actually exists (a Codex Goal or Claude Code task list). Earlier macro phases use `Objective:` and never create or continue a durable execution control.
 
 Keep prompts in chat unless the user asks for a standalone prompt artifact. Do not include worker command manuals, model catalogs, full repository summaries, repeated authorization policy, or empty headings.

@@ -31,7 +31,7 @@ Revise the existing repository-local prompt-composer skill so it reconstructs ar
 
 Success means the canonical `.agents/skills/` source and useful examples/evals agree; the skill preserves exact identifiers, adds repository context only when it changes execution, and remains local to this repository.
 
-Inspect `.agents/skills/agent-prompt-composer/`. Keep dependencies minimal. Validate with `go test ./scripts/ci/hard-skills-check`, `make workflow-routing-check`, and `git diff --check`. Do not create a global or home-directory skill.
+Inspect `.agents/skills/agent-prompt-composer/`. Keep dependencies minimal. Validate with `git diff --check`. Do not create a global or home-directory skill.
 ```
 
 ## Example 3: Flaky Shutdown / Drain Investigation

@@ -27,7 +27,7 @@
       ],
       "expectations": [
         "The response makes the skill local to this repository and does not drift into a global solution.",
-        "The response names `.agents/skills` and validation such as `go test ./scripts/ci/hard-skills-check` or `git diff --check`.",
+        "The response names `.agents/skills` and validation such as `git diff --check`.",
         "The response explicitly treats the task as intent and context reconstruction for arbitrary messy user input rather than literal translation or prompt polish.",
         "The response includes examples, evals, or validation expectations as part of the deliverable.",
         "The response omits broad workflow and project summaries that the downstream agent can recover from named repository owners."

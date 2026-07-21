@@ -9,3 +9,4 @@ coverage.out
 .idea/
 .vscode/
 .DS_Store
+.claude/settings.local.json
