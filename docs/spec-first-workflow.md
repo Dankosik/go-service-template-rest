@@ -86,14 +86,37 @@ A request authorizing end-to-end implementation may continue through the needed 
 
 Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, acceptance, review, correction, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation review and handoff mechanics.
 
+### Phase Lock
+
+Planning `PASS` on an exact `tasks.md` revision with implementation-input
+closure commits the next transition to the first ready implementation task or
+wave. Status checks and compaction resume from artifacts without changing the
+phase. Concrete new evidence that invalidates a named accepted input or
+readiness disposition reopens only its smallest owner and preserves every
+unaffected disposition.
+
 At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/subagents-and-handoff.md#handoff).
 
 ## Prompt Maintenance
 
-Current references: for Codex sessions, OpenAI's [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model) and [Prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6); for Claude Code sessions, Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [Claude prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview). [Agent Harness](agent-harness.md) owns which harness's native controls apply.
+Current references: for Codex sessions, OpenAI's [model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices); for Claude Code sessions, Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview). [Agent Harness](agent-harness.md) owns which harness's native controls apply.
 
-Preserve outcome, permission boundaries, success criteria, proof, and stop
-conditions. Change one instruction group at a time and review realistic
-trigger, near-miss, and completion cases. This repository does not own a fake
-agent runner or judge; without an externally owned live evaluation system,
-invocation and model-behavior claims remain explicitly unproven.
+Use the repository [Task Contract](../AGENTS.md#task-contract) as the
+outcome-first prompt schema. State each durable instruction once in its
+narrowest owner and link to it elsewhere. Phrase it as an observable trigger,
+action, completion criterion, or stop condition. Prefer the allowed behavior;
+reserve prohibitions for safety, authorization, or a decisive exclusion. Avoid
+broad tone or brevity labels; name the required content and what may be omitted.
+
+Change one instruction group at a time. Retain examples and style guidance only
+when they encode a product requirement or close a measured gap, then review
+realistic trigger, near-miss, and completion cases. This repository does not own
+a fake agent runner or judge; without an externally owned live evaluation
+system, invocation and model-behavior claims remain explicitly unproven.
+
+The structural instruction gate proves canonical wording only. Claim that
+implementation orchestration behavior is fixed only after an externally owned
+live adapter exercises the current target model and harness against scope-creep
+rejection, repeated-action interruption, regression-correction rollback, and
+the planning-`PASS` transition. Without those results, report an instruction-
+level mitigation rather than verified model behavior.

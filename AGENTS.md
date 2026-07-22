@@ -6,10 +6,10 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 
 - Use the narrowest current evidence that can prove or falsify the next claim.
 - Reuse the current owner, repository pattern, standard library, and installed dependencies before adding machinery.
-- Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow.
+- Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow. Remove replaced code and adjacent stale artifacts unless current compatibility requires them.
 - Treat cancellation, deadlines, partial work, cleanup, shutdown, generated authority, and mutable ownership as first-class only when the change touches them.
 - During iteration, use cached focused checks and keep reusable local dependencies running. Reserve uncached tests, race, coverage, full lint, rebuilds, and teardown for a triggered claim or publication evidence; do not clean caches as a speed technique.
-- For performance changes, follow [Benchmarking](docs/benchmarking.md): choose the narrowest matching Go, in-process HTTP, real-PostgreSQL, or external HTTP proof; define workload and budget before measuring; preserve raw baseline/candidate evidence where comparison applies; and keep correctness proof independent. Before executing a benchmark, prefer the DigitalOcean runner when `doctl` is installed and its selected context is authorized; use the matching local command only when that remote path is unavailable. Read the `digitalocean-benchmark-runner` skill before remote execution, and keep every paid lifecycle operation behind explicit user authorization. Run `make benchmark-infra-check` when benchmark tooling or scenario infrastructure changes. Persistent history or blocking automation requires a stable dedicated testbed and a named threshold owner.
+- For performance changes, follow [Benchmarking](docs/benchmarking.md): choose the narrowest matching Go, in-process HTTP, real-PostgreSQL, or external HTTP proof; define workload and budget before measuring; preserve raw baseline/candidate evidence where comparison applies; and keep correctness proof independent. Before executing a benchmark, prefer the DigitalOcean runner when `doctl` is installed and its selected context is authorized; use the matching local command only when that remote path is unavailable. Read the `digitalocean-benchmark-runner` skill before remote execution, and keep every paid lifecycle operation inside an explicitly authorized cost and lifecycle envelope. Run `make benchmark-infra-check` when benchmark tooling or scenario infrastructure changes. Persistent history or blocking automation requires a stable dedicated testbed and a named threshold owner.
 
 ## Collaboration
 
@@ -28,6 +28,7 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 
 - `answer`, `explain`, `review`, `diagnose`, and `plan` authorize inspection and reporting only. `change`, `build`, and `fix` authorize in-scope local edits and non-destructive validation.
 - Ask before external writes, destructive actions, purchases, or material scope expansion. Do not ask before ordinary reads, in-scope edits, or tests.
+- An approved external-write or purchase envelope owns its cost, security, and proof bounds. Inside it, choose live-state parameters such as region, equivalent host or size, bounded retry route, and local or remote execution from current evidence; a rejected route is no longer valid. Reopen authorization only to exceed the envelope, weaken required security or proof, or change scope or behavior.
 - Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
 - A durable execution control (a Codex Goal in the Codex App; the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) is for implementation only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts.
 - For ordinary non-interactive shell calls, avoid shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
@@ -44,42 +45,24 @@ Public contracts, persisted data, security, money, concurrency/lifecycle, deploy
 
 ### Required Spine
 
-Structured and orchestrated work evaluates the phase router in order:
-
-1. establish the accepted outcome at intake;
-2. resolve decision-changing evidence, or state why research is unnecessary;
-3. complete specification and independent specification review;
-4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then independently review the design;
-5. complete test design when proof is non-obvious, then obtain independent QA review;
-6. complete `tasks.md` and independent task review/readiness;
-7. enter [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger wave.
-
-Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff. Specification, planning, and their independent review gates remain required for structured and orchestrated work.
-
-Before each required review of Specification, combined Technical Design, Test Design, Planning, or an explicit `research only` boundary, run one autonomous read-only challenge probe after the whole candidate meets its authoring bar and before a different independent reviewer. Direct work, supporting steps, and Implementation / Validation / Closeout do not run this probe. [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) owns the protocol.
+Structured and orchestrated work follows the workflow router's [Required Spine](docs/spec-first-workflow.md#required-spine), including its review, challenge, movement, and scoping-down rules.
 
 Before structured or orchestrated work designs against an external platform, unfamiliar mechanism, new infrastructure or dependency, or non-trivial architecture choice, research current official documentation/source and credible real implementations or engineering writeups. Treat official sources as contract authority, real-world sources as operational evidence, and do not rely on model memory for current external behavior.
 
-## Working Contract
+## Task Contract
 
-1. Reconstruct the intended outcome before acting. Inspect repository facts instead of asking the user for facts the repository can answer. Ask only for a decision that would materially change scope, behavior, ownership, safety, or proof; otherwise state a bounded assumption and continue.
-2. Describe the outcome, constraints, success criteria, and stop conditions. Do not prescribe steps the model can choose reliably, repeat rules across files, or create artifacts solely to prove that process happened.
-3. Choose the smallest path that preserves correctness. Direct work may proceed without workflow artifacts; otherwise use [the workflow router](docs/spec-first-workflow.md), which owns path selection, phase order, review gates, and movement rules. Respect a user-named phase boundary.
-4. Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof, but not automatically full-depth work or a durable artifact in every phase. Apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure) when the accepted outcome spans multiple deployables, repositories, or managed dependencies.
-5. Evidence before invention. Prefer current Go stdlib and established repository patterns. For structured or orchestrated work, research current external contracts and credible operational evidence before choosing an unfamiliar platform, mechanism, infrastructure, dependency, or non-trivial architecture.
-6. Keep ownership explicit. Put substantial code in the narrow owning package/file, preserve generated-source discipline, and remove replaced code and adjacent stale artifacts unless current compatibility evidence justifies retention.
-7. Skills define method. [Subagents And Handoff](docs/spec-first-workflow/shared/subagents-and-handoff.md) owns built-in subagent eligibility, mandatory non-implementation review independence, and handoff; [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md) owns its protocol; the implementation phase retains its current local/direct and optional Worker execution contract. The root owns synthesis and decisions.
-8. Do not claim ready, complete, fixed, or covered without current evidence matched to the claim. Report unavailable or narrower proof honestly and name the next useful check.
+1. Reconstruct the accepted outcome from current repository facts before acting. Ask the user only when an unresolved decision would materially change scope, behavior, ownership, safety, authorization, or proof; otherwise state a bounded assumption and continue.
+2. State the goal, relevant context, hard constraints, authorization boundary, required evidence, success criteria, output format, and stop condition once. Leave discretionary steps to the model; prescribe an order or mechanism only when an accepted decision fixes it.
+3. Match every readiness or completion claim to current evidence of equal scope. Report narrower or unavailable proof honestly and name the next useful check.
 
 ## Implementation And Evidence
 
-- During implementation, optimize for the shortest evidence-backed path to the accepted outcome. Quality means satisfying the accepted criteria with matching proof, not maximizing analysis, findings, or review passes. Review, correction, delegation, and artifacts are means, not progress by themselves; continue a loop only while it closes a criterion, resolves evidence required for acceptance, or exposes a real blocker.
+- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture) and [Progress](docs/spec-first-workflow/phases/implementation-validation-closeout.md#progress). A real blocker ends implementation and is reported.
 - The root may implement direct local work. Use the current harness's native implementation worker and isolated worktree ([Agent Harness](docs/agent-harness.md): a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation) only when the routing triggers above apply or the user explicitly delegates implementation.
 - A durable execution control (Codex Goal or Claude Code task list) is for genuinely long-running, multi-step, or resumable implementation; one root control spans that outcome. Do not create one for ordinary direct work or non-implementation reasoning.
 - Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. Fix defects at the narrowest shared owner proved by the reproducer.
-- Review only changed and transitively affected surfaces. Return all evidence-backed compatible findings together; do not create ceremonial re-review loops.
-- Map every completion claim to current proof of equal scope. Proof for an immutable commit/tree remains valid after a byte-identical fast-forward; rerun only when the tree, relevant environment or preconditions, claim scope, provenance, or risk surface changed.
-- Never claim complete, fixed, ready, or covered beyond current evidence. State unavailable proof and the reopen owner.
+- Worker candidates pass the phase-owned [Scope Lock](docs/spec-first-workflow/phases/implementation-validation-closeout.md#scope-lock) before review and then follow [Monotonic Acceptance](docs/spec-first-workflow/phases/implementation-validation-closeout.md#monotonic-acceptance) plus its [Diagnostic Gate](docs/spec-first-workflow/phases/implementation-validation-closeout.md#diagnostic-gate). A correction finding identifies a candidate-caused regression, a concrete violation of an accepted criterion or repository-owned invariant, or proof missing from an accepted claim; other defects remain observations.
+- Proof for an immutable commit/tree remains valid after a byte-identical fast-forward; rerun only when the tree, relevant environment or preconditions, claim scope, provenance, or risk surface changed.
 
 ## Validation Matrix
 
@@ -118,4 +101,4 @@ it.
 - `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns built-in subagent delegation, mandatory non-implementation review independence, convergence, and handoff; `shared/autonomous-pre-review-challenge.md` owns the autonomous challenge protocol.
 - Skills provide methods; they do not create work or override accepted decisions.
 - Task-local artifacts own accepted task decisions. Runtime and generated authorities named there win over derived prose.
-- Keep a rule in its narrowest owner; replace duplicates with links or delete them.
+- [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance) owns instruction phrasing, deduplication, and behavior-evaluation boundaries.

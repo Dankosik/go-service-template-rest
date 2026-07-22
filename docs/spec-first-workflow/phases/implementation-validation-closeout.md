@@ -1,6 +1,12 @@
 # Implementation / Validation / Closeout
 
-Implement the accepted outcome at its narrowest owner, then make only the claim the current evidence supports. Direct work is local by default; delegation is an optional execution tool.
+## Acceptance Posture
+
+Act as a contract closer. Seek the earliest proven state that satisfies the
+accepted outcome while preserving already-valid behavior, decisions, candidate
+state, and proof. Spend an edit only on an accepted criterion or current open
+finding; all other discoveries retain observation status. Acceptance is
+terminal: close out when the criteria and mapped proof pass.
 
 ## Read When
 
@@ -41,9 +47,38 @@ Keep one write Worker per outcome. A Worker receives an outcome-first brief
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
 
-For every Worker task, the root explicitly selects and passes the best-suited available model and reasoning effort through the current harness's supported controls; never inherit a harness default or ask the user to choose when those controls exist. This is the user's standing request. Choose model and effort independently from the [harness model map](../../agent-harness.md#model-and-effort-selection): in the Codex App, Luna for clear mechanical work, Terra for ordinary implementation, Sol for complex or high-consequence work; in Claude Code, Haiku, Sonnet, and Opus for the same tiers, with Anthropic effort chosen from `low`/`medium`/`high`/`xhigh`/`max`. Always use the lowest effort likely to succeed. Existing eval evidence may inform the choice but is never a dispatch prerequisite.
+#### Scope Lock
 
-Ordinary implementation-owned findings from the single full acceptance review return together to the same Worker and managed worktree. That review freezes its candidate identity and initial complete finding set. Each correction brief contains every still-open finding in the current correction set and requires each one to return closed, disproved, or genuinely blocked with evidence. A repeated material candidate, an acknowledgement-only correction, or the same proof observable failing after one correction under the same causal hypothesis establishes evidence-backed no progress: preserve the candidate and cumulative evidence, then replace the Worker or switch to a materially different repair route. Treat an `inProgress` task that produces no new turn or item after one continuation as stalled. Oscillation, an exhausted repair route, or an invalidated base likewise requires replacement or rerouting. Keep only one write Worker active for the outcome and follow native completion and status events instead of actively polling or narrating unchanged state.
+A candidate is scope-valid only when every changed path is authorized by an
+explicit editable path or by the deterministic placement rule in its bounded
+discovery boundary, and every retained change maps to an accepted criterion or
+required proof. Before acceptance review, derive paths
+with `git diff --name-only <recorded-base> <candidate-tree>` or the
+harness-native equivalent. For an uncommitted checkout, combine
+`git diff --name-only <recorded-base>` with
+`git ls-files --others --exclude-standard` so the check includes untracked
+paths. A scope-invalid candidate has one disposition: reject it in full from
+the recorded base while other provisional wave members remain unaffected. A
+required boundary expansion reopens the scope owner before implementation.
+
+For every Worker task, the root explicitly selects and passes the best-suited available model and a task-matched reasoning effort through the current harness's supported controls; never inherit a controllable default or ask the user to choose. This is the user's standing request. [Agent Harness](../../agent-harness.md#model-and-effort-selection) owns model tiers, effort baselines, and evaluation rules.
+
+#### Progress
+
+Progress is a material candidate transition toward an open finding or new
+evidence that changes a causal hypothesis's disposition. Repeated tool or
+status activity, a materially repeated candidate, acknowledgement without a
+correction, and the same proof observable under the same hypothesis all end the
+write lane at the preceding frozen candidate with the cumulative evidence and
+an honest blocker. Activity is repeated when its effective inputs, causal
+hypothesis, and expected observable already have a disposition, even when the
+command changes. A returned correction may continue only through the
+Diagnostic Gate below. Worker replacement is reserved for an execution stall
+that produces no new native turn or item after continuation, or for an
+invalidated base; it continues the same brief from the frozen candidate. Keep
+one write Worker active for the outcome and follow native completion and status
+events. When those events cannot distinguish active repetition from progress,
+only returned-candidate convergence is verified.
 
 For a planned write wave, every member starts from the same accepted integrated base and every returned result remains provisional. Assemble only bounded deltas into a frozen candidate.
 
@@ -51,9 +86,38 @@ When a failure is isolated and the reviewed independence basis still holds, shri
 
 ### Candidate Acceptance
 
-On each Worker return, the root performs only boundary intake for scope, ownership, mergeability, and proof provenance. On the first acceptance-ready frozen candidate, the root performs exactly one full acceptance review across all triggered lenses, freezes that candidate as the review baseline, returns one combined complete set of evidence-backed compatible findings, and maps claims with the same preconditions to one exact proof command.
+#### Monotonic Acceptance
 
-After a Worker correction, the root does not re-review the candidate or unchanged surfaces. Correction verification checks only the disposition of every open finding, the diff from the immediately preceding returned candidate, and proof invalidated by that delta. The root may read unchanged context needed to judge the delta, but may add a finding only for a regression introduced by the delta; that regression joins the current correction set. Unchanged bytes retain their prior review disposition for the rest of the task. Concrete evidence that became available only after the full review and proves a critical security breach, data loss or corruption, or critical violation of an accepted public contract is the only hard-stop exception. When every finding is closed or disproved and the invalidated proof passes, accept the candidate immediately without another review pass; a genuinely blocked finding produces the honest blocker instead.
+The root is an acceptance authority. Each Worker return first passes Scope Lock
+plus ownership, mergeability, and proof-provenance intake. The first
+acceptance-ready candidate becomes the frozen baseline for exactly one full
+acceptance review and its initial mapped proof. That review freezes one complete
+finite finding set containing only candidate-caused regressions, concrete
+violations of accepted criteria or repository invariants, and proof missing
+from an accepted claim. All other observations retain observation status.
+
+Correction verification covers the open findings, the delta from the frozen
+baseline, and proof invalidated by that delta; unchanged bytes retain their
+prior disposition. Adopt a correction only when it closes or disproves at least
+one finding, reopens none, introduces no regression, stays in scope, and
+preserves passing proof. Adoption makes the correction the current frozen
+baseline and the open set a strict subset. An empty set plus passing mapped
+proof accepts the candidate immediately.
+
+#### Diagnostic Gate
+
+A correction that introduces a regression, reopens a finding, or fails to
+shrink the open set has one disposition: reject the entire delta and retain the
+preceding frozen baseline. Its bytes serve only as diagnosis evidence;
+rejection removes write authority for that finding. Read-only diagnosis against
+the retained baseline restores write authority only when evidence independent
+of the rejected bytes falsifies the rejected causal hypothesis and establishes
+a different causal owner, expected observable, and bounded edit for the same
+finding. Otherwise the finding returns the honest blocker.
+
+Concrete evidence first available after the full review that proves a critical
+security breach, data loss or corruption, or critical violation of an accepted
+public contract stops correction and reopens that evidence's owner.
 
 The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Freeze the reviewed candidate as a commit or tree and run every mapped claim-scoped proof command once on that exact state. Integrate only the accepted delta, prefer a byte-identical fast-forward when valid, verify the resulting authoritative tree identity, and then accept it or dispatch later work. If integration changes the tree, treat it as a new candidate and validate the affected claims before acceptance. Do not mutate unrelated dirty state to force integration. Remote push is outside this integration rule and requires separate authorization.
 
@@ -63,11 +127,11 @@ Proof belongs to the exact tree and claim it exercised. Record the commit or tre
 
 ## Review
 
-Review the changed outcome for correctness, affected error/context/resource behavior, generated authority, security/data/rollout risk when triggered, unnecessary abstraction, stale replacements, and proof adequacy. A style preference or unproven suspicion is not a correction finding. Resolve repository-answerable uncertainty before asking another actor.
+Review the changed outcome for correctness, affected error/context/resource behavior, generated authority, security/data/rollout risk when triggered, unnecessary abstraction, stale replacements, and proof adequacy. Candidate Acceptance owns finding admissibility: surrounding and transitive context informs the candidate judgment, while unrelated or pre-existing defects, style preferences, and unproven suspicions remain observations. Resolve repository-answerable uncertainty before asking another actor.
 
 ## Validate
 
-Map each claim to current proof of equal scope. Use the smallest matching validation:
+Apply the repository [Task Contract](../../../AGENTS.md#task-contract) with the smallest matching validation:
 
 | Surface | Proof |
 | --- | --- |
@@ -90,8 +154,8 @@ Do not use Worker prose, stale logs, unrelated green checks, or a broad command 
 
 ## Close Out
 
-State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Use complete/fixed/ready only when the matching current evidence supports the full claim.
+State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Apply the [Task Contract](../../../AGENTS.md#task-contract) to readiness and completion language.
 
 ## Stop Rule
 
-Finish when the bounded outcome is reviewed, every stated claim has matching current evidence or an honest gap, and no unowned implementation decision remains. Reopen the narrowest upstream owner only when a decision or unavailable evidence must change; do not manufacture workflow work after proof is sufficient.
+Finish direct work when the bounded outcome is self-reviewed and every stated claim has matching current evidence or an honest gap. Worker execution finishes when the frozen finding set is empty and its mapped proof passes, or with the honest blocker when an admissible finding cannot close. A changed decision or unavailable evidence reopens its narrowest upstream owner; after sufficient proof, closeout is the only authorized next action.

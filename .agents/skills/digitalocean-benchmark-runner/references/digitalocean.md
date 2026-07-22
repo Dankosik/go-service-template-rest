@@ -6,6 +6,7 @@ price with `scripts/dev/benchmark-remote.sh check` before creating resources.
 
 - [Account and workstation onboarding](#account-and-workstation-onboarding)
 - [Preflight and paid setup smoke](#preflight)
+- [Autonomous placement recovery](#autonomous-placement-recovery)
 - [Reusable golden snapshot](#reusable-golden-snapshot)
 - [Parallel sessions](#parallel-sessions-and-account-visibility)
 - [Fast one-shot run](#fast-one-shot-run)
@@ -245,6 +246,41 @@ bills CPU Droplets per second with a 60-second or $0.01 minimum. Billing begins
 at creation and ends only at destruction; a powered-off Droplet still bills.
 The script prints the current API price, which wins over this dated note.
 
+### Autonomous placement recovery
+
+`fra1` and `c-4` are starting values, not user decisions or fixed requirements
+unless the accepted workload makes geography or hardware part of the claim.
+Once paid execution is authorized with a maximum spend, that authorization
+covers safe placement attempts inside the same cost, security, topology, and
+proof envelope. Do not ask the user to choose a region or approve each retry.
+
+Inspect current provider placement data before creation and after a capacity
+failure:
+
+```bash
+doctl --context benchmarks compute region list --output json
+doctl --context benchmarks compute size list --output json
+```
+
+The region and size APIs advertise supported size/region pairs, but a create
+can still fail because current capacity changed. After `422 Size is not
+available in this region` or an equivalent placement rejection, first confirm
+that the failed session left no paid resource, firewall, or tag. Never repeat
+that exact size/region pair. Select, in order:
+
+1. the same dedicated size in another advertised available region when
+   geography is not part of the claim or a data-residency boundary;
+2. a sufficient CPU-Optimized dedicated size in an advertised available region
+   whose hourly and worst-case run cost fit the authorized budget;
+3. the matching local benchmark when it can still close the accepted proof.
+
+Keep baseline and candidate on the same realized Droplet. For two-host HTTP,
+place both sessions in one selected region/VPC. Shared CPU remains valid only
+for wiring or bounded low load. Stop only when every live candidate would
+change the claim, cross the authorization envelope, or weaken required proof;
+report the exhausted candidate set instead of polling or repeating one rejected
+placement.
+
 If Tier 1 reports `DigitalOcean size is unavailable or unknown: c-4`, list the
 plans actually available to the Team:
 
@@ -262,16 +298,18 @@ DO_BENCH_SIZE=s-4vcpu-8gb \
 make benchmark-remote-check
 ```
 
-Do not silently use Shared CPU for a decision-grade comparison. Request Tier 2
-or a limit increase and return to the dedicated `c-4` default, or run locally
-and narrow the claim.
+Do not silently use Shared CPU for a decision-grade comparison. First exhaust
+the autonomous dedicated-placement route above. If the Team exposes no valid
+dedicated size, use the matching local proof when adequate. A Tier upgrade,
+prepayment, or limit increase changes the purchase envelope and still requires
+user action and authorization.
 
 ### Paid setup smoke
 
-After preflight succeeds and the user explicitly authorizes one paid test,
-exercise creation, SSH/Keychain, provisioning, source transfer, benchmark
-execution, artifact download, and cleanup with a deliberately tiny stdlib
-workload:
+After preflight succeeds and the paid execution envelope is explicitly
+authorized, exercise creation, SSH/Keychain, provisioning, source transfer,
+benchmark execution, artifact download, and cleanup with a deliberately tiny
+stdlib workload:
 
 ```bash
 state="$PWD/.artifacts/bench/remote/setup-smoke.state"

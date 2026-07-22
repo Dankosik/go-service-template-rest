@@ -7,7 +7,7 @@ status: ready
 - `docs/spec-first-workflow.md` routed implementation with one ready ledger task at a time.
 - `docs/spec-first-workflow/phases/planning.md` already recorded true dependencies and one independently reviewable outcome; this change makes writable ownership, exclusive resources, and exact handoffs structural while `task-review-readiness.md` rejects artificial dependency chains and hidden overlaps.
 - `docs/spec-first-workflow/phases/implementation-validation-closeout.md` assigned one task per native App Worker in a dedicated managed worktree, but permitted only one active write Worker and required acceptance before dispatching the next task.
-- The existing ledger, Worker brief, transient execution record, root acceptance, same-task correction, replacement, and dirty-Local recovery mechanisms are sufficient building blocks. No scheduler service, new dependency, or second state artifact exists or is needed.
+- The existing ledger, Worker brief, transient execution record, root acceptance, same-task correction, execution-stall/base-invalidation replacement, and dirty-Local recovery mechanisms are sufficient building blocks. No scheduler service, new dependency, or second state artifact exists or is needed.
 
 ## Selected mechanism
 
@@ -30,26 +30,24 @@ There are four transient states:
 3. **Disposable wave candidate**: a clean integration worktree or task-owned integration branch where the root mechanically applies provisionally suitable bounded Worker deltas in controlled order. It may contain unaccepted deltas and is never ledger completion.
 4. **Authoritative integrated state**: the wave candidate only after every wave task passes root review and its declared proof on the combined candidate; the bounded wave delta is then promoted and every task's evidence is recorded.
 
-The root may review returned results as they arrive and return ordinary task-local findings to the same owning App task immediately. It does not mark any wave task accepted while another wave member is unresolved. Before return, each Worker rereads its outcome and constraints, inspects its bounded diff and cleanup, runs focused proof, and reports gaps; this remains evidence rather than acceptance. Once every locally suitable result is present, the root freezes the disposable wave candidate, maps claims to exact commands, and runs each identical command once. One result may satisfy multiple explicit claim mappings, but commands with different arguments, environment, state preconditions, or observables remain distinct.
+Every returned result passes the implementation phase's [Scope Lock](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#scope-lock) before wave assembly. The root does not mark any wave task accepted while another member is unresolved. Before return, each Worker rereads its outcome and constraints, inspects its bounded diff and cleanup, runs focused proof, and reports gaps; this remains evidence rather than acceptance. Once every locally suitable result is present, the root freezes the disposable wave candidate, performs its single full acceptance review, maps claims to exact commands, runs each identical command once, and freezes the resulting finding set. Commands with different arguments, environment, state preconditions, or observables remain distinct.
 
 ### Failure and recovery
 
-- A Worker-local defect returns to the same task and worktree under the existing correction/replacement rule.
-- Repeated material findings from one causal class stop symptom-level patch requests. The root names the violated invariant and owning surface, groups the evidence, and requires a materially different route; the same Worker continues unless the evidence-backed replacement rule also applies.
-- A mechanical apply conflict, semantic overlap, invalidated assumption, or combined-proof failure holds the whole wave. No member is accepted or promoted.
-- The root preserves unaffected results as provisional, supplies the current disposable wave candidate and concrete fan-in finding to the owning Worker, and has that Worker repair only its task. The root may mechanically update the task worktree with the current wave base; it does not author the repair.
+- An admissible Worker-local defect from the frozen finding set returns to the same task and worktree under the correction rule.
+- Per-task liveness and correction recovery use the implementation phase's [Progress](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#progress) and [Diagnostic Gate](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#diagnostic-gate); wave assembly grants no additional repair or replacement authority.
+- Before the finding set is frozen, a mechanical apply conflict, semantic overlap, or invalidated assumption holds the whole wave. No member is accepted or promoted. The root preserves unaffected results as provisional, supplies the current disposable wave candidate and concrete assembly finding to the owning Worker, and has that Worker repair only its task. The root may mechanically update the task worktree with the current wave base; it does not author the repair.
+- Failure of the initial combined proof enters the frozen finding set. A later correction conflict or proof failure rejects the entire correction delta and restores the preceding frozen baseline; it never becomes a fix-forward request against the failed delta.
 - If the conflict only disproves the planned concurrency grouping, the root adjusts the wave and recovery order locally, then reassembles and re-proves it. Reopen the smallest planning, design, specification, or evidence owner only when recovery requires a genuinely missing or changed behavior, ownership, proof, or rollout decision.
 - If App capacity is one, concurrency cannot be observed reliably, or any independence condition is uncertain, the existing sequential Worker loop is the complete fallback.
 
-### Convergence-first correction
+### Convergence ownership
 
-Root and Worker optimize jointly for the fastest safe path from bounded candidate to proven acceptance. The root's first acceptance inspection covers the full task claim and affected lenses, then batches every currently detectable compatible finding into the existing outcome-first brief with causal owner, evidence, required end state, affected scope, and proof. There is no correction artifact or acknowledgement turn.
-
-The Worker treats a suggested patch as a hypothesis unless accepted design fixes the method. It validates the finding, may return counter-evidence, repairs the violated contract at the narrowest owner, checks sibling and transitive effects, and returns a candidate intended for acceptance. The root re-reviews the complete correction set, correction delta, affected proof, and invalidated lenses only; once they pass, it accepts without another review lane. A later finding is classified as a prior omission, correction regression, repeated causal class, genuinely new surface, or upstream decision gap. Each turn must shrink the evidence frontier or materially change the causal model or route; no fixed retry limit or unchanged loop is added.
+The implementation phase's [Monotonic Acceptance](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#monotonic-acceptance) is canonical. This design adds only wave fan-in: one frozen combined candidate covers every assembled member and affected integration seam, and each admissible task-local finding returns in the existing outcome-first brief to its owning Worker.
 
 ### Completion
 
-After atomic wave acceptance, the root advances to the next planned or adjusted wave and rechecks only seams affected by integrated changes. One root Goal spans all waves. Final integrated-diff review and terminal validation still cover every accepted obligation and task; a wave's green focused proof is not repository completion.
+Each disposable wave candidate's single acceptance review and mapped proof cover the seams affected by its integration. After atomic wave acceptance, the root advances to the next planned or adjusted wave. One root Goal spans all waves. Completion reuses the accepted review dispositions and runs claim-mapped terminal validation across every obligation and task; it does not open a second whole-diff review or a new finding set. A terminal failure stops and reopens its narrowest owner instead of starting another implementation correction set. A wave's green focused proof alone is not repository completion.
 
 ### Resume state
 
@@ -76,9 +74,8 @@ Canonical changes belong in:
 - `docs/spec-first-workflow/phases/planning.md`: preserve outcome-sized tasks while recording earliest-safe waves and enough dependency/ownership evidence to justify them without per-task parallel fields.
 - `docs/spec-first-workflow/phases/task-review-readiness.md`: falsify false independence, hidden shared write/proof state, and micro-tasking for fan-out.
 - `docs/spec-first-workflow/phases/implementation-validation-closeout.md`: own safe-wave dispatch, isolated App tasks, disposable fan-in, atomic wave acceptance, correction, fallback, and closeout.
-- `docs/spec-first-workflow-evals.md`: revise sequential cases so only dependent or not-positively-independent tasks are forbidden to overlap; add positive safe-wave and false-independence/fan-in cases.
-- `scripts/ci/workflow-instructions-check.sh` and `scripts/dev/workflow-behavior-evals.sh`: enforce the new canonical tokens and eval manifest/counts.
-- `Makefile` and `docs/build-test-and-development-commands.md`: update only the eval count exposed by existing help/docs.
+- `scripts/ci/implementation-convergence-check.sh`: enforce the bounded instruction contract for fail-closed scope, no-progress, diagnostic-only recovery after a rejected correction, monotonic correction, effort selection, safe-wave routing, post-planning transition, and the absence of known superseded loop rules.
+- `Makefile` and `docs/build-test-and-development-commands.md`: expose that focused gate and include it in local CI.
 
 `AGENTS.md` already delegates Worker execution, acceptance, and integration mechanics to the implementation phase and needs no duplicate scheduling policy. Canonical skills already delegate to the planning and implementation phase files, so they need no semantic rewrite or new skill; mirror checks still verify there is no drift.
 
@@ -93,6 +90,6 @@ Canonical changes belong in:
 ## Proof and reopen conditions
 
 - Structural workflow proof must cover safe parallel dispatch, sequential fallback for hidden coupling, disposable fan-in, atomic acceptance, same-task repair, one Goal, dirty-Local preservation, and terminal combined validation.
-- Repository proof uses the existing workflow instruction, behavior-manifest, routing, skill/mirror, agent, and diff checks. Live behavior requires authorized eval adapters and is not implied by structural checks.
+- Repository proof uses `make implementation-convergence-check` and `git diff --check`. Live behavior requires an external evaluation adapter and is not implied by structural checks.
 - Reopen planning ownership if the compact planned waves and existing task fields repeatedly fail to expose material conflicts or useful concurrency in representative evals.
 - Reopen this design if native App tasks cannot share one authoritative starting state, the root cannot materialize bounded Worker deltas in a disposable integration worktree, or whole-wave recovery creates measured unacceptable delay.

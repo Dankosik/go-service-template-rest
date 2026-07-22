@@ -36,8 +36,13 @@ Prefer DigitalOcean when `doctl` is already installed and its selected context
 is authorized. If either condition is false, stop the remote path and run the
 matching local command: `make bench*` for Go and in-process HTTP,
 `make bench-db*` for real PostgreSQL, or `make bench-http` for external HTTP.
+An unavailable default size/region pair does not make the remote path
+unavailable: after paid execution is authorized, the runner skill owns
+equivalent placement and bounded fallback inside the accepted cost, security,
+and proof envelope without asking the user to choose a host or region.
 Do not install `doctl`, start authentication, create an account, or provision a
-Droplet unless the user explicitly asks. An unavailable DigitalOcean account
+Droplet unless the user explicitly authorizes that setup or paid execution
+envelope. An unavailable DigitalOcean account
 is an expected local-fallback condition, not a successful remote proof. Local
 Docker or service prerequisites still fail closed when the chosen benchmark
 requires them.
