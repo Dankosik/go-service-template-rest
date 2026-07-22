@@ -158,33 +158,14 @@ make vendor
 
 ## Benchmarking
 
+Choose the execution environment before capturing results. DigitalOcean is the
+default when `doctl` is installed and its selected context is authorized. Start
+with the read-only preflight; after it succeeds and the user authorizes the paid
+lifecycle operation, run the matching benchmark target through the remote
+runner:
+
 ```bash
-make bench
-make bench-baseline
-make bench-compare
-make bench-profile
-
-make bench-db BENCH_DB_WORKLOAD_ID=fixture-10k-warm
-make bench-db-baseline BENCH_DB_WORKLOAD_ID=fixture-10k-warm
-make bench-db-compare
-
-make bench-http
-make bench-http-inspect
-make benchmark-infra-check
 make benchmark-remote-check
-# Optional paid one-time DigitalOcean snapshot build:
-DO_BENCH_CONTEXT=benchmarks-image-builder make benchmark-remote-image
-```
-
-Go and in-process HTTP benchmarks run on the host toolchain. Database
-benchmarks use the existing Testcontainers seam. External HTTP load uses the
-digest-pinned k6 image owned by `scripts/dev/benchmark.sh`. Workload,
-comparison, and evidence rules are in [Benchmarking](benchmarking.md).
-
-`make benchmark-remote-check` is a read-only preflight for the optional
-DigitalOcean executor. Paid lifecycle commands intentionally remain explicit:
-
-```bash
 scripts/dev/benchmark-remote.sh list
 scripts/dev/benchmark-remote.sh image-list
 scripts/dev/benchmark-remote.sh run -- make bench
@@ -200,10 +181,36 @@ scripts/dev/benchmark-remote.sh fetch
 scripts/dev/benchmark-remote.sh destroy
 ```
 
+If `doctl` is absent or the selected context is not authorized, do not start
+DigitalOcean setup automatically. Use the matching local command instead:
+
+```bash
+make bench
+make bench-baseline
+make bench-compare
+make bench-profile
+
+make bench-db BENCH_DB_WORKLOAD_ID=fixture-10k-warm
+make bench-db-baseline BENCH_DB_WORKLOAD_ID=fixture-10k-warm
+make bench-db-compare
+
+make bench-http
+make bench-http-inspect
+make benchmark-infra-check
+```
+
+Go and in-process HTTP benchmarks use the host toolchain of the selected
+environment. Database benchmarks use the existing Testcontainers seam.
+External HTTP load uses the digest-pinned k6 image owned by
+`scripts/dev/benchmark.sh`. Workload, comparison, and evidence rules are in
+[Benchmarking](benchmarking.md).
+
 For faster fresh-Droplet startup, source the non-secret reference produced by
 `benchmark-remote-image`, then return to the normal least-privilege context:
 
 ```bash
+# Optional paid one-time DigitalOcean snapshot build:
+DO_BENCH_CONTEXT=benchmarks-image-builder make benchmark-remote-image
 source .artifacts/bench/remote/golden-image.env
 export DO_BENCH_CONTEXT=benchmarks
 make benchmark-remote-check
