@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/subagent-contract.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Own business invariants, state transitions, acceptance/rejection semantics, duplicate/replay behavior, and forbidden paths. Inspect the task spec, `internal/app/`, promoted contracts under `internal/domain/`, and only the API or persistence surface needed to prove exposure or enforcement.
 

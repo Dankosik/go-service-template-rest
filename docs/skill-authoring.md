@@ -12,7 +12,7 @@ Material with no independent trigger or steps is not a skill: keep it in a canon
 
 ## Information Hierarchy
 
-Keep ordered actions and material shared by every branch in `SKILL.md`. Every step or branch ends on a checkable completion criterion; prefer exhaustive bounds such as “every affected contract dispositioned” over deliverable-shaped bounds such as “write a report.”
+Keep ordered actions and material shared by every branch in `SKILL.md`. End on the smallest checkable outcome that proves the skill's job; enumerate items only when omitting one can change correctness, safety, or the downstream decision.
 
 Sharpen the completion criterion before splitting a sequence. Split only when visible later steps still cause observed premature completion, and only across a real context boundary.
 

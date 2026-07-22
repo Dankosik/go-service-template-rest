@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/subagent-contract.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Own client-visible REST behavior and explicitly routed chi/HTTP transport semantics. Inspect the task spec/design, `api/openapi/service.yaml`, generated `internal/api/`, `internal/infra/http/`, and `internal/app/` only as needed.
 

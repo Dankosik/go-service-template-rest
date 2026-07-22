@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/subagent-contract.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Own operator questions and their logs, metrics, traces, correlation, SLI/SLO, alerts, dashboards/runbooks, runtime diagnostics, and telemetry cost/privacy contract. Inspect the task spec/design and the smallest relevant telemetry, HTTP, bootstrap, OTel, or config surface.
 

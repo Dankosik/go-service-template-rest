@@ -9,7 +9,7 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/subagent-contract.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Review a fixed design packet for contradictions across behavior, contracts, source of truth, sequence/failures, data, security/reliability, rollout, Go ownership, cleanup, tests, and proof. Prefer the smallest coherent design and flag layers, artifacts, or specialist recommendations that do not solve a present requirement.
 

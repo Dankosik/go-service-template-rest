@@ -59,11 +59,11 @@ status: draft | ready | blocked | done
 ```
 
 - `draft`: still being authored or repaired.
-- `ready`: the artifact has closed every decision or input it owns for the accepted completion condition, and its next consumer can use them without semantic invention. A ready `tasks.md` additionally satisfies [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure) for every mandatory task and proof path through that completion; a known-unavailable input on such a path requires `blocked`.
+- `ready`: the artifact has closed every decision it owns, and its next consumer can act without semantic invention. A ready `tasks.md` additionally closes the inputs and proof for its next executable task or real parallel wave plus any decision that could invalidate that work.
 - `blocked`: name the missing decision/evidence and reopen owner.
 - `done`: use for execution/closeout state, not as a substitute for evidence.
 
-When review is required, only `PASS` can move an artifact to `ready` or permit `done`; `CONCERNS` keeps it `draft` while the owner dispositions the concern and obtains fresh review, and `FAIL` requires repair or reopening.
+When review is triggered, `PASS` or dispositioned `CONCERNS` can move an artifact to `ready`; `FAIL` requires repair or reopening and fresh review.
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 
@@ -79,9 +79,6 @@ A useful `tasks.md` usually needs:
 
 ```markdown
 Global constraints: <exact constraints shared by multiple tasks; omit when none>
-Planned waves:
-- W1: T01, T02 — <positive independence basis>
-
 - [ ] ID: outcome
   - Source: <narrow anchors>
   - Owner/surface/resources: <writable owner; execution-exclusive resources or none>
@@ -90,6 +87,8 @@ Planned waves:
   - Proof: <claim; check; expected observable>
   - Reopen if: <objective invalidation condition; omit when none>
 ```
+
+Add `Planned waves` only when at least two ready tasks will actually be dispatched concurrently; dependency order is sufficient for sequential work.
 
 When an active wave must survive compaction, interruption, or session handoff, add one compact `Active wave` block to this same ledger with the adjusted member IDs, accepted integration base, task-to-App-task/worktree state, disposable candidate identity when one exists, and next root action or open causal class. Update it only at a material transition and remove or collapse it into task evidence after atomic wave acceptance; do not create a scheduler file or reconstruct it from chat.
 

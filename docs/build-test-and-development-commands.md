@@ -39,19 +39,12 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | Command | Meaning |
 | --- | --- |
 | `make check` | `fmt-check`, `lint`, and ordinary unit tests |
-| `make ci-local` | Host-toolchain CI aggregate: module, init and implementation-convergence contracts, format, lint, race, coverage report, generated contracts, Go security, and secret scan |
+| `make ci-local` | Host-toolchain CI aggregate: module, initialization, format, lint, race, coverage report, generated contracts, Go security, and secret scan |
 | `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
 | `make pr-check BASE_REF=origin/main` | `check-full` plus OpenAPI breaking comparison when the base contains the spec |
 
 `check-full` fails immediately when Docker is unavailable. It never converts a
 missing container runtime into a successful skip.
-
-For an instruction-only change that affects implementation orchestration, run
-`make implementation-convergence-check`. It deterministically checks the
-fail-closed scope, semantic no-progress, monotonic correction, effort-selection,
-safe-wave, and post-planning transition contract. A green result proves those
-repository instructions are wired consistently; live model adherence still
-requires an external behavior evaluation.
 
 ## Tests
 

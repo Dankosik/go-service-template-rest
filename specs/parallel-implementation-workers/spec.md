@@ -6,14 +6,14 @@ status: ready
 
 - The implementation/validation/closeout phase may execute multiple ready ledger tasks concurrently when their independence is positively established.
 - Each concurrent task remains one task owned by one native Codex App Worker in its own Codex-managed worktree.
-- Planning must precompute every task's earliest-safe planned wave from dependency, ownership, mutable-resource, and proof information so implementation does not rediscover the initial schedule.
+- Planning records a concurrent wave only when multiple ready tasks have proven independent ownership and resources; sequential tasks rely on dependencies without wave bookkeeping.
 - Direct work remains one accepted outcome and does not gain artificial task splitting solely to create parallelism.
 - This change does not authorize built-in subagents to implement, remove root acceptance, weaken per-task proof, or introduce a second ledger, phase, or parallel status field.
 - This change does not target maximum fan-out. It targets the fastest safe bounded execution available from the current App capacity.
 
 ## Behavior and contract delta
 
-1. Planning records every ledger task in exactly one earliest-safe planned wave with a short positive independence basis for each multi-task wave.
+1. Planning records a compact wave only for ready tasks proposed for concurrent dispatch, with a short positive independence basis.
 2. After entering implementation under the single root Goal, the root uses the next planned wave as the default route and performs only a lightweight current-state check on facts that may have changed.
 3. The root dispatches ready wave members concurrently only when repository evidence and the reviewed ledger establish all of the following:
    - no task requires another task's unaccepted output or proof;
@@ -50,19 +50,18 @@ status: ready
 - OpenAI's current Worktrees documentation is authoritative for managed-worktree isolation; it supports multiple independent tasks but does not waive integration checks.
 - `specs/parallel-implementation-workers/research/references.md` owns the current external evidence boundary.
 - Existing task right-sizing remains outcome-based: split separable, independently reviewable outcomes; keep coupled source/generated/test/doc work together. Do not adopt `superpowers`' 2-5 minute step format or make tasks smaller solely to increase Worker count.
-- `Global constraints`, `Depends on`, `Owner/surface/resources`, optional exact `Handoff`, and one compact top-level `Planned waves` section are the canonical planning inputs. Do not add per-task parallel status, conflict lists, or a second scheduling artifact.
+- `Global constraints`, `Depends on`, `Owner/surface/resources`, optional exact `Handoff`, and an optional compact top-level `Planned waves` section are the canonical planning inputs. Do not add a wave for sequential tasks, per-task parallel status, conflict lists, or a second scheduling artifact.
 - Existing accepted-only authoritative integration, root acceptance, same-task correction, model/effort selection, worktree isolation, and evidence-clamped closeout rules remain authoritative. This specification replaces only the single-active-Worker restriction and the requirement to accept one ready task before dispatching another task in the same reviewed safe wave; provisional wave assembly does not weaken accepted-only authoritative integration.
 
 ## Success criteria and proof expectations
 
-- A reviewed plan places every task in an earliest-safe planned wave; two or more positively independent ready members cause concurrent native App Worker dispatches in separate managed worktrees, followed by atomic wave acceptance, controlled fan-in, and combined validation.
+- A reviewed plan dispatches two or more positively independent ready members concurrently only when it records a real wave; other tasks remain dependency-ordered and sequential.
 - A plan with dependencies, overlapping ownership, canonical/generated coupling, shared mutable state, or uncertain independence remains sequential for the affected tasks.
 - An initial fan-in conflict or combined-proof failure cannot be accepted as successful completion and is routed to the owning Worker or smallest upstream owner; the same failure on a correction delta rejects that delta and restores the preceding baseline.
 - Hidden shared databases, ports, environments, migration targets, destructive fixtures, locks, generated pairs, and proof resources prevent unsafe wave membership; oversized tasks are split only across valid independent outcome boundaries.
 - An interrupted active wave resumes from the compact ledger state without chat reconstruction; per-task correction uses the canonical Progress and Diagnostic Gate states; Worker self-check and proof-command deduplication reduce avoidable correction and validation work without weakening root acceptance.
 - A bounded task with several compatible admissible gaps receives one complete frozen finding set; an evidence-backed Worker can reject a wrong patch hypothesis, and a successful correction reaches immediate root acceptance through delta-only correction verification without a new review lane.
-- `make implementation-convergence-check` covers fail-closed scope intake, semantic no-progress, diagnostic-only recovery after a rejected correction, monotonic correction, effort selection, safe parallel dispatch, false independence, the post-planning implementation transition, and the single-Goal invariant.
-- The deterministic instruction gate and `git diff --check` pass on the frozen candidate. This is structural proof of the repository contract; it does not claim live model adherence without an external behavior-evaluation adapter.
+- `git diff --check` passes on the frozen candidate. Instruction review covers consistency and stale references; it does not claim live model adherence without an external behavior evaluation.
 
 ## Risks, assumptions, and reopen conditions
 

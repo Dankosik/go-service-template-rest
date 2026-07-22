@@ -13,7 +13,7 @@ status: ready
 
 ### Planned waves and lightweight dispatch
 
-Planning places every task in exactly one earliest-safe planned wave. `Depends on` remains the execution/proof authority; the wave section precomputes the recommended concurrency schedule and records a short positive independence basis for each multi-task wave. Direct work remains one sequential outcome.
+Planning adds a wave only for multiple ready tasks proposed for concurrent dispatch. `Depends on` remains the execution/proof authority for all sequential work; the optional wave records only its positive independence basis. Direct work remains one sequential outcome.
 
 At implementation entry and after every accepted wave, the root reads the next planned wave and performs one lightweight check only on facts that may have changed: dependencies are accepted, every member starts from the same authoritative integration base, ownership and exclusive-resource boundaries remain disjoint, and no new canonical/generated, interface, migration, rollout, or proof coupling invalidates the recorded basis. `Depends on: none` alone never establishes independence.
 
@@ -55,14 +55,14 @@ Transient execution state remains sufficient during uninterrupted work. Before c
 
 ## Planning and task shape
 
-Use one compact task contract plus one top-level `Planned waves` section. `Global constraints` owns only exact constraints shared by multiple tasks; `Depends on` owns real start/complete/proof gates; `Owner/surface/resources` owns the writable boundary plus mutable, exclusive, or non-concurrent resources; optional `Handoff` owns an exact consumed/produced cross-task contract; task outcome and `Proof` own reviewability. Planning adds only these rules:
+Use one compact task contract plus an optional top-level `Planned waves` section. `Global constraints` owns only exact constraints shared by multiple tasks; `Depends on` owns real start/complete/proof gates; `Owner/surface/resources` owns the writable boundary plus mutable, exclusive, or non-concurrent resources; optional `Handoff` owns an exact consumed/produced cross-task contract; task outcome and `Proof` own reviewability. Planning adds only these rules:
 
-- every task appears exactly once in its earliest safe wave, with a short positive independence basis for each multi-task wave;
+- a wave contains only ready tasks proposed for concurrent dispatch and carries a short positive independence basis;
 - task boundaries should expose genuinely separable outcomes but must not be made smaller solely for concurrency;
 - coupled source/generated/test/doc changes stay in one task when splitting would create an invalid intermediate state;
 - exact ownership, canonical/generated relationships, shared mutable resources, and cross-task interfaces must be explicit enough that implementation can prove or reject pairwise independence;
 - an oversized-task preflight splits separable ownership, review, failure/recovery, rollback, or proof domains only when each can end in a valid provable state; file count, estimated minutes, and desired Worker count are not sizing rules;
-- uncertain independence produces a one-task wave.
+- uncertain independence stays sequential without a wave.
 
 Per-task `Parallel with`, lane, status, or conflict-list fields are rejected. They duplicate the reviewed top-level schedule, drift when tasks change, and create parallel state fields the artifact model avoids. Shared database, port, environment, migration target, destructive fixture, lock, generated-pair, and proof-resource conflicts belong in `Owner/surface/resources`, not prose or a second conflict list.
 
@@ -74,8 +74,7 @@ Canonical changes belong in:
 - `docs/spec-first-workflow/phases/planning.md`: preserve outcome-sized tasks while recording earliest-safe waves and enough dependency/ownership evidence to justify them without per-task parallel fields.
 - `docs/spec-first-workflow/phases/task-review-readiness.md`: falsify false independence, hidden shared write/proof state, and micro-tasking for fan-out.
 - `docs/spec-first-workflow/phases/implementation-validation-closeout.md`: own safe-wave dispatch, isolated App tasks, disposable fan-in, atomic wave acceptance, correction, fallback, and closeout.
-- `scripts/ci/implementation-convergence-check.sh`: enforce the bounded instruction contract for fail-closed scope, no-progress, diagnostic-only recovery after a rejected correction, monotonic correction, effort selection, safe-wave routing, post-planning transition, and the absence of known superseded loop rules.
-- `Makefile` and `docs/build-test-and-development-commands.md`: expose that focused gate and include it in local CI.
+- `Makefile` and `docs/build-test-and-development-commands.md`: remove the focused wording gate; `ci-local` retains behavior and tooling checks only.
 
 `AGENTS.md` already delegates Worker execution, acceptance, and integration mechanics to the implementation phase and needs no duplicate scheduling policy. Canonical skills already delegate to the planning and implementation phase files, so they need no semantic rewrite or new skill; mirror checks still verify there is no drift.
 
@@ -90,6 +89,6 @@ Canonical changes belong in:
 ## Proof and reopen conditions
 
 - Structural workflow proof must cover safe parallel dispatch, sequential fallback for hidden coupling, disposable fan-in, atomic acceptance, same-task repair, one Goal, dirty-Local preservation, and terminal combined validation.
-- Repository proof uses `make implementation-convergence-check` and `git diff --check`. Live behavior requires an external evaluation adapter and is not implied by structural checks.
+- Repository proof uses `git diff --check` plus inspection for stale references. Live behavior requires an external evaluation adapter and is not implied by documentation checks.
 - Reopen planning ownership if the compact planned waves and existing task fields repeatedly fail to expose material conflicts or useful concurrency in representative evals.
 - Reopen this design if native App tasks cannot share one authoritative starting state, the root cannot materialize bounded Worker deltas in a disposable integration worktree, or whole-wave recovery creates measured unacceptable delay.

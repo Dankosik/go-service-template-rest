@@ -50,18 +50,18 @@ An honestly unavailable target, budget, fixture, command, environment, or other 
 
 ## Review
 
-When structured or orchestrated work triggers test design, run an independent QA review before planning. Direct work uses one only when the user or risk requires it. The reviewer falsifies the Outputs above, including bidirectional traceability, existing-proof disposition, scenario normalization, setup derivability, oracle discrimination, command-to-oracle coupling, determinism/isolation, proof-boundary sufficiency, fail-before expectations, command feasibility, and residual gaps. It does not write tests or change behavior.
+Apply focused root self-review when test design is triggered. Run independent QA review only when the shared review trigger applies. The reviewer falsifies the Outputs above without writing tests or changing behavior.
 
 The reviewer returns one verdict under the shared convergence contract:
 
 - `PASS`: every material risk has a credible, owned, executable proof path or an authorized recorded acceptance with evidence, owner, and reopen condition, and no affected lens is uncovered;
-- `CONCERNS`: a bounded downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit planning, including when the check is honestly unavailable outside current completion;
+- `CONCERNS`: a bounded downstream proof obligation may move after its owner, observable, and reopen condition are recorded and no test-strategy decision remains open;
 - `FAIL`: a missing scenario, observable, proof level, feasible command path, owner, or upstream decision prevents honest planning.
 
-When test design owns that review, findings return to the owning root for same-session repair and fresh re-review until convergence. An explicitly user-requested standalone QA review returns the complete review result and stops read-only.
+When test design owns that review, findings return to the owning root for disposition; fresh review follows only `FAIL` repair or material candidate change. An explicitly user-requested standalone QA review returns the complete review result and stops read-only.
 
 ## Stop Rule
 
-Continue to planning when every material acceptance claim, invariant, transition, failure mode, and protected side effect is dispositioned as sufficient existing proof, an owned executable proof path, a named non-test falsifier, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition, and the required review has returned `PASS`. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
+Continue to planning when every material acceptance claim, invariant, transition, failure mode, and protected side effect is dispositioned as sufficient existing proof, an owned executable proof path, a named non-test falsifier, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition, and any triggered review has returned `PASS` or dispositioned `CONCERNS`. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
 
 Do not create a test plan whose only content is headings or generic “add coverage” tasks.

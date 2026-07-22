@@ -117,9 +117,8 @@ scope. Do not add exhaustive sections for unaffected concerns.
 
 ## Review
 
-For structured or orchestrated work, run the independent [Specification
-Review](specification-review.md) before leaving this phase. Direct work uses
-focused self-review unless the user or risk requires independent review.
+Apply focused root self-review. Run independent [Specification
+Review](specification-review.md) only when the shared review trigger applies.
 
 Use the shared [Review
 Independence](../shared/subagents-and-handoff.md#review-independence) contract for
@@ -127,7 +126,7 @@ disposition, repair, and convergence.
 
 ## Stop Rule
 
-Continue to design or planning when the Decision Bar is met and the required
+Continue to design or planning when the Decision Bar is met and any triggered
 review has returned `PASS`. Reopen intake, research, or a user/specialist
 decision when the missing answer belongs there. Do not start implementation
 from a blocked spec.

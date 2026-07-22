@@ -3,7 +3,7 @@ description = "Read-only performance subagent for budgets, bottlenecks, and meas
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/subagent-contract.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
 Own hot-path budgets, bottleneck hypotheses, reproducible measurement, and latency, throughput, allocation, contention, or capacity regression risk. Inspect the changed path and nearest benchmark/profile/trace evidence, then only the relevant HTTP, app, Postgres, or telemetry surface.
 

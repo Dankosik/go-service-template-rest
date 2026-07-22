@@ -3,7 +3,7 @@ description = "Read-only distributed systems subagent for cross-service consiste
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/subagent-contract.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
 Own cross-service consistency: orchestration/choreography, saga boundaries, outbox/inbox, idempotency, replay/redrive, compensation or forward recovery, and reconciliation. Inspect the task flow/ownership artifacts, `docs/repo-architecture.md`, relevant app/storage adapters, and API or message contracts.
 

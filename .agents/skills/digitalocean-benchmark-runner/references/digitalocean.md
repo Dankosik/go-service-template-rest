@@ -584,11 +584,10 @@ scripts/dev/benchmark-remote.sh destroy
 ```
 
 `sync` replaces the remote source so deleted files do not survive, while
-preserving `.artifacts/bench` between baseline and candidate. It records the
-local revision, dirty state, and a SHA-256 fingerprint of every transferred
-path, mode, and content object without uploading `.git`. The fingerprint is
-recomputed after transfer and execution remains blocked if local source changed
-mid-sync. For a candidate that already exists in the current dirty checkout,
+preserving `.artifacts/bench` between baseline and candidate. The runner tracks
+the transferred source automatically without uploading `.git` and blocks
+execution if local source changes mid-sync. Do not add manual file-hash checks
+to the prompt or closeout. For a candidate that already exists in the current dirty checkout,
 materialize the baseline in a separate clean worktree and invoke `sync` there
 with the same absolute `DO_BENCH_STATE_FILE`; do not reset or overwrite user
 work.
@@ -678,7 +677,7 @@ Official contracts:
 Every `exec` writes a unique directory under
 `.artifacts/bench/remote/runs/` containing:
 
-- source revision, dirty state, and exact transferred-source fingerprint;
+- automatic transferred-source identity;
 - start/end UTC times and exit status;
 - kernel, CPU topology/model, memory, load, Docker, and Go information;
 - optional 5-second CPU/memory (`vmstat`, per-CPU `mpstat`), disk (`iostat`),

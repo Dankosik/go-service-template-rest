@@ -16,7 +16,7 @@ Use `direct` only when all of these are true:
 
 Direct work that satisfies these conditions enters the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#local-execution) with one accepted outcome. That phase owns local execution, root review, and bounded validation; optional Worker execution remains available only under its current triggers.
 
-Use `structured` for the normal non-trivial case. Keep a reviewed `spec.md` and reviewed `tasks.md`; create design and test artifacts only when their decisions must survive.
+Use `structured` for the normal non-trivial case. Keep only the `spec.md`, `tasks.md`, design, or test artifacts whose decisions must survive; root self-review is sufficient unless the independent-review trigger below applies.
 
 Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
 
@@ -28,17 +28,15 @@ Structured and orchestrated work evaluates the phase router in order:
 
 1. establish the accepted outcome at intake;
 2. resolve decision-changing evidence, or state why research is unnecessary;
-3. complete specification and independent specification review;
-4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then independently review the design;
-5. complete test design when proof is non-obvious, then obtain independent QA review;
-6. complete `tasks.md` and independent task review/readiness;
+3. complete specification and its path/risk-matched review;
+4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then apply path/risk-matched review;
+5. complete test design when proof is non-obvious, then apply path/risk-matched QA review;
+6. complete `tasks.md` and its path/risk-matched readiness review;
 7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger wave; that phase owns local or optional Worker execution, root acceptance, integrated review, adaptation to execution drift, and validation.
 
-Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification, planning, and their review gates remain required.
+Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification and planning remain required; independent review follows the shared trigger rather than artifact presence alone.
 
-For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase and requires independent synthesis review; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
-
-Before each required review of an applicable structured or orchestrated non-implementation owning macro phase, run one autonomous read-only challenge probe before the separate reviewer. The applicable boundaries are Specification, combined Technical Design, Test Design, Planning, and an explicit `research only` boundary; run it once after the whole candidate meets its authoring bar, with Technical Design waiting for both system/integration and Go ownership. Direct work, supporting steps, and Implementation/Validation/Closeout do not run this probe. A closed candidate may return `DONE` immediately. [Autonomous Pre-Review Challenge](spec-first-workflow/shared/autonomous-pre-review-challenge.md) owns the protocol.
+For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
 
 ## Phase Router
 
@@ -55,7 +53,7 @@ Before each required review of an applicable structured or orchestrated non-impl
 
 ### Review Routing
 
-Required review is an internal method of the artifact-owning phase:
+Independent review, when triggered, is an internal method of the artifact-owning phase:
 
 | Review need | Read | Outcome |
 | --- | --- | --- |
@@ -64,9 +62,9 @@ Required review is an internal method of the artifact-owning phase:
 | Test technical design and ownership readiness. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) | Findings and verdict returned to technical design. |
 | Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings and verdict returned to test design. |
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
-For every required non-implementation review, phase movement waits for the [shared `PASS`-only convergence rule](spec-first-workflow/shared/subagents-and-handoff.md#review-independence); `CONCERNS` and `FAIL` stay inside repair, disposition, or reopen work. Implementation acceptance and closeout follow the current root-owned review contract in the implementation phase.
+For every triggered non-implementation review, phase movement follows the shared [Review Independence](spec-first-workflow/shared/subagents-and-handoff.md#review-independence) rule. A dispositioned `CONCERNS` verdict may move; `FAIL` may not. Implementation acceptance and closeout follow the current root-owned review contract in the implementation phase.
 
-Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Autonomous Pre-Review Challenge](spec-first-workflow/shared/autonomous-pre-review-challenge.md) only for that protocol. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
+Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
 
 ## Phase Movement
 
@@ -74,7 +72,7 @@ Close before movement: move forward only when the current owner has dispositione
 
 ### Implementation-Input Closure
 
-Before moving forward, every input required by the next phase must be exactly defined by a current canonical source, mechanically derivable from approved sources without a semantic choice, or recorded as an external input with its owner, authoritative source, required shape, and earliest required checkpoint. Prose promises and future fixtures without deterministic content do not count as closure. Before implementation, apply closure to every mandatory task and proof on every dependency path through the accepted completion, not only the first executable task. A known unavailable external input may remain only when its dependent task and protected claim are excluded from the current completion and routed to a later ledger; otherwise readiness is `FAIL` and reopens the smallest owner.
+Before moving forward, close the inputs required by the next phase action or implementation task/wave: each is canonical, mechanically derivable without a semantic choice, or available from a named external owner. Also close any cross-task decision that could invalidate that next work. Later inputs may remain open with an owner and checkpoint when they cannot invalidate the next accepted result; they block only when the current task would otherwise be unusable or dishonest.
 
 A request authorizing end-to-end implementation may continue through the needed phases and reviews in one session. Stop only when:
 
@@ -88,12 +86,7 @@ Review, repair, and re-review of non-implementation artifacts stay with the arti
 
 ### Phase Lock
 
-Planning `PASS` on an exact `tasks.md` revision with implementation-input
-closure commits the next transition to the first ready implementation task or
-wave. Status checks and compaction resume from artifacts without changing the
-phase. Concrete new evidence that invalidates a named accepted input or
-readiness disposition reopens only its smallest owner and preserves every
-unaffected disposition.
+Planning readiness on the current `tasks.md` candidate commits the next transition to its first executable task or real parallel wave. Status checks and compaction resume from artifacts without changing the phase. Concrete new evidence that invalidates a named accepted input or readiness disposition reopens only its smallest owner and preserves every unaffected disposition.
 
 At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/subagents-and-handoff.md#handoff).
 
@@ -114,9 +107,6 @@ realistic trigger, near-miss, and completion cases. This repository does not own
 a fake agent runner or judge; without an externally owned live evaluation
 system, invocation and model-behavior claims remain explicitly unproven.
 
-The structural instruction gate proves canonical wording only. Claim that
-implementation orchestration behavior is fixed only after an externally owned
-live adapter exercises the current target model and harness against scope-creep
-rejection, repeated-action interruption, regression-correction rollback, and
-the planning-`PASS` transition. Without those results, report an instruction-
-level mitigation rather than verified model behavior.
+Instruction edits prove only an instruction-level mitigation. Claim changed
+model behavior only after an external live evaluation exercises the relevant
+target model, harness, trigger, and completion case.

@@ -43,13 +43,12 @@ HTTP_BENCH_RAW_SAMPLES ?= 0
 
 TRIVY_IMAGE ?= aquasec/trivy:0.69.2@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
-IMPLEMENTATION_CONVERGENCE_CHECK_SCRIPT := bash ./scripts/ci/implementation-convergence-check.sh
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help template-init template-init-check implementation-convergence-check check check-full pr-check \
+.PHONY: help template-init template-init-check check check-full pr-check \
 	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
@@ -69,7 +68,6 @@ help:
 	@echo "  make test | test-race | test-report | test-integration"
 	@echo "  make lint | lint-fast | go-security | secret-scan"
 	@echo "  make openapi-check | sqlc-check | migration-validate"
-	@echo "  make implementation-convergence-check"
 	@echo "  make docker-build | container-security"
 	@echo ""
 	@echo "Benchmarking:"
@@ -89,9 +87,6 @@ template-init:
 template-init-check:
 	bash ./scripts/ci/template-init-check.sh
 
-implementation-convergence-check:
-	$(IMPLEMENTATION_CONVERGENCE_CHECK_SCRIPT)
-
 claude-skills-sync:
 	@mkdir -p .claude/skills
 	@find .claude/skills -maxdepth 1 -type l -delete
@@ -101,7 +96,7 @@ claude-skills-sync:
 check: fmt-check lint test
 
 ci-local:
-	$(MAKE) mod-check template-init-check implementation-convergence-check fmt-check lint test-race test-report sqlc-check openapi-check go-security secret-scan
+	$(MAKE) mod-check template-init-check fmt-check lint test-race test-report sqlc-check openapi-check go-security secret-scan
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }

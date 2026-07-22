@@ -38,21 +38,21 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 `docs/spec-first-workflow.md` owns path selection. Choose the smallest path that can close the accepted outcome:
 
 - **Direct:** the request is clear, local, reversible, has one owner, bounded proof, and no unresolved protected-domain decision. The root may edit the assigned checkout, self-review the bounded diff, and run focused proof. No durable execution control, native worker, worktree, durable artifact, independent review, or workflow opt-out is required.
-- **Structured:** the normal non-trivial case. Keep a reviewed `spec.md` and reviewed `tasks.md`; create design and test artifacts only when their decisions must survive.
+- **Structured:** the normal non-trivial case. Keep only the `spec.md`, `tasks.md`, design, or test artifacts whose decisions must survive; the root self-reviews them unless current risk or the user requires independent review.
 - **Orchestrated:** use durable coordination, parallel lanes, or optional durable-control and native worker/worktree execution only when broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution makes coordination real.
 
 Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
 
 ### Required Spine
 
-Structured and orchestrated work follows the workflow router's [Required Spine](docs/spec-first-workflow.md#required-spine), including its review, challenge, movement, and scoping-down rules.
+Structured and orchestrated work follows the workflow router's [Required Spine](docs/spec-first-workflow.md#required-spine), including its review, movement, and scoping-down rules.
 
 Before structured or orchestrated work designs against an external platform, unfamiliar mechanism, new infrastructure or dependency, or non-trivial architecture choice, research current official documentation/source and credible real implementations or engineering writeups. Treat official sources as contract authority, real-world sources as operational evidence, and do not rely on model memory for current external behavior.
 
 ## Task Contract
 
 1. Reconstruct the accepted outcome from current repository facts before acting. Ask the user only when an unresolved decision would materially change scope, behavior, ownership, safety, authorization, or proof; otherwise state a bounded assumption and continue.
-2. State the goal, relevant context, hard constraints, authorization boundary, required evidence, success criteria, output format, and stop condition once. Leave discretionary steps to the model; prescribe an order or mechanism only when an accepted decision fixes it.
+2. State the outcome, non-obvious constraints or authority, matching proof, and stop condition. Omit inherited defaults, empty fields, and discretionary steps; prescribe an order or mechanism only when an accepted decision fixes it.
 3. Match every readiness or completion claim to current evidence of equal scope. Report narrower or unavailable proof honestly and name the next useful check.
 
 ## Implementation And Evidence
@@ -62,7 +62,7 @@ Before structured or orchestrated work designs against an external platform, unf
 - A durable execution control (Codex Goal or Claude Code task list) is for genuinely long-running, multi-step, or resumable implementation; one root control spans that outcome. Do not create one for ordinary direct work or non-implementation reasoning.
 - Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. Fix defects at the narrowest shared owner proved by the reproducer.
 - Worker candidates pass the phase-owned [Scope Lock](docs/spec-first-workflow/phases/implementation-validation-closeout.md#scope-lock) before review and then follow [Monotonic Acceptance](docs/spec-first-workflow/phases/implementation-validation-closeout.md#monotonic-acceptance) plus its [Diagnostic Gate](docs/spec-first-workflow/phases/implementation-validation-closeout.md#diagnostic-gate). A correction finding identifies a candidate-caused regression, a concrete violation of an accepted criterion or repository-owned invariant, or proof missing from an accepted claim; other defects remain observations.
-- Proof for an immutable commit/tree remains valid after a byte-identical fast-forward; rerun only when the tree, relevant environment or preconditions, claim scope, provenance, or risk surface changed.
+- Reuse successful proof only while the relevant content, environment or preconditions, claim scope, provenance, and risk surface are unchanged. Use a commit/tree identity only when proof crosses a checkout or integration boundary.
 
 ## Validation Matrix
 
@@ -70,7 +70,7 @@ Use the smallest matching check:
 
 | Changed surface | Default proof |
 | --- | --- |
-| Docs or instructions | `git diff --check` and the relevant instruction gate |
+| Docs or instructions | `git diff --check` |
 | Local Go behavior | Focused package/test proof; changed-code lint when useful |
 | Concurrency/lifecycle | Focused behavior plus race/liveness proof |
 | Performance claim | The matching [benchmark level](docs/benchmarking.md), equivalent workload/testbed evidence, and independent correctness proof |
@@ -98,7 +98,7 @@ it.
 - [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - `docs/spec-first-workflow.md` owns routing and movement.
 - Keep phase-specific method in `docs/spec-first-workflow/phases/`.
-- `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns built-in subagent delegation, mandatory non-implementation review independence, convergence, and handoff; `shared/autonomous-pre-review-challenge.md` owns the autonomous challenge protocol.
+- `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns built-in subagent delegation, triggered non-implementation review independence, convergence, and handoff.
 - Skills provide methods; they do not create work or override accepted decisions.
 - Task-local artifacts own accepted task decisions. Runtime and generated authorities named there win over derived prose.
 - [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance) owns instruction phrasing, deduplication, and behavior-evaluation boundaries.

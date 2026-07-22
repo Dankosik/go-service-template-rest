@@ -11,7 +11,7 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 
 ## Inputs
 
-- Ready spec and exact design revision.
+- Ready spec and current fixed design candidate or diff.
 - Relevant repository architecture and runtime/generated sources.
 - Dispositioned accepted risks/downstream proof obligations and prior design findings.
 
@@ -20,7 +20,7 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 Ranked anchored findings and one verdict:
 
 - `PASS`: the sufficient material evidence boundary has no hidden design work, current-phase defect, unowned question, or uncovered affected lens.
-- `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit planning.
+- `CONCERNS`: a bounded risk or proof obligation may move after its downstream owner, observable, and reopen condition are recorded and no design decision remains open; no fresh review is required for that disposition.
 - `FAIL`: specification or design must change first.
 
 ## Review Method
@@ -45,4 +45,4 @@ Do not block on local naming or task order after the owning design decision is c
 
 ## Stop Rule
 
-For an internal checkpoint, return findings to the owning root; it routes repairs and re-reviews under the shared convergence contract in the same root session without a user handoff. Use focused re-review for local repairs and full affected-surface review when behavior, contracts, ownership, shared assumptions, or proof changes. A focused re-review may close the named finding, but a phase-level `PASS` requires rechecking implementation-input closure across every materially distinct input-bearing surface on the current completion path. For an explicitly user-requested standalone review, return findings and stop read-only.
+For an internal checkpoint, return findings to the owning root for disposition under the shared convergence contract. Re-review only after `FAIL` repair or a material change to behavior, contracts, ownership, shared assumptions, or proof. For an explicitly user-requested standalone review, return findings and stop read-only.

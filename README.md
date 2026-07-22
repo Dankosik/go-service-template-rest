@@ -38,9 +38,9 @@ The workflow chooses among three paths:
 
 Protected concerns such as public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require full-depth work or a durable artifact in every phase.
 
-Structured and orchestrated work evaluates every phase boundary in order. The owning macro phases are specification, technical design, test design, planning, and implementation/validation/closeout; intake and research support the owning phase unless the user names `research only`, which makes the fixed synthesis its own independently reviewed macro-phase outcome. Research, design, or test design may be scoped down when its question is already closed, with a concrete reason; specification, planning, and their independent review gates remain required. One authorized request may cross several phases without collapsing their ownership or gates. An explicit boundary such as `research only`, `planning only`, `read-only`, or `docs-only` stops the work there. Required non-implementation reviews need a fresh `PASS`; `CONCERNS` stays for disposition/re-review and `FAIL` for repair/reopen. Implementation retains the current local/direct and optional Worker contract in [AGENTS.md](AGENTS.md#implementation-and-evidence) and [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md). An explicitly requested independent review of completed implementation is a separate read-only request. A next-session prompt is reserved for an intentional next macro phase or an honest blocker the current root cannot resolve.
+Structured and orchestrated work evaluates the relevant phase boundaries in order. Specification and planning remain required; research, design, or test design may be scoped down when their questions are already closed. The root self-reviews ordinary structured artifacts. Independent review is reserved for user-requested, orchestrated, high-impact, hard-to-reverse, protected-domain, or materially contested decisions. A dispositioned `CONCERNS` verdict may move; `FAIL` requires repair or reopen. Implementation retains the current local/direct and optional Worker contract in [AGENTS.md](AGENTS.md#implementation-and-evidence) and [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md).
 
-Before each applicable non-implementation review, the root runs one autonomous read-only grilling probe against the completed candidate, records material dispositions in that candidate, and then uses a different child for the required review. This applies once to Specification, combined Technical Design, Test Design, Planning, and explicit `research only`; it does not add probes to supporting steps, direct work, or Implementation. Explicit user-requested grilling remains a root-to-user dialogue. See [Autonomous Pre-Review Challenge](docs/spec-first-workflow/shared/autonomous-pre-review-challenge.md).
+Each triggered non-implementation boundary uses one independent review. A separate focused challenge is justified only by a concrete high-impact, hard-to-reverse, or contested decision; ordinary candidates use root self-review. Explicit user-requested grilling remains a root-to-user dialogue.
 
 ### Artifacts
 
@@ -78,7 +78,7 @@ Representative agents:
 | `reliability-agent` | timeouts, retries, overload, lifecycle |
 | `qa-agent` | test obligations and validation readiness |
 | `quality-agent` | idiomatic Go and structural simplification |
-| `challenger-agent` | focused challenge or internal pre-review grilling probe |
+| `challenger-agent` | one focused high-impact or contested challenge |
 
 Representative workflow skills:
 

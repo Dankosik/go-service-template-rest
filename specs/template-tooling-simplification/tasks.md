@@ -23,15 +23,11 @@ the before/after comparison.
 Global constraints: Preserve unrelated benchmark work and all other user changes.
 Keep existing benchmark commands/artifacts, removing only their Docker-Go
 fallback and moving pinned k6 execution to the benchmark owner. Do not mutate
-GitHub settings or publish. Immediately before T1 edits, snapshot the complete
-dirty checkout under
-`/private/tmp/go-service-template-rest-benchmark-baseline-20260720`: create
-`tracked.patch` with `git diff --binary --output=<path>`, create
-`untracked.tar` from the exact newline-delimited
-`git ls-files --others --exclude-standard` output, and record SHA-256 for both.
-This deterministic recoverable baseline is outside the repository and therefore
-covers every overlapping tracked and untracked benchmark path without a
-hand-maintained file list.
+GitHub settings or publish. Immediately before T1 edits, create a recoverable
+dirty-checkout snapshot under
+`/private/tmp/go-service-template-rest-benchmark-baseline-20260720`: write
+`tracked.patch` with `git diff --binary --output=<path>` and archive the current
+untracked files as `untracked.tar`. Stop if either command fails.
 Planned waves:
 - W1: T1; it establishes every surviving command owner before deletion.
 - W2: T2; it consumes T1's final command surface.
@@ -48,8 +44,7 @@ Planned waves:
     `/private/tmp/go-service-template-rest-benchmark-baseline-20260720`.
   - Depends on: none
   - Handoff: T2 receives the final Make target names and the four retained
-    script owners. T3 receives the exact benchmark backup path and its content
-    manifest/hash.
+    script owners. T3 receives the benchmark backup path for recovery only.
   - Proof: initialization success and pre-mutation rejection; `make
     template-init-check` passes and its forbidden-import fixture is rejected by
     depguard after module rename. The same check proves a template-source origin
@@ -60,9 +55,8 @@ Planned waves:
     mirror. Native aggregate; `make ci-local` runs no conditional Docker skip.
     Static Docker wiring; Compose configuration and `make -n check-full` show
     integration, isolated migration plus `/migrate`, and the digest-pinned image
-    scan without claiming execution. The external dirty-state baseline exists,
-    both recorded hashes revalidate, and its archive member list equals the
-    pre-edit untracked list before repository mutation.
+    scan without claiming execution. The external dirty-state snapshot was
+    created successfully before repository mutation.
   - Reopen if: benchmark commands/artifact semantics cannot survive without the
     general Docker emulator; Specification owns that contract.
 
@@ -135,10 +129,9 @@ Planned waves:
     path listed in T2 observes `! -e`, a fixed-string active-surface scan for
     each deleted basename returns no match outside `specs/` and `.git/`, and
     `rg --files .agents/skills | rg '/evals/'` returns no match. Comparison with
-    the external pre-edit patch/copy manifest shows benchmark commands and
-    artifact contract remain except the accepted Docker-Go fallback removal and
-    k6 relocation. Pre-existing unrelated changes remain present or recoverable
-    from that baseline.
+    the current bounded diff shows benchmark commands and the artifact contract
+    remain except the accepted Docker-Go fallback removal and k6 relocation.
+    Pre-existing unrelated changes remain present; the snapshot is recovery-only.
     Record Docker-backed integration, isolated migration runtime/cleanup, and
     runtime image scan as unverified; they are excluded from current completion
     because the current OrbStack socket is not reachable from this environment.

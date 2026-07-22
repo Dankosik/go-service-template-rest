@@ -64,16 +64,16 @@ Prefer primary/current sources. A missing hit is not proof of absence unless the
 
 ## Review
 
-When `research only` is the accepted macro-phase boundary for structured or orchestrated work, obtain independent read-only review of the fixed synthesis before returning it. Ordinary supporting research that does not trigger the semantic-challenge rule above is consumed inside specification and uses specification review instead of a duplicate gate; a triggered synthesis challenge remains required before downstream consumption.
+When `research only` is the accepted macro-phase boundary, apply root self-review and obtain independent read-only review only when the shared review trigger applies. Ordinary supporting research is consumed inside specification; a risk-triggered synthesis challenge remains separate.
 
 The reviewer checks the Outputs against the Method: affected-lens and question coverage; open-item and quantitative provenance; source authority, applicability, and freshness; falsification; current-state semantic baseline and probe limits when triggered; candidate decision levels, relationships, local fit, sensitivity, and saturation when a solution choice is live; unresolved conflicts; fact/inference separation; and evidence-backed downstream dispositions, then returns:
 
 - `PASS`: the sufficient material evidence boundary supports every decision-changing conclusion and has no unowned question or uncovered affected lens;
-- `CONCERNS`: a bounded residual evidence risk or downstream proof obligation still needs explicit disposition and fresh review; it does not permit the reviewed synthesis to leave research and may not carry a missing answer owned by research;
+- `CONCERNS`: a bounded residual evidence risk or downstream proof obligation may move after its owner, observable, and refresh/reopen condition are recorded; it may not carry a missing answer owned by research;
 - `FAIL`: missing, stale, conflicting, or unavailable evidence makes a required material conclusion unreliable or prevents closure.
 
-The owning root repairs and re-reviews under the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract until convergence. An explicitly requested standalone review of research remains read-only.
+The owning root dispositions findings under the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract. Fresh review follows only `FAIL` repair or material candidate change. An explicitly requested standalone review of research remains read-only.
 
 ## Stop Rule
 
-Finish when every decision-changing question is supported, honestly bounded, or blocked with a reopen owner, and the next owner can distinguish established, uncertain, and freshness-sensitive material without repeating the same search or inventing missing evidence. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. When a required `research only` synthesis review applies, it must have returned `PASS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.
+Finish when every decision-changing question is supported, honestly bounded, or blocked with a reopen owner, and the next owner can distinguish established, uncertain, and freshness-sensitive material without repeating the same search or inventing missing evidence. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. Any triggered `research only` review must have returned `PASS` or dispositioned `CONCERNS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.

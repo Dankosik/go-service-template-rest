@@ -108,10 +108,10 @@ scripts/dev/benchmark-remote.sh run -- \
 
 For a before/after claim, retain one Droplet and use `create`, `sync`, `exec`,
 `fetch`, and `destroy`; run both sides on that Droplet. `sync` preserves remote
-benchmark artifacts while replacing source, and remote metadata retains the
-local revision, dirty state, and exact SHA-256 transferred-source fingerprint
-without copying `.git`. Do not compare raw results from different ephemeral
-Droplets even when their size slug matches.
+benchmark artifacts while replacing source, and the runner automatically
+tracks transferred-source identity without copying `.git`. Do not ask the
+operator or Worker to calculate or recheck file hashes. Do not compare raw
+results from different ephemeral Droplets even when their size slug matches.
 
 For decision-grade external HTTP capacity, use two same-region/VPC runners with
 different `DO_BENCH_STATE_FILE` values: one target and one k6 generator. Allow
@@ -215,8 +215,8 @@ workload identity, dependency image, schema fingerprint, CPU identity/count, or
 `.artifacts/bench/`:
 
 - `baseline.txt` and `current.txt`: raw Go benchmark output;
-- adjacent `.meta` files: revision, dirty state, exact source fingerprint,
-  settings, and Go environment;
+- adjacent `.meta` files: automatic source identity, settings, and Go
+  environment;
 - `comparison.txt`: the `benchstat` report.
 
 `BENCH_COUNT=10` is a comparison-ready default, not an acceptance policy.

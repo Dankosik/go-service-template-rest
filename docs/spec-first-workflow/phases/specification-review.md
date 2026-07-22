@@ -16,7 +16,7 @@ falsification lenses, finding fields, and verdict consequences.
 
 ## Inputs
 
-- The exact `spec.md` revision or content anchor.
+- The current fixed `spec.md` candidate or diff.
 - Accepted brief, relevant evidence, named sources of truth, and repository or
   consumer surfaces the accepted outcome can affect.
 - Prior findings for a follow-up review.
@@ -33,9 +33,9 @@ Verdict consequences:
 
 - `PASS`: within the stated evidence boundary, no readiness gap, current-phase
   defect, unowned question, or uncovered affected lens remains.
-- `CONCERNS`: a bounded risk or proof obligation still needs explicit owner
-  disposition and fresh review; the spec cannot leave Specification on this
-  verdict.
+- `CONCERNS`: a bounded risk or proof obligation may move after its downstream
+  owner, observable, and reopen condition are recorded and no specification
+  decision remains open; no fresh review is required for that disposition.
 - `FAIL`: a missing or contradictory decision prevents honest design/planning.
 
 ## Review Method
@@ -46,9 +46,8 @@ Reconstruct the affected behavior surface independently from the accepted
 brief, relevant research, current runtime/generated contracts, and repository
 or consumer surfaces the accepted outcome can affect.
 Do not treat omission from the spec as evidence that a lens is not triggered.
-Falsify it with the smallest decision-changing questions below, then apply the
-shared covered/delegated/not-triggered disposition to every materially affected
-lens and issue one evidence-bounded verdict on that exact revision.
+Falsify it with the smallest decision-changing questions below, then issue one
+evidence-bounded verdict on the current candidate.
 
 Try to falsify the spec with the smallest decision-changing questions:
 

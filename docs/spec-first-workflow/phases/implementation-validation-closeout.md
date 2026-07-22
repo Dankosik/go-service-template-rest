@@ -8,6 +8,12 @@ state, and proof. Spend an edit only on an accepted criterion or current open
 finding; all other discoveries retain observation status. Acceptance is
 terminal: close out when the criteria and mapped proof pass.
 
+Reason backward from the observable outcome: identify what must be true, its
+narrowest implementation owner, the wiring that exposes it on the real path,
+and the check that would fail if it were absent or wrong. Task status, file or
+symbol presence, an unrelated passing check, and Worker prose are not
+completion evidence.
+
 ## Read When
 
 - A request authorizes change, build, or fix.
@@ -30,6 +36,15 @@ terminal: close out when the criteria and mapped proof pass.
 
 Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. For a defect, repair the narrowest shared owner proved by the reproducer. Preserve accepted behavior, cleanup, authority, and protected-domain constraints; remove replaced paths only when compatibility does not require them.
 
+Treat task paths and symbols as navigation anchors; current canonical source
+determines placement. Adapt local placement drift while accepted behavior,
+ownership, proof, and risk stay unchanged. If one changes, reopen only its
+narrowest decision owner.
+
+Accepted behavior remains incomplete when replaced by a placeholder, temporary
+hardcoding, TODO, mock success, or undeclared `v1`. Return a blocker or reopen
+scope instead of declaring the smaller outcome done.
+
 Before a production Go edit, apply `go-coder`; route an unknown cause to `go-systematic-debugging` and test-only work to `go-test-implementation`. During implementation, `go-coder` owns the change. Apply only the Go, contract, data, lifecycle, or delivery methods triggered by the changed surface as review lenses under Candidate Acceptance below. Missing accepted policy reopens its narrow upstream decision owner.
 
 ### Local Execution
@@ -40,9 +55,10 @@ For direct work, the root edits the assigned checkout, performs one coherent sel
 
 Keep a clear sequential outcome root-local even when it is long-running or spans multiple files. Use the harness-native implementation worker and isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — only when resumability, dirty-checkout isolation, safe parallelism, or materially separate context outweighs dispatch, worktree, fan-in, and acceptance cost, or when the user explicitly delegates implementation. Create one root durable execution control (Codex Goal or Claude Code task list) only for a genuinely multi-step or resumable outcome.
 
-Before dispatching from uncommitted accepted input, record the selected
-physical checkout, base/tree/ref, current status, and authorized paths. Do not
-stash, clean, ignore, or mutate user changes to manufacture acceptable input.
+Before dispatching from uncommitted accepted input, identify the source
+checkout and authorized paths and inspect its current diff/status. Record a
+base only when the candidate will leave that checkout or several provisional
+deltas must be compared. Do not stash, clean, ignore, or mutate user changes.
 Keep one write Worker per outcome. A Worker receives an outcome-first brief
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
@@ -119,11 +135,11 @@ Concrete evidence first available after the full review that proves a critical
 security breach, data loss or corruption, or critical violation of an accepted
 public contract stops correction and reopens that evidence's owner.
 
-The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Freeze the reviewed candidate as a commit or tree and run every mapped claim-scoped proof command once on that exact state. Integrate only the accepted delta, prefer a byte-identical fast-forward when valid, verify the resulting authoritative tree identity, and then accept it or dispatch later work. If integration changes the tree, treat it as a new candidate and validate the affected claims before acceptance. Do not mutate unrelated dirty state to force integration. Remote push is outside this integration rule and requires separate authorization.
+The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Run mapped claim-scoped proof on the reviewed candidate, integrate only the accepted delta, and confirm the authoritative diff still contains that candidate without unrelated changes. If integration changes relevant content, validate the affected claims before acceptance. Use a commit/tree identity only when proof crosses a checkout or integration boundary; never hash individual files or specifications for this purpose. Do not mutate unrelated dirty state to force integration. Remote push requires separate authorization.
 
 ### Immutable Evidence
 
-Proof belongs to the exact tree and claim it exercised. Record the commit or tree identity, command, relevant environment/preconditions, result, and gaps. Exact successful Worker proof remains valid after a byte-identical fast-forward or integration. Rerun only when the tree, relevant environment or precondition, claim scope, provenance, or risk surface changed. A local direct change does not need a commit before proof.
+Proof belongs to the relevant content and claim it exercised. Record the command, relevant environment/preconditions, result, and gaps. Attach a commit/tree identity only when reusing proof across a checkout or integration boundary; the current bounded diff is sufficient for local work. Reuse proof while the relevant content, preconditions, claim scope, provenance, and risk surface remain unchanged.
 
 ## Review
 
@@ -131,17 +147,9 @@ Review the changed outcome for correctness, affected error/context/resource beha
 
 ## Validate
 
-Apply the repository [Task Contract](../../../AGENTS.md#task-contract) with the smallest matching validation:
-
-| Surface | Proof |
-| --- | --- |
-| Docs/instructions | `git diff --check` and the relevant instruction gate |
-| Local Go behavior | Focused package or regression proof; changed-code lint when useful |
-| Concurrency/lifecycle | Focused behavior plus race/liveness proof |
-| Performance | The matching level from [Benchmarking](../../benchmarking.md), equivalent workload/testbed evidence, and independent correctness proof |
-| API, sqlc, migrations, generated source | Canonical generation/drift plus affected runtime proof |
-| Security, deployment, cross-service | Matching protected-domain and integrated proof |
-| Publication, CI parity, broad cross-cutting work | `check-full`, `ci-local`, `pr-check`, container, or security suites only when that claim requires them |
+Apply the repository [Task Contract](../../../AGENTS.md#task-contract) and
+[Validation Matrix](../../../AGENTS.md#validation-matrix). For instruction-only
+work, the default proof is `git diff --check`; wording does not need a CI gate.
 
 Performance validation is triggered by an accepted performance claim, budget,
 or materially affected hot path; it is not a ceremony for every change. If the

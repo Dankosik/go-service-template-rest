@@ -11,7 +11,7 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 
 ## Inputs
 
-- Exact `tasks.md` revision.
+- Current fixed `tasks.md` candidate or diff.
 - Ready spec and required design/test/rollout artifacts.
 - Repository source/command evidence needed to check ownership and proof feasibility.
 
@@ -19,13 +19,13 @@ Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review
 
 Ranked anchored findings and one verdict:
 
-- `PASS`: every mandatory task and proof through current completion is executable from closed inputs in safe planned waves, with no hidden execution work, current-phase defect, unowned question, or uncovered affected lens.
-- `CONCERNS`: a bounded risk or downstream proof obligation still needs explicit owner disposition and fresh review; it does not permit implementation.
+- `PASS`: the next task or real parallel wave is executable from closed inputs with adequate proof and no hidden decision that can invalidate it.
+- `CONCERNS`: a bounded later risk or proof obligation may move after its owner, checkpoint, observable, and reopen condition are recorded and it cannot invalidate the next accepted result.
 - `FAIL`: the ledger or an upstream decision must be repaired first.
 
 ## Review Method
 
-Independently cold-walk the fixed ledger from each dependency root through final validation using only cited sources and currently available inputs. Record the first hidden decision, unavailable mandatory input, unsafe wave, unowned delta, or unprovable claim on each mandatory path and suppress downstream noise behind that broken edge. Continue across every dependency root and every affected-set group below to collect the complete compatible finding set before issuing a verdict.
+Independently walk the next executable task or real parallel wave through its proof using cited sources and current inputs. Report hidden decisions, unavailable required inputs, unsafe concurrency, unowned deltas, or unprovable claims that can invalidate that work. Inspect later tasks only for a decision or dependency that can invalidate the next accepted result.
 
 ## Review Questions
 
@@ -44,19 +44,18 @@ Independently cold-walk the fixed ledger from each dependency root through final
 ### Waves And Dependencies
 
 - Are dependency edges true execution or proof gates rather than document order or review preference, and do independent roots remain unchained?
-- Does every task appear exactly once in the earliest safe planned wave? For each multi-task wave, does current evidence positively establish disjoint writable or discovery boundaries, no canonical/generated or migration/rollout coupling, no shared mutable or non-concurrent proof resource, and no interface, invariant, or assumption changed by one member and consumed by another? Absence of dependency edges alone is not proof; unknown independence requires a one-task wave.
+- When a real multi-task wave exists, does current evidence establish disjoint writable and mutable-resource ownership, preserve canonical/generated and migration/rollout coupling, and avoid an interface or assumption changed by one member and consumed by another? Sequential tasks need no wave record.
 
 ### Proof And External Inputs
 
 - Does each proof name its claim, check, and expected observable, and can that observable establish the claim, including failure and negative paths where relevant?
 - Would implementation have to choose behavior, design, test strategy, or rollout policy?
-- Is every known external input on a mandatory path available now? If not, is its dependent task and claim excluded from current completion and routed separately? A ledger cannot receive `PASS subject to gates` when a gate can block mandatory completion.
-- Is any task both mandatory for completion and permitted to remain blocked? If so, return `FAIL` and reopen the accepted-outcome owner; the reviewer does not narrow scope.
+- Is every external input required by the next task or wave available now? Later unavailable inputs need an owner and checkpoint; they block only when they can invalidate the next result or a final-completion claim.
 
 ### Cold Completion
 
 - Is the completion condition successful and observable, not merely “record blocker” or “run commands”?
-- Can a fresh agent execute every mandatory path and planned wave from each dependency root through final validation from cited sources and currently available inputs, without chat history or choosing behavior, schema, values, ownership, proof strategy, or the initial concurrency schedule?
+- Can a fresh agent execute the next task or real parallel wave and its proof from cited sources and current inputs without chat history or choosing behavior, ownership, proof strategy, or concurrency?
 - Is the ledger smaller and clearer than the work it coordinates?
 
 Do not require fields or phase files that cannot change execution or evidence.

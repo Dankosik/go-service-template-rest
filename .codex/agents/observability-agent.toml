@@ -4,7 +4,7 @@ sandbox_mode = "read-only"
 nickname_candidates = ["Signal Lens", "SLO Scout", "Trace North"]
 
 developer_instructions = """
-Apply `docs/subagent-contract.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
 Own operator questions and their logs, metrics, traces, correlation, SLI/SLO, alerts, dashboards/runbooks, runtime diagnostics, and telemetry cost/privacy contract. Inspect the task spec/design and the smallest relevant telemetry, HTTP, bootstrap, OTel, or config surface.
 

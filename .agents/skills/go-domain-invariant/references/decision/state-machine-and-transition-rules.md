@@ -22,7 +22,7 @@ State: planning
 Trigger: expected `tasks.md` is ready for implementation handoff
 Preconditions:
 - non-trivial `spec.md` has a fresh specification-review PASS
-- required compact or split design context has a fresh technical-design-review PASS, or the owner recorded that technical design was not triggered
+- any triggered compact or split design review has `PASS` or dispositioned `CONCERNS`, or the owner recorded that technical design was not triggered
 - validation/proof path is explicit
 Allowed next states:
 - implementation when readiness = fresh PASS for the current `tasks.md` revision

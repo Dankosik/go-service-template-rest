@@ -9,7 +9,7 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/subagent-contract.md` and use `go-concurrency`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and use `go-concurrency`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Own goroutine lifecycle, cancellation, channel ownership, shared-state synchronization, bounded concurrency, error propagation, and shutdown safety. Inspect the changed code, nearest tests, and only the relevant lifecycle surface under `cmd/service/internal/bootstrap/`, `internal/infra/http/`, `internal/app/health/`, or `internal/infra/postgres/`.
 

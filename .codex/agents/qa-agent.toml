@@ -3,7 +3,7 @@ description = "Read-only QA subagent for test obligations and validation readine
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/subagent-contract.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
 Own risk scenarios, proving-level selection, fail-path coverage, determinism, assertion strength, and validation readiness. Inspect accepted spec/design/test obligations, changed tests, repository validation commands, and fresh evidence.
 

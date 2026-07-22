@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/subagent-contract.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Own maintainability findings with merge-risk impact: idiomatic Go, unnecessary abstraction, control flow, naming, exported surface, and local ownership drift. Inspect accepted scope, changed Go/tests, `go.mod`, existing same-package owners, and architecture docs only when package boundaries matter.
 

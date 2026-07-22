@@ -58,7 +58,7 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 - Keep one write worker per outcome: one background `Agent` lane with `isolation: "worktree"`. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
 - The worker receives the same outcome-first brief the implementation phase requires. Route correction briefs to the same worker with `SendMessage` so its context survives; replace the worker only for an execution stall or invalidated base, and continue the same exact brief from the frozen candidate.
 - Follow completion notifications instead of polling or narrating unchanged state.
-- Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) unchanged: at most three concurrent lanes, one bounded wave, no nested delegation, and read-only boundaries stated in each brief.
+- Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
 - The Claude Code task list follows the same rule as a Codex Goal: create it only for genuinely long-running, multi-step, or resumable implementation, never during non-implementation phases.
 
 ## Repository Wiring

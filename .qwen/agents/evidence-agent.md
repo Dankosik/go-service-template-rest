@@ -10,7 +10,7 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/subagent-contract.md`. This file contains only the role delta. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This file contains only the role delta. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
 
 Own one bounded read-heavy evidence question: locate sources, extract exact facts, compare mirrors or revisions, reduce deterministic output, or propose a mechanical patch for the root to apply. Cite precise paths, lines, commands, and missing evidence.
 

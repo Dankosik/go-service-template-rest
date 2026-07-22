@@ -4,7 +4,7 @@ sandbox_mode = "read-only"
 nickname_candidates = ["Source Keeper", "Cache Lens", "Migration Scout"]
 
 developer_instructions = """
-Apply `docs/subagent-contract.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
 Own data/source-of-truth boundaries, schema evolution, migration safety, transactions, query shape, and cache correctness. Inspect the task spec/design, `env/migrations/`, SQLC sources/generated output, `internal/infra/postgres/`, and `internal/app/` only as needed.
 
