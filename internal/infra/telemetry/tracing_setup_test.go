@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -18,12 +19,7 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service-name")
 
-	previousTracerProvider := otel.GetTracerProvider()
-	previousPropagator := otel.GetTextMapPropagator()
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetTextMapPropagator(previousPropagator)
-	})
+	telemetrytest.RestoreGlobals(t)
 
 	shutdown, err := SetupTracing(context.Background(), TracingConfig{
 		ServiceName:      " config-service ",
@@ -81,12 +77,7 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry provider and propagator.
 func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
-	previousTracerProvider := otel.GetTracerProvider()
-	previousPropagator := otel.GetTextMapPropagator()
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetTextMapPropagator(previousPropagator)
-	})
+	telemetrytest.RestoreGlobals(t)
 
 	shutdown, err := SetupTracing(context.Background(), TracingConfig{
 		TracesSampler:    "always_on",
@@ -139,12 +130,7 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", resourceAttrs)
 	t.Setenv("OTEL_SERVICE_NAME", serviceName)
 
-	previousTracerProvider := otel.GetTracerProvider()
-	previousPropagator := otel.GetTextMapPropagator()
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetTextMapPropagator(previousPropagator)
-	})
+	telemetrytest.RestoreGlobals(t)
 
 	shutdowns := make(chan func(context.Context) error, setupCount)
 	errs := make(chan error, setupCount)
@@ -247,7 +233,8 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restoreGlobalTelemetry(t)
+			telemetrytest.ClearAmbientExporterEnv(t)
+			telemetrytest.RestoreGlobals(t)
 			t.Setenv(tt.envName, tt.envValue)
 
 			err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{
@@ -264,7 +251,8 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 }
 
 func TestSetupTracingDoesNotEnableExporterFromAmbientOTLPEndpointEnv(t *testing.T) {
-	restoreGlobalTelemetry(t)
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 
 	requests := make(chan string, 1)
 	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -338,7 +326,8 @@ func TestSetupTracingRejectsAmbientOTLPProxyEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restoreGlobalTelemetry(t)
+			telemetrytest.ClearAmbientExporterEnv(t)
+			telemetrytest.RestoreGlobals(t)
 			t.Setenv(tt.envName, "http://proxy.example.com:8080")
 
 			err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{

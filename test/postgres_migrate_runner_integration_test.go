@@ -16,7 +16,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	dsn := postgresTestDSN(t, ctx)
+	dsn := integrationPostgresDSN(t)
 
 	firstRun, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        dsn,

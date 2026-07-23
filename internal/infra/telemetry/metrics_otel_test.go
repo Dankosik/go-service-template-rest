@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.opentelemetry.io/otel"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
@@ -13,10 +13,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service")
 
-	previousMeterProvider := otel.GetMeterProvider()
-	t.Cleanup(func() {
-		otel.SetMeterProvider(previousMeterProvider)
-	})
+	telemetrytest.RestoreGlobals(t)
 
 	metrics := New()
 	shutdown, err := SetupMetrics(context.Background(), metrics, MetricsConfig{

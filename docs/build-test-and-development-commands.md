@@ -66,9 +66,13 @@ CI does not carry a duplicate standalone test job. `lint` owns the configured
 Go analyzers, including vet-class checks.
 
 Effective filtered coverage is the merge gate; raw coverage is informational.
-The configured filter excludes generated OpenAPI and sqlc code plus `cmd`
+The configured filter excludes generated OpenAPI and sqlc code, the
+test-support `internal/infra/telemetry/telemetrytest` package, and `cmd`
 composition roots. Integration-tag coverage is separate. Repository maintainers
-own `COVERAGE_MIN` changes and must record the rationale.
+own `COVERAGE_MIN` changes and must record the rationale. Keep effective
+coverage at least one percentage point above `COVERAGE_MIN`; a gate operating
+at zero margin turns unrelated refactors and platform drift into false CI
+failures.
 
 Use standard Go selection flags for focused local work; no wrapper targets are
 needed:

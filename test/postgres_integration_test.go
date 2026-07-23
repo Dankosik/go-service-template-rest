@@ -5,20 +5,25 @@ package integration_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
+	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
@@ -29,8 +34,9 @@ func TestPostgresPool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	dsn := postgresTestDSN(t, ctx)
-	spanRecorder, metricReader := installPostgresTelemetry(t)
+	dsn := integrationPostgresDSN(t)
+	spanRecorder := telemetrytest.InstallSpanRecorder(t)
+	metricReader := telemetrytest.InstallManualReader(t)
 
 	pool, err := postgres.New(ctx, postgres.Options{
 		DSN:                dsn,
@@ -93,35 +99,6 @@ func TestPostgresPool(t *testing.T) {
 		assertPostgresTracePrivacy(t, spanRecorder)
 		assertPostgresPoolMetrics(t, ctx, metricReader, pool.Name())
 	})
-}
-
-func installPostgresTelemetry(t *testing.T) (*tracetest.SpanRecorder, *sdkmetric.ManualReader) {
-	t.Helper()
-
-	previousTracerProvider := otel.GetTracerProvider()
-	previousMeterProvider := otel.GetMeterProvider()
-
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
-	metricReader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
-	otel.SetTracerProvider(tracerProvider)
-	otel.SetMeterProvider(meterProvider)
-
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetMeterProvider(previousMeterProvider)
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := errors.Join(
-			tracerProvider.Shutdown(shutdownCtx),
-			meterProvider.Shutdown(shutdownCtx),
-		); err != nil {
-			t.Errorf("shutdown postgres telemetry: %v", err)
-		}
-	})
-
-	return spanRecorder, metricReader
 }
 
 func assertPostgresTracePrivacy(t *testing.T, recorder *tracetest.SpanRecorder) {
@@ -188,11 +165,21 @@ func assertPostgresPoolMetrics(
 	t.Fatal("postgres metrics do not contain pgxpool.max_connections")
 }
 
-func postgresTestDSN(t *testing.T, ctx context.Context) string {
-	t.Helper()
+func TestMain(m *testing.M) {
+	os.Exit(runWithSharedPostgres(m))
+}
 
-	if !requireDockerForIntegration() {
-		testcontainers.SkipIfProviderIsNotHealthy(t)
+// runWithSharedPostgres starts one PostgreSQL container for the whole
+// integration package. Each test derives its own database from it through
+// integrationPostgresDSN, so tests stay isolated without paying container
+// startup per test.
+func runWithSharedPostgres(m *testing.M) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	if !requireDockerForIntegration() && !dockerProviderIsHealthy(ctx) {
+		// Docker-backed tests skip through integrationPostgresDSN.
+		return m.Run()
 	}
 
 	container, err := tcpostgres.Run(
@@ -203,16 +190,89 @@ func postgresTestDSN(t *testing.T, ctx context.Context) string {
 		tcpostgres.WithPassword("app"),
 		tcpostgres.BasicWaitStrategies(),
 	)
-	testcontainers.CleanupContainer(t, container)
 	if err != nil {
-		t.Fatalf("start postgres container: %v", err)
+		terminateSharedPostgres(container)
+		log.Printf("start shared postgres container: %v", err)
+		return 1
 	}
-
 	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		t.Fatalf("build postgres dsn: %v", err)
+		terminateSharedPostgres(container)
+		log.Printf("resolve shared postgres dsn: %v", err)
+		return 1
 	}
-	return dsn
+
+	sharedPostgresAdminDSN = dsn
+	code := m.Run()
+	terminateSharedPostgres(container)
+	return code
+}
+
+var (
+	sharedPostgresAdminDSN string
+	integrationDatabaseSeq atomic.Int64
+)
+
+func dockerProviderIsHealthy(ctx context.Context) bool {
+	provider, err := testcontainers.NewDockerProvider()
+	if err != nil {
+		return false
+	}
+	defer provider.Close()
+	return provider.Health(ctx) == nil
+}
+
+func terminateSharedPostgres(container *tcpostgres.PostgresContainer) {
+	if container == nil {
+		return
+	}
+	if err := testcontainers.TerminateContainer(container); err != nil {
+		log.Printf("terminate shared postgres container: %v", err)
+	}
+}
+
+// integrationPostgresDSN returns a DSN for a database owned by this test,
+// created on the shared container and dropped on cleanup. It skips the test
+// when Docker is unavailable and REQUIRE_DOCKER does not require it.
+func integrationPostgresDSN(t *testing.T) string {
+	t.Helper()
+
+	if sharedPostgresAdminDSN == "" {
+		t.Skip("docker provider is not healthy; set REQUIRE_DOCKER=1 to require it")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	databaseName := fmt.Sprintf("test_db_%d", integrationDatabaseSeq.Add(1))
+	admin, err := pgxpool.New(ctx, sharedPostgresAdminDSN)
+	if err != nil {
+		t.Fatalf("connect shared postgres admin database: %v", err)
+	}
+	defer admin.Close()
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+databaseName); err != nil {
+		t.Fatalf("create test database %s: %v", databaseName, err)
+	}
+	t.Cleanup(func() {
+		dropCtx, dropCancel := context.WithTimeout(context.Background(), time.Minute)
+		defer dropCancel()
+		drop, err := pgxpool.New(dropCtx, sharedPostgresAdminDSN)
+		if err != nil {
+			t.Errorf("connect to drop test database %s: %v", databaseName, err)
+			return
+		}
+		defer drop.Close()
+		if _, err := drop.Exec(dropCtx, "DROP DATABASE "+databaseName+" WITH (FORCE)"); err != nil {
+			t.Errorf("drop test database %s: %v", databaseName, err)
+		}
+	})
+
+	adminURL, err := url.Parse(sharedPostgresAdminDSN)
+	if err != nil {
+		t.Fatalf("parse shared postgres dsn: %v", err)
+	}
+	adminURL.Path = "/" + databaseName
+	return adminURL.String()
 }
 
 func requireDockerForIntegration() bool {

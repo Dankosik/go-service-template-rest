@@ -14,11 +14,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/go-chi/chi/v5"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
@@ -336,10 +334,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	metrics := telemetry.New()
-	previousMeterProvider := otel.GetMeterProvider()
-	t.Cleanup(func() {
-		otel.SetMeterProvider(previousMeterProvider)
-	})
+	telemetrytest.RestoreGlobals(t)
 	shutdown, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
 		ServiceName:    "router-test",
 		ServiceVersion: "test",
@@ -495,20 +490,7 @@ func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
-	recorder := tracetest.NewSpanRecorder()
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(recorder),
-	)
-	previousTracerProvider := otel.GetTracerProvider()
-	previousPropagator := otel.GetTextMapPropagator()
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetTextMapPropagator(previousPropagator)
-		_ = tp.Shutdown(context.Background())
-	})
+	recorder := telemetrytest.InstallSpanRecorder(t)
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	migrate "github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the pgx/v5 database/sql driver
 )
 
 type MigrationOptions struct {
@@ -59,13 +61,27 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 		return MigrationResult{}, fmt.Errorf("open migration source %q: %w", opts.SourcePath, err)
 	}
 
-	databaseDriver, err := (&pgxmigrate.Postgres{}).Open(normalizedDSN)
+	databaseHandle, err := sql.Open("pgx/v5", normalizedDSN)
 	if err != nil {
 		sourceCloseErr := sourceDriver.Close()
 		if sourceCloseErr != nil {
 			return MigrationResult{}, errors.Join(
-				fmt.Errorf("open postgres migration driver: %w", err),
+				fmt.Errorf("open postgres migration database: %w", err),
 				fmt.Errorf("close migration source: %w", sourceCloseErr),
+			)
+		}
+		return MigrationResult{}, fmt.Errorf("open postgres migration database: %w", err)
+	}
+
+	// The migration driver owns databaseHandle only after WithInstance
+	// succeeds; every failure path here must close it directly.
+	databaseDriver, err := pgxmigrate.WithInstance(databaseHandle, &pgxmigrate.Config{})
+	if err != nil {
+		closeErr := closeMigrationResources(sourceDriver, databaseHandle)
+		if closeErr != nil {
+			return MigrationResult{}, errors.Join(
+				fmt.Errorf("open postgres migration driver: %w", err),
+				closeErr,
 			)
 		}
 		return MigrationResult{}, fmt.Errorf("open postgres migration driver: %w", err)

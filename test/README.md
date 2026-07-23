@@ -37,13 +37,18 @@ Feature-author placement:
 | Generated drift for OpenAPI and SQLC | Use the owning make targets instead of integration tests. |
 
 Docker behavior:
-- Local `make test-integration` skips when Docker is unavailable.
+- Local `make test-integration` skips Docker-backed tests when Docker is unavailable.
 - CI sets `REQUIRE_DOCKER=1`, so Docker unavailability fails the job instead of silently skipping.
+
+Shared PostgreSQL harness:
+- `TestMain` starts one digest-pinned PostgreSQL container for the whole package and terminates it after the run.
+- Call `integrationPostgresDSN(t)` for database-backed tests: it creates a database owned by the calling test on the shared container and drops it in `t.Cleanup`, so tests stay isolated without paying container startup per test.
+- The `postgresTestImage` constant in `postgres_integration_test.go` is the single image source; the Makefile and benchmark scripts extract it.
 
 Migration-backed helpers:
 - Prefer `make migration-validate` when the claim is migration correctness.
 - Test helpers that execute `env/migrations/*.up.sql` directly are schema bootstrap helpers for integration setup, not full migration rehearsal.
-- Apply migration files in sorted order, fail on empty globs, use bounded contexts, and clean up containers and pools with `t.Cleanup`.
+- Apply migration files in sorted order, fail on empty globs, use bounded contexts, and clean up databases and pools with `t.Cleanup`.
 
 Database benchmark behavior:
 - `make bench-db` sets `REQUIRE_DOCKER=1`, selects the `integration` build tag,

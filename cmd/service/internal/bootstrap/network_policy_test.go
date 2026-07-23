@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"errors"
 	"maps"
 	"os"
@@ -566,6 +567,34 @@ func TestNetworkPolicyValidateIngressRuntimeRejectsExpiredException(t *testing.T
 	err = policy.ValidateIngressRuntime()
 	if err == nil {
 		t.Fatal("ValidateIngressRuntime() error = nil, want non-nil")
+	}
+}
+
+func TestRuntimeIngressAdmissionGuardCheck(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	setValidIngressExceptionEnv(t, now, map[string]string{
+		"ID": "ex-ingress-admission-guard",
+	})
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+
+	policy.now = func() time.Time { return now }
+	if err := newRuntimeIngressAdmissionGuard(policy).Check(context.Background()); err != nil {
+		t.Fatalf("Check() with active exception error = %v, want nil", err)
+	}
+
+	policy.now = func() time.Time { return now.Add(3 * time.Hour) }
+	if err := newRuntimeIngressAdmissionGuard(policy).Check(context.Background()); err == nil {
+		t.Fatal("Check() with expired exception error = nil, want non-nil")
+	}
+
+	var nilGuard *runtimeIngressAdmissionGuard
+	if err := nilGuard.Check(context.Background()); err != nil {
+		t.Fatalf("nil guard Check() error = %v, want nil", err)
 	}
 }
 
