@@ -32,7 +32,7 @@ Copy this shape when the design finding is route/contract seam drift and chi sem
 
 ```text
 Findings:
-- [high] [go-implementation-ownership] internal/app/invoices/service.go:89
+- [high] [go-implementation-ownership] internal/invoices/service.go:89
   Issue: App code now assumes repository writes and cache invalidation happen atomically, but no design owner was updated for that cross-resource invariant.
   Impact: The app layer is depending on a data/cache behavior that is invisible in the ownership map.
   Suggested fix: Keep the app contract explicit and route transaction/cache semantics through the data design or repository owner.

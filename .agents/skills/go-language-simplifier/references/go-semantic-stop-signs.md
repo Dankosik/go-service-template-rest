@@ -18,7 +18,7 @@ Use this as a stop-sign reference. It helps decide whether simplification review
 Finding shape to copy when clone-before-store is removed:
 
 ```text
-[high] [go-language-simplifier] internal/app/orders/cache.go:41
+[high] [go-language-simplifier] internal/orders/cache.go:41
 Issue: The cleanup inlines `storeOrder` and drops the `slices.Clone(order.Tags)` step that isolated cached state from caller-owned slices.
 Impact: The shorter code now lets a caller mutate tags after saving and change the cached order, so a later reader can miss an aliasing bug that the old helper prevented.
 Suggested fix: Restore the clone-before-store step or keep a policy-named helper such as `cloneOrderForCache`; hand off deeper aliasing review to `go-idiomatic` if more shared fields are involved.

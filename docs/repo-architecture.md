@@ -19,14 +19,13 @@ It does not restate the full tree, every command, or task-local design choices.
 | `cmd/service/internal/bootstrap/` | Service composition root, startup/shutdown flow, config/bootstrap lifecycle, dependency admission, runtime policy. | Use-case semantics, transport contract definition, persistence logic. |
 | `internal/config/` | Building one validated, immutable runtime config snapshot from defaults, config files, env, and flags. | Feature behavior, dependency wiring, request handling. |
 | `api/openapi/service.yaml` | Source of truth for the REST contract. | Hand-written runtime logic or transport implementation. |
-| `internal/api/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
-| `internal/app/` | Use-case behavior and service-level orchestration that should stay transport-agnostic. | HTTP details, driver details, process lifecycle. |
-| `internal/requestmeta/` | Validated request correlation identity and context access. | Transport headers, arbitrary metadata maps, tracing, or business behavior. |
+| `internal/openapi/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
+| `internal/<feature>/` | Feature-owned use cases, business types, ports, invariants, and domain errors. | HTTP details, driver details, runtime config, process lifecycle. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/postgres/` | Postgres connection/pool lifecycle and repository code. | Process lifecycle, HTTP behavior, config precedence rules. |
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup, Prometheus export, and native startup/config instruments. | Feature semantics or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
-| `env/migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
+| `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 
 ## Source-Of-Truth Ownership
 
@@ -34,16 +33,16 @@ Keep these ownership rules stable across tasks:
 
 | Source of truth | Derived or consuming surfaces |
 | --- | --- |
-| `api/openapi/service.yaml` | `internal/api/` generated bindings and `internal/infra/http/` transport wiring |
+| `api/openapi/service.yaml` | `internal/openapi/` generated bindings and `internal/infra/http/` transport wiring |
 | `internal/config/` snapshot build + validation rules | Runtime config consumed by bootstrap and adapters |
 | `env/config/*.yaml`, `APP__...`, and runtime flags | Inputs to `internal/config/`; precedence and secret rules live in [Configuration Source Policy](./configuration-source-policy.md) |
-| `env/migrations/*.sql` | Database shape used by Postgres runtime code and any generated SQL access layer |
-| `internal/app/*` behavior | Consumed by HTTP handlers now; reusable by future binaries or async workers |
+| `migrations/*.sql` | Database shape used by Postgres runtime code and any generated SQL access layer |
+| `internal/<feature>/*` behavior | Consumed by HTTP handlers now; reusable by future binaries or async workers |
 | `cmd/service/internal/bootstrap/*` lifecycle logic | Consumed by the `service` binary only; future binaries should own their own bootstrap flow |
 
 Two repository-wide rules matter most:
 1. Generated code is derived code. Edit the contract or generation inputs first, then regenerate.
-2. Concrete adapter wiring belongs in the composition root, not inside `internal/app`.
+2. Concrete adapter wiring belongs in the composition root, not inside `internal/<feature>`.
 
 ## Stable Dependency Direction
 
@@ -53,13 +52,12 @@ The default dependency direction is inward toward business behavior and outward 
 cmd/service/main.go
   -> cmd/service/internal/bootstrap
      -> internal/config
-     -> internal/app/*
+     -> internal/<feature>/*
      -> internal/infra/*
 
 internal/infra/http
-  -> internal/api
-  -> internal/app/*
-  -> internal/requestmeta
+  -> internal/openapi
+  -> internal/<feature>/*
 
 internal/infra/postgres, internal/infra/telemetry
   -> external libraries
@@ -69,9 +67,9 @@ internal/config, internal/infra/telemetry
 ```
 
 Stable direction rules:
-- `internal/app` must not depend on `internal/infra/http` or other concrete transport packages.
+- `internal/<feature>` must not depend on `internal/infra/http` or other concrete transport packages.
 - Concrete integration packages belong under `internal/infra/*` and may depend on external libraries.
-- Shared contracts start beside the consuming `internal/app/<feature>` package and should move only when real reuse exists.
+- Shared contracts start beside the consuming `internal/<feature>` package and should move only when real reuse exists.
 - `cmd/service/internal/bootstrap` is allowed to know concrete adapters because it is the composition root.
 - `internal/observability/otelconfig` is a vocabulary package only; it must not import config, infra adapters, or OpenTelemetry SDK packages.
 
@@ -79,11 +77,11 @@ Stable direction rules:
 
 ### Request/Response Path
 
-1. `cmd/service/internal/bootstrap.Run` builds the config snapshot, lifecycle logging, telemetry, dependency probes, app services, router, and HTTP server.
-2. `internal/infra/http.NewRouter` validates or creates `X-Request-ID` through `internal/requestmeta`, extracts only W3C Trace Context, and wraps the root router with security headers, framing/body guards, panic recovery, access logging, route labeling, and OpenTelemetry HTTP instrumentation.
+1. `cmd/service/internal/bootstrap.Run` builds the config snapshot, lifecycle logging, telemetry, dependency probes, feature services, router, and HTTP server.
+2. `internal/infra/http.NewRouter` validates or creates `X-Request-ID` at the HTTP boundary, extracts only W3C Trace Context, and wraps the root router with security headers, framing/body guards, panic recovery, access logging, route labeling, and OpenTelemetry HTTP instrumentation.
 3. `/metrics` is the documented operational root-router exception, served directly outside the client OpenAPI contract; route inventory guards it against accidental generated/manual overlap. API routes are handled through the generated strict OpenAPI server.
-4. `internal/infra/http` maps the request into the generated OpenAPI handler interface and calls the app service (`internal/app/*`).
-5. The app service returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or RFC 9457 problem responses whose stable `code`, type, title, and status come from one closed transport catalog.
+4. `internal/infra/http` maps the request into the generated OpenAPI handler interface and calls the feature package (`internal/<feature>`).
+5. The feature package returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or RFC 9457 problem responses whose stable `code`, type, title, and status come from one closed transport catalog.
 6. Transport observability is emitted at the edge: request logs, OpenTelemetry HTTP metrics exported through Prometheus, and OpenTelemetry spans use bounded route templates from the HTTP layer. HTTP metric server identity comes from configured service identity, never the caller-controlled `Host`; the OTel SDK cardinality cap remains explicit; native startup/config metrics share the same private Prometheus registry.
 
 Current runtime note: the shipped endpoints are intentionally small (liveness, readiness, metrics), and they are public system endpoints. New business endpoints must make a security decision before implementation: public by design, protected by real OpenAPI security plus auth middleware and 401/403 Problem responses, or blocked pending a security spec. Browser CORS remains fail-closed by default.
@@ -98,18 +96,18 @@ Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLI
 2. Bootstrap parses config flags, creates the signal-aware root context, initializes baseline metrics, and loads the immutable config snapshot through `internal/config`.
 3. Bootstrap reconfigures structured logging from the validated config, initializes local OTel-to-Prometheus metrics and optional tracing with one service resource in fail-open mode, applies startup network policy checks, and probes enabled dependencies.
 4. The HTTP runtime may begin serving while startup admission is still running, but external `/health/ready` stays not ready until startup admission marks the process ready.
-5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/app/health.Service`, which runs enabled dependency probes sequentially under one readiness timeout.
+5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/health.Service`, which runs enabled dependency probes sequentially under one readiness timeout.
 6. `/health/live` remains process-only; external dependency checks, startup admission, drain, and ingress-policy checks belong in readiness.
 7. On shutdown, bootstrap marks the service as draining, flips readiness off, waits the configured propagation delay, gracefully shuts down the HTTP server, and flushes telemetry inside the process-grace budget.
 
-The lifecycle baseline is: config and dependency validation happen before accepting traffic, and shutdown is coordinated from the bootstrap layer rather than from handlers or app services.
+The lifecycle baseline is: config and dependency validation happen before accepting traffic, and shutdown is coordinated from the bootstrap layer rather than from handlers or feature services.
 
 ### Background / Async Extension Path
 
 The baseline repository does not ship an always-on background worker runtime.
 
 When a task introduces async work, keep the extension path stable:
-1. Put business behavior in `internal/app/<feature>`.
+1. Put business behavior in `internal/<feature>`.
 2. Put queue, scheduler, database, or external-system mechanics in `internal/infra/<integration>`.
 3. Own lifecycle, config loading, telemetry, and graceful shutdown in a composition root under `cmd/<binary>/` or another explicit bootstrap entrypoint.
 
@@ -119,12 +117,12 @@ Preferred rule: if the workload has a distinct lifecycle or scaling model, add a
 
 Use these seams when extending the repository:
 
-- New HTTP capability: first consume the approved `spec.md` behavior/contract delta plus any needed system/integration contract decisions; then update `api/openapi/service.yaml`, regenerate `internal/api`, add use-case logic in `internal/app`, and wire handlers/routes in `internal/infra/http`. Do not use OpenAPI edits, generated code, handlers, or tests to invent resource, status, error, retry, async, freshness, or compatibility semantics.
-- New persistence flow: add a deterministic migration under `env/migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into app-facing types, add an app-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
-- New integration adapter: add it under `internal/infra/<integration>`; add an app-owned contract only if `internal/app` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, network egress admission, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
+- New HTTP capability: first consume the approved `spec.md` behavior/contract delta plus any needed system/integration contract decisions; then update `api/openapi/service.yaml`, regenerate `internal/openapi`, add use-case logic in `internal/<feature>`, and wire handlers/routes in `internal/infra/http`. Do not use OpenAPI edits, generated code, handlers, or tests to invent resource, status, error, retry, async, freshness, or compatibility semantics.
+- New persistence flow: add a deterministic migration under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
+- New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, network egress admission, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
 - New outbound target: fixed targets must declare source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before bootstrap wiring; dynamic or user-controlled URLs require a separate security design.
-- New durable schema behavior: evolve `env/migrations/` first, then keep adapter or generated access code derived from that schema.
-- New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse shared app/infra packages instead of duplicating logic.
+- New durable schema behavior: evolve `migrations/` first, then keep adapter or generated access code derived from that schema.
+- New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse feature/infra packages instead of duplicating logic.
 - New non-HTTP contract surface: `api/proto/` is the reserved source-of-truth location for protobuf contracts when that runtime is introduced.
 
 ## Related Repository Docs

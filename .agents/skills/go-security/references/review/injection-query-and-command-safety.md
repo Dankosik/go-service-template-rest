@@ -28,7 +28,7 @@ Reference: SQL query construction boundary.
 Copy this shape when user-controlled text becomes interpreter syntax.
 
 ```text
-[high] [go-security] internal/app/export.go:74
+[high] [go-security] internal/export.go:74
 Issue: Axis: Injection And Command Safety; the export command runs `sh -c` with a filename derived from the request.
 Impact: A caller who controls the filename can influence shell parsing under the service account.
 Suggested fix: Avoid the shell, hardcode the executable, pass validated operands as separate `exec.CommandContext` args, and use the request context.

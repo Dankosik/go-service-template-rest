@@ -37,7 +37,7 @@ Reference: app/repository ownership in task design or `docs/repo-architecture.md
 Copy this shape when the review needs to correct interface placement without demanding an interface by default.
 
 ```text
-[low] [go-implementation-ownership] internal/app/reports/pipeline.go:27
+[low] [go-implementation-ownership] internal/reports/pipeline.go:27
 Issue: The wrapper layer introduces a manager and future-stage flag but does not remove current duplication or isolate a real seam.
 Impact: Readers must follow indirection to understand a simple sequence, and later stages can accumulate hidden policy in the wrapper.
 Suggested fix: Keep the direct call sequence local until a second real workflow or approved design seam exists.
@@ -56,7 +56,7 @@ Suggested fix: Inline it.
 Reject because helpers are acceptable when they name an owned stable seam.
 
 ```text
-[low] [go-implementation-ownership] internal/app/reports/pipeline.go:27
+[low] [go-implementation-ownership] internal/reports/pipeline.go:27
 Issue: This is too complex.
 ```
 

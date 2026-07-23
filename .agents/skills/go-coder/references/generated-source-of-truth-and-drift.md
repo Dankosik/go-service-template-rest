@@ -18,15 +18,15 @@ Load this when work touches generated files, generation configs, OpenAPI, sqlc, 
 For OpenAPI server bindings, change the contract or generator config, then regenerate and check.
 
 ```text
-Source: api/openapi/service.yaml or internal/api/oapi-codegen.yaml
-Generated: internal/api/openapi.gen.go
+Source: api/openapi/service.yaml or internal/openapi/oapi-codegen.yaml
+Generated: internal/openapi/openapi.gen.go
 Proof: make openapi-check
 ```
 
 For sqlc, change query/schema sources, then regenerate and check the generated package.
 
 ```text
-Source: env/migrations/*.up.sql or internal/infra/postgres/queries/*.sql
+Source: migrations/*.up.sql or internal/infra/postgres/queries/*.sql
 Generated: internal/infra/postgres/sqlcgen/*
 Proof: make sqlc-check
 ```
@@ -35,7 +35,7 @@ Proof: make sqlc-check
 Reject direct generated edits as the primary fix.
 
 ```go
-// internal/api/openapi.gen.go
+// internal/openapi/openapi.gen.go
 func (c *Client) NewMethod(...) { // hand-written patch
 	// ...
 }

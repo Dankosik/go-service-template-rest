@@ -16,7 +16,7 @@ Load this when changed behavior, approved obligations, invariants, or API/data/r
 ## Imitate
 
 ```text
-[high] [go-test-strategy] internal/infra/http/router_test.go:79
+[high] [go-test-strategy] internal/infra/http/router_contract_test.go:22
 Issue:
 `TestRouterHTTPPolicy` covers normal method handling but does not trace the new fail-closed CORS preflight rule for unknown origins. The changed policy can now regress without a scenario that sends an untrusted `Origin` and verifies the denied response headers.
 Impact:
@@ -46,7 +46,7 @@ Copy this shape: bounded traceability finding for a behavior that already has ne
 ## Reject
 
 ```text
-[medium] [go-test-strategy] internal/infra/http/router_test.go:79
+[medium] [go-test-strategy] internal/infra/http/router_contract_test.go:22
 Issue:
 The route tests need more coverage.
 Impact:

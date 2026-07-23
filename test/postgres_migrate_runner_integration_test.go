@@ -4,8 +4,8 @@ package integration_test
 
 import (
 	"context"
-	"os"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
@@ -17,11 +17,15 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	defer cancel()
 
 	dsn := integrationPostgresDSN(t)
+	migrationFS := fstest.MapFS{
+		"migrations/000001_integration.up.sql":   {Data: []byte("select 1;")},
+		"migrations/000001_integration.down.sql": {Data: []byte("select 1;")},
+	}
 
 	firstRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        dsn,
-		SourceFS:   os.DirFS(".."),
-		SourcePath: "env/migrations",
+		SourceFS:   migrationFS,
+		SourcePath: "migrations",
 	})
 	if err != nil {
 		t.Fatalf("MigrateUp(first) error: %v", err)
@@ -47,8 +51,8 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 
 	secondRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        dsn,
-		SourceFS:   os.DirFS(".."),
-		SourcePath: "env/migrations",
+		SourceFS:   migrationFS,
+		SourcePath: "migrations",
 	})
 	if err != nil {
 		t.Fatalf("MigrateUp(second) error: %v", err)
@@ -59,8 +63,8 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 
 	if err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
 		DSN:        dsn,
-		SourceFS:   os.DirFS(".."),
-		SourcePath: "env/migrations",
+		SourceFS:   migrationFS,
+		SourcePath: "migrations",
 	}); err != nil {
 		t.Fatalf("ValidateMigrations() error: %v", err)
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
-	clearPrefixedEnvForTest(t, "APP__")
+	clearAppEnvForTest(t)
 
 	t.Chdir(t.TempDir())
 
@@ -26,7 +26,7 @@ func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) { //nolint:paralle
 }
 
 func TestRunReturnsConfigLoadError(t *testing.T) {
-	clearPrefixedEnvForTest(t, "APP__")
+	clearAppEnvForTest(t)
 
 	t.Chdir(t.TempDir())
 	t.Setenv("APP__HTTP__ADDR", "")
@@ -42,12 +42,30 @@ func TestRunReturnsConfigLoadError(t *testing.T) {
 	}
 }
 
+func TestRunSkipsWhenNoMigrationFilesExist(t *testing.T) {
+	clearAppEnvForTest(t)
+
+	t.Chdir(t.TempDir())
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
+
+	var stdout bytes.Buffer
+
+	if err := run(nil, &stdout); err != nil {
+		t.Fatalf("run() error = %v, want nil", err)
+	}
+	if got := stdout.String(); got != "no migration files found; skipping migrations\n" {
+		t.Fatalf("run() stdout = %q, want no-migrations message", got)
+	}
+}
+
 func TestRunReturnsMigrationApplyError(t *testing.T) {
-	clearPrefixedEnvForTest(t, "APP__")
+	clearAppEnvForTest(t)
 
 	t.Chdir(t.TempDir())
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "not-a-postgres-dsn")
+	t.Setenv("MIGRATION_PATH", "missing-migrations")
 
 	var stdout bytes.Buffer
 
@@ -80,7 +98,10 @@ func TestResolveMigrationSourceUsesConfiguredPath(t *testing.T) { //nolint:paral
 	}
 	t.Setenv("MIGRATION_PATH", " custom/migrations ")
 
-	sourceFS, sourcePath := resolveMigrationSource()
+	sourceFS, sourcePath, found := resolveMigrationSource()
+	if !found {
+		t.Fatal("resolveMigrationSource() found = false, want true for configured path")
+	}
 	if sourcePath != "custom/migrations" {
 		t.Fatalf("resolveMigrationSource() path = %q, want %q", sourcePath, "custom/migrations")
 	}
@@ -94,12 +115,18 @@ func TestResolveMigrationSourceUsesConfiguredPath(t *testing.T) { //nolint:paral
 
 func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
-	if err := os.MkdirAll("env/migrations", 0o755); err != nil {
+	if err := os.MkdirAll("migrations", 0o755); err != nil {
 		t.Fatalf("create local migrations dir: %v", err)
+	}
+	if err := os.WriteFile("migrations/000001_test.up.sql", []byte("select 1;"), 0o600); err != nil {
+		t.Fatalf("create local migration: %v", err)
 	}
 
 	imagePath := filepath.Join(t.TempDir(), "image-migrations")
-	sourceFS, sourcePath := resolveMigrationSourceFrom(imagePath, localMigrationSourcePath)
+	sourceFS, sourcePath, found := resolveMigrationSourceFrom(imagePath)
+	if !found {
+		t.Fatal("resolveMigrationSourceFrom() found = false, want true")
+	}
 	if sourcePath != localMigrationSourcePath {
 		t.Fatalf("resolveMigrationSourceFrom() path = %q, want %q", sourcePath, localMigrationSourcePath)
 	}
@@ -115,7 +142,16 @@ func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) { //noli
 	t.Chdir(t.TempDir())
 
 	imagePath := filepath.Join(t.TempDir(), "image-migrations")
-	sourceFS, sourcePath := resolveMigrationSourceFrom(imagePath, localMigrationSourcePath)
+	if err := os.MkdirAll(imagePath, 0o755); err != nil {
+		t.Fatalf("create image migrations dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(imagePath, "000001_test.up.sql"), []byte("select 1;"), 0o600); err != nil {
+		t.Fatalf("create image migration: %v", err)
+	}
+	sourceFS, sourcePath, found := resolveMigrationSourceFrom(imagePath)
+	if !found {
+		t.Fatal("resolveMigrationSourceFrom() found = false, want true")
+	}
 	if sourcePath != imagePath {
 		t.Fatalf("resolveMigrationSourceFrom() path = %q, want %q", sourcePath, imagePath)
 	}
@@ -124,9 +160,23 @@ func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) { //noli
 	}
 }
 
+func TestResolveMigrationSourceReportsNoMigrations(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	sourceFS, sourcePath, found := resolveMigrationSourceFrom("image-migrations")
+	if found {
+		t.Fatal("resolveMigrationSourceFrom() found = true, want false")
+	}
+	if sourceFS != nil || sourcePath != "" {
+		t.Fatalf("resolveMigrationSourceFrom() = (%T, %q), want (nil, empty)", sourceFS, sourcePath)
+	}
+}
+
 //nolint:usetesting // This helper must unset variables; t.Setenv only sets values.
-func clearPrefixedEnvForTest(t *testing.T, prefix string) {
+func clearAppEnvForTest(t *testing.T) {
 	t.Helper()
+
+	const prefix = "APP__"
 
 	type envState struct {
 		name  string

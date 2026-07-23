@@ -17,10 +17,10 @@ Prefer narrower references when the primary symptom is import direction, generat
 
 ## Imitate
 ```text
-[high] [go-implementation-ownership] internal/app/orders/service.go:42
+[high] [go-implementation-ownership] internal/orders/service.go:42
 Issue: The app layer now builds HTTP problem responses, moving transport response policy into the transport-agnostic app boundary.
 Impact: Future non-HTTP callers inherit HTTP semantics and must account for adapter concerns that should stay at the edge.
-Suggested fix: Return an app/domain error shape from `internal/app/orders` and keep HTTP response mapping in `internal/infra/http`.
+Suggested fix: Return an app/domain error shape from `internal/orders` and keep HTTP response mapping in `internal/infra/http`.
 Reference: task `design/ownership-map.md` if present; otherwise `docs/repo-architecture.md` app and HTTP ownership rows.
 ```
 
@@ -38,7 +38,7 @@ Copy this shape when the wrong package owns a policy lookup rather than just a h
 
 ## Reject
 ```text
-[medium] [go-implementation-ownership] internal/app/orders/service.go:42
+[medium] [go-implementation-ownership] internal/orders/service.go:42
 Issue: This violates clean architecture.
 Suggested fix: Add an interface.
 ```
@@ -46,7 +46,7 @@ Suggested fix: Add an interface.
 Reject because it skips the repository owner, the concrete merge risk, and the smallest safe correction.
 
 ```text
-[low] [go-implementation-ownership] internal/app/orders/errors.go:12
+[low] [go-implementation-ownership] internal/orders/errors.go:12
 Issue: This helper should be in a shared package.
 ```
 

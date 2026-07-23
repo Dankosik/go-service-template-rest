@@ -69,11 +69,13 @@ Railway service ID.
 ## Migration contract
 
 - Railway runs one `/migrate` pre-deploy command before promotion.
-- The runtime image contains `/migrate` and `/env/migrations/`.
+- The runtime image contains `/migrate` and `/migrations/`; the directory is
+  empty until the first owned migration and the migrator then exits as an
+  explicit successful no-op.
 - Application startup does not run migrations.
-- CI rehearses `up -> down 1 -> up 1`, runs the image's migrator, starts the
-  production image against the migrated database, checks readiness, and sends
-  SIGTERM.
+- When migrations exist, CI rehearses `up -> down 1 -> up 1`. It always runs
+  the image's migrator, starts the production image against the database,
+  checks readiness, and sends SIGTERM.
 - Overlapping releases require mixed-version-compatible schema changes.
 - Destructive or forward-only changes require a staged
   expand/migrate/verify/contract plan and an explicit recovery method.

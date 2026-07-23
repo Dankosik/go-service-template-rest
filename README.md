@@ -132,16 +132,19 @@ contract.
 ## Repository Layout
 
 ```text
-cmd/service/                 service entrypoint and bootstrap lifecycle
-internal/app/                use cases and domain-facing application logic
-internal/infra/http/         HTTP transport and middleware
-internal/infra/postgres/     PostgreSQL adapters
-api/openapi/service.yaml     API source of truth
-internal/api/                generated OpenAPI artifacts
-env/migrations/              SQL migrations
-specs/                       durable task decisions when needed
-.agents/skills/              canonical reusable skills
-.codex/agents/               Codex specialist agents
+cmd/service/                     service entrypoint and bootstrap lifecycle
+cmd/migrate/                     migration entrypoint
+internal/<feature>/              feature-owned business behavior (when added)
+internal/config/                 runtime configuration
+internal/health/                 readiness and drain behavior
+internal/infra/http/             HTTP transport and middleware
+internal/infra/postgres/         PostgreSQL adapters
+api/openapi/service.yaml         API source of truth
+internal/openapi/                generated OpenAPI artifacts
+migrations/                      SQL migrations (when first owned)
+specs/                           durable task decisions when needed
+.agents/skills/                  canonical reusable skills
+.codex/agents/                   Codex specialist agents
 ```
 
 Use the [placement guide](docs/project-structure-and-module-organization.md)

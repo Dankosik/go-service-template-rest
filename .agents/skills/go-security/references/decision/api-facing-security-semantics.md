@@ -39,4 +39,6 @@ Load this when security requirements touch REST/OpenAPI behavior, status codes, 
 ## Repo-Local Anchors
 - `api/openapi/service.yaml` is the REST contract source of truth and currently defines shared problem responses and a `bearerAuth` component.
 - `internal/infra/http/router.go` explicitly handles `NotFound`, `MethodNotAllowed`, `OPTIONS`, CORS preflight rejection, and request body limits.
-- `internal/infra/http/router_test.go` already includes fail-closed CORS preflight and body-limit assertions that can guide future tests.
+- `internal/infra/http/router_contract_test.go` and
+  `middleware_guards_test.go` include fail-closed HTTP policy and body-limit
+  assertions that can guide future tests.

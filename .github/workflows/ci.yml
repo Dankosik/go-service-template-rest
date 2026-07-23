@@ -37,6 +37,9 @@ jobs:
       - name: Verify module integrity
         run: make mod-check
 
+      - name: Verify project structure
+        run: make project-structure-check
+
       - name: Verify formatting drift
         run: make fmt-check
 
@@ -84,7 +87,7 @@ jobs:
         run: make openapi-drift-check
 
       - name: Compile generated OpenAPI package
-        run: go test ./internal/api
+        run: go test ./internal/openapi
 
       - name: Verify OpenAPI runtime contract
         run: make openapi-runtime-contract-check
@@ -267,7 +270,7 @@ jobs:
           fi
 
           if git diff --name-only "${BASE_REF}" "${{ github.sha }}" |
-            grep -Eq '^(env/migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
+            grep -Eq '^(migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"

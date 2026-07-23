@@ -30,7 +30,7 @@ Validate with `go test ./internal/config -run '^TestValidate/.+duration' -count=
 Copy this shape: name the exact boundary, false pass, and deterministic negative case.
 
 ```text
-[medium] [go-test-strategy] internal/infra/http/router_test.go:188
+[medium] [go-test-strategy] internal/infra/http/middleware_guards_test.go:31
 Issue:
 The body-size test covers oversized JSON but not the new malformed chunked-body path. That parser path now returns the same problem type and can drift without a regression seed or named malformed-input case.
 Impact:

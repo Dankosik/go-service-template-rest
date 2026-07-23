@@ -2,7 +2,7 @@ SERVICE_NAME := service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
 GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
-GOFUMPT_FILES := $(filter-out internal/api/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
+GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
 REDOCLY_CLI_VERSION := 2.20.3
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
@@ -10,7 +10,7 @@ TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
-COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/api/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
@@ -34,6 +34,7 @@ BENCH_DB_BASELINE ?= .artifacts/bench/db/baseline.txt
 BENCH_DB_CURRENT ?= .artifacts/bench/db/current.txt
 BENCH_DB_COMPARE_OUTPUT ?= .artifacts/bench/db/comparison.txt
 BENCH_DB_WORKLOAD_ID ?=
+BENCH_DB_SCHEMA_PATH := $(if $(wildcard migrations/*.up.sql),migrations,)
 POSTGRES_TEST_IMAGE := $(shell sed -n 's/^const postgresTestImage = "\(.*\)"$$/\1/p' test/postgres_integration_test.go)
 HTTP_BENCH_SCRIPT ?= test/performance/http/single-flow.js
 HTTP_BENCH_ARTIFACT_DIR ?= .artifacts/bench/http
@@ -43,12 +44,13 @@ HTTP_BENCH_RAW_SAMPLES ?= 0
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
+PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help template-init template-init-check check check-full pr-check \
+.PHONY: help template-init template-init-check project-structure-check check check-full pr-check \
 	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
@@ -59,6 +61,7 @@ help:
 	@echo "Setup and everyday development:"
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
 	@echo "  make check              # formatting, lint, and unit tests"
+	@echo "  make project-structure-check"
 	@echo "  make ci-local           # deterministic native CI aggregate"
 	@echo "  make check-full         # native aggregate plus Docker-backed gates"
 	@echo "  make pr-check BASE_REF=origin/main"
@@ -87,16 +90,19 @@ template-init:
 template-init-check:
 	bash ./scripts/ci/template-init-check.sh
 
+project-structure-check:
+	$(PROJECT_STRUCTURE_CHECK_SCRIPT)
+
 claude-skills-sync:
 	@mkdir -p .claude/skills
 	@find .claude/skills -maxdepth 1 -type l -delete
 	@set -e; for d in .agents/skills/*/; do n=$$(basename "$$d"); ln -s "../../.agents/skills/$$n" ".claude/skills/$$n"; done
 	@echo ".claude/skills: $$(ls .claude/skills | wc -l | tr -d ' ') skill links"
 
-check: fmt-check lint test
+check: project-structure-check fmt-check lint test
 
 ci-local:
-	$(MAKE) mod-check template-init-check fmt-check lint test-race test-report sqlc-check openapi-check go-security secret-scan
+	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint test-race test-report sqlc-check openapi-check go-security secret-scan
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
@@ -225,7 +231,7 @@ bench-profile:
 
 bench-db:
 	@test -n "$(BENCH_DB_WORKLOAD_ID)" || { echo "BENCH_DB_WORKLOAD_ID is required, for example fixture-10k-warm"; exit 1; }
-	REQUIRE_DOCKER=1 BENCH_PACKAGE="$(BENCH_DB_PACKAGE)" BENCH_PATTERN="$(BENCH_DB_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS=integration BENCH_OUTPUT="$(BENCH_DB_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_DB_WORKLOAD_ID)" BENCH_DEPENDENCY_IMAGE="$(POSTGRES_TEST_IMAGE)" BENCH_SCHEMA_PATH=env/migrations $(BENCHMARK_SCRIPT) run
+	REQUIRE_DOCKER=1 BENCH_PACKAGE="$(BENCH_DB_PACKAGE)" BENCH_PATTERN="$(BENCH_DB_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS=integration BENCH_OUTPUT="$(BENCH_DB_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_DB_WORKLOAD_ID)" BENCH_DEPENDENCY_IMAGE="$(POSTGRES_TEST_IMAGE)" BENCH_SCHEMA_PATH="$(BENCH_DB_SCHEMA_PATH)" $(BENCHMARK_SCRIPT) run
 
 bench-db-baseline:
 	$(MAKE) bench-db BENCH_DB_OUTPUT="$(BENCH_DB_BASELINE)"
@@ -284,7 +290,7 @@ secret-scan:
 	go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
 
 sqlc-generate:
-	@if [ -z "$$(find internal/infra/postgres/queries -type f -name '*.sql' -print -quit)" ]; then \
+	@if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then \
 		echo "no sqlc query sources; skipping sqlc generation"; \
 	else \
 		go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml; \
@@ -294,7 +300,7 @@ sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
 
 openapi-generate:
-	go generate ./internal/api
+	go generate ./internal/openapi
 
 openapi-drift-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) openapi
@@ -321,14 +327,13 @@ openapi-breaking:
 	fi
 
 openapi-check: openapi-drift-check
-	go test ./internal/api
+	go test ./internal/openapi
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
 
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \
 		APP__POSTGRES__ENABLED=true \
 			APP__POSTGRES__DSN="$(MIGRATION_DSN)" \
-			MIGRATION_PATH="$${MIGRATION_PATH:-env/migrations}" \
 			go run ./cmd/migrate validate; \
 	else \
 		command -v docker >/dev/null 2>&1 || { echo "MIGRATION_DSN or Docker is required"; exit 1; }; \
@@ -348,7 +353,6 @@ migration-validate:
 		dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
 		APP__POSTGRES__ENABLED=true \
 			APP__POSTGRES__DSN="$$dsn" \
-			MIGRATION_PATH="$${MIGRATION_PATH:-env/migrations}" \
 			go run ./cmd/migrate validate; \
 		image="$(RUNTIME_IMAGE)"; \
 		if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \

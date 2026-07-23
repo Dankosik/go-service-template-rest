@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/app/health"
+	"github.com/example/go-service-template-rest/internal/health"
 )
 
 type Handlers struct {
@@ -19,8 +18,6 @@ type strictHandlers struct {
 	readinessGate    func(context.Context) error
 	readinessTimeout time.Duration
 }
-
-var _ api.StrictServerInterface = (*strictHandlers)(nil)
 
 func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandlers, error) {
 	if h.Health == nil {
@@ -38,22 +35,4 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
 		readinessGate:    h.ReadinessGate,
 		readinessTimeout: readinessTimeout,
 	}, nil
-}
-
-func (h strictHandlers) HealthLive(_ context.Context, _ api.HealthLiveRequestObject) (api.HealthLiveResponseObject, error) {
-	return api.HealthLive200TextResponse("ok"), nil
-}
-
-func (h strictHandlers) HealthReady(ctx context.Context, _ api.HealthReadyRequestObject) (api.HealthReadyResponseObject, error) {
-	readyCtx, cancel := context.WithTimeout(ctx, h.readinessTimeout)
-	defer cancel()
-
-	if err := h.readinessGate(readyCtx); err != nil {
-		return api.HealthReady503TextResponse("not ready"), nil
-	}
-	if err := h.health.Ready(readyCtx); err != nil {
-		return api.HealthReady503TextResponse("not ready"), nil
-	}
-
-	return api.HealthReady200TextResponse("ok"), nil
 }

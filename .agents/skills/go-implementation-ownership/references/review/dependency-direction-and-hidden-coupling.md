@@ -19,7 +19,7 @@ Prefer `boundary-and-ownership-drift.md` when the main problem is misplaced beha
 
 ## Imitate
 ```text
-[critical] [go-implementation-ownership] internal/app/billing/service.go:31
+[critical] [go-implementation-ownership] internal/billing/service.go:31
 Issue: The app package now imports the concrete Postgres adapter, reversing the approved inward dependency direction.
 Impact: Business behavior becomes coupled to datastore mechanics, so alternate adapters, workers, and app tests inherit Postgres lifecycle concerns.
 Suggested fix: Have bootstrap construct the Postgres repository and pass it into the app service; introduce a consumer-owned app/domain interface only if the use case needs inversion.
@@ -40,7 +40,7 @@ Copy this shape when the coupling is hidden behind side effects rather than a di
 
 ## Reject
 ```text
-[medium] [go-implementation-ownership] internal/app/billing/service.go:31
+[medium] [go-implementation-ownership] internal/billing/service.go:31
 Issue: This import looks wrong.
 Suggested fix: Add `BillingRepository` interface to the postgres package.
 ```

@@ -30,7 +30,7 @@ Validate with `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContractRe
 Copy this shape: name the false pass, the contract consequence, and the stable assertion target.
 
 ```text
-[medium] [go-test-strategy] internal/app/health/service_test.go:32
+[medium] [go-test-strategy] internal/health/service_test.go:32
 Issue:
 The degraded-health case asserts only that an error was returned. It never checks that `errors.Is(err, ErrDependencyUnavailable)` remains true after the new dependency classification path.
 Impact:
@@ -38,7 +38,7 @@ Callers could lose the retryable error classification while this test still pass
 Suggested fix:
 Assert the stable error identity with `errors.Is` and keep the current message check out unless the message is a documented contract.
 Reference:
-Validate with `go test ./internal/app/health -run '^TestService/.+degraded' -count=1`.
+Validate with `go test ./internal/health -run '^TestService/.+degraded' -count=1`.
 ```
 
 Copy this shape: upgrade a weak error assertion without overfitting to incidental text.
@@ -46,7 +46,7 @@ Copy this shape: upgrade a weak error assertion without overfitting to incidenta
 ## Reject
 
 ```text
-[medium] [go-test-strategy] internal/app/health/service_test.go:32
+[medium] [go-test-strategy] internal/health/service_test.go:32
 Issue:
 The assertion is weak.
 Impact:

@@ -199,6 +199,9 @@ jobs:
       - name: Verify sqlc generation drift
         run: make sqlc-check
 
+      - name: Verify project structure
+        run: make project-structure-check
+
       - name: Lint
         run: make lint
 

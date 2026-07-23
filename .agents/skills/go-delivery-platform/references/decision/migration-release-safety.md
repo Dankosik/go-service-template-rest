@@ -7,7 +7,7 @@ When loaded for symptom "a release includes schema migrations or data-moving rol
 Load for migration rehearsal, release sequencing, rollback class, mixed-version compatibility windows, backfill gates, one-migrator policy, or promotion criteria tied to migrations.
 
 ## Local Source Of Truth
-- `.github/workflows/ci.yml` runs `migration-validate` on ephemeral Postgres when `env/migrations/` changes.
+- `.github/workflows/ci.yml` runs `migration-validate` on ephemeral Postgres when `migrations/` changes.
 - `Makefile` exposes `migration-validate` and `docker-migration-validate`.
 - `scripts/dev/docker-tooling.sh` runs migration up, down one step, and up one step against temporary Postgres.
 - `railway.toml` records healthcheck, overlap, draining, restart policy, and replica baseline comments that affect rollout windows.

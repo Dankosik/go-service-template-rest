@@ -65,7 +65,7 @@ linters:
   exclusions:
     generated: strict
     paths:
-      - internal/api/openapi\.gen\.go
+      - internal/openapi/openapi\.gen\.go
       - internal/infra/postgres/sqlcgen/.*
     rules:
       # Complexity gates are production-focused for now; table-heavy tests stay review-visible
@@ -86,17 +86,62 @@ linters:
         - unexported
     depguard:
       rules:
-        app_domain_no_adapters:
+        feature_packages_no_adapters:
           list-mode: lax
           files:
-            - "**/internal/app/**/*.go"
+            - "**/internal/**/*.go"
+            - "!**/cmd/**/*.go"
+            - "!**/internal/config/**/*.go"
+            - "!**/internal/infra/**/*.go"
+            - "!**/internal/observability/**/*.go"
+            - "!**/internal/openapi/**/*.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal/api
-              desc: app packages must stay transport-contract agnostic; map generated API types in internal/infra/http.
+            - pkg: github.com/example/go-service-template-rest/internal/openapi
+              desc: feature packages must stay transport-contract agnostic; map generated OpenAPI types in internal/infra/http.
             - pkg: github.com/example/go-service-template-rest/internal/infra
-              desc: app packages must not import concrete infra adapters; wire adapters in bootstrap.
+              desc: feature packages must not import concrete infra adapters; wire adapters in bootstrap.
+            - pkg: github.com/example/go-service-template-rest/internal/config
+              desc: runtime configuration belongs to bootstrap and adapters, not feature behavior.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: feature packages must not import composition roots.
             - pkg: github.com/jackc/pgx/v5
               desc: direct Postgres driver usage belongs in internal/infra/postgres.
+        config_no_runtime_owners:
+          list-mode: lax
+          files:
+            - "**/internal/config/**/*.go"
+          allow:
+            - github.com/example/go-service-template-rest/internal/observability/otelconfig
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: config parsing must not depend on features, runtime adapters, or transport contracts.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: config parsing must not depend on composition roots.
+        health_no_runtime_adapters:
+          list-mode: lax
+          files:
+            - "**/internal/health/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: health behavior receives probes and must not depend on config, adapters, generated contracts, or other features.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: health behavior must not depend on composition roots.
+        http_no_postgres:
+          list-mode: lax
+          files:
+            - "**/internal/infra/http/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal/infra/postgres
+              desc: HTTP maps feature behavior and must not call the database adapter directly.
+        otelconfig_is_pure_policy:
+          list-mode: lax
+          files:
+            - "**/internal/observability/otelconfig/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: otelconfig is pure OpenTelemetry policy and must not depend on repository runtime packages.
+            - pkg: go.opentelemetry.io/otel/sdk
+              desc: SDK construction belongs in internal/infra/telemetry.
         postgres_driver_boundary:
           list-mode: lax
           files:
@@ -123,7 +168,7 @@ linters:
           list-mode: lax
           files:
             - "$all"
-            - "!**/internal/api/*.go"
+            - "!**/internal/openapi/*.go"
             - "!**/internal/infra/http/*.go"
           deny:
             - pkg: github.com/go-chi/chi/v5
@@ -159,7 +204,7 @@ linters:
     exhaustruct:
       allow-empty-returns: true
       include:
-        - '^github\.com/example/go-service-template-rest/internal/api\.Problem$'
+        - '^github\.com/example/go-service-template-rest/internal/openapi\.Problem$'
         - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig|FeatureFlagsConfig)$'
     forbidigo:
       analyze-types: true

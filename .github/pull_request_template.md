@@ -5,9 +5,9 @@
 ## Scope
 
 - [ ] API contract changed (`api/openapi/service.yaml`)
-- [ ] Runtime behavior changed (`cmd/`, `internal/app/`, `internal/infra/http/`)
+- [ ] Runtime behavior changed (`cmd/`, `internal/<feature>/`, `internal/infra/`)
 - [ ] CI/CD workflow or quality gates changed (`.github/workflows/`, `Makefile`)
-- [ ] Database schema/migrations changed (`env/migrations/`)
+- [ ] Database schema/migrations changed (`migrations/`)
 
 ## Test Evidence
 

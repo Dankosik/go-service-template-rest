@@ -5,13 +5,46 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+)
+
+var errDependencyInit = errors.New("dependency init")
+
+const (
+	startupDependencyPostgres     = "postgres"
+	startupPostgresProbeOperation = "postgres_probe"
+	startupPostgresResolveStage   = "startup.resolve.postgres"
+	startupPostgresProbeStage     = "startup.probe.postgres"
+)
+
+const (
+	startupDependencyTelemetry       = "telemetry"
+	startupDependencyNetworkPolicy   = "network_policy"
+	startupDependencyIngressPolicy   = "ingress_policy"
+	startupDependencyMetricsExposure = "metrics_exposure"
+	startupDependencyEgressException = "egress_exception"
+	startupDependencyModeFeatureOff  = "feature_off"
+)
+
+const (
+	startupLogComponentStartupProbes = "startup_probes"
+	startupLogComponentShutdown      = "shutdown"
+
+	startupOperationTelemetryInit  = "telemetry_init"
+	startupOperationTelemetryFlush = "telemetry_flush"
+)
+
+type (
+	postgresConnectFunc func(context.Context, postgres.Options) (*postgres.Pool, error)
+	startupDelayFunc    func(int) time.Duration
+	startupSleepFunc    func(context.Context, time.Duration) error
 )
 
 type dependencyProbeRuntime struct {
@@ -20,6 +53,75 @@ type dependencyProbeRuntime struct {
 	cfg           config.Config
 	log           *slog.Logger
 	networkPolicy networkPolicy
+}
+
+func postgresStartupProbeAddress(cfg config.PostgresConfig) (string, error) {
+	address, err := postgres.ProbeAddress(cfg.DSN)
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve postgres probe address: %w", errDependencyInit, err)
+	}
+	return address, nil
+}
+
+func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
+	return initPostgresWithRetryFunc(ctx, cfg, postgres.New, fullJitterDelay, sleepWithContext)
+}
+
+func initPostgresWithRetryFunc(
+	ctx context.Context,
+	cfg config.PostgresConfig,
+	connect postgresConnectFunc,
+	delayFor startupDelayFunc,
+	sleep startupSleepFunc,
+) (*postgres.Pool, error) {
+	options := postgres.Options{
+		DSN:                cfg.DSN,
+		ConnectTimeout:     cfg.ConnectTimeout,
+		HealthcheckTimeout: cfg.HealthcheckTimeout,
+		MaxOpenConns:       cfg.MaxOpenConns,
+		ConnMaxLifetime:    cfg.ConnMaxLifetime,
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= postgresStartupAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("%w: postgres init canceled: %w", errDependencyInit, err)
+		}
+
+		pg, err := connect(ctx, options)
+		if err == nil {
+			return pg, nil
+		}
+
+		lastErr = err
+		if !shouldRetryPostgresStartup(err, attempt) {
+			break
+		}
+
+		delay := delayFor(attempt)
+		if err := sleep(ctx, delay); err != nil {
+			return nil, fmt.Errorf("%w: postgres retry wait canceled: %w", errDependencyInit, err)
+		}
+	}
+
+	return nil, fmt.Errorf("%w: postgres init failed after retries: %w", errDependencyInit, lastErr)
+}
+
+func shouldRetryPostgresStartup(err error, attempt int) bool {
+	if attempt >= postgresStartupAttempts {
+		return false
+	}
+	return errors.Is(err, postgres.ErrConnect) || errors.Is(err, postgres.ErrHealthcheck)
+}
+
+func fullJitterDelay(attempt int) time.Duration {
+	backoff := startupRetryBaseDelay << (attempt - 1)
+	backoff = min(backoff, startupRetryMaxDelay)
+	if backoff <= 0 {
+		return 0
+	}
+
+	return rand.N(backoff + 1) // #nosec G404 -- startup retry jitter is not security-sensitive.
 }
 
 type dependencyProbeOutcome struct {

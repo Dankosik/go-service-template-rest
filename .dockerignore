@@ -8,8 +8,8 @@ bin
 npm-cache
 .env*
 env
-!env/migrations
-!env/migrations/**
+!migrations
+!migrations/**
 docs
 scripts
 test

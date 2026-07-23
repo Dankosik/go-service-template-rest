@@ -19,8 +19,8 @@ Use this shape for a failed command:
 
 ```text
 Not verified: `make test` failed.
-Signal: `FAIL ./internal/app/user`, with `TestCreateUser` failing on duplicate key handling.
-Next verification action: fix the failing path, then rerun `go test ./internal/app/user -run '^TestCreateUser$' -count=1` and `make test`.
+Signal: `FAIL ./internal/user`, with `TestCreateUser` failing on duplicate key handling.
+Next verification action: fix the failing path, then rerun `go test ./internal/user -run '^TestCreateUser$' -count=1` and `make test`.
 ```
 
 Use this shape for a missing or skipped command:
@@ -35,7 +35,7 @@ Use this shape for weaker evidence:
 
 ```text
 Partially verified: focused parser test passed, but repository tests were not run.
-Evidence: `go test ./internal/app/parser -run '^TestParserRejectsTrailingJSON$' -count=1` passed.
+Evidence: `go test ./internal/parser -run '^TestParserRejectsTrailingJSON$' -count=1` passed.
 Not proven: "all tests pass" or "ready for merge".
 Next verification action: run `make test` and any changed-surface checks.
 ```

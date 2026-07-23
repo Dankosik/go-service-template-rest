@@ -10,7 +10,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 )
 
-func TestStartupProbeHelperBasics(t *testing.T) {
+func TestStartupTimingAndRetryBasics(t *testing.T) {
 	t.Parallel()
 
 	t.Run("shouldRetryPostgresStartup", func(t *testing.T) {

@@ -1,328 +1,307 @@
-# Project Structure & Module Organization
+# Project Structure And Module Organization
 
-This document explains the `go-service-template-rest` repository layout: what is stored where, why it is placed there, and where to add new code.
+This document is the normative owner of repository placement and file naming.
+When a new artifact is needed, follow the decision tree below. Do not create a
+directory until the first real artifact has an owner.
 
-## 1) Project Tree
+## 1. Structural model
+
+The repository is feature-first for business behavior and layer-first only for
+shared technical adapters:
 
 ```text
 .
-├── .agents/                    # canonical project skill sources
-├── .claude/                     # Claude Code project configuration
-├── .codex/                      # Codex project-agent configuration
-├── .github/                     # CI, release, and repository policy
-├── .artifacts/bench/            # generated local benchmark evidence, not source
-├── .artifacts/test/             # generated local test reports, not source
+├── .agents/skills/
+├── .claude/
+├── .codex/
+├── .qwen/
 ├── api/
-│   ├── openapi/service.yaml     # REST contract source of truth
-│   └── proto/                   # reserved protobuf contract surface
-├── build/                       # Docker and CI build assets
-├── cmd/service/                 # service binary and bootstrap lifecycle
-├── docs/                        # repository and delivery documentation
+│   └── openapi/service.yaml
+├── build/
+│   └── docker/Dockerfile
+├── cmd/
+│   ├── migrate/
+│   │   ├── main.go
+│   │   ├── run.go
+│   │   └── run_test.go
+│   └── service/
+│       ├── main.go
+│       └── internal/bootstrap/
+├── docs/
 ├── env/
-│   ├── config/                  # non-secret config file examples
-│   ├── docker-compose.yml
-│   └── migrations/              # SQL migration source of truth
+│   ├── config/
+│   └── docker-compose.yml
 ├── internal/
-│   ├── api/                     # generated OpenAPI bindings plus generation config
-│   ├── app/                     # use-case behavior
-│   ├── config/                  # config loading, defaults, validation, snapshot
-│   ├── observability/           # narrow shared observability vocabulary, not SDK setup
-│   ├── requestmeta/             # validated request correlation context
-│   └── infra/
-│       ├── http/                # HTTP adapter, middleware, route policy
-│       ├── postgres/            # Postgres pool, repositories, sqlc sources/output
-│       └── telemetry/           # OTel metrics/tracing and Prometheus export
-├── scripts/                     # developer and CI helper scripts
-├── specs/                       # spec-first task records and implementation history
-├── test/                        # integration tests and external performance scenarios
-│   └── performance/http/        # feature-owned k6 HTTP load scenarios
-├── Makefile
-├── README.md
-├── go.mod
-└── go.sum
+│   ├── config/
+│   ├── health/
+│   ├── infra/
+│   │   ├── http/
+│   │   ├── postgres/
+│   │   └── telemetry/
+│   ├── observability/otelconfig/
+│   └── openapi/
+├── scripts/
+├── specs/
+└── test/
+    └── performance/http/
 ```
 
-Generated outputs such as `internal/api/openapi.gen.go`, `internal/infra/postgres/sqlcgen/*` when SQLC queries exist, coverage files, `.artifacts/bench/*` evidence, and `.artifacts/test/*` reports are derived from their owning sources and commands. Do not edit generated code by hand, and do not treat local report files as design or source artifacts.
+Conditional paths are created only by the first real owner:
 
-## 2) Layer and Folder Responsibilities
+```text
+internal/<feature>/                         business feature
+migrations/                                schema migration source
+internal/infra/postgres/queries/            sqlc query source
+internal/infra/postgres/sqlcgen/            generated sqlc output
+internal/infra/<outbound-system>/            outbound adapter
+cmd/<worker>/                               additional process
+api/proto/                                  protobuf source
+test/performance/http/<feature>.js           multi-step k6 scenario
+```
 
-### `cmd/`
-Thin executable entrypoints.  
-Why: startup and wiring are separated from business logic. This makes it easier to reuse code and add new binaries (for example, worker, migrator, admin CLI) without duplicating domain logic.
+There is no `pkg/`: this module does not currently promise reusable public Go
+packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
+`sqlcgen/`. Add one only with its first owned source file.
 
-### `cmd/service/internal/bootstrap/`
-Service bootstrap implementation for the `service` binary: startup orchestration, dependency probes, shutdown flow, and deploy/network policy helpers used during process lifecycle.
-Why: keeps `cmd/service/main.go` as a composition entrypoint while moving complex lifecycle logic into focused files with local tests.
+## 2. Package ownership
 
-### `internal/`
-Private service code that is not part of the module public API.  
-Why: Go `internal` enforces import boundaries and keeps the service contract controlled.
-
-### `internal/app/`
-Use-case layer: business scenarios and orchestration without transport or storage details.  
-Why: this behavior can be reused by HTTP handlers, background jobs, CLI commands, and tests.
-
-### `internal/requestmeta/`
-Transport-neutral validated request correlation identity stored in `context.Context`.
-Why: HTTP headers stay at the adapter edge while logs, public problems, and future real adapters can read one bounded request ID without importing the HTTP package. Do not turn this package into an arbitrary metadata bag.
-
-### `internal/infra/`
-Infrastructure adapters: HTTP, Postgres, telemetry.  
-Why: framework and integration details are isolated from business code; replacing an adapter affects minimal code.
-
-HTTP route ownership: normal API endpoints are added through `api/openapi/service.yaml` and generated bindings first. Manual root-router routes are only for documented operational exceptions such as `/metrics`; do not add manual `/api/...` routes.
-
-Postgres/sqlc ownership: `env/migrations/*.sql` owns schema shape, `internal/infra/postgres/queries/*.sql` owns query sources, and `internal/infra/postgres/sqlcgen` is generated output when query sources exist. Hand-written repositories under `internal/infra/postgres` translate generated rows into app-facing types instead of leaking `sqlcgen` into `internal/app`.
-
-Postgres pool lifecycle behavior, including `pgxpool` hook composition for connection preparation, release, and close paths, belongs in `internal/infra/postgres`. Keep adapter-specific connection guards there and cover hook changes with repository-local tests before broad integration checks.
-
-The baseline template has no feature-owned SQLC queries. Keep `env/migrations` and `internal/infra/postgres/queries` empty of sample business state until a real feature owns the schema and query contract.
-
-Feature telemetry placement: OpenTelemetry HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`; their MeterProvider, Prometheus bridge, resource identity, and shutdown belong in `internal/infra/telemetry`. HTTP metrics use configured service identity rather than the caller-controlled `Host`. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
-
-### `internal/observability/`
-Shared observability vocabulary that is not an adapter.
-Why: OTel config strings used by both `internal/config` and `internal/infra/telemetry` need one neutral owner without reversing the config-to-infra dependency direction.
-
-`internal/observability/otelconfig` owns OTel sampler/protocol names, defaults, and pure validation helpers only. It must not load config, construct OTel SDK resources/exporters, emit metrics, or become a generic observability helper package.
-
-### `internal/config/`
-Environment-based config loading and validation, including defaults.  
-Why: one config source reduces local/CI/prod drift and keeps startup behavior predictable.
-
-### `internal/api/`
-Generated Go bindings from OpenAPI (`go generate`, `oapi-codegen`).  
-Why: contract is maintained separately (`api/openapi/service.yaml`) and code is synchronized from a single source of truth.
-
-### `api/openapi/`
-REST API contract (source of truth).  
-Why: contract-first workflow gives predictable API evolution, lint/validate/breaking checks in CI, and clear visibility for API consumers.
-
-Security note: the baseline endpoints are public system/sample endpoints and the contract intentionally does not define placeholder auth. Each new business operation must declare one of three choices before implementation: public by design, protected by real auth middleware and OpenAPI `security` plus 401/403 Problem responses, or blocked pending a security spec.
-
-### `api/proto/`
-Optional protobuf contract for gRPC/inter-service communication.  
-Why: REST and protobuf contracts are explicitly separated instead of mixed into runtime code.
-
-### `env/`
-Local environment assets: env template, docker-compose, SQL migrations.  
-Why: everything needed for local reproducible runs is versioned and kept together.
-
-Migrations are deterministic by default: use plain `CREATE` / `DROP` statements so unexpected schema drift fails loudly. Use `IF NOT EXISTS` / `IF EXISTS` only for an explicitly reviewed repair or idempotent migration.
-
-Online production safety is a separate question from deterministic local rehearsal. Prefer additive expand-first migrations for online systems. Destructive changes, type rewrites, large backfills, new constraints, and new indexes need an explicit lock/backfill/mixed-version rollout plan sized to the table and traffic shape. `make migration-validate` rehearses migration mechanics; it does not prove production lock safety, backfill safety, or mixed-version compatibility. Escalate schema ownership, retention, backfill, and rollout questions to data-architecture design before coding.
-
-### `test/`
-Integration/e2e tests, real-PostgreSQL benchmarks, and external performance
-scenarios (separate from unit tests and in-process benchmarks in
-`internal/...`).
-Why: fast local proof stays close to its owner, while Testcontainers-backed
-benchmarks use the `integration` tag and deployed-service k6 scenarios remain
-explicit workload definitions under `test/performance/http/`.
-
-### `build/`
-Build and delivery assets: Dockerfile, CI notes, related build files.  
-Why: separates runtime code from build/deploy concerns and keeps `internal/` focused.
-
-### `scripts/`
-Repository automation is deliberately small.
-
-Current owners:
-
-- `scripts/init-module.sh`: the single template initialization mutation.
-- `scripts/ci/template-init-check.sh`: isolated contract proof for initialization.
-- `scripts/ci/generated-drift-check.sh`: OpenAPI and SQLC derived-output comparison.
-- `scripts/dev/benchmark.sh`: benchmark execution, metadata, comparison, and
-  digest-pinned k6 HTTP load.
-- `scripts/dev/benchmark-remote.sh`: ephemeral DigitalOcean provisioning,
-  reusable snapshot creation, safe source transfer, remote execution, evidence
-  return, and paid-resource cleanup.
-- `scripts/dev/benchmark-remote-check.sh`: hermetic remote lifecycle, snapshot,
-  and recovery proof without cloud writes.
-
-The Makefile owns composition. Go and Node checks use the host toolchain;
-Docker remains only for runtime dependencies, integration and migration proof,
-runtime images, container scanning, real-PostgreSQL benchmarks, and external
-HTTP load.
-
-### `docs/`
-Engineering documentation, including this document and the stable repository architecture baseline.
-Why: development rules and structure should be explicit and versioned, not scattered in code comments.
-
-### `.agents/skills`
-Canonical source of runnable `SKILL.md` definitions.  
-Why: this is the authoring and runtime source for repository skills, loaded by both supported harnesses.
-
-### `.codex/agents`
-Canonical source of project Codex subagent definitions.
-Why: these standalone TOML files are loaded through `.codex/config.toml`.
-
-### `.claude/`
-Claude Code project configuration: `.claude/agents/*.md` mirrors the `.codex/agents/*.toml` specialist roles, `.claude/skills/` holds per-skill symlinks into the canonical `.agents/skills/` (resync with `make claude-skills-sync`), and `CLAUDE.md` at the repository root imports `AGENTS.md`. `settings.local.json` is personal and gitignored.
-Why: this is the Claude Code counterpart of `.codex/`; [docs/agent-harness.md](agent-harness.md) owns the mapping between the two harnesses' native controls and the wiring rules.
-
-### `.github/`
-CI workflow and dependency update automation (Dependabot).  
-Why: quality and security checks are codified, reviewable, and reproducible on every PR.
-
-## 3) Code Ownership Boundaries
-
-`cmd/service/main.go` should only perform composition and delegate lifecycle orchestration to `cmd/service/internal/bootstrap`:
-- read config;
-- wire dependencies;
-- call bootstrap runner with CLI flags/context;
-- return process exit status based on bootstrap result.
-
-`internal/app/*` should not import `internal/infra/*`, `internal/infra/postgres/sqlcgen`, or concrete database drivers.
-
-`internal/infra/*` can import external libraries (`pgx`, Prometheus, and similar), because these packages are adapters.
-
-`/metrics` is operational telemetry, not a normal public business endpoint. If the service HTTP listener is internet-facing, expose `/metrics` only through a private scrape path/network or add a real auth/internal-listener design first. Browser CORS remains fail-closed until a dedicated security decision covers origins, credentials, headers, and protected endpoints. Fail-closed CORS is not CSRF protection.
-
-Public ingress declaration rule: in non-local environments, wildcard HTTP binds such as `:8080`, `0.0.0.0:8080`, and `[::]:8080` require `NETWORK_PUBLIC_INGRESS_ENABLED` to be explicitly set. `false` is a private-ingress assertion: the operator is saying a platform load balancer, private network, firewall, or equivalent control keeps the listener away from the public internet. `true` is a public-ingress exception and must include the reviewed `NETWORK_INGRESS_EXCEPTION_*` metadata with owner, reason, scope, expiry, and rollback plan.
-
-Health endpoint rule: `/health/live` stays process-only and must not call external dependencies. External dependency checks, startup admission, drain state, and runtime ingress policy belong in readiness, not liveness.
-
-Browser-callable endpoint checklist:
-- Record whether browsers may call the endpoint and whether credentials are allowed.
-- Define the CORS origin, method, and header allowlist before enabling CORS.
-- For cookie-backed flows, define `Secure`, `HttpOnly`, `SameSite`, Path, and Domain attributes.
-- Define CSRF controls such as origin checks, token policy, or `http.CrossOriginProtection`.
-- Add negative tests for disallowed origins, disallowed methods or headers, missing CSRF controls when credentials are used, and unauthenticated protected calls.
-
-## 4) Where to Put New Code
-
-### Worked Feature Paths
-
-Use these paths as starting points before choosing a narrower recipe below:
-
-| Feature shape | Put the code here | Prove it with |
+| Path | Owns | Must not own |
 | --- | --- | --- |
-| App-only behavior | Put use-case rules, feature-local request/result types, and consumer-owned ports in `internal/app/<feature>` without adding transport or adapter packages. | App package tests beside `internal/app/<feature>`, plus the caller package tests if an existing adapter starts using it. |
-| Simple read-only endpoint | Add use-case behavior in `internal/app/<feature>`, update `api/openapi/service.yaml`, regenerate `internal/api`, implement `strictHandlers.<Operation>` in `internal/infra/http`, and keep manual `/api/...` routes out of the root router. | Contract and handler tests near `internal/infra/http`, app tests near `internal/app/<feature>`, and `make openapi-check`. |
-| Postgres-backed endpoint | Keep app behavior and app-owned ports in `internal/app/<feature>`, evolve `env/migrations`, add sqlc queries under `internal/infra/postgres/queries`, regenerate `sqlcgen`, map rows in a hand-written Postgres repository, then inject the concrete adapter in bootstrap. | Repository tests under `internal/infra/postgres`, integration tests under `test/` when container-backed behavior matters, `make sqlc-check`, and migration rehearsal. |
-| Background job or worker | Keep business behavior in `internal/app/<feature>`, put queue/scheduler/database/external-system mechanics in `internal/infra/<integration>`, and create a `cmd/<binary>` composition root when lifecycle or scaling differs from the HTTP service. | App tests near the feature, adapter tests near the integration, bootstrap/lifecycle tests for the new binary, and shutdown/cancellation proof for worker loops. |
+| `cmd/<binary>/` | process entry point; `main.go` plus binary-local orchestration | reusable business or adapter behavior |
+| `cmd/service/internal/bootstrap/` | composition, startup, admission, shutdown, dependency wiring | domain policy, HTTP mapping, persistence queries |
+| `internal/<feature>/` | business types, use cases, ports, invariants, domain errors | generated OpenAPI types, runtime config, concrete adapters |
+| `internal/health/` | service readiness/drain behavior and probe interface | HTTP responses, Postgres construction, config loading |
+| `internal/config/` | config schema, defaults, loading, parsing, validation, immutable snapshot | feature behavior and adapter construction |
+| `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
+| `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
+| `internal/infra/postgres/` | pool, migrations, concrete repositories, query mapping | HTTP behavior and business policy |
+| `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
+| `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
+| `api/openapi/` | client-visible REST source of truth | generated Go or runtime handlers |
+| `migrations/` | ordered schema changes | query logic and sample placeholder schema |
+| `test/` | container/external-process integration proof | ordinary package unit tests |
+| `.agents/skills/<skill>/` | canonical agent skill | harness-specific copies |
+| `.claude/`, `.codex/`, and `.qwen/` | harness adapters to canonical skills | independent skill authority |
 
-### File-Level Responsibility Rule
+`package httpx` intentionally differs from directory `http`: callers can import
+it as `httpx` without colliding with the standard library `net/http`.
 
-Choose the file owner before adding code, not after a file becomes hard to review. Existing large hand-written files are a placement warning: inspect sibling files and split new behavior into a focused owner file when the code has a distinct concern such as mapping, validation, lifecycle wiring, repository translation, route policy, telemetry vocabulary, or test setup policy.
+## 3. Deterministic placement algorithm
 
-Prefer same-package seam files with concrete names (`*_mapping.go`, `*_validation.go`, `*_config.go`, `route_*.go`, `*_repository.go`) before creating broader packages. Do not split generated files by hand, and do not split straightforward cohesive logic only to satisfy a line count; the goal is one clear responsibility and one abstraction level per file where practical.
+Use the first matching rule.
 
-### First Production Feature Checklist
+1. Is it the source of a client-visible REST contract?
+   Put it in `api/openapi/service.yaml`. Generated Go goes only to
+   `internal/openapi/openapi.gen.go`.
+2. Is it business behavior for one capability?
+   Put it in `internal/<feature>/`.
+   - command/use case: `<verb>_<noun>.go`;
+   - business types and invariants: `model.go`;
+   - domain errors: `errors.go`;
+   - consumer-owned persistence/outbound interface: `repository.go` or
+     `client.go`.
+3. Is it HTTP transport mapping?
+   Put endpoint methods in `internal/infra/http/<feature>_handlers.go`.
+   Put cross-route policy in `middleware_<concern>.go`; router composition stays
+   in `router.go`; Problem mapping stays in `problem.go`.
+4. Is it Postgres implementation?
+   - concrete feature adapter:
+     `internal/infra/postgres/<feature>_repository.go`;
+   - migration:
+     `migrations/NNNNNN_<feature>_<change>.up.sql` and matching `.down.sql`;
+   - sqlc source: `internal/infra/postgres/queries/<feature>.sql`;
+   - generated result: `internal/infra/postgres/sqlcgen/`.
+5. Is it another outbound system?
+   Put the concrete adapter in
+   `internal/infra/<outbound-system>/client.go`; add
+   `<feature>.go` only when several features map through that adapter.
+6. Is it process construction or lifecycle?
+   Existing service wiring goes in `cmd/service/internal/bootstrap/` under the
+   matching `startup_<concern>.go`, `run.go`, or `shutdown.go`.
+7. Is it a background process with an independent deployment/lifecycle?
+   Create `cmd/<worker>/main.go`; keep binary-only wiring under
+   `cmd/<worker>/internal/bootstrap/`. Reuse feature packages and adapters
+   rather than duplicating them.
+8. Is it runtime configuration?
+   Add the field to `internal/config/types.go`, its default to `defaults.go`,
+   accepted key to `schema.go`, parsing in `parse.go`, validation in
+   `validate.go`, and the local example in `env/config/local.yaml`.
+9. Is it telemetry?
+   SDK/exporter setup belongs in `internal/infra/telemetry/`. Adapter-owned
+   instruments belong in `internal/infra/<adapter>/metrics.go` or `tracing.go`.
+   Feature-owned signals belong in `internal/<feature>/telemetry.go`.
+10. Is it a test?
+    - package behavior: sibling `<owner>_test.go`;
+    - executable boundary contract: sibling `<owner>_contract_test.go`;
+    - container/external process: `test/<feature>_integration_test.go` with
+      `//go:build integration` and `package integration_test`;
+    - shared fake used by two or more test files in one package:
+      unexported in `<package>_test.go`; otherwise keep it in its one test file.
+11. Is it HTTP load proof?
+    A single configurable request uses
+    `test/performance/http/single-flow.js`. A genuinely multi-step feature flow
+    goes to `test/performance/http/<feature>.js`.
+12. Is it agent guidance?
+    A reusable skill goes to `.agents/skills/<skill>/SKILL.md`. Repository
+    policy goes to the owning `docs/<topic>.md`; task decisions go to
+    `specs/<task>/`. Do not duplicate canonical instructions into harness
+    adapters.
 
-Before coding the first real business feature, write down the feature owner and keep this path intact:
+If none matches, the artifact has no accepted owner. Stop and update this
+document plus its enforcement before adding the file.
 
-1. Start in `internal/app/<feature>` with use-case behavior, feature-local request/result/value types, and app-owned ports only when the app must invert a concrete adapter.
-2. For HTTP behavior, update `api/openapi/service.yaml`, regenerate `internal/api`, and map generated request/response and Problem shapes in `internal/infra/http`; never add manual `/api/...` routes.
-3. For Postgres behavior, add feature-owned migrations and queries, regenerate `sqlcgen`, map rows in `internal/infra/postgres`, and keep generated types out of `internal/app`.
-4. Wire concrete adapters in `cmd/service/internal/bootstrap` after config and dependency admission are defined; prove disabled, ready, and partial-initialization cleanup paths in bootstrap tests.
-5. Keep feature-specific telemetry beside the feature or adapter that owns the event; move an instrument into shared telemetry only after it is genuinely reused and low-cardinality.
-6. Put tests at the owning layer first: app tests beside `internal/app/<feature>`, HTTP mapping tests beside `internal/infra/http`, repository tests beside `internal/infra/postgres`, config tests beside `internal/config`, bootstrap wiring tests beside `cmd/service/internal/bootstrap`, and integration tests under `test/` only when a real dependency or cross-package scenario is part of the claim.
+## 4. File naming and granularity
 
-Existing examples to inspect before adding new surfaces:
-- `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
-- `internal/infra/postgres` for pool lifecycle, adapter config parsing, migration running, and generated SQLC ownership.
-- `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
+All Go filenames use lowercase snake case. Name files after owned behavior, not
+chronology or editing history.
 
-Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
+| Artifact | Required form |
+| --- | --- |
+| middleware | `middleware_<concern>.go` and matching `_test.go` |
+| startup policy | `startup_<concern>.go` and matching `_test.go` |
+| feature HTTP handlers | `<feature>_handlers.go` |
+| Postgres repository | `<feature>_repository.go` |
+| normal unit test | `<owner>_test.go` |
+| executable boundary contract | `<owner>_contract_test.go` |
+| package-wide test helpers | `<package>_test.go` |
+| integration test | `<feature>_integration_test.go` |
+| package documentation/generation directive | `doc.go` |
 
-New HTTP endpoint:
-1. Add or update contract in `api/openapi/service.yaml`.
-2. Record the endpoint security decision: public by design, protected by real auth, or blocked pending security design. For protected endpoints, define OpenAPI `security`, 401/403 Problem responses using the canonical `Problem` schema, scoped generated/strict middleware or an explicitly designed equivalent, identity middleware, tenant/object authorization rules, unauthenticated-call tests, and public-route non-regression tests.
-3. Generate or refresh API artifacts in `internal/api`.
-4. Add use-case logic in `internal/app/<feature>`.
-5. Add handler mapping in `internal/infra/http`; do not bypass generated routing with a manual `/api/...` chi route.
-6. Add tests near changed code and add integration tests in `test/` when needed.
-7. For parameterized routes, prove logs, metrics, and spans use route templates such as `/users/{id}` rather than concrete IDs.
-8. Validate with `make openapi-check`, plus targeted handler/app tests for the changed behavior.
+Forbidden names:
 
-New Postgres persistence:
-1. Start with real feature-owned schema and queries; do not add sample tables or query fixtures to runtime migrations.
-2. Add a deterministic migration under `env/migrations`.
-3. Add SQLC query sources under `internal/infra/postgres/queries/*.sql`.
-4. Regenerate `internal/infra/postgres/sqlcgen` with `make sqlc-generate`; do not hand-edit generated files. With no query sources, `sqlc-generate` intentionally skips generation.
-5. Add a hand-written repository under `internal/infra/postgres` only when a real feature needs an app-facing mapping layer over generated rows/types.
-6. Add an app-owned port beside the consumer in `internal/app/<feature>` when the app layer needs inversion over the adapter.
-7. Wire the concrete repository in `cmd/service/internal/bootstrap`.
-8. Clamp bounded list limits before values reach SQL `LIMIT`; the API/app contract or repository must define the upper bound instead of trusting caller input.
-9. Validate with `make sqlc-check`, repository unit tests,
-   `make test-integration`, and `make migration-validate` when
-   migration-backed behavior changed. `migration-validate` uses an explicit
-   `MIGRATION_DSN` or provisions its own isolated Docker-backed rehearsal.
+- `*_additional_test.go`, `*_part2_test.go`, and other ordinal/history suffixes;
+- `test_helpers_test.go`;
+- production `*_helpers.go`, `util.go`, `common.go`, or `misc.go`.
 
-Transaction recipe:
-1. Call `Pool.InTx` with the caller context at the use-case transaction boundary.
-2. Use only the callback's sqlc `Queries`; they are bound through generated `WithTx`.
-3. Keep network calls and unrelated external side effects outside the callback.
-4. Let `pgx.BeginFunc` own begin, rollback, and commit; the helper performs no retries.
-5. Replace the marked SQL example with feature-owned queries, or delete the example and helper when the service has no transactional use case.
+Split a file when its declarations have different owners named by this table.
+Do not split merely to hit a line-count target. `network_policy.go`,
+`network_policy_parsing.go`, and `network_policy_enforcement.go` are separate
+because state, parsing, and enforcement are independent policies.
 
-DB-required feature bootstrap:
-1. Validate required Postgres config before constructing feature repositories.
-2. Construct repositories only after an initialized pool exists and the dependency is enabled for that feature.
-3. Inject the concrete repository through an app-owned port beside `internal/app/<feature>`.
-4. Test disabled, ready, and partial-initialization cleanup paths in bootstrap.
+Bootstrap is intentionally one package because its declarations jointly build
+one process. Its production files are:
 
-App-facing persistence port sketch:
-
-```go
-// internal/app/orders/store.go
-package orders
-
-import "context"
-
-type Store interface {
-	Save(ctx context.Context, order Order) error
-}
+```text
+network_policy.go
+network_policy_enforcement.go
+network_policy_parsing.go
+run.go
+shutdown.go
+startup.go
+startup_admission.go
+startup_config.go
+startup_dependencies.go
+startup_logging.go
+startup_rejections.go
+startup_server.go
+startup_span.go
+startup_telemetry.go
+startup_timing.go
 ```
 
-The port belongs beside the app feature that consumes it. The Postgres implementation belongs under `internal/infra/postgres`, and bootstrap wires the concrete adapter into the app service. Do not add a generic runtime port package just to prepare for future repositories.
+Do not create a bootstrap subpackage unless behavior becomes reusable outside
+that binary; file size alone is not a package boundary.
 
-New integration (cache, queue, object store, external API):
-1. Add adapter in `internal/infra/<integration>`.
-2. Add an app-owned interface only if `app` needs inversion over the concrete adapter.
-3. Wire the concrete adapter in `cmd/service/internal/bootstrap`; keep `cmd/service/main.go` thin.
-4. For outbound calls, declare the target source, timeout, redirect policy, DNS/IP-class behavior, and egress allowlist policy before wiring. Fixed outbound targets are validated by bootstrap policy. Dynamic or user-controlled URLs require a separate security design and review before implementation.
-5. Add the runtime dependency admission checklist before enabling it in startup:
-   - config keys, defaults, secret-source policy, and validation;
-   - network policy egress target and public/private exposure assumptions;
-   - criticality mode (`critical_fail_closed`, `optional_fail_open`, degraded, or feature-off) and degraded-mode contract;
-   - retry class, timeout, startup budget, and readiness participation;
-   - cleanup registration for partially initialized resources;
-   - stable structured log fields for startup outcomes, and low-cardinality
-     runtime metrics only when the state is repeatedly observable and actionable;
-   - bootstrap tests for disabled, ready, policy-denied, degraded, and cleanup paths.
+## 5. Generated authority
 
-New binary:
-1. Create `cmd/<binary>/main.go`.
-2. Reuse existing packages from `internal/*`.
-3. Do not duplicate business logic in `cmd`.
+| Source of truth | Generated/derived output | Proof |
+| --- | --- | --- |
+| `api/openapi/service.yaml` + `internal/openapi/oapi-codegen.yaml` | `internal/openapi/openapi.gen.go` | `make openapi-check` |
+| `migrations/*.up.sql` + `internal/infra/postgres/queries/*.sql` | `internal/infra/postgres/sqlcgen/` | `make sqlc-check` |
+| `.agents/skills/` | harness adapters | `make template-init-check` where applicable |
 
-Changes to startup/lifecycle flow of the `service` binary:
-1. Keep `cmd/service/main.go` thin.
-2. Add/modify logic in `cmd/service/internal/bootstrap/*`.
-3. Add tests near modified bootstrap files (`*_test.go` in the same folder).
+Never hand-edit generated Go. With no owned migrations or queries, their source
+and generated directories are absent and the migration/sqlc commands
+intentionally no-op.
 
-Test placement matrix:
+## 6. Test level
 
-| Behavior under test | Owning test location |
+Use the narrowest real owner:
+
+- a pure function, use case, mapper, middleware, or adapter policy is tested
+  beside its package;
+- `_contract_test.go` is reserved for an executable boundary or architecture
+  invariant, not stronger-sounding unit tests;
+- `test/` is reserved for proof requiring a real database, container, external
+  process, or multiple packages as black boxes;
+- build-tagged integration tests must be deterministic and isolated; ordinary
+  package tests must not require Docker.
+
+## 7. Enforcement
+
+| Rule | Enforcement |
 | --- | --- |
-| App use-case rules, feature-local types, and app-owned ports | Beside the package under `internal/app/<feature>`. |
-| HTTP mapping, generated-route ownership, manual route exceptions, CORS, Problem responses, route labels, metrics, and span naming | `internal/infra/http`. |
-| Bootstrap lifecycle, config wiring, dependency admission, disabled/ready/cleanup paths, and shutdown | `cmd/service/internal/bootstrap`. |
-| Runtime config key defaults, snapshot construction, validation, and secret-source policy | `internal/config`. |
-| Feature bootstrap wiring that introduces a real dependency adapter | `cmd/service/internal/bootstrap`, proving disabled, ready, policy-denied, and partial-initialization cleanup paths before adding broad integration coverage. |
-| Postgres pool and hand-written repository mapping | `internal/infra/postgres`. |
-| Migration-backed read/write behavior and container-backed database scenarios | `test/` with the `integration` build tag. |
-| Endpoint plus real persistence plus bootstrap composition in one scenario | Targeted owner tests first, then `test/` with the `integration` tag when a real database-backed flow is required to prove the combined contract. |
-| Broad cross-package or end-to-end scenarios | `test/` or a focused subdirectory below it, using an external package such as `integration_test` when possible. |
+| feature/config/health import direction | depguard in `.golangci.yml` |
+| HTTP cannot import Postgres | depguard |
+| sqlc types stay behind Postgres adapter | depguard |
+| chi stays in OpenAPI/HTTP owners | depguard |
+| `otelconfig` stays pure and SDK-free | depguard |
+| no historical/helper filenames | `make project-structure-check` |
+| command directories contain `main.go` | `make project-structure-check` |
+| integration suffix/tag/package | `make project-structure-check` |
+| no empty speculative source/generated directories | `make project-structure-check` |
+| migration up/down pairing | `make project-structure-check` |
+| OpenAPI/sqlc generated drift | `make openapi-check`, `make sqlc-check` |
+| runtime OpenAPI route ownership | package `_contract_test.go` tests |
+| all remaining placement and naming decisions | this document; review risk |
 
-See [test/README.md](../test/README.md) for integration-test ownership, build-tag rules, Docker behavior, and migration-backed helper guidance.
+The structure check runs in local aggregates and CI. Prose-only rules are an
+explicit residual risk; add executable enforcement when a repeated drift is
+observed.
 
-## 5) Why This Structure Scales
+## 8. Ten placement examples
 
-- Improves code review: contract, use-case, and infrastructure concerns are easy to locate.
-- Reduces coupling: `app` layer can be tested without booting HTTP server or database.
-- Supports contract-first API evolution through OpenAPI and CI quality gates.
-- Speeds onboarding: each top-level folder has one clear responsibility.
+| Requested artifact | One result |
+| --- | --- |
+| `CreateOrder` use case | `internal/orders/create_order.go` |
+| order domain error | `internal/orders/errors.go` |
+| `POST /orders` handler | `internal/infra/http/orders_handlers.go` |
+| order Postgres adapter | `internal/infra/postgres/orders_repository.go` |
+| create orders table | `migrations/000001_orders_create.up.sql` plus `.down.sql` |
+| order sqlc operations | `internal/infra/postgres/queries/orders.sql` |
+| request authentication middleware | `internal/infra/http/middleware_authentication.go` |
+| Stripe outbound client | `internal/infra/stripe/client.go` |
+| order DB integration proof | `test/orders_integration_test.go` |
+| order-processing worker | `cmd/order-worker/main.go` |
+
+Every example resolves through exactly one first-matching rule. A proposal such
+as “shared helpers” or “generic service layer” does not resolve and is rejected
+until it names a concrete owner.
+
+## 9. First production feature checklist
+
+1. Name one feature owner and create `internal/<feature>/` only with its first
+   use case.
+2. Decide the public/security behavior in the task specification, then update
+   `api/openapi/service.yaml`.
+3. Add feature behavior and consumer-owned ports before concrete adapters.
+4. Add `<feature>_handlers.go`; do not register a manual business route.
+5. If persistence is required, add the first paired migration, query source,
+   generated sqlc output, and hand-written repository in that order.
+6. Add config, telemetry, startup wiring, and cleanup only for dependencies the
+   feature actually uses.
+7. Add sibling unit/contract tests and `test/<feature>_integration_test.go` only
+   when real infrastructure is part of the claim.
+8. Run the matching generators, `make project-structure-check`, focused tests,
+   and the publication gate required by the change.
+
+## 10. Source basis
+
+Primary guidance:
+
+- [Organizing a Go module](https://go.dev/doc/modules/layout)
+- [Go Wiki: package names](https://go.dev/wiki/CodeReviewComments#package-names)
+- [Google Go Style Guide: package names](https://google.github.io/styleguide/go/decisions#package-names)
+
+Community implementations are evidence, not authority:
+
+- [ardanlabs/service](https://github.com/ardanlabs/service) groups business
+  capabilities separately from platform adapters.
+- [Grafana k6](https://github.com/grafana/k6) keeps commands and internal
+  implementation ownership explicit in a large production Go module.
+- [GoogleCloudPlatform/microservices-demo](https://github.com/GoogleCloudPlatform/microservices-demo)
+  demonstrates per-service ownership rather than one repository-wide framework
+  layer stack.
+
+`golang-standards/project-layout` is not an official Go standard and is not a
+source of authority for this repository.

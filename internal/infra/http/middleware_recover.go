@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/felixge/httpsnoop"
 )
 
@@ -54,7 +53,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 					"panic_type", fmt.Sprintf("%T", rec),
 					"method", method,
 					"path", path,
-					"request_id", requestmeta.RequestIDFromContext(ctx),
+					"request_id", requestIDFromContext(ctx),
 					"trace_id", traceID,
 					"span_id", spanID,
 				)

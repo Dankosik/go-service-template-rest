@@ -30,7 +30,7 @@ Reference: identity source boundary.
 Copy this shape when caller-controlled headers become identity.
 
 ```text
-[high] [go-security] internal/app/reset.go:69
+[high] [go-security] internal/reset.go:69
 Issue: Axis: Token And Credential Flow; password-reset tokens are generated with `math/rand` seeded from time and stored in plaintext.
 Impact: An attacker can predict or recover reset tokens and take over accounts before expiry.
 Suggested fix: Generate reset tokens with `crypto/rand`, store only a token digest with expiry and single-use invalidation, and compare digests safely.
@@ -40,7 +40,7 @@ Reference: account recovery token lifecycle.
 Copy this shape when the risk is token predictability or recoverability, not just reset abuse volume.
 
 ```text
-[high] [go-security] internal/app/passwords.go:38
+[high] [go-security] internal/passwords.go:38
 Issue: Axis: Token And Credential Flow; new passwords are stored as raw SHA-256 hashes without a password-hashing work factor or per-password salt.
 Impact: A database leak enables fast offline cracking of user passwords.
 Suggested fix: Use the repo-approved adaptive password hashing library and add a regression test that plaintext or fast hashes are not accepted as stored passwords.

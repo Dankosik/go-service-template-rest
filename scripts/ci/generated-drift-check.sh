@@ -8,14 +8,14 @@ usage() {
 }
 
 check_openapi() (
-	local path="internal/api/openapi.gen.go"
+	local path="internal/openapi/openapi.gen.go"
 	local snapshot
 
 	snapshot="$(mktemp)"
 	trap 'rm -f "${snapshot}"' EXIT
 	cp "${ROOT_DIR}/${path}" "${snapshot}"
 
-	(cd "${ROOT_DIR}" && go generate ./internal/api)
+	(cd "${ROOT_DIR}" && go generate ./internal/openapi)
 
 	if ! cmp -s "${snapshot}" "${ROOT_DIR}/${path}"; then
 		echo "openapi codegen drift detected: generation changed ${path}"
@@ -79,7 +79,7 @@ check_sqlc_stems() {
 }
 
 has_sqlc_queries() {
-	find "${ROOT_DIR}/internal/infra/postgres/queries" -type f -name '*.sql' -print -quit | grep -q .
+	find "${ROOT_DIR}/internal/infra/postgres/queries" -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .
 }
 
 check_empty_sqlc_outputs() {

@@ -15,7 +15,7 @@ Success criteria
 - OpenAPI and generated bindings remain unchanged unless bounded inspection proves the public contract changes.
 
 Constraints and evidence
-- Inspect `internal/infra/http/router.go` and `internal/infra/http/router_test.go` first.
+- Inspect `internal/infra/http/router.go` and `internal/infra/http/router_contract_test.go` first.
 - Preserve the exact signals `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.
 - Run focused `./internal/infra/http` tests; run `make openapi-check` only if contract-owned files change.
 
@@ -47,7 +47,7 @@ Success criteria
 - Targeted regression proof covers the failing branch; race or integration proof is included when the affected boundary requires it.
 
 Inspect/evidence
-- Start with `cmd/service/internal/bootstrap/`, `internal/app/health/service.go`, and nearby shutdown/readiness tests.
+- Start with `cmd/service/internal/bootstrap/`, `internal/health/service.go`, and nearby shutdown/readiness tests.
 - Preserve the exact signals `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration`.
 - Do not use a timeout increase as the primary fix without evidence that timeout behavior is the contract.
 

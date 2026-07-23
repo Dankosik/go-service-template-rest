@@ -11,9 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"github.com/example/go-service-template-rest/internal/requestmeta"
+	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/go-chi/chi/v5"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -42,7 +41,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		return nil, err
 	}
 
-	server := api.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
+	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
 	requestValidator, err := openAPIRequestValidator(log)
 	if err != nil {
 		return nil, err
@@ -55,7 +54,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
 	)
 
-	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, requestValidator))
+	apiSubrouter := openapi.HandlerWithOptions(server, generatedChiServerOptions(log, requestValidator))
 
 	// Prometheus exposition is an operational protocol outside the client OpenAPI contract.
 	rootRouter := newRootRouter(
@@ -71,8 +70,8 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	return RequestCorrelation(rootRouter), nil
 }
 
-func openAPIRequestValidator(log *slog.Logger) (api.MiddlewareFunc, error) {
-	spec, err := api.GetSpec()
+func openAPIRequestValidator(log *slog.Logger) (openapi.MiddlewareFunc, error) {
+	spec, err := openapi.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("http router: load embedded OpenAPI spec: %w", err)
 	}
@@ -100,8 +99,8 @@ func otelServerName(configured string) string {
 	return net.JoinHostPort(serverName, "0")
 }
 
-func generatedStrictServerOptions(log *slog.Logger) api.StrictHTTPServerOptions {
-	return api.StrictHTTPServerOptions{
+func generatedStrictServerOptions(log *slog.Logger) openapi.StrictHTTPServerOptions {
+	return openapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			handleMalformedGeneratedRequest(log, w, r, err)
 		},
@@ -111,8 +110,8 @@ func generatedStrictServerOptions(log *slog.Logger) api.StrictHTTPServerOptions 
 	}
 }
 
-func generatedChiServerOptions(log *slog.Logger, middlewares ...api.MiddlewareFunc) api.ChiServerOptions {
-	return api.ChiServerOptions{
+func generatedChiServerOptions(log *slog.Logger, middlewares ...openapi.MiddlewareFunc) openapi.ChiServerOptions {
+	return openapi.ChiServerOptions{
 		Middlewares: middlewares,
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			handleMalformedGeneratedRequest(log, w, r, err)
@@ -176,7 +175,7 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 
 	attrs := []any{slog.String("error_class", strictRequestErrorClass(err))}
 	if r != nil {
-		if requestID := requestmeta.RequestIDFromContext(r.Context()); requestID != "" {
+		if requestID := requestIDFromContext(r.Context()); requestID != "" {
 			attrs = append(attrs, slog.String("request_id", requestID))
 		}
 		traceID, spanID := traceIDsFromContext(r.Context())

@@ -223,9 +223,9 @@ func TestNormalizeMigrationSourcePath(t *testing.T) {
 		want    string
 		wantErr string
 	}{
-		{name: "relative clean path", raw: "env/migrations", want: "env/migrations"},
-		{name: "absolute path converted to fs path", raw: "/env/migrations", want: "env/migrations"},
-		{name: "trimmed and cleaned path", raw: " ./env//migrations/ ", want: "env/migrations"},
+		{name: "relative clean path", raw: "migrations", want: "migrations"},
+		{name: "absolute path converted to fs path", raw: "/migrations", want: "migrations"},
+		{name: "trimmed and cleaned path", raw: " ./migrations// ", want: "migrations"},
 		{name: "empty", raw: " \t\n", wantErr: "migration source path is empty"},
 		{name: "root", raw: "/", wantErr: "migration source path is empty"},
 		{name: "dot", raw: ".", wantErr: "migration source path is empty"},

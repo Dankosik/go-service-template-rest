@@ -38,8 +38,9 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 
 | Command | Meaning |
 | --- | --- |
-| `make check` | `fmt-check`, `lint`, and ordinary unit tests |
-| `make ci-local` | Host-toolchain CI aggregate: module, initialization, format, lint, race, coverage report, generated contracts, Go security, and secret scan |
+| `make project-structure-check` | Placement, naming, command, integration-test, migration-pair, and no-empty-placeholder contract |
+| `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
+| `make ci-local` | Host-toolchain CI aggregate: module, initialization, project structure, format, lint, race, coverage report, generated contracts, Go security, and secret scan |
 | `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
 | `make pr-check BASE_REF=origin/main` | `check-full` plus OpenAPI breaking comparison when the base contains the spec |
 
@@ -128,9 +129,10 @@ make sqlc-generate
 make sqlc-check
 ```
 
-`api/openapi/service.yaml` and SQL query sources are authoritative. The shared
-generated-drift script snapshots the current derived output, runs the canonical
-generator, and fails with a diff only when generation changes that output.
+`api/openapi/service.yaml`, `internal/openapi/oapi-codegen.yaml`, migrations,
+and SQL query sources are authoritative. The shared generated-drift script
+snapshots the current derived output, runs the canonical generator, and fails
+with a diff only when generation changes that output.
 Uncommitted but already current generated files therefore pass; Git and CI own
 the separate question of whether those files were committed.
 
@@ -164,10 +166,12 @@ make compose-up
 make compose-down
 ```
 
-`migration-validate` rehearses `up`, `down 1`, and `up 1`. With
-`MIGRATION_DSN`, it uses that database. Otherwise it creates an isolated
-Compose project on a dynamic host port, exercises the host migration tool,
-then runs the runtime image's `/migrate` entrypoint on the Compose network.
+When owned migration files exist, `migration-validate` rehearses `up`, `down
+1`, and `up 1`. With no migrations, the host and image migration entrypoints
+return a successful explicit no-op. With `MIGRATION_DSN`, the command uses that
+database. Otherwise it creates an isolated Compose project on a dynamic host
+port, exercises the host migration tool, then runs the runtime image's
+`/migrate` entrypoint on the Compose network.
 It starts the same image with a read-only filesystem and dropped capabilities,
 waits for `/health/ready`, optionally checks `RUNTIME_EXPECTED_VERSION` in the
 startup log, and requires a clean SIGTERM exit. Cleanup is registered before

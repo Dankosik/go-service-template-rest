@@ -18,7 +18,7 @@ Use this for simplification review of proof readability. Coverage completeness, 
 Finding shape to copy when a giant table hides different proof shapes:
 
 ```text
-[medium] [go-language-simplifier] internal/app/orders/service_test.go:52
+[medium] [go-language-simplifier] internal/orders/service_test.go:52
 Issue: The new table drives success, validation, conflict, and cancellation cases through `wantErr`, `wantStatus`, and `wantAudit` mode fields.
 Impact: Each row now needs custom decoding to understand what behavior is being proven, so adding a case can silently skip the relevant assertion.
 Suggested fix: Split the table into success and failure groups, or use subtests with explicit assertion blocks for each behavior class.

@@ -6,4 +6,4 @@
 /api/ @Dankosik
 /internal/ @Dankosik
 /.github/workflows/ @Dankosik
-/env/migrations/ @Dankosik
+/migrations/ @Dankosik
