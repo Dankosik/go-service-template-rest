@@ -2,10 +2,6 @@
 # Owners: Platform + Service Owner.
 # Scope: non-secret deployment policy only. Keep secrets in Railway variables.
 # Review rule: policy changes require PR review and the affected CI/release gates.
-#
-# Baseline policy assertions tracked as release evidence:
-# - production replica baseline: >=2
-# - per-replica baseline: 2 vCPU / 2 GiB
 
 [build]
 builder = "DOCKERFILE"
@@ -18,4 +14,4 @@ healthcheckTimeout = 180
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 overlapSeconds = 45
-drainingSeconds = 30
+drainingSeconds = 45

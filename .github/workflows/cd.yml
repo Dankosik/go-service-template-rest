@@ -9,8 +9,8 @@ on:
       - "v*"
 
 concurrency:
-  group: cd-${{ github.workflow }}-${{ github.run_id }}
-  cancel-in-progress: false
+  group: cd-${{ github.workflow }}-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
 
 permissions:
   contents: read
@@ -47,7 +47,8 @@ jobs:
           echo "image_repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
           echo "tag_main=main" >> "$GITHUB_OUTPUT"
           echo "tag_sha=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "primary_image=${IMAGE_REPO}:main" >> "$GITHUB_OUTPUT"
+          echo "version=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "primary_image=${IMAGE_REPO}:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "artifact_name=sbom-main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Login to GHCR
@@ -57,8 +58,10 @@ jobs:
       - name: Build image
         run: |
           docker build \
+            --build-arg APP_VERSION="${{ steps.meta.outputs.version }}" \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -f build/docker/Dockerfile \
-            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}" \
             -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
             .
 
@@ -78,9 +81,8 @@ jobs:
           format: cyclonedx
           output: sbom.cdx.json
 
-      - name: Push image tags
+      - name: Push immutable image tag
         run: |
-          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
           docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}"
 
       - name: Resolve pushed digest
@@ -106,11 +108,55 @@ jobs:
           "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: ${{ steps.meta.outputs.image_repo }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          sbom-path: sbom.cdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify release trust
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IMAGE="${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/cd.yml@refs/heads/${{ github.event.repository.default_branch }}"
+
+          "$(go env GOPATH)/bin/cosign" verify \
+            --certificate-identity "${IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE}"
+          gh attestation verify "oci://${IMAGE}" --repo "${GITHUB_REPOSITORY}"
+          gh attestation verify "oci://${IMAGE}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --predicate-type "https://cyclonedx.org/bom"
+
+      - name: Promote verified main tag
+        run: |
+          docker tag \
+            "${{ steps.meta.outputs.primary_image }}" \
+            "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
+          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
+          docker buildx imagetools inspect \
+            "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}" |
+            grep -Fq "Digest: ${{ steps.digest.outputs.digest }}"
+
+      - name: Publish immutable image reference
+        run: |
+          {
+            echo "### Published image"
+            echo
+            printf '`%s`\n' "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -193,13 +239,12 @@ jobs:
         run: |
           IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
           VERSION_TAG="${GITHUB_REF_NAME}"
-          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-12)"
 
           echo "image_repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
           echo "tag_version=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
           echo "tag_latest=latest" >> "$GITHUB_OUTPUT"
-          echo "tag_sha=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "primary_image=${IMAGE_REPO}:${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          echo "primary_image=${IMAGE_REPO}:build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "artifact_name=sbom-${VERSION_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Login to GHCR
@@ -209,10 +254,11 @@ jobs:
       - name: Build image
         run: |
           docker build \
+            --build-arg APP_VERSION="${{ steps.meta.outputs.version }}" \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -f build/docker/Dockerfile \
-            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_version }}" \
-            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_latest }}" \
-            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
+            -t "${{ steps.meta.outputs.primary_image }}" \
             .
 
       - name: Scan image with Trivy
@@ -231,11 +277,9 @@ jobs:
           format: cyclonedx
           output: sbom.cdx.json
 
-      - name: Push image tags
+      - name: Push release candidate image
         run: |
-          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_version }}"
-          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_latest }}"
-          docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}"
+          docker push "${{ steps.meta.outputs.primary_image }}"
 
       - name: Resolve pushed digest
         id: digest
@@ -260,11 +304,59 @@ jobs:
           "$(go env GOPATH)/bin/cosign" sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: ${{ steps.meta.outputs.image_repo }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          sbom-path: sbom.cdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify release trust
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IMAGE="${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/cd.yml@${GITHUB_REF}"
+
+          "$(go env GOPATH)/bin/cosign" verify \
+            --certificate-identity "${IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE}"
+          gh attestation verify "oci://${IMAGE}" --repo "${GITHUB_REPOSITORY}"
+          gh attestation verify "oci://${IMAGE}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --predicate-type "https://cyclonedx.org/bom"
+
+      - name: Promote verified release tags
+        run: |
+          for tag in \
+            "${{ steps.meta.outputs.tag_version }}" \
+            "${{ steps.meta.outputs.tag_latest }}"; do
+            docker tag \
+              "${{ steps.meta.outputs.primary_image }}" \
+              "${{ steps.meta.outputs.image_repo }}:${tag}"
+            docker push "${{ steps.meta.outputs.image_repo }}:${tag}"
+            docker buildx imagetools inspect \
+              "${{ steps.meta.outputs.image_repo }}:${tag}" |
+              grep -Fq "Digest: ${{ steps.digest.outputs.digest }}"
+          done
+
+      - name: Publish immutable image reference
+        run: |
+          {
+            echo "### Published image"
+            echo
+            printf '`%s`\n' "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

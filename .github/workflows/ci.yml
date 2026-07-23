@@ -232,22 +232,8 @@ jobs:
 
   migration-validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: repo-integrity
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_DB: app
-          POSTGRES_USER: app
-          POSTGRES_PASSWORD: app
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U app -d app"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -263,6 +249,10 @@ jobs:
             push)
               BASE_REF="${{ github.event.before }}"
               ;;
+            workflow_dispatch)
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
             *)
               echo "should_run=false" >> "$GITHUB_OUTPUT"
               exit 0
@@ -270,11 +260,12 @@ jobs:
           esac
 
           if [ -z "${BASE_REF}" ] || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ]; then
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if git diff --name-only "${BASE_REF}" "${{ github.sha }}" | grep -Eq '^env/migrations/'; then
+          if git diff --name-only "${BASE_REF}" "${{ github.sha }}" |
+            grep -Eq '^(env/migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
@@ -287,11 +278,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Validate migrations on ephemeral Postgres
+      - name: Build production runtime image
+        if: steps.migration_changes.outputs.should_run == 'true'
+        id: runtime_image
+        run: |
+          VERSION="sha-${GITHUB_SHA:0:12}"
+          docker build \
+            --build-arg APP_VERSION="${VERSION}" \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -f build/docker/Dockerfile \
+            -t service:migration-ci \
+            .
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate migrations and production runtime image
         if: steps.migration_changes.outputs.should_run == 'true'
         run: |
           make migration-validate \
-            MIGRATION_DSN='postgres://app:app@localhost:5432/app?sslmode=disable'
+            RUNTIME_IMAGE=service:migration-ci \
+            RUNTIME_EXPECTED_VERSION="${{ steps.runtime_image.outputs.version }}"
 
       - name: Skip migration validation
         if: steps.migration_changes.outputs.should_run != 'true'
@@ -307,11 +313,10 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Dependency Review (informational)
-        continue-on-error: true
+      - name: Dependency Review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
-          warn-only: true
+          fail-on-severity: high
           comment-summary-in-pr: never
 
   go-security:

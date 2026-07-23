@@ -20,7 +20,7 @@
 - [ ] `make test-race` (when concurrency-sensitive code changed)
 - [ ] `make test-integration` (when integration behavior changed)
 - [ ] `make sqlc-check` (when SQL queries or migrations changed)
-- [ ] `make migration-validate` (when migrations changed)
+- [ ] `make migration-validate` (when migrations, Docker runtime, or startup changed)
 
 Commands/output summary:
 

@@ -92,6 +92,22 @@ repository_files() {
 	done < <(git ls-files --cached --others --exclude-standard -z)
 }
 
+repository_object_id() {
+	local file="$1"
+	local link_target
+
+	if [[ ! -L "${file}" ]]; then
+		git hash-object --no-filters -- "${file}"
+		return
+	fi
+	if ! link_target="$({ readlink "./${file}" || exit; printf x; })"; then
+		echo "failed to read benchmark source symlink: ${file}" >&2
+		return 1
+	fi
+	link_target="${link_target%x}"
+	printf '%s' "${link_target}" | git hash-object --stdin
+}
+
 repository_fingerprint() {
 	local file mode object_id
 
@@ -102,7 +118,7 @@ repository_fingerprint() {
 			else
 				mode="$(stat -c '%a' -- "${file}")"
 			fi
-			object_id="$(git hash-object --no-filters -- "${file}")"
+			object_id="$(repository_object_id "${file}")"
 			printf '%s\0%s\0%s\0' "${mode}" "${object_id}" "${file}"
 		done < <(repository_files)
 	} | shasum -a 256 | awk '{ print $1 }'

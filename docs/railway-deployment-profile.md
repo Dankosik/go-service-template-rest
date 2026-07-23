@@ -1,95 +1,118 @@
 # Railway Deployment Profile
 
-This document defines the repository-managed Railway deployment policy baseline for this service template.
+This repository is a service template. It ships a generic Railway source-build
+profile and release-image tooling, but it never connects to a Railway project,
+service, environment, domain, or secret.
 
-## Source Of Truth
+## Independent delivery paths
 
-- Deployment policy source of truth: `railway.toml`
-- Owners: Platform + Service Owner
-- Secret boundary:
-  - `railway.toml` contains only non-secret deployment policy fields.
-  - Secrets remain in Railway environment variables.
+Choose one path for each derived service and keep its evidence separate.
 
-## Canonical Build Path
+### Railway source build
 
-- Production build path is Dockerfile-only.
-- Canonical Dockerfile: `build/docker/Dockerfile`
-- Railway compatibility rule:
-  - do not use BuildKit cache mounts (`RUN --mount=type=cache,...`) in the canonical Dockerfile unless mount IDs are explicitly Railway-formatted and validated for the target service.
-- CI/CD parity requirement:
-  - `.github/workflows/cd.yml` must build images with `docker build -f build/docker/Dockerfile`.
-  - `railway.toml` must keep `builder = "DOCKERFILE"` and `dockerfilePath = "build/docker/Dockerfile"`.
+Connect the derived GitHub repository and branch in Railway. Railway builds
+`build/docker/Dockerfile` from that source and applies `railway.toml`.
 
-## Policy Baseline
+For GitHub-triggered builds, Railway supplies `RAILWAY_GIT_COMMIT_SHA`.
+The Dockerfile embeds its first 12 characters as the default application
+version, so startup logs identify the source commit without a project-specific
+variable. A caller-provided `APP_VERSION` build argument takes precedence.
 
-`railway.toml` tracks the current hard baseline:
+The GHCR image published by `.github/workflows/cd.yml` is a different build.
+Its signature and attestations do not prove what a Railway source build runs.
+Source-build release evidence therefore comes from the selected repository
+commit plus Railway's build and deployment records.
 
+### Published image
+
+The CD workflow publishes a signed GHCR image, CycloneDX SBOM, build provenance,
+and an immutable `image@sha256:...` reference. A derived repository may deploy
+that digest to Railway or another platform after verifying it.
+
+This is opt-in operator configuration. Neither `railway.toml` nor the workflow
+contains a Railway project identifier or changes a Railway service.
+
+See [CI/CD Production-Ready Checklist](ci-cd-production-ready.md) for consumer
+verification commands.
+
+## Repository-owned Railway policy
+
+`railway.toml` is the source of truth only for non-secret settings that Railway
+can read from the derived source repository:
+
+- `builder = "DOCKERFILE"`
+- `dockerfilePath = "build/docker/Dockerfile"`
 - `preDeployCommand = ["/migrate"]`
 - `healthcheckPath = "/health/ready"`
 - `healthcheckTimeout = 180`
 - `restartPolicyType = "ON_FAILURE"`
 - `restartPolicyMaxRetries = 5`
 - `overlapSeconds = 45`
-- `drainingSeconds = 30`
+- `drainingSeconds = 45`
 
-Migration baseline:
+The application default shutdown budget is 30 seconds. Railway therefore gets
+a 15-second margin before SIGKILL. If a derived service changes the application
+shutdown budget, keep the platform draining window greater than that budget and
+re-run the runtime-image shutdown check.
 
-- Railway runs one pre-deploy migrator before promoting a new release.
-- The runtime image must ship `/migrate` and `/env/migrations/`.
-- Normal app startup must not own migrations.
-- Same-deploy schema changes must remain mixed-version compatible while Railway overlap is enabled.
-- Destructive or contract-only schema changes require a staged expand/migrate/verify/contract rollout.
-- A failed pre-deploy migration blocks promotion; fix the migration or configuration and redeploy while the old release remains active. Do not move migration ownership into app startup as a workaround.
+Do not use project-specific BuildKit cache mount IDs in the template
+Dockerfile. A derived service may add them after it owns and verifies its
+Railway service ID.
 
-Release evidence baseline (tracked in comments and rollout evidence):
+## Migration contract
 
-- production replica floor: `>=2`
-- per-replica baseline: `2 vCPU / 2 GiB`
+- Railway runs one `/migrate` pre-deploy command before promotion.
+- The runtime image contains `/migrate` and `/env/migrations/`.
+- Application startup does not run migrations.
+- CI rehearses `up -> down 1 -> up 1`, runs the image's migrator, starts the
+  production image against the migrated database, checks readiness, and sends
+  SIGTERM.
+- Overlapping releases require mixed-version-compatible schema changes.
+- Destructive or forward-only changes require a staged
+  expand/migrate/verify/contract plan and an explicit recovery method.
+- A failed pre-deploy command blocks promotion. Fix the migration or
+  configuration; do not move migration ownership into application startup.
 
-## Go Runtime Resource Contract
+## Operator-owned configuration
 
-- Set `GOMEMLIMIT` in the Railway service variables to leave 5-10% of the
-  container memory limit outside the Go runtime. For the current 2 GiB
-  per-replica baseline, use `GOMEMLIMIT=1843MiB` (90%).
-- Keep `GOMEMLIMIT` as a deployment variable rather than duplicating it in
-  application configuration. Recalculate it whenever the Railway memory limit
-  changes.
-- Leave `GOMAXPROCS` unset by default. Go 1.26 already derives its default from
-  the container CPU limit; override it only with measured evidence.
-- Do not add an automatic memory-limit or CPU-tuning dependency while these
-  native runtime controls satisfy the deployment contract.
+The template deliberately does not choose these values:
 
-`GOMEMLIMIT` is a soft runtime limit rather than a hard process cap, so the
-headroom covers the binary, non-Go memory, and operating-system overhead. See
-the official [Go GC guide](https://go.dev/doc/gc-guide#Memory_limit) and
-[`runtime/debug.SetMemoryLimit`](https://pkg.go.dev/runtime/debug#SetMemoryLimit).
+- Railway project, environment, service, branch, domain, or region;
+- secrets and database connection references;
+- replica count, CPU, memory, autoscaling, or spend;
+- public/private networking and access control for `/metrics`;
+- alerting, continuous health monitoring, or an external uptime check;
+- release approval, rollback authority, and retention policy.
 
-## GitHub Autodeploy Prerequisites
+For source builds, enable Railway `Wait for CI` when promotion must wait for the
+repository's push checks. Treat Railway's deployment healthcheck as a
+startup/promotion gate, not continuous monitoring.
 
-The template can encode the migration hook in `railway.toml`, but GitHub-triggered deploy wiring still has one operator-managed step in Railway:
+Set `GOMEMLIMIT` only after choosing a real container memory limit. Leave
+headroom for the binary, non-Go allocations, and the operating system; 90-95%
+of the container limit is a starting range to validate, not a template default.
+Leave `GOMAXPROCS` unset unless measurements justify an override because current
+Go derives it from the container CPU limit.
 
-- connect the service to the intended GitHub repository and branch;
-- enable Railway `Wait for CI` when deploys should wait for push-triggered GitHub workflows.
+## Rollback
 
-The repository already provides the required push-triggered CI workflow in `.github/workflows/ci.yml`, so `Wait for CI` can be enabled without adding a second deploy pipeline.
+- For a source build, select a previously successful Railway deployment and
+  verify its source commit before rollback.
+- For an image deployment, restore the previously accepted immutable digest,
+  not an unverified mutable tag.
+- Application rollback does not undo a database migration. Schema recovery
+  follows the migration's declared reversible, forward-only, or destructive
+  class.
 
-## Governance And Drift Policy
+After any rollback, verify readiness, application version, core dependency
+health, and the external user path owned by the derived service.
 
-- Policy changes must be PR-reviewed and traceable in git history.
-- `railway.toml` owns non-secret Railway policy.
-- The runtime Dockerfile and release workflow own `/migrate`, migration assets,
-  and the canonical image build path.
-- GitHub Rulesets or organization policy own required status contexts; review
-  them when CI jobs change.
-- UI-only Railway policy edits are non-compliant until reconciled back into `railway.toml` via PR.
+## Change proof
 
-## Change Procedure
+For changes to this profile:
 
-1. Update `railway.toml` in a PR.
-2. Run `make check-full` when the claim includes migration and runtime-image
-   readiness, or run and report the narrower affected gates.
-3. Include rollout evidence in PR/release packet:
-   - `railway.toml` diff,
-   - linked review trail,
-   - active settings snapshot from Railway.
-4. For numeric policy changes (`180/45/30/5`) or baseline floor/caps, reopen spec before merge.
+1. review the `railway.toml` and Dockerfile diff;
+2. run `make migration-validate` or `make check-full`;
+3. confirm the runtime image becomes ready and exits cleanly on SIGTERM;
+4. leave project-specific settings and live deployment evidence to the derived
+   service's operator.
