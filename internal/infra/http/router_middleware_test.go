@@ -24,10 +24,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	t.Run("generates request id when header is absent", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, http.MethodGet, "/api/v1/ping")
 
 		if got := resp.Header().Get(requestIDHeader); got == "" {
 			t.Fatalf("%s header is empty", requestIDHeader)
@@ -124,10 +121,7 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
+	resp := doRequest(h, http.MethodGet, "/api/v1/ping")
 
 	if got := resp.Header().Get(contentTypeOptionsHeader); got != "nosniff" {
 		t.Fatalf("%s = %q, want %q", contentTypeOptionsHeader, got, "nosniff")
@@ -257,10 +251,7 @@ func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {
 			t.Parallel()
 
 			handler := Recover(slog.New(slog.DiscardHandler), tt.handler)
-			req := httptest.NewRequest(http.MethodGet, "/panic", nil)
-			resp := httptest.NewRecorder()
-
-			handler.ServeHTTP(resp, req)
+			resp := doRequest(handler, http.MethodGet, "/panic")
 
 			if resp.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", resp.Code, tt.wantStatus)
@@ -289,10 +280,7 @@ func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
 		panic("after flush")
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
-	resp := httptest.NewRecorder()
-
-	handler.ServeHTTP(resp, req)
+	resp := doRequest(handler, http.MethodGet, "/panic")
 
 	if !sawFlusher {
 		t.Fatal("wrapped ResponseWriter does not implement http.Flusher")
@@ -318,9 +306,7 @@ func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/status", nil)
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	resp := doRequest(handler, http.MethodGet, "/status")
 
 	if resp.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
@@ -354,9 +340,7 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 		flushErr = http.NewResponseController(w).Flush()
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/flush", nil)
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	resp := doRequest(handler, http.MethodGet, "/flush")
 
 	if !directFlusher {
 		t.Fatal("wrapped ResponseWriter does not implement http.Flusher")

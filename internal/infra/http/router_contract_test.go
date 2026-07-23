@@ -30,10 +30,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("not found uses problem envelope", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, http.MethodGet, "/does-not-exist")
 
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
@@ -45,10 +42,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("unknown method on missing path returns not found", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest("BREW", "/does-not-exist", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, "BREW", "/does-not-exist")
 
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
@@ -62,10 +56,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("method not allowed uses problem envelope and allow header", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, http.MethodPost, "/api/v1/ping")
 
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
@@ -78,10 +69,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("unknown method on existing path returns method not allowed", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest("BREW", "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, "BREW", "/api/v1/ping")
 
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
@@ -102,10 +90,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		}))
 
-		req := httptest.NewRequest(http.MethodPost, "/trace-only", nil)
-		resp := httptest.NewRecorder()
-
-		rootRouter.ServeHTTP(resp, req)
+		resp := doRequest(rootRouter, http.MethodPost, "/trace-only")
 
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
@@ -116,10 +101,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("options for known path returns no content with allow", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodOptions, "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, http.MethodOptions, "/api/v1/ping")
 
 		if resp.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
@@ -156,10 +138,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("options for unknown path returns not found", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodOptions, "/unknown", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doRequest(h, http.MethodOptions, "/unknown")
 
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
@@ -358,9 +337,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	pingResp := httptest.NewRecorder()
 	h.ServeHTTP(pingResp, pingReq)
 
-	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	metricsResp := httptest.NewRecorder()
-	h.ServeHTTP(metricsResp, metricsReq)
+	metricsResp := doRequest(h, http.MethodGet, "/metrics")
 
 	if metricsResp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", metricsResp.Code, http.StatusOK)
@@ -381,9 +358,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	}
 
 	// Scrape once more to include the previous /metrics request in histogram output.
-	metricsReqSecond := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	metricsRespSecond := httptest.NewRecorder()
-	h.ServeHTTP(metricsRespSecond, metricsReqSecond)
+	metricsRespSecond := doRequest(h, http.MethodGet, "/metrics")
 	if metricsRespSecond.Code != http.StatusOK {
 		t.Fatalf("second metrics status = %d, want %d", metricsRespSecond.Code, http.StatusOK)
 	}
@@ -497,23 +472,17 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{})
 
-	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-	pingResp := httptest.NewRecorder()
-	h.ServeHTTP(pingResp, pingReq)
+	pingResp := doRequest(h, http.MethodGet, "/api/v1/ping")
 	if pingResp.Code != http.StatusOK {
 		t.Fatalf("ping status = %d, want %d", pingResp.Code, http.StatusOK)
 	}
 
-	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	metricsResp := httptest.NewRecorder()
-	h.ServeHTTP(metricsResp, metricsReq)
+	metricsResp := doRequest(h, http.MethodGet, "/metrics")
 	if metricsResp.Code != http.StatusOK {
 		t.Fatalf("metrics status = %d, want %d", metricsResp.Code, http.StatusOK)
 	}
 
-	customMethodReq := httptest.NewRequest("BREW", "/api/v1/ping", nil)
-	customMethodResp := httptest.NewRecorder()
-	h.ServeHTTP(customMethodResp, customMethodReq)
+	customMethodResp := doRequest(h, "BREW", "/api/v1/ping")
 	if customMethodResp.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("custom method status = %d, want %d", customMethodResp.Code, http.StatusMethodNotAllowed)
 	}

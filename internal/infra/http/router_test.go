@@ -83,21 +83,21 @@ func BenchmarkTemplateExample(b *testing.B) {
 
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
-			if got := benchmarkTemplateExampleRequest(h, tt.target, tt.body); got != tt.wantStatus {
+			if got := doJSONRequest(h, http.MethodPost, tt.target, tt.body).Code; got != tt.wantStatus {
 				b.Fatalf("status = %d, want %d", got, tt.wantStatus)
 			}
 
 			b.Run("serial", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
-					benchmarkTemplateExampleRequest(h, tt.target, tt.body)
+					doJSONRequest(h, http.MethodPost, tt.target, tt.body)
 				}
 			})
 			b.Run("parallel", func(b *testing.B) {
 				b.ReportAllocs()
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
-						benchmarkTemplateExampleRequest(h, tt.target, tt.body)
+						doJSONRequest(h, http.MethodPost, tt.target, tt.body)
 					}
 				})
 			})
@@ -105,12 +105,24 @@ func BenchmarkTemplateExample(b *testing.B) {
 	}
 }
 
-func benchmarkTemplateExampleRequest(h http.Handler, target, body string) int {
-	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+// doRequest executes a bodyless request against h and returns the recorded
+// response. Tests that need custom headers, bodies with unusual framing, or
+// other request mutation keep building the request explicitly at the call site.
+func doRequest(h http.Handler, method, target string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, nil)
+	resp := httptest.NewRecorder()
+	h.ServeHTTP(resp, req)
+	return resp
+}
+
+// doJSONRequest executes a request carrying a JSON body against h and returns
+// the recorded response.
+func doJSONRequest(h http.Handler, method, target, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()
 	h.ServeHTTP(resp, req)
-	return resp.Code
+	return resp
 }
 
 func spanHTTPRoute(span sdktrace.ReadOnlySpan) string {
