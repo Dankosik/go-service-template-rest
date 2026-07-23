@@ -255,7 +255,7 @@ nilaway:
 	go tool nilaway -include-pkgs="$$module_path" -test ./...
 
 modernize-check:
-	go tool golangci-lint run --enable-only=modernize --timeout=3m
+	go fix -diff ./...
 
 test-parallelism-check:
 	go tool golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0

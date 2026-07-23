@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
+	"testing/synctest"
 )
 
 func TestOverlayPathsFlagSetAndString(t *testing.T) {
@@ -100,28 +100,22 @@ func TestRunReturnsParseErrorForInvalidFlags(t *testing.T) {
 func TestReleaseSignalNotificationOnDoneReleasesOnceAfterCancellation(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var stopCalls atomic.Int32
-	stopCalled := make(chan struct{})
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		var stopCalls atomic.Int32
 
-	release := releaseSignalNotificationOnDone(ctx, func() {
-		if stopCalls.Add(1) == 1 {
-			close(stopCalled)
+		release := releaseSignalNotificationOnDone(ctx, func() {
+			stopCalls.Add(1)
+		})
+		defer release()
+
+		cancel()
+		synctest.Wait()
+
+		release()
+		release()
+		if got := stopCalls.Load(); got != 1 {
+			t.Fatalf("stop callback calls = %d, want 1", got)
 		}
 	})
-	defer release()
-
-	cancel()
-
-	select {
-	case <-stopCalled:
-	case <-time.After(time.Second):
-		t.Fatal("stop callback was not called after context cancellation")
-	}
-
-	release()
-	release()
-	if got := stopCalls.Load(); got != 1 {
-		t.Fatalf("stop callback calls = %d, want 1", got)
-	}
 }

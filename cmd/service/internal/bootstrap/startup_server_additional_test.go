@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
@@ -80,23 +81,21 @@ func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulCheck(t *testing.T) {
 	t.Parallel()
 
-	bootstrapCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		bootstrapCtx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 
-	resultCh := startStartupAdmission(bootstrapCtx, func(ctx context.Context) error {
-		cancel()
-		<-ctx.Done()
-		return nil
-	}, time.Second)
+		resultCh := startStartupAdmission(bootstrapCtx, func(ctx context.Context) error {
+			cancel()
+			<-ctx.Done()
+			return nil
+		}, time.Second)
 
-	select {
-	case err := <-resultCh:
+		err := <-resultCh
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("startStartupAdmission() error = %v, want wrapped %v", err, context.Canceled)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("startStartupAdmission() did not return after readiness context cancellation")
-	}
+	})
 }
 
 func TestServeHTTPRuntimeListenError(t *testing.T) {
@@ -148,7 +147,6 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("serveHTTPRuntime() err = %v, want wrapped %v", err, context.Canceled)
 	}
-
 }
 
 func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
@@ -208,7 +206,6 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("serveHTTPRuntime() did not return after shutdown signal")
 	}
-
 }
 
 func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
@@ -239,7 +236,6 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, context.DeadlineExceeded)
 	}
-
 }
 
 func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T) {
@@ -277,7 +273,6 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	if !strings.Contains(err.Error(), "startup readiness check failed") {
 		t.Fatalf("serveHTTPRuntime() err = %v, want startup readiness context", err)
 	}
-
 }
 
 func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
@@ -313,7 +308,6 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	if !strings.Contains(err.Error(), "http server stopped before readiness: boom") {
 		t.Fatalf("serveHTTPRuntime() err = %v, want pre-readiness serve failure", err)
 	}
-
 }
 
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
@@ -357,5 +351,4 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 	if admission.Ready() {
 		t.Fatal("startup admission marked ready while serve failure was already pending")
 	}
-
 }

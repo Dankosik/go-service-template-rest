@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -18,30 +17,10 @@ import (
 const postgresTestImage = "postgres:17@sha256:2cd82735a36356842d5eb1ef80db3ae8f1154172f0f653db48fde079b2a0b7f7"
 
 func TestPostgresReadinessProbe(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	container, err := runPostgresContainer(ctx)
-	if err != nil {
-		if isDockerUnavailable(err) {
-			if requireDockerForIntegration() {
-				t.Fatalf("docker is required for integration tests: %v", err)
-			}
-			t.Skipf("docker is unavailable: %v", err)
-		}
-		t.Fatalf("start postgres container: %v", err)
-	}
-
-	t.Cleanup(func() {
-		if termErr := testcontainers.TerminateContainer(container); termErr != nil {
-			t.Errorf("terminate postgres container: %v", termErr)
-		}
-	})
-
-	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("build postgres dsn: %v", err)
-	}
+	dsn := postgresTestDSN(t, ctx)
 
 	pool, err := postgres.New(ctx, postgres.Options{
 		DSN:                dsn,
@@ -55,7 +34,7 @@ func TestPostgresReadinessProbe(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	checkCtx, checkCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	checkCtx, checkCancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer checkCancel()
 
 	if err := pool.Check(checkCtx); err != nil {
@@ -63,14 +42,14 @@ func TestPostgresReadinessProbe(t *testing.T) {
 	}
 }
 
-func runPostgresContainer(ctx context.Context) (container *tcpostgres.PostgresContainer, err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("testcontainers panic: %v", recovered)
-		}
-	}()
+func postgresTestDSN(t *testing.T, ctx context.Context) string {
+	t.Helper()
 
-	container, err = tcpostgres.Run(
+	if !requireDockerForIntegration() {
+		testcontainers.SkipIfProviderIsNotHealthy(t)
+	}
+
+	container, err := tcpostgres.Run(
 		ctx,
 		postgresTestImage,
 		tcpostgres.WithDatabase("app"),
@@ -78,21 +57,16 @@ func runPostgresContainer(ctx context.Context) (container *tcpostgres.PostgresCo
 		tcpostgres.WithPassword("app"),
 		tcpostgres.BasicWaitStrategies(),
 	)
-	return container, err
-}
-
-func isDockerUnavailable(err error) bool {
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "checked path: $xdg_runtime_dir") {
-		return true
+	testcontainers.CleanupContainer(t, container)
+	if err != nil {
+		t.Fatalf("start postgres container: %v", err)
 	}
 
-	return strings.Contains(msg, "cannot connect to the docker daemon") ||
-		strings.Contains(msg, "is the docker daemon running") ||
-		strings.Contains(msg, "error during connect") ||
-		strings.Contains(msg, "docker socket") ||
-		strings.Contains(msg, "rootless docker not found") ||
-		strings.Contains(msg, "no such host")
+	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatalf("build postgres dsn: %v", err)
+	}
+	return dsn
 }
 
 func requireDockerForIntegration() bool {

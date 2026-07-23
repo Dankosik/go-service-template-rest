@@ -55,9 +55,6 @@ type ServerInterface interface {
 	// Readiness probe
 	// (GET /health/ready)
 	HealthReady(w http.ResponseWriter, r *http.Request)
-	// Prometheus metrics
-	// (GET /metrics)
-	Metrics(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -79,12 +76,6 @@ func (_ Unimplemented) HealthLive(w http.ResponseWriter, r *http.Request) {
 // Readiness probe
 // (GET /health/ready)
 func (_ Unimplemented) HealthReady(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Prometheus metrics
-// (GET /metrics)
-func (_ Unimplemented) Metrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -130,20 +121,6 @@ func (siw *ServerInterfaceWrapper) HealthReady(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HealthReady(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// Metrics operation middleware
-func (siw *ServerInterfaceWrapper) Metrics(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Metrics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -274,9 +251,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health/ready", wrapper.HealthReady)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/metrics", wrapper.Metrics)
 	})
 
 	return r
@@ -497,72 +471,6 @@ func (response HealthReady503TextResponse) VisitHealthReadyResponse(w http.Respo
 	return err
 }
 
-type MetricsRequestObject struct {
-}
-
-type MetricsResponseObject interface {
-	VisitMetricsResponse(w http.ResponseWriter) error
-}
-
-type Metrics200TextResponse string
-
-func (response Metrics200TextResponse) VisitMetricsResponse(w http.ResponseWriter) error {
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(200)
-
-	_, err := w.Write([]byte(response))
-	return err
-}
-
-type Metrics400ApplicationProblemPlusJSONResponse struct {
-	BadRequestApplicationProblemPlusJSONResponse
-}
-
-func (response Metrics400ApplicationProblemPlusJSONResponse) VisitMetricsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type Metrics413ApplicationProblemPlusJSONResponse struct {
-	RequestEntityTooLargeApplicationProblemPlusJSONResponse
-}
-
-func (response Metrics413ApplicationProblemPlusJSONResponse) VisitMetricsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(413)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type Metrics500ApplicationProblemPlusJSONResponse struct {
-	InternalServerErrorApplicationProblemPlusJSONResponse
-}
-
-func (response Metrics500ApplicationProblemPlusJSONResponse) VisitMetricsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Ping endpoint
@@ -574,9 +482,6 @@ type StrictServerInterface interface {
 	// Readiness probe
 	// (GET /health/ready)
 	HealthReady(ctx context.Context, request HealthReadyRequestObject) (HealthReadyResponseObject, error)
-	// Prometheus metrics
-	// (GET /metrics)
-	Metrics(ctx context.Context, request MetricsRequestObject) (MetricsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -680,54 +585,28 @@ func (sh *strictHandler) HealthReady(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Metrics operation middleware
-func (sh *strictHandler) Metrics(w http.ResponseWriter, r *http.Request) {
-	var request MetricsRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.Metrics(ctx, request.(MetricsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "Metrics")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(MetricsResponseObject); ok {
-		if err := validResponse.VisitMetricsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"1Ffbjts2EP0VgulbZcvOXtL1WwsE6AIJGiTpUxEENDmymKVIdjjyWlj434uhZPkSp5ukbYo8LLCW5nrO",
-	"4XD0IHVoYvDgKcnFg0RIMfgE+ccvyryGP1tIxL908AQ+/6tidFYrssGXEcPSQfPjhxQ8v0u6hkbxfz8g",
-	"VHIhn5T7FGX/NpWvei+53W4LaSBptJHDyYXEPqWwSTTKVQEbMCKgsH6tnDVyW8hbT4BeuTeAa8DniAG/",
-	"ZYWth00ETWBEyhWISlnXInBtA2LPPVnq3obwQuEK/g/8lsF0AjYawCShg6/sqkUwwtnGkmS/IRjn2sVb",
-	"PMiIIQKS7TWgg8nVH+d4Q2rpQDRK19bDBEGZ/ACYCsE+U1lI2KgmOpALuVTm/VCXLCR1kR8mQutXMjdA",
-	"yjpOs3cZ6Ba7dipUDZufcbc+kfL6TJ2/v74VCBUgeA3CGvBkq876laDaJhG0brF/d1+DF1RDZtRqELCJ",
-	"IUESwedeWIeKmHy0kzHkuWqGgt9bc9zQjdagTWVunuqby+vrK3V5fTm7rn5aqmcX2jx7di5WIkVtOopz",
-	"OZsdVGM9XTzde1pPsAJkV7Lk4LiCpRrhPJesf/AJqv8OSRCDiIV2KqVj6muimBZleX9/P8VKT8BYCjgN",
-	"uCqx0vx3M5/PniTQnHAyv5peTedfAPiAuEUwcvFHr9fBaAfCiOO70TssP4Cm/vhYXwXu21kNPmUIvGrY",
-	"6uXtW1nIFt1BHyGCT6FFDbmHwSmVbLuHXa7CZFDShKCJThEfkwz8GjD12M6m8+mMvTioilYu5MV0Nr2Q",
-	"hYyK6kx8qaIt1/MycreLB7mCPEL4jOYBcmvkQr7qT8bR9H46m52MHYINldEpezJo9mTFcO6EfTxjst22",
-	"kJd9jnOTaqylPLhG2GV+8bjL+SG6LeTV5yQ8dz3kedc2jcJuwEuANzFYn8+CWiVWj4qRRbKZJNAtWuom",
-	"BrTt2WKcYkg85hcytktnNUOeSVAZvZRhHOOKKqDYkS9SE+5A6Br0XeohLWtQjurS2TV8ktlfs80LNvkX",
-	"+A13n8NuuPueuWWsPKSUhxIckJu6RND8A34jBg0pTYJ3nWBWeUYJt8s38n5vqRY+CAMRvAGvO9HfcCfE",
-	"87XZPcL862zzzajvS/q+2Gffiy/GwwcSOID7KCx742OtMTv2PxLbTl845hgFln15hGUlrsADWt0XKPiq",
-	"g0FnDRBanT4psZfD+6+W16PADRWI0FJs6bu+MjA0QDW0STQjbF/D9kiBcpOIdt1vBsMGc6yBA1NB4IAT",
-	"d2IwZs1lb5E0qgiCV4ZC2KET4WwiVkbBH09VSy0CS8QJ1VItllAFhMEaBknlT5jMYv9dw72d7oPRKQ11",
-	"cAaQRW/avLeJpUq8JL74aF9S0U670OJuHZqSM3L7bsTuNP5vBz3vBJ/yVbobtMX+SBRCebPjg/fOYXEb",
-	"+NgWp9F/3n957aMfOPICsH23/SsAAP//",
+	"1FZbb9tGE/0ri8339kmiFPlS860FAtSAiwZO+lQYwWp3KE683N3OLm0Rhv57MUuKshSlTtA2RR4ESORc",
+	"zpwzFz1J7ZvgHbgUZfkkCWLwLkL+8ZMyt/BHCzHxL+1dApe/qhAsapXQuyKQX1lo/v8xesfvoq6hUfzt",
+	"fwSVLOWrYp+i6N/G4m3vJbfb7UQaiJowcDhZSupTCoyiUbby1IARngS6B2XRyO1EXrsE5JR9B/QA9IbI",
+	"07dE2DrYBNAJjIgZgagU2paAsQ2MvXEJU/fe+xtFa/gv+Ft50wnYaAAThfauwnVLYITFBpNkvyEY59rF",
+	"K59kIB+AEvY9oL3J6A9zvEtqZUE0StfoYEqgTH4ALIVgn5mcSNioJliQpVwp82HAJScydYEfxkTo1jIX",
+	"kBRaTrN3GeQWu3IqUg2bn3BHF5Ny+gTO326vBUEFBE6DQAMuYdWhW4tUYxRe65b6d481OJFqyIqiBgGb",
+	"4CNE4V2uhftQJRafcDqGPIVmAPwBzWFBV1qDNpW5eq2vzi4uztXZxdn8ovphpS6X2lxenooVk0ptPIhz",
+	"Np8/Q4MuLV/vPdElWAOxa8Jk4RDBSo10nkrWP/iM1H/FJIihiYW2KsZD6euUQiyL4vHxcUaVnoLB5Gnm",
+	"aV1QpflztVjMX0XQnHC6OJ+dzxZfQfjAOBIYWf7e9+tgtCNh5PFu9Parj6BTPz7oKs91W9TgYqbAqYat",
+	"frl+LyeyJfusDh/ARd+ShlzD4BQLtt3TLtd+OnTSNEETrEo8Jpn4B6DYczufLWZz9uKgKqAs5XI2ny3l",
+	"RAaV6ix8oQIWD4sicLXlk1xDXiE8o3mBXBtZyrf9ZBxs79fz+dHaSbBJRbAKjxbNXqzgT03Ypzsm220n",
+	"8qzPcWpTjViKZ2eEXRbLl11OL9HtRJ5/ScJT5yHvu7ZpFHUDXwKcCR5dngW1jtw9KgRuks00gm4JUzc1",
+	"oLFXi3kKPvKaL2VoVxY1U55FUJm9mGkc44rKk9iJL2Lj70HoGvR97CktalA21YXFB/issj9nmxs2+Qf0",
+	"9fdfoq6//561Za4cxJiXEjwTN3YxQfM39A3kNcQ49c52glXlHSXsLt+o+yOmWjgvDARwBpzuRH/hjoTn",
+	"s9m9oPxttvlm0veQvi/12Xf51Xw4nwQN5L5Iy974sNdYHfyXmm3XXzTmGBss+/IKy524BgeEugco+NQB",
+	"18BAM02M5/iqB6s01N4aIIZu2nx9xUpFPvU3n1w9FXDW+ZZ2R22WrJHbu7He4/i/7lpZ2RF2zAtxHBfl",
+	"zL42/s8wHN2Bue3kOOaP+3/N+5jPHHl5b++2fwYAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

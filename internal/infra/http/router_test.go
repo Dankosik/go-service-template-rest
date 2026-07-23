@@ -871,100 +871,27 @@ func TestOTelServerNameBoundsAuthorityLabels(t *testing.T) {
 	}
 }
 
-func TestOpenAPIRuntimeContractRootRouterMetricsRouteHasPriorityOverMountedSubrouter(t *testing.T) {
-	t.Parallel()
-
-	apiSubrouter := chi.NewRouter()
-	apiSubrouter.Get("/metrics", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusTeapot)
-		_, _ = w.Write([]byte("mounted"))
-	})
-	apiSubrouter.Get("/api/v1/ping", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("subrouter-ping"))
-	})
-
-	metricsHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("root-metrics"))
-	})
-
-	rootRouter := newRootRouter(apiSubrouter, metricsHandler)
-
-	t.Run("metrics uses root handler", func(t *testing.T) {
-		t.Parallel()
-
-		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-		resp := httptest.NewRecorder()
-
-		rootRouter.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-		if body := resp.Body.String(); body != "root-metrics" {
-			t.Fatalf("body = %q, want %q", body, "root-metrics")
-		}
-	})
-
-	t.Run("non-conflicting routes still served by mounted subrouter", func(t *testing.T) {
-		t.Parallel()
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
-
-		rootRouter.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-		if body := resp.Body.String(); body != "subrouter-ping" {
-			t.Fatalf("body = %q, want %q", body, "subrouter-ping")
-		}
-	})
-}
-
-func TestStrictMetricsHandlerIsNotRuntimeOwned(t *testing.T) {
-	t.Parallel()
-
-	strict := strictHandlers{}
-	resp, err := strict.Metrics(context.Background(), api.MetricsRequestObject{})
-	if err == nil {
-		t.Fatal("strict Metrics() error = nil, want non-nil")
-	}
-	if resp != nil {
-		t.Fatalf("strict Metrics() response = %T, want nil", resp)
-	}
-	if !strings.Contains(err.Error(), "not runtime-owned") {
-		t.Fatalf("strict Metrics() error = %q, want runtime ownership detail", err.Error())
-	}
-}
-
 func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing.T) {
 	t.Parallel()
 
 	openAPIRoutes := openAPIOperationRoutes(t)
 	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	manualRouteReasons := make(map[manualRootRouteKey]string, len(manualRoutes))
+	seen := make(map[manualRootRouteKey]struct{}, len(manualRoutes))
 
 	for _, route := range manualRoutes {
-		manualRouteReasons[route.key] = route.reason
 		if strings.HasPrefix(route.key.path, "/api/") {
 			t.Fatalf("manual route %s %s uses API namespace; add it through OpenAPI instead", route.key.method, route.key.path)
 		}
-
 		if route.reason == "" {
 			t.Fatalf("manual route %s %s has an empty documented root exception reason", route.key.method, route.key.path)
 		}
-	}
-
-	for key, reason := range manualRouteReasons {
-		if reason == "" {
-			t.Fatalf("documented root exception %s %s has an empty reason", key.method, key.path)
+		if _, generated := openAPIRoutes[route.key]; generated {
+			t.Fatalf("manual route %s %s overlaps the generated OpenAPI surface", route.key.method, route.key.path)
 		}
-		if _, generated := openAPIRoutes[key]; generated && reason != metricsRootRouteReason {
-			t.Fatalf("documented generated-route overlap %s %s reason = %q, want %q", key.method, key.path, reason, metricsRootRouteReason)
+		if _, duplicate := seen[route.key]; duplicate {
+			t.Fatalf("manual route %s %s is registered more than once", route.key.method, route.key.path)
 		}
+		seen[route.key] = struct{}{}
 	}
 }
 

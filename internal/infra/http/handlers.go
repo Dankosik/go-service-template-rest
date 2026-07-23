@@ -63,8 +63,3 @@ func (h strictHandlers) HealthReady(ctx context.Context, _ api.HealthReadyReques
 
 	return api.HealthReady200TextResponse("ok"), nil
 }
-
-func (h strictHandlers) Metrics(_ context.Context, _ api.MetricsRequestObject) (api.MetricsResponseObject, error) {
-	// /metrics is served by the documented root-router exception, not the generated strict path.
-	return nil, fmt.Errorf("metrics strict handler is not runtime-owned")
-}

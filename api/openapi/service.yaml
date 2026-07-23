@@ -11,7 +11,7 @@ servers:
 security: []
 tags:
   - name: system
-    description: Operational endpoints for liveness, readiness, and metrics.
+    description: Operational endpoints for liveness and readiness.
   - name: app
     description: Application endpoints.
 paths:
@@ -88,27 +88,6 @@ paths:
               schema:
                 type: string
                 example: not ready
-  /metrics:
-    get:
-      tags: [system]
-      summary: Prometheus metrics
-      operationId: metrics
-      x-security-decision:
-        exposure: operational-private-required
-        rationale: operational telemetry requires private scrape path, internal listener, or future real auth before internet exposure
-      responses:
-        "200":
-          description: metrics output
-          content:
-            text/plain:
-              schema:
-                type: string
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "413":
-          $ref: "#/components/responses/RequestEntityTooLarge"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
 components:
   schemas:
     Problem:

@@ -81,7 +81,7 @@ Stable direction rules:
 
 1. `cmd/service/internal/bootstrap.Run` builds the config snapshot, lifecycle logging, telemetry, dependency probes, app services, router, and HTTP server.
 2. `internal/infra/http.NewRouter` validates or creates `X-Request-ID` through `internal/requestmeta`, extracts only W3C Trace Context, and wraps the root router with security headers, framing/body guards, panic recovery, access logging, route labeling, and OpenTelemetry HTTP instrumentation.
-3. `/metrics` is the documented operational root-router exception, served directly to avoid strict-handler buffering while still being guarded against accidental generated/manual route overlap. API routes are handled through the generated strict OpenAPI server.
+3. `/metrics` is the documented operational root-router exception, served directly outside the client OpenAPI contract; route inventory guards it against accidental generated/manual overlap. API routes are handled through the generated strict OpenAPI server.
 4. `internal/infra/http` maps the request into the generated OpenAPI handler interface and calls the app service (`internal/app/*`).
 5. The app service returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or RFC 9457 problem responses whose stable `code`, type, title, and status come from one closed transport catalog.
 6. Transport observability is emitted at the edge: request logs, OpenTelemetry HTTP metrics exported through Prometheus, and OpenTelemetry spans use bounded route templates from the HTTP layer. HTTP metric server identity comes from configured service identity, never the caller-controlled `Host`; the OTel SDK cardinality cap remains explicit; native startup/config metrics share the same private Prometheus registry.

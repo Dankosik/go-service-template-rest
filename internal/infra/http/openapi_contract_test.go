@@ -53,12 +53,6 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody:   "ok",
 		},
-		{
-			name:       "metrics",
-			method:     http.MethodGet,
-			path:       "/metrics",
-			wantStatus: http.StatusOK,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -283,7 +277,7 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 				}
 
 				switch decision.exposure {
-				case securityExposurePublic, securityExposureOperationalPrivateRequired:
+				case securityExposurePublic:
 					if operationHasRealSecurity(swagger, operation) {
 						t.Fatalf("%s operation declares real security while marked %q", operation.OperationID, decision.exposure)
 					}
@@ -298,11 +292,7 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 					}
 				case securityExposureBlocked:
 				default:
-					t.Fatalf("exposure = %q, want one of %q, %q, %q, %q", decision.exposure, securityExposurePublic, securityExposureOperationalPrivateRequired, securityExposureProtected, securityExposureBlocked)
-				}
-
-				if path == "/metrics" && decision.exposure != securityExposureOperationalPrivateRequired {
-					t.Fatalf("/metrics exposure = %q, want %q", decision.exposure, securityExposureOperationalPrivateRequired)
+					t.Fatalf("exposure = %q, want one of %q, %q, %q", decision.exposure, securityExposurePublic, securityExposureProtected, securityExposureBlocked)
 				}
 			})
 		}
@@ -312,10 +302,9 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 const securityDecisionExtension = "x-security-decision"
 
 const (
-	securityExposurePublic                     = "public"
-	securityExposureOperationalPrivateRequired = "operational-private-required"
-	securityExposureProtected                  = "protected"
-	securityExposureBlocked                    = "blocked"
+	securityExposurePublic    = "public"
+	securityExposureProtected = "protected"
+	securityExposureBlocked   = "blocked"
 )
 
 type openAPISecurityDecision struct {

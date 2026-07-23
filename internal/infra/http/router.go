@@ -59,7 +59,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 
 	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware))
 
-	// Serve /metrics directly on the root router to avoid full payload buffering in strict handler path.
+	// Prometheus exposition is an operational protocol outside the client OpenAPI contract.
 	metricsHandler := captureRouteLabelMiddleware(metrics.Handler())
 	rootRouter := newRootRouter(apiSubrouter, metricsHandler)
 
@@ -120,8 +120,6 @@ type manualRootRoute struct {
 	reason  string
 }
 
-const metricsRootRouteReason = "operational metrics is streamed from the root router while remaining visible in the OpenAPI contract"
-
 func newRootRouter(apiSubrouter http.Handler, metricsHandler http.Handler) chi.Router {
 	root := chi.NewRouter()
 	for _, route := range manualRootRoutes(metricsHandler) {
@@ -140,7 +138,7 @@ func manualRootRoutes(metricsHandler http.Handler) []manualRootRoute {
 				path:   "/metrics",
 			},
 			handler: metricsHandler,
-			reason:  metricsRootRouteReason,
+			reason:  "Prometheus exposition is operational telemetry, not a client API operation",
 		},
 	}
 }

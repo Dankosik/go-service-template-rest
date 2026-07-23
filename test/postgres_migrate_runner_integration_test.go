@@ -10,34 +10,13 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go"
 )
 
 func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	container, err := runPostgresContainer(ctx)
-	if err != nil {
-		if isDockerUnavailable(err) {
-			if requireDockerForIntegration() {
-				t.Fatalf("docker is required for integration tests: %v", err)
-			}
-			t.Skipf("docker is unavailable: %v", err)
-		}
-		t.Fatalf("start postgres container: %v", err)
-	}
-
-	t.Cleanup(func() {
-		if termErr := testcontainers.TerminateContainer(container); termErr != nil {
-			t.Errorf("terminate postgres container: %v", termErr)
-		}
-	})
-
-	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("build postgres dsn: %v", err)
-	}
+	dsn := postgresTestDSN(t, ctx)
 
 	firstRun, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        dsn,
