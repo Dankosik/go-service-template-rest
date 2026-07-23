@@ -3,6 +3,7 @@ module github.com/example/go-service-template-rest
 go 1.26.5
 
 require (
+	github.com/exaring/otelpgx v0.11.1
 	github.com/felixge/httpsnoop v1.1.0
 	github.com/getkin/kin-openapi v0.143.0
 	github.com/go-chi/chi/v5 v5.3.1

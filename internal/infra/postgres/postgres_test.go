@@ -517,3 +517,14 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 		t.Fatalf("Check() error = %v, want ErrHealthcheck", err)
 	}
 }
+
+func TestPostgresOperationNameSkipsSQLCComment(t *testing.T) {
+	t.Parallel()
+
+	statement := `-- name: TemplateExampleTransactionID :one
+SELECT pg_current_xact_id()::text AS transaction_id
+`
+	if got := postgresOperationName(statement); got != "SELECT" {
+		t.Fatalf("postgresOperationName() = %q, want SELECT", got)
+	}
+}
