@@ -1164,9 +1164,6 @@ func TestLoadDetailedFailedStageReporting(t *testing.T) {
 		if report.FailedStage != StageParse {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageParse)
 		}
-		if report.FailedStageDuration <= 0 {
-			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
-		}
 	})
 
 	//nolint:paralleltest // Subtests reset process-wide configuration environment.
@@ -1190,9 +1187,6 @@ unknown:
 		if report.FailedStage != StageValidate {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
 		}
-		if report.FailedStageDuration <= 0 {
-			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
-		}
 	})
 
 	t.Run("load_file_stage", func(t *testing.T) {
@@ -1209,9 +1203,6 @@ unknown:
 		}
 		if report.FailedStage != StageLoadFile {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageLoadFile)
-		}
-		if report.FailedStageDuration <= 0 {
-			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
 		}
 	})
 
@@ -1234,9 +1225,6 @@ unknown:
 		}
 		if report.FailedStage != StageValidate {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
-		}
-		if report.FailedStageDuration <= 0 {
-			t.Fatalf("FailedStageDuration = %s, want > 0", report.FailedStageDuration)
 		}
 	})
 }
@@ -1313,7 +1301,7 @@ func resetConfigEnv(t *testing.T) {
 	t.Helper()
 
 	previousValues := make(map[string]string)
-	for _, key := range configEnvResetKeys() {
+	for _, key := range configEnvResetKeys(t) {
 		if value, ok := os.LookupEnv(key); ok {
 			previousValues[key] = value
 			t.Setenv(key, value)
@@ -1323,7 +1311,7 @@ func resetConfigEnv(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() {
-		for _, key := range configEnvResetKeys() {
+		for _, key := range configEnvResetKeys(t) {
 			if _, ok := previousValues[key]; !ok {
 				_ = os.Unsetenv(key)
 			}
@@ -1332,11 +1320,13 @@ func resetConfigEnv(t *testing.T) {
 	t.Setenv("APP__APP__ENV", "local")
 }
 
-func configEnvResetKeys() []string {
-	knownKeys := knownConfigKeys()
+func configEnvResetKeys(t *testing.T) []string {
+	t.Helper()
+
+	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
 	knownSections := knownConfigSections()
 	keySet := make(map[string]struct{}, len(knownKeys)+len(knownSections)+1)
-	for key := range knownKeys {
+	for _, key := range knownKeys {
 		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
 	}
 	for key := range knownSections {

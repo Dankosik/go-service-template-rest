@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"strings"
 	"time"
 )
 
@@ -23,15 +22,10 @@ type LoadOptions struct {
 }
 
 type LoadReport struct {
-	LoadDuration         time.Duration
-	LoadDefaultsDuration time.Duration
-	LoadFileDuration     time.Duration
-	LoadEnvDuration      time.Duration
-	ParseDuration        time.Duration
-	ValidateDuration     time.Duration
-	UnknownKeyWarnings   []string
-	FailedStage          string
-	FailedStageDuration  time.Duration
+	LoadDuration       time.Duration
+	ValidateDuration   time.Duration
+	UnknownKeyWarnings []string
+	FailedStage        string
 }
 
 func Load() (Config, error) {
@@ -54,32 +48,27 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	loadStarted := time.Now()
 	k, metadata, err := loadKoanf(loadCtx, opts)
 	report := LoadReport{
-		LoadDuration:         time.Since(loadStarted),
-		LoadDefaultsDuration: metadata.loadDefaultsDuration,
-		LoadFileDuration:     metadata.loadFileDuration,
-		LoadEnvDuration:      metadata.loadEnvDuration,
-		FailedStage:          metadata.failedStage,
-		FailedStageDuration:  metadata.failedStageDuration,
+		LoadDuration: time.Since(loadStarted),
+		FailedStage:  metadata.failedStage,
 	}
 	if err != nil {
-		report.markFailedStage(report.FailedStage, report.FailedStageDuration)
+		if report.FailedStage == "" {
+			report.FailedStage = StageLoadDefaults
+		}
 		return Config{}, report, err
 	}
 	if err := checkContext(loadCtx); err != nil {
-		report.markFailedStage(StageLoadEnv, report.LoadEnvDuration)
+		report.FailedStage = StageLoadEnv
 		return Config{}, report, err
 	}
 
-	parseStarted := time.Now()
-	cfg, err := buildSnapshot(k)
-	report.ParseDuration = time.Since(parseStarted)
+	cfg, unknownKeys, err := buildSnapshot(k)
 	if err != nil {
 		report.FailedStage = StageParse
-		report.FailedStageDuration = report.ParseDuration
 		return Config{}, report, err
 	}
 	if err := checkContext(loadCtx); err != nil {
-		report.markFailedStage(StageParse, report.ParseDuration)
+		report.FailedStage = StageParse
 		return Config{}, report, err
 	}
 
@@ -88,56 +77,20 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	defer validateCancel()
 	if err := checkValidateContext(validateCtx); err != nil {
 		report.ValidateDuration = time.Since(validateStarted)
-		report.markFailedStage(StageValidate, report.ValidateDuration)
+		report.FailedStage = StageValidate
 		return Config{}, report, err
 	}
 
-	validationResult, err := validateConfig(validateCtx, k, &cfg, validationOptions{
-		Strict:                opts.Strict,
-		AdditionalUnknownKeys: metadata.sectionScalarOverrideKeys,
+	validationResult, err := validateConfig(validateCtx, &cfg, validationOptions{
+		Strict:      opts.Strict,
+		UnknownKeys: append(unknownKeys, metadata.sectionScalarOverrideKeys...),
 	})
 	report.ValidateDuration = time.Since(validateStarted)
 	report.UnknownKeyWarnings = validationResult.UnknownKeyWarnings
 	if err != nil {
 		report.FailedStage = StageValidate
-		report.FailedStageDuration = report.ValidateDuration
 		return Config{}, report, err
 	}
 
 	return cfg, report, nil
-}
-
-func (report *LoadReport) markFailedStage(stage string, duration time.Duration) {
-	stage = strings.TrimSpace(stage)
-	if stage == "" {
-		stage = StageLoadDefaults
-	}
-	if duration <= 0 {
-		duration = report.durationForStage(stage)
-	}
-	if duration <= 0 {
-		duration = report.LoadDuration
-	}
-	if duration <= 0 {
-		duration = time.Millisecond
-	}
-	report.FailedStage = stage
-	report.FailedStageDuration = duration
-}
-
-func (report *LoadReport) durationForStage(stage string) time.Duration {
-	switch stage {
-	case StageLoadDefaults:
-		return report.LoadDefaultsDuration
-	case StageLoadFile:
-		return report.LoadFileDuration
-	case StageLoadEnv:
-		return report.LoadEnvDuration
-	case StageParse:
-		return report.ParseDuration
-	case StageValidate:
-		return report.ValidateDuration
-	default:
-		return 0
-	}
 }

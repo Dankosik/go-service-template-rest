@@ -8,24 +8,23 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
-	"github.com/knadh/koanf/v2"
 )
 
 type validationOptions struct {
-	Strict                bool
-	AdditionalUnknownKeys []string
+	Strict      bool
+	UnknownKeys []string
 }
 
 type validationResult struct {
 	UnknownKeyWarnings []string
 }
 
-func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts validationOptions) (validationResult, error) {
+func validateConfig(ctx context.Context, cfg *Config, opts validationOptions) (validationResult, error) {
 	if err := checkValidateContext(ctx); err != nil {
 		return validationResult{}, err
 	}
 
-	result, err := validateUnknownConfigKeys(k, opts)
+	result, err := validateUnknownConfigKeys(opts)
 	if err != nil {
 		return validationResult{}, err
 	}
@@ -60,8 +59,8 @@ func validateConfig(ctx context.Context, k *koanf.Koanf, cfg *Config, opts valid
 	return result, nil
 }
 
-func validateUnknownConfigKeys(k *koanf.Koanf, opts validationOptions) (validationResult, error) {
-	unknownKeys := findUnknownKeys(k, opts.AdditionalUnknownKeys)
+func validateUnknownConfigKeys(opts validationOptions) (validationResult, error) {
+	unknownKeys := findUnknownKeys(opts.UnknownKeys)
 	if len(unknownKeys) == 0 {
 		return validationResult{}, nil
 	}
@@ -138,13 +137,12 @@ func validateObservabilityConfig(cfg ObservabilityConfig) error {
 	return validateOTLPExporter(cfg.OTel.Exporter)
 }
 
-func findUnknownKeys(k *koanf.Koanf, additionalUnknownKeys []string) []string {
-	knownKeys := knownConfigKeys()
-	knownSections := knownConfigSections()
+func findUnknownKeys(keys []string) []string {
 	unknownSet := make(map[string]struct{})
 	unknown := make([]string, 0)
-	for _, key := range additionalUnknownKeys {
-		if strings.TrimSpace(key) == "" {
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
 			continue
 		}
 		if _, ok := unknownSet[key]; ok {
@@ -153,22 +151,6 @@ func findUnknownKeys(k *koanf.Koanf, additionalUnknownKeys []string) []string {
 		unknownSet[key] = struct{}{}
 		unknown = append(unknown, key)
 	}
-	for _, key := range k.Keys() {
-		if _, ok := knownKeys[key]; ok {
-			continue
-		}
-
-		if _, ok := knownSections[key]; ok && configSectionValueIsMap(k.Get(key)) {
-			continue
-		}
-
-		if _, ok := unknownSet[key]; ok {
-			continue
-		}
-		unknownSet[key] = struct{}{}
-		unknown = append(unknown, key)
-	}
-
 	sort.Strings(unknown)
 	return unknown
 }

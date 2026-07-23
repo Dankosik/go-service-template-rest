@@ -46,33 +46,22 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		otelhttp.WithMeterProvider(metrics.MeterProvider()),
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
-		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-			if route := routeLabelForRequest(r); route != "" {
-				return route
-			}
-			if r != nil {
-				return normalizeHTTPMethodLabel(r.Method) + " <unmatched>"
-			}
-			return operation
-		}),
 	)
 
-	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, captureRouteLabelMiddleware))
+	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log))
 
 	// Prometheus exposition is an operational protocol outside the client OpenAPI contract.
-	metricsHandler := captureRouteLabelMiddleware(metrics.Handler())
-	rootRouter := newRootRouter(apiSubrouter, metricsHandler)
+	rootRouter := newRootRouter(
+		apiSubrouter,
+		metrics.Handler(),
+		otelMiddleware,
+		SecurityHeaders,
+		func(next http.Handler) http.Handler { return AccessLog(log, next) },
+		func(next http.Handler) http.Handler { return RequestBodyLimit(cfg.MaxBodyBytes, next) },
+		func(next http.Handler) http.Handler { return Recover(log, next) },
+	)
 
-	var handler http.Handler = rootRouter
-	handler = Recover(log, handler)
-	handler = RequestFramingGuard(handler)
-	handler = RequestBodyLimit(cfg.MaxBodyBytes, handler)
-	handler = AccessLog(log, handler)
-	handler = SecurityHeaders(handler)
-	handler = otelMiddleware(handler)
-	handler = RequestCorrelation(handler)
-
-	return handler, nil
+	return RequestCorrelation(rootRouter), nil
 }
 
 func otelServerName(configured string) string {
@@ -120,8 +109,13 @@ type manualRootRoute struct {
 	reason  string
 }
 
-func newRootRouter(apiSubrouter http.Handler, metricsHandler http.Handler) chi.Router {
+func newRootRouter(
+	apiSubrouter http.Handler,
+	metricsHandler http.Handler,
+	middlewares ...func(http.Handler) http.Handler,
+) chi.Router {
 	root := chi.NewRouter()
+	root.Use(middlewares...)
 	for _, route := range manualRootRoutes(metricsHandler) {
 		root.Method(route.key.method, route.key.path, route.handler)
 	}

@@ -502,37 +502,6 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 	}
 }
 
-func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
-	t.Parallel()
-
-	log := slog.New(slog.DiscardHandler)
-	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
-	}, telemetry.New(), RouterConfig{})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-	req.Header.Set("Transfer-Encoding", "chunked")
-	req.Header.Set("Content-Length", "1")
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
-	}
-	assertProblemContentType(t, resp.Header())
-	assertProblemCode(t, resp, problemCodeBadRequest)
-	if !strings.Contains(resp.Body.String(), "invalid request framing") {
-		t.Fatalf("body = %q, want %q", resp.Body.String(), "invalid request framing")
-	}
-	if got := resp.Header().Get(contentTypeOptionsHeader); got != "nosniff" {
-		t.Fatalf("%s = %q, want %q", contentTypeOptionsHeader, got, "nosniff")
-	}
-	if got := resp.Header().Get(requestIDHeader); got == "" {
-		t.Fatalf("%s header is empty", requestIDHeader)
-	}
-}
-
 func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	t.Parallel()
 
@@ -1016,9 +985,9 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	}
 
 	wantSpanNames := map[string]bool{
-		"GET /api/v1/ping":  false,
-		"GET /metrics":      false,
-		"OTHER <unmatched>": false,
+		"GET /api/v1/ping": false,
+		"GET /metrics":     false,
+		"HTTP":             false,
 	}
 	wantHTTPRoutes := map[string]string{
 		"GET /api/v1/ping": "/api/v1/ping",

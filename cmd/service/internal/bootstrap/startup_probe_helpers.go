@@ -2,10 +2,9 @@ package bootstrap
 
 import (
 	"context"
-	crand "crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
+	"math/rand/v2"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -76,11 +75,7 @@ func fullJitterDelay(attempt int) time.Duration {
 		return 0
 	}
 
-	jitter, err := crand.Int(crand.Reader, big.NewInt(int64(backoff)+1))
-	if err != nil {
-		return backoff
-	}
-	return time.Duration(jitter.Int64())
+	return rand.N(backoff + 1)
 }
 
 func withStageBudget(parent context.Context, stageBudget time.Duration) (context.Context, context.CancelFunc) {

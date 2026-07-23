@@ -151,21 +151,19 @@ func TestNewInvalidDSNIsRedacted(t *testing.T) {
 func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
+	for _, tc := range []struct {
 		name string
 		dsn  string
 	}{
 		{
-			name: "url",
+			name: "postgres scheme",
 			dsn:  "postgres://user:pass@localhost:5432/app?sslmode=disable",
 		},
 		{
-			name: "keyword value",
-			dsn:  "user='user' password='pass' host='localhost' port='5432' dbname='app' sslmode='disable'",
+			name: "postgresql scheme",
+			dsn:  "postgresql://user:pass@localhost:5432/app?sslmode=disable",
 		},
-	}
-
-	for _, tc := range testCases {
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -193,6 +191,15 @@ func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParsePoolConfigRejectsKeywordValueDSN(t *testing.T) {
+	t.Parallel()
+
+	rawDSN := "user=user password=top-secret host=localhost port=5432 dbname=app sslmode=disable"
+	_, err := parsePoolConfig(rawDSN)
+	requirePostgresConfigError(t, err, "postgres dsn must use postgres:// or postgresql:// URL format")
+	requireErrorDoesNotContain(t, err, rawDSN, "top-secret")
 }
 
 func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
@@ -235,13 +242,13 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 	}{
 		{
 			name:             "service",
-			dsn:              "service=prodservice user=user password=pass host=localhost port=5432 dbname=app sslmode=disable",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=disable&service=prodservice",
 			want:             "postgres dsn uses unsupported service/passfile source",
 			forbiddenDetails: []string{"prodservice"},
 		},
 		{
 			name:             "servicefile",
-			dsn:              "servicefile=/tmp/pg_service.conf user=user password=pass host=localhost port=5432 dbname=app sslmode=disable",
+			dsn:              "postgres://user:pass@localhost:5432/app?sslmode=disable&servicefile=/tmp/pg_service.conf",
 			want:             "postgres dsn uses unsupported service/passfile source",
 			forbiddenDetails: []string{"/tmp/pg_service.conf"},
 		},
@@ -283,7 +290,7 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 		},
 		{
 			name: "missing host",
-			dsn:  "user=user password=pass port=5432 dbname=app sslmode=disable",
+			dsn:  "postgres://user:pass@:5432/app?sslmode=disable",
 			want: "postgres dsn requires explicit host, port, user, password, database, and sslmode",
 		},
 		{
@@ -364,26 +371,6 @@ func TestNormalizePostgresDSNSuppressesFileDefaultKeys(t *testing.T) {
 			t.Fatalf("normalized URL query contains disallowed-only key %q in %q", key, normalizedURL)
 		}
 	}
-
-	normalizedKeywordValue := normalizePostgresKeywordValueDSN("user=user password=pass host=localhost port=5432 dbname=app sslmode=disable")
-	settings, err := parsePostgresKeywordValueDSNSettings(normalizedKeywordValue)
-	if err != nil {
-		t.Fatalf("parsePostgresKeywordValueDSNSettings() error = %v", err)
-	}
-	for _, key := range postgresFileDefaultDSNKeys {
-		value, present := settings[key.name]
-		if !present {
-			t.Fatalf("normalized keyword/value DSN missing %q in %q", key.name, normalizedKeywordValue)
-		}
-		if value != "" {
-			t.Fatalf("normalized keyword/value DSN %q = %q, want empty", key.name, value)
-		}
-	}
-	for _, key := range []string{"service", "servicefile"} {
-		if _, present := settings[key]; present {
-			t.Fatalf("normalized keyword/value DSN contains disallowed-only key %q in %q", key, normalizedKeywordValue)
-		}
-	}
 }
 
 func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
@@ -397,11 +384,6 @@ func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
 		{
 			name: "multi-host url",
 			dsn:  "postgres://user:pass@first:5432,second:5432/app?sslmode=disable",
-			want: "postgres dsn fallback targets are not supported",
-		},
-		{
-			name: "multi-host keyword value",
-			dsn:  "user=user password=pass host=first,second port=5432 dbname=app sslmode=disable",
 			want: "postgres dsn fallback targets are not supported",
 		},
 		{
@@ -470,7 +452,7 @@ func TestProbeAddress(t *testing.T) {
 	t.Run("invalid probe target shape", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := ProbeAddress("user=user password=pass host=/var/run/postgresql port=5432 dbname=app sslmode=disable")
+		_, err := ProbeAddress("postgres://user:pass@localhost:5432/app?host=/var/run/postgresql&port=5432&sslmode=disable")
 		if err == nil {
 			t.Fatal("ProbeAddress() error = nil, want non-nil")
 		}

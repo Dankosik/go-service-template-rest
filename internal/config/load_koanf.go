@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -31,12 +30,8 @@ const (
 )
 
 type loadMetadata struct {
-	loadDefaultsDuration      time.Duration
-	loadFileDuration          time.Duration
-	loadEnvDuration           time.Duration
-	failedStage               string
-	failedStageDuration       time.Duration
 	sectionScalarOverrideKeys []string
+	failedStage               string
 }
 
 func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadata, error) {
@@ -47,26 +42,20 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	k := koanf.New(keyDelimiter)
 	metadata := loadMetadata{}
 
-	defaultsStarted := time.Now()
 	if err := k.Load(confmap.Provider(defaultValues(), keyDelimiter), nil); err != nil {
 		metadata.failedStage = StageLoadDefaults
-		metadata.failedStageDuration = time.Since(defaultsStarted)
 		return nil, metadata, fmt.Errorf("%w: load defaults: %w", ErrLoad, err)
 	}
-	metadata.loadDefaultsDuration = time.Since(defaultsStarted)
 	if err := checkContext(ctx); err != nil {
 		metadata.failedStage = StageLoadDefaults
-		metadata.failedStageDuration = metadata.loadDefaultsDuration
 		return nil, metadata, err
 	}
 
 	filePolicy := configFilePolicyForLoad(hasExplicitConfigFiles(opts))
-	filesStarted := time.Now()
 	if strings.TrimSpace(opts.ConfigPath) != "" {
 		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath, filePolicy)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
-			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
 		}
 		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
@@ -78,19 +67,15 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath, filePolicy)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
-			metadata.failedStageDuration = time.Since(filesStarted)
 			return nil, metadata, err
 		}
 		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
-	metadata.loadFileDuration = time.Since(filesStarted)
 	if err := checkContext(ctx); err != nil {
 		metadata.failedStage = StageLoadFile
-		metadata.failedStageDuration = metadata.loadFileDuration
 		return nil, metadata, err
 	}
 
-	envStarted := time.Now()
 	namespaceValues := collectNamespaceValues(os.Environ())
 	if len(namespaceValues) > 0 {
 		sectionScalarOverrideKeys := removeSectionScalarOverridesInPlace(namespaceValues)
@@ -99,14 +84,11 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	if len(namespaceValues) > 0 {
 		if err := k.Load(confmap.Provider(namespaceValues, keyDelimiter), nil); err != nil {
 			metadata.failedStage = StageLoadEnv
-			metadata.failedStageDuration = time.Since(envStarted)
 			return nil, metadata, fmt.Errorf("%w: load namespace env: %w", ErrLoad, err)
 		}
 	}
-	metadata.loadEnvDuration = time.Since(envStarted)
 	if err := checkContext(ctx); err != nil {
 		metadata.failedStage = StageLoadEnv
-		metadata.failedStageDuration = metadata.loadEnvDuration
 		return nil, metadata, err
 	}
 

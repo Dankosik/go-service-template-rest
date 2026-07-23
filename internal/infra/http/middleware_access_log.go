@@ -9,16 +9,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/felixge/httpsnoop"
 	"github.com/go-chi/chi/v5"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
-
-type routeLabelContextKey struct{}
-
-type routeLabelHolder struct {
-	value string
-}
 
 func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 	if log == nil {
@@ -26,17 +19,15 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		routeHolder := &routeLabelHolder{}
-		ctxWithRouteHolder := context.WithValue(r.Context(), routeLabelContextKey{}, routeHolder)
-
 		captured := httpsnoop.CaptureMetricsFn(w, func(capturedWriter http.ResponseWriter) {
-			next.ServeHTTP(capturedWriter, r.WithContext(ctxWithRouteHolder))
+			next.ServeHTTP(capturedWriter, r)
 		})
 
-		route := routeHolder.value
-		if route == "" {
-			route = routeLabelForRequest(r)
+		routePathTemplate := routePathTemplateForRequest(r)
+		if routePathTemplate != "" {
+			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(routePathTemplate))
 		}
+		route := joinMethodAndPattern(requestMethodLabel(r), routePathTemplate)
 		if route == "" {
 			route = "<unmatched>"
 		}
@@ -54,39 +45,6 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 			"span_id", spanID,
 		)
 	})
-}
-
-func captureRouteLabelMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer captureRouteMetadata(r)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func captureRouteMetadata(r *http.Request) {
-	if r == nil {
-		return
-	}
-
-	routePathTemplate := routePathTemplateForRequest(r)
-	routeLabel := joinMethodAndPattern(requestMethodLabel(r), routePathTemplate)
-
-	if routePathTemplate != "" {
-		routeAttr := semconv.HTTPRoute(routePathTemplate)
-		if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() && routeLabel != "" {
-			span.SetName(routeLabel)
-			span.SetAttributes(routeAttr)
-		}
-		if labeler, ok := otelhttp.LabelerFromContext(r.Context()); ok {
-			labeler.Add(routeAttr)
-		}
-	}
-
-	holder, _ := r.Context().Value(routeLabelContextKey{}).(*routeLabelHolder)
-	if holder == nil || holder.value != "" {
-		return
-	}
-	holder.value = routeLabel
 }
 
 func routeLabelForRequest(r *http.Request) string {

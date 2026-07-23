@@ -62,7 +62,6 @@ func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
 	t.Cleanup(func() {
 		cleanup(context.Background())
 	})
-
 }
 
 func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
@@ -89,7 +88,6 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 	if !strings.Contains(err.Error(), "telemetry egress target denied") {
 		t.Fatalf("bootstrapTelemetryStage() error = %v, want telemetry egress context", err)
 	}
-
 }
 
 func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) {
@@ -119,7 +117,6 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) 
 			t.Fatalf("bootstrapTelemetryStage() error = %v, leaked %q", err, leaked)
 		}
 	}
-
 }
 
 func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *testing.T) {
@@ -389,7 +386,6 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	if !errors.Is(err, errDependencyInit) {
 		t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 	}
-
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {

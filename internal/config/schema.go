@@ -6,25 +6,18 @@ import (
 	"strings"
 )
 
-func knownConfigKeys() map[string]struct{} {
-	leafKeys, _ := configSchemaKeySets(reflect.TypeFor[Config](), "")
-	return leafKeys
-}
-
 func knownConfigSections() map[string]struct{} {
-	_, sectionKeys := configSchemaKeySets(reflect.TypeFor[Config](), "")
-	return sectionKeys
+	return configSchemaSections(reflect.TypeFor[Config](), "")
 }
 
-func configSchemaKeySets(typ reflect.Type, prefix string) (map[string]struct{}, map[string]struct{}) {
+func configSchemaSections(typ reflect.Type, prefix string) map[string]struct{} {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
-	leafKeys := make(map[string]struct{})
 	sectionKeys := make(map[string]struct{})
 	if typ.Kind() != reflect.Struct {
-		return leafKeys, sectionKeys
+		return sectionKeys
 	}
 
 	for field := range typ.Fields() {
@@ -40,15 +33,11 @@ func configSchemaKeySets(typ reflect.Type, prefix string) (map[string]struct{}, 
 
 		if configSchemaHasTaggedFields(field.Type) {
 			sectionKeys[key] = struct{}{}
-			nestedLeafKeys, nestedSectionKeys := configSchemaKeySets(field.Type, key)
-			maps.Copy(leafKeys, nestedLeafKeys)
-			maps.Copy(sectionKeys, nestedSectionKeys)
-			continue
+			maps.Copy(sectionKeys, configSchemaSections(field.Type, key))
 		}
-		leafKeys[key] = struct{}{}
 	}
 
-	return leafKeys, sectionKeys
+	return sectionKeys
 }
 
 func configSchemaHasTaggedFields(typ reflect.Type) bool {

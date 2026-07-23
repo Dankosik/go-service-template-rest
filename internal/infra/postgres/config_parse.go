@@ -93,26 +93,17 @@ func preflightPostgresDSN(rawDSN string) (string, error) {
 		}
 	}
 
-	settings, isURL, err := parsePostgresDSNSettings(dsn)
+	if !strings.HasPrefix(dsn, "postgres://") && !strings.HasPrefix(dsn, "postgresql://") {
+		return "", fmt.Errorf("%w: postgres dsn must use postgres:// or postgresql:// URL format", ErrConfig)
+	}
+	settings, err := parsePostgresURLDSNSettings(dsn)
 	if err != nil {
 		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
 	}
 	if err := validatePostgresDSNSettings(settings); err != nil {
 		return "", err
 	}
-	if isURL {
-		return normalizePostgresURLDSN(dsn)
-	}
-	return normalizePostgresKeywordValueDSN(dsn), nil
-}
-
-func parsePostgresDSNSettings(dsn string) (map[string]string, bool, error) {
-	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
-		settings, err := parsePostgresURLDSNSettings(dsn)
-		return settings, true, err
-	}
-	settings, err := parsePostgresKeywordValueDSNSettings(dsn)
-	return settings, false, err
+	return normalizePostgresURLDSN(dsn)
 }
 
 func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
@@ -120,7 +111,7 @@ func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
 
 	parsedURL, err := url.Parse(dsn)
 	if err != nil {
-		if urlErr := new(url.Error); errors.As(err, &urlErr) {
+		if urlErr, ok := errors.AsType[*url.Error](err); ok {
 			return nil, fmt.Errorf("parse postgres url settings: %w", urlErr.Err)
 		}
 		return nil, fmt.Errorf("parse postgres url settings: %w", err)
@@ -177,86 +168,6 @@ func postgresURLHostDoesNotNeedSplitHostPort(host string) bool {
 	return net.ParseIP(strings.Trim(host, "[]")) != nil || !strings.Contains(host, ":")
 }
 
-func parsePostgresKeywordValueDSNSettings(dsn string) (map[string]string, error) {
-	settings := make(map[string]string)
-	remaining := dsn
-
-	for len(remaining) > 0 {
-		eqIdx := strings.IndexRune(remaining, '=')
-		if eqIdx < 0 {
-			return nil, errors.New("invalid keyword/value")
-		}
-
-		key := strings.Trim(remaining[:eqIdx], " \t\n\r\v\f")
-		remaining = strings.TrimLeft(remaining[eqIdx+1:], " \t\n\r\v\f")
-		value, rest, err := nextPostgresKeywordValue(remaining)
-		if err != nil {
-			return nil, err
-		}
-		if key == "" {
-			return nil, errors.New("invalid keyword/value")
-		}
-		if key == "dbname" {
-			key = "database"
-		}
-		settings[key] = value
-		remaining = rest
-	}
-	return settings, nil
-}
-
-func nextPostgresKeywordValue(s string) (string, string, error) {
-	if s == "" {
-		return "", "", nil
-	}
-	if s[0] == '\'' {
-		return nextQuotedPostgresKeywordValue(s[1:])
-	}
-	end := 0
-	for end < len(s) {
-		if asciiSpace[s[end]] == 1 {
-			break
-		}
-		if s[end] == '\\' {
-			end++
-			if end == len(s) {
-				return "", "", errors.New("invalid backslash")
-			}
-		}
-		end++
-	}
-	value := unescapePostgresKeywordValue(s[:end])
-	if end == len(s) {
-		return value, "", nil
-	}
-	return value, s[end+1:], nil
-}
-
-func nextQuotedPostgresKeywordValue(s string) (string, string, error) {
-	end := 0
-	for end < len(s) {
-		if s[end] == '\'' {
-			value := unescapePostgresKeywordValue(s[:end])
-			if end == len(s) {
-				return value, "", nil
-			}
-			return value, s[end+1:], nil
-		}
-		if s[end] == '\\' {
-			end++
-		}
-		end++
-	}
-	return "", "", errors.New("unterminated quoted string in connection info string")
-}
-
-func unescapePostgresKeywordValue(value string) string {
-	value = strings.ReplaceAll(value, `\\`, `\`)
-	return strings.ReplaceAll(value, `\'`, `'`)
-}
-
-var asciiSpace = [256]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}
-
 func validatePostgresDSNSettings(settings map[string]string) error {
 	for key, message := range disallowedPostgresDSNKeys {
 		if _, present := settings[key]; present {
@@ -285,18 +196,6 @@ func normalizePostgresURLDSN(dsn string) (string, error) {
 	}
 	parsedURL.RawQuery = query.Encode()
 	return parsedURL.String(), nil
-}
-
-func normalizePostgresKeywordValueDSN(dsn string) string {
-	var normalized strings.Builder
-	normalized.Grow(len(dsn) + len(postgresFileDefaultDSNKeys)*16)
-	normalized.WriteString(dsn)
-	for _, key := range postgresFileDefaultDSNKeys {
-		normalized.WriteByte(' ')
-		normalized.WriteString(key.name)
-		normalized.WriteString("=''")
-	}
-	return normalized.String()
 }
 
 func postgresTargetFromPoolConfig(config *pgxpool.Config) (postgresTarget, error) {

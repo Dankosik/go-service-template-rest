@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync/atomic"
 )
 
@@ -20,9 +21,7 @@ type Probe interface {
 var ErrDraining = errors.New("service is draining")
 
 func New(probes ...Probe) *Service {
-	items := make([]Probe, len(probes))
-	copy(items, probes)
-	return &Service{probes: items}
+	return &Service{probes: slices.Clone(probes)}
 }
 
 func (s *Service) Ready(ctx context.Context) error {

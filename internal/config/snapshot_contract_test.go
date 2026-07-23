@@ -17,7 +17,8 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 	t.Parallel()
 
 	sourceValues := sentinelConfigSourceValues()
-	knownKeys := sortedStringSetKeys(knownConfigKeys())
+	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
+	sort.Strings(knownKeys)
 	sourceKeys := sortedStringSetKeys(sourceValues)
 	if !reflect.DeepEqual(sourceKeys, knownKeys) {
 		t.Fatalf("sentinel source keys = %v, want known config keys %v", sourceKeys, knownKeys)
@@ -28,7 +29,7 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 		t.Fatalf("load sentinel config source: %v", err)
 	}
 
-	cfg, err := buildSnapshot(k)
+	cfg, _, err := buildSnapshot(k)
 	if err != nil {
 		t.Fatalf("buildSnapshot() error = %v", err)
 	}
@@ -52,18 +53,6 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 	}
 }
 
-func TestKnownConfigKeysMatchSnapshotTags(t *testing.T) {
-	t.Parallel()
-
-	knownKeys := sortedStringSetKeys(knownConfigKeys())
-
-	tagKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
-	sort.Strings(tagKeys)
-	if !reflect.DeepEqual(knownKeys, tagKeys) {
-		t.Fatalf("knownConfigKeys() = %v, want Config koanf leaf keys %v", knownKeys, tagKeys)
-	}
-}
-
 func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
 	t.Parallel()
 
@@ -79,7 +68,10 @@ func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
 func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
 	t.Parallel()
 
-	knownKeys := knownConfigKeys()
+	knownKeys := make(map[string]struct{})
+	for _, key := range configLeafKeysFromType(t, reflect.TypeFor[Config](), "") {
+		knownKeys[key] = struct{}{}
+	}
 	for key := range defaultValues() {
 		if _, ok := knownKeys[key]; !ok {
 			t.Fatalf("defaultValues() contains %q, which is not a known Config koanf leaf key", key)

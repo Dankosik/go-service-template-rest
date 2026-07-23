@@ -25,25 +25,45 @@ func (e *configValueDecodeError) Error() string {
 	return e.detail
 }
 
-func buildSnapshot(k *koanf.Koanf) (Config, error) {
+func buildSnapshot(k *koanf.Koanf) (Config, []string, error) {
 	var cfg Config
+	var metadata mapstructure.Metadata
 	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
 			DecodeHook:       mapstructure.DecodeHookFuncType(decodeConfigValue),
+			Metadata:         &metadata,
 			WeaklyTypedInput: false,
 		},
 	})
 	if err != nil {
-		return Config{}, fmt.Errorf("%w: %s", ErrParse, sanitizedSnapshotDecodeError(err))
+		return Config{}, nil, fmt.Errorf("%w: %s", ErrParse, sanitizedSnapshotDecodeError(err))
 	}
 
 	normalizeConfigStrings(&cfg)
-	return cfg, nil
+	return cfg, expandUnusedConfigKeys(metadata.Unused, k.Keys()), nil
+}
+
+func expandUnusedConfigKeys(unusedKeys, sourceLeafKeys []string) []string {
+	expanded := make([]string, 0, len(unusedKeys))
+	for _, unusedKey := range unusedKeys {
+		prefix := unusedKey + keyDelimiter
+		foundLeaf := false
+		for _, sourceKey := range sourceLeafKeys {
+			if sourceKey == unusedKey || strings.HasPrefix(sourceKey, prefix) {
+				expanded = append(expanded, sourceKey)
+				foundLeaf = true
+			}
+		}
+		if !foundLeaf {
+			expanded = append(expanded, unusedKey)
+		}
+	}
+	return expanded
 }
 
 func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any, error) {
-	switch {
-	case targetType == durationType:
+	switch targetType {
+	case durationType:
 		raw, ok := value.(string)
 		if !ok {
 			return nil, newConfigValueDecodeError("duration must be a string with a unit")
@@ -57,7 +77,7 @@ func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any,
 			return nil, newConfigValueDecodeError(err.Error())
 		}
 		return duration, nil
-	case targetType == logLevelType:
+	case logLevelType:
 		raw, ok := value.(string)
 		if !ok {
 			return nil, newConfigValueDecodeError("log level must be a string")
@@ -73,8 +93,8 @@ func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any,
 		return level, nil
 	}
 
-	switch targetType.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	kind := targetType.Kind()
+	if kind >= reflect.Int && kind <= reflect.Int64 {
 		integer, err := parseSignedInteger(value, targetType.Bits())
 		if err != nil {
 			return nil, newConfigValueDecodeError(err.Error())
@@ -82,21 +102,22 @@ func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any,
 		converted := reflect.New(targetType).Elem()
 		converted.SetInt(integer)
 		return converted.Interface(), nil
-	case reflect.Float64:
+	}
+	if kind == reflect.Float64 {
 		number, err := parseFloat64(value)
 		if err != nil {
 			return nil, newConfigValueDecodeError(err.Error())
 		}
 		return number, nil
-	case reflect.Bool:
+	}
+	if kind == reflect.Bool {
 		boolean, err := parseBool(value)
 		if err != nil {
 			return nil, newConfigValueDecodeError(err.Error())
 		}
 		return boolean, nil
-	default:
-		return value, nil
 	}
+	return value, nil
 }
 
 func newConfigValueDecodeError(detail string) error {
@@ -104,13 +125,12 @@ func newConfigValueDecodeError(detail string) error {
 }
 
 func sanitizedSnapshotDecodeError(err error) string {
-	var valueErr *configValueDecodeError
-	if !errors.As(err, &valueErr) {
+	valueErr, ok := errors.AsType[*configValueDecodeError](err)
+	if !ok {
 		return "configuration values do not match the Config schema"
 	}
 
-	var decodeErr *mapstructure.DecodeError
-	if errors.As(err, &decodeErr) && strings.TrimSpace(decodeErr.Name()) != "" {
+	if decodeErr, ok := errors.AsType[*mapstructure.DecodeError](err); ok && strings.TrimSpace(decodeErr.Name()) != "" {
 		return fmt.Sprintf("%s has invalid value: %s", decodeErr.Name(), valueErr.detail)
 	}
 	return valueErr.detail
