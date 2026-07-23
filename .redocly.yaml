@@ -2,7 +2,36 @@ extends:
   - recommended
 
 rules:
+  # Stable generated API.
   operation-operationId: error
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
   operation-summary: error
   operation-2xx-response: error
+
+  # Paths and parameters must be unambiguous.
+  no-ambiguous-paths: error
+  no-identical-paths: error
+  no-path-trailing-slash: error
+  path-not-include-query: error
+  path-parameters-defined: error
+  operation-parameters-unique: error
+
+  # Schemas and examples must agree.
+  no-unresolved-refs: error
+  no-schema-type-mismatch: error
+  no-enum-type-mismatch: error
+  no-required-schema-properties-undefined: error
+  no-invalid-schema-examples: error
+  no-invalid-parameter-examples: error
+  no-invalid-media-type-examples: error
+
+  # Referenced security schemes must exist.
+  security-defined: error
+
+  # Hygiene, but not merge blockers initially.
+  no-unused-components: warn
+  tag-description: warn
+
+  # Do not force prose that repeats the summary.
   operation-description: off
