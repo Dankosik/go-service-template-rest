@@ -6,9 +6,5 @@ func ProbeAddress(rawDSN string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	target, err := postgresTargetFromPoolConfig(pgxCfg)
-	if err != nil {
-		return "", err
-	}
-	return target.address(), nil
+	return postgresProbeAddressFromPoolConfig(pgxCfg)
 }

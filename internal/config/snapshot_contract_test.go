@@ -211,15 +211,11 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.max_open_conns":      26,
 		"postgres.conn_max_lifetime":   "45m",
 
-		"observability.otel.service_name":                  "snapshot-service",
-		"observability.otel.traces_sampler":                "always_on",
-		"observability.otel.traces_sampler_arg":            0.25,
-		"observability.otel.exporter.otlp_endpoint":        "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_traces_endpoint": "https://otel.example.com:4318/v1/traces",
-		"observability.otel.exporter.otlp_headers":         "authorization=Bearer snapshot",
-		"observability.otel.exporter.otlp_protocol":        "grpc",
-
-		"feature_flags.postgres_readiness_probe": false,
+		"observability.otel.service_name":           "snapshot-service",
+		"observability.otel.traces_sampler":         "always_on",
+		"observability.otel.traces_sampler_arg":     0.25,
+		"observability.otel.exporter.otlp_endpoint": "https://otel.example.com:4318",
+		"observability.otel.exporter.otlp_headers":  "authorization=Bearer snapshot",
 	}
 }
 
@@ -248,15 +244,11 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.max_open_conns":      26,
 		"postgres.conn_max_lifetime":   45 * time.Minute,
 
-		"observability.otel.service_name":                  "snapshot-service",
-		"observability.otel.traces_sampler":                "always_on",
-		"observability.otel.traces_sampler_arg":            0.25,
-		"observability.otel.exporter.otlp_endpoint":        "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_traces_endpoint": "https://otel.example.com:4318/v1/traces",
-		"observability.otel.exporter.otlp_headers":         "authorization=Bearer snapshot",
-		"observability.otel.exporter.otlp_protocol":        "grpc",
-
-		"feature_flags.postgres_readiness_probe": false,
+		"observability.otel.service_name":           "snapshot-service",
+		"observability.otel.traces_sampler":         "always_on",
+		"observability.otel.traces_sampler_arg":     0.25,
+		"observability.otel.exporter.otlp_endpoint": "https://otel.example.com:4318",
+		"observability.otel.exporter.otlp_headers":  "authorization=Bearer snapshot",
 	}
 }
 

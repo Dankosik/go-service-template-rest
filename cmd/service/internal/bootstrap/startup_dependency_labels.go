@@ -1,22 +1,11 @@
 package bootstrap
 
-type startupDependencyProbeLabels struct {
-	dependency   string
-	operation    string
-	resolveStage string
-	probeStage   string
-}
-
-func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLabels {
-	return startupDependencyProbeLabels{
-		dependency:   dependency,
-		operation:    dependency + "_probe",
-		resolveStage: "startup.resolve." + dependency,
-		probeStage:   "startup.probe." + dependency,
-	}
-}
-
-var startupPostgresDependencyLabels = newStartupDependencyProbeLabels("postgres")
+const (
+	startupDependencyPostgres     = "postgres"
+	startupPostgresProbeOperation = "postgres_probe"
+	startupPostgresResolveStage   = "startup.resolve.postgres"
+	startupPostgresProbeStage     = "startup.probe.postgres"
+)
 
 const (
 	startupDependencyTelemetry       = "telemetry"

@@ -173,9 +173,7 @@ func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
 	resetConfigEnv(t)
 
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "https://otel.example.com:4318")
-	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_TRACES_ENDPOINT", "https://otel.example.com:4318/v1/traces")
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", "authorization=Bearer token")
-	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_PROTOCOL", "http/protobuf")
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -184,13 +182,7 @@ func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
 	if cfg.Observability.OTel.Exporter.OTLPEndpoint != "https://otel.example.com:4318" {
 		t.Fatalf("OTLPEndpoint = %q, want %q", cfg.Observability.OTel.Exporter.OTLPEndpoint, "https://otel.example.com:4318")
 	}
-	if cfg.Observability.OTel.Exporter.OTLPTracesEndpoint != "https://otel.example.com:4318/v1/traces" {
-		t.Fatalf("OTLPTracesEndpoint = %q, want %q", cfg.Observability.OTel.Exporter.OTLPTracesEndpoint, "https://otel.example.com:4318/v1/traces")
-	}
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != "authorization=Bearer token" {
 		t.Fatalf("OTLPHeaders = %q, want %q", cfg.Observability.OTel.Exporter.OTLPHeaders, "authorization=Bearer token")
-	}
-	if cfg.Observability.OTel.Exporter.OTLPProtocol != "http/protobuf" {
-		t.Fatalf("OTLPProtocol = %q, want %q", cfg.Observability.OTel.Exporter.OTLPProtocol, "http/protobuf")
 	}
 }

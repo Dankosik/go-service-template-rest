@@ -10,64 +10,44 @@ import (
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 )
 
-type validationOptions struct {
-	Strict      bool
-	UnknownKeys []string
-}
-
-type validationResult struct {
-	UnknownKeyWarnings []string
-}
-
-func validateConfig(ctx context.Context, cfg *Config, opts validationOptions) (validationResult, error) {
+func validateConfig(ctx context.Context, cfg *Config, strict bool, unknownKeys []string) ([]string, error) {
 	if err := checkValidateContext(ctx); err != nil {
-		return validationResult{}, err
+		return nil, err
 	}
 
-	result, err := validateUnknownConfigKeys(opts)
-	if err != nil {
-		return validationResult{}, err
+	unknownKeyWarnings := findUnknownKeys(unknownKeys)
+	if strict && len(unknownKeyWarnings) > 0 {
+		return nil, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeyWarnings, ", "))
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return result, err
+		return unknownKeyWarnings, err
 	}
 
 	if err := validateAppConfig(cfg.App); err != nil {
-		return result, err
+		return unknownKeyWarnings, err
 	}
 	if err := validateHTTPConfig(cfg.HTTP); err != nil {
-		return result, err
+		return unknownKeyWarnings, err
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return result, err
+		return unknownKeyWarnings, err
 	}
 
-	if err := validateDatastoreConfig(*cfg); err != nil {
-		return result, err
+	if err := validatePostgres(cfg.Postgres); err != nil {
+		return unknownKeyWarnings, err
 	}
-	if err := validateReadinessProbeBudgets(*cfg); err != nil {
-		return result, err
+	if err := validatePostgresReadinessBudget(*cfg); err != nil {
+		return unknownKeyWarnings, err
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return result, err
+		return unknownKeyWarnings, err
 	}
 
 	if err := validateObservabilityConfig(cfg.Observability); err != nil {
-		return result, err
+		return unknownKeyWarnings, err
 	}
 
-	return result, nil
-}
-
-func validateUnknownConfigKeys(opts validationOptions) (validationResult, error) {
-	unknownKeys := findUnknownKeys(opts.UnknownKeys)
-	if len(unknownKeys) == 0 {
-		return validationResult{}, nil
-	}
-	if opts.Strict {
-		return validationResult{}, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeys, ", "))
-	}
-	return validationResult{UnknownKeyWarnings: unknownKeys}, nil
+	return unknownKeyWarnings, nil
 }
 
 func validateAppConfig(cfg AppConfig) error {
@@ -120,21 +100,11 @@ func validateHTTPConfig(cfg HTTPConfig) error {
 	return nil
 }
 
-func validateDatastoreConfig(cfg Config) error {
-	if err := validatePostgres(cfg.Postgres); err != nil {
-		return err
-	}
-	return nil
-}
-
 func validateObservabilityConfig(cfg ObservabilityConfig) error {
 	if strings.TrimSpace(cfg.OTel.ServiceName) == "" {
 		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
-	if err := validateSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg); err != nil {
-		return err
-	}
-	return validateOTLPExporter(cfg.OTel.Exporter)
+	return validateSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg)
 }
 
 func findUnknownKeys(keys []string) []string {
@@ -198,20 +168,15 @@ func validateHTTPReadinessWriteTimeout(cfg HTTPConfig) error {
 	return nil
 }
 
-func validateReadinessProbeBudgets(cfg Config) error {
-	budgets := cfg.ReadinessProbeBudgets()
-	var aggregate time.Duration
-	names := make([]string, 0, len(budgets))
-	for _, probe := range budgets {
-		aggregate += probe.Budget
-		names = append(names, probe.ConfigKey)
+func validatePostgresReadinessBudget(cfg Config) error {
+	if !cfg.Postgres.Enabled {
+		return nil
 	}
-	if cfg.HTTP.ReadinessTimeout < aggregate {
+	if cfg.HTTP.ReadinessTimeout < cfg.Postgres.HealthcheckTimeout {
 		return fmt.Errorf(
-			"%w: http.readiness_timeout must be >= aggregate sequential readiness probe budget (%s = %s)",
+			"%w: http.readiness_timeout must be >= readiness probe budget (postgres.healthcheck_timeout = %s)",
 			ErrValidate,
-			strings.Join(names, " + "),
-			aggregate,
+			cfg.Postgres.HealthcheckTimeout,
 		)
 	}
 	return nil
@@ -227,18 +192,6 @@ func validateSampler(sampler string, samplerArg float64) error {
 	}
 	if !otelconfig.TraceSamplerArgInRange(samplerArg) {
 		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be in range [0,1]", ErrValidate)
-	}
-	return nil
-}
-
-func validateOTLPExporter(cfg OTelExporterConfig) error {
-	protocol := otelconfig.NormalizeOTLPProtocol(cfg.OTLPProtocol)
-	if protocol == "" {
-		return nil
-	}
-
-	if !otelconfig.OTLPProtocolSupported(protocol) {
-		return fmt.Errorf("%w: observability.otel.exporter.otlp_protocol must be %s", ErrValidate, otelconfig.OTLPProtocolHTTPProtobuf)
 	}
 	return nil
 }

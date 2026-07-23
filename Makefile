@@ -310,9 +310,15 @@ openapi-lint:
 openapi-validate:
 	go tool validate -- $(OPENAPI_FILE)
 
+OPENAPI_BREAKING_APPROVALS ?= api/openapi/breaking-changes-approvals.txt
+
 openapi-breaking:
 	@test -n "$(BASE_OPENAPI)" || { echo "BASE_OPENAPI is required"; exit 1; }
-	go tool oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
+	@if [ -s "$(OPENAPI_BREAKING_APPROVALS)" ]; then \
+		go tool oasdiff breaking --fail-on ERR --err-ignore "$(OPENAPI_BREAKING_APPROVALS)" $(BASE_OPENAPI) $(OPENAPI_FILE); \
+	else \
+		go tool oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE); \
+	fi
 
 openapi-check: openapi-drift-check
 	go test ./internal/api

@@ -86,7 +86,7 @@ Stable direction rules:
 5. The app service returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or RFC 9457 problem responses whose stable `code`, type, title, and status come from one closed transport catalog.
 6. Transport observability is emitted at the edge: request logs, OpenTelemetry HTTP metrics exported through Prometheus, and OpenTelemetry spans use bounded route templates from the HTTP layer. HTTP metric server identity comes from configured service identity, never the caller-controlled `Host`; the OTel SDK cardinality cap remains explicit; native startup/config metrics share the same private Prometheus registry.
 
-Current runtime note: the shipped endpoints are intentionally small (`ping`, liveness, readiness, metrics), and they are public system/sample endpoints. New business endpoints must make a security decision before implementation: public by design, protected by real OpenAPI security plus auth middleware and 401/403 Problem responses, or blocked pending a security spec. Browser CORS remains fail-closed by default.
+Current runtime note: the shipped endpoints are intentionally small (liveness, readiness, metrics), and they are public system endpoints. New business endpoints must make a security decision before implementation: public by design, protected by real OpenAPI security plus auth middleware and 401/403 Problem responses, or blocked pending a security spec. Browser CORS remains fail-closed by default.
 
 Operational exposure note: `/metrics` is not an ordinary public business API. Production deployments should expose it only on a private scrape path/network or add a real auth/internal-listener design before internet exposure.
 

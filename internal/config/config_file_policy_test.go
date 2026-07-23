@@ -139,7 +139,7 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 		},
 		{
 			name:       "bool format",
-			envKey:     "APP__FEATURE_FLAGS__POSTGRES_READINESS_PROBE",
+			envKey:     "APP__POSTGRES__ENABLED",
 			envValue:   "maybe",
 			wantDetail: "invalid boolean format",
 		},
@@ -245,9 +245,9 @@ http:
 func TestLoadConfigFileRejectsWhitespaceOnlyPath(t *testing.T) {
 	t.Parallel()
 
-	err := loadConfigFile(context.Background(), koanf.New(keyDelimiter), " \t\n ", configFilePolicyLocal)
+	_, err := loadConfigFileWithMetadata(context.Background(), koanf.New(keyDelimiter), " \t\n ", configFilePolicyLocal)
 	if err == nil {
-		t.Fatal("loadConfigFile() error = nil, want non-nil")
+		t.Fatal("loadConfigFileWithMetadata() error = nil, want non-nil")
 	}
 	if !errors.Is(err, ErrLoad) {
 		t.Fatalf("error = %v, want ErrLoad", err)

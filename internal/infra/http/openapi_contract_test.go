@@ -2,13 +2,11 @@ package httpx
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -36,13 +34,6 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 		wantStatus int
 		wantBody   string
 	}{
-		{
-			name:       "ping",
-			method:     http.MethodGet,
-			path:       "/api/v1/ping",
-			wantStatus: http.StatusOK,
-			wantBody:   "pong",
-		},
 		{
 			name:       "health live",
 			method:     http.MethodGet,
@@ -74,79 +65,6 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 			if tc.wantBody != "" && resp.Body.String() != tc.wantBody {
 				t.Fatalf("body = %q, want %q", resp.Body.String(), tc.wantBody)
 			}
-		})
-	}
-}
-
-// TEMPLATE EXAMPLE: delete this test with the synthetic OpenAPI operation,
-// or replace its cases with the real operation's boundary contract.
-func TestOpenAPIRuntimeContractTemplateExample(t *testing.T) {
-	t.Parallel()
-
-	h := mustNewRouter(
-		t,
-		slog.New(slog.DiscardHandler),
-		Handlers{Health: health.New()},
-		telemetry.New(),
-		RouterConfig{},
-	)
-
-	t.Run("accepts validated path query and body", func(t *testing.T) {
-		t.Parallel()
-
-		resp := doJSONRequest(h, http.MethodPost, "/api/v1/template-example/demo?copies=2", `{"message":"hello"}`)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d; body = %q", resp.Code, http.StatusOK, resp.Body.String())
-		}
-		var body api.TemplateExampleResponse
-		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-			t.Fatalf("decode response: %v", err)
-		}
-		if body.Slug != "demo" {
-			t.Fatalf("slug = %q, want %q", body.Slug, "demo")
-		}
-		if got, want := body.Messages, []string{"hello", "hello"}; !slices.Equal(got, want) {
-			t.Fatalf("messages = %v, want %v", got, want)
-		}
-	})
-
-	for _, tc := range []struct {
-		name string
-		path string
-		body string
-	}{
-		{
-			name: "invalid path",
-			path: "/api/v1/template-example/INVALID?copies=1",
-			body: `{"message":"hello"}`,
-		},
-		{
-			name: "invalid query",
-			path: "/api/v1/template-example/demo?copies=4",
-			body: `{"message":"hello"}`,
-		},
-		{
-			name: "invalid body",
-			path: "/api/v1/template-example/demo?copies=1",
-			body: `{"message":""}`,
-		},
-		{
-			name: "unknown body field",
-			path: "/api/v1/template-example/demo?copies=1",
-			body: `{"message":"hello","unknown":true}`,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			resp := doJSONRequest(h, http.MethodPost, tc.path, tc.body)
-
-			if resp.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d; body = %q", resp.Code, http.StatusBadRequest, resp.Body.String())
-			}
-			assertProblemContentType(t, resp.Header())
-			assertProblemCode(t, resp, problemCodeBadRequest)
 		})
 	}
 }
@@ -394,13 +312,6 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 		wantStatus int
 	}{
 		{
-			name:       "ping 200",
-			handler:    ready,
-			method:     http.MethodGet,
-			target:     "/api/v1/ping",
-			wantStatus: http.StatusOK,
-		},
-		{
 			name:       "health live 200",
 			handler:    ready,
 			method:     http.MethodGet,
@@ -422,27 +333,11 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 			wantStatus: http.StatusServiceUnavailable,
 		},
 		{
-			name:       "template example 200",
-			handler:    ready,
-			method:     http.MethodPost,
-			target:     "/api/v1/template-example/demo?copies=2",
-			body:       `{"message":"hello"}`,
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "template example 400 problem",
-			handler:    ready,
-			method:     http.MethodPost,
-			target:     "/api/v1/template-example/demo?copies=4",
-			body:       `{"message":"hello"}`,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "template example 413 problem",
+			name:       "health live 413 problem",
 			handler:    tinyBodyLimit,
-			method:     http.MethodPost,
-			target:     "/api/v1/template-example/demo?copies=1",
-			body:       `{"message":"hello"}`,
+			method:     http.MethodGet,
+			target:     "/health/live",
+			body:       "ab",
 			wantStatus: http.StatusRequestEntityTooLarge,
 		},
 	}

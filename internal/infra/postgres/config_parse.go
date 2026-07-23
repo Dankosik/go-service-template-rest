@@ -49,11 +49,6 @@ var postgresFileDefaultDSNKeys = []postgresFileDefaultDSNKey{
 
 var disallowedPostgresDSNKeys = postgresDisallowedDSNKeys()
 
-type postgresTarget struct {
-	host string
-	port uint16
-}
-
 func postgresDisallowedDSNKeys() map[string]string {
 	keys := map[string]string{
 		"service":     postgresServicePassfileDSNSourceError,
@@ -75,7 +70,7 @@ func parsePoolConfig(rawDSN string) (*pgxpool.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
 	}
-	if _, err := postgresTargetFromPoolConfig(config); err != nil {
+	if _, err := postgresProbeAddressFromPoolConfig(config); err != nil {
 		return nil, err
 	}
 	return config, nil
@@ -198,25 +193,22 @@ func normalizePostgresURLDSN(dsn string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-func postgresTargetFromPoolConfig(config *pgxpool.Config) (postgresTarget, error) {
+// postgresProbeAddressFromPoolConfig extracts the single tcp host:port target.
+func postgresProbeAddressFromPoolConfig(config *pgxpool.Config) (string, error) {
 	if config == nil || config.ConnConfig == nil {
-		return postgresTarget{}, fmt.Errorf("%w: invalid postgres pool config", ErrConfig)
+		return "", fmt.Errorf("%w: invalid postgres pool config", ErrConfig)
 	}
 	if len(config.ConnConfig.Fallbacks) > 0 {
-		return postgresTarget{}, fmt.Errorf("%w: postgres dsn fallback targets are not supported", ErrConfig)
+		return "", fmt.Errorf("%w: postgres dsn fallback targets are not supported", ErrConfig)
 	}
 
 	host := strings.TrimSpace(config.ConnConfig.Host)
 	port := config.ConnConfig.Port
 	if host == "" || port == 0 {
-		return postgresTarget{}, fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
+		return "", fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
 	}
 	if network, _ := pgconn.NetworkAddress(host, port); network != "tcp" {
-		return postgresTarget{}, fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
+		return "", fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
 	}
-	return postgresTarget{host: host, port: port}, nil
-}
-
-func (target postgresTarget) address() string {
-	return net.JoinHostPort(target.host, strconv.Itoa(int(target.port)))
+	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
 }

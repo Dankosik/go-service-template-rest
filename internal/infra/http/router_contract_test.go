@@ -56,7 +56,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("method not allowed uses problem envelope and allow header", func(t *testing.T) {
 		t.Parallel()
 
-		resp := doRequest(h, http.MethodPost, "/api/v1/ping")
+		resp := doRequest(h, http.MethodPost, "/health/live")
 
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
@@ -69,7 +69,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("unknown method on existing path returns method not allowed", func(t *testing.T) {
 		t.Parallel()
 
-		resp := doRequest(h, "BREW", "/api/v1/ping")
+		resp := doRequest(h, "BREW", "/health/live")
 
 		if resp.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
@@ -101,7 +101,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("options for known path returns no content with allow", func(t *testing.T) {
 		t.Parallel()
 
-		resp := doRequest(h, http.MethodOptions, "/api/v1/ping")
+		resp := doRequest(h, http.MethodOptions, "/health/live")
 
 		if resp.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
@@ -115,7 +115,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("cors preflight is explicit and fail-closed", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodOptions, "/api/v1/ping", nil)
+		req := httptest.NewRequest(http.MethodOptions, "/health/live", nil)
 		req.Header.Set("Origin", "https://example.com")
 		req.Header.Set("Access-Control-Request-Method", http.MethodGet)
 		resp := httptest.NewRecorder()
@@ -163,7 +163,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 		options.RequestErrorHandlerFunc(w, r, errors.New(attackerDetail))
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	req.Header.Set(requestIDHeader, "req-123")
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	req = req.WithContext(propagation.TraceContext{}.Extract(req.Context(), propagation.HeaderCarrier(req.Header)))
@@ -219,7 +219,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 		options.ErrorHandlerFunc(w, r, errors.New(attackerDetail))
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	req.Header.Set(requestIDHeader, "req-chi-123")
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	req = req.WithContext(propagation.TraceContext{}.Extract(req.Context(), propagation.HeaderCarrier(req.Header)))
@@ -274,13 +274,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 		traceID   = "4bf92f3577b34da6a3ce929d0e0e4736"
 	)
 
-	// TEMPLATE EXAMPLE: replace this request with the first real parameterized route.
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/template-example/concrete-slug?copies=1",
-		strings.NewReader(`{"message":"hello"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	req.Header.Set(requestIDHeader, requestID)
 	req.Header.Set("Traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
@@ -305,8 +299,8 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	if got, ok := event["span_id"].(string); !ok || got == "" {
 		t.Fatalf("span_id = %v, want non-empty string", event["span_id"])
 	}
-	if got := event["route"]; got != "POST /api/v1/template-example/{slug}" {
-		t.Fatalf("route = %v, want %q", got, "POST /api/v1/template-example/{slug}")
+	if got := event["route"]; got != "GET /health/ready" {
+		t.Fatalf("route = %v, want %q", got, "GET /health/ready")
 	}
 }
 
@@ -332,10 +326,10 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 		Health: health.New(),
 	}, metrics, RouterConfig{})
 
-	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-	pingReq.Host = "attacker-controlled.example:65535"
-	pingResp := httptest.NewRecorder()
-	h.ServeHTTP(pingResp, pingReq)
+	liveReq := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	liveReq.Host = "attacker-controlled.example:65535"
+	liveResp := httptest.NewRecorder()
+	h.ServeHTTP(liveResp, liveReq)
 
 	metricsResp := doRequest(h, http.MethodGet, "/metrics")
 
@@ -349,9 +343,9 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	}
 	if !strings.Contains(body, `http_request_method="GET"`) ||
 		!strings.Contains(body, `http_response_status_code="200"`) ||
-		!strings.Contains(body, `http_route="/api/v1/ping"`) ||
+		!strings.Contains(body, `http_route="/health/live"`) ||
 		!strings.Contains(body, `server_address="router-test"`) {
-		t.Fatalf("metrics output does not contain expected duration histogram labels for ping endpoint")
+		t.Fatalf("metrics output does not contain expected duration histogram labels for liveness endpoint")
 	}
 	if strings.Contains(body, "attacker-controlled.example") || strings.Contains(body, `server_port="65535"`) {
 		t.Fatal("metrics output contains attacker-controlled authority labels")
@@ -472,9 +466,9 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{})
 
-	pingResp := doRequest(h, http.MethodGet, "/api/v1/ping")
-	if pingResp.Code != http.StatusOK {
-		t.Fatalf("ping status = %d, want %d", pingResp.Code, http.StatusOK)
+	liveResp := doRequest(h, http.MethodGet, "/health/live")
+	if liveResp.Code != http.StatusOK {
+		t.Fatalf("liveness status = %d, want %d", liveResp.Code, http.StatusOK)
 	}
 
 	metricsResp := doRequest(h, http.MethodGet, "/metrics")
@@ -482,7 +476,7 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		t.Fatalf("metrics status = %d, want %d", metricsResp.Code, http.StatusOK)
 	}
 
-	customMethodResp := doRequest(h, "BREW", "/api/v1/ping")
+	customMethodResp := doRequest(h, "BREW", "/health/live")
 	if customMethodResp.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("custom method status = %d, want %d", customMethodResp.Code, http.StatusMethodNotAllowed)
 	}
@@ -493,12 +487,12 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	}
 
 	wantSpanNames := map[string]bool{
-		"GET /api/v1/ping": false,
+		"GET /health/live": false,
 		"GET /metrics":     false,
 		"HTTP":             false,
 	}
 	wantHTTPRoutes := map[string]string{
-		"GET /api/v1/ping": "/api/v1/ping",
+		"GET /health/live": "/health/live",
 		"GET /metrics":     "/metrics",
 	}
 

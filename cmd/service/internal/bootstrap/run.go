@@ -38,26 +38,6 @@ const (
 	postgresStartupAttempts = 2
 )
 
-type overlayPathsFlag struct {
-	paths []string
-}
-
-func (f *overlayPathsFlag) String() string {
-	if f == nil {
-		return ""
-	}
-	return strings.Join(f.paths, ",")
-}
-
-func (f *overlayPathsFlag) Set(value string) error {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return fmt.Errorf("config overlay path cannot be empty")
-	}
-	f.paths = append(f.paths, trimmed)
-	return nil
-}
-
 func Run(args []string) (runErr error) {
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
@@ -72,10 +52,9 @@ func Run(args []string) (runErr error) {
 	slog.SetDefault(bootstrapLog)
 
 	metrics := telemetry.New()
+	// NotifyContext already unregisters on signal delivery, and stop is idempotent.
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	stopOnSignalDone := context.AfterFunc(signalCtx, stop)
 	defer stop()
-	defer stopOnSignalDone()
 	defer func() {
 		if runErr != nil {
 			slog.Error(
@@ -132,9 +111,11 @@ func Run(args []string) (runErr error) {
 
 	healthSvc := health.New(probeOutcome.probes...)
 	startupAdmission := newStartupAdmissionController(bootstrapSpan)
-	ingressGuard := newRuntimeIngressAdmissionGuard(bootstrap.networkPolicy)
+	// Runtime readiness re-checks the ingress policy so an exception lapsing
+	// while the process runs flips /health/ready without a redeploy.
+	ingressCheck := func(context.Context) error { return bootstrap.networkPolicy.EnforceIngress() }
 	readinessCheck := func(ctx context.Context) error {
-		if err := ingressGuard.Check(ctx); err != nil {
+		if err := ingressCheck(ctx); err != nil {
 			return err
 		}
 		return healthSvc.Ready(ctx)
@@ -143,7 +124,7 @@ func Run(args []string) (runErr error) {
 		if err := startupAdmission.CheckReady(ctx); err != nil {
 			return err
 		}
-		return ingressGuard.Check(ctx)
+		return ingressCheck(ctx)
 	}
 
 	handler, err := httpx.NewRouter(
@@ -185,13 +166,20 @@ func Run(args []string) (runErr error) {
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	var overlays overlayPathsFlag
+	var overlays []string
 
 	flags := flag.NewFlagSet("service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 
 	configPath := flags.String("config", "", "path to base config file")
-	flags.Var(&overlays, "config-overlay", "path to config overlay file (repeatable)")
+	flags.Func("config-overlay", "path to config overlay file (repeatable)", func(value string) error {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return fmt.Errorf("config overlay path cannot be empty")
+		}
+		overlays = append(overlays, trimmed)
+		return nil
+	})
 	configStrict := flags.Bool("config-strict", false, "enable strict unknown-key validation")
 
 	if err := flags.Parse(args); err != nil {
@@ -203,7 +191,7 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 
 	return config.LoadOptions{
 		ConfigPath:     strings.TrimSpace(*configPath),
-		ConfigOverlays: overlays.paths,
+		ConfigOverlays: overlays,
 		Strict:         *configStrict,
 	}, nil
 }

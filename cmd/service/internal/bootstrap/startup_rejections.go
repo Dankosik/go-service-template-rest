@@ -83,39 +83,18 @@ func rejectStartupForDependencyInit(
 	return rejectErr
 }
 
-func recordDependencyProbeRejection(
-	ctx context.Context,
-	runtime dependencyProbeRuntime,
-	labels startupDependencyProbeLabels,
-	mode string,
-	err error,
-) {
-	dep := strings.ToLower(strings.TrimSpace(labels.dependency))
-	if dep == "" {
-		dep = "dependency"
-	}
-	operation := strings.TrimSpace(labels.operation)
-	if operation == "" {
-		operation = dep + "_probe"
-	}
-	stage := strings.TrimSpace(labels.probeStage)
-	if stage == "" {
-		stage = "startup.probe." + dep
-	}
-
-	recordStartupRejection(runtime.bootstrapSpan, "dependency_init", stage, err)
-
-	args := startupLogArgs(
-		ctx,
-		startupLogComponentStartupProbes,
-		operation,
-		"error",
-		"error.type", "dependency_init",
-		"dependency", dep,
-		"err", err,
+func recordDependencyProbeRejection(ctx context.Context, runtime dependencyProbeRuntime, err error) {
+	recordStartupRejection(runtime.bootstrapSpan, "dependency_init", startupPostgresProbeStage, err)
+	runtime.log.Error(
+		"startup_blocked",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			startupPostgresProbeOperation,
+			"error",
+			"error.type", "dependency_init",
+			"dependency", startupDependencyPostgres,
+			"err", err,
+		)...,
 	)
-	if strings.TrimSpace(mode) != "" {
-		args = append(args, "mode", strings.TrimSpace(mode))
-	}
-	runtime.log.Error("startup_blocked", args...)
 }

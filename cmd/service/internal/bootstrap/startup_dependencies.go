@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
@@ -26,24 +25,6 @@ type dependencyProbeRuntime struct {
 type dependencyProbeOutcome struct {
 	probes       []health.Probe
 	postgresPool *postgres.Pool
-}
-
-type dependencyCleanupStack struct {
-	cleanups []func()
-}
-
-func (s *dependencyCleanupStack) add(cleanup func()) {
-	if cleanup == nil {
-		return
-	}
-	s.cleanups = append(s.cleanups, cleanup)
-}
-
-func (s *dependencyCleanupStack) run() {
-	for _, cleanup := range slices.Backward(s.cleanups) {
-		cleanup()
-	}
-	s.cleanups = nil
 }
 
 type postgresReadinessProbe struct {
@@ -85,35 +66,24 @@ type probeExecutionResult struct {
 	err           error
 }
 
-func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime dependencyProbeRuntime) (outcome dependencyProbeOutcome, err error) {
+func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime dependencyProbeRuntime) (dependencyProbeOutcome, error) {
 	dependencyProbeCtx, dependencyProbeCancel := withStageBudget(startupCtx, startupProbeBudget)
 	defer dependencyProbeCancel()
 
-	outcome = dependencyProbeOutcome{probes: make([]health.Probe, 0, 1)}
-	cleanupStack := dependencyCleanupStack{}
-	defer func() {
-		if err != nil {
-			cleanupStack.run()
-		}
-	}()
-
+	outcome := dependencyProbeOutcome{probes: make([]health.Probe, 0, 1)}
 	pg, err := initPostgresDependency(bootstrapCtx, dependencyProbeCtx, runtime)
 	if err != nil {
 		return outcome, err
 	}
 	if pg != nil {
 		outcome.postgresPool = pg
-		cleanupStack.add(pg.Close)
-		if runtime.cfg.PostgresReadinessProbeRequired() {
-			outcome.probes = append(outcome.probes, newPostgresReadinessProbe(pg, runtime.cfg.Postgres.HealthcheckTimeout))
-		}
+		outcome.probes = append(outcome.probes, newPostgresReadinessProbe(pg, runtime.cfg.Postgres.HealthcheckTimeout))
 	}
 
 	return outcome, nil
 }
 
 func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (*postgres.Pool, error) {
-	labels := startupPostgresDependencyLabels
 	if !runtime.cfg.Postgres.Enabled {
 		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no pool and no startup error.
 	}
@@ -124,8 +94,8 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.log,
-			labels.dependency,
-			labels.resolveStage,
+			startupDependencyPostgres,
+			startupPostgresResolveStage,
 			addressErr,
 		)
 	}
@@ -134,7 +104,7 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.log,
-			labels.dependency,
+			startupDependencyPostgres,
 			err,
 		)
 	}
@@ -148,8 +118,8 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 	}()
 
 	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        labels.probeStage,
-		dep:          labels.dependency,
+		stage:        startupPostgresProbeStage,
+		dep:          startupDependencyPostgres,
 		budget:       postgresProbeBudget,
 		minRemaining: startupFailFastThreshold + startupReserveBudget,
 		probe: func(probeCtx context.Context) error {
@@ -160,25 +130,13 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 	})
 	if probeResult.err != nil {
 		if probeResult.budgetBlocked {
-			rejectErr := dependencyInitAbortFailure(labels.dependency, probeResult)
-			recordDependencyProbeRejection(
-				bootstrapCtx,
-				runtime,
-				labels,
-				"",
-				rejectErr,
-			)
+			rejectErr := dependencyInitAbortFailure(startupDependencyPostgres, probeResult)
+			recordDependencyProbeRejection(bootstrapCtx, runtime, rejectErr)
 			return nil, rejectErr
 		}
 
-		sanitizedErr := dependencyInitFailure(labels.dependency, probeResult.err)
-		recordDependencyProbeRejection(
-			bootstrapCtx,
-			runtime,
-			labels,
-			"",
-			sanitizedErr,
-		)
+		sanitizedErr := dependencyInitFailure(startupDependencyPostgres, probeResult.err)
+		recordDependencyProbeRejection(bootstrapCtx, runtime, sanitizedErr)
 		return nil, sanitizedErr
 	}
 

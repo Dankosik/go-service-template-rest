@@ -3,6 +3,8 @@ package httpx
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +26,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	t.Run("generates request id when header is absent", func(t *testing.T) {
 		t.Parallel()
 
-		resp := doRequest(h, http.MethodGet, "/api/v1/ping")
+		resp := doRequest(h, http.MethodGet, "/health/live")
 
 		if got := resp.Header().Get(requestIDHeader); got == "" {
 			t.Fatalf("%s header is empty", requestIDHeader)
@@ -36,7 +38,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 
 		const wantRequestID = "demo-123"
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 		req.Header.Set(requestIDHeader, wantRequestID)
 		resp := httptest.NewRecorder()
 
@@ -97,7 +99,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 
 		tooLongRequestID := strings.Repeat("a", 129)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 		req.Header.Set(requestIDHeader, tooLongRequestID)
 		resp := httptest.NewRecorder()
 
@@ -121,7 +123,7 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{})
 
-	resp := doRequest(h, http.MethodGet, "/api/v1/ping")
+	resp := doRequest(h, http.MethodGet, "/health/live")
 
 	if got := resp.Header().Get(contentTypeOptionsHeader); got != "nosniff" {
 		t.Fatalf("%s = %q, want %q", contentTypeOptionsHeader, got, "nosniff")
@@ -136,52 +138,44 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
 
-	tests := []struct {
-		name          string
-		method        string
-		target        string
-		body          string
-		contentLength int64
-		contentType   string
-	}{
-		{
-			name:          "known content length",
-			method:        http.MethodGet,
-			target:        "/api/v1/ping",
-			body:          "ab",
-			contentLength: 2,
-		},
-		{
-			name:          "unknown content length",
-			method:        http.MethodPost,
-			target:        "/api/v1/template-example/example?copies=1",
-			body:          `{"message":"a"}`,
-			contentLength: -1,
-			contentType:   "application/json",
-		},
-	}
+	t.Run("known content length is rejected before reading", func(t *testing.T) {
+		t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.target, strings.NewReader(tt.body))
-			req.ContentLength = tt.contentLength
-			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
-			}
-			resp := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/health/live", strings.NewReader("ab"))
+		req.ContentLength = 2
+		resp := httptest.NewRecorder()
 
-			h.ServeHTTP(resp, req)
+		h.ServeHTTP(resp, req)
 
-			if resp.Code != http.StatusRequestEntityTooLarge {
-				t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
-			}
-			assertProblemContentType(t, resp.Header())
-			assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
-			if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
-				t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
-			}
-		})
-	}
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
+		}
+		assertProblemContentType(t, resp.Header())
+		assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
+		if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
+			t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
+		}
+	})
+
+	t.Run("unknown content length is capped at the body reader", func(t *testing.T) {
+		t.Parallel()
+
+		var readErr error
+		handler := RequestBodyLimit(1, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			_, readErr = io.ReadAll(r.Body)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/any", strings.NewReader(`{"message":"a"}`))
+		req.ContentLength = -1
+		resp := httptest.NewRecorder()
+
+		handler.ServeHTTP(resp, req)
+
+		var maxBytesErr *http.MaxBytesError
+		if !errors.As(readErr, &maxBytesErr) {
+			t.Fatalf("read error = %v, want *http.MaxBytesError", readErr)
+		}
+	})
 }
 
 func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
@@ -358,8 +352,11 @@ func TestHTTPMethodNormalizationBoundsNonStandardRouteLabels(t *testing.T) {
 
 	req := httptest.NewRequest("BREW", "/coffee", nil)
 	req.Pattern = "BREW /coffee"
-	if got := routeLabelForRequest(req); got != "OTHER /coffee" {
-		t.Fatalf("routeLabelForRequest() = %q, want %q", got, "OTHER /coffee")
+	if got := requestMethodLabel(req); got != "OTHER" {
+		t.Fatalf("requestMethodLabel() = %q, want %q", got, "OTHER")
+	}
+	if got := routePathTemplateForRequest(req); got != "/coffee" {
+		t.Fatalf("routePathTemplateForRequest() = %q, want %q", got, "/coffee")
 	}
 }
 

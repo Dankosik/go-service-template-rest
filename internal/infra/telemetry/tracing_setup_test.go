@@ -239,7 +239,6 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 
 			err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{
 				OTLPEndpoint: typedCollector.URL,
-				OTLPProtocol: "http/protobuf",
 			})
 			requireAmbientExporterEnvError(t, err, "unsupported ambient otel exporter environment")
 			requireErrorDoesNotContain(t, err, tt.envValue)
@@ -262,9 +261,7 @@ func TestSetupTracingDoesNotEnableExporterFromAmbientOTLPEndpointEnv(t *testing.
 	t.Cleanup(collector.Close)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.URL)
 
-	shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(TraceExporterConfig{
-		OTLPProtocol: "http/protobuf",
-	}))
+	shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(TraceExporterConfig{}))
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
 	}
@@ -332,7 +329,6 @@ func TestSetupTracingRejectsAmbientOTLPProxyEnv(t *testing.T) {
 
 			err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{
 				OTLPEndpoint: tt.endpoint,
-				OTLPProtocol: "http/protobuf",
 			})
 			requireAmbientExporterEnvError(t, err, "unsupported ambient otlp proxy environment")
 			requireErrorDoesNotContain(t, err, "proxy.example.com")

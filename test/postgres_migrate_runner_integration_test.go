@@ -18,7 +18,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 
 	dsn := integrationPostgresDSN(t)
 
-	firstRun, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+	firstRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        dsn,
 		SourceFS:   os.DirFS(".."),
 		SourcePath: "env/migrations",
@@ -26,7 +26,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(first) error: %v", err)
 	}
-	if !firstRun.Changed {
+	if !firstRunChanged {
 		t.Fatal("MigrateUp(first) reported no change, want applied migrations")
 	}
 
@@ -45,7 +45,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 		t.Fatalf("schema_migrations = version %d dirty %t, want version 1 dirty false", version, dirty)
 	}
 
-	secondRun, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+	secondRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        dsn,
 		SourceFS:   os.DirFS(".."),
 		SourcePath: "env/migrations",
@@ -53,7 +53,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(second) error: %v", err)
 	}
-	if secondRun.Changed {
+	if secondRunChanged {
 		t.Fatal("MigrateUp(second) reported schema change, want no change")
 	}
 

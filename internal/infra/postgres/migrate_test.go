@@ -193,7 +193,7 @@ func TestExecuteMigrations(t *testing.T) {
 				upErr:    tc.upErr,
 				stepErrs: tc.stepErrs,
 			}
-			result, err := executeMigrations(runner, tc.rehearse)
+			changed, err := executeMigrations(runner, tc.rehearse)
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) {
 					t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, tc.wantErr)
@@ -204,8 +204,8 @@ func TestExecuteMigrations(t *testing.T) {
 			} else if err != nil {
 				t.Fatalf("executeMigrations() error = %v, want nil", err)
 			}
-			if result.Changed != tc.wantChanged {
-				t.Fatalf("executeMigrations() Changed = %t, want %t", result.Changed, tc.wantChanged)
+			if changed != tc.wantChanged {
+				t.Fatalf("executeMigrations() changed = %t, want %t", changed, tc.wantChanged)
 			}
 			if !slices.Equal(runner.stepCalls, tc.wantStepCalls) {
 				t.Fatalf("executeMigrations() Steps calls = %v, want %v", runner.stepCalls, tc.wantStepCalls)
