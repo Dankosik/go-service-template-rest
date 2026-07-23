@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,8 +20,8 @@ import (
 
 const testRouterMaxBodyBytes int64 = 1 << 20
 
-func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
-	t.Helper()
+func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
+	tb.Helper()
 
 	if h.Health == nil {
 		h.Health = health.New()
@@ -43,73 +44,73 @@ func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetr
 
 	handler, err := NewRouter(log, h, metrics, cfg)
 	if err != nil {
-		t.Fatalf("NewRouter() error = %v, want nil", err)
+		tb.Fatalf("NewRouter() error = %v, want nil", err)
 	}
 	return handler
 }
 
-func TestRouterEndpoints(t *testing.T) {
-	t.Parallel()
-
+func BenchmarkTemplateExample(b *testing.B) {
 	log := slog.New(slog.DiscardHandler)
-	h := mustNewRouter(t, log, Handlers{
+	h := mustNewRouter(b, log, Handlers{
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{})
 
-	t.Run("ping", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name       string
+		target     string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "valid-small",
+			target:     "/api/v1/template-example/example?copies=1",
+			body:       `{"message":"hello"}`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "valid-maximum",
+			target:     "/api/v1/template-example/" + strings.Repeat("s", 32) + "?copies=3",
+			body:       `{"message":"` + strings.Repeat("m", 64) + `"}`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "invalid-body",
+			target:     "/api/v1/template-example/example?copies=1",
+			body:       `{"message":"hello","unexpected":true}`,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-		resp := httptest.NewRecorder()
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			if got := benchmarkTemplateExampleRequest(h, tt.target, tt.body); got != tt.wantStatus {
+				b.Fatalf("status = %d, want %d", got, tt.wantStatus)
+			}
 
-		h.ServeHTTP(resp, req)
+			b.Run("serial", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					benchmarkTemplateExampleRequest(h, tt.target, tt.body)
+				}
+			})
+			b.Run("parallel", func(b *testing.B) {
+				b.ReportAllocs()
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						benchmarkTemplateExampleRequest(h, tt.target, tt.body)
+					}
+				})
+			})
+		})
+	}
+}
 
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-		if body := resp.Body.String(); body != "pong" {
-			t.Fatalf("body = %q, want %q", body, "pong")
-		}
-	})
-
-	t.Run("live", func(t *testing.T) {
-		t.Parallel()
-
-		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-	})
-
-	t.Run("ready", func(t *testing.T) {
-		t.Parallel()
-
-		req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-	})
-
-	t.Run("metrics", func(t *testing.T) {
-		t.Parallel()
-
-		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
-		}
-	})
+func benchmarkTemplateExampleRequest(h http.Handler, target, body string) int {
+	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	h.ServeHTTP(resp, req)
+	return resp.Code
 }
 
 func spanHTTPRoute(span sdktrace.ReadOnlySpan) string {

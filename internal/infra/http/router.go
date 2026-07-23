@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -121,6 +122,11 @@ func generatedChiServerOptions(log *slog.Logger, middlewares ...api.MiddlewareFu
 
 func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r *http.Request, err error) {
 	logStrictRequestError(log, r, err)
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		writeProblem(w, r, problemResponse{code: problemCodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+		return
+	}
 	writeMalformedRequestProblem(w, r)
 }
 
