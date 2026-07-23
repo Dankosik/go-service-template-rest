@@ -95,7 +95,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apache/arrow/go/v10 v10.0.1 // indirect
-	github.com/apache/thrift v0.16.0 // indirect
+	github.com/apache/thrift v0.23.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ashanbrown/forbidigo/v2 v2.3.0 // indirect
 	github.com/ashanbrown/makezero/v2 v2.1.0 // indirect
