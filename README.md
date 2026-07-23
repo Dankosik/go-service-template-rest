@@ -1,11 +1,11 @@
 <p align="center">
-  <img src=".github/assets/go-service-template-hero.png" alt="Go Service Template: agent-native REST services for Codex, Claude Code, and Qwen" width="100%" />
+  <img src=".github/assets/go-service-template-hero.png" alt="Go REST API and Golang microservice template, AI-native for developers and coding agents" width="100%" />
 </p>
 
-<h1 align="center">Go Service Template REST</h1>
+<h1 align="center">Go REST API &amp; Microservice Template</h1>
 
 <p align="center">
-  An agent-native Go REST service template with real architecture, delivery constraints, and proof.
+  An AI-native Golang backend boilerplate for developers and coding agents, with OpenAPI-first HTTP, PostgreSQL, sqlc, observability, and CI.
 </p>
 
 <p align="center">
@@ -40,9 +40,9 @@ make check
 make run
 ```
 
-Your agent can start immediately: Codex reads `AGENTS.md`, Claude Code reads
-`CLAUDE.md`, and Qwen Code reads `QWEN.md`. All three use the same repository
-rules, specialist agents, and reusable skills.
+Developers and coding agents can start immediately: Codex reads `AGENTS.md`,
+Claude Code reads `CLAUDE.md`, and Qwen Code reads `QWEN.md`. All three use the
+same repository rules, specialist agents, and reusable skills.
 
 ## What You Get
 
