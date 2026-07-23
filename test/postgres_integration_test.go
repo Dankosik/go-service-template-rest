@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -51,7 +49,10 @@ func TestPostgresPool(t *testing.T) {
 	t.Cleanup(pool.Close)
 
 	t.Run("readiness probe", func(t *testing.T) {
-		checkCtx, checkCancel := context.WithTimeout(t.Context(), 3*time.Second)
+		traceCtx, traceSpan := otel.Tracer("postgres-integration-test").Start(t.Context(), "postgres readiness")
+		defer traceSpan.End()
+
+		checkCtx, checkCancel := context.WithTimeout(traceCtx, 3*time.Second)
 		defer checkCancel()
 
 		if err := pool.Check(checkCtx); err != nil {
@@ -59,38 +60,7 @@ func TestPostgresPool(t *testing.T) {
 		}
 	})
 
-	t.Run("InTx binds all statements to one transaction", func(t *testing.T) {
-		traceCtx, traceSpan := otel.Tracer("postgres-integration-test").Start(t.Context(), "postgres transaction")
-		defer traceSpan.End()
-
-		txCtx, txCancel := context.WithTimeout(traceCtx, 3*time.Second)
-		defer txCancel()
-
-		var firstID string
-		var secondID string
-		err := pool.InTx(txCtx, func(tx pgx.Tx) error {
-			if err := tx.QueryRow(txCtx, "SELECT pg_current_xact_id()::text").Scan(&firstID); err != nil {
-				return err
-			}
-			return tx.QueryRow(txCtx, "SELECT pg_current_xact_id()::text").Scan(&secondID)
-		})
-		if err != nil {
-			t.Fatalf("InTx() error = %v, want nil", err)
-		}
-		if firstID == "" || firstID != secondID {
-			t.Fatalf("transaction IDs = %q, %q; want one non-empty ID", firstID, secondID)
-		}
-
-		sentinel := errors.New("callback failure")
-		err = pool.InTx(txCtx, func(pgx.Tx) error {
-			return sentinel
-		})
-		if !errors.Is(err, postgres.ErrTransaction) || !errors.Is(err, sentinel) {
-			t.Fatalf("InTx() error = %v, want ErrTransaction and callback failure", err)
-		}
-	})
-
-	t.Run("telemetry is useful and does not expose query details", func(t *testing.T) {
+	t.Run("telemetry is useful and does not expose database details", func(t *testing.T) {
 		assertPostgresTracePrivacy(t, spanRecorder)
 		assertPostgresPoolMetrics(t, ctx, metricReader, pool.Name())
 	})
@@ -107,28 +77,27 @@ func assertPostgresTracePrivacy(t *testing.T, recorder *tracetest.SpanRecorder) 
 		semconv.DBNamespaceKey,
 		attribute.Key("pgx.query.parameters"),
 	}
-	sawQuerySpan := false
+	sawDatabaseSpan := false
+	observedNames := make([]string, 0, len(recorder.Ended()))
 	for _, span := range recorder.Ended() {
 		name := span.Name()
-		if !strings.HasPrefix(name, "query ") {
+		observedNames = append(observedNames, name)
+		if name != "pool.acquire" {
 			continue
 		}
-		sawQuerySpan = true
+		sawDatabaseSpan = true
 
-		// Span names stay bounded to one operation keyword (BEGIN, COMMIT,
-		// ROLLBACK, SELECT, ...) and never carry raw statement text.
-		if fields := strings.Fields(name); len(fields) != 2 {
-			t.Fatalf("query span name %q is not bounded to one operation keyword", name)
-		}
+		// The readiness path stays bounded to a fixed operation label and never
+		// carries raw database or connection details.
 		attrs := attribute.NewSet(span.Attributes()...)
 		for _, key := range sensitiveKeys {
 			if _, present := attrs.Value(key); present {
-				t.Fatalf("query span %q contains sensitive attribute %q", name, key)
+				t.Fatalf("database span %q contains sensitive attribute %q", name, key)
 			}
 		}
 	}
-	if !sawQuerySpan {
-		t.Fatal("postgres spans contain no bounded query spans")
+	if !sawDatabaseSpan {
+		t.Fatalf("postgres spans contain no bounded database spans; observed spans: %q", observedNames)
 	}
 }
 

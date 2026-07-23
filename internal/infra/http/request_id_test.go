@@ -1,4 +1,4 @@
-package requestmeta
+package httpx
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func TestContextWithRequestID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, got := ContextWithRequestID(context.Background(), tt.candidate)
+			ctx, got := contextWithRequestID(context.Background(), tt.candidate)
 			if tt.want != "" && got != tt.want {
 				t.Fatalf("ContextWithRequestID() = %q, want %q", got, tt.want)
 			}
@@ -36,7 +36,7 @@ func TestContextWithRequestID(t *testing.T) {
 			if !validRequestID(got) {
 				t.Fatalf("ContextWithRequestID() returned invalid request ID %q", got)
 			}
-			if fromContext := RequestIDFromContext(ctx); fromContext != got {
+			if fromContext := requestIDFromContext(ctx); fromContext != got {
 				t.Fatalf("RequestIDFromContext() = %q, want %q", fromContext, got)
 			}
 		})
@@ -46,7 +46,7 @@ func TestContextWithRequestID(t *testing.T) {
 func TestRequestIDFromContextWithoutValue(t *testing.T) {
 	t.Parallel()
 
-	if got := RequestIDFromContext(context.Background()); got != "" {
+	if got := requestIDFromContext(context.Background()); got != "" {
 		t.Fatalf("RequestIDFromContext() = %q, want empty", got)
 	}
 }

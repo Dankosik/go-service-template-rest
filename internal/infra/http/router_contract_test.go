@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/app/health"
+	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -440,7 +440,7 @@ func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRou
 func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 	t.Helper()
 
-	swagger, err := api.GetSpec()
+	swagger, err := openapi.GetSpec()
 	if err != nil {
 		t.Fatalf("GetSpec() error = %v", err)
 	}

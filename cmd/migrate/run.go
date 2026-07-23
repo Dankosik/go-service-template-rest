@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	imageMigrationSourcePath = "/env/migrations"
-	localMigrationSourcePath = "env/migrations"
+	imageMigrationSourcePath = "/migrations"
+	localMigrationSourcePath = "migrations"
 )
 
 func run(args []string, stdout io.Writer) error {
@@ -39,7 +39,11 @@ func run(args []string, stdout io.Writer) error {
 		return nil
 	}
 
-	migrationSourceFS, migrationSourcePath := resolveMigrationSource()
+	migrationSourceFS, migrationSourcePath, found := resolveMigrationSource()
+	if !found {
+		_, _ = fmt.Fprintln(stdout, "no migration files found; skipping migrations")
+		return nil
+	}
 	if validate {
 		if err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
 			DSN:        cfg.Postgres.DSN,
@@ -70,14 +74,14 @@ func run(args []string, stdout io.Writer) error {
 	return nil
 }
 
-func resolveMigrationSource() (fs.FS, string) {
+func resolveMigrationSource() (fs.FS, string, bool) {
 	if configuredPath := strings.TrimSpace(os.Getenv("MIGRATION_PATH")); configuredPath != "" {
 		if path.IsAbs(configuredPath) {
-			return nil, path.Clean(configuredPath)
+			return nil, path.Clean(configuredPath), true
 		}
-		return os.DirFS("."), path.Clean(configuredPath)
+		return os.DirFS("."), path.Clean(configuredPath), true
 	}
-	return resolveMigrationSourceFrom(imageMigrationSourcePath, localMigrationSourcePath)
+	return resolveMigrationSourceFrom(imageMigrationSourcePath)
 }
 
 func parseMigrationCommand(args []string) (bool, error) {
@@ -92,14 +96,31 @@ func parseMigrationCommand(args []string) (bool, error) {
 	return false, fmt.Errorf("usage: migrate [validate]")
 }
 
-func resolveMigrationSourceFrom(imagePath string, localPath string) (fs.FS, string) {
-	if info, err := os.Stat(imagePath); err == nil && info.IsDir() {
-		return nil, imagePath
+func resolveMigrationSourceFrom(imagePath string) (fs.FS, string, bool) {
+	if hasMigrationFiles(imagePath) {
+		return nil, imagePath, true
 	}
 
-	if info, err := os.Stat(localPath); err == nil && info.IsDir() {
-		return os.DirFS("."), path.Clean(localPath)
+	if hasMigrationFiles(localMigrationSourcePath) {
+		return os.DirFS("."), localMigrationSourcePath, true
 	}
 
-	return nil, imagePath
+	return nil, "", false
+}
+
+func hasMigrationFiles(directory string) bool {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".up.sql") || strings.HasSuffix(name, ".down.sql") {
+			return true
+		}
+	}
+	return false
 }

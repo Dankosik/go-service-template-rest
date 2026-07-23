@@ -48,7 +48,7 @@ Copy this shape when a scoped-out decision appears in implementation.
 
 ## Reject
 ```text
-[low] [go-implementation-ownership] internal/app/widgets/format.go:18
+[low] [go-implementation-ownership] internal/widgets/format.go:18
 Issue: This helper was not mentioned in the spec.
 ```
 

@@ -1,4 +1,4 @@
-package requestmeta
+package httpx
 
 import (
 	"context"
@@ -10,9 +10,9 @@ const maxRequestIDLength = 128
 
 type requestIDContextKey struct{}
 
-// ContextWithRequestID validates the candidate, generates a replacement when needed,
+// contextWithRequestID validates the candidate, generates a replacement when needed,
 // and returns both the enriched context and the accepted identifier.
-func ContextWithRequestID(ctx context.Context, candidate string) (context.Context, string) {
+func contextWithRequestID(ctx context.Context, candidate string) (context.Context, string) {
 	requestID := strings.TrimSpace(candidate)
 	if !validRequestID(requestID) {
 		requestID = newRequestID()
@@ -20,8 +20,8 @@ func ContextWithRequestID(ctx context.Context, candidate string) (context.Contex
 	return context.WithValue(ctx, requestIDContextKey{}, requestID), requestID
 }
 
-// RequestIDFromContext returns the validated request identifier stored in ctx.
-func RequestIDFromContext(ctx context.Context) string {
+// requestIDFromContext returns the validated request identifier stored in ctx.
+func requestIDFromContext(ctx context.Context) string {
 	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
 	return requestID
 }

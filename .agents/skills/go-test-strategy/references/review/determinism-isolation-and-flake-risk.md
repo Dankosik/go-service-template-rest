@@ -17,7 +17,7 @@ Load this when tests involve sleeps, timers, randomness, environment variables, 
 ## Imitate
 
 ```text
-[high] [go-test-strategy] cmd/service/internal/bootstrap/main_shutdown_test.go:123
+[high] [go-test-strategy] cmd/service/internal/bootstrap/shutdown_test.go:123
 Issue:
 `TestDrainAndShutdownWaitsForPropagationDelay` uses a real sleep as the only proof that the drain marker is set before shutdown starts. If the goroutine reaches shutdown late or early due to scheduler timing, the test can pass without proving the required ordering.
 Impact:
@@ -47,7 +47,7 @@ Copy this shape: only object to `t.Parallel()` because a shared fixture is mutab
 ## Reject
 
 ```text
-[medium] [go-test-strategy] cmd/service/internal/bootstrap/main_shutdown_test.go:123
+[medium] [go-test-strategy] cmd/service/internal/bootstrap/shutdown_test.go:123
 Issue:
 This test sleeps, so it is flaky.
 Impact:

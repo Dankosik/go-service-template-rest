@@ -18,7 +18,7 @@ Load this when changed Go code makes outbound HTTP or network calls based on use
 
 ## Imitate
 ```text
-[high] [go-security] internal/app/avatar.go:66
+[high] [go-security] internal/avatar.go:66
 Issue: Axis: SSRF And Outbound Safety; `FetchAvatar` accepts a full request URL and calls `http.Get` with the default redirect policy.
 Impact: A tenant user can point the service at an internal admin endpoint or a trusted external URL that redirects internally.
 Suggested fix: Require pre-registered HTTPS origins or an allowlisted host ID, use a custom client with timeout, disable or revalidate redirects, and reject private or metadata IP resolutions before the request.
@@ -28,7 +28,7 @@ Reference: outbound fetch boundary.
 Copy this shape when both arbitrary target selection and redirect behavior matter.
 
 ```text
-[medium] [go-security] internal/app/webhook.go:112
+[medium] [go-security] internal/webhook.go:112
 Issue: Axis: SSRF And Redirect Safety; the webhook validator checks the initial hostname but delivery follows redirects without rechecking the target.
 Impact: A partner-controlled endpoint can pass registration and later redirect to a private address.
 Suggested fix: Set `CheckRedirect` to reject redirects or re-run the same scheme, host, and IP policy on every redirect target.

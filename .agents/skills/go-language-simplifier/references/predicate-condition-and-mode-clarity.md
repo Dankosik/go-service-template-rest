@@ -18,7 +18,7 @@ Use this when the review question is "can a reader tell which decision is being 
 Finding shape to copy when a predicate helper hides the actual decision:
 
 ```text
-[medium] [go-language-simplifier] internal/app/reports/filter.go:47
+[medium] [go-language-simplifier] internal/reports/filter.go:47
 Issue: `shouldInclude` hides tenant visibility, archive state, and admin override policy behind one generic predicate name.
 Impact: Callers cannot tell which report visibility decision is being made without opening the helper, so future changes can reuse it for the wrong policy.
 Suggested fix: Rename and narrow the predicate to the policy it answers, such as `canIncludeArchivedReport`, or keep the condition local with named subexpressions.
@@ -30,7 +30,7 @@ Copy the move: identify the policy terms hidden behind the generic predicate nam
 Finding shape to copy when an API exposes hidden modes:
 
 ```text
-[high] [go-language-simplifier] internal/app/exports/service.go:29
+[high] [go-language-simplifier] internal/exports/service.go:29
 Issue: `RunExport(ctx, id, true, false, "retry")` replaced a small options type with same-typed booleans and a raw mode string.
 Impact: The call site is shorter but less safe to read, and invalid mode combinations can now reach runtime instead of being named by the API shape.
 Suggested fix: Restore named options or split the modes into policy-named entry points; treat exported API changes as design-sensitive.

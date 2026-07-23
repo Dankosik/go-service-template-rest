@@ -18,7 +18,7 @@ Do not load this for ordinary local names unless the rename changes branch-misre
 Finding shape to copy when a helper name hides a policy distinction:
 
 ```text
-[medium] [go-language-simplifier] internal/app/accounts/lifecycle.go:63
+[medium] [go-language-simplifier] internal/accounts/lifecycle.go:63
 Issue: `processAccount` now handles both deactivation and deletion policy, but the name exposes neither lifecycle state.
 Impact: Future callers can reuse it without noticing that one path preserves audit history while the other removes credentials.
 Suggested fix: Split or rename the helper around the lifecycle policy it owns, such as `deactivateAccount` and `deleteAccountCredentials`.
@@ -30,7 +30,7 @@ Copy the move: connect the generic name to a specific wrong reuse risk.
 Finding shape to copy when vocabulary drift makes cleanup risky:
 
 ```text
-[low] [go-language-simplifier] internal/app/reports/archive.go:28
+[low] [go-language-simplifier] internal/reports/archive.go:28
 Issue: The new cleanup renames `archived` to `disabled` only in one predicate while the rest of the package still uses archive vocabulary.
 Impact: A reader has to decide whether "disabled" is a new state or a synonym, which raises future branch-misread risk.
 Suggested fix: Keep the existing archive vocabulary, or rename the whole local policy only if the behavior actually changed and the design approves it.

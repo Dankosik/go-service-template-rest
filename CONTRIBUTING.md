@@ -74,8 +74,8 @@ For Railway policy changes:
 - Format Go through `make fmt`; verify with `make fmt-check`.
 - Prefer explicit Go and existing repository seams over new framework layers.
 - Use the placement guide in
-  [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#4-where-to-put-new-code).
-- Keep business logic in `internal/app/<feature>`, HTTP mapping in
+  [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#3-deterministic-placement-algorithm).
+- Keep business logic in `internal/<feature>`, HTTP mapping in
   `internal/infra/http`, persistence adapters in `internal/infra/postgres`,
   configuration in `internal/config`, and composition in
   `cmd/service/internal/bootstrap`.

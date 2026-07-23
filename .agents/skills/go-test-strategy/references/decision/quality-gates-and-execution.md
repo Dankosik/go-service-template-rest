@@ -7,7 +7,7 @@ When loaded for symptom "the strategy must name executable validation", this fil
 Load this when test strategy must name local or CI validation commands, focused checks, coverage/race/fuzz/integration gates, OpenAPI checks, migration checks, generated-code drift checks, or residual proof limits.
 
 ## Decision Rubric
-- Use `docs/build-test-and-development-commands.md`, `Makefile`, `.github/workflows/ci.yml`, `.github/workflows/nightly.yml`, `test/README.md`, and `internal/api/README.md` as command sources.
+- Use `docs/build-test-and-development-commands.md`, `Makefile`, `.github/workflows/ci.yml`, `.github/workflows/nightly.yml`, `test/README.md`, and `internal/openapi/README.md` as command sources.
 - Start with the proof obligation, then choose the narrowest focused command and the broader repo/CI gate that cover the same surface.
 - Use focused `go test ./internal/<pkg> -run <RelevantPattern> -count=1` when fresh package-local evidence matters.
 - Use `make test-race` or focused `go test -race ...` only when the scenario executes the shared-state or goroutine path.

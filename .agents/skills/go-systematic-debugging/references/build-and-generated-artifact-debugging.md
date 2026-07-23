@@ -18,11 +18,11 @@ Load when `go build`, `go test` compilation, `go vet`, code generation, build ta
 
 ```bash
 go env GOVERSION GOOS GOARCH CGO_ENABLED GOMOD GOWORK
-go list -f '{{.GoFiles}} {{.IgnoredGoFiles}}' -tags 'ci' ./internal/api
-go build -json -tags 'ci' ./internal/api
-go generate -run 'oapi' -n -v -x ./internal/api
-go generate -run 'oapi' -v -x ./internal/api
-go test ./internal/api -run '^$' -tags 'ci' -count=1
+go list -f '{{.GoFiles}} {{.IgnoredGoFiles}}' -tags 'ci' ./internal/openapi
+go build -json -tags 'ci' ./internal/openapi
+go generate -run 'oapi' -n -v -x ./internal/openapi
+go generate -run 'oapi' -v -x ./internal/openapi
+go test ./internal/openapi -run '^$' -tags 'ci' -count=1
 ```
 
 Copy the order: prove environment and selected source set, inspect generation, then mutate through the generator if needed.

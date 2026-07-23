@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/requestmeta"
+	"github.com/example/go-service-template-rest/internal/openapi"
 )
 
 const (
@@ -36,7 +35,7 @@ type problemDefinition struct {
 
 func writeProblem(w http.ResponseWriter, r *http.Request, problem problemResponse) {
 	code, definition := problemDefinitionFor(problem.code)
-	p := api.Problem{
+	p := openapi.Problem{
 		Code:      string(code),
 		Detail:    optionalProblemString(problem.detail),
 		Instance:  nil,
@@ -46,7 +45,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, problem problemRespons
 		Type:      definition.typeURI,
 	}
 	if r != nil {
-		p.RequestId = optionalProblemString(requestmeta.RequestIDFromContext(r.Context()))
+		p.RequestId = optionalProblemString(requestIDFromContext(r.Context()))
 	}
 
 	w.Header().Set("Content-Type", problemJSONContentType)

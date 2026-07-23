@@ -18,7 +18,7 @@ Use this as the primary reference for helper economics. If the helper mainly cha
 Finding shape to copy when a helper adds jumps without semantic compression:
 
 ```text
-[medium] [go-language-simplifier] internal/app/users/create.go:34
+[medium] [go-language-simplifier] internal/users/create.go:34
 Issue: The new `prepareInput` helper is used once and only moves three local validation assignments away from the decision that consumes them.
 Impact: A reader now has to jump between functions to verify the create preconditions, but the helper name does not expose a stable policy beyond "do the next few lines."
 Suggested fix: Inline the validation back into `CreateUser`, or rename and narrow the helper only if this is the package's stable user-normalization policy.

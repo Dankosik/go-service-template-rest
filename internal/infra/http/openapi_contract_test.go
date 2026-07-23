@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/api"
-	"github.com/example/go-service-template-rest/internal/app/health"
+	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
@@ -474,7 +474,7 @@ func resolveResponseRef(swagger *openapi3.T, responseRef *openapi3.ResponseRef) 
 func mustOpenAPISwagger(t *testing.T) *openapi3.T {
 	t.Helper()
 
-	swagger, err := api.GetSpec()
+	swagger, err := openapi.GetSpec()
 	if err != nil {
 		t.Fatalf("GetSpec() error = %v", err)
 	}

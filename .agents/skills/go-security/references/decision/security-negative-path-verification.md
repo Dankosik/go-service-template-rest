@@ -38,7 +38,9 @@ Load this when turning security requirements into validation obligations before 
 - Repo gates: `make go-security` for `govulncheck` and `gosec`; `make secret-scan` for `gitleaks`; targeted Go/OpenAPI tests for behavior.
 
 ## Repo-Local Anchors
-- `internal/infra/http/router_test.go` includes fail-closed CORS preflight, security header, request framing, request ID, and body-limit tests.
+- `internal/infra/http/router_contract_test.go`, `middleware_guards_test.go`, and
+  `middleware_correlation_test.go` cover fail-closed HTTP policy, security
+  headers, request framing, request IDs, and body limits.
 - `internal/config/config_test.go` includes secret policy and raw-secret redaction tests.
 - `Makefile` provides `go-security`, `secret-scan`, `openapi-check`, `test`, and `test-race` proof commands.
 - `scripts/ci/required-guardrails-check.sh` tracks required guardrails including security policy and CI checks.

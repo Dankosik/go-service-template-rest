@@ -18,7 +18,7 @@ Use this when the simplification risk is the error contract itself. If the risk 
 Finding shape to copy when a generic helper destroys error identity:
 
 ```text
-[high] [go-language-simplifier] internal/app/users/service.go:118
+[high] [go-language-simplifier] internal/users/service.go:118
 Issue: `newServiceError("save user", err)` formats the database and conflict paths with `%v`, so callers can no longer match `ErrEmailTaken` with `errors.Is`.
 Impact: The helper removes visible repetition by weakening the caller-visible error contract and can route conflicts as internal failures at the transport boundary.
 Suggested fix: Preserve the original wrapping contract with `%w` for inspectable errors, or keep the conflict branch local when it needs different mapping.

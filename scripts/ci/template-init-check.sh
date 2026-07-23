@@ -18,7 +18,7 @@ new_fixture() {
 	mkdir -p \
 		"${root}/.github" \
 		"${root}/env" \
-		"${root}/internal/app/example" \
+		"${root}/internal/example" \
 		"${root}/internal/infra/example"
 
 	{
@@ -34,7 +34,7 @@ new_fixture() {
 		echo "package example"
 		echo
 		echo 'const Module = "github.com/example/go-service-template-rest"'
-	} >"${root}/internal/app/example/example.go"
+	} >"${root}/internal/example/example.go"
 	echo "package example" >"${root}/internal/infra/example/example.go"
 
 	if [[ "${existing_env}" == true ]]; then
@@ -96,12 +96,12 @@ grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@acme/platf
 	echo "package example"
 	echo
 	echo 'import _ "github.com/acme/orders/internal/infra/example"'
-} >"${derived}/internal/app/example/forbidden.go"
+} >"${derived}/internal/example/forbidden.go"
 if (
 	cd "${derived}"
 	"${LINTER}" run --enable-only=depguard ./... >"${TEMP_ROOT}/depguard.log" 2>&1
 ); then
-	echo "depguard accepted an app-to-infra import after module initialization"
+	echo "depguard accepted a feature-to-infra import after module initialization"
 	exit 1
 fi
 grep -Fq "depguard" "${TEMP_ROOT}/depguard.log" || {

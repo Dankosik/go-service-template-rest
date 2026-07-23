@@ -18,7 +18,7 @@ Use this for the question "is this value trusted enough to act on?" If the prima
 
 ## Imitate
 ```text
-[high] [go-security] internal/api/orders.go:47
+[high] [go-security] internal/infra/http/orders_handlers.go:47
 Issue: Axis: Trust Boundary And Input Validation; the handler decodes `sort` from the query and passes it into repository filtering before checking it against supported sort keys.
 Impact: An authenticated caller can select unsupported operators that change the database predicate shape.
 Suggested fix: Reject unknown sort keys at the HTTP boundary and map accepted values to internal enum constants before calling the repository.

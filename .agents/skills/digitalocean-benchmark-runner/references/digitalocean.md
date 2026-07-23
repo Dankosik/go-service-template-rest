@@ -518,7 +518,7 @@ Use this only when one remote result is sufficient:
 
 ```bash
 scripts/dev/benchmark-remote.sh run -- \
-  make bench BENCH_PACKAGE=./internal/app/orders \
+  make bench BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines
 ```
@@ -567,7 +567,7 @@ Use a retained session when claiming that code became faster or slower:
 scripts/dev/benchmark-remote.sh create
 scripts/dev/benchmark-remote.sh sync
 scripts/dev/benchmark-remote.sh exec \
-  make bench-baseline BENCH_PACKAGE=./internal/app/orders \
+  make bench-baseline BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines
 
@@ -575,7 +575,7 @@ scripts/dev/benchmark-remote.sh exec \
 
 scripts/dev/benchmark-remote.sh sync
 scripts/dev/benchmark-remote.sh exec \
-  make bench BENCH_PACKAGE=./internal/app/orders \
+  make bench BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines
 scripts/dev/benchmark-remote.sh exec make bench-compare

@@ -21,7 +21,7 @@ If the primary issue is only request body size, load the abuse reference. If the
 
 ## Imitate
 ```text
-[high] [go-security] internal/app/files.go:51
+[high] [go-security] internal/files.go:51
 Issue: Axis: Path And Filesystem Safety; `Download` joins `baseDir` with the request `name` and opens the result without proving the final path remains under `baseDir`.
 Impact: A caller can request a path outside the download root where lexical cleanup is insufficient or symlinks are in scope.
 Suggested fix: Use `os.OpenInRoot` or an `os.Root` opened on `baseDir`, and reject non-local names before the open.
@@ -31,7 +31,7 @@ Reference: download root confinement.
 Copy this shape when the file operation can escape a root.
 
 ```text
-[high] [go-security] internal/app/upload.go:88
+[high] [go-security] internal/upload.go:88
 Issue: Axis: Upload Safety; the upload handler stores `header.Filename` directly under the public assets directory after checking only the extension.
 Impact: A user can choose colliding or dangerous names and publish active content under a served path.
 Suggested fix: Generate a server-side storage key, enforce body and per-file size limits, validate decoded extension plus detected content type, and keep uploads outside direct public serving until scanned or approved.
@@ -41,7 +41,7 @@ Reference: upload storage boundary.
 Copy this shape when filename trust and public serving combine.
 
 ```text
-[medium] [go-security] internal/app/archive.go:119
+[medium] [go-security] internal/archive.go:119
 Issue: Axis: Archive Extraction Safety; archive entries are extracted with raw member paths.
 Impact: A crafted archive can write outside the extraction root or plant a symlink for a later member.
 Suggested fix: Use root-constrained extraction, reject non-local member names, and define symlink policy before extraction.

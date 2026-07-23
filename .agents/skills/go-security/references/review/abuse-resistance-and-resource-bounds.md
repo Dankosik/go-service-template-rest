@@ -20,7 +20,7 @@ If password reset or OTP token generation, hashing, expiry, or replay is primary
 
 ## Imitate
 ```text
-[high] [go-security] internal/app/search.go:91
+[high] [go-security] internal/search.go:91
 Issue: Axis: Abuse Resistance And Resource Bounds; `limit` is parsed from the query and passed directly into `ListRecent` without a maximum.
 Impact: An authenticated caller can request very large result sets and pin database and response memory.
 Suggested fix: Clamp to the API maximum at the HTTP boundary and add a regression test for `limit=max+1`.
@@ -30,7 +30,7 @@ Reference: pagination limit contract.
 Copy this shape when the caller controls result size.
 
 ```text
-[high] [go-security] internal/app/reset.go:44
+[high] [go-security] internal/reset.go:44
 Issue: Axis: Abuse Resistance And Resource Bounds; every password-reset request sends an SMS before any per-account or per-IP throttle.
 Impact: An unauthenticated caller can drive third-party SMS cost and lockout noise.
 Suggested fix: Add a fail-closed throttle before the provider call and return a generic response that does not disclose account existence.
@@ -40,7 +40,7 @@ Reference: account recovery abuse boundary.
 Copy this shape when the risk is repeatable provider cost, not token cryptography.
 
 ```text
-[medium] [go-security] internal/app/import.go:133
+[medium] [go-security] internal/import.go:133
 Issue: Axis: Abuse Resistance And Resource Bounds; the importer starts one goroutine per submitted item with no batch cap or worker limit.
 Impact: A tenant can submit a large array and exhaust goroutines or downstream connections.
 Suggested fix: Enforce a maximum item count and process through a bounded worker pool tied to the request context.

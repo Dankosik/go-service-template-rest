@@ -29,7 +29,7 @@ Reference: tenant isolation and object access contract.
 Copy this shape when identity exists but object access is not scoped before data returns.
 
 ```text
-[high] [go-security] internal/app/admin/users.go:58
+[high] [go-security] internal/admin/users.go:58
 Issue: Axis: AuthZ And Tenant Isolation; the new `X-Admin: true` shortcut trusts a client-controlled header as an admin decision.
 Impact: A caller can set the header and reach admin user export.
 Suggested fix: Remove the header trust and derive admin capability only from verified identity claims or an internal authenticated service context.

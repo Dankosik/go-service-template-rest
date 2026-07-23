@@ -18,7 +18,7 @@ Do not load this by default when a narrower reference already matches the primar
 Finding shape to copy when a dedupe helper merges failure semantics:
 
 ```text
-[high] [go-language-simplifier] internal/app/orders/complete.go:88
+[high] [go-language-simplifier] internal/orders/complete.go:88
 Issue: The new `finishOrderFailure` helper merges validation, inventory conflict, and payment retry failures behind one status and notification path.
 Impact: Reviewers now have to inspect helper inputs to recover which branch owns customer-visible status and retry behavior, and future changes can silently route a conflict like a validation error.
 Suggested fix: Keep the repeated response shape local, or extract only the shared formatting after each branch has selected its stable failure class.

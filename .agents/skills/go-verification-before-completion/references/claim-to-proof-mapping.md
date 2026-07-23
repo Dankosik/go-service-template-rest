@@ -17,18 +17,18 @@ Load this for fuzzy positive claims such as "fixed", "tests pass", "green", "rea
 ## Imitate
 | Claim | Choose | Copy this behavior |
 |---|---|---|
-| "I fixed `TestCreateUser`" | `go test ./internal/app/user -run '^TestCreateUser$' -count=1` | Match the failing test and force a fresh body execution. |
-| "The parser package is green" | `go test ./internal/app/parser/...` | Expand from one focused test to the package tree named by the claim. |
+| "I fixed `TestCreateUser`" | `go test ./internal/user -run '^TestCreateUser$' -count=1` | Match the failing test and force a fresh body execution. |
+| "The parser package is green" | `go test ./internal/parser/...` | Expand from one focused test to the package tree named by the claim. |
 | "Repository tests pass" | `make test` or `go test ./...` with honest cache reporting | Use repository-wide proof for repository-wide wording. |
 | "Build succeeds" | `make build` | Do not let tests stand in for building the command binary. |
 | "Lint is clean" | `make lint` | Use the repo target that verifies golangci-lint config before linting. |
-| "Worker race path is checked" | `go test -race ./internal/app/worker/...` or `make test-race` | Race proof requires race instrumentation on the relevant executed path. |
+| "Worker race path is checked" | `go test -race ./internal/worker/...` or `make test-race` | Race proof requires race instrumentation on the relevant executed path. |
 | "Ready for review" | focused fix proof plus triggered repo checks such as `make test`, `make lint`, and any surface-specific checks | Treat readiness as a composite claim. |
 
 ## Reject
 | Plausible bad conclusion | Why it fails |
 |---|---|
-| "All tests pass" after `go test ./internal/app/parser/...` | A package pattern does not prove unrelated packages. |
+| "All tests pass" after `go test ./internal/parser/...` | A package pattern does not prove unrelated packages. |
 | "Build is good" after `go test ./...` | Tests compile packages under test, but this repo's build claim maps to `make build`. |
 | "Race safe" after non-race `go test` | Races are only detected in race-instrumented executed paths. |
 | "Ready to merge" after one focused `-run` test | A focused reproducer proves the fix path, not lint, build, generated drift, migrations, or broader regressions. |

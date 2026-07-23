@@ -7,7 +7,7 @@ When loaded for symptom "the change is REST/OpenAPI or client-boundary visible",
 Load this when planned behavior affects OpenAPI, generated bindings, HTTP method/status semantics, validation, limits, idempotency keys, auth/tenant/object boundaries, problem details, async acceptance, or runtime route/handler conformance.
 
 ## Decision Rubric
-- Use `api/openapi/service.yaml`, generated API docs, `internal/api/README.md`, and runtime route tests as local contract sources before naming external standards.
+- Use `api/openapi/service.yaml`, generated API docs, `internal/openapi/README.md`, and runtime route tests as local contract sources before naming external standards.
 - Contract proof must name status, headers, body schema/problem details, request decoding, and generated/runtime artifact expectations when those are affected.
 - Boundary proof must vary the caller-controlled dimension: credential, tenant, object ID, idempotency key, cursor/filter, request size, unknown field, or async operation ID.
 - Idempotent write proof should include first request, same key/same payload replay, same key/different payload mismatch rejection, and concurrent same-key attempts when concurrency is in scope. Do not collapse mismatch and in-flight concurrency into the same status expectation unless the approved API contract does.
@@ -21,7 +21,7 @@ Load this when planned behavior affects OpenAPI, generated bindings, HTTP method
 | Request validation | valid body; missing field; invalid type; unknown field if strict; oversized body if limit changed | Contract | status, problem payload shape, field path if specified, no partial side effect |
 | Auth and ownership | no credential; expired/invalid credential; wrong tenant/object owner; authorized actor | Contract or integration | 401/403/concealment status per approved policy, no leaked data, no write |
 | Idempotent write | first request; same key/same payload; same key/different payload; concurrent same key | Contract plus integration if durable | stable response or operation, mismatch rejection/status per approved policy, concurrency conflict where specified, exactly one durable side effect |
-| OpenAPI drift | generated bindings compile; runtime route contract check; lint/validate | Repository contract commands | clean generated diff, `internal/api` tests pass, runtime contract check passes |
+| OpenAPI drift | generated bindings compile; runtime route contract check; lint/validate | Repository contract commands | clean generated diff, `internal/openapi` tests pass, runtime contract check passes |
 
 ## Reject
 - "Unit test the handler" as the only API contract proof when middleware, decoding, generated bindings, headers, or OpenAPI drift can change client-visible behavior.

@@ -38,7 +38,7 @@ Reference: zero-value usability contract
 Copy the exported zero-value reasoning: constructors are not automatically enough when the type is public.
 
 ```text
-[medium] [go-idiomatic] internal/api/response.go:63
+[medium] [go-idiomatic] internal/infra/http/response.go:63
 Issue: The response changed omitted items from []string{} to nil without updating the JSON contract.
 Impact: Existing clients can observe null instead of [], even though len/range behavior in Go tests remains the same.
 Suggested fix: Preserve the previous non-nil empty slice at the serialization boundary, or record the API contract change for the API lane.

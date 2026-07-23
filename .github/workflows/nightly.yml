@@ -40,6 +40,9 @@ jobs:
       - name: Verify module integrity
         run: make mod-check
 
+      - name: Verify project structure
+        run: make project-structure-check
+
       - name: Verify formatting drift
         run: make fmt-check
 
@@ -72,7 +75,7 @@ jobs:
       - name: OpenAPI contract checks
         run: |
           make openapi-drift-check
-          go test ./internal/api
+          go test ./internal/openapi
           make openapi-validate
           make openapi-lint
 

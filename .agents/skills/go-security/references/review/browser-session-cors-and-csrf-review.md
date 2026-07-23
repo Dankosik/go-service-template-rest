@@ -39,7 +39,7 @@ Reference: credentialed CORS policy.
 Copy this shape when CORS turns browser credentials into cross-origin readable data.
 
 ```text
-[medium] [go-security] internal/app/session.go:42
+[medium] [go-security] internal/session.go:42
 Issue: Axis: Browser Session Cookie Safety; the session cookie is set without `Secure`, `HttpOnly`, or `SameSite`.
 Impact: The cookie is easier to steal through script exposure, send over non-TLS in misconfigured environments, or attach to cross-site requests.
 Suggested fix: Set `Secure` in non-local environments, keep `HttpOnly`, choose the approved `SameSite` mode for the flow, and keep `Path` and `Domain` constrained.
@@ -78,4 +78,6 @@ Reject when the route already authorizes the victim user but lacks protection ag
 
 ## Repo-Local Anchors
 - `internal/infra/http/router.go` owns HTTP middleware and explicit CORS preflight behavior.
-- `internal/infra/http/router_test.go` has CORS and security-header patterns that should stay fail-closed when browser behavior changes.
+- `internal/infra/http/router_contract_test.go` and
+  `middleware_guards_test.go` have HTTP policy and security-header patterns
+  that should stay fail-closed when browser behavior changes.

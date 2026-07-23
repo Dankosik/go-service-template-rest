@@ -28,7 +28,7 @@ Feature-author placement:
 | Surface | Prefer tests |
 | --- | --- |
 | Handler mapping, OpenAPI contract policy, Problem responses, generated-route ownership, and route labels | Beside `internal/infra/http`. |
-| App use-case behavior and app-owned ports | Beside `internal/app/<feature>`. |
+| Feature use-case behavior and feature-owned ports | Beside `internal/<feature>`. |
 | Runtime config keys, defaults, snapshot construction, validation, and secret-source policy | Beside `internal/config`. |
 | Repository mapping and SQLC adapter behavior | Beside `internal/infra/postgres`; use `test/` only for container-backed behavior. |
 | Feature bootstrap wiring for a real adapter | Beside `cmd/service/internal/bootstrap`; prove disabled, ready, policy-denied, and partial-initialization cleanup paths before adding broad integration coverage. |
@@ -47,8 +47,9 @@ Shared PostgreSQL harness:
 
 Migration-backed helpers:
 - Prefer `make migration-validate` when the claim is migration correctness.
-- Test helpers that execute `env/migrations/*.up.sql` directly are schema bootstrap helpers for integration setup, not full migration rehearsal.
-- Apply migration files in sorted order, fail on empty globs, use bounded contexts, and clean up databases and pools with `t.Cleanup`.
+- Keep integration-only migration fixtures in the owning test file. Repository
+  migrations, when present, are validated through `make migration-validate`.
+- Use bounded contexts and clean up databases and pools with `t.Cleanup`.
 
 Database benchmark behavior:
 - `make bench-db` sets `REQUIRE_DOCKER=1`, selects the `integration` build tag,

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/felixge/httpsnoop"
 	"github.com/go-chi/chi/v5"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
@@ -40,7 +39,7 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 			"route", route,
 			"status", captured.Code,
 			"duration_ms", captured.Duration.Milliseconds(),
-			"request_id", requestmeta.RequestIDFromContext(r.Context()),
+			"request_id", requestIDFromContext(r.Context()),
 			"trace_id", traceID,
 			"span_id", spanID,
 		)

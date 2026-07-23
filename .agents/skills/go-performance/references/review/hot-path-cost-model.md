@@ -16,7 +16,7 @@ Load this when the review turns on how work scales with request count, page size
 
 ## Imitate
 ```text
-[high] [go-performance] internal/api/list.go:74
+[high] [go-performance] internal/infra/http/list_handlers.go:74
 Issue:
 Axis: Hot Path Cost; the new response builder formats and re-parses the item timestamp inside the per-row loop after the handler already loaded normalized timestamps. This adds CPU and allocation work proportional to page size on the list endpoint's hot path, and the PR benchmark only covers 10 items while the API allows 500.
 Impact:
@@ -55,9 +55,9 @@ Reject it when the request hot path cost is in I/O, serialization, batching, or 
 
 ## Validation Shape
 ```bash
-go test -run '^$' -bench '^BenchmarkListResponse/(size=50|size=500)$' -benchmem -count=10 ./internal/api > new.txt
+go test -run '^$' -bench '^BenchmarkListResponse/(size=50|size=500)$' -benchmem -count=10 ./internal/openapi > new.txt
 benchstat old.txt new.txt
-go test -run '^$' -bench '^BenchmarkListResponse/size=500$' -benchmem -cpuprofile cpu.out -memprofile mem.out ./internal/api
+go test -run '^$' -bench '^BenchmarkListResponse/size=500$' -benchmem -cpuprofile cpu.out -memprofile mem.out ./internal/openapi
 go tool pprof -top cpu.out
 go tool pprof -top -alloc_space mem.out
 ```

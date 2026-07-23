@@ -101,7 +101,7 @@ For one remote result:
 
 ```bash
 scripts/dev/benchmark-remote.sh run -- \
-  make bench BENCH_PACKAGE=./internal/app/orders \
+  make bench BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines
 ```
@@ -180,7 +180,7 @@ case 10 times, and saves raw output and environment metadata:
 make bench
 
 make bench \
-  BENCH_PACKAGE=./internal/app/orders \
+  BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines \
   BENCH_COUNT=20 \
@@ -197,12 +197,12 @@ Capture both sides on the same testbed:
 
 ```bash
 make bench-baseline \
-  BENCH_PACKAGE=./internal/app/orders \
+  BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines
 # Apply the candidate change.
 make bench \
-  BENCH_PACKAGE=./internal/app/orders \
+  BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_WORKLOAD_ID=orders-100-lines
 make bench-compare
@@ -270,7 +270,7 @@ make bench-db-compare
 The target sets `REQUIRE_DOCKER=1`, uses the `integration` build tag, fails if
 Docker, `BENCH_DB_WORKLOAD_ID`, or a matching benchmark is unavailable, and
 writes results under `.artifacts/bench/db/`. Metadata records the exact
-PostgreSQL image digest, a fingerprint of `env/migrations`, and the named
+PostgreSQL image digest, a fingerprint of `migrations`, and the named
 fixture/workload. The infrastructure check keeps the Testcontainers and
 Compose images identical and digest-pinned.
 
@@ -380,7 +380,7 @@ Collect one symptom-matched Go diagnostic from one concrete package:
 
 ```bash
 make bench-profile \
-  BENCH_PACKAGE=./internal/app/orders \
+  BENCH_PACKAGE=./internal/orders \
   BENCH_PATTERN=BenchmarkCalculateTotal \
   BENCH_PROFILE=cpu
 ```

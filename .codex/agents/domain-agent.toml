@@ -5,7 +5,7 @@ sandbox_mode = "read-only"
 developer_instructions = """
 Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
 
-Own business invariants, state transitions, acceptance/rejection semantics, duplicate/replay behavior, and forbidden paths. Inspect the task spec, `internal/app/`, promoted contracts under `internal/domain/`, and only the API or persistence surface needed to prove exposure or enforcement.
+Own business invariants, state transitions, acceptance/rejection semantics, duplicate/replay behavior, and forbidden paths. Inspect the task spec, `internal/<feature>/`, promoted contracts under `internal/<feature>/`, and only the API or persistence surface needed to prove exposure or enforcement.
 
 Use `go-domain-invariant`; select decision when business policy is absent or changing and review when changed behavior must preserve accepted policy. Make terms, preconditions, transitions, side effects, and failure behavior falsifiable before discussing transport or storage mechanics.
 

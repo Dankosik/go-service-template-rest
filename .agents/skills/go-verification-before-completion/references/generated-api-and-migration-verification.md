@@ -27,7 +27,7 @@ Load this when changes touch OpenAPI specs, generated API code, sqlc output, SQL
 ## Reject
 | Plausible bad conclusion | Why it fails |
 |---|---|
-| "OpenAPI is current" after `go test ./internal/api` | Unit tests do not prove generated artifact drift, spec lint, spec validation, or runtime contract wiring. |
+| "OpenAPI is current" after `go test ./internal/openapi` | Unit tests do not prove generated artifact drift, spec lint, spec validation, or runtime contract wiring. |
 | "sqlc is current" after `go test ./internal/infra/postgres/...` | Data-access tests can pass with stale or extra generated files. |
 | "Migration validated" when `make migration-validate` says `MIGRATION_DSN` is empty and Docker is unavailable | The target exits after a skip message; the rehearsal did not run. |
 | "Migration-backed behavior works" after only migration rehearsal | Rehearsal proves schema transition mechanics, not repository behavior over the new schema. |

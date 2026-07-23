@@ -11,7 +11,7 @@
       ],
       "expectations": [
         "The response preserves exact signals such as `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.",
-        "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_test.go` or clearly equivalent HTTP package surfaces.",
+        "The response points the downstream agent to `internal/infra/http/router.go` and `internal/infra/http/router_contract_test.go` or clearly equivalent HTTP package surfaces.",
         "The response keeps OpenAPI changes conditional instead of assuming `api/openapi/service.yaml` must change.",
         "The response includes a realistic scoped verification path rather than only generic repository-wide checks.",
         "The response does not emit empty headings or expand into the skill's full field inventory when a compact handoff is sufficient."
@@ -43,7 +43,7 @@
       ],
       "expectations": [
         "The response keeps `context canceled`, `shutdown`, `drain`, `worker`, `race`, and `integration` as exact signals.",
-        "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/app/health/service.go`.",
+        "The response points to lifecycle or readiness surfaces such as `cmd/service/internal/bootstrap/` and `internal/health/service.go`.",
         "The response does not treat increasing timeouts as the primary solution.",
         "The response includes race-aware or integration-aware verification steps and keeps remaining ambiguity explicit.",
         "The response uses only the optional fields needed for this task and does not pad the prompt with a global repository template."

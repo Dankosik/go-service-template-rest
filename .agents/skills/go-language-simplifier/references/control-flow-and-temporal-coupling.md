@@ -18,7 +18,7 @@ Use this when the review question is "does the order still read safely?" If the 
 Finding shape to copy when sentinel state creates a hidden phase machine:
 
 ```text
-[high] [go-language-simplifier] internal/app/imports/run.go:103
+[high] [go-language-simplifier] internal/imports/run.go:103
 Issue: The refactor stores `action`, `status`, and `notify` across multiple branches and decodes them in one tail switch.
 Impact: The operation now reads like a manual phase machine, so a future branch can set an inconsistent combination that still compiles.
 Suggested fix: Return from each branch after selecting the explicit outcome, or replace the flag cluster with a small typed result that cannot encode invalid combinations.
