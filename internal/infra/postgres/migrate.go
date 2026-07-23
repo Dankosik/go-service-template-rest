@@ -25,6 +25,15 @@ type MigrationResult struct {
 }
 
 func MigrateUp(ctx context.Context, opts MigrationOptions) (MigrationResult, error) {
+	return runPostgresMigrations(ctx, opts, false)
+}
+
+func ValidateMigrations(ctx context.Context, opts MigrationOptions) error {
+	_, err := runPostgresMigrations(ctx, opts, true)
+	return err
+}
+
+func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse bool) (MigrationResult, error) {
 	normalizedSourcePath, err := normalizeMigrationSourcePath(opts.SourcePath)
 	if err != nil {
 		return MigrationResult{}, err
@@ -84,14 +93,26 @@ func MigrateUp(ctx context.Context, opts MigrationOptions) (MigrationResult, err
 	}()
 	defer close(stopWatcherStop)
 
+	changed := true
 	if err := runner.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
-			return MigrationResult{Changed: false}, nil
+			changed = false
+		} else {
+			return MigrationResult{}, fmt.Errorf("run postgres migrations: %w", err)
 		}
-		return MigrationResult{}, fmt.Errorf("run postgres migrations: %w", err)
 	}
 
-	return MigrationResult{Changed: true}, nil
+	if !rehearse {
+		return MigrationResult{Changed: changed}, nil
+	}
+	if err := runner.Steps(-1); err != nil {
+		return MigrationResult{}, fmt.Errorf("roll back latest postgres migration: %w", err)
+	}
+	if err := runner.Steps(1); err != nil {
+		return MigrationResult{}, fmt.Errorf("reapply latest postgres migration: %w", err)
+	}
+
+	return MigrationResult{Changed: changed}, nil
 }
 
 func normalizeMigrationSourcePath(raw string) (string, error) {

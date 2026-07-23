@@ -56,4 +56,19 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	if secondRun.Changed {
 		t.Fatal("MigrateUp(second) reported schema change, want no change")
 	}
+
+	if err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
+		DSN:        dsn,
+		SourceFS:   os.DirFS(".."),
+		SourcePath: "env/migrations",
+	}); err != nil {
+		t.Fatalf("ValidateMigrations() error: %v", err)
+	}
+
+	if err := pool.QueryRow(ctx, "select version, dirty from schema_migrations").Scan(&version, &dirty); err != nil {
+		t.Fatalf("query schema_migrations after validation: %v", err)
+	}
+	if version != 1 || dirty {
+		t.Fatalf("schema_migrations after validation = version %d dirty %t, want version 1 dirty false", version, dirty)
+	}
 }

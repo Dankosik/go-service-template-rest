@@ -16,7 +16,7 @@ func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) { //nolint:paralle
 
 	var stdout bytes.Buffer
 
-	if err := run(&stdout); err != nil {
+	if err := run(nil, &stdout); err != nil {
 		t.Fatalf("run() error = %v, want nil", err)
 	}
 
@@ -33,7 +33,7 @@ func TestRunReturnsConfigLoadError(t *testing.T) {
 
 	var stdout bytes.Buffer
 
-	err := run(&stdout)
+	err := run(nil, &stdout)
 	if err == nil {
 		t.Fatal("run() error = nil, want config load error")
 	}
@@ -51,12 +51,44 @@ func TestRunReturnsMigrationApplyError(t *testing.T) {
 
 	var stdout bytes.Buffer
 
-	err := run(&stdout)
+	err := run(nil, &stdout)
 	if err == nil {
 		t.Fatal("run() error = nil, want migration apply error")
 	}
 	if !strings.Contains(err.Error(), "apply postgres migrations") {
 		t.Fatalf("run() error = %q, want migration apply context", err.Error())
+	}
+}
+
+func TestRunRejectsUnexpectedArguments(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	err := run([]string{"unexpected"}, &stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want usage error")
+	}
+	if !strings.Contains(err.Error(), "usage: migrate [validate]") {
+		t.Fatalf("run() error = %q, want usage", err.Error())
+	}
+}
+
+func TestResolveMigrationSourceUsesConfiguredPath(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll("custom/migrations", 0o755); err != nil {
+		t.Fatalf("create configured migrations dir: %v", err)
+	}
+	t.Setenv("MIGRATION_PATH", " custom/migrations ")
+
+	sourceFS, sourcePath := resolveMigrationSource()
+	if sourcePath != "custom/migrations" {
+		t.Fatalf("resolveMigrationSource() path = %q, want %q", sourcePath, "custom/migrations")
+	}
+	if sourceFS == nil {
+		t.Fatal("resolveMigrationSource() fs = nil, want configured local fs")
+	}
+	if _, err := fs.Stat(sourceFS, sourcePath); err != nil {
+		t.Fatalf("resolved configured source is not readable: %v", err)
 	}
 }
 

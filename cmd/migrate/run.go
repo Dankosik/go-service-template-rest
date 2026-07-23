@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -19,7 +20,12 @@ const (
 	localMigrationSourcePath = "env/migrations"
 )
 
-func run(stdout io.Writer) error {
+func run(args []string, stdout io.Writer) error {
+	validate, err := parseMigrationCommand(args)
+	if err != nil {
+		return err
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -34,6 +40,18 @@ func run(stdout io.Writer) error {
 	}
 
 	migrationSourceFS, migrationSourcePath := resolveMigrationSource()
+	if validate {
+		if err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
+			DSN:        cfg.Postgres.DSN,
+			SourceFS:   migrationSourceFS,
+			SourcePath: migrationSourcePath,
+		}); err != nil {
+			return fmt.Errorf("validate postgres migrations: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "validated migrations from %s\n", migrationSourcePath)
+		return nil
+	}
+
 	result, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        cfg.Postgres.DSN,
 		SourceFS:   migrationSourceFS,
@@ -53,7 +71,25 @@ func run(stdout io.Writer) error {
 }
 
 func resolveMigrationSource() (fs.FS, string) {
+	if configuredPath := strings.TrimSpace(os.Getenv("MIGRATION_PATH")); configuredPath != "" {
+		if path.IsAbs(configuredPath) {
+			return nil, path.Clean(configuredPath)
+		}
+		return os.DirFS("."), path.Clean(configuredPath)
+	}
 	return resolveMigrationSourceFrom(imageMigrationSourcePath, localMigrationSourcePath)
+}
+
+func parseMigrationCommand(args []string) (bool, error) {
+	switch len(args) {
+	case 0:
+		return false, nil
+	case 1:
+		if args[0] == "validate" {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("usage: migrate [validate]")
 }
 
 func resolveMigrationSourceFrom(imagePath string, localPath string) (fs.FS, string) {

@@ -310,9 +310,10 @@ openapi-check: openapi-drift-check
 
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \
-		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$(MIGRATION_DSN)" up; \
-		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$(MIGRATION_DSN)" down 1; \
-		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$(MIGRATION_DSN)" up 1; \
+		APP__POSTGRES__ENABLED=true \
+			APP__POSTGRES__DSN="$(MIGRATION_DSN)" \
+			MIGRATION_PATH="$${MIGRATION_PATH:-env/migrations}" \
+			go run ./cmd/migrate validate; \
 	else \
 		command -v docker >/dev/null 2>&1 || { echo "MIGRATION_DSN or Docker is required"; exit 1; }; \
 		docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }; \
@@ -325,9 +326,10 @@ migration-validate:
 		port="$${address##*:}"; \
 		test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
 		dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
-		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$$dsn" up; \
-		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$$dsn" down 1; \
-		go tool migrate -path "$${MIGRATION_PATH:-env/migrations}" -database "$$dsn" up 1; \
+		APP__POSTGRES__ENABLED=true \
+			APP__POSTGRES__DSN="$$dsn" \
+			MIGRATION_PATH="$${MIGRATION_PATH:-env/migrations}" \
+			go run ./cmd/migrate validate; \
 		image="$(RUNTIME_IMAGE)"; \
 		if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 		docker run --rm --network "$${project}_default" \
