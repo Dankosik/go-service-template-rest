@@ -18,6 +18,14 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !log.Enabled(r.Context(), slog.LevelInfo) {
+			next.ServeHTTP(w, r)
+			if routePathTemplate := routePathTemplateForRequest(r); routePathTemplate != "" {
+				trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(routePathTemplate))
+			}
+			return
+		}
+
 		captured := httpsnoop.CaptureMetricsFn(w, func(capturedWriter http.ResponseWriter) {
 			next.ServeHTTP(capturedWriter, r)
 		})
