@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/go-service-template-hero.png" alt="Go REST API and Golang microservice template, AI-native for developers and coding agents" width="100%" />
+  <img src=".github/assets/go-service-template-hero.png" alt="Built for Go. Ready for agents. AI-native Go REST API and microservice template" width="100%" />
 </p>
 
 <h1 align="center">Go REST API &amp; Microservice Template</h1>
