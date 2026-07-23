@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) {
+func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	clearPrefixedEnvForTest(t, "APP__")
 
 	t.Chdir(t.TempDir())
@@ -60,7 +60,7 @@ func TestRunReturnsMigrationApplyError(t *testing.T) {
 	}
 }
 
-func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) {
+func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
 	if err := os.MkdirAll("env/migrations", 0o755); err != nil {
 		t.Fatalf("create local migrations dir: %v", err)
@@ -79,7 +79,7 @@ func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) {
 	}
 }
 
-func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) {
+func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
 
 	imagePath := filepath.Join(t.TempDir(), "image-migrations")

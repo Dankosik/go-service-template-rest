@@ -58,8 +58,7 @@ func loadNetworkPolicy() networkPolicyLoadResult {
 }
 
 func networkPolicyErrorLabels(err error) (string, string) {
-	var cfgErr *networkPolicyConfigError
-	if errors.As(err, &cfgErr) {
+	if cfgErr, ok := errors.AsType[*networkPolicyConfigError](err); ok {
 		return cfgErr.policyClass, cfgErr.reasonClass
 	}
 	return "ingress", "invalid_configuration"

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/app/health"
@@ -41,8 +42,8 @@ func (s *dependencyCleanupStack) add(cleanup func()) {
 }
 
 func (s *dependencyCleanupStack) run() {
-	for i := len(s.cleanups) - 1; i >= 0; i-- {
-		s.cleanups[i]()
+	for _, cleanup := range slices.Backward(s.cleanups) {
+		cleanup()
 	}
 	s.cleanups = nil
 }

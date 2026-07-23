@@ -1,9 +1,11 @@
 .git
 .cache
+.artifacts
 .agents
 .codex
 .github
 bin
+npm-cache
 .env*
 env
 !env/migrations

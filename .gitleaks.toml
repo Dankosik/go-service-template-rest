@@ -10,3 +10,11 @@ condition = "AND"
 regexTarget = "line"
 regexes = ['''Idempotency-Key:\s*"?[A-Za-z0-9_-]+''']
 paths = ['''^(\.agents/skills/go-api-contract|\.(agents|claude|cursor|gemini|github|opencode)/skills/api-contract-designer[-]spec)/references/(async-operations-and-webhooks|idempotency-preconditions-retries)\.md$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Historical cache-design prose that names key and value shape"
+condition = "AND"
+regexTarget = "line"
+regexes = ['''key and value shape, freshness/TTL/invalidation/stampede behavior''']
+paths = ['''^\.agents/skills/go-db-cache-spec/SKILL\.md$''']
