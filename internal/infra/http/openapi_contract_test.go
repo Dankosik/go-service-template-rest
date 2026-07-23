@@ -17,6 +17,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 )
 
 func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
@@ -61,10 +63,7 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			req := httptest.NewRequest(tc.method, tc.path, nil)
-			resp := httptest.NewRecorder()
-
-			h.ServeHTTP(resp, req)
+			resp := doRequest(h, tc.method, tc.path)
 
 			if resp.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", resp.Code, tc.wantStatus)
@@ -95,15 +94,7 @@ func TestOpenAPIRuntimeContractTemplateExample(t *testing.T) {
 	t.Run("accepts validated path query and body", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(
-			http.MethodPost,
-			"/api/v1/template-example/demo?copies=2",
-			strings.NewReader(`{"message":"hello"}`),
-		)
-		req.Header.Set("Content-Type", "application/json")
-		resp := httptest.NewRecorder()
-
-		h.ServeHTTP(resp, req)
+		resp := doJSONRequest(h, http.MethodPost, "/api/v1/template-example/demo?copies=2", `{"message":"hello"}`)
 
 		if resp.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d; body = %q", resp.Code, http.StatusOK, resp.Body.String())
@@ -149,11 +140,7 @@ func TestOpenAPIRuntimeContractTemplateExample(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
-			req.Header.Set("Content-Type", "application/json")
-			resp := httptest.NewRecorder()
-
-			h.ServeHTTP(resp, req)
+			resp := doJSONRequest(h, http.MethodPost, tc.path, tc.body)
 
 			if resp.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body = %q", resp.Code, http.StatusBadRequest, resp.Body.String())
@@ -172,10 +159,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
 	}, telemetry.New(), RouterConfig{})
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
+	resp := doRequest(h, http.MethodGet, "/health/ready")
 
 	if resp.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
@@ -196,10 +180,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 		Health: healthSvc,
 	}, telemetry.New(), RouterConfig{})
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
+	resp := doRequest(h, http.MethodGet, "/health/ready")
 
 	if resp.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
@@ -220,10 +201,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T)
 		},
 	}, telemetry.New(), RouterConfig{})
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
+	resp := doRequest(h, http.MethodGet, "/health/ready")
 
 	if resp.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
@@ -242,10 +220,7 @@ func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 	}, telemetry.New(), RouterConfig{})
 
 	// Deployment admission must fail deterministically when an unknown health path is used.
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
+	resp := doRequest(h, http.MethodGet, "/health")
 
 	if resp.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
@@ -383,6 +358,131 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 				}
 			})
 		}
+	}
+}
+
+// TestOpenAPIRuntimeContractResponsesMatchSpec replays one request per
+// reachable operation/status pair and validates the recorded response —
+// status, Content-Type, and body schema — against the embedded OpenAPI spec.
+// Generated Visit* responses are contract-shaped by construction; this closes
+// the remaining gap for the hand-written problem writer and text responses.
+func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
+	t.Parallel()
+
+	spec := mustOpenAPISwagger(t)
+	// Mirror the runtime request validator, which disables host matching via
+	// Options.DoNotValidateServers: route lookup must not depend on servers.
+	spec.Servers = nil
+	specRouter, err := gorillamux.NewRouter(spec)
+	if err != nil {
+		t.Fatalf("gorillamux.NewRouter() error = %v", err)
+	}
+
+	log := slog.New(slog.DiscardHandler)
+	ready := mustNewRouter(t, log, Handlers{Health: health.New()}, telemetry.New(), RouterConfig{})
+	notReady := mustNewRouter(t, log, Handlers{
+		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
+	}, telemetry.New(), RouterConfig{})
+	tinyBodyLimit := mustNewRouter(t, log, Handlers{Health: health.New()}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
+
+	testCases := []struct {
+		name       string
+		handler    http.Handler
+		method     string
+		target     string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "ping 200",
+			handler:    ready,
+			method:     http.MethodGet,
+			target:     "/api/v1/ping",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "health live 200",
+			handler:    ready,
+			method:     http.MethodGet,
+			target:     "/health/live",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "health ready 200",
+			handler:    ready,
+			method:     http.MethodGet,
+			target:     "/health/ready",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "health ready 503",
+			handler:    notReady,
+			method:     http.MethodGet,
+			target:     "/health/ready",
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name:       "template example 200",
+			handler:    ready,
+			method:     http.MethodPost,
+			target:     "/api/v1/template-example/demo?copies=2",
+			body:       `{"message":"hello"}`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "template example 400 problem",
+			handler:    ready,
+			method:     http.MethodPost,
+			target:     "/api/v1/template-example/demo?copies=4",
+			body:       `{"message":"hello"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "template example 413 problem",
+			handler:    tinyBodyLimit,
+			method:     http.MethodPost,
+			target:     "/api/v1/template-example/demo?copies=1",
+			body:       `{"message":"hello"}`,
+			wantStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var resp *httptest.ResponseRecorder
+			if tc.body == "" {
+				resp = doRequest(tc.handler, tc.method, tc.target)
+			} else {
+				resp = doJSONRequest(tc.handler, tc.method, tc.target, tc.body)
+			}
+			if resp.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body = %q", resp.Code, tc.wantStatus, resp.Body.String())
+			}
+
+			req := httptest.NewRequest(tc.method, tc.target, nil)
+			route, pathParams, err := specRouter.FindRoute(req)
+			if err != nil {
+				t.Fatalf("FindRoute(%s %s) error = %v", tc.method, tc.target, err)
+			}
+
+			input := &openapi3filter.ResponseValidationInput{
+				RequestValidationInput: &openapi3filter.RequestValidationInput{
+					Request:    req,
+					PathParams: pathParams,
+					Route:      route,
+				},
+				Status:  resp.Code,
+				Header:  resp.Header(),
+				Options: &openapi3filter.Options{IncludeResponseStatus: true},
+			}
+			input.SetBodyBytes(resp.Body.Bytes())
+
+			if err := openapi3filter.ValidateResponse(t.Context(), input); err != nil {
+				t.Fatalf("response does not match OpenAPI contract: %v", err)
+			}
+		})
 	}
 }
 
