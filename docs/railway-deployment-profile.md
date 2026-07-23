@@ -50,10 +50,17 @@ can read from the derived source repository:
 - `overlapSeconds = 45`
 - `drainingSeconds = 45`
 
-The application default shutdown budget is 30 seconds. Railway therefore gets
-a 15-second margin before SIGKILL. If a derived service changes the application
-shutdown budget, keep the platform draining window greater than that budget and
-re-run the runtime-image shutdown check.
+The application default worst-case shutdown sequence is 35 seconds: the
+30-second HTTP shutdown budget (which includes the 15-second
+readiness-propagation delay) plus the 5-second bootstrap telemetry flush. The
+45-second draining window therefore leaves Railway roughly a 10-second margin
+before SIGKILL. If a derived service changes the application shutdown budget,
+keep the platform draining window greater than that full sequence and re-run
+the runtime-image shutdown check. On platforms other than Railway, configure
+the equivalent stop grace explicitly (for example `docker stop --time 45`,
+Compose `stop_grace_period: 45s`, or Kubernetes
+`terminationGracePeriodSeconds: 50`); default grace periods of 10-30 seconds
+SIGKILL the service mid-drain.
 
 Do not use project-specific BuildKit cache mount IDs in the template
 Dockerfile. A derived service may add them after it owns and verifies its

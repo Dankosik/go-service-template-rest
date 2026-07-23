@@ -21,3 +21,11 @@ tmp
 dist
 vendor
 *.md
+.codegraph
+.claude
+.qwen
+.kilo
+workspace
+home
+specs
+**/.DS_Store

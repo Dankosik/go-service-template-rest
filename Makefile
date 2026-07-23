@@ -41,7 +41,7 @@ HTTP_BENCH_ENV_FILE ?= .env.bench
 HTTP_BENCH_DOCKER_NETWORK ?=
 HTTP_BENCH_RAW_SAMPLES ?= 0
 
-TRIVY_IMAGE ?= aquasec/trivy:0.69.2@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
+TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
@@ -413,7 +413,7 @@ docker-build:
 	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):local .
 
 docker-run:
-	docker run --rm -p 8080:8080 --env-file .env $(SERVICE_NAME):local
+	docker run --rm --stop-timeout 45 -p 8080:8080 --env-file .env $(SERVICE_NAME):local
 
 compose-up:
 	docker compose -f env/docker-compose.yml up -d --wait
