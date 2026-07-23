@@ -24,6 +24,11 @@ type MigrationResult struct {
 	Changed bool
 }
 
+type migrationExecutor interface {
+	Up() error
+	Steps(int) error
+}
+
 func MigrateUp(ctx context.Context, opts MigrationOptions) (MigrationResult, error) {
 	return runPostgresMigrations(ctx, opts, false)
 }
@@ -93,6 +98,10 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 	}()
 	defer close(stopWatcherStop)
 
+	return executeMigrations(runner, rehearse)
+}
+
+func executeMigrations(runner migrationExecutor, rehearse bool) (MigrationResult, error) {
 	changed := true
 	if err := runner.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
