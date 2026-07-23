@@ -77,6 +77,7 @@ func BenchmarkAccessLog(b *testing.B) {
 		{name: "disabled", level: slog.LevelWarn},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
+			//nolint:sloglint // This benchmark needs a level-selectable handler.
 			log := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level}))
 			handler := AccessLog(log, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
