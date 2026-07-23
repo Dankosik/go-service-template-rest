@@ -50,12 +50,16 @@ same repository rules, specialist agents, and reusable skills.
 
 | Area | Included |
 | --- | --- |
-| Service foundation | Go 1.26, `chi`, configuration, graceful shutdown, health and readiness |
-| API | OpenAPI-first HTTP with generated request bindings and typed server responses |
-| Data | PostgreSQL 17, `pgx/v5`, migrations, and `sqlc` ownership |
-| Operations | OpenTelemetry traces and HTTP metrics, Prometheus export, structured logs, Docker, Railway |
-| Delivery | GitHub Actions, race and integration tests, security and image scanning |
+| Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
+| API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
+| Data | PostgreSQL 17, `pgx v5`, `golang-migrate v4`, and `sqlc` |
+| Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
+| Testing | `testcontainers-go`, race detection, goroutine leak checks, and PostgreSQL integration tests |
+| Delivery | Docker, GHCR, Cosign signing, CycloneDX SBOMs, and GitHub Actions security gates |
 | Agent workflow | Codex, Claude Code, Qwen Code, specialist agents, risk-proportional artifacts |
+
+Major versions describe the supported stack; [`go.mod`](go.mod) is the source
+of truth for exact dependency versions.
 
 This is a working service scaffold, not only a prompt collection. The code,
 generated sources, database lifecycle, CI, and agent instructions share one
