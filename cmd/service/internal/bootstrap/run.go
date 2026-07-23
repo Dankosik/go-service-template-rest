@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -74,8 +73,9 @@ func Run(args []string) (runErr error) {
 
 	metrics := telemetry.New()
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	releaseSignalNotification := releaseSignalNotificationOnDone(signalCtx, stop)
-	defer releaseSignalNotification()
+	stopOnSignalDone := context.AfterFunc(signalCtx, stop)
+	defer stop()
+	defer stopOnSignalDone()
 	defer func() {
 		if runErr != nil {
 			slog.Error(
@@ -182,27 +182,6 @@ func Run(args []string) (runErr error) {
 		admission:      startupAdmission,
 		shutdownDelay:  bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 	})
-}
-
-func releaseSignalNotificationOnDone(ctx context.Context, stop context.CancelFunc) context.CancelFunc {
-	released := make(chan struct{})
-	var releaseOnce sync.Once
-	release := func() {
-		releaseOnce.Do(func() {
-			stop()
-			close(released)
-		})
-	}
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			release()
-		case <-released:
-		}
-	}()
-
-	return release
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

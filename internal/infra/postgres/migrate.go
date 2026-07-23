@@ -103,16 +103,9 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 	}()
 
 	stopSignals := make(chan bool, 1)
-	stopWatcherStop := make(chan struct{})
 	runner.GracefulStop = stopSignals
-	go func() {
-		select {
-		case <-ctx.Done():
-			stopSignals <- true
-		case <-stopWatcherStop:
-		}
-	}()
-	defer close(stopWatcherStop)
+	stopWatcher := context.AfterFunc(ctx, func() { stopSignals <- true })
+	defer stopWatcher()
 
 	return executeMigrations(runner, rehearse)
 }

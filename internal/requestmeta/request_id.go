@@ -3,9 +3,7 @@ package requestmeta
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"strings"
-	"time"
 )
 
 const maxRequestIDLength = 128
@@ -48,9 +46,5 @@ func validRequestID(value string) bool {
 }
 
 func newRequestID() string {
-	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return time.Now().UTC().Format("20060102150405.000000000")
-	}
-	return hex.EncodeToString(buf[:])
+	return rand.Text()
 }

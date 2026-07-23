@@ -36,5 +36,5 @@ func (m *Metrics) Handler() http.Handler {
 	if m == nil || m.registry == nil {
 		return http.NotFoundHandler()
 	}
-	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
+	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{EnableOpenMetrics: true})
 }
