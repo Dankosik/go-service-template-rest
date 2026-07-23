@@ -12,6 +12,7 @@ The workflow instructions in this repository are harness-neutral. This document 
 
 - Identify the current harness from the session environment before dispatching any harness control: the Codex App or Codex CLI runs the Codex-native path; Claude Code (CLI, desktop, web, or IDE) runs the Anthropic-native path; Qwen Code (CLI or IDE) runs the Qwen-native path.
 - Use only the current harness's native controls. Do not emulate another harness's controls, shell out to its CLI, or mix the two control planes within one outcome.
+- Treat every Codex App `collaboration.spawn_agent` lane as a built-in read-only subagent, including one dispatched with `agent_type: "worker"`; it is never the Native App Worker with managed worktree.
 - When the current session lacks the needed native control, do the work root-locally under the owning phase's local-execution rules and state the missing control; do not invent a substitute.
 
 ## Control Map
