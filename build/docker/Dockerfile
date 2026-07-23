@@ -9,27 +9,41 @@ RUN go mod download
 
 COPY . .
 
+ARG APP_VERSION=dev
+ARG VCS_REF=unknown
+ARG RAILWAY_GIT_COMMIT_SHA
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
-    go build \
+RUN module_path="$(go list -m)" && \
+    resolved_version="${APP_VERSION}" && \
+    if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
+      resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
+    fi && \
+    ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version}" && \
+    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
       -trimpath \
       -mod=readonly \
       -buildvcs=false \
-      -ldflags="-s -w -buildid=" \
+      -ldflags="${ldflags}" \
       -tags=timetzdata \
-      -o /out/service ./cmd/service
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
-    go build \
+      -o /out/service ./cmd/service && \
+    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
       -trimpath \
       -mod=readonly \
       -buildvcs=false \
-      -ldflags="-s -w -buildid=" \
+      -ldflags="${ldflags}" \
       -tags=timetzdata \
       -o /out/migrate ./cmd/migrate
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:a9329520abc449e3b14d5bc3a6ffae065bdde0f02667fa10880c49b35c109fd1
+
+ARG APP_VERSION=dev
+ARG VCS_REF=unknown
+ARG SOURCE_URL=""
+LABEL org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="${SOURCE_URL}"
 
 WORKDIR /
 COPY --from=build /out/service /service

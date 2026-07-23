@@ -164,7 +164,10 @@ make compose-down
 `MIGRATION_DSN`, it uses that database. Otherwise it creates an isolated
 Compose project on a dynamic host port, exercises the host migration tool,
 then runs the runtime image's `/migrate` entrypoint on the Compose network.
-Cleanup is registered before the rehearsal begins.
+It starts the same image with a read-only filesystem and dropped capabilities,
+waits for `/health/ready`, optionally checks `RUNTIME_EXPECTED_VERSION` in the
+startup log, and requires a clean SIGTERM exit. Cleanup is registered before
+the rehearsal begins.
 
 `docker-build` and `docker-run` operate on the production Dockerfile. Compose
 exists for runtime dependencies, not to emulate every native Make target.
@@ -253,4 +256,7 @@ required checks. Review the workflow when configuring those settings; do not
 use a repository script to rewrite its own protection policy.
 
 `.github/workflows/cd.yml` owns release validation and runtime image
-publication. `railway.toml` owns Railway's non-secret deployment profile.
+publication. It reports an immutable digest and promotes mutable tags only
+after signature and attestation verification. `railway.toml` owns the generic,
+non-secret Railway source-build profile; it does not connect the template to a
+Railway project or make GHCR evidence apply to Railway's independent build.

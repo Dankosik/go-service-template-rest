@@ -2,10 +2,13 @@ package config
 
 import "github.com/example/go-service-template-rest/internal/observability/otelconfig"
 
+// buildVersion is set by the production Docker build and remains "dev" for local builds.
+var buildVersion = "dev"
+
 func defaultValues() map[string]any {
 	return map[string]any{
 		"app.env":     "local",
-		"app.version": "dev",
+		"app.version": buildVersion,
 
 		"http.addr":                        ":8080",
 		"http.shutdown_timeout":            "30s",
