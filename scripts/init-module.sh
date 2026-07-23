@@ -4,6 +4,7 @@ set -euo pipefail
 TEMPLATE_MODULE="github.com/example/go-service-template-rest"
 TEMPLATE_SOURCE="github.com/Dankosik/go-service-template-rest"
 TEMPLATE_OWNER="@Dankosik"
+TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
 	echo "usage: CODEOWNER=@user-or-org/team $0 [module-path]"
@@ -81,7 +82,7 @@ if [[ $# -gt 1 ]]; then
 	exit 1
 fi
 
-for required_file in go.mod env/.env.example .github/CODEOWNERS .golangci.yml; do
+for required_file in go.mod env/.env.example .github/CODEOWNERS .golangci.yml api/openapi/service.yaml; do
 	[[ -f "${required_file}" ]] || {
 		echo "required template file not found: ${required_file}"
 		exit 1
@@ -157,6 +158,11 @@ fi
 
 if [[ "${source_checkout}" != true ]]; then
 	replace_codeowner_rules "${codeowner}"
+	service_name="${new_module##*/}"
+	replace_literal \
+		api/openapi/service.yaml \
+		"title: \"${TEMPLATE_API_TITLE}\"" \
+		"title: \"${service_name}\""
 fi
 
 go mod tidy

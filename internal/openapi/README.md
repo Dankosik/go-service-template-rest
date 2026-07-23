@@ -11,6 +11,29 @@ go generate ./internal/openapi
 Generation config: `internal/openapi/oapi-codegen.yaml`.
 Current server mode: `chi-server: true` + `strict-server: true`.
 
+## Contract Lifecycle
+
+The provider repository owns `api/openapi/service.yaml` and the matching runtime
+behavior. Generated Go is committed and reviewed, but remains derived output.
+Treat compatibility as three separate questions:
+
+- wire compatibility for existing HTTP callers;
+- generated-source compatibility for committed or published clients;
+- semantic compatibility for auth, errors, ordering, retries, defaults, and
+  business meaning.
+
+`operationId` is a stable generated-source identifier. An intentional breaking
+exception in `api/openapi/breaking-changes-approvals.txt` must be exact,
+temporary, and recorded with an owner, migration rationale, deadline, and
+consumer-removal evidence in the pull request. Remove the entry after the
+approved change merges.
+
+Use OpenAPI `deprecated: true`, RFC 9745 `Deprecation`, and RFC 8594 `Sunset`
+only with migration guidance and a removal owner. Keep Git as the distribution
+mechanism until a real consumer needs a bundled specification or generated
+client outside this repository; then publish immutable versioned artifacts
+rather than resolving mutable `main`.
+
 Strict-server generation provides typed request/response glue; it does not install
 full runtime OpenAPI schema or security validation. The generated operations are
 wrapped once by `oapi-codegen/nethttp-middleware`, which enforces path, query,

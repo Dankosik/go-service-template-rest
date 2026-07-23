@@ -74,6 +74,7 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/config/` | config schema, defaults, loading, parsing, validation, immutable snapshot | feature behavior and adapter construction |
 | `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
+| `internal/infra/httpclient/` | outbound fixed-authority transport safety and lifecycle | provider auth, retries, error mapping, or business policy |
 | `internal/infra/postgres/` | pool, migrations, concrete repositories, query mapping | HTTP behavior and business policy |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
