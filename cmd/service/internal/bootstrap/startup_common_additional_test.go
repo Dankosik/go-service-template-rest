@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel"
 )
 
@@ -42,7 +42,8 @@ func TestTelemetryInitFailureReason(t *testing.T) {
 }
 
 func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
-	restoreGlobalTelemetry(t)
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "http")
 
 	metrics := telemetry.New()
@@ -65,7 +66,8 @@ func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
 }
 
 func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
-	restoreGlobalTelemetry(t)
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "http")
 
 	metrics := telemetry.New()
@@ -91,7 +93,8 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 }
 
 func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) {
-	restoreGlobalTelemetry(t)
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "http")
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
@@ -120,7 +123,8 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) 
 }
 
 func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *testing.T) {
-	restoreGlobalTelemetry(t)
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "1bad")
 	netPolicyResult := loadNetworkPolicy()
 	if netPolicyResult.err == nil {
@@ -199,7 +203,8 @@ func TestBootstrapTelemetryStageAdmitTelemetryExporterTargetUsesNamedOutcomes(t 
 }
 
 func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
-	restoreGlobalTelemetry(t)
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv(envNetworkEgressAllowedSchemes, "http")
 	netPolicyResult := loadNetworkPolicy()
 	if netPolicyResult.err != nil {
@@ -233,7 +238,7 @@ func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
 
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
-	spanRecorder := installTestTracerProvider(t)
+	spanRecorder := telemetrytest.InstallSpanRecorder(t)
 	ctx, span := otel.Tracer("test").Start(context.Background(), "startup-log-test")
 	args := startupLogArgs(ctx, "c", "o", "ok", "k", "v")
 	span.End()
@@ -259,40 +264,6 @@ func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
 	}
 	if !foundTrace || !foundSpan {
 		t.Fatalf("trace/span ids not found in args: %#v", args)
-	}
-}
-
-func restoreGlobalTelemetry(t *testing.T) {
-	t.Helper()
-
-	clearAmbientTraceExporterEnv(t)
-
-	previousTracerProvider := otel.GetTracerProvider()
-	previousPropagator := otel.GetTextMapPropagator()
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetTextMapPropagator(previousPropagator)
-	})
-}
-
-func clearAmbientTraceExporterEnv(t *testing.T) {
-	t.Helper()
-
-	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") {
-			t.Setenv(name, "")
-		}
-	}
-	for _, name := range []string{
-		"HTTP_PROXY",
-		"HTTPS_PROXY",
-		"NO_PROXY",
-		"http_proxy",
-		"https_proxy",
-		"no_proxy",
-	} {
-		t.Setenv(name, "")
 	}
 }
 
@@ -479,6 +450,63 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	}
 	if !strings.Contains(logLine, `"err":"cache probe connection refused"`) {
 		t.Fatalf("dependency probe rejection log = %q, want root cause err", logLine)
+	}
+}
+
+func TestRejectStartupForDependencyInitDefaultsDependencyAndStage(t *testing.T) {
+	t.Parallel()
+
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+	rootCause := errors.New("postgres dsn is empty")
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "dependency-init-log")
+	err := rejectStartupForDependencyInit(ctx, span, logger, "  ", "  ", rootCause)
+	span.End()
+
+	if err == nil {
+		t.Fatal("rejectStartupForDependencyInit() error = nil, want non-nil")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("rejectStartupForDependencyInit() error = %v, want wrapped dependency init sentinel", err)
+	}
+	if !strings.Contains(err.Error(), "postgres dsn is empty") {
+		t.Fatalf("rejectStartupForDependencyInit() error = %v, want root cause detail", err)
+	}
+
+	logLine := logBuffer.String()
+	if !strings.Contains(logLine, `"msg":"startup_blocked"`) {
+		t.Fatalf("dependency init rejection log = %q, want startup_blocked message", logLine)
+	}
+	if !strings.Contains(logLine, `"dependency":"dependency"`) {
+		t.Fatalf("dependency init rejection log = %q, want defaulted dependency label", logLine)
+	}
+	if !strings.Contains(logLine, "postgres dsn is empty") {
+		t.Fatalf("dependency init rejection log = %q, want root cause err", logLine)
+	}
+}
+
+func TestRejectStartupForDependencyInitDoesNotDuplicateSentinel(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
+	cause := fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, errors.New("dsn rejected"))
+
+	ctx, span := otel.Tracer("test").Start(context.Background(), "dependency-init-idempotent")
+	err := rejectStartupForDependencyInit(ctx, span, logger, "Postgres", "startup.resolve.postgres", cause)
+	span.End()
+
+	if err == nil {
+		t.Fatal("rejectStartupForDependencyInit() error = nil, want non-nil")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("rejectStartupForDependencyInit() error = %v, want wrapped dependency init sentinel", err)
+	}
+	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
+		t.Fatalf("rejectStartupForDependencyInit() error = %v, dependency init count = %d, want 1", err, count)
+	}
+	if !strings.Contains(err.Error(), "dsn rejected") {
+		t.Fatalf("rejectStartupForDependencyInit() error = %v, want original cause detail", err)
 	}
 }
 

@@ -3,9 +3,28 @@ package config
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 )
+
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+func TestLoadMatchesDetailedDefaults(t *testing.T) {
+	resetConfigEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	detailed, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if !reflect.DeepEqual(cfg, detailed) {
+		t.Fatalf("Load() = %+v, want LoadDetailed defaults %+v", cfg, detailed)
+	}
+}
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {

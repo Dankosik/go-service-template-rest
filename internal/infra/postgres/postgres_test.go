@@ -8,13 +8,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 func TestMain(m *testing.M) {
 	restore := clearPostgresEnvForTests()
-	code := m.Run()
-	restore()
-	os.Exit(code)
+	goleak.VerifyTestMain(m, goleak.Cleanup(func(exitCode int) {
+		restore()
+		os.Exit(exitCode)
+	}))
 }
 
 func clearPostgresEnvForTests() func() {

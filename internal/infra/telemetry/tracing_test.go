@@ -3,12 +3,10 @@ package telemetry
 import (
 	"context"
 	"math"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -102,40 +100,6 @@ func TestExporterOptionTypeCompatibility(t *testing.T) {
 
 	// Guard against accidental option-type drift when upgrading OTLP exporter package.
 	var _ []otlptracehttp.Option
-}
-
-func restoreGlobalTelemetry(t *testing.T) {
-	t.Helper()
-
-	clearAmbientTraceExporterEnv(t)
-
-	previousTracerProvider := otel.GetTracerProvider()
-	previousPropagator := otel.GetTextMapPropagator()
-	t.Cleanup(func() {
-		otel.SetTracerProvider(previousTracerProvider)
-		otel.SetTextMapPropagator(previousPropagator)
-	})
-}
-
-func clearAmbientTraceExporterEnv(t *testing.T) {
-	t.Helper()
-
-	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") {
-			t.Setenv(name, "")
-		}
-	}
-	for _, name := range []string{
-		"HTTP_PROXY",
-		"HTTPS_PROXY",
-		"NO_PROXY",
-		"http_proxy",
-		"https_proxy",
-		"no_proxy",
-	} {
-		t.Setenv(name, "")
-	}
 }
 
 func setupTracingForEnvPolicyTest(t *testing.T, exporter TraceExporterConfig) error {
