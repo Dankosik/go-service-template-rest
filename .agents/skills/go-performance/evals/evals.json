@@ -105,6 +105,34 @@
         "Does not invent a ten-times target interpretation, numeric budgets, fixtures, optimization mechanism, or pass/fail threshold."
       ],
       "trial_class": "standard"
+    },
+    {
+      "id": 104,
+      "category": "domain_defect",
+      "prompt": "Design a synchronous account export that returns the same accepted JSON representation for tenants with 20 to 20,000 records. The proposed flow fetches record IDs once, then queries metadata and normalizes and marshals the same payload separately for every record. No latency SLO, baseline, cache policy, or optimization request was supplied. Complete the design decisions needed before implementation without inventing product targets.",
+      "expected_output": "Activate the performance decision from structural workload amplification, bound the accepted scale, and select the least-complex no-N+1 and no-duplicate-work shape with claim-matched proof without inventing an SLO.",
+      "files": [],
+      "expectations": [
+        "Recognizes per-record database I/O and repeated normalization or serialization as scale-sensitive amplification even though the prompt does not explicitly request performance work.",
+        "Keeps the known 20-to-20,000-record scale boundary explicit and maps the critical path or amplification shape.",
+        "Uses an evidence-bounded constraint_only disposition when no numeric budget authority exists instead of inventing latency, throughput, allocation, or capacity targets.",
+        "Prefers eliminating, batching, bounding, or reusing existing work before cache, concurrency, pooling, PGO, or a new dependency.",
+        "Names representative proof for the changed path and keeps correctness proof independent from the performance evidence."
+      ],
+      "trial_class": "standard"
+    },
+    {
+      "id": 105,
+      "category": "clean",
+      "prompt": "Design a weekly operator-only endpoint with a contract-enforced maximum of 10 records. It performs one bounded database query and one response encoding, has no nested external calls, fan-out, queue, retained cache, performance claim, or accepted budget, and does not change an existing hot path. Apply only decisions that the design actually triggers.",
+      "expected_output": "No new performance decision or artifact beyond preserving the existing hard bound; leave ordinary behavior and ownership decisions to their owners.",
+      "files": [],
+      "expectations": [
+        "Returns no_new_decision_required or an equivalent unchanged bounded constraint.",
+        "Does not invent workloads, budgets, benchmarks, profiles, load tests, caches, concurrency, pooling, PGO, or new dependencies.",
+        "Does not create a performance artifact or broaden the task solely because the go-performance skill is available."
+      ],
+      "trial_class": "standard"
     }
   ]
 }

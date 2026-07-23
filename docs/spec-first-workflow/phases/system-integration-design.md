@@ -48,6 +48,20 @@ For each material mechanism decision, record the selected mechanism, accepted de
 
 When one of those system decisions is live, apply `go-system-architecture` to the affected boundary and satisfy its completion criterion. Otherwise keep this phase compact.
 
+## Performance Rule
+
+When a material flow's work can grow with input or data cardinality, traffic,
+round trips, serialization or copies, fan-out, retained memory, or contention,
+or when an accepted latency, throughput, capacity, or resource objective applies,
+use the `go-performance` Decision branch before mechanism closure. Close the
+representative workload and scale boundary, critical path and amplification
+shape, accepted budget or structural constraint, least-complex viable option,
+claim-matched proof, and reopen owner. Prefer eliminating, batching, or bounding
+work before cache, concurrency, pooling, PGO, or custom machinery. When a numeric
+target is unavailable, use an evidence-bounded `constraint_only` disposition if
+it closes the implementation fork; otherwise reopen the target's owner instead
+of inventing a budget.
+
 ## Contract Rule
 
 When a caller-visible API, generated contract, event, or material shared interface changes, decide the semantics before implementation:

@@ -70,6 +70,7 @@ Planning must make these explicit where relevant:
 
 - canonical source before generated/mirrored output;
 - proof-first regression work and test-plan scenario IDs;
+- accepted performance workload/scale boundaries, hot-path amplification or resource constraints, and matching benchmark, load, profile, query-count, or other claim-matched proof;
 - migrations/backfills/rollout order and rollback gates;
 - cleanup of replaced code, tests, fixtures, config, docs, skills, or mirrors;
 - fresh validation and negative proof for retired identifiers;

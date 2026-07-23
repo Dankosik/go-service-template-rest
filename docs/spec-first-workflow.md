@@ -10,7 +10,7 @@ Use `direct` only when all of these are true:
 
 - the request is clear enough to act on;
 - the change is small, reversible, and has one obvious owner;
-- no unresolved contract, data, security, money, concurrency, delivery, or cross-service decision exists;
+- no unresolved contract, data, security, money, performance, concurrency, delivery, or cross-service decision exists;
 - validation is obvious and bounded;
 - durable resume state and independent evidence are unnecessary.
 
