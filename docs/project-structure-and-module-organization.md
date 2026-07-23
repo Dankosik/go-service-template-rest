@@ -135,8 +135,12 @@ Use the first matching rule.
     - executable boundary contract: sibling `<owner>_contract_test.go`;
     - container/external process: `test/<feature>_integration_test.go` with
       `//go:build integration` and `package integration_test`;
-    - shared fake used by two or more test files in one package:
-      unexported in `<package>_test.go`; otherwise keep it in its one test file.
+    - fake used by one test file: keep it in that file;
+    - fake shared within one package: keep it unexported in `<package>_test.go`;
+    - non-trivial test support used by two or more current packages:
+      `<owner-package>/<owner-name>test/`, as in
+      `internal/infra/telemetry/telemetrytest/`; production code must not import it;
+    - package-wide goroutine leak gate: sibling `goleak_test.go` with `TestMain`.
 11. Is it HTTP load proof?
     A single configurable request uses
     `test/performance/http/single-flow.js`. A genuinely multi-step feature flow
@@ -164,6 +168,8 @@ chronology or editing history.
 | normal unit test | `<owner>_test.go` |
 | executable boundary contract | `<owner>_contract_test.go` |
 | package-wide test helpers | `<package>_test.go` |
+| cross-package test support | `<owner-name>test/` under its owning package |
+| package-wide goroutine leak gate | `goleak_test.go` |
 | integration test | `<feature>_integration_test.go` |
 | package documentation/generation directive | `doc.go` |
 
