@@ -165,8 +165,7 @@ jobs:
             echo
             if [ -f coverage.out ]; then
               coverage_details="$(go tool cover -func=coverage.out 2>&1 || true)"
-              coverage_total="$(printf '%s\n' "${coverage_details}" | awk '/^total:/ {print $3}')"
-              echo "- Total coverage: ${coverage_total:-unavailable}"
+              make --no-print-directory coverage-summary
               echo "- Required minimum: ${COVERAGE_MIN}%"
               echo
               echo "<details><summary>Coverage details</summary>"

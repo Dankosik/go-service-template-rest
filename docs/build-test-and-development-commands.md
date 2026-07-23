@@ -60,9 +60,30 @@ make test-flake-smoke
 make test-integration
 ```
 
-Unit tests use `go test ./...`. The coverage job also executes the ordinary
-test suite, so CI does not carry a duplicate standalone test job. `lint` owns
-the configured Go analyzers, including vet-class checks.
+`make test` uses the pinned `gotestsum` format; `make test-summary` is its
+compatibility alias. The coverage job also executes the ordinary test suite, so
+CI does not carry a duplicate standalone test job. `lint` owns the configured
+Go analyzers, including vet-class checks.
+
+Effective filtered coverage is the merge gate; raw coverage is informational.
+The configured filter excludes generated OpenAPI and sqlc code plus `cmd`
+composition roots. Integration-tag coverage is separate. Repository maintainers
+own `COVERAGE_MIN` changes and must record the rationale.
+
+Use standard Go selection flags for focused local work; no wrapper targets are
+needed:
+
+```bash
+go test ./internal/config
+go test ./internal/config -run '^TestLoadDefaults$'
+go test ./internal/config -run '^TestResourceIdentityFieldsCannotBeEmpty$/app_version$'
+go test -count=1 ./internal/config
+go test ./internal/config -run '^FuzzParseDuration$'
+go test ./internal/config -run '^$' -fuzz='^FuzzParseDuration$' -fuzztime=30s
+```
+
+The first fuzz command runs the seed corpus only; the second actively fuzzes
+for the stated duration.
 
 Integration tests use the `integration` build tag. Local focused execution may
 skip an unavailable container dependency according to the test contract;

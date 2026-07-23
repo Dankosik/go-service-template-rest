@@ -49,7 +49,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 .DEFAULT_GOAL := help
 
 .PHONY: help template-init template-init-check check check-full pr-check \
-	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-check test-fuzz-smoke test-flake-smoke test-integration \
+	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
 	sqlc-generate sqlc-check openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
@@ -147,10 +147,9 @@ fmt-check:
 	fi
 
 test:
-	go test ./...
-
-test-summary:
 	go tool gotestsum --format=pkgname-and-test-fails -- ./...
+
+test-summary: test
 
 test-watch:
 	go tool gotestsum --watch --format=pkgname-and-test-fails
@@ -160,21 +159,32 @@ test-race:
 
 test-cover:
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out
+	$(MAKE) coverage-summary
 
 test-report:
 	@mkdir -p $(TEST_REPORT_DIR)
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out
+	$(MAKE) coverage-summary
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 
-coverage-check:
+coverage-effective-total:
 	@test -f coverage.out || { echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1; }
 	@filtered_cov="$$(mktemp)"; \
+	trap 'rm -f "$$filtered_cov"' EXIT; \
 	grep -Ev '$(COVERAGE_EXCLUDE_REGEX)' coverage.out >"$$filtered_cov"; \
 	total="$$(GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func="$$filtered_cov" | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
-	rm -f "$$filtered_cov"; \
 	test -n "$$total" || { echo "failed to parse total coverage"; exit 1; }; \
+	printf '%s\n' "$$total"
+
+coverage-summary:
+	@test -f coverage.out || { echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1; }
+	@raw="$$(GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) go tool cover -func=coverage.out | awk '/^total:/ {print $$3}')"; \
+	effective="$$( $(MAKE) --no-print-directory coverage-effective-total )"; \
+	test -n "$$raw" && test -n "$$effective" || { echo "failed to parse coverage totals"; exit 1; }; \
+	printf 'Raw coverage: %s\nEffective coverage (filtered): %s%%\n' "$$raw" "$$effective"
+
+coverage-check:
+	@total="$$( $(MAKE) --no-print-directory coverage-effective-total )"; \
 	awk -v total="$$total" -v minimum="$(COVERAGE_MIN)" 'BEGIN { \
 		if ((total + 0) < (minimum + 0)) { \
 			printf "coverage %.2f%% is below threshold %.2f%%\n", total, minimum; \
