@@ -3,8 +3,10 @@ package httpx
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -63,5 +65,30 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 	}
 	if !resp.Flushed {
 		t.Fatalf("ResponseRecorder.Flushed = false, want true")
+	}
+}
+
+func BenchmarkAccessLog(b *testing.B) {
+	for _, tc := range []struct {
+		name  string
+		level slog.Level
+	}{
+		{name: "enabled", level: slog.LevelInfo},
+		{name: "disabled", level: slog.LevelWarn},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			log := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level}))
+			handler := AccessLog(log, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			request := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+			request.Pattern = "GET /health/live"
+			response := httptest.NewRecorder()
+
+			b.ReportAllocs()
+			for b.Loop() {
+				handler.ServeHTTP(response, request)
+			}
+		})
 	}
 }

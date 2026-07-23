@@ -64,14 +64,18 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		return nil, err
 	}
 
-	options := []sdktrace.TracerProviderOption{
-		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sampler),
-	}
-
 	exporterOptions, exporterConfigured, err := buildTraceExporterOptions(cfg.Exporter)
 	if err != nil {
 		return nil, err
+	}
+	if !exporterConfigured {
+		// Keep valid trace IDs for propagation and log correlation without recording spans that cannot be exported.
+		sampler = sdktrace.NeverSample()
+	}
+
+	options := []sdktrace.TracerProviderOption{
+		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sampler),
 	}
 	if exporterConfigured {
 		if err := rejectUnsupportedAmbientTraceExporterEnv(); err != nil {

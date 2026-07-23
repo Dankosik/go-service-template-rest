@@ -27,6 +27,7 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 		DeploymentEnv:    " config-env ",
 		TracesSampler:    "always_on",
 		TracesSamplerArg: 0.1,
+		Exporter:         testTraceExporter(t),
 	})
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
@@ -75,6 +76,70 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 	}
 }
 
+func TestSetupTracingWithoutExporterDoesNotRecord(t *testing.T) {
+	telemetrytest.RestoreGlobals(t)
+
+	shutdown, err := SetupTracing(t.Context(), TracingConfig{
+		ServiceName:      "test-service",
+		ServiceVersion:   "test",
+		DeploymentEnv:    "test",
+		TracesSampler:    "always_on",
+		TracesSamplerArg: 1,
+	})
+	if err != nil {
+		t.Fatalf("SetupTracing() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Errorf("shutdown tracing: %v", err)
+		}
+	})
+
+	_, span := otel.Tracer("telemetry-test").Start(t.Context(), "no-exporter")
+	defer span.End()
+	if span.IsRecording() {
+		t.Fatal("span.IsRecording() = true without an exporter")
+	}
+	if !span.SpanContext().IsValid() {
+		t.Fatal("span context is invalid, want trace correlation preserved")
+	}
+}
+
+func BenchmarkTracingWithoutExporter(b *testing.B) {
+	telemetrytest.ClearAmbientExporterEnv(b)
+	previousTracerProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	b.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+
+	shutdown, err := SetupTracing(b.Context(), TracingConfig{
+		ServiceName:      "benchmark-service",
+		ServiceVersion:   "benchmark",
+		DeploymentEnv:    "benchmark",
+		TracesSampler:    "parentbased_traceidratio",
+		TracesSamplerArg: 0.10,
+	})
+	if err != nil {
+		b.Fatalf("SetupTracing() error = %v", err)
+	}
+	b.Cleanup(func() {
+		if err := shutdown(context.Background()); err != nil {
+			b.Errorf("shutdown tracing: %v", err)
+		}
+	})
+
+	ctx := context.Background()
+	tracer := otel.Tracer("telemetry-benchmark")
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_, span := tracer.Start(ctx, "request")
+		span.End()
+	}
+}
+
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry provider and propagator.
 func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
@@ -82,6 +147,7 @@ func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 	shutdown, err := SetupTracing(context.Background(), TracingConfig{
 		TracesSampler:    "always_on",
 		TracesSamplerArg: 0.1,
+		Exporter:         testTraceExporter(t),
 	})
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
@@ -119,6 +185,17 @@ func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 			t.Fatalf("resource attribute %q used fallback %q; attrs=%v", key, fallback, attrs)
 		}
 	}
+}
+
+func testTraceExporter(t *testing.T) TraceExporterConfig {
+	t.Helper()
+	telemetrytest.ClearAmbientExporterEnv(t)
+
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(collector.Close)
+	return TraceExporterConfig{OTLPEndpoint: collector.URL}
 }
 
 func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
