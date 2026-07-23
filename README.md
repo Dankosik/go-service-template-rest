@@ -138,6 +138,7 @@ internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
+internal/infra/httpclient/       bounded outbound HTTP transport
 internal/infra/postgres/         PostgreSQL adapters
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
