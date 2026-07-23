@@ -142,19 +142,51 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 		Health: health.New(),
 	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", strings.NewReader("ab"))
-	req.ContentLength = 2
-	resp := httptest.NewRecorder()
-
-	h.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
+	tests := []struct {
+		name          string
+		method        string
+		target        string
+		body          string
+		contentLength int64
+		contentType   string
+	}{
+		{
+			name:          "known content length",
+			method:        http.MethodGet,
+			target:        "/api/v1/ping",
+			body:          "ab",
+			contentLength: 2,
+		},
+		{
+			name:          "unknown content length",
+			method:        http.MethodPost,
+			target:        "/api/v1/template-example/example?copies=1",
+			body:          `{"message":"a"}`,
+			contentLength: -1,
+			contentType:   "application/json",
+		},
 	}
-	assertProblemContentType(t, resp.Header())
-	assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
-	if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
-		t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.target, strings.NewReader(tt.body))
+			req.ContentLength = tt.contentLength
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
+			}
+			resp := httptest.NewRecorder()
+
+			h.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
+			}
+			assertProblemContentType(t, resp.Header())
+			assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
+			if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
+				t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
+			}
+		})
 	}
 }
 
