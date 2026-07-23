@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 )
 
 // Problem defines model for Problem.
@@ -35,6 +37,17 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// TemplateExampleRequest defines model for TemplateExampleRequest.
+type TemplateExampleRequest struct {
+	Message string `json:"message"`
+}
+
+// TemplateExampleResponse defines model for TemplateExampleResponse.
+type TemplateExampleResponse struct {
+	Messages []string `json:"messages"`
+	Slug     string   `json:"slug"`
+}
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Problem
 
@@ -44,11 +57,22 @@ type InternalServerError = Problem
 // RequestEntityTooLarge defines model for RequestEntityTooLarge.
 type RequestEntityTooLarge = Problem
 
+// TemplateExampleParams defines parameters for TemplateExample.
+type TemplateExampleParams struct {
+	Copies int32 `form:"copies" json:"copies"`
+}
+
+// TemplateExampleJSONRequestBody defines body for TemplateExample for application/json ContentType.
+type TemplateExampleJSONRequestBody = TemplateExampleRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Ping endpoint
 	// (GET /api/v1/ping)
 	Ping(w http.ResponseWriter, r *http.Request)
+	// Exercise generated request validation
+	// (POST /api/v1/template-example/{slug})
+	TemplateExample(w http.ResponseWriter, r *http.Request, slug string, params TemplateExampleParams)
 	// Liveness probe
 	// (GET /health/live)
 	HealthLive(w http.ResponseWriter, r *http.Request)
@@ -64,6 +88,12 @@ type Unimplemented struct{}
 // Ping endpoint
 // (GET /api/v1/ping)
 func (_ Unimplemented) Ping(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Exercise generated request validation
+// (POST /api/v1/template-example/{slug})
+func (_ Unimplemented) TemplateExample(w http.ResponseWriter, r *http.Request, slug string, params TemplateExampleParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -93,6 +123,48 @@ func (siw *ServerInterfaceWrapper) Ping(w http.ResponseWriter, r *http.Request) 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Ping(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TemplateExample operation middleware
+func (siw *ServerInterfaceWrapper) TemplateExample(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", chi.URLParam(r, "slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TemplateExampleParams
+
+	// ------------- Required query parameter "copies" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "copies", r.URL.Query(), &params.Copies, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "copies"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "copies", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TemplateExample(w, r, slug, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -247,6 +319,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/v1/ping", wrapper.Ping)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/template-example/{slug}", wrapper.TemplateExample)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health/live", wrapper.HealthLive)
 	})
 	r.Group(func(r chi.Router) {
@@ -317,6 +392,78 @@ type Ping500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response Ping500ApplicationProblemPlusJSONResponse) VisitPingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TemplateExampleRequestObject struct {
+	Slug   string `json:"slug"`
+	Params TemplateExampleParams
+	Body   *TemplateExampleJSONRequestBody
+}
+
+type TemplateExampleResponseObject interface {
+	VisitTemplateExampleResponse(w http.ResponseWriter) error
+}
+
+type TemplateExample200JSONResponse TemplateExampleResponse
+
+func (response TemplateExample200JSONResponse) VisitTemplateExampleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TemplateExample400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response TemplateExample400ApplicationProblemPlusJSONResponse) VisitTemplateExampleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TemplateExample413ApplicationProblemPlusJSONResponse struct {
+	RequestEntityTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response TemplateExample413ApplicationProblemPlusJSONResponse) VisitTemplateExampleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TemplateExample500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response TemplateExample500ApplicationProblemPlusJSONResponse) VisitTemplateExampleResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -476,6 +623,9 @@ type StrictServerInterface interface {
 	// Ping endpoint
 	// (GET /api/v1/ping)
 	Ping(ctx context.Context, request PingRequestObject) (PingResponseObject, error)
+	// Exercise generated request validation
+	// (POST /api/v1/template-example/{slug})
+	TemplateExample(ctx context.Context, request TemplateExampleRequestObject) (TemplateExampleResponseObject, error)
 	// Liveness probe
 	// (GET /health/live)
 	HealthLive(ctx context.Context, request HealthLiveRequestObject) (HealthLiveResponseObject, error)
@@ -537,6 +687,40 @@ func (sh *strictHandler) Ping(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TemplateExample operation middleware
+func (sh *strictHandler) TemplateExample(w http.ResponseWriter, r *http.Request, slug string, params TemplateExampleParams) {
+	var request TemplateExampleRequestObject
+
+	request.Slug = slug
+	request.Params = params
+
+	var body TemplateExampleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TemplateExample(ctx, request.(TemplateExampleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TemplateExample")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TemplateExampleResponseObject); ok {
+		if err := validResponse.VisitTemplateExampleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // HealthLive operation middleware
 func (sh *strictHandler) HealthLive(w http.ResponseWriter, r *http.Request) {
 	var request HealthLiveRequestObject
@@ -590,23 +774,30 @@ func (sh *strictHandler) HealthReady(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"bNnWotJlDpeIXZ8vN+Nz43PLEFV/fb3+MwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

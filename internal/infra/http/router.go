@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/go-chi/chi/v5"
+	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -40,6 +42,10 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	}
 
 	server := api.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
+	requestValidator, err := openAPIRequestValidator(log)
+	if err != nil {
+		return nil, err
+	}
 
 	otelMiddleware := otelhttp.NewMiddleware(
 		"http.server",
@@ -48,7 +54,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
 	)
 
-	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log))
+	apiSubrouter := api.HandlerWithOptions(server, generatedChiServerOptions(log, requestValidator))
 
 	// Prometheus exposition is an operational protocol outside the client OpenAPI contract.
 	rootRouter := newRootRouter(
@@ -62,6 +68,26 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	)
 
 	return RequestCorrelation(rootRouter), nil
+}
+
+func openAPIRequestValidator(log *slog.Logger) (api.MiddlewareFunc, error) {
+	spec, err := api.GetSpec()
+	if err != nil {
+		return nil, fmt.Errorf("http router: load embedded OpenAPI spec: %w", err)
+	}
+
+	return oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
+		DoNotValidateServers: true,
+		ErrorHandlerWithOpts: func(
+			_ context.Context,
+			err error,
+			w http.ResponseWriter,
+			r *http.Request,
+			_ oapimiddleware.ErrorHandlerOpts,
+		) {
+			handleMalformedGeneratedRequest(log, w, r, err)
+		},
+	}), nil
 }
 
 func otelServerName(configured string) string {

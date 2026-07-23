@@ -37,6 +37,55 @@ paths:
           $ref: "#/components/responses/RequestEntityTooLarge"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/v1/template-example/{slug}:
+    post:
+      tags: [app]
+      summary: Exercise generated request validation
+      description: |
+        TEMPLATE EXAMPLE: this operation is intentionally synthetic. Delete it
+        if the service does not need it, or replace it with real business logic
+        and remove the marker.
+      operationId: templateExample
+      x-template-example: true
+      x-security-decision:
+        exposure: public
+        rationale: synthetic validation example; no placeholder authentication is permitted
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 32
+            pattern: "^[a-z][a-z0-9-]*$"
+        - name: copies
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateExampleRequest"
+      responses:
+        "200":
+          description: validated request values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateExampleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/RequestEntityTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /health/live:
     get:
       tags: [system]
@@ -90,6 +139,29 @@ paths:
                 example: not ready
 components:
   schemas:
+    TemplateExampleRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 64
+    TemplateExampleResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - slug
+        - messages
+      properties:
+        slug:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
     Problem:
       type: object
       required:

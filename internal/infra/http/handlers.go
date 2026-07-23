@@ -46,6 +46,27 @@ func (h strictHandlers) Ping(_ context.Context, _ api.PingRequestObject) (api.Pi
 	return api.Ping200TextResponse(pingResponseBody), nil
 }
 
+// TEMPLATE EXAMPLE: delete this handler with its OpenAPI operation if unused,
+// or replace it with real app-layer behavior and remove the marker.
+func (h strictHandlers) TemplateExample(
+	_ context.Context,
+	request api.TemplateExampleRequestObject,
+) (api.TemplateExampleResponseObject, error) {
+	if request.Body == nil {
+		return nil, fmt.Errorf("template example body is required")
+	}
+
+	messages := make([]string, request.Params.Copies)
+	for i := range messages {
+		messages[i] = request.Body.Message
+	}
+
+	return api.TemplateExample200JSONResponse{
+		Slug:     request.Slug,
+		Messages: messages,
+	}, nil
+}
+
 func (h strictHandlers) HealthLive(_ context.Context, _ api.HealthLiveRequestObject) (api.HealthLiveResponseObject, error) {
 	return api.HealthLive200TextResponse("ok"), nil
 }

@@ -12,10 +12,12 @@ Generation config: `internal/api/oapi-codegen.yaml`.
 Current server mode: `chi-server: true` + `strict-server: true`.
 
 Strict-server generation provides typed request/response glue; it does not install
-full runtime OpenAPI schema or security validation. The baseline operations have
-no parameters, request bodies, or protected routes. Add scoped validation
-middleware with the first schema-bearing or protected operation, when its
-behavior and public-route boundaries can be proved.
+full runtime OpenAPI schema or security validation. The generated operations are
+wrapped once by `oapi-codegen/nethttp-middleware`; the marked template operation
+proves path, query, JSON body, and unknown-field validation. See
+[`docs/template-examples.md`](../../docs/template-examples.md) for its mandatory
+delete-or-replace lifecycle. Protected routes still require a real
+`AuthenticationFunc`; the template deliberately provides no placeholder auth.
 
 ## Adding A Strict-Server Endpoint
 

@@ -658,7 +658,13 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 		traceID   = "4bf92f3577b34da6a3ce929d0e0e4736"
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	// TEMPLATE EXAMPLE: replace this request with the first real parameterized route.
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/template-example/concrete-slug?copies=1",
+		strings.NewReader(`{"message":"hello"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(requestIDHeader, requestID)
 	req.Header.Set("Traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
@@ -683,8 +689,8 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	if got, ok := event["span_id"].(string); !ok || got == "" {
 		t.Fatalf("span_id = %v, want non-empty string", event["span_id"])
 	}
-	if got := event["route"]; got != "GET /api/v1/ping" {
-		t.Fatalf("route = %v, want %q", got, "GET /api/v1/ping")
+	if got := event["route"]; got != "POST /api/v1/template-example/{slug}" {
+		t.Fatalf("route = %v, want %q", got, "POST /api/v1/template-example/{slug}")
 	}
 }
 

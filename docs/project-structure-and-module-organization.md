@@ -225,6 +225,7 @@ Existing examples to inspect before adding new surfaces:
 - `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
 - `internal/infra/postgres` for pool lifecycle, adapter config parsing, migration running, and generated SQLC ownership.
 - `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
+- `docs/template-examples.md` for the synthetic HTTP and transaction examples that must be deleted or replaced before production.
 
 Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
 
@@ -253,11 +254,11 @@ New Postgres persistence:
    `MIGRATION_DSN` or provisions its own isolated Docker-backed rehearsal.
 
 Transaction recipe:
-1. Start the transaction with the caller context.
-2. Bind sqlc queries to the transaction for the duration of the operation.
-3. Defer rollback next to transaction creation and use a bounded cleanup context when the driver requires context for cleanup.
-4. Commit once, with the caller context, after all side effects that belong inside the transaction have succeeded.
-5. Do not add a generic transaction helper until repeated production code shows one stable local policy.
+1. Call `Pool.InTx` with the caller context at the use-case transaction boundary.
+2. Use only the callback's sqlc `Queries`; they are bound through generated `WithTx`.
+3. Keep network calls and unrelated external side effects outside the callback.
+4. Let `pgx.BeginFunc` own begin, rollback, and commit; the helper performs no retries.
+5. Replace the marked SQL example with feature-owned queries, or delete the example and helper when the service has no transactional use case.
 
 DB-required feature bootstrap:
 1. Validate required Postgres config before constructing feature repositories.

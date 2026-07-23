@@ -75,7 +75,7 @@ func fullJitterDelay(attempt int) time.Duration {
 		return 0
 	}
 
-	return rand.N(backoff + 1)
+	return rand.N(backoff + 1) // #nosec G404 -- startup retry jitter is not security-sensitive.
 }
 
 func withStageBudget(parent context.Context, stageBudget time.Duration) (context.Context, context.CancelFunc) {
