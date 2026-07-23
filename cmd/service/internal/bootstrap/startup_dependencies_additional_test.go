@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -287,17 +288,19 @@ func TestPostgresRuntimeReadinessProbeDoesNotExtendShorterParentDeadline(t *test
 func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(t *testing.T) {
 	t.Parallel()
 
-	probe := newPostgresReadinessProbe(testProbe{
-		name: "postgres",
-		check: func(ctx context.Context) error {
-			<-ctx.Done()
-			return nil
-		},
-	}, time.Millisecond)
+	synctest.Test(t, func(t *testing.T) {
+		probe := newPostgresReadinessProbe(testProbe{
+			name: "postgres",
+			check: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+		}, time.Millisecond)
 
-	if err := probe.Check(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("probe.Check() error = %v, want wrapped %v", err, context.DeadlineExceeded)
-	}
+		if err := probe.Check(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("probe.Check() error = %v, want wrapped %v", err, context.DeadlineExceeded)
+		}
+	})
 }
 
 func TestInitStartupDependenciesAllDisabled(t *testing.T) {

@@ -46,6 +46,24 @@ Release evidence baseline (tracked in comments and rollout evidence):
 - production replica floor: `>=2`
 - per-replica baseline: `2 vCPU / 2 GiB`
 
+## Go Runtime Resource Contract
+
+- Set `GOMEMLIMIT` in the Railway service variables to leave 5-10% of the
+  container memory limit outside the Go runtime. For the current 2 GiB
+  per-replica baseline, use `GOMEMLIMIT=1843MiB` (90%).
+- Keep `GOMEMLIMIT` as a deployment variable rather than duplicating it in
+  application configuration. Recalculate it whenever the Railway memory limit
+  changes.
+- Leave `GOMAXPROCS` unset by default. Go 1.26 already derives its default from
+  the container CPU limit; override it only with measured evidence.
+- Do not add an automatic memory-limit or CPU-tuning dependency while these
+  native runtime controls satisfy the deployment contract.
+
+`GOMEMLIMIT` is a soft runtime limit rather than a hard process cap, so the
+headroom covers the binary, non-Go memory, and operating-system overhead. See
+the official [Go GC guide](https://go.dev/doc/gc-guide#Memory_limit) and
+[`runtime/debug.SetMemoryLimit`](https://pkg.go.dev/runtime/debug#SetMemoryLimit).
+
 ## GitHub Autodeploy Prerequisites
 
 The template can encode the migration hook in `railway.toml`, but GitHub-triggered deploy wiring still has one operator-managed step in Railway:

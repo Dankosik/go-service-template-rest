@@ -8,8 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
+
+const poolName = "postgres"
 
 var (
 	ErrConfig      = errors.New("postgres config")
@@ -54,6 +58,12 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, err
 	}
 	poolConfig.ConnConfig.ConnectTimeout = opts.ConnectTimeout
+	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer(
+		otelpgx.WithTrimSQLInSpanName(),
+		otelpgx.WithSpanNameFunc(postgresOperationName),
+		otelpgx.WithDisableSQLStatementInAttributes(),
+		otelpgx.WithDisableConnectionDetailsInAttributes(),
+	)
 	poolConfig.MaxConns = int32(opts.MaxOpenConns) // #nosec G115 -- validated to be <= math.MaxInt32 above.
 	poolConfig.MaxConnLifetime = opts.ConnMaxLifetime
 
@@ -69,6 +79,14 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, fmt.Errorf("%w: ping postgres: %w", ErrHealthcheck, err)
 	}
 
+	if err := otelpgx.RecordStats(
+		pool,
+		otelpgx.WithStatsAttributes(semconv.DBClientConnectionPoolName(poolName)),
+	); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("record postgres pool metrics: %w", err)
+	}
+
 	return &Pool{pool: pool}, nil
 }
 
@@ -80,7 +98,7 @@ func (p *Pool) Close() {
 }
 
 func (p *Pool) Name() string {
-	return "postgres"
+	return poolName
 }
 
 func (p *Pool) Check(ctx context.Context) error {
@@ -91,4 +109,17 @@ func (p *Pool) Check(ctx context.Context) error {
 		return fmt.Errorf("%w: ping postgres: %w", ErrHealthcheck, err)
 	}
 	return nil
+}
+
+func postgresOperationName(statement string) string {
+	for line := range strings.Lines(statement) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "--") {
+			continue
+		}
+		for operation := range strings.FieldsSeq(line) {
+			return strings.ToUpper(operation)
+		}
+	}
+	return "UNKNOWN"
 }
