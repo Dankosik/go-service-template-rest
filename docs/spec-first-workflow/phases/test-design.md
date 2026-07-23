@@ -5,7 +5,7 @@ Turn risky behavior into explicit proof obligations before implementation. Keep 
 ## Read When
 
 - Proof spans several scenarios, failure modes, or levels.
-- Public contracts, migrations/data, security, money, concurrency/lifecycle, retries, async work, compatibility, or rollout behavior changes.
+- Public contracts, migrations/data, security, money, performance budgets or scale-sensitive hot paths, concurrency/lifecycle, retries, async work, compatibility, or rollout behavior changes.
 - A regression needs non-obvious fail-before proof.
 - Planning would otherwise choose scenario classes or proof levels.
 
@@ -20,6 +20,12 @@ Turn risky behavior into explicit proof obligations before implementation. Keep 
 Before writing scenarios, disposition every material acceptance claim, invariant, state transition, failure mode, and protected side effect affected by the change as existing sufficient proof, existing proof to strengthen, one or more `TD-*` scenarios, a named non-test proof that can falsify the claim, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition. Omission is not disposition. Derive this proof surface from approved behavior and affected contract, runtime, state, trust, and lifecycle boundaries, not from existing test names or implementation branches.
 
 For each resulting proof obligation, design the smallest falsifier: a controlled setup/action/failure trigger plus an oracle that rejects a plausible incorrect observable result, state, emission, or side effect. Then select the narrowest complementary proving level and runnable command that can establish that oracle.
+
+Route performance proof decisions through `go-performance` and
+[Benchmarking](../../benchmarking.md); keep the accepted workload and scale
+boundary, measured path or structural oracle, budget or structural constraint,
+baseline/candidate equivalence when comparison applies, and independent
+correctness proof explicit.
 
 Route non-obvious Go proving decisions through `go-test-strategy`; this phase
 still owns the complete obligation matrix and Planning handoff. Map only

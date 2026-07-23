@@ -41,7 +41,7 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - **Structured:** the normal non-trivial case. Keep only the `spec.md`, `tasks.md`, design, or test artifacts whose decisions must survive; the root self-reviews them unless current risk or the user requires independent review.
 - **Orchestrated:** use durable coordination, parallel lanes, or optional durable-control and native worker/worktree execution only when broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution makes coordination real.
 
-Public contracts, persisted data, security, money, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
+Public contracts, persisted data, security, money, performance, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
 
 ### Required Spine
 
@@ -85,11 +85,11 @@ Use the smallest matching check:
 When work can change Go, classify only the triggered pressures: package owner,
 import direction, composition, or exported surface; method sets, nil/zero,
 errors, or context; resource or transaction lifetime; mutable ownership,
-aliasing, concurrency, or lifecycle; canonical, generated, or hand-written
-authority; and repository-native proof. Activate only the matching existing Go
-methods; untriggered categories create no work. Close every triggered category
-with its phase or skill owner, or name the owner and condition that must reopen
-it.
+aliasing, concurrency, or lifecycle; hot-path work amplification, resource cost,
+or capacity; canonical, generated, or hand-written authority; and
+repository-native proof. Activate only the matching existing Go methods;
+untriggered categories create no work. Close every triggered category with its
+phase or skill owner, or name the owner and condition that must reopen it.
 
 ## Instruction Ownership
 
