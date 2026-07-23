@@ -123,6 +123,11 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
 	}
+	for _, field := range otel.GetTextMapPropagator().Fields() {
+		if field == "baggage" {
+			t.Fatalf("global propagator fields include unowned baggage: %v", otel.GetTextMapPropagator().Fields())
+		}
+	}
 	t.Cleanup(func() {
 		if err := shutdown(context.Background()); err != nil {
 			t.Fatalf("shutdown tracing: %v", err)

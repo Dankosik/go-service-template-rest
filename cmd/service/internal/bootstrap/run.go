@@ -157,6 +157,7 @@ func Run(args []string) (runErr error) {
 		httpx.RouterConfig{
 			MaxBodyBytes:     bootstrap.cfg.HTTP.MaxBodyBytes,
 			ReadinessTimeout: bootstrap.cfg.HTTP.ReadinessTimeout,
+			OTelServerName:   bootstrap.cfg.Observability.OTel.ServiceName,
 		},
 	)
 	if err != nil {

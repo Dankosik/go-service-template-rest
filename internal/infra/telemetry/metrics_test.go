@@ -257,7 +257,6 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 
 	m := New()
 
-	m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
 	m.IncConfigFailure(ConfigFailureReasonValidate)
 	m.IncStartupRejection(StartupRejectionReasonDependencyInit)
 	m.IncStartupRejection("dns_failure")
@@ -268,13 +267,11 @@ func TestCoreMetricsHandlerExposesExpectedSeries(t *testing.T) {
 	metricsText := collectMetricsText(t, m)
 
 	expected := []string{
-		`http_requests_total`,
 		`config_failures_total`,
 		`startup_rejections_total`,
 		`telemetry_init_failure_total`,
 		`config_startup_outcome_total`,
 		`startup_dependency_status`,
-		`route="/ping"`,
 		`config_failures_total{reason="validate"} 1`,
 		`startup_rejections_total{reason="` + StartupRejectionReasonDependencyInit + `"} 1`,
 		`startup_rejections_total{reason="` + StartupRejectionReasonOther + `"} 1`,
@@ -393,8 +390,6 @@ func TestMetricsNilAndZeroValueMethodsAreNoops(t *testing.T) {
 	t.Parallel()
 
 	for _, m := range []*Metrics{nil, {}} {
-		m.ObserveHTTPRequest(http.MethodGet, "/ping", http.StatusOK)
-		m.ObserveHTTPRequestDuration(http.MethodGet, "/ping", http.StatusOK, time.Millisecond)
 		m.ObserveConfigLoadDuration("load", "ok", time.Millisecond)
 		m.IncConfigFailure("dependency_init")
 		m.IncStartupRejection(StartupRejectionReasonDependencyInit)

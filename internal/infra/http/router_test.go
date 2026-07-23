@@ -44,6 +44,9 @@ func mustNewRouter(t *testing.T, log *slog.Logger, h Handlers, metrics *telemetr
 	if cfg.MaxBodyBytes <= 0 {
 		cfg.MaxBodyBytes = testRouterMaxBodyBytes
 	}
+	if cfg.OTelServerName == "" {
+		cfg.OTelServerName = "router-test"
+	}
 
 	handler, err := NewRouter(log, h, metrics, cfg)
 	if err != nil {
@@ -136,20 +139,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 		}
 		assertProblemContentType(t, resp.Header())
-		var problem map[string]any
-		if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
-			t.Fatalf("unmarshal problem: %v", err)
-		}
-		if got := problem["title"]; got != "not found" {
-			t.Fatalf("title = %v, want %q", got, "not found")
-		}
-		status, ok := problem["status"].(float64)
-		if !ok {
-			t.Fatalf("problem status type = %T, want float64", problem["status"])
-		}
-		if got := int(status); got != http.StatusNotFound {
-			t.Fatalf("problem status = %d, want %d", got, http.StatusNotFound)
-		}
+		assertProblemCode(t, resp, problemCodeNotFound)
 	})
 
 	t.Run("unknown method on missing path returns not found", func(t *testing.T) {
@@ -181,6 +171,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
 		}
 		assertProblemContentType(t, resp.Header())
+		assertProblemCode(t, resp, problemCodeMethodNotAllowed)
 		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
@@ -296,6 +287,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, "req-123")
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	req = req.WithContext(propagation.TraceContext{}.Extract(req.Context(), propagation.HeaderCarrier(req.Header)))
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -351,6 +343,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 	req.Header.Set(requestIDHeader, "req-chi-123")
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	req = req.WithContext(propagation.TraceContext{}.Extract(req.Context(), propagation.HeaderCarrier(req.Header)))
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -473,7 +466,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	t.Run("replaces too long request id", func(t *testing.T) {
 		t.Parallel()
 
-		tooLongRequestID := strings.Repeat("a", maxRequestIDLength+1)
+		tooLongRequestID := strings.Repeat("a", 129)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
 		req.Header.Set(requestIDHeader, tooLongRequestID)
@@ -528,6 +521,7 @@ func TestRouterRejectsConflictingRequestFraming(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
 	}
 	assertProblemContentType(t, resp.Header())
+	assertProblemCode(t, resp, problemCodeBadRequest)
 	if !strings.Contains(resp.Body.String(), "invalid request framing") {
 		t.Fatalf("body = %q, want %q", resp.Body.String(), "invalid request framing")
 	}
@@ -557,6 +551,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
 	}
 	assertProblemContentType(t, resp.Header())
+	assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
 	if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
 		t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
 	}
@@ -581,6 +576,7 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)
 	}
+	assertProblemCode(t, resp, problemCodeInternalError)
 	if strings.Contains(out.String(), secretValue) {
 		t.Fatalf("panic log leaks raw recovered value: %q", out.String())
 	}
@@ -728,7 +724,7 @@ func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
-	handler := AccessLog(log, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := AccessLog(log, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -759,7 +755,7 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 
 	var directFlusher bool
 	var flushErr error
-	handler := AccessLog(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := AccessLog(nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			return
@@ -785,14 +781,32 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
-	t.Parallel()
-
 	log := slog.New(slog.DiscardHandler)
+	metrics := telemetry.New()
+	previousMeterProvider := otel.GetMeterProvider()
+	t.Cleanup(func() {
+		otel.SetMeterProvider(previousMeterProvider)
+	})
+	shutdown, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
+		ServiceName:    "router-test",
+		ServiceVersion: "test",
+		DeploymentEnv:  "test",
+	})
+	if err != nil {
+		t.Fatalf("SetupMetrics() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown metrics: %v", err)
+		}
+	})
+
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-	}, telemetry.New(), RouterConfig{})
+	}, metrics, RouterConfig{})
 
 	pingReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+	pingReq.Host = "attacker-controlled.example:65535"
 	pingResp := httptest.NewRecorder()
 	h.ServeHTTP(pingResp, pingReq)
 
@@ -805,11 +819,17 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	}
 
 	body := metricsResp.Body.String()
-	if !strings.Contains(body, "http_request_duration_seconds_bucket") {
+	if !strings.Contains(body, "http_server_request_duration_seconds_bucket") {
 		t.Fatalf("metrics output does not contain duration histogram buckets")
 	}
-	if !strings.Contains(body, `method="GET",route="GET /api/v1/ping",status_code="200"`) {
+	if !strings.Contains(body, `http_request_method="GET"`) ||
+		!strings.Contains(body, `http_response_status_code="200"`) ||
+		!strings.Contains(body, `http_route="/api/v1/ping"`) ||
+		!strings.Contains(body, `server_address="router-test"`) {
 		t.Fatalf("metrics output does not contain expected duration histogram labels for ping endpoint")
+	}
+	if strings.Contains(body, "attacker-controlled.example") || strings.Contains(body, `server_port="65535"`) {
+		t.Fatal("metrics output contains attacker-controlled authority labels")
 	}
 
 	// Scrape once more to include the previous /metrics request in histogram output.
@@ -819,39 +839,35 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	if metricsRespSecond.Code != http.StatusOK {
 		t.Fatalf("second metrics status = %d, want %d", metricsRespSecond.Code, http.StatusOK)
 	}
-	if !strings.Contains(metricsRespSecond.Body.String(), `method="GET",route="GET /metrics",status_code="200"`) {
+	if !strings.Contains(metricsRespSecond.Body.String(), `http_route="/metrics"`) {
 		t.Fatalf("metrics output does not contain expected duration histogram labels for metrics endpoint")
 	}
 }
 
-func TestHTTPMethodNormalizationBoundsNonStandardMetricsLabels(t *testing.T) {
+func TestHTTPMethodNormalizationBoundsNonStandardRouteLabels(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
-	handler := AccessLog(nil, metrics, captureRouteLabelMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Pattern = "BREW /coffee"
-		w.WriteHeader(http.StatusNoContent)
-	})))
-
 	req := httptest.NewRequest("BREW", "/coffee", nil)
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	if resp.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
+	req.Pattern = "BREW /coffee"
+	if got := routeLabelForRequest(req); got != "OTHER /coffee" {
+		t.Fatalf("routeLabelForRequest() = %q, want %q", got, "OTHER /coffee")
 	}
+}
 
-	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	metricsResp := httptest.NewRecorder()
-	metrics.Handler().ServeHTTP(metricsResp, metricsReq)
-	if metricsResp.Code != http.StatusOK {
-		t.Fatalf("metrics status = %d, want %d", metricsResp.Code, http.StatusOK)
-	}
-	body := metricsResp.Body.String()
-	if strings.Contains(body, "BREW") {
-		t.Fatalf("metrics output contains raw method label BREW:\n%s", body)
-	}
-	if !strings.Contains(body, `method="OTHER",route="OTHER /coffee",status_code="204"`) {
-		t.Fatalf("metrics output does not contain bounded method labels:\n%s", body)
+func TestOTelServerNameBoundsAuthorityLabels(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		configured string
+		want       string
+	}{
+		{configured: "orders-api", want: "orders-api:0"},
+		{configured: " orders-api ", want: "orders-api:0"},
+		{want: "service:0"},
+	} {
+		if got := otelServerName(tt.configured); got != tt.want {
+			t.Fatalf("otelServerName(%q) = %q, want %q", tt.configured, got, tt.want)
+		}
 	}
 }
 
@@ -1144,10 +1160,46 @@ func assertProblemContentType(t *testing.T, header http.Header) {
 	}
 }
 
-func TestProblemHTTPStatusFallsBackForInvalidStatus(t *testing.T) {
+func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode problemCode) {
+	t.Helper()
+
+	var problem api.Problem
+	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("unmarshal problem: %v", err)
+	}
+	if got := problem.Code; got != string(wantCode) {
+		t.Fatalf("problem code = %q, want %q", got, wantCode)
+	}
+}
+
+func TestProblemCatalogDefinitions(t *testing.T) {
 	t.Parallel()
 
-	if got := problemHTTPStatus(0); got != http.StatusInternalServerError {
-		t.Fatalf("problemHTTPStatus(0) = %d, want %d", got, http.StatusInternalServerError)
+	tests := []struct {
+		code    problemCode
+		status  int
+		title   string
+		typeURI string
+	}{
+		{code: problemCodeBadRequest, status: http.StatusBadRequest, title: "bad request", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1"},
+		{code: problemCodeNotFound, status: http.StatusNotFound, title: "not found", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5"},
+		{code: problemCodeMethodNotAllowed, status: http.StatusMethodNotAllowed, title: "method not allowed", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6"},
+		{code: problemCodeRequestEntityTooLarge, status: http.StatusRequestEntityTooLarge, title: "request entity too large", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14"},
+		{code: problemCodeInternalError, status: http.StatusInternalServerError, title: "internal server error", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1"},
+	}
+
+	for _, tt := range tests {
+		code, definition := problemDefinitionFor(tt.code)
+		if code != tt.code {
+			t.Fatalf("problemDefinitionFor(%q) code = %q", tt.code, code)
+		}
+		if definition.status != tt.status || definition.title != tt.title || definition.typeURI != tt.typeURI {
+			t.Fatalf("problemDefinitionFor(%q) = %+v, want status=%d title=%q type=%q", tt.code, definition, tt.status, tt.title, tt.typeURI)
+		}
+	}
+
+	code, definition := problemDefinitionFor("unknown")
+	if code != problemCodeInternalError || definition.status != http.StatusInternalServerError {
+		t.Fatalf("unknown problem definition = (%q, %+v), want internal error", code, definition)
 	}
 }

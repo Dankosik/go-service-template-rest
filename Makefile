@@ -280,7 +280,7 @@ sqlc-generate:
 		go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml; \
 	fi
 
-sqlc-check: sqlc-generate
+sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
 
 openapi-generate:
@@ -304,7 +304,7 @@ openapi-breaking:
 	@test -n "$(BASE_OPENAPI)" || { echo "BASE_OPENAPI is required"; exit 1; }
 	go tool oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE)
 
-openapi-check: openapi-generate openapi-drift-check
+openapi-check: openapi-drift-check
 	go test ./internal/api
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
 

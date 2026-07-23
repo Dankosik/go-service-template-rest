@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime"
 
+	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/felixge/httpsnoop"
 )
 
@@ -53,14 +54,14 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 					"panic_type", fmt.Sprintf("%T", rec),
 					"method", method,
 					"path", path,
-					"request_id", requestIDFromContext(ctx),
+					"request_id", requestmeta.RequestIDFromContext(ctx),
 					"trace_id", traceID,
 					"span_id", spanID,
 				)
 				if committed {
 					return
 				}
-				writeProblem(w, r, problemResponse{status: http.StatusInternalServerError, title: "internal server error", detail: "request failed"})
+				writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
 			}
 		}(r.Context(), r.Method, r.URL.Path)
 		next.ServeHTTP(trackedWriter, r)

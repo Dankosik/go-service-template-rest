@@ -7,25 +7,49 @@ usage() {
 	echo "usage: $0 openapi|sqlc"
 }
 
-check_generated_dir() {
-	local label="$1"
-	local path="$2"
+check_openapi() (
+	local path="internal/api/openapi.gen.go"
+	local snapshot
 
-	if ! git -C "${ROOT_DIR}" diff --quiet -- "${path}"; then
-		echo "tracked ${label} drift detected in ${path}"
-		git -C "${ROOT_DIR}" diff -- "${path}"
+	snapshot="$(mktemp)"
+	trap 'rm -f "${snapshot}"' EXIT
+	cp "${ROOT_DIR}/${path}" "${snapshot}"
+
+	(cd "${ROOT_DIR}" && go generate ./internal/api)
+
+	if ! cmp -s "${snapshot}" "${ROOT_DIR}/${path}"; then
+		echo "openapi codegen drift detected: generation changed ${path}"
+		diff -u \
+			--label "${path} (before generation)" \
+			--label "${path} (after generation)" \
+			"${snapshot}" "${ROOT_DIR}/${path}" || true
+		echo "generated output was updated; review and commit it"
 		exit 1
 	fi
 
-	local untracked
-	untracked="$(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- "${path}")"
-	if [[ -n "${untracked}" ]]; then
-		echo "untracked ${label} artifacts detected in ${path}"
-		echo "${untracked}"
-		echo "run the matching generate target and commit updated generated files"
+	echo "openapi generated output is current"
+)
+
+check_sqlc() (
+	local path="internal/infra/postgres/sqlcgen"
+	local snapshot
+
+	snapshot="$(mktemp -d)"
+	trap 'rm -rf "${snapshot}"' EXIT
+	cp -R "${ROOT_DIR}/${path}/." "${snapshot}/"
+
+	(cd "${ROOT_DIR}" && go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml)
+
+	if ! diff -qr "${snapshot}" "${ROOT_DIR}/${path}" >/dev/null; then
+		echo "sqlc drift detected: generation changed ${path}"
+		diff -ruN "${snapshot}" "${ROOT_DIR}/${path}" || true
+		echo "generated output was updated; review and commit it"
 		exit 1
 	fi
-}
+
+	check_sqlc_stems
+	echo "sqlc generated output is current"
+)
 
 check_sqlc_stems() {
 	local expected actual
@@ -71,15 +95,15 @@ check_empty_sqlc_outputs() {
 
 case "${1:-}" in
 openapi)
-	check_generated_dir "openapi codegen" "internal/api/openapi.gen.go"
+	check_openapi
 	;;
 sqlc)
 	if ! has_sqlc_queries; then
 		check_empty_sqlc_outputs
+		echo "sqlc generated output is current (no query sources)"
 		exit 0
 	fi
-	check_generated_dir "sqlc" "internal/infra/postgres/sqlcgen"
-	check_sqlc_stems
+	check_sqlc
 	;;
 *)
 	usage

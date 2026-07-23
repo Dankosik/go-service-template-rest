@@ -10,10 +10,8 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -49,7 +47,7 @@ type traceOTLPEndpoint struct {
 
 type traceOTLPEndpointSource int
 
-var tracingSetupMu sync.Mutex
+var otelSetupMu sync.Mutex
 
 const (
 	traceOTLPEndpointSourceGeneric traceOTLPEndpointSource = iota
@@ -66,25 +64,14 @@ var unsupportedOTLPProxyEnvVars = []string{
 }
 
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
-	serviceName := strings.TrimSpace(cfg.ServiceName)
-	serviceVersion := strings.TrimSpace(cfg.ServiceVersion)
-	deploymentEnv := strings.TrimSpace(cfg.DeploymentEnv)
-
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := resource.New(
-		ctx,
-		resource.WithAttributes(
-			attribute.String("service.name", serviceName),
-			attribute.String("service.version", serviceVersion),
-			attribute.String("deployment.environment.name", deploymentEnv),
-		),
-	)
+	res, err := newResource(ctx, cfg.ServiceName, cfg.ServiceVersion, cfg.DeploymentEnv)
 	if err != nil {
-		return nil, fmt.Errorf("build otel resource: %w", err)
+		return nil, err
 	}
 
 	options := []sdktrace.TracerProviderOption{
@@ -107,15 +94,12 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		options = append(options, sdktrace.WithBatcher(exporter))
 	}
 
-	tracingSetupMu.Lock()
-	defer tracingSetupMu.Unlock()
+	otelSetupMu.Lock()
+	defer otelSetupMu.Unlock()
 
 	provider := newTracerProvider(options...)
 	otel.SetTracerProvider(provider)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	return provider.Shutdown, nil
 }

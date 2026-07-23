@@ -3,6 +3,7 @@ package httpx
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -10,13 +11,16 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/api"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type RouterConfig struct {
 	MaxBodyBytes     int64
 	ReadinessTimeout time.Duration
+	OTelServerName   string
 }
 
 func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) (http.Handler, error) {
@@ -39,6 +43,9 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 
 	otelMiddleware := otelhttp.NewMiddleware(
 		"http.server",
+		otelhttp.WithMeterProvider(metrics.MeterProvider()),
+		otelhttp.WithPropagators(propagation.TraceContext{}),
+		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
 			if route := routeLabelForRequest(r); route != "" {
 				return route
@@ -60,12 +67,21 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	handler = Recover(log, handler)
 	handler = RequestFramingGuard(handler)
 	handler = RequestBodyLimit(cfg.MaxBodyBytes, handler)
-	handler = AccessLog(log, metrics, handler)
+	handler = AccessLog(log, handler)
 	handler = SecurityHeaders(handler)
 	handler = otelMiddleware(handler)
 	handler = RequestCorrelation(handler)
 
 	return handler, nil
+}
+
+func otelServerName(configured string) string {
+	serverName := strings.TrimSpace(configured)
+	if serverName == "" {
+		serverName = "service"
+	}
+	// Port zero keeps server.address bounded without inventing a listening port.
+	return net.JoinHostPort(serverName, "0")
 }
 
 func generatedStrictServerOptions(log *slog.Logger) api.StrictHTTPServerOptions {
@@ -74,7 +90,7 @@ func generatedStrictServerOptions(log *slog.Logger) api.StrictHTTPServerOptions 
 			handleMalformedGeneratedRequest(log, w, r, err)
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
-			writeProblem(w, r, problemResponse{status: http.StatusInternalServerError, title: "internal server error", detail: "request failed"})
+			writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
 		},
 	}
 }
@@ -136,7 +152,7 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 
 	attrs := []any{slog.String("error_class", strictRequestErrorClass(err))}
 	if r != nil {
-		if requestID := requestIDFromContext(r.Context()); requestID != "" {
+		if requestID := requestmeta.RequestIDFromContext(r.Context()); requestID != "" {
 			attrs = append(attrs, slog.String("request_id", requestID))
 		}
 		traceID, spanID := traceIDsFromContext(r.Context())
@@ -156,13 +172,13 @@ func strictRequestErrorClass(err error) string {
 
 func applyHTTPPolicy(root chi.Router) {
 	root.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problemResponse{status: http.StatusNotFound, title: "not found", detail: "resource not found"})
+		writeProblem(w, r, problemResponse{code: problemCodeNotFound, detail: "resource not found"})
 	})
 
 	root.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		allowMethods := allowedMethodsForPath(root, r.URL.Path)
 		if len(allowMethods) == 0 {
-			writeProblem(w, r, problemResponse{status: http.StatusNotFound, title: "not found", detail: "resource not found"})
+			writeProblem(w, r, problemResponse{code: problemCodeNotFound, detail: "resource not found"})
 			return
 		}
 		allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
@@ -171,7 +187,7 @@ func applyHTTPPolicy(root chi.Router) {
 			setAllowHeader(w, allowMethods)
 
 			if isCORSPreflightRequest(r) {
-				writeProblem(w, r, problemResponse{status: http.StatusMethodNotAllowed, title: "method not allowed", detail: "cors preflight is not enabled"})
+				writeProblem(w, r, problemResponse{code: problemCodeMethodNotAllowed, detail: "cors preflight is not enabled"})
 				return
 			}
 
@@ -180,7 +196,7 @@ func applyHTTPPolicy(root chi.Router) {
 		}
 
 		setAllowHeader(w, allowMethods)
-		writeProblem(w, r, problemResponse{status: http.StatusMethodNotAllowed, title: "method not allowed", detail: "method is not allowed for this resource"})
+		writeProblem(w, r, problemResponse{code: problemCodeMethodNotAllowed, detail: "method is not allowed for this resource"})
 	})
 }
 

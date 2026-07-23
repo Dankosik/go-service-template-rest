@@ -20,7 +20,7 @@ func RequestFramingGuard(next http.Handler) http.Handler {
 		hasContentLength := strings.TrimSpace(r.Header.Get("Content-Length")) != ""
 		if hasTransferEncoding && hasContentLength {
 			w.Header().Set("Connection", "close")
-			writeProblem(w, r, problemResponse{status: http.StatusBadRequest, title: "bad request", detail: "invalid request framing"})
+			writeProblem(w, r, problemResponse{code: problemCodeBadRequest, detail: "invalid request framing"})
 			return
 		}
 
@@ -35,7 +35,7 @@ func RequestBodyLimit(maxBytes int64, next http.Handler) http.Handler {
 			return
 		}
 		if r.ContentLength > maxBytes {
-			writeProblem(w, r, problemResponse{status: http.StatusRequestEntityTooLarge, title: "request entity too large", detail: "request body exceeds limit"})
+			writeProblem(w, r, problemResponse{code: problemCodeRequestEntityTooLarge, detail: "request body exceeds limit"})
 			return
 		}
 		if r.Body != nil {

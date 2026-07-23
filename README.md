@@ -51,7 +51,7 @@ same repository rules, specialist agents, and reusable skills.
 | Service foundation | Go 1.26, `chi`, configuration, graceful shutdown, health and readiness |
 | API | OpenAPI-first HTTP with validation and generated server types |
 | Data | PostgreSQL 17, `pgx/v5`, migrations, and `sqlc` ownership |
-| Operations | Prometheus metrics, OpenTelemetry tracing, structured logs, Docker, Railway |
+| Operations | OpenTelemetry traces and HTTP metrics, Prometheus export, structured logs, Docker, Railway |
 | Delivery | GitHub Actions, race and integration tests, security and image scanning |
 | Agent workflow | Codex, Claude Code, Qwen Code, specialist agents, risk-proportional artifacts |
 

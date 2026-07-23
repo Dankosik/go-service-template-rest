@@ -114,13 +114,20 @@ components:
     Problem:
       type: object
       required:
+        - code
         - type
         - title
         - status
       properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          example: bad_request
         type:
           type: string
-          example: about:blank
+          format: uri-reference
+          description: Stable URI reference identifying the problem class.
+          example: https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1
         title:
           type: string
           example: bad request
@@ -131,6 +138,10 @@ components:
         detail:
           type: string
           example: invalid request framing
+        instance:
+          type: string
+          format: uri-reference
+          description: URI reference identifying this occurrence when the service exposes one.
         request_id:
           type: string
           example: 9ccecdfd92c94665a46406f8ba73cd77

@@ -21,9 +21,10 @@ It does not restate the full tree, every command, or task-local design choices.
 | `api/openapi/service.yaml` | Source of truth for the REST contract. | Hand-written runtime logic or transport implementation. |
 | `internal/api/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
 | `internal/app/` | Use-case behavior and service-level orchestration that should stay transport-agnostic. | HTTP details, driver details, process lifecycle. |
+| `internal/requestmeta/` | Validated request correlation identity and context access. | Transport headers, arbitrary metadata maps, tracing, or business behavior. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/postgres/` | Postgres connection/pool lifecycle and repository code. | Process lifecycle, HTTP behavior, config precedence rules. |
-| `internal/infra/telemetry/` | Prometheus metrics and OpenTelemetry tracing setup/adapters. | Feature semantics or request routing decisions. |
+| `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup, Prometheus export, and native startup/config instruments. | Feature semantics or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
 | `env/migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 
@@ -58,6 +59,7 @@ cmd/service/main.go
 internal/infra/http
   -> internal/api
   -> internal/app/*
+  -> internal/requestmeta
 
 internal/infra/postgres, internal/infra/telemetry
   -> external libraries
@@ -78,11 +80,11 @@ Stable direction rules:
 ### Request/Response Path
 
 1. `cmd/service/internal/bootstrap.Run` builds the config snapshot, lifecycle logging, telemetry, dependency probes, app services, router, and HTTP server.
-2. `internal/infra/http.NewRouter` wraps the root router with request correlation, security headers, framing/body guards, panic recovery, access logging, route labeling, metrics, and tracing middleware.
+2. `internal/infra/http.NewRouter` validates or creates `X-Request-ID` through `internal/requestmeta`, extracts only W3C Trace Context, and wraps the root router with security headers, framing/body guards, panic recovery, access logging, route labeling, and OpenTelemetry HTTP instrumentation.
 3. `/metrics` is the documented operational root-router exception, served directly to avoid strict-handler buffering while still being guarded against accidental generated/manual route overlap. API routes are handled through the generated strict OpenAPI server.
 4. `internal/infra/http` maps the request into the generated OpenAPI handler interface and calls the app service (`internal/app/*`).
-5. The app service returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or problem responses.
-6. Transport observability is emitted at the edge: request logs, Prometheus request metrics, and OpenTelemetry spans use route labels from the HTTP layer.
+5. The app service returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or RFC 9457 problem responses whose stable `code`, type, title, and status come from one closed transport catalog.
+6. Transport observability is emitted at the edge: request logs, OpenTelemetry HTTP metrics exported through Prometheus, and OpenTelemetry spans use bounded route templates from the HTTP layer. HTTP metric server identity comes from configured service identity, never the caller-controlled `Host`; the OTel SDK cardinality cap remains explicit; native startup/config metrics share the same private Prometheus registry.
 
 Current runtime note: the shipped endpoints are intentionally small (`ping`, liveness, readiness, metrics), and they are public system/sample endpoints. New business endpoints must make a security decision before implementation: public by design, protected by real OpenAPI security plus auth middleware and 401/403 Problem responses, or blocked pending a security spec. Browser CORS remains fail-closed by default.
 
@@ -94,7 +96,7 @@ Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLI
 
 1. `cmd/service/main.go` delegates to `bootstrap.Run`.
 2. Bootstrap parses config flags, creates the signal-aware root context, initializes baseline metrics, and loads the immutable config snapshot through `internal/config`.
-3. Bootstrap reconfigures structured logging from the validated config, initializes tracing in fail-open mode, applies startup network policy checks, and probes enabled dependencies.
+3. Bootstrap reconfigures structured logging from the validated config, initializes local OTel-to-Prometheus metrics and optional tracing with one service resource in fail-open mode, applies startup network policy checks, and probes enabled dependencies.
 4. The HTTP runtime may begin serving while startup admission is still running, but external `/health/ready` stays not ready until startup admission marks the process ready.
 5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/app/health.Service`, which runs enabled dependency probes sequentially under one readiness timeout.
 6. `/health/live` remains process-only; external dependency checks, startup admission, drain, and ingress-policy checks belong in readiness.

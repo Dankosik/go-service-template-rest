@@ -28,10 +28,11 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   ├── config/                  # config loading, defaults, validation, snapshot
 │   ├── domain/                  # small shared contracts only when stable
 │   ├── observability/           # narrow shared observability vocabulary, not SDK setup
+│   ├── requestmeta/             # validated request correlation context
 │   └── infra/
 │       ├── http/                # HTTP adapter, middleware, route policy
 │       ├── postgres/            # Postgres pool, repositories, sqlc sources/output
-│       └── telemetry/           # shared metrics and tracing setup
+│       └── telemetry/           # OTel metrics/tracing and Prometheus export
 ├── scripts/                     # developer and CI helper scripts
 ├── specs/                       # spec-first task records and implementation history
 ├── test/                        # integration tests and external performance scenarios
@@ -62,6 +63,10 @@ Why: Go `internal` enforces import boundaries and keeps the service contract con
 Use-case layer: business scenarios and orchestration without transport or storage details.  
 Why: this behavior can be reused by HTTP handlers, background jobs, CLI commands, and tests.
 
+### `internal/requestmeta/`
+Transport-neutral validated request correlation identity stored in `context.Context`.
+Why: HTTP headers stay at the adapter edge while logs, public problems, and future real adapters can read one bounded request ID without importing the HTTP package. Do not turn this package into an arbitrary metadata bag.
+
 ### `internal/infra/`
 Infrastructure adapters: HTTP, Postgres, telemetry.  
 Why: framework and integration details are isolated from business code; replacing an adapter affects minimal code.
@@ -74,7 +79,7 @@ Postgres pool lifecycle behavior, including `pgxpool` hook composition for conne
 
 The baseline template has no feature-owned SQLC queries. Keep `env/migrations` and `internal/infra/postgres/queries` empty of sample business state until a real feature owns the schema and query contract.
 
-Feature telemetry placement: HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`, using shared instruments from `internal/infra/telemetry` where appropriate. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
+Feature telemetry placement: OpenTelemetry HTTP request metrics, route labels, access logs, and request spans belong at the HTTP edge in `internal/infra/http`; their MeterProvider, Prometheus bridge, resource identity, and shutdown belong in `internal/infra/telemetry`. HTTP metrics use configured service identity rather than the caller-controlled `Host`. Feature-specific counters, spans, or logs should live beside the feature or adapter that owns the event, use low-cardinality labels, and move into shared telemetry code only after the instrument is genuinely reused.
 
 ### `internal/observability/`
 Shared observability vocabulary that is not an adapter.

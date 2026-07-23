@@ -2,19 +2,19 @@ package telemetry
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel/metric"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
 )
 
 type Metrics struct {
 	registry                 *prometheus.Registry
-	requestsTotal            *prometheus.CounterVec
-	requestDuration          *prometheus.HistogramVec
+	meterProvider            metric.MeterProvider
 	configLoadDuration       *prometheus.HistogramVec
 	configFailures           *prometheus.CounterVec
 	startupRejections        *prometheus.CounterVec
@@ -178,23 +178,6 @@ const (
 func New() *Metrics {
 	registry := prometheus.NewRegistry()
 
-	requestsTotal := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "http_requests_total",
-			Help: "Total number of HTTP requests processed.",
-		},
-		[]string{"method", "route", "status_code"},
-	)
-
-	requestDuration := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "http_request_duration_seconds",
-			Help:    "HTTP request latency in seconds.",
-			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10},
-		},
-		[]string{"method", "route", "status_code"},
-	)
-
 	configLoadDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "config_load_duration_seconds",
@@ -254,8 +237,6 @@ func New() *Metrics {
 	registry.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		requestsTotal,
-		requestDuration,
 		configLoadDuration,
 		configFailures,
 		startupRejections,
@@ -267,8 +248,6 @@ func New() *Metrics {
 
 	return &Metrics{
 		registry:                 registry,
-		requestsTotal:            requestsTotal,
-		requestDuration:          requestDuration,
 		configLoadDuration:       configLoadDuration,
 		configFailures:           configFailures,
 		startupRejections:        startupRejections,
@@ -279,18 +258,12 @@ func New() *Metrics {
 	}
 }
 
-func (m *Metrics) ObserveHTTPRequest(method, route string, statusCode int) {
-	if m == nil || m.requestsTotal == nil {
-		return
+// MeterProvider returns the configured provider or a no-op provider before telemetry setup.
+func (m *Metrics) MeterProvider() metric.MeterProvider {
+	if m == nil || m.meterProvider == nil {
+		return metricnoop.NewMeterProvider()
 	}
-	m.requestsTotal.WithLabelValues(method, route, strconv.Itoa(statusCode)).Inc()
-}
-
-func (m *Metrics) ObserveHTTPRequestDuration(method, route string, statusCode int, duration time.Duration) {
-	if m == nil || m.requestDuration == nil {
-		return
-	}
-	m.requestDuration.WithLabelValues(method, route, strconv.Itoa(statusCode)).Observe(duration.Seconds())
+	return m.meterProvider
 }
 
 func (m *Metrics) ObserveConfigLoadDuration(stage, result string, duration time.Duration) {

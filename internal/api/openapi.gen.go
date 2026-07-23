@@ -21,11 +21,18 @@ import (
 
 // Problem defines model for Problem.
 type Problem struct {
-	Detail    *string `json:"detail,omitempty"`
+	// Code Stable machine-readable error code.
+	Code   string  `json:"code"`
+	Detail *string `json:"detail,omitempty"`
+
+	// Instance URI reference identifying this occurrence when the service exposes one.
+	Instance  *string `json:"instance,omitempty"`
 	RequestId *string `json:"request_id,omitempty"`
 	Status    int32   `json:"status"`
 	Title     string  `json:"title"`
-	Type      string  `json:"type"`
+
+	// Type Stable URI reference identifying the problem class.
+	Type string `json:"type"`
 }
 
 // BadRequest defines model for BadRequest.
@@ -702,23 +709,25 @@ func (sh *strictHandler) Metrics(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"1Fbbbhs3EP0Vgu1bV1rZcux631ogQA04aOCmT4VRUORIYswl2eGsasHYfy+Ge9HFCpymbQq/acW5nnM4",
-	"nCepQx2DB09JVk8SIcXgE+SPH5W5gz8aSMRfOngCn3+qGJ3VimzwZcSwcFB/9zEFz2dJr6FW/OtbhKWs",
-	"5DflLkXZnabyfecl27YtpIGk0UYOJyuJXUphk6iVWwaswYiAwvqNctbItpA3ngC9cr8AbgDfIgb8mhU2",
-	"Hh4jaAIjUq5ALJV1DQLX1iP21pOl7YcQbhWu4P/AbxHMVsCjBjBJ6OCXdtUgGOFsbUmyXx+Mcw3xqicZ",
-	"MURAsp0GDJCyjn/Bo6qjA1nJngkxZFqiqq1fyULSNrJBIuTvthiK+d2awxDXWoM2S3N9rq8vLi/fqIvL",
-	"i9nl8vuFupprc3V1KlYiRU06iHMxmxWSJaIo10Xz852n9QQrQHYlSw4OK1iosYFTybo/9h3UIjRULZzy",
-	"D88d+lYtgpHVb93pkHas/H50C4uPoKljz/pl4EzOavApJ/WqZqt3Nx9kIRt0spJropiqsgwRfAoNapgG",
-	"XJW9UyrZdteoXIUJS9NqmBDU0SmCCXatbgBTp5TZ9Gw6Yy8OqqKVlZxPZ9O5LGRUtM5QlyracnNWRm6z",
-	"epIryApmiWT93hhZyfcd+wfD43w2O1I9wSOV0Sl7pPMdxDGcUtFziWe7tpAXXY5TF2WspdybYuxyNn/Z",
-	"5fQdbgv55nMSnppO+bo1da1w2+MlwJsYrM/qU6vEslExskgeJwl0g5a2EwPadmwxTjEknjKVjM3CWc2Q",
-	"ZxJURi9lGMe4YhlQDOSLVIcHEHoN+iF1kJZrUI7WpbMb+CSzP2WbWzb5F/gND5/Dbnh4zdwyVh5SEjzY",
-	"YY/ctE0E9T/gN2LQkNIkeLcVzCoPPuGGfCPvf1paCx+EgQjegNdb0U3xI+IRlNm+wPxdtvlq1HclvS72",
-	"2Xf+t/HwgQT24L4Iy874UGvMjv2PxDboC8cco8CyL4+wrMQVeECruwIFP3XQ66wGQqvTJyX2rj//Ynm9",
-	"CFxfgQgNxYZe9ZOBoQZaQ5NEPcL2JWyPFCg3iWg33WbQry6HGtgzFQQOOPFW9MasuewtkkYVQfDKUAjb",
-	"dyKcTcTKKHh3XzbUILBEnFANrcUClgGht4ZeUnmDzix2azX39nT89DulYR2cAWTRm0bzgVioBOLXu9tn",
-	"+5KKdroNDQ7r0JScke39iN1x/J/3eh4En/JTOgzaYnclCqG8GfiYymJY3Ho+2uI4+g+7xX8Xfc+RF4D2",
-	"vv0rAAD//w==",
+	"1Ffbjts2EP0VgulbZcvOXtL1WwsE6AIJGiTpUxEENDmymKVIdjjyWlj434uhZPkSp5ukbYo8LLCW5nrO",
+	"4XD0IHVoYvDgKcnFg0RIMfgE+ccvyryGP1tIxL908AQ+/6tidFYrssGXEcPSQfPjhxQ8v0u6hkbxfz8g",
+	"VHIhn5T7FGX/NpWvei+53W4LaSBptJHDyYXEPqWwSTTKVQEbMCKgsH6tnDVyW8hbT4BeuTeAa8DniAG/",
+	"ZYWth00ETWBEyhWISlnXInBtA2LPPVnq3obwQuEK/g/8lsF0AjYawCShg6/sqkUwwtnGkmS/IRjn2sVb",
+	"PMiIIQKS7TWgg8nVH+d4Q2rpQDRK19bDBEGZ/ACYCsE+U1lI2KgmOpALuVTm/VCXLCR1kR8mQutXMjdA",
+	"yjpOs3cZ6Ba7dipUDZufcbc+kfL6TJ2/v74VCBUgeA3CGvBkq876laDaJhG0brF/d1+DF1RDZtRqELCJ",
+	"IUESwedeWIeKmHy0kzHkuWqGgt9bc9zQjdagTWVunuqby+vrK3V5fTm7rn5aqmcX2jx7di5WIkVtOopz",
+	"OZsdVGM9XTzde1pPsAJkV7Lk4LiCpRrhPJesf/AJqv8OSRCDiIV2KqVj6muimBZleX9/P8VKT8BYCjgN",
+	"uCqx0vx3M5/PniTQnHAyv5peTedfAPiAuEUwcvFHr9fBaAfCiOO70TssP4Cm/vhYXwXu21kNPmUIvGrY",
+	"6uXtW1nIFt1BHyGCT6FFDbmHwSmVbLuHXa7CZFDShKCJThEfkwz8GjD12M6m8+mMvTioilYu5MV0Nr2Q",
+	"hYyK6kx8qaIt1/MycreLB7mCPEL4jOYBcmvkQr7qT8bR9H46m52MHYINldEpezJo9mTFcO6EfTxjst22",
+	"kJd9jnOTaqylPLhG2GV+8bjL+SG6LeTV5yQ8dz3kedc2jcJuwEuANzFYn8+CWiVWj4qRRbKZJNAtWuom",
+	"BrTt2WKcYkg85hcytktnNUOeSVAZvZRhHOOKKqDYkS9SE+5A6Br0XeohLWtQjurS2TV8ktlfs80LNvkX",
+	"+A13n8NuuPueuWWsPKSUhxIckJu6RND8A34jBg0pTYJ3nWBWeUYJt8s38n5vqRY+CAMRvAGvO9HfcCfE",
+	"87XZPcL862zzzajvS/q+2Gffiy/GwwcSOID7KCx742OtMTv2PxLbTl845hgFln15hGUlrsADWt0XKPiq",
+	"g0FnDRBanT4psZfD+6+W16PADRWI0FJs6bu+MjA0QDW0STQjbF/D9kiBcpOIdt1vBsMGc6yBA1NB4IAT",
+	"d2IwZs1lb5E0qgiCV4ZC2KET4WwiVkbBH09VSy0CS8QJ1VItllAFhMEaBknlT5jMYv9dw72d7oPRKQ11",
+	"cAaQRW/avLeJpUq8JL74aF9S0U670OJuHZqSM3L7bsTuNP5vBz3vBJ/yVbobtMX+SBRCebPjg/fOYXEb",
+	"+NgWp9F/3n957aMfOPICsH23/SsAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

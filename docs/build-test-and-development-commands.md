@@ -104,8 +104,10 @@ make sqlc-check
 ```
 
 `api/openapi/service.yaml` and SQL query sources are authoritative. The shared
-generated-drift script only compares their derived output; it does not act as
-a general repository-policy checker.
+generated-drift script snapshots the current derived output, runs the canonical
+generator, and fails with a diff only when generation changes that output.
+Uncommitted but already current generated files therefore pass; Git and CI own
+the separate question of whether those files were committed.
 
 For a PR comparison:
 

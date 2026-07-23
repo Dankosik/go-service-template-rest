@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/requestmeta"
 	"github.com/felixge/httpsnoop"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -20,7 +20,7 @@ type routeLabelHolder struct {
 	value string
 }
 
-func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) http.Handler {
+func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -49,16 +49,10 @@ func AccessLog(log *slog.Logger, metrics *telemetry.Metrics, next http.Handler) 
 			"route", route,
 			"status", captured.Code,
 			"duration_ms", captured.Duration.Milliseconds(),
-			"request_id", requestIDFromContext(r.Context()),
+			"request_id", requestmeta.RequestIDFromContext(r.Context()),
 			"trace_id", traceID,
 			"span_id", spanID,
 		)
-
-		methodLabel := requestMethodLabel(r)
-		if metrics != nil {
-			metrics.ObserveHTTPRequest(methodLabel, route, captured.Code)
-			metrics.ObserveHTTPRequestDuration(methodLabel, route, captured.Code, captured.Duration)
-		}
 	})
 }
 

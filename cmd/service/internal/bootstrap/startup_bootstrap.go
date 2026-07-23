@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -175,16 +176,31 @@ func bootstrapTelemetryStage(
 	netPolicyResult networkPolicyLoadResult,
 ) (func(context.Context), error) {
 	metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
+
+	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
+	metricsShutdown, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
+		ServiceName:    cfg.Observability.OTel.ServiceName,
+		ServiceVersion: cfg.App.Version,
+		DeploymentEnv:  cfg.App.Env,
+	})
+	metricsCancel()
+	if telemetryInitErr != nil {
+		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
+		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
+		return func(context.Context) {}, fmt.Errorf("setup metrics: %w", telemetryInitErr)
+	}
+	cleanup := newTelemetryCleanup(log, metricsShutdown)
+
 	exporterCfg := traceExporterConfig(cfg)
 	targetAdmission, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
-		return func(context.Context) {}, fmt.Errorf("setup tracing: %w", telemetryInitErr)
+		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 	if targetAdmission == telemetryExporterTargetDeferredToNetworkPolicy {
 		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
-		return func(context.Context) {}, nil
+		return cleanup, nil
 	}
 
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
@@ -200,10 +216,14 @@ func bootstrapTelemetryStage(
 	if telemetryInitErr != nil {
 		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
 		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
-		return func(context.Context) {}, fmt.Errorf("setup tracing: %w", telemetryInitErr)
+		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 
 	metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
+	return newTelemetryCleanup(log, tracingShutdown, metricsShutdown), nil
+}
+
+func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
 	return func(shutdownBaseCtx context.Context) {
 		log.Info(
 			"telemetry_flush_started",
@@ -216,9 +236,19 @@ func bootstrapTelemetryStage(
 		)
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(shutdownBaseCtx), telemetryShutdownTimeout)
 		defer cancel()
-		if shutdownErr := tracingShutdown(shutdownCtx); shutdownErr != nil {
+
+		var shutdownErrors []error
+		for _, shutdown := range shutdowns {
+			if shutdown == nil {
+				continue
+			}
+			if shutdownErr := shutdown(shutdownCtx); shutdownErr != nil {
+				shutdownErrors = append(shutdownErrors, shutdownErr)
+			}
+		}
+		if shutdownErr := errors.Join(shutdownErrors...); shutdownErr != nil {
 			log.Error(
-				"tracing shutdown failed",
+				"telemetry shutdown failed",
 				startupLogArgs(
 					shutdownBaseCtx,
 					startupLogComponentShutdown,
@@ -239,7 +269,7 @@ func bootstrapTelemetryStage(
 				"success",
 			)...,
 		)
-	}, nil
+	}
 }
 
 func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
