@@ -35,7 +35,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20.20.0"
+          node-version: "22.23.1"
 
       - name: Verify module integrity
         run: make mod-check
@@ -65,6 +65,9 @@ jobs:
 
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
+
+      - name: Benchmark infrastructure check
+        run: make benchmark-infra-check
 
       - name: OpenAPI contract checks
         run: |
