@@ -3,9 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	migrate "github.com/golang-migrate/migrate/v4"
 )
 
 type closeFunc struct {
@@ -14,6 +17,21 @@ type closeFunc struct {
 
 func (f closeFunc) Close() error {
 	return f.err
+}
+
+type migrationExecutorStub struct {
+	upErr     error
+	stepErrs  map[int]error
+	stepCalls []int
+}
+
+func (s *migrationExecutorStub) Up() error {
+	return s.upErr
+}
+
+func (s *migrationExecutorStub) Steps(steps int) error {
+	s.stepCalls = append(s.stepCalls, steps)
+	return s.stepErrs[steps]
 }
 
 func TestMigrateUpRejectsInvalidInputsBeforeConnecting(t *testing.T) {
@@ -95,6 +113,104 @@ func TestMigrateUpReportsRunFailureWithReadableSource(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "open postgres migration driver") {
 		t.Fatalf("MigrateUp() error = %q, want postgres driver context", err.Error())
+	}
+}
+
+func TestValidateMigrationsRejectsInvalidInputBeforeConnecting(t *testing.T) {
+	t.Parallel()
+
+	err := ValidateMigrations(context.Background(), MigrationOptions{})
+	if err == nil {
+		t.Fatal("ValidateMigrations() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "migration source path is empty") {
+		t.Fatalf("ValidateMigrations() error = %q, want source path validation", err.Error())
+	}
+}
+
+func TestExecuteMigrations(t *testing.T) {
+	t.Parallel()
+
+	upErr := errors.New("up failed")
+	downErr := errors.New("down failed")
+	reapplyErr := errors.New("reapply failed")
+
+	testCases := []struct {
+		name          string
+		rehearse      bool
+		upErr         error
+		stepErrs      map[int]error
+		wantChanged   bool
+		wantStepCalls []int
+		wantErr       error
+		wantErrText   string
+	}{
+		{
+			name:        "apply only",
+			wantChanged: true,
+		},
+		{
+			name:          "rehearse latest migration",
+			rehearse:      true,
+			wantChanged:   true,
+			wantStepCalls: []int{-1, 1},
+		},
+		{
+			name:          "rehearse up-to-date schema",
+			rehearse:      true,
+			upErr:         migrate.ErrNoChange,
+			wantStepCalls: []int{-1, 1},
+		},
+		{
+			name:        "apply failure",
+			upErr:       upErr,
+			wantErr:     upErr,
+			wantErrText: "run postgres migrations",
+		},
+		{
+			name:          "rollback failure",
+			rehearse:      true,
+			stepErrs:      map[int]error{-1: downErr},
+			wantStepCalls: []int{-1},
+			wantErr:       downErr,
+			wantErrText:   "roll back latest postgres migration",
+		},
+		{
+			name:          "reapply failure",
+			rehearse:      true,
+			stepErrs:      map[int]error{1: reapplyErr},
+			wantStepCalls: []int{-1, 1},
+			wantErr:       reapplyErr,
+			wantErrText:   "reapply latest postgres migration",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			runner := &migrationExecutorStub{
+				upErr:    tc.upErr,
+				stepErrs: tc.stepErrs,
+			}
+			result, err := executeMigrations(runner, tc.rehearse)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, tc.wantErr)
+				}
+				if !strings.Contains(err.Error(), tc.wantErrText) {
+					t.Fatalf("executeMigrations() error = %q, want to contain %q", err.Error(), tc.wantErrText)
+				}
+			} else if err != nil {
+				t.Fatalf("executeMigrations() error = %v, want nil", err)
+			}
+			if result.Changed != tc.wantChanged {
+				t.Fatalf("executeMigrations() Changed = %t, want %t", result.Changed, tc.wantChanged)
+			}
+			if !slices.Equal(runner.stepCalls, tc.wantStepCalls) {
+				t.Fatalf("executeMigrations() Steps calls = %v, want %v", runner.stepCalls, tc.wantStepCalls)
+			}
+		})
 	}
 }
 
