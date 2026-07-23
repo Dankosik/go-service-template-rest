@@ -130,7 +130,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	}
 }
 
-func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
+func TestReadinessTimeoutMustCoverEnabledProbeBudget(t *testing.T) {
 	resetConfigEnv(t)
 
 	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
@@ -140,16 +140,16 @@ func TestReadinessTimeoutMustCoverAggregateEnabledProbeBudget(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for aggregate readiness timeout")
+		t.Fatalf("LoadDetailed() expected validation error for readiness probe budget")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
 	}
-	if !strings.Contains(err.Error(), "aggregate sequential readiness probe budget") {
-		t.Fatalf("error = %v, want aggregate readiness dependency budget policy", err)
+	if !strings.Contains(err.Error(), "readiness probe budget") {
+		t.Fatalf("error = %v, want readiness probe budget policy", err)
 	}
 	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
-		t.Fatalf("error = %v, want enabled readiness probe names", err)
+		t.Fatalf("error = %v, want enabled readiness probe name", err)
 	}
 }
 

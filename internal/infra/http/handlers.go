@@ -9,8 +9,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/app/health"
 )
 
-const pingResponseBody = "pong"
-
 type Handlers struct {
 	Health        *health.Service
 	ReadinessGate func(context.Context) error
@@ -39,31 +37,6 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
 		health:           h.Health,
 		readinessGate:    h.ReadinessGate,
 		readinessTimeout: readinessTimeout,
-	}, nil
-}
-
-func (h strictHandlers) Ping(_ context.Context, _ api.PingRequestObject) (api.PingResponseObject, error) {
-	return api.Ping200TextResponse(pingResponseBody), nil
-}
-
-// TEMPLATE EXAMPLE: delete this handler with its OpenAPI operation if unused,
-// or replace it with real app-layer behavior and remove the marker.
-func (h strictHandlers) TemplateExample(
-	_ context.Context,
-	request api.TemplateExampleRequestObject,
-) (api.TemplateExampleResponseObject, error) {
-	if request.Body == nil {
-		return nil, fmt.Errorf("template example body is required")
-	}
-
-	messages := make([]string, request.Params.Copies)
-	for i := range messages {
-		messages[i] = request.Body.Message
-	}
-
-	return api.TemplateExample200JSONResponse{
-		Slug:     request.Slug,
-		Messages: messages,
 	}, nil
 }
 

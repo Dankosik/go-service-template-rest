@@ -30,14 +30,10 @@ func defaultValues() map[string]any {
 		"postgres.max_open_conns":      25,
 		"postgres.conn_max_lifetime":   "30m",
 
-		"observability.otel.service_name":                  "service",
-		"observability.otel.traces_sampler":                otelconfig.DefaultTracesSampler,
-		"observability.otel.traces_sampler_arg":            otelconfig.DefaultTracesSamplerArg,
-		"observability.otel.exporter.otlp_endpoint":        "",
-		"observability.otel.exporter.otlp_traces_endpoint": "",
-		"observability.otel.exporter.otlp_headers":         "",
-		"observability.otel.exporter.otlp_protocol":        otelconfig.DefaultOTLPProtocol,
-
-		"feature_flags.postgres_readiness_probe": true,
+		"observability.otel.service_name":           "service",
+		"observability.otel.traces_sampler":         otelconfig.DefaultTracesSampler,
+		"observability.otel.traces_sampler_arg":     otelconfig.DefaultTracesSamplerArg,
+		"observability.otel.exporter.otlp_endpoint": "",
+		"observability.otel.exporter.otlp_headers":  "",
 	}
 }

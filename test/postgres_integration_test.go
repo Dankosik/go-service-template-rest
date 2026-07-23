@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -59,9 +59,7 @@ func TestPostgresPool(t *testing.T) {
 		}
 	})
 
-	// TEMPLATE EXAMPLE: delete this subtest with template_example.sql if unused,
-	// or replace both with transaction behavior owned by a real feature.
-	t.Run("sqlc queries share one pgx transaction", func(t *testing.T) {
+	t.Run("InTx binds all statements to one transaction", func(t *testing.T) {
 		traceCtx, traceSpan := otel.Tracer("postgres-integration-test").Start(t.Context(), "postgres transaction")
 		defer traceSpan.End()
 
@@ -70,14 +68,11 @@ func TestPostgresPool(t *testing.T) {
 
 		var firstID string
 		var secondID string
-		err := pool.InTx(txCtx, func(queries *sqlcgen.Queries) error {
-			var queryErr error
-			firstID, queryErr = queries.TemplateExampleTransactionID(txCtx)
-			if queryErr != nil {
-				return queryErr
+		err := pool.InTx(txCtx, func(tx pgx.Tx) error {
+			if err := tx.QueryRow(txCtx, "SELECT pg_current_xact_id()::text").Scan(&firstID); err != nil {
+				return err
 			}
-			secondID, queryErr = queries.TemplateExampleTransactionID(txCtx)
-			return queryErr
+			return tx.QueryRow(txCtx, "SELECT pg_current_xact_id()::text").Scan(&secondID)
 		})
 		if err != nil {
 			t.Fatalf("InTx() error = %v, want nil", err)
@@ -86,8 +81,8 @@ func TestPostgresPool(t *testing.T) {
 			t.Fatalf("transaction IDs = %q, %q; want one non-empty ID", firstID, secondID)
 		}
 
-		sentinel := errors.New("template callback failure")
-		err = pool.InTx(txCtx, func(*sqlcgen.Queries) error {
+		sentinel := errors.New("callback failure")
+		err = pool.InTx(txCtx, func(pgx.Tx) error {
 			return sentinel
 		})
 		if !errors.Is(err, postgres.ErrTransaction) || !errors.Is(err, sentinel) {
@@ -112,20 +107,29 @@ func assertPostgresTracePrivacy(t *testing.T, recorder *tracetest.SpanRecorder) 
 		semconv.DBNamespaceKey,
 		attribute.Key("pgx.query.parameters"),
 	}
+	sawQuerySpan := false
 	for _, span := range recorder.Ended() {
-		if span.Name() != "query SELECT" {
+		name := span.Name()
+		if !strings.HasPrefix(name, "query ") {
 			continue
 		}
+		sawQuerySpan = true
 
+		// Span names stay bounded to one operation keyword (BEGIN, COMMIT,
+		// ROLLBACK, SELECT, ...) and never carry raw statement text.
+		if fields := strings.Fields(name); len(fields) != 2 {
+			t.Fatalf("query span name %q is not bounded to one operation keyword", name)
+		}
 		attrs := attribute.NewSet(span.Attributes()...)
 		for _, key := range sensitiveKeys {
 			if _, present := attrs.Value(key); present {
-				t.Fatalf("query span contains sensitive attribute %q", key)
+				t.Fatalf("query span %q contains sensitive attribute %q", name, key)
 			}
 		}
-		return
 	}
-	t.Fatal(`postgres spans do not contain the bounded name "query SELECT"`)
+	if !sawQuerySpan {
+		t.Fatal("postgres spans contain no bounded query spans")
+	}
 }
 
 func assertPostgresPoolMetrics(

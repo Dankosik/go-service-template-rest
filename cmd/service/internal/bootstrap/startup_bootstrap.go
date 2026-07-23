@@ -166,11 +166,11 @@ func bootstrapTelemetryStage(
 	cleanup := newTelemetryCleanup(log, metricsShutdown)
 
 	exporterCfg := traceExporterConfig(cfg)
-	targetAdmission, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
+	skipTracing, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
 	if telemetryInitErr != nil {
 		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
-	if targetAdmission == telemetryExporterTargetDeferredToNetworkPolicy {
+	if skipTracing {
 		return cleanup, nil
 	}
 
@@ -242,39 +242,31 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 
 func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
 	return telemetry.TraceExporterConfig{
-		OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPEndpoint,
-		OTLPTracesEndpoint: cfg.Observability.OTel.Exporter.OTLPTracesEndpoint,
-		OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
-		OTLPProtocol:       cfg.Observability.OTel.Exporter.OTLPProtocol,
+		OTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
+		OTLPHeaders:  cfg.Observability.OTel.Exporter.OTLPHeaders,
 	}
 }
 
-type telemetryExporterTargetAdmission int
-
-const (
-	telemetryExporterTargetUnconfigured telemetryExporterTargetAdmission = iota
-	telemetryExporterTargetAllowed
-	telemetryExporterTargetDeferredToNetworkPolicy
-)
-
-func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (telemetryExporterTargetAdmission, error) {
+// admitTelemetryExporterTarget reports whether optional tracing setup must be
+// skipped: an invalid network policy defers the exporter fail-open to the later
+// mandatory policy enforcement stage instead of blocking startup here.
+func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (bool, error) {
 	target, err := telemetry.DescribeTraceExporterTarget(cfg)
 	if err != nil {
-		return telemetryExporterTargetUnconfigured, fmt.Errorf("describe trace exporter target: %w", err)
+		return false, fmt.Errorf("describe trace exporter target: %w", err)
 	}
 	if !target.Configured {
-		return telemetryExporterTargetUnconfigured, nil
+		return false, nil
 	}
 
-	policyErr := netPolicyResult.err
-	if policyErr != nil {
-		//nolint:nilerr // Invalid network policy defers optional telemetry exporter admission fail-open.
-		return telemetryExporterTargetDeferredToNetworkPolicy, nil
+	if netPolicyResult.err != nil {
+		//nolint:nilerr // Invalid network policy defers optional telemetry admission fail-open.
+		return true, nil
 	}
 	if err := netPolicyResult.policy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {
-		return telemetryExporterTargetUnconfigured, fmt.Errorf("telemetry egress target denied: %w", err)
+		return false, fmt.Errorf("telemetry egress target denied: %w", err)
 	}
-	return telemetryExporterTargetAllowed, nil
+	return false, nil
 }
 
 // bootstrapTraceStage transfers bootstrapSpan ownership to bootstrapRuntime.

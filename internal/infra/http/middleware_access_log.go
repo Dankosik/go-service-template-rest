@@ -47,10 +47,6 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 	})
 }
 
-func routeLabelForRequest(r *http.Request) string {
-	return joinMethodAndPattern(requestMethodLabel(r), routePathTemplateForRequest(r))
-}
-
 func routePathTemplateForRequest(r *http.Request) string {
 	if r == nil {
 		return ""

@@ -1,0 +1,8 @@
+# Consciously approved OpenAPI breaking changes (oasdiff --err-ignore).
+# Each line must contain the operation (method and path) plus the oasdiff
+# breaking-change description text. Prune entries after the change merges;
+# an empty file disables the bypass.
+#
+# 2026-07-23: baseline deletion audit removes the synthetic sample operations.
+GET /api/v1/ping api path removed without deprecation
+POST /api/v1/template-example/{slug} api path removed without deprecation

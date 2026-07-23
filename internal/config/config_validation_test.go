@@ -199,83 +199,38 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 	})
 }
 
-func TestConfigReadinessProbeRequiredPolicyHelpers(t *testing.T) {
+func TestValidatePostgresReadinessBudget(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name         string
-		cfg          Config
-		wantPostgres bool
-	}{
-		{
-			name: "disabled dependencies ignore readiness flags",
-			cfg: Config{
-				FeatureFlags: FeatureFlagsConfig{
-					PostgresReadinessProbe: true,
-				},
-			},
-		},
-		{
-			name: "enabled postgres without readiness flag",
-			cfg: Config{
-				Postgres: PostgresConfig{Enabled: true},
-			},
-		},
-		{
-			name: "enabled postgres with readiness flag",
-			cfg: Config{
-				Postgres: PostgresConfig{Enabled: true},
-				FeatureFlags: FeatureFlagsConfig{
-					PostgresReadinessProbe: true,
-				},
-			},
-			wantPostgres: true,
-		},
+	disabled := Config{
+		HTTP:     HTTPConfig{ReadinessTimeout: time.Second},
+		Postgres: PostgresConfig{HealthcheckTimeout: 10 * time.Second},
+	}
+	if err := validatePostgresReadinessBudget(disabled); err != nil {
+		t.Fatalf("validatePostgresReadinessBudget() error = %v, want nil for disabled postgres", err)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := tc.cfg.PostgresReadinessProbeRequired(); got != tc.wantPostgres {
-				t.Fatalf("PostgresReadinessProbeRequired() = %v, want %v", got, tc.wantPostgres)
-			}
-		})
-	}
-}
-
-func TestConfigReadinessProbeBudgetsUseRequiredRuntimeProbes(t *testing.T) {
-	t.Parallel()
-
-	cfg := Config{
-		HTTP: HTTPConfig{
-			ReadinessTimeout: 10 * time.Second,
-		},
+	tooSmall := Config{
+		HTTP: HTTPConfig{ReadinessTimeout: time.Second},
 		Postgres: PostgresConfig{
 			Enabled:            true,
 			HealthcheckTimeout: 2 * time.Second,
 		},
-		FeatureFlags: FeatureFlagsConfig{
-			PostgresReadinessProbe: true,
-		},
+	}
+	err := validatePostgresReadinessBudget(tooSmall)
+	if err == nil {
+		t.Fatal("validatePostgresReadinessBudget() error = nil, want budget error")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
+		t.Fatalf("error = %v, want readiness probe budget name", err)
 	}
 
-	budgets := cfg.ReadinessProbeBudgets()
-	want := []ReadinessProbeBudget{
-		{ConfigKey: "postgres.healthcheck_timeout", Budget: 2 * time.Second},
-	}
-	if len(budgets) != len(want) {
-		t.Fatalf("ReadinessProbeBudgets() len = %d, want %d", len(budgets), len(want))
-	}
-	for i := range want {
-		if budgets[i] != want[i] {
-			t.Fatalf("ReadinessProbeBudgets()[%d] = %+v, want %+v", i, budgets[i], want[i])
-		}
-	}
-
-	budgets[0].Budget = time.Nanosecond
-	if got := cfg.ReadinessProbeBudgets()[0].Budget; got != 2*time.Second {
-		t.Fatalf("ReadinessProbeBudgets() returned aliased slice; first budget = %s, want 2s", got)
+	tooSmall.HTTP.ReadinessTimeout = 2 * time.Second
+	if err := validatePostgresReadinessBudget(tooSmall); err != nil {
+		t.Fatalf("validatePostgresReadinessBudget() error = %v, want nil when budget fits", err)
 	}
 }
 

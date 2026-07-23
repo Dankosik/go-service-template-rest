@@ -135,21 +135,6 @@ func TestRunDependencyProbe(t *testing.T) {
 	})
 }
 
-func TestStartupDependencyProbeLabelsUseCanonicalProbeStage(t *testing.T) {
-	t.Parallel()
-
-	labels := newStartupDependencyProbeLabels("cache")
-	if labels.resolveStage != "startup.resolve.cache" {
-		t.Fatalf("resolveStage = %q, want %q", labels.resolveStage, "startup.resolve.cache")
-	}
-	if labels.probeStage != "startup.probe.cache" {
-		t.Fatalf("probeStage = %q, want %q", labels.probeStage, "startup.probe.cache")
-	}
-	if labels.operation != "cache_probe" {
-		t.Fatalf("operation = %q, want %q", labels.operation, "cache_probe")
-	}
-}
-
 func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	t.Parallel()
 
@@ -323,25 +308,6 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	}
 	if outcome.postgresPool != nil {
 		t.Fatal("postgresPool != nil, want nil")
-	}
-}
-
-func TestDependencyCleanupStackRunsInReverseOrder(t *testing.T) {
-	t.Parallel()
-
-	var closed []string
-	stack := dependencyCleanupStack{}
-	stack.add(func() { closed = append(closed, "postgres") })
-	stack.add(func() { closed = append(closed, "telemetry") })
-
-	stack.run()
-
-	if got := strings.Join(closed, ","); got != "telemetry,postgres" {
-		t.Fatalf("cleanup order = %q, want %q", got, "telemetry,postgres")
-	}
-	stack.run()
-	if got := strings.Join(closed, ","); got != "telemetry,postgres" {
-		t.Fatalf("cleanup rerun changed order = %q", got)
 	}
 }
 

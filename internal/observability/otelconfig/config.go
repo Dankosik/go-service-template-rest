@@ -23,12 +23,6 @@ const (
 
 	// DefaultTracesSamplerArg is the repository default trace sampler ratio.
 	DefaultTracesSamplerArg float64 = 0.10
-
-	// OTLPProtocolHTTPProtobuf is the supported OTLP HTTP protobuf protocol value.
-	OTLPProtocolHTTPProtobuf = "http/protobuf"
-
-	// DefaultOTLPProtocol is the repository default OTLP exporter protocol.
-	DefaultOTLPProtocol = OTLPProtocolHTTPProtobuf
 )
 
 func NormalizeTraceSampler(name string) string {
@@ -58,20 +52,4 @@ func TraceSamplerArgFinite(arg float64) bool {
 
 func TraceSamplerArgInRange(arg float64) bool {
 	return TraceSamplerArgFinite(arg) && arg >= 0 && arg <= 1
-}
-
-func NormalizeOTLPProtocol(protocol string) string {
-	return strings.ToLower(strings.TrimSpace(protocol))
-}
-
-func OTLPProtocolOrDefault(protocol string) string {
-	normalized := NormalizeOTLPProtocol(protocol)
-	if normalized == "" {
-		return DefaultOTLPProtocol
-	}
-	return normalized
-}
-
-func OTLPProtocolSupported(protocol string) bool {
-	return NormalizeOTLPProtocol(protocol) == OTLPProtocolHTTPProtobuf
 }

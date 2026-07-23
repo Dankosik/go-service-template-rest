@@ -11,9 +11,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
 		t.Parallel()
 
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPProtocol: "http/protobuf",
-		})
+		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
@@ -29,8 +27,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector.example:4318")
 
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPHeaders:  "authorization=Bearer token",
-			OTLPProtocol: "http/protobuf",
+			OTLPHeaders: "authorization=Bearer token",
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
@@ -49,7 +46,6 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
 			OTLPHeaders:  "authorization=Bearer token",
-			OTLPProtocol: "http/protobuf",
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
@@ -62,7 +58,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("generic endpoint base path appends traces path", func(t *testing.T) {
+	t.Run("endpoint without path defaults to the traces path", func(t *testing.T) {
 		t.Parallel()
 
 		paths := make(chan string, 1)
@@ -73,8 +69,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint: server.URL + "/collector",
-			OTLPProtocol: "http/protobuf",
+			OTLPEndpoint: server.URL,
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
@@ -84,45 +79,10 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}
 
 		exportOneTestSpan(t, options)
-		assertCollectorPath(t, paths, "/collector/v1/traces")
+		assertCollectorPath(t, paths, "/v1/traces")
 	})
 
-	t.Run("traces endpoint overrides generic endpoint and uses path as configured", func(t *testing.T) {
-		t.Parallel()
-
-		genericPaths := make(chan string, 1)
-		genericServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			genericPaths <- r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(genericServer.Close)
-
-		tracesPaths := make(chan string, 1)
-		tracesServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tracesPaths <- r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(tracesServer.Close)
-
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint:       genericServer.URL + "/generic",
-			OTLPTracesEndpoint: tracesServer.URL + "/custom/traces",
-			OTLPProtocol:       "http/protobuf",
-		})
-		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
-		}
-		if !configured {
-			t.Fatalf("configured = false, want true")
-		}
-
-		exportOneTestSpan(t, options)
-
-		assertNoCollectorRequest(t, genericPaths, "generic endpoint")
-		assertCollectorPath(t, tracesPaths, "/custom/traces")
-	})
-
-	t.Run("traces endpoint without path uses root path", func(t *testing.T) {
+	t.Run("endpoint path is used exactly as configured", func(t *testing.T) {
 		t.Parallel()
 
 		paths := make(chan string, 1)
@@ -133,8 +93,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPTracesEndpoint: server.URL,
-			OTLPProtocol:       "http/protobuf",
+			OTLPEndpoint: server.URL + "/custom/traces",
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
@@ -144,18 +103,20 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}
 
 		exportOneTestSpan(t, options)
-		assertCollectorPath(t, paths, "/")
+		assertCollectorPath(t, paths, "/custom/traces")
 	})
 
-	t.Run("invalid protocol", func(t *testing.T) {
+	t.Run("scheme-less endpoint is rejected fail-closed", func(t *testing.T) {
 		t.Parallel()
 
 		_, _, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint: "https://otel.example.com:4318",
-			OTLPProtocol: "grpc",
+			OTLPEndpoint: "otel.internal:4318",
 		})
 		if err == nil {
-			t.Fatalf("buildTraceExporterOptions() error = nil, want non-nil")
+			t.Fatal("buildTraceExporterOptions() error = nil, want non-nil")
+		}
+		if !strings.Contains(err.Error(), "unsupported scheme") {
+			t.Fatalf("buildTraceExporterOptions() error = %v, want unsupported scheme", err)
 		}
 	})
 }
@@ -175,7 +136,7 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 			name: "not configured",
 		},
 		{
-			name: "generic endpoint",
+			name: "https endpoint",
 			cfg: TraceExporterConfig{
 				OTLPEndpoint: "https://otel.example.com:4318",
 			},
@@ -184,22 +145,12 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 			wantScheme: "https",
 		},
 		{
-			name: "traces endpoint takes precedence",
+			name: "http endpoint with explicit path",
 			cfg: TraceExporterConfig{
-				OTLPEndpoint:       "https://generic.example.com:4318",
-				OTLPTracesEndpoint: "http://traces.example.com:4318/v1/traces",
+				OTLPEndpoint: "http://traces.example.com:4318/v1/traces",
 			},
 			wantConfig: true,
 			wantTarget: "traces.example.com:4318",
-			wantScheme: "http",
-		},
-		{
-			name: "scheme-less endpoint is http",
-			cfg: TraceExporterConfig{
-				OTLPEndpoint: "otel.internal:4318",
-			},
-			wantConfig: true,
-			wantTarget: "otel.internal:4318",
 			wantScheme: "http",
 		},
 		{
@@ -207,6 +158,13 @@ func TestDescribeTraceExporterTarget(t *testing.T) {
 			cfg: TraceExporterConfig{
 				OTLPHeaders: "authorization=Bearer token",
 			},
+		},
+		{
+			name: "scheme-less endpoint is rejected",
+			cfg: TraceExporterConfig{
+				OTLPEndpoint: "otel.internal:4318",
+			},
+			wantErr: "unsupported scheme",
 		},
 		{
 			name: "invalid endpoint",
@@ -290,11 +248,6 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 			raw:     "http://:4318/v1/traces",
 			wantErr: "empty host",
 		},
-		{
-			name:    "port-only scheme-less authority",
-			raw:     ":4318",
-			wantErr: "empty host",
-		},
 	}
 
 	for _, tc := range testCases {
@@ -316,64 +269,6 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 				}
 			}
 		})
-	}
-}
-
-func TestBuildTraceExporterOptionsUsesRuntimeEndpointParser(t *testing.T) {
-	t.Parallel()
-
-	options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-		OTLPEndpoint: "http://localhost:4318/v1/traces",
-		OTLPProtocol: "http/protobuf",
-	})
-	if err != nil {
-		t.Fatalf("buildTraceExporterOptions() error = %v", err)
-	}
-	if !configured {
-		t.Fatalf("configured = false, want true")
-	}
-	if len(options) == 0 {
-		t.Fatalf("options len = 0, want > 0")
-	}
-
-	options, configured, err = buildTraceExporterOptions(TraceExporterConfig{
-		OTLPEndpoint: "localhost:4318",
-		OTLPProtocol: "http/protobuf",
-	})
-	if err != nil {
-		t.Fatalf("buildTraceExporterOptions() scheme-less error = %v", err)
-	}
-	if !configured {
-		t.Fatalf("scheme-less configured = false, want true")
-	}
-	if len(options) == 0 {
-		t.Fatalf("scheme-less options len = 0, want > 0")
-	}
-	serverPaths := make(chan string, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		serverPaths <- r.URL.Path
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-	schemeLessOptions, configured, err := buildTraceExporterOptions(TraceExporterConfig{
-		OTLPEndpoint: strings.TrimPrefix(server.URL, "http://"),
-		OTLPProtocol: "http/protobuf",
-	})
-	if err != nil {
-		t.Fatalf("buildTraceExporterOptions() scheme-less test server error = %v", err)
-	}
-	if !configured {
-		t.Fatalf("scheme-less test server configured = false, want true")
-	}
-	exportOneTestSpan(t, schemeLessOptions)
-	assertCollectorPath(t, serverPaths, "/v1/traces")
-
-	_, _, err = buildTraceExporterOptions(TraceExporterConfig{
-		OTLPEndpoint: "://bad-endpoint",
-		OTLPProtocol: "http/protobuf",
-	})
-	if err == nil {
-		t.Fatalf("buildTraceExporterOptions() error = nil, want non-nil")
 	}
 }
 

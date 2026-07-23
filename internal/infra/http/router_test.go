@@ -49,62 +49,6 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 	return handler
 }
 
-func BenchmarkTemplateExample(b *testing.B) {
-	log := slog.New(slog.DiscardHandler)
-	h := mustNewRouter(b, log, Handlers{
-		Health: health.New(),
-	}, telemetry.New(), RouterConfig{})
-
-	tests := []struct {
-		name       string
-		target     string
-		body       string
-		wantStatus int
-	}{
-		{
-			name:       "valid-small",
-			target:     "/api/v1/template-example/example?copies=1",
-			body:       `{"message":"hello"}`,
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "valid-maximum",
-			target:     "/api/v1/template-example/" + strings.Repeat("s", 32) + "?copies=3",
-			body:       `{"message":"` + strings.Repeat("m", 64) + `"}`,
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "invalid-body",
-			target:     "/api/v1/template-example/example?copies=1",
-			body:       `{"message":"hello","unexpected":true}`,
-			wantStatus: http.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		b.Run(tt.name, func(b *testing.B) {
-			if got := doJSONRequest(h, http.MethodPost, tt.target, tt.body).Code; got != tt.wantStatus {
-				b.Fatalf("status = %d, want %d", got, tt.wantStatus)
-			}
-
-			b.Run("serial", func(b *testing.B) {
-				b.ReportAllocs()
-				for b.Loop() {
-					doJSONRequest(h, http.MethodPost, tt.target, tt.body)
-				}
-			})
-			b.Run("parallel", func(b *testing.B) {
-				b.ReportAllocs()
-				b.RunParallel(func(pb *testing.PB) {
-					for pb.Next() {
-						doJSONRequest(h, http.MethodPost, tt.target, tt.body)
-					}
-				})
-			})
-		})
-	}
-}
-
 // doRequest executes a bodyless request against h and returns the recorded
 // response. Tests that need custom headers, bodies with unusual framing, or
 // other request mutation keep building the request explicitly at the call site.

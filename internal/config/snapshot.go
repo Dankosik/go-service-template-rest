@@ -143,10 +143,4 @@ func normalizeConfigStrings(cfg *Config) {
 	cfg.Observability.OTel.ServiceName = strings.TrimSpace(cfg.Observability.OTel.ServiceName)
 	cfg.Observability.OTel.TracesSampler = strings.TrimSpace(cfg.Observability.OTel.TracesSampler)
 	cfg.Observability.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.Observability.OTel.Exporter.OTLPEndpoint)
-	cfg.Observability.OTel.Exporter.OTLPTracesEndpoint = strings.TrimSpace(
-		cfg.Observability.OTel.Exporter.OTLPTracesEndpoint,
-	)
-	cfg.Observability.OTel.Exporter.OTLPProtocol = strings.TrimSpace(
-		cfg.Observability.OTel.Exporter.OTLPProtocol,
-	)
 }

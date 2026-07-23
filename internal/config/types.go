@@ -12,7 +12,6 @@ type Config struct {
 	Log           LogConfig           `koanf:"log"`
 	Observability ObservabilityConfig `koanf:"observability"`
 	Postgres      PostgresConfig      `koanf:"postgres"`
-	FeatureFlags  FeatureFlagsConfig  `koanf:"feature_flags"`
 }
 
 type AppConfig struct {
@@ -49,10 +48,10 @@ type OTelConfig struct {
 }
 
 type OTelExporterConfig struct {
-	OTLPEndpoint       string `koanf:"otlp_endpoint"`
-	OTLPTracesEndpoint string `koanf:"otlp_traces_endpoint"`
-	OTLPHeaders        string `koanf:"otlp_headers"`
-	OTLPProtocol       string `koanf:"otlp_protocol"`
+	// OTLPEndpoint is the full OTLP HTTP traces endpoint URL (http or https).
+	// A missing path defaults to /v1/traces.
+	OTLPEndpoint string `koanf:"otlp_endpoint"`
+	OTLPHeaders  string `koanf:"otlp_headers"`
 }
 
 type PostgresConfig struct {
@@ -62,8 +61,4 @@ type PostgresConfig struct {
 	HealthcheckTimeout time.Duration `koanf:"healthcheck_timeout"`
 	MaxOpenConns       int           `koanf:"max_open_conns"`
 	ConnMaxLifetime    time.Duration `koanf:"conn_max_lifetime"`
-}
-
-type FeatureFlagsConfig struct {
-	PostgresReadinessProbe bool `koanf:"postgres_readiness_probe"`
 }

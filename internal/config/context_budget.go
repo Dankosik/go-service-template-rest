@@ -24,7 +24,9 @@ func checkContextWithError(ctx context.Context, classification error) error {
 	return nil
 }
 
-func withContextBudget(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+// WithContextBudget bounds ctx by budget; a non-positive budget only adds
+// cancellation. Shared by config loading and bootstrap stage budgets.
+func WithContextBudget(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
 	if budget <= 0 {
 		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}

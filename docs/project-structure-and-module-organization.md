@@ -26,7 +26,6 @@ This document explains the `go-service-template-rest` repository layout: what is
 │   ├── api/                     # generated OpenAPI bindings plus generation config
 │   ├── app/                     # use-case behavior
 │   ├── config/                  # config loading, defaults, validation, snapshot
-│   ├── domain/                  # small shared contracts only when stable
 │   ├── observability/           # narrow shared observability vocabulary, not SDK setup
 │   ├── requestmeta/             # validated request correlation context
 │   └── infra/
@@ -225,7 +224,6 @@ Existing examples to inspect before adding new surfaces:
 - `internal/infra/http` for strict-server handler mapping, generated-route policy, Problem responses, and route labels.
 - `internal/infra/postgres` for pool lifecycle, adapter config parsing, migration running, and generated SQLC ownership.
 - `cmd/service/internal/bootstrap` for dependency admission, disabled/ready/cleanup paths, and runtime wiring.
-- `docs/template-examples.md` for the synthetic HTTP and transaction examples that must be deleted or replaced before production.
 
 Keep feature-local types in `internal/app/<feature>` until there is a real shared contract. Keep feature-specific telemetry local unless the same low-cardinality instrument is shared across features.
 

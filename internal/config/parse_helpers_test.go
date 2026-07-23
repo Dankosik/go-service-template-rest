@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+// parseInt and parseInt64 are test-local shims over the production owner
+// parseSignedInteger, exercising its int- and int64-width contracts.
+func parseInt(value any) (int64, error) {
+	return parseSignedInteger(value, strconv.IntSize)
+}
+
+func parseInt64(value any) (int64, error) {
+	return parseSignedInteger(value, 64)
+}
+
 func TestParseInt(t *testing.T) {
 	t.Parallel()
 

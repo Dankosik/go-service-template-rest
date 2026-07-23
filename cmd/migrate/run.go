@@ -52,7 +52,7 @@ func run(args []string, stdout io.Writer) error {
 		return nil
 	}
 
-	result, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+	changed, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
 		DSN:        cfg.Postgres.DSN,
 		SourceFS:   migrationSourceFS,
 		SourcePath: migrationSourcePath,
@@ -61,7 +61,7 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("apply postgres migrations: %w", err)
 	}
 
-	if result.Changed {
+	if changed {
 		_, _ = fmt.Fprintf(stdout, "applied migrations from %s\n", migrationSourcePath)
 		return nil
 	}

@@ -95,11 +95,6 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 	return k, metadata, nil
 }
 
-func loadConfigFile(ctx context.Context, k *koanf.Koanf, path string, policy configFilePolicy) error {
-	_, err := loadConfigFileWithMetadata(ctx, k, path, policy)
-	return err
-}
-
 func loadConfigFileWithMetadata(ctx context.Context, k *koanf.Koanf, path string, policy configFilePolicy) ([]string, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err
@@ -242,12 +237,10 @@ func collectNamespaceValues(environ []string) map[string]any {
 	values := make(map[string]any)
 
 	for _, entry := range environ {
-		parts := strings.SplitN(entry, "=", 2)
-		if len(parts) != 2 {
+		envKey, envValue, ok := strings.Cut(entry, "=")
+		if !ok {
 			continue
 		}
-		envKey := parts[0]
-		envValue := parts[1]
 		if !strings.HasPrefix(envKey, namespacePrefix) {
 			continue
 		}

@@ -25,18 +25,6 @@ func sanitizedDurationParseDetail(raw string) string {
 	return "invalid duration syntax"
 }
 
-func parseInt(value any) (int, error) {
-	n, err := parseSignedInteger(value, strconv.IntSize)
-	if err != nil {
-		return 0, err
-	}
-	return int(n), nil
-}
-
-func parseInt64(value any) (int64, error) {
-	return parseSignedInteger(value, 64)
-}
-
 func parseSignedInteger(value any, bitSize int) (int64, error) {
 	lowerBound, upperBound, err := signedIntegerBounds(bitSize)
 	if err != nil {

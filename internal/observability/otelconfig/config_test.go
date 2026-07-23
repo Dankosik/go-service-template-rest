@@ -52,20 +52,3 @@ func TestTraceSamplerArgValidation(t *testing.T) {
 		}
 	}
 }
-
-func TestOTLPProtocolVocabulary(t *testing.T) {
-	t.Parallel()
-
-	if got := OTLPProtocolOrDefault(" "); got != DefaultOTLPProtocol {
-		t.Fatalf("OTLPProtocolOrDefault(empty) = %q, want %q", got, DefaultOTLPProtocol)
-	}
-	if got := OTLPProtocolOrDefault(" HTTP/PROTOBUF "); got != OTLPProtocolHTTPProtobuf {
-		t.Fatalf("OTLPProtocolOrDefault() = %q, want %q", got, OTLPProtocolHTTPProtobuf)
-	}
-	if !OTLPProtocolSupported(" HTTP/PROTOBUF ") {
-		t.Fatal("OTLPProtocolSupported(HTTP/PROTOBUF) = false, want true")
-	}
-	if OTLPProtocolSupported("grpc") {
-		t.Fatal("OTLPProtocolSupported(grpc) = true, want false")
-	}
-}

@@ -42,7 +42,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, LoadReport{}, err
 	}
 
-	loadCtx, loadCancel := withContextBudget(ctx, opts.LoadBudget)
+	loadCtx, loadCancel := WithContextBudget(ctx, opts.LoadBudget)
 	defer loadCancel()
 
 	loadStarted := time.Now()
@@ -73,7 +73,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	}
 
 	validateStarted := time.Now()
-	validateCtx, validateCancel := withContextBudget(ctx, opts.ValidateBudget)
+	validateCtx, validateCancel := WithContextBudget(ctx, opts.ValidateBudget)
 	defer validateCancel()
 	if err := checkValidateContext(validateCtx); err != nil {
 		report.ValidateDuration = time.Since(validateStarted)
@@ -81,12 +81,14 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, report, err
 	}
 
-	validationResult, err := validateConfig(validateCtx, &cfg, validationOptions{
-		Strict:      opts.Strict,
-		UnknownKeys: append(unknownKeys, metadata.sectionScalarOverrideKeys...),
-	})
+	unknownKeyWarnings, err := validateConfig(
+		validateCtx,
+		&cfg,
+		opts.Strict,
+		append(unknownKeys, metadata.sectionScalarOverrideKeys...),
+	)
 	report.ValidateDuration = time.Since(validateStarted)
-	report.UnknownKeyWarnings = validationResult.UnknownKeyWarnings
+	report.UnknownKeyWarnings = unknownKeyWarnings
 	if err != nil {
 		report.FailedStage = StageValidate
 		return Config{}, report, err

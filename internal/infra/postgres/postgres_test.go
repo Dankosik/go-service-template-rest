@@ -524,7 +524,7 @@ func TestPoolHelpersWithoutConnection(t *testing.T) {
 func TestPostgresOperationNameSkipsSQLCComment(t *testing.T) {
 	t.Parallel()
 
-	statement := `-- name: TemplateExampleTransactionID :one
+	statement := `-- name: CurrentTransactionID :one
 SELECT pg_current_xact_id()::text AS transaction_id
 `
 	if got := postgresOperationName(statement); got != "SELECT" {

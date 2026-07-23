@@ -22,16 +22,13 @@ type MigrationOptions struct {
 	SourcePath string
 }
 
-type MigrationResult struct {
-	Changed bool
-}
-
 type migrationExecutor interface {
 	Up() error
 	Steps(int) error
 }
 
-func MigrateUp(ctx context.Context, opts MigrationOptions) (MigrationResult, error) {
+// MigrateUp applies pending migrations and reports whether anything changed.
+func MigrateUp(ctx context.Context, opts MigrationOptions) (bool, error) {
 	return runPostgresMigrations(ctx, opts, false)
 }
 
@@ -40,15 +37,15 @@ func ValidateMigrations(ctx context.Context, opts MigrationOptions) error {
 	return err
 }
 
-func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse bool) (MigrationResult, error) {
+func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse bool) (bool, error) {
 	normalizedSourcePath, err := normalizeMigrationSourcePath(opts.SourcePath)
 	if err != nil {
-		return MigrationResult{}, err
+		return false, err
 	}
 
 	normalizedDSN, err := preflightPostgresDSN(opts.DSN)
 	if err != nil {
-		return MigrationResult{}, err
+		return false, err
 	}
 
 	sourceFS := opts.SourceFS
@@ -58,19 +55,19 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 
 	sourceDriver, err := iofs.New(sourceFS, normalizedSourcePath)
 	if err != nil {
-		return MigrationResult{}, fmt.Errorf("open migration source %q: %w", opts.SourcePath, err)
+		return false, fmt.Errorf("open migration source %q: %w", opts.SourcePath, err)
 	}
 
 	databaseHandle, err := sql.Open("pgx/v5", normalizedDSN)
 	if err != nil {
 		sourceCloseErr := sourceDriver.Close()
 		if sourceCloseErr != nil {
-			return MigrationResult{}, errors.Join(
+			return false, errors.Join(
 				fmt.Errorf("open postgres migration database: %w", err),
 				fmt.Errorf("close migration source: %w", sourceCloseErr),
 			)
 		}
-		return MigrationResult{}, fmt.Errorf("open postgres migration database: %w", err)
+		return false, fmt.Errorf("open postgres migration database: %w", err)
 	}
 
 	// The migration driver owns databaseHandle only after WithInstance
@@ -79,24 +76,24 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 	if err != nil {
 		closeErr := closeMigrationResources(sourceDriver, databaseHandle)
 		if closeErr != nil {
-			return MigrationResult{}, errors.Join(
+			return false, errors.Join(
 				fmt.Errorf("open postgres migration driver: %w", err),
 				closeErr,
 			)
 		}
-		return MigrationResult{}, fmt.Errorf("open postgres migration driver: %w", err)
+		return false, fmt.Errorf("open postgres migration driver: %w", err)
 	}
 
 	runner, err := migrate.NewWithInstance("iofs", sourceDriver, "pgx", databaseDriver)
 	if err != nil {
 		closeErr := closeMigrationResources(sourceDriver, databaseDriver)
 		if closeErr != nil {
-			return MigrationResult{}, errors.Join(
+			return false, errors.Join(
 				fmt.Errorf("build migration runner: %w", err),
 				closeErr,
 			)
 		}
-		return MigrationResult{}, fmt.Errorf("build migration runner: %w", err)
+		return false, fmt.Errorf("build migration runner: %w", err)
 	}
 	defer func() {
 		_ = closeMigrationRunner(runner)
@@ -110,27 +107,27 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 	return executeMigrations(runner, rehearse)
 }
 
-func executeMigrations(runner migrationExecutor, rehearse bool) (MigrationResult, error) {
+func executeMigrations(runner migrationExecutor, rehearse bool) (bool, error) {
 	changed := true
 	if err := runner.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			changed = false
 		} else {
-			return MigrationResult{}, fmt.Errorf("run postgres migrations: %w", err)
+			return false, fmt.Errorf("run postgres migrations: %w", err)
 		}
 	}
 
 	if !rehearse {
-		return MigrationResult{Changed: changed}, nil
+		return changed, nil
 	}
 	if err := runner.Steps(-1); err != nil {
-		return MigrationResult{}, fmt.Errorf("roll back latest postgres migration: %w", err)
+		return false, fmt.Errorf("roll back latest postgres migration: %w", err)
 	}
 	if err := runner.Steps(1); err != nil {
-		return MigrationResult{}, fmt.Errorf("reapply latest postgres migration: %w", err)
+		return false, fmt.Errorf("reapply latest postgres migration: %w", err)
 	}
 
-	return MigrationResult{Changed: changed}, nil
+	return changed, nil
 }
 
 func normalizeMigrationSourcePath(raw string) (string, error) {

@@ -52,7 +52,7 @@ func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
 
 	cleanup, err := bootstrapTelemetryStage(
 		context.Background(),
-		telemetryStageTestConfig("127.0.0.1:4318"),
+		telemetryStageTestConfig("http://127.0.0.1:4318"),
 		metrics,
 		logger,
 		loadNetworkPolicy(),
@@ -75,7 +75,7 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 
 	cleanup, err := bootstrapTelemetryStage(
 		context.Background(),
-		telemetryStageTestConfig("public-otel.example.com:4318"),
+		telemetryStageTestConfig("http://public-otel.example.com:4318"),
 		metrics,
 		logger,
 		loadNetworkPolicy(),
@@ -103,7 +103,7 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) 
 
 	cleanup, err := bootstrapTelemetryStage(
 		context.Background(),
-		telemetryStageTestConfig("127.0.0.1:4318"),
+		telemetryStageTestConfig("http://127.0.0.1:4318"),
 		metrics,
 		logger,
 		loadNetworkPolicy(),
@@ -137,7 +137,7 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 
 	cleanup, err := bootstrapTelemetryStage(
 		context.Background(),
-		telemetryStageTestConfig("127.0.0.1:4318"),
+		telemetryStageTestConfig("http://127.0.0.1:4318"),
 		metrics,
 		logger,
 		netPolicyResult,
@@ -157,47 +157,47 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 	}
 }
 
-func TestBootstrapTelemetryStageAdmitTelemetryExporterTargetUsesNamedOutcomes(t *testing.T) {
+func TestBootstrapTelemetryStageAdmitTelemetryExporterTargetSkipsOnlyOnInvalidPolicy(t *testing.T) {
 	//nolint:paralleltest // Sibling subtests mutate process-wide network policy env and must stay serialized.
-	t.Run("unconfigured", func(t *testing.T) {
-		got, err := admitTelemetryExporterTarget(telemetry.TraceExporterConfig{}, loadNetworkPolicy())
+	t.Run("unconfigured target does not skip tracing", func(t *testing.T) {
+		skip, err := admitTelemetryExporterTarget(telemetry.TraceExporterConfig{}, loadNetworkPolicy())
 		if err != nil {
 			t.Fatalf("admitTelemetryExporterTarget() error = %v, want nil", err)
 		}
-		if got != telemetryExporterTargetUnconfigured {
-			t.Fatalf("admitTelemetryExporterTarget() = %v, want %v", got, telemetryExporterTargetUnconfigured)
+		if skip {
+			t.Fatal("admitTelemetryExporterTarget() = true, want false for unconfigured target")
 		}
 	})
 
-	t.Run("allowed", func(t *testing.T) {
+	t.Run("allowed target does not skip tracing", func(t *testing.T) {
 		t.Setenv(envNetworkEgressAllowedSchemes, "http")
-		got, err := admitTelemetryExporterTarget(
-			traceExporterConfig(telemetryStageTestConfig("127.0.0.1:4318")),
+		skip, err := admitTelemetryExporterTarget(
+			traceExporterConfig(telemetryStageTestConfig("http://127.0.0.1:4318")),
 			loadNetworkPolicy(),
 		)
 		if err != nil {
 			t.Fatalf("admitTelemetryExporterTarget() error = %v, want nil", err)
 		}
-		if got != telemetryExporterTargetAllowed {
-			t.Fatalf("admitTelemetryExporterTarget() = %v, want %v", got, telemetryExporterTargetAllowed)
+		if skip {
+			t.Fatal("admitTelemetryExporterTarget() = true, want false for allowed target")
 		}
 	})
 
-	t.Run("deferred to network policy", func(t *testing.T) {
+	t.Run("invalid network policy defers and skips tracing", func(t *testing.T) {
 		t.Setenv(envNetworkEgressAllowedSchemes, "1bad")
 		netPolicyResult := loadNetworkPolicy()
 		if netPolicyResult.err == nil {
 			t.Fatal("loadNetworkPolicy() error = nil, want invalid policy")
 		}
-		got, err := admitTelemetryExporterTarget(
-			traceExporterConfig(telemetryStageTestConfig("127.0.0.1:4318")),
+		skip, err := admitTelemetryExporterTarget(
+			traceExporterConfig(telemetryStageTestConfig("http://127.0.0.1:4318")),
 			netPolicyResult,
 		)
 		if err != nil {
 			t.Fatalf("admitTelemetryExporterTarget() error = %v, want nil", err)
 		}
-		if got != telemetryExporterTargetDeferredToNetworkPolicy {
-			t.Fatalf("admitTelemetryExporterTarget() = %v, want %v", got, telemetryExporterTargetDeferredToNetworkPolicy)
+		if !skip {
+			t.Fatal("admitTelemetryExporterTarget() = false, want true when policy is invalid")
 		}
 	})
 }
@@ -218,7 +218,7 @@ func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
 
 	cleanup, err := bootstrapTelemetryStage(
 		context.Background(),
-		telemetryStageTestConfig("127.0.0.1:4318"),
+		telemetryStageTestConfig("http://127.0.0.1:4318"),
 		metrics,
 		logger,
 		netPolicyResult,
@@ -280,7 +280,6 @@ func telemetryStageTestConfig(otlpEndpoint string) config.Config {
 				TracesSamplerArg: 0,
 				Exporter: config.OTelExporterConfig{
 					OTLPEndpoint: otlpEndpoint,
-					OTLPProtocol: "http/protobuf",
 				},
 			},
 		},
@@ -425,28 +424,18 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 		log:           logger,
 	}
 
-	recordDependencyProbeRejection(
-		ctx,
-		runtime,
-		startupDependencyProbeLabels{
-			dependency: " Cache ",
-			operation:  " cache_probe ",
-			probeStage: " startup.probe.cache ",
-		},
-		" cache ",
-		rootCause,
-	)
+	recordDependencyProbeRejection(ctx, runtime, rootCause)
 	span.End()
 
 	logLine := logBuffer.String()
 	if !strings.Contains(logLine, `"msg":"startup_blocked"`) {
 		t.Fatalf("dependency probe rejection log = %q, want startup_blocked message", logLine)
 	}
-	if !strings.Contains(logLine, `"dependency":"cache"`) {
-		t.Fatalf("dependency probe rejection log = %q, want normalized dependency", logLine)
+	if !strings.Contains(logLine, `"dependency":"postgres"`) {
+		t.Fatalf("dependency probe rejection log = %q, want postgres dependency", logLine)
 	}
-	if !strings.Contains(logLine, `"mode":"cache"`) {
-		t.Fatalf("dependency probe rejection log = %q, want mode", logLine)
+	if !strings.Contains(logLine, `"operation":"postgres_probe"`) {
+		t.Fatalf("dependency probe rejection log = %q, want probe operation", logLine)
 	}
 	if !strings.Contains(logLine, `"err":"cache probe connection refused"`) {
 		t.Fatalf("dependency probe rejection log = %q, want root cause err", logLine)

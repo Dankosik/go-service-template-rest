@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -36,27 +35,19 @@ func validateStartupTimeoutBudget(name string, value time.Duration, budget time.
 }
 
 func validateStartupReadinessHeadroom(cfg config.Config) error {
-	probes := cfg.ReadinessProbeBudgets()
-	if len(probes) == 0 {
+	if !cfg.Postgres.Enabled {
 		return nil
 	}
 
-	var aggregate time.Duration
-	names := make([]string, 0, len(probes))
-	for _, probe := range probes {
-		aggregate += probe.Budget
-		names = append(names, probe.ConfigKey)
-	}
-	required := aggregate + startupReadinessHeadroom
+	required := cfg.Postgres.HealthcheckTimeout + startupReadinessHeadroom
 	if cfg.HTTP.ReadinessTimeout >= required {
 		return nil
 	}
 	return fmt.Errorf(
-		"%w: http.readiness_timeout must be >= aggregate sequential readiness probe budget plus startup headroom (%s + %s = %s; probes: %s)",
+		"%w: http.readiness_timeout must be >= postgres.healthcheck_timeout readiness budget plus startup headroom (%s + %s = %s)",
 		config.ErrValidate,
-		aggregate,
+		cfg.Postgres.HealthcheckTimeout,
 		startupReadinessHeadroom,
 		required,
-		strings.Join(names, " + "),
 	)
 }

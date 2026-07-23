@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"context"
 	"errors"
 	"maps"
 	"os"
@@ -550,27 +549,7 @@ func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *tes
 	}
 }
 
-func TestNetworkPolicyValidateIngressRuntimeRejectsExpiredException(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID":     "ex-ingress-expired-runtime",
-		"EXPIRY": now.Add(-5 * time.Minute).Format(time.RFC3339),
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy.now = func() time.Time { return now }
-
-	err = policy.ValidateIngressRuntime()
-	if err == nil {
-		t.Fatal("ValidateIngressRuntime() error = nil, want non-nil")
-	}
-}
-
-func TestRuntimeIngressAdmissionGuardCheck(t *testing.T) {
+func TestNetworkPolicyEnforceIngressAtRuntimeRejectsExceptionExpiry(t *testing.T) {
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
 	setValidIngressExceptionEnv(t, now, map[string]string{
@@ -583,18 +562,15 @@ func TestRuntimeIngressAdmissionGuardCheck(t *testing.T) {
 	}
 
 	policy.now = func() time.Time { return now }
-	if err := newRuntimeIngressAdmissionGuard(policy).Check(context.Background()); err != nil {
-		t.Fatalf("Check() with active exception error = %v, want nil", err)
+	if err := policy.EnforceIngress(); err != nil {
+		t.Fatalf("EnforceIngress() with active exception error = %v, want nil", err)
 	}
 
+	// The same check runs on every readiness poll: expiry while the process
+	// runs must flip ingress validation without a redeploy.
 	policy.now = func() time.Time { return now.Add(3 * time.Hour) }
-	if err := newRuntimeIngressAdmissionGuard(policy).Check(context.Background()); err == nil {
-		t.Fatal("Check() with expired exception error = nil, want non-nil")
-	}
-
-	var nilGuard *runtimeIngressAdmissionGuard
-	if err := nilGuard.Check(context.Background()); err != nil {
-		t.Fatalf("nil guard Check() error = %v, want nil", err)
+	if err := policy.EnforceIngress(); err == nil {
+		t.Fatal("EnforceIngress() with expired exception error = nil, want non-nil")
 	}
 }
 

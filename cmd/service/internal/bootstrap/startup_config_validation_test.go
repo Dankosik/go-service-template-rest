@@ -86,9 +86,6 @@ func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.
 			Enabled:            true,
 			HealthcheckTimeout: time.Second,
 		},
-		FeatureFlags: config.FeatureFlagsConfig{
-			PostgresReadinessProbe: true,
-		},
 	}
 
 	err := validateStartupBudgetCompatibility(cfg)
