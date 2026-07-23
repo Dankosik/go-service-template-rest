@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
-  title: go-service-template-rest
+  title: "go-service-template-rest"
   version: 0.1.0
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 servers:
-  - url: https://api.your-service.tld
-    description: placeholder production base URL
+  - url: /
+    description: current service origin
 security: []
 tags:
   - name: system

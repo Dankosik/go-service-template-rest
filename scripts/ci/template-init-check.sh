@@ -17,6 +17,7 @@ new_fixture() {
 
 	mkdir -p \
 		"${root}/.github" \
+		"${root}/api/openapi" \
 		"${root}/env" \
 		"${root}/internal/example" \
 		"${root}/internal/infra/example"
@@ -28,6 +29,7 @@ new_fixture() {
 	} >"${root}/go.mod"
 	cp "${ROOT_DIR}/.golangci.yml" "${root}/.golangci.yml"
 	cp "${ROOT_DIR}/.github/CODEOWNERS" "${root}/.github/CODEOWNERS"
+	cp "${ROOT_DIR}/api/openapi/service.yaml" "${root}/api/openapi/service.yaml"
 	cp "${ROOT_DIR}/env/.env.example" "${root}/env/.env.example"
 
 	{
@@ -90,6 +92,7 @@ grep -Fqx "module github.com/acme/orders" "${derived}/go.mod"
 	"${derived}/internal" "${derived}/.golangci.yml"
 ! grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@Dankosik"
 grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@acme/platform"
+grep -Fqx '  title: "orders"' "${derived}/api/openapi/service.yaml"
 [[ "${env_before}" == "$(shasum -a 256 "${derived}/.env")" ]]
 
 {
