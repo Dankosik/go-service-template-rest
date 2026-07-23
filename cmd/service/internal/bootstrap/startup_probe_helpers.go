@@ -82,15 +82,6 @@ func withStageBudget(parent context.Context, stageBudget time.Duration) (context
 	if stageBudget <= 0 {
 		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}
-	if deadline, ok := parent.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining < stageBudget {
-			stageBudget = remaining
-		}
-	}
-	if stageBudget <= 0 {
-		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
-	}
 	return context.WithTimeout(parent, stageBudget) // #nosec G118 -- cancel function is returned to caller.
 }
 
@@ -119,13 +110,10 @@ func sleepWithContext(ctx context.Context, wait time.Duration) error {
 	if wait <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("sleep canceled: %w", ctx.Err())
-	case <-timer.C:
+	case <-time.After(wait):
 		return nil
 	}
 }

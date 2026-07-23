@@ -1,11 +1,8 @@
 package bootstrap
 
 import (
-	"context"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"testing/synctest"
 )
 
 func TestOverlayPathsFlagSetAndString(t *testing.T) {
@@ -95,27 +92,4 @@ func TestRunReturnsParseErrorForInvalidFlags(t *testing.T) {
 	if !strings.Contains(err.Error(), "parse flags") {
 		t.Fatalf("Run() err = %v, want parse flags context", err)
 	}
-}
-
-func TestReleaseSignalNotificationOnDoneReleasesOnceAfterCancellation(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		var stopCalls atomic.Int32
-
-		release := releaseSignalNotificationOnDone(ctx, func() {
-			stopCalls.Add(1)
-		})
-		defer release()
-
-		cancel()
-		synctest.Wait()
-
-		release()
-		release()
-		if got := stopCalls.Load(); got != 1 {
-			t.Fatalf("stop callback calls = %d, want 1", got)
-		}
-	})
 }

@@ -28,14 +28,5 @@ func withContextBudget(parent context.Context, budget time.Duration) (context.Co
 	if budget <= 0 {
 		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
 	}
-	if deadline, ok := parent.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining < budget {
-			budget = remaining
-		}
-	}
-	if budget <= 0 {
-		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
-	}
 	return context.WithTimeout(parent, budget) // #nosec G118 -- cancel function is returned to caller.
 }
