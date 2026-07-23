@@ -146,9 +146,11 @@ jobs:
             "${{ steps.meta.outputs.primary_image }}" \
             "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
           docker push "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
-          docker buildx imagetools inspect \
-            "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}" |
-            grep -Fq "Digest: ${{ steps.digest.outputs.digest }}"
+          test "$(
+            docker buildx imagetools inspect \
+              --format '{{.Manifest.Digest}}' \
+              "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_main }}"
+          )" = "${{ steps.digest.outputs.digest }}"
 
       - name: Publish immutable image reference
         run: |
@@ -345,9 +347,11 @@ jobs:
               "${{ steps.meta.outputs.primary_image }}" \
               "${{ steps.meta.outputs.image_repo }}:${tag}"
             docker push "${{ steps.meta.outputs.image_repo }}:${tag}"
-            docker buildx imagetools inspect \
-              "${{ steps.meta.outputs.image_repo }}:${tag}" |
-              grep -Fq "Digest: ${{ steps.digest.outputs.digest }}"
+            test "$(
+              docker buildx imagetools inspect \
+                --format '{{.Manifest.Digest}}' \
+                "${{ steps.meta.outputs.image_repo }}:${tag}"
+            )" = "${{ steps.digest.outputs.digest }}"
           done
 
       - name: Publish immutable image reference
