@@ -51,15 +51,16 @@ Before a production Go edit, apply `go-coder`; route an unknown cause to `go-sys
 
 For direct work, the root edits the assigned checkout, performs one coherent self-review of the bounded diff, and runs the validation matrix's smallest matching proof. Do not create a durable execution control, commit, worktree, Worker, ledger, or reviewer just to record a local reversible change.
 
-### Optional Worker Execution
+### Worker Execution
 
-Keep a clear sequential outcome root-local even when it is long-running or spans multiple files. Use the harness-native implementation worker and isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — only when resumability, dirty-checkout isolation, safe parallelism, or materially separate context outweighs dispatch, worktree, fan-in, and acceptance cost, or when the user explicitly delegates implementation. Create one root durable execution control (Codex Goal or Claude Code task list) only for a genuinely multi-step or resumable outcome.
+Keep direct work root-local. For structured or orchestrated implementation, delegate each ready ledger task by default to one harness-native implementation Worker in an isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — once its behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed. Dependencies schedule Workers sequentially; a planned wave with positive independence permits concurrent dispatch. Sequential work is not a reason for root-local implementation. Root-local implementation is limited to direct work or an unavailable native Worker control; reclassify a structured task as direct only when it satisfies the router's current direct criteria. Create one root durable execution control (Codex Goal or Claude Code task list) only for a genuinely multi-step or resumable outcome.
 
 Before dispatching from uncommitted accepted input, identify the source
 checkout and authorized paths and inspect its current diff/status. Record a
 base only when the candidate will leave that checkout or several provisional
 deltas must be compared. Do not stash, clean, ignore, or mutate user changes.
-Keep one write Worker per outcome. A Worker receives an outcome-first brief
+Keep one write Worker per ledger task; several write Workers may run only as
+members of a positively independent planned wave. A Worker receives an outcome-first brief
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
 
@@ -92,7 +93,7 @@ command changes. A returned correction may continue only through the
 Diagnostic Gate below. Worker replacement is reserved for an execution stall
 that produces no new native turn or item after continuation, or for an
 invalidated base; it continues the same brief from the frozen candidate. Keep
-one write Worker active for the outcome and follow native completion and status
+one write Worker active per task and follow native completion and status
 events. When those events cannot distinguish active repetition from progress,
 only returned-candidate convergence is verified.
 

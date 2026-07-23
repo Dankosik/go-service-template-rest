@@ -27,7 +27,7 @@ The workflow instructions in this repository are harness-neutral. This document 
 
 ## Model And Effort Selection
 
-The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#optional-worker-execution) and in [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): the root explicitly and independently selects the best-suited available model and a task-matched reasoning effort for every worker and read-only lane, and never inherits a harness default when the controls exist. This table owns the per-harness tiers:
+The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): the root explicitly and independently selects the best-suited available model and a task-matched reasoning effort for every worker and read-only lane, and never inherits a harness default when the controls exist. This table owns the per-harness tiers:
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
@@ -55,7 +55,7 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 
 ## Claude Code Worker Mechanics
 
-- Keep one write worker per outcome: one background `Agent` lane with `isolation: "worktree"`. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
+- Keep one write worker per ready ledger task: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
 - The worker receives the same outcome-first brief the implementation phase requires. Route correction briefs to the same worker with `SendMessage` so its context survives; replace the worker only for an execution stall or invalidated base, and continue the same exact brief from the frozen candidate.
 - Follow completion notifications instead of polling or narrating unchanged state.
 - Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.

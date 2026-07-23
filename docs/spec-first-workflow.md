@@ -14,7 +14,7 @@ Use `direct` only when all of these are true:
 - validation is obvious and bounded;
 - durable resume state and independent evidence are unnecessary.
 
-Direct work that satisfies these conditions enters the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#local-execution) with one accepted outcome. That phase owns local execution, root review, and bounded validation; optional Worker execution remains available only under its current triggers.
+Direct work that satisfies these conditions enters the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#local-execution) with one accepted outcome. That phase owns root-local execution, root review, and bounded validation.
 
 Use `structured` for the normal non-trivial case. Keep only the `spec.md`, `tasks.md`, design, or test artifacts whose decisions must survive; root self-review is sufficient unless the independent-review trigger below applies.
 
@@ -32,7 +32,7 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then apply path/risk-matched review;
 5. complete test design when proof is non-obvious, then apply path/risk-matched QA review;
 6. complete `tasks.md` and its path/risk-matched readiness review;
-7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger wave; that phase owns local or optional Worker execution, root acceptance, integrated review, adaptation to execution drift, and validation.
+7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger task or wave; that phase owns direct root-local execution, default Worker execution for ready ledger tasks, root acceptance, integrated review, adaptation to execution drift, and validation.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification and planning remain required; independent review follows the shared trigger rather than artifact presence alone.
 

@@ -39,11 +39,11 @@ Use a subagent when all are true:
 
 Good lanes include independent source research, one specialist design question, or review of a fixed non-implementation revision. Bad lanes include broad “review everything,” duplicate lenses, tiny lookups, and any implementation review, acceptance, specialist analysis, re-review, or repair.
 
-The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Built-in subagents are read-only research, challenge, or review lanes; they never implement or repair code, config, docs, or tests. In the Codex App a lane is a project subagent; in Claude Code it is an `Agent` tool lane ([Agent Harness](../../agent-harness.md#control-map)). The harness-native implementation Worker is outside this contract and follows the [implementation phase](../phases/implementation-validation-closeout.md#optional-worker-execution).
+The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Built-in subagents are read-only research, challenge, or review lanes; they never implement or repair code, config, docs, or tests. In the Codex App a lane is a project subagent; in Claude Code it is an `Agent` tool lane ([Agent Harness](../../agent-harness.md#control-map)). The harness-native implementation Worker is outside this contract and follows the [implementation phase](../phases/implementation-validation-closeout.md#worker-execution).
 
 Run one lane per distinct decision-changing question. Current harness capacity, mutable-state independence, and root synthesis cost bound concurrency; do not add a lane for coverage or confidence alone. Nested delegation is not a default and needs its own independent evidence question. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
 
-For read-only subagents, choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error, using the [harness model map](../../agent-harness.md#model-and-effort-selection). Re-review should be at least as capable as the review that found the issue. The implementation phase separately owns optional native Worker execution.
+For read-only subagents, choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error, using the [harness model map](../../agent-harness.md#model-and-effort-selection). Re-review should be at least as capable as the review that found the issue. The implementation phase separately owns native Worker dispatch and execution.
 
 ## Lane Brief
 
