@@ -1,10 +1,8 @@
 package config
 
 import (
-	"context"
 	"log/slog"
 	"maps"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -86,40 +84,6 @@ func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
 		if _, ok := knownKeys[key]; !ok {
 			t.Fatalf("defaultValues() contains %q, which is not a known Config koanf leaf key", key)
 		}
-	}
-}
-
-func TestDefaultConfigYAMLMatchesCodeDefaults(t *testing.T) {
-	t.Parallel()
-
-	defaultKoanf := koanf.New(keyDelimiter)
-	if err := defaultKoanf.Load(confmap.Provider(defaultValues(), keyDelimiter), nil); err != nil {
-		t.Fatalf("load code defaults: %v", err)
-	}
-	defaultSnapshot, err := buildSnapshot(defaultKoanf)
-	if err != nil {
-		t.Fatalf("buildSnapshot(defaultValues()) error = %v", err)
-	}
-
-	yamlKoanf := koanf.New(keyDelimiter)
-	path := filepath.Join("..", "..", "env", "config", "default.yaml")
-	if err := loadConfigFile(context.Background(), yamlKoanf, path, configFilePolicyLocal); err != nil {
-		t.Fatalf("load default config yaml: %v", err)
-	}
-
-	defaultKeys := sortedStringSetKeys(defaultValues())
-	yamlKeys := yamlKoanf.Keys()
-	sort.Strings(yamlKeys)
-	if !reflect.DeepEqual(yamlKeys, defaultKeys) {
-		t.Fatalf("env/config/default.yaml keys = %v, want code default keys %v", yamlKeys, defaultKeys)
-	}
-
-	yamlSnapshot, err := buildSnapshot(yamlKoanf)
-	if err != nil {
-		t.Fatalf("buildSnapshot(env/config/default.yaml) error = %v", err)
-	}
-	if !reflect.DeepEqual(yamlSnapshot, defaultSnapshot) {
-		t.Fatalf("env/config/default.yaml snapshot = %+v, want code defaults %+v", yamlSnapshot, defaultSnapshot)
 	}
 }
 

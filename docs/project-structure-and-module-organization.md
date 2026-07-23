@@ -291,7 +291,8 @@ New integration (cache, queue, object store, external API):
    - criticality mode (`critical_fail_closed`, `optional_fail_open`, degraded, or feature-off) and degraded-mode contract;
    - retry class, timeout, startup budget, and readiness participation;
    - cleanup registration for partially initialized resources;
-   - low-cardinality metrics/log labels such as `startup_dependency_status` `dep` and `mode`;
+   - stable structured log fields for startup outcomes, and low-cardinality
+     runtime metrics only when the state is repeatedly observable and actionable;
    - bootstrap tests for disabled, ready, policy-denied, degraded, and cleanup paths.
 
 New binary:

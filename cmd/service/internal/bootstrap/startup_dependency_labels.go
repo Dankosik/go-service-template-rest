@@ -1,7 +1,5 @@
 package bootstrap
 
-import "github.com/example/go-service-template-rest/internal/infra/telemetry"
-
 type startupDependencyProbeLabels struct {
 	dependency   string
 	operation    string
@@ -18,21 +16,15 @@ func newStartupDependencyProbeLabels(dependency string) startupDependencyProbeLa
 	}
 }
 
-var startupPostgresDependencyLabels = newStartupDependencyProbeLabels(telemetry.StartupDependencyPostgres)
+var startupPostgresDependencyLabels = newStartupDependencyProbeLabels("postgres")
 
 const (
-	startupDependencyTelemetry       = telemetry.StartupDependencyTelemetry
-	startupDependencyNetworkPolicy   = telemetry.StartupDependencyNetworkPolicy
-	startupDependencyIngressPolicy   = telemetry.StartupDependencyIngressPolicy
-	startupDependencyMetricsExposure = telemetry.StartupDependencyMetricsExposure
-	startupDependencyEgressException = telemetry.StartupDependencyEgressException
-)
-
-const (
-	startupDependencyModeDisabled           = telemetry.StartupDependencyModeDisabled
-	startupDependencyModeCriticalFailClosed = telemetry.StartupDependencyModeCriticalFailClosed
-	startupDependencyModeOptionalFailOpen   = telemetry.StartupDependencyModeOptionalFailOpen
-	startupDependencyModeFeatureOff         = telemetry.StartupDependencyModeFeatureOff
+	startupDependencyTelemetry       = "telemetry"
+	startupDependencyNetworkPolicy   = "network_policy"
+	startupDependencyIngressPolicy   = "ingress_policy"
+	startupDependencyMetricsExposure = "metrics_exposure"
+	startupDependencyEgressException = "egress_exception"
+	startupDependencyModeFeatureOff  = "feature_off"
 )
 
 const (

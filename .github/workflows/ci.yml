@@ -78,9 +78,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Generate OpenAPI Go bindings
-        run: make openapi-generate
-
       - name: Detect OpenAPI codegen drift
         run: make openapi-drift-check
 

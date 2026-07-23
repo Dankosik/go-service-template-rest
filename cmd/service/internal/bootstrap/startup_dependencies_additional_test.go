@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -304,12 +303,10 @@ func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(
 func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{},
-		metrics:       metrics,
 		log:           slog.New(slog.DiscardHandler),
 		networkPolicy: networkPolicy{},
 	}
@@ -323,11 +320,6 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	}
 	if outcome.postgresPool != nil {
 		t.Fatal("postgresPool != nil, want nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="postgres",mode="disabled"} 1`) {
-		t.Fatalf("missing postgres disabled status:\n%s", metricsText)
 	}
 }
 

@@ -11,6 +11,12 @@ go generate ./internal/api
 Generation config: `internal/api/oapi-codegen.yaml`.
 Current server mode: `chi-server: true` + `strict-server: true`.
 
+Strict-server generation provides typed request/response glue; it does not install
+full runtime OpenAPI schema or security validation. The baseline operations have
+no parameters, request bodies, or protected routes. Add scoped validation
+middleware with the first schema-bearing or protected operation, when its
+behavior and public-route boundaries can be proved.
+
 ## Adding A Strict-Server Endpoint
 
 Protected operations require a real security design before coding. Do not add placeholder auth, broad root middleware, or test-only identity plumbing as a shortcut; choose public-by-design, protected-by-real-policy, or blocked-pending-security-spec first.

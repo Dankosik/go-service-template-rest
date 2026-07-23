@@ -1,240 +1,132 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/v2"
 )
 
+var (
+	durationType = reflect.TypeFor[time.Duration]()
+	logLevelType = reflect.TypeFor[slog.Level]()
+)
+
+type configValueDecodeError struct {
+	detail string
+}
+
+func (e *configValueDecodeError) Error() string {
+	return e.detail
+}
+
 func buildSnapshot(k *koanf.Koanf) (Config, error) {
-	httpCfg, err := readHTTPSnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
-	logCfg, err := readLogSnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
-	observabilityCfg, err := readObservabilitySnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
-	postgresCfg, err := readPostgresSnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
-	featureFlagsCfg, err := readFeatureFlagsSnapshot(k)
-	if err != nil {
-		return Config{}, err
-	}
-
-	return Config{
-		App:           readAppSnapshot(k),
-		HTTP:          httpCfg,
-		Log:           logCfg,
-		Observability: observabilityCfg,
-		Postgres:      postgresCfg,
-		FeatureFlags:  featureFlagsCfg,
-	}, nil
-}
-
-func readAppSnapshot(k *koanf.Koanf) AppConfig {
-	return AppConfig{
-		Env:     readTrimmedConfigString(k, "app.env"),
-		Version: readTrimmedConfigString(k, "app.version"),
-	}
-}
-
-func readHTTPSnapshot(k *koanf.Koanf) (HTTPConfig, error) {
-	addr := readTrimmedConfigString(k, "http.addr")
-	var shutdownTimeout time.Duration
-	if err := readDurationInto(k, "http.shutdown_timeout", &shutdownTimeout); err != nil {
-		return HTTPConfig{}, err
-	}
-	var readinessTimeout time.Duration
-	if err := readDurationInto(k, "http.readiness_timeout", &readinessTimeout); err != nil {
-		return HTTPConfig{}, err
-	}
-	var readinessPropagationDelay time.Duration
-	if err := readDurationInto(k, "http.readiness_propagation_delay", &readinessPropagationDelay); err != nil {
-		return HTTPConfig{}, err
-	}
-	var readHeaderTimeout time.Duration
-	if err := readDurationInto(k, "http.read_header_timeout", &readHeaderTimeout); err != nil {
-		return HTTPConfig{}, err
-	}
-	var readTimeout time.Duration
-	if err := readDurationInto(k, "http.read_timeout", &readTimeout); err != nil {
-		return HTTPConfig{}, err
-	}
-	var writeTimeout time.Duration
-	if err := readDurationInto(k, "http.write_timeout", &writeTimeout); err != nil {
-		return HTTPConfig{}, err
-	}
-	var idleTimeout time.Duration
-	if err := readDurationInto(k, "http.idle_timeout", &idleTimeout); err != nil {
-		return HTTPConfig{}, err
-	}
-	var maxHeaderBytes int
-	if err := readIntInto(k, "http.max_header_bytes", &maxHeaderBytes); err != nil {
-		return HTTPConfig{}, err
-	}
-	var maxBodyBytes int64
-	if err := readInt64Into(k, "http.max_body_bytes", &maxBodyBytes); err != nil {
-		return HTTPConfig{}, err
-	}
-	return HTTPConfig{
-		Addr:                      addr,
-		ShutdownTimeout:           shutdownTimeout,
-		ReadinessTimeout:          readinessTimeout,
-		ReadinessPropagationDelay: readinessPropagationDelay,
-		ReadHeaderTimeout:         readHeaderTimeout,
-		ReadTimeout:               readTimeout,
-		WriteTimeout:              writeTimeout,
-		IdleTimeout:               idleTimeout,
-		MaxHeaderBytes:            maxHeaderBytes,
-		MaxBodyBytes:              maxBodyBytes,
-	}, nil
-}
-
-func readLogSnapshot(k *koanf.Koanf) (LogConfig, error) {
-	level, err := readLogLevel(k, "log.level")
-	if err != nil {
-		return LogConfig{}, err
-	}
-	return LogConfig{Level: level}, nil
-}
-
-func readObservabilitySnapshot(k *koanf.Koanf) (ObservabilityConfig, error) {
-	var tracesSamplerArg float64
-	if err := readFloat64Into(k, "observability.otel.traces_sampler_arg", &tracesSamplerArg); err != nil {
-		return ObservabilityConfig{}, err
-	}
-	return ObservabilityConfig{
-		OTel: OTelConfig{
-			ServiceName:      readTrimmedConfigString(k, "observability.otel.service_name"),
-			TracesSampler:    readTrimmedConfigString(k, "observability.otel.traces_sampler"),
-			TracesSamplerArg: tracesSamplerArg,
-			Exporter: OTelExporterConfig{
-				OTLPEndpoint:       readTrimmedConfigString(k, "observability.otel.exporter.otlp_endpoint"),
-				OTLPTracesEndpoint: readTrimmedConfigString(k, "observability.otel.exporter.otlp_traces_endpoint"),
-				OTLPHeaders:        readRawConfigString(k, "observability.otel.exporter.otlp_headers"),
-				OTLPProtocol:       readTrimmedConfigString(k, "observability.otel.exporter.otlp_protocol"),
-			},
+	var cfg Config
+	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook:       mapstructure.DecodeHookFuncType(decodeConfigValue),
+			WeaklyTypedInput: false,
 		},
-	}, nil
-}
-
-func readPostgresSnapshot(k *koanf.Koanf) (PostgresConfig, error) {
-	var enabled bool
-	if err := readBoolInto(k, "postgres.enabled", &enabled); err != nil {
-		return PostgresConfig{}, err
-	}
-	dsn := readRawConfigString(k, "postgres.dsn")
-	var connectTimeout time.Duration
-	if err := readDurationInto(k, "postgres.connect_timeout", &connectTimeout); err != nil {
-		return PostgresConfig{}, err
-	}
-	var healthcheckTimeout time.Duration
-	if err := readDurationInto(k, "postgres.healthcheck_timeout", &healthcheckTimeout); err != nil {
-		return PostgresConfig{}, err
-	}
-	var maxOpenConns int
-	if err := readIntInto(k, "postgres.max_open_conns", &maxOpenConns); err != nil {
-		return PostgresConfig{}, err
-	}
-	var connMaxLifetime time.Duration
-	if err := readDurationInto(k, "postgres.conn_max_lifetime", &connMaxLifetime); err != nil {
-		return PostgresConfig{}, err
-	}
-	return PostgresConfig{
-		Enabled:            enabled,
-		DSN:                dsn,
-		ConnectTimeout:     connectTimeout,
-		HealthcheckTimeout: healthcheckTimeout,
-		MaxOpenConns:       maxOpenConns,
-		ConnMaxLifetime:    connMaxLifetime,
-	}, nil
-}
-
-func readFeatureFlagsSnapshot(k *koanf.Koanf) (FeatureFlagsConfig, error) {
-	var postgresReadinessProbe bool
-	if err := readBoolInto(k, "feature_flags.postgres_readiness_probe", &postgresReadinessProbe); err != nil {
-		return FeatureFlagsConfig{}, err
-	}
-	return FeatureFlagsConfig{
-		PostgresReadinessProbe: postgresReadinessProbe,
-	}, nil
-}
-
-func readRawConfigString(k *koanf.Koanf, key string) string {
-	return k.String(key)
-}
-
-func readTrimmedConfigString(k *koanf.Koanf, key string) string {
-	return strings.TrimSpace(k.String(key))
-}
-
-func readDurationInto(k *koanf.Koanf, key string, dst *time.Duration) error {
-	raw := readTrimmedConfigString(k, key)
-	if raw == "" {
-		return fmt.Errorf("%w: %s is empty", ErrParse, key)
-	}
-	d, err := parseDuration(raw)
+	})
 	if err != nil {
-		return fmt.Errorf("%w: %s has invalid duration: %w", ErrParse, key, err)
+		return Config{}, fmt.Errorf("%w: %s", ErrParse, sanitizedSnapshotDecodeError(err))
 	}
-	*dst = d
-	return nil
+
+	normalizeConfigStrings(&cfg)
+	return cfg, nil
 }
 
-func readIntInto(k *koanf.Koanf, key string, dst *int) error {
-	value, err := parseInt(k.Get(key))
-	if err != nil {
-		return fmt.Errorf("%w: %s has invalid int value: %w", ErrParse, key, err)
+func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any, error) {
+	switch {
+	case targetType == durationType:
+		raw, ok := value.(string)
+		if !ok {
+			return nil, newConfigValueDecodeError("duration must be a string with a unit")
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return nil, newConfigValueDecodeError("duration is empty")
+		}
+		duration, err := parseDuration(raw)
+		if err != nil {
+			return nil, newConfigValueDecodeError(err.Error())
+		}
+		return duration, nil
+	case targetType == logLevelType:
+		raw, ok := value.(string)
+		if !ok {
+			return nil, newConfigValueDecodeError("log level must be a string")
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return nil, newConfigValueDecodeError("log level is empty")
+		}
+		var level slog.Level
+		if err := level.UnmarshalText([]byte(raw)); err != nil {
+			return nil, newConfigValueDecodeError("invalid log level")
+		}
+		return level, nil
 	}
-	*dst = value
-	return nil
+
+	switch targetType.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		integer, err := parseSignedInteger(value, targetType.Bits())
+		if err != nil {
+			return nil, newConfigValueDecodeError(err.Error())
+		}
+		converted := reflect.New(targetType).Elem()
+		converted.SetInt(integer)
+		return converted.Interface(), nil
+	case reflect.Float64:
+		number, err := parseFloat64(value)
+		if err != nil {
+			return nil, newConfigValueDecodeError(err.Error())
+		}
+		return number, nil
+	case reflect.Bool:
+		boolean, err := parseBool(value)
+		if err != nil {
+			return nil, newConfigValueDecodeError(err.Error())
+		}
+		return boolean, nil
+	default:
+		return value, nil
+	}
 }
 
-func readInt64Into(k *koanf.Koanf, key string, dst *int64) error {
-	value, err := parseInt64(k.Get(key))
-	if err != nil {
-		return fmt.Errorf("%w: %s has invalid int64 value: %w", ErrParse, key, err)
-	}
-	*dst = value
-	return nil
+func newConfigValueDecodeError(detail string) error {
+	return &configValueDecodeError{detail: detail}
 }
 
-func readFloat64Into(k *koanf.Koanf, key string, dst *float64) error {
-	value, err := parseFloat64(k.Get(key))
-	if err != nil {
-		return fmt.Errorf("%w: %s has invalid float value: %w", ErrParse, key, err)
+func sanitizedSnapshotDecodeError(err error) string {
+	var valueErr *configValueDecodeError
+	if !errors.As(err, &valueErr) {
+		return "configuration values do not match the Config schema"
 	}
-	*dst = value
-	return nil
+
+	var decodeErr *mapstructure.DecodeError
+	if errors.As(err, &decodeErr) && strings.TrimSpace(decodeErr.Name()) != "" {
+		return fmt.Sprintf("%s has invalid value: %s", decodeErr.Name(), valueErr.detail)
+	}
+	return valueErr.detail
 }
 
-func readBoolInto(k *koanf.Koanf, key string, dst *bool) error {
-	value, err := parseBool(k.Get(key))
-	if err != nil {
-		return fmt.Errorf("%w: %s has invalid bool value: %w", ErrParse, key, err)
-	}
-	*dst = value
-	return nil
-}
-
-func readLogLevel(k *koanf.Koanf, key string) (slog.Level, error) {
-	raw := readTrimmedConfigString(k, key)
-	if raw == "" {
-		return slog.LevelInfo, fmt.Errorf("%w: %s is empty", ErrParse, key)
-	}
-	var level slog.Level
-	if err := level.UnmarshalText([]byte(raw)); err != nil {
-		return slog.LevelInfo, fmt.Errorf("%w: %s has invalid log level", ErrParse, key)
-	}
-	return level, nil
+func normalizeConfigStrings(cfg *Config) {
+	cfg.App.Env = strings.TrimSpace(cfg.App.Env)
+	cfg.App.Version = strings.TrimSpace(cfg.App.Version)
+	cfg.HTTP.Addr = strings.TrimSpace(cfg.HTTP.Addr)
+	cfg.Observability.OTel.ServiceName = strings.TrimSpace(cfg.Observability.OTel.ServiceName)
+	cfg.Observability.OTel.TracesSampler = strings.TrimSpace(cfg.Observability.OTel.TracesSampler)
+	cfg.Observability.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.Observability.OTel.Exporter.OTLPEndpoint)
+	cfg.Observability.OTel.Exporter.OTLPTracesEndpoint = strings.TrimSpace(
+		cfg.Observability.OTel.Exporter.OTLPTracesEndpoint,
+	)
+	cfg.Observability.OTel.Exporter.OTLPProtocol = strings.TrimSpace(
+		cfg.Observability.OTel.Exporter.OTLPProtocol,
+	)
 }

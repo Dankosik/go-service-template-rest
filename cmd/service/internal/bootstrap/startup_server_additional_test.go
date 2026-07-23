@@ -12,7 +12,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -56,18 +55,16 @@ func (f *fakeRuntimeServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func newTestStartupAdmissionController(metrics *telemetry.Metrics) *startupAdmissionController {
+func newTestStartupAdmissionController() *startupAdmissionController {
 	return newStartupAdmissionController(
 		newStartupSpanController(trace.SpanFromContext(context.Background()), func(context.Context) {}),
-		metrics,
 	)
 }
 
 func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
-	admission := newTestStartupAdmissionController(metrics)
+	admission := newTestStartupAdmissionController()
 
 	err := admission.CheckReady(context.Background())
 	if !errors.Is(err, errStartupAdmissionPending) {
@@ -105,7 +102,6 @@ func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulChec
 func TestServeHTTPRuntimeListenError(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
@@ -113,11 +109,10 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:-1", ShutdownTimeout: time.Second}},
 		log:            logger,
-		metrics:        metrics,
 		healthSvc:      svc,
 		srv:            newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
-		admission:      newTestStartupAdmissionController(metrics),
+		admission:      newTestStartupAdmissionController(),
 	})
 
 	if err == nil {
@@ -131,7 +126,6 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
@@ -142,11 +136,10 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:            logger,
-		metrics:        metrics,
 		healthSvc:      svc,
 		srv:            newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
-		admission:      newTestStartupAdmissionController(metrics),
+		admission:      newTestStartupAdmissionController(),
 	})
 
 	if err == nil {
@@ -156,22 +149,15 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 		t.Fatalf("serveHTTPRuntime() err = %v, want wrapped %v", err, context.Canceled)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
-		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController(metrics)
+	admission := newTestStartupAdmissionController()
 	readinessChecked := make(chan struct{}, 1)
 
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
@@ -185,7 +171,6 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 			bootstrapSpan: bootstrapSpan,
 			cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			log:           logger,
-			metrics:       metrics,
 			healthSvc:     svc,
 			srv:           srv,
 			readinessCheck: func(context.Context) error {
@@ -224,19 +209,11 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 		t.Fatal("serveHTTPRuntime() did not return after shutdown signal")
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="ready"} 1`) {
-		t.Fatalf("metrics do not contain ready startup outcome:\n%s", metricsText)
-	}
-	if strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
-		t.Fatalf("metrics unexpectedly contain rejected startup outcome:\n%s", metricsText)
-	}
 }
 
 func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
@@ -247,14 +224,13 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,
-		metrics:       metrics,
 		healthSvc:     svc,
 		srv:           newFakeRuntimeServer(),
 		readinessCheck: func(ctx context.Context) error {
 			<-ctx.Done()
 			return ctx.Err()
 		},
-		admission: newTestStartupAdmissionController(metrics),
+		admission: newTestStartupAdmissionController(),
 	})
 
 	if err == nil {
@@ -264,18 +240,11 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, context.DeadlineExceeded)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
-		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
@@ -290,13 +259,12 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
 		log:           logger,
-		metrics:       metrics,
 		healthSvc:     svc,
 		srv:           srv,
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
-		admission:     newTestStartupAdmissionController(metrics),
+		admission:     newTestStartupAdmissionController(),
 		shutdownDelay: time.Hour,
 	})
 
@@ -310,18 +278,11 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		t.Fatalf("serveHTTPRuntime() err = %v, want startup readiness context", err)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
-		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
@@ -333,7 +294,6 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,
-		metrics:       metrics,
 		healthSvc:     svc,
 		srv:           srv,
 		readinessCheck: func(ctx context.Context) error {
@@ -344,7 +304,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 				return nil
 			}
 		},
-		admission: newTestStartupAdmissionController(metrics),
+		admission: newTestStartupAdmissionController(),
 	})
 
 	if err == nil {
@@ -354,22 +314,15 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 		t.Fatalf("serveHTTPRuntime() err = %v, want pre-readiness serve failure", err)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
-		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
-	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }
 
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController(metrics)
+	admission := newTestStartupAdmissionController()
 	serveReturned := make(chan struct{})
 	serveErr := errors.New("serve failed while admission succeeded")
 
@@ -382,7 +335,6 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:           logger,
-		metrics:       metrics,
 		healthSvc:     svc,
 		srv:           srv,
 		readinessCheck: func(ctx context.Context) error {
@@ -406,12 +358,4 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 		t.Fatal("startup admission marked ready while serve failure was already pending")
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if strings.Contains(metricsText, `config_startup_outcome_total{outcome="ready"} 1`) {
-		t.Fatalf("metrics unexpectedly contain ready startup outcome:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"} 1`) {
-		t.Fatalf("metrics do not contain rejected startup outcome:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonStartupError)
 }

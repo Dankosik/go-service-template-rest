@@ -677,6 +677,12 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 			envValue:   "maybe",
 			wantDetail: "invalid boolean format",
 		},
+		{
+			name:       "log level",
+			envKey:     "APP__LOG__LEVEL",
+			envValue:   "secret-level",
+			wantDetail: "invalid log level",
+		},
 	}
 
 	for _, tt := range tests {

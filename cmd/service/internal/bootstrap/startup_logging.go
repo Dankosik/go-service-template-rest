@@ -4,8 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/trace"
+)
+
+const (
+	telemetryFailureReasonSetupError       = "setup_error"
+	telemetryFailureReasonDeadlineExceeded = "deadline_exceeded"
+	telemetryFailureReasonCanceled         = "canceled"
 )
 
 func startupLogArgs(ctx context.Context, component, operation, outcome string, extra ...any) []any {
@@ -31,10 +36,10 @@ func startupLogArgs(ctx context.Context, component, operation, outcome string, e
 func telemetryInitFailureReason(err error) string {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return telemetry.TelemetryFailureReasonDeadlineExceeded
+		return telemetryFailureReasonDeadlineExceeded
 	case errors.Is(err, context.Canceled):
-		return telemetry.TelemetryFailureReasonCanceled
+		return telemetryFailureReasonCanceled
 	default:
-		return telemetry.TelemetryFailureReasonSetupError
+		return telemetryFailureReasonSetupError
 	}
 }

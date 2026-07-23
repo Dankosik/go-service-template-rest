@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,36 +15,28 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-func TestFailedStageDetails(t *testing.T) {
+func TestFailedConfigStage(t *testing.T) {
 	t.Parallel()
 
-	stage, dur := failedStageDetails(config.LoadReport{})
-	if stage != config.StageLoadDefaults {
-		t.Fatalf("stage = %q, want %q", stage, config.StageLoadDefaults)
+	if got := failedConfigStage(config.LoadReport{}); got != config.StageLoadDefaults {
+		t.Fatalf("failedConfigStage() = %q, want %q", got, config.StageLoadDefaults)
 	}
-	if dur <= 0 {
-		t.Fatalf("duration = %s, want > 0", dur)
-	}
-
-	stage, dur = failedStageDetails(config.LoadReport{FailedStage: config.StageValidate, FailedStageDuration: 2 * time.Second})
-	if stage != config.StageValidate || dur != 2*time.Second {
-		t.Fatalf("got (%q,%s), want (%q,%s)", stage, dur, config.StageValidate, 2*time.Second)
+	if got := failedConfigStage(config.LoadReport{FailedStage: config.StageValidate}); got != config.StageValidate {
+		t.Fatalf("failedConfigStage() = %q, want %q", got, config.StageValidate)
 	}
 }
 
 func TestTelemetryInitFailureReason(t *testing.T) {
 	t.Parallel()
-	if got := telemetryInitFailureReason(context.DeadlineExceeded); got != telemetry.TelemetryFailureReasonDeadlineExceeded {
+	if got := telemetryInitFailureReason(context.DeadlineExceeded); got != telemetryFailureReasonDeadlineExceeded {
 		t.Fatalf("got %q", got)
 	}
-	if got := telemetryInitFailureReason(context.Canceled); got != telemetry.TelemetryFailureReasonCanceled {
+	if got := telemetryInitFailureReason(context.Canceled); got != telemetryFailureReasonCanceled {
 		t.Fatalf("got %q", got)
 	}
-	if got := telemetryInitFailureReason(errors.New("x")); got != telemetry.TelemetryFailureReasonSetupError {
+	if got := telemetryInitFailureReason(errors.New("x")); got != telemetryFailureReasonSetupError {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -73,13 +63,6 @@ func TestBootstrapTelemetryStageAdmitsAllowedExporterTarget(t *testing.T) {
 		cleanup(context.Background())
 	})
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="optional_fail_open"} 1`) {
-		t.Fatalf("metrics output missing ready telemetry status:\n%s", metricsText)
-	}
-	if strings.Contains(metricsText, `telemetry_init_failure_total{`) {
-		t.Fatalf("metrics output contains telemetry init failure:\n%s", metricsText)
-	}
 }
 
 func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
@@ -107,16 +90,6 @@ func TestBootstrapTelemetryStageDeniesExporterTargetFailOpen(t *testing.T) {
 		t.Fatalf("bootstrapTelemetryStage() error = %v, want telemetry egress context", err)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `telemetry_init_failure_total{reason="setup_error"} 1`) {
-		t.Fatalf("metrics output missing telemetry init failure:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 1`) {
-		t.Fatalf("metrics output missing feature_off telemetry status:\n%s", metricsText)
-	}
-	if strings.Contains(metricsText, `startup_rejections_total{`) {
-		t.Fatalf("metrics output contains startup rejection for optional telemetry denial:\n%s", metricsText)
-	}
 }
 
 func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) {
@@ -147,16 +120,6 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnvFailOpen(t *testing.T) 
 		}
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `telemetry_init_failure_total{reason="setup_error"} 1`) {
-		t.Fatalf("metrics output missing telemetry init failure:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 1`) {
-		t.Fatalf("metrics output missing feature_off telemetry status:\n%s", metricsText)
-	}
-	if strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="optional_fail_open"} 1`) {
-		t.Fatalf("metrics output marked telemetry ready:\n%s", metricsText)
-	}
 }
 
 func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *testing.T) {
@@ -182,16 +145,8 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 	if err != nil {
 		t.Fatalf("bootstrapTelemetryStage() error = %v, want nil for policy-stage ownership", err)
 	}
-	metricsText := collectServiceMetricsText(t, metrics)
-	if strings.Contains(metricsText, `telemetry_init_failure_total{`) {
-		t.Fatalf("metrics output contains telemetry init failure for startup-critical policy error:\n%s", metricsText)
-	}
-	if !strings.Contains(metricsText, `startup_dependency_status{dep="telemetry",mode="feature_off"} 1`) {
-		t.Fatalf("metrics output missing deferred feature_off telemetry status:\n%s", metricsText)
-	}
-
 	ctx, span := otel.Tracer("test").Start(context.Background(), "invalid-network-policy")
-	_, networkErr := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, netPolicyResult, config.Config{})
+	_, networkErr := bootstrapNetworkPolicyStage(ctx, span, logger, netPolicyResult, config.Config{})
 	span.End()
 	if networkErr == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want invalid network policy rejection")
@@ -199,9 +154,6 @@ func TestBootstrapTelemetryStageLeavesInvalidNetworkPolicyStartupCritical(t *tes
 	if !errors.Is(networkErr, errDependencyInit) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", networkErr, errDependencyInit)
 	}
-
-	metricsText = collectServiceMetricsText(t, metrics)
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
 func TestBootstrapTelemetryStageAdmitTelemetryExporterTargetUsesNamedOutcomes(t *testing.T) {
@@ -275,7 +227,7 @@ func TestBootstrapStagesUseOnceLoadedNetworkPolicyResult(t *testing.T) {
 	cleanup(context.Background())
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "loaded-network-policy")
-	_, err = bootstrapNetworkPolicyStage(ctx, span, metrics, logger, netPolicyResult, config.Config{})
+	_, err = bootstrapNetworkPolicyStage(ctx, span, logger, netPolicyResult, config.Config{})
 	span.End()
 	if err != nil {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want nil from loaded policy", err)
@@ -367,110 +319,14 @@ func telemetryStageTestConfig(otlpEndpoint string) config.Config {
 	}
 }
 
-func TestRecordConfigHelpers(t *testing.T) {
-	t.Parallel()
-
-	report := config.LoadReport{
-		LoadDefaultsDuration: 10 * time.Millisecond,
-		LoadFileDuration:     11 * time.Millisecond,
-		LoadEnvDuration:      12 * time.Millisecond,
-		ParseDuration:        13 * time.Millisecond,
-		ValidateDuration:     14 * time.Millisecond,
-	}
-	wantStages := []string{
-		telemetry.ConfigLoadStageLoadDefaults,
-		telemetry.ConfigLoadStageLoadFile,
-		telemetry.ConfigLoadStageLoadEnv,
-		telemetry.ConfigLoadStageParse,
-		telemetry.ConfigLoadStageValidate,
-	}
-	stageDurations := configLoadStageDurations(report)
-	if len(stageDurations) != len(wantStages) {
-		t.Fatalf("configLoadStageDurations() len = %d, want %d", len(stageDurations), len(wantStages))
-	}
-	for i, wantStage := range wantStages {
-		if stageDurations[i].stage != wantStage {
-			t.Fatalf("configLoadStageDurations()[%d].stage = %q, want %q", i, stageDurations[i].stage, wantStage)
-		}
-	}
-
-	metrics := telemetry.New()
-	recordConfigSuccessMetrics(metrics, report)
-	metricsText := collectServiceMetricsText(t, metrics)
-	for _, stage := range wantStages {
-		pattern := `config_load_duration_seconds_count{result="success",stage="` + stage + `"}`
-		if !strings.Contains(metricsText, pattern) {
-			t.Fatalf("metrics output missing stage count %q:\n%s", stage, metricsText)
-		}
-	}
-
-	spanRecorder := tracetest.NewSpanRecorder()
-	provider := sdktrace.NewTracerProvider()
-	provider.RegisterSpanProcessor(spanRecorder)
-	tracer := provider.Tracer("test")
-	for _, stage := range stageDurations {
-		recordConfigStageSpan(context.Background(), tracer, stage.stage, stage.duration, "success", "")
-	}
-	recordConfigStageSpan(context.Background(), tracer, "cfg.zero", 0, "success", "")
-	_ = provider.Shutdown(context.Background())
-	spans := spanRecorder.Ended()
-	if len(spans) != len(wantStages) {
-		t.Fatalf("ended spans len = %d, want %d", len(spans), len(wantStages))
-	}
-	seenSpans := make(map[string]struct{}, len(spans))
-	for _, span := range spans {
-		seenSpans[span.Name()] = struct{}{}
-	}
-	for _, stage := range wantStages {
-		if _, ok := seenSpans[stage]; !ok {
-			t.Fatalf("missing config stage span %q; spans=%v", stage, seenSpans)
-		}
-	}
-}
-
-func TestBootstrapConfigStageRecordsConfigFailureAndStartupRejection(t *testing.T) {
+func TestBootstrapConfigStageReturnsConfigLoadFailure(t *testing.T) {
 	t.Setenv("APP__APP__ENV", "local")
 
-	metrics := telemetry.New()
 	missingConfig := filepath.Join(t.TempDir(), "missing.yaml")
 
-	_, _, err := bootstrapConfigStage(context.Background(), config.LoadOptions{ConfigPath: missingConfig}, metrics)
+	_, _, err := bootstrapConfigStage(context.Background(), config.LoadOptions{ConfigPath: missingConfig})
 	if err == nil {
 		t.Fatal("bootstrapConfigStage() error = nil, want non-nil")
-	}
-
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_failures_total{reason="load"} 1`) {
-		t.Fatalf("metrics output missing config load failure:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonConfigLoad)
-}
-
-func TestStartupRejectionReasonForConfigErrorType(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name      string
-		errorType string
-		want      string
-	}{
-		{name: "load", errorType: "load", want: telemetry.StartupRejectionReasonConfigLoad},
-		{name: "parse", errorType: "parse", want: telemetry.StartupRejectionReasonConfigParse},
-		{name: "validate", errorType: "validate", want: telemetry.StartupRejectionReasonConfigValidate},
-		{name: "strict unknown key", errorType: "strict_unknown_key", want: telemetry.StartupRejectionReasonConfigStrictUnknownKey},
-		{name: "secret policy", errorType: "secret_policy", want: telemetry.StartupRejectionReasonConfigSecretPolicy},
-		{name: "unknown", errorType: "new_config_reason", want: telemetry.StartupRejectionReasonOther},
-		{name: "empty", errorType: "", want: telemetry.StartupRejectionReasonOther},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := startupRejectionReasonForConfigErrorType(tc.errorType); got != tc.want {
-				t.Fatalf("startupRejectionReasonForConfigErrorType(%q) = %q, want %q", tc.errorType, got, tc.want)
-			}
-		})
 	}
 }
 
@@ -488,12 +344,11 @@ func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testin
 	}
 	netPolicyResult.policy.now = func() time.Time { return now }
 
-	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "metrics-exposure-policy")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, netPolicyResult, config.Config{
+	_, err := bootstrapNetworkPolicyStage(ctx, span, logger, netPolicyResult, config.Config{
 		App:  config.AppConfig{Env: "prod"},
 		HTTP: config.HTTPConfig{Addr: ":8080"},
 	})
@@ -508,9 +363,6 @@ func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testin
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want operational metrics detail", err)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
-	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 	if !strings.Contains(logBuffer.String(), `"dependency":"metrics_exposure"`) {
 		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want metrics exposure dependency", logBuffer.String())
 	}
@@ -519,7 +371,6 @@ func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testin
 func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
@@ -527,7 +378,6 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 	err := rejectStartupForPolicyViolation(
 		ctx,
 		span,
-		metrics,
 		logger,
 		"cache",
 		errors.New("blocked"),
@@ -540,18 +390,11 @@ func TestPolicyViolationAndRollbackHelpers(t *testing.T) {
 		t.Fatalf("err = %v, want wrapped %v", err, errDependencyInit)
 	}
 
-	metricsText := collectServiceMetricsText(t, metrics)
-	if !strings.Contains(metricsText, `config_startup_outcome_total{outcome="rejected"}`) {
-		t.Fatalf("metrics output missing rejected startup outcome:\n%s", metricsText)
-	}
-	assertStartupRejectionMetric(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
-	assertConfigFailureMetricAbsent(t, metricsText, telemetry.StartupRejectionReasonPolicyViolation)
 }
 
 func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
@@ -560,7 +403,6 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	err := rejectStartupForPolicyViolation(
 		ctx,
 		span,
-		metrics,
 		logger,
 		"network_policy",
 		rootCause,
@@ -577,7 +419,6 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 func TestRejectStartupForPolicyViolationDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
 	cause := fmt.Errorf("%w: invalid network policy configuration: %w", errDependencyInit, errors.New("RFC3339 parse failed"))
 
@@ -585,7 +426,6 @@ func TestRejectStartupForPolicyViolationDoesNotDuplicateDependencyInitSentinel(t
 	err := rejectStartupForPolicyViolation(
 		ctx,
 		span,
-		metrics,
 		logger,
 		startupDependencyNetworkPolicy,
 		cause,
@@ -608,7 +448,6 @@ func TestRejectStartupForPolicyViolationDoesNotDuplicateDependencyInitSentinel(t
 func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	t.Parallel()
 
-	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 	rootCause := errors.New("cache probe connection refused")
@@ -616,7 +455,6 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	runtime := dependencyProbeRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: span,
-		metrics:       metrics,
 		log:           logger,
 	}
 
@@ -656,12 +494,11 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", "not-rfc3339")
 	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
 
-	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, loadNetworkPolicy(), config.Config{})
+	_, err := bootstrapNetworkPolicyStage(ctx, span, logger, loadNetworkPolicy(), config.Config{})
 	span.End()
 	if err == nil {
 		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
@@ -684,12 +521,11 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLocalWildcardBind(t *testing.T) {
 	t.Setenv(envNetworkPublicIngressEnabled, "")
 
-	metrics := telemetry.New()
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, metrics, logger, loadNetworkPolicy(), config.Config{
+	_, err := bootstrapNetworkPolicyStage(ctx, span, logger, loadNetworkPolicy(), config.Config{
 		App:  config.AppConfig{Env: "prod"},
 		HTTP: config.HTTPConfig{Addr: ":8080"},
 	})
@@ -702,35 +538,5 @@ func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLoca
 	}
 	if !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want missing ingress declaration detail", err)
-	}
-}
-
-func collectServiceMetricsText(t *testing.T, metrics *telemetry.Metrics) string {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	resp := httptest.NewRecorder()
-	metrics.Handler().ServeHTTP(resp, req)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("metrics handler status = %d, want %d", resp.Code, http.StatusOK)
-	}
-	return resp.Body.String()
-}
-
-func assertStartupRejectionMetric(t *testing.T, metricsText string, reason string) {
-	t.Helper()
-
-	pattern := `startup_rejections_total{reason="` + reason + `"} 1`
-	if !strings.Contains(metricsText, pattern) {
-		t.Fatalf("metrics output missing startup rejection %q:\n%s", reason, metricsText)
-	}
-}
-
-func assertConfigFailureMetricAbsent(t *testing.T, metricsText string, reason string) {
-	t.Helper()
-
-	pattern := `config_failures_total{reason="` + reason + `"}`
-	if strings.Contains(metricsText, pattern) {
-		t.Fatalf("metrics output unexpectedly contains config failure %q:\n%s", reason, metricsText)
 	}
 }

@@ -6,6 +6,7 @@ require (
 	github.com/felixge/httpsnoop v1.1.0
 	github.com/getkin/kin-openapi v0.142.0
 	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/knadh/koanf/parsers/yaml v1.1.0
@@ -191,7 +192,6 @@ require (
 	github.com/go-toolsmith/astp v1.1.0 // indirect
 	github.com/go-toolsmith/strparse v1.1.0 // indirect
 	github.com/go-toolsmith/typep v1.1.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/go-xmlfmt/xmlfmt v1.1.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect

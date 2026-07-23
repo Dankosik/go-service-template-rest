@@ -7,12 +7,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-func recordStartupRejection(bootstrapSpan trace.Span, metrics *telemetry.Metrics, metricReason, errorType, failedStage string, err error) {
+func recordStartupRejection(bootstrapSpan trace.Span, errorType, failedStage string, err error) {
 	if err != nil {
 		bootstrapSpan.RecordError(err)
 	}
@@ -21,21 +20,18 @@ func recordStartupRejection(bootstrapSpan trace.Span, metrics *telemetry.Metrics
 		attribute.String("error.type", errorType),
 		attribute.String("failed.stage", failedStage),
 	)
-	metrics.IncStartupRejection(metricReason)
-	metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 }
 
 func rejectStartupForPolicyViolation(
 	ctx context.Context,
 	bootstrapSpan trace.Span,
-	metrics *telemetry.Metrics,
 	log *slog.Logger,
 	dependency string,
 	err error,
 	extra ...any,
 ) error {
 	dep := strings.ToLower(strings.TrimSpace(dependency))
-	recordStartupRejection(bootstrapSpan, metrics, telemetry.StartupRejectionReasonPolicyViolation, "policy_violation", "startup.policy."+dep, err)
+	recordStartupRejection(bootstrapSpan, "policy_violation", "startup.policy."+dep, err)
 	args := startupLogArgs(
 		ctx,
 		startupLogComponentStartupProbes,
@@ -56,7 +52,6 @@ func rejectStartupForPolicyViolation(
 func rejectStartupForDependencyInit(
 	ctx context.Context,
 	bootstrapSpan trace.Span,
-	metrics *telemetry.Metrics,
 	log *slog.Logger,
 	dependency string,
 	stage string,
@@ -72,7 +67,7 @@ func rejectStartupForDependencyInit(
 	}
 
 	rejectErr := dependencyInitFailure(dep, err)
-	recordStartupRejection(bootstrapSpan, metrics, telemetry.StartupRejectionReasonDependencyInit, "dependency_init", failedStage, rejectErr)
+	recordStartupRejection(bootstrapSpan, "dependency_init", failedStage, rejectErr)
 	log.Error(
 		"startup_blocked",
 		startupLogArgs(
@@ -108,7 +103,7 @@ func recordDependencyProbeRejection(
 		stage = "startup.probe." + dep
 	}
 
-	recordStartupRejection(runtime.bootstrapSpan, runtime.metrics, telemetry.StartupRejectionReasonDependencyInit, "dependency_init", stage, err)
+	recordStartupRejection(runtime.bootstrapSpan, "dependency_init", stage, err)
 
 	args := startupLogArgs(
 		ctx,

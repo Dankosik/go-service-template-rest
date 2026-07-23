@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -38,7 +37,6 @@ func bootstrapRuntime(
 	cfg, configReport, err := bootstrapConfigStage(
 		startupCtx,
 		loadOptions,
-		metrics,
 	)
 	if err != nil {
 		return startupBootstrap{}, err
@@ -55,11 +53,10 @@ func bootstrapRuntime(
 		}
 	}()
 
-	bootstrapReportStage(bootstrapCtx, tracer, log, cfg, loadOptions, configReport, telemetryInitErr)
+	bootstrapReportStage(bootstrapCtx, log, cfg, loadOptions, configReport, telemetryInitErr)
 	netPolicy, err := bootstrapNetworkPolicyStage(
 		bootstrapCtx,
 		bootstrapSpan,
-		metrics,
 		log,
 		netPolicyResult,
 		cfg,
@@ -87,7 +84,6 @@ func startupBootstrapContext(startupCtx context.Context, bootstrapSpan trace.Spa
 func bootstrapConfigStage(
 	startupCtx context.Context,
 	loadOptions config.LoadOptions,
-	metrics *telemetry.Metrics,
 ) (config.Config, config.LoadReport, error) {
 	slog.Info(
 		"config_load_started",
@@ -104,12 +100,8 @@ func bootstrapConfigStage(
 
 	cfg, configReport, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
 	if err != nil {
-		failedStage, failedDuration := failedStageDetails(configReport)
+		failedStage := failedConfigStage(configReport)
 		errorType := config.ErrorType(err)
-		metrics.ObserveConfigLoadDuration(configLoadStageMetricLabel(failedStage), telemetry.ConfigLoadResultError, failedDuration)
-		metrics.IncConfigFailure(errorType)
-		metrics.IncStartupRejection(startupRejectionReasonForConfigErrorType(errorType))
-		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 		slog.Error(
 			"config_load_failed",
 			startupLogArgs(
@@ -124,17 +116,8 @@ func bootstrapConfigStage(
 		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
-	compatibilityStarted := time.Now()
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
-		failedDuration := time.Since(compatibilityStarted)
-		if failedDuration <= 0 {
-			failedDuration = time.Millisecond
-		}
 		errorType := startupConfigCompatibilityReason
-		metrics.ObserveConfigLoadDuration(startupConfigCompatibilityStage, telemetry.ConfigLoadResultError, failedDuration)
-		metrics.IncConfigFailure(errorType)
-		metrics.IncStartupRejection(telemetry.StartupRejectionReasonConfigStartupCompatibility)
-		metrics.IncConfigStartupOutcome(telemetry.ConfigStartupOutcomeRejected)
 		slog.Error(
 			"config_load_failed",
 			startupLogArgs(
@@ -147,11 +130,6 @@ func bootstrapConfigStage(
 			)...,
 		)
 		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
-	}
-
-	recordConfigSuccessMetrics(metrics, configReport)
-	if len(configReport.UnknownKeyWarnings) > 0 {
-		metrics.AddConfigUnknownKeyWarnings(len(configReport.UnknownKeyWarnings))
 	}
 
 	return cfg, configReport, nil
@@ -175,8 +153,6 @@ func bootstrapTelemetryStage(
 	log *slog.Logger,
 	netPolicyResult networkPolicyLoadResult,
 ) (func(context.Context), error) {
-	metrics.MarkStartupDependencyBlocked(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
-
 	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	metricsShutdown, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
 		ServiceName:    cfg.Observability.OTel.ServiceName,
@@ -185,8 +161,6 @@ func bootstrapTelemetryStage(
 	})
 	metricsCancel()
 	if telemetryInitErr != nil {
-		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return func(context.Context) {}, fmt.Errorf("setup metrics: %w", telemetryInitErr)
 	}
 	cleanup := newTelemetryCleanup(log, metricsShutdown)
@@ -194,12 +168,9 @@ func bootstrapTelemetryStage(
 	exporterCfg := traceExporterConfig(cfg)
 	targetAdmission, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
 	if telemetryInitErr != nil {
-		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 	if targetAdmission == telemetryExporterTargetDeferredToNetworkPolicy {
-		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return cleanup, nil
 	}
 
@@ -214,12 +185,9 @@ func bootstrapTelemetryStage(
 	})
 	telemetryCancel()
 	if telemetryInitErr != nil {
-		metrics.IncTelemetryInitFailure(telemetryInitFailureReason(telemetryInitErr))
-		metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeFeatureOff)
 		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 
-	metrics.MarkStartupDependencyReady(startupDependencyTelemetry, startupDependencyModeOptionalFailOpen)
 	return newTelemetryCleanup(log, tracingShutdown, metricsShutdown), nil
 }
 
@@ -321,17 +289,12 @@ func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Cont
 
 func bootstrapReportStage(
 	bootstrapCtx context.Context,
-	tracer trace.Tracer,
 	log *slog.Logger,
 	cfg config.Config,
 	loadOptions config.LoadOptions,
 	configReport config.LoadReport,
 	telemetryInitErr error,
 ) {
-	for _, stage := range configLoadStageDurations(configReport) {
-		recordConfigStageSpan(bootstrapCtx, tracer, stage.stage, stage.duration, "success", "")
-	}
-
 	log.Info(
 		"config_validated",
 		startupLogArgs(
@@ -392,7 +355,6 @@ func bootstrapReportStage(
 func bootstrapNetworkPolicyStage(
 	bootstrapCtx context.Context,
 	bootstrapSpan trace.Span,
-	metrics *telemetry.Metrics,
 	log *slog.Logger,
 	netPolicyResult networkPolicyLoadResult,
 	cfg config.Config,
@@ -402,7 +364,6 @@ func bootstrapNetworkPolicyStage(
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
-			metrics,
 			log,
 			startupDependencyNetworkPolicy,
 			fmt.Errorf("invalid network policy configuration: %w", netPolicyResult.err),
@@ -416,7 +377,6 @@ func bootstrapNetworkPolicyStage(
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
-			metrics,
 			log,
 			startupDependencyIngressPolicy,
 			ingressErr,
@@ -427,7 +387,6 @@ func bootstrapNetworkPolicyStage(
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
-			metrics,
 			log,
 			startupDependencyMetricsExposure,
 			metricsExposureErr,
@@ -438,7 +397,6 @@ func bootstrapNetworkPolicyStage(
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
-			metrics,
 			log,
 			startupDependencyEgressException,
 			egressErr,

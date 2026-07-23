@@ -120,7 +120,6 @@ func Run(args []string) (runErr error) {
 		tracer:        bootstrap.tracer,
 		bootstrapSpan: bootstrap.bootstrapSpan,
 		cfg:           bootstrap.cfg,
-		metrics:       metrics,
 		log:           bootstrap.log,
 		networkPolicy: bootstrap.networkPolicy,
 	})
@@ -132,7 +131,7 @@ func Run(args []string) (runErr error) {
 	}
 
 	healthSvc := health.New(probeOutcome.probes...)
-	startupAdmission := newStartupAdmissionController(bootstrapSpan, metrics)
+	startupAdmission := newStartupAdmissionController(bootstrapSpan)
 	ingressGuard := newRuntimeIngressAdmissionGuard(bootstrap.networkPolicy)
 	readinessCheck := func(ctx context.Context) error {
 		if err := ingressGuard.Check(ctx); err != nil {
@@ -177,7 +176,6 @@ func Run(args []string) (runErr error) {
 		bootstrapSpan:  bootstrap.bootstrapSpan,
 		cfg:            bootstrap.cfg,
 		log:            bootstrap.log,
-		metrics:        metrics,
 		healthSvc:      healthSvc,
 		srv:            srv,
 		readinessCheck: readinessCheck,

@@ -49,7 +49,7 @@ same repository rules, specialist agents, and reusable skills.
 | Area | Included |
 | --- | --- |
 | Service foundation | Go 1.26, `chi`, configuration, graceful shutdown, health and readiness |
-| API | OpenAPI-first HTTP with validation and generated server types |
+| API | OpenAPI-first HTTP with generated request bindings and typed server responses |
 | Data | PostgreSQL 17, `pgx/v5`, migrations, and `sqlc` ownership |
 | Operations | OpenTelemetry traces and HTTP metrics, Prometheus export, structured logs, Docker, Railway |
 | Delivery | GitHub Actions, race and integration tests, security and image scanning |

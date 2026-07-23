@@ -12,7 +12,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -25,7 +24,6 @@ type serveHTTPRuntimeArgs struct {
 	bootstrapSpan  trace.Span
 	cfg            config.Config
 	log            *slog.Logger
-	metrics        *telemetry.Metrics
 	healthSvc      *health.Service
 	srv            runtimeServer
 	readinessCheck func(context.Context) error
@@ -45,7 +43,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		return rejectHTTPStartup(
 			bootstrapCtx,
 			args.bootstrapSpan,
-			args.metrics,
 			args.log,
 			"startup.http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
@@ -58,7 +55,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		return rejectHTTPStartup(
 			bootstrapCtx,
 			args.bootstrapSpan,
-			args.metrics,
 			args.log,
 			"startup.http_listen",
 			fmt.Errorf("listen http server: %w", err),
@@ -69,7 +65,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		return rejectHTTPStartup(
 			bootstrapCtx,
 			args.bootstrapSpan,
-			args.metrics,
 			args.log,
 			"startup.http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
@@ -138,7 +133,6 @@ func waitForHTTPRuntimePreReady(
 				outcome.terminalErr = rejectHTTPStartup(
 					bootstrapCtx,
 					args.bootstrapSpan,
-					args.metrics,
 					args.log,
 					"startup.readiness",
 					fmt.Errorf("startup readiness check failed: %w", err),
@@ -208,7 +202,7 @@ func (o *httpRuntimeWaitOutcome) recordPreReadyFailure(args serveHTTPRuntimeArgs
 	if o.startupFailureRecorded || args.admission.Ready() {
 		return
 	}
-	recordStartupRejection(args.bootstrapSpan, args.metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
+	recordStartupRejection(args.bootstrapSpan, "startup_error", stage, err)
 	o.startupFailureRecorded = true
 }
 
@@ -256,12 +250,11 @@ func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Co
 func rejectHTTPStartup(
 	bootstrapCtx context.Context,
 	bootstrapSpan trace.Span,
-	metrics *telemetry.Metrics,
 	log *slog.Logger,
 	stage string,
 	err error,
 ) error {
-	recordStartupRejection(bootstrapSpan, metrics, telemetry.StartupRejectionReasonStartupError, "startup_error", stage, err)
+	recordStartupRejection(bootstrapSpan, "startup_error", stage, err)
 	log.Error(
 		"startup_blocked",
 		startupLogArgs(

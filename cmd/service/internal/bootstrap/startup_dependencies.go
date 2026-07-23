@@ -11,7 +11,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/app/health"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -20,7 +19,6 @@ type dependencyProbeRuntime struct {
 	tracer        trace.Tracer
 	bootstrapSpan trace.Span
 	cfg           config.Config
-	metrics       *telemetry.Metrics
 	log           *slog.Logger
 	networkPolicy networkPolicy
 }
@@ -117,17 +115,14 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (*postgres.Pool, error) {
 	labels := startupPostgresDependencyLabels
 	if !runtime.cfg.Postgres.Enabled {
-		runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeDisabled)
 		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no pool and no startup error.
 	}
 
-	runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailClosed)
 	postgresProbeAddress, addressErr := postgresStartupProbeAddress(runtime.cfg.Postgres)
 	if addressErr != nil {
 		return nil, rejectStartupForDependencyInit(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
-			runtime.metrics,
 			runtime.log,
 			labels.dependency,
 			labels.resolveStage,
@@ -138,7 +133,6 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 		return nil, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
-			runtime.metrics,
 			runtime.log,
 			labels.dependency,
 			err,
@@ -178,7 +172,6 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 		}
 
 		sanitizedErr := dependencyInitFailure(labels.dependency, probeResult.err)
-		runtime.metrics.MarkStartupDependencyBlocked(labels.dependency, startupDependencyModeCriticalFailClosed)
 		recordDependencyProbeRejection(
 			bootstrapCtx,
 			runtime,
@@ -189,7 +182,6 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 		return nil, sanitizedErr
 	}
 
-	runtime.metrics.MarkStartupDependencyReady(labels.dependency, startupDependencyModeCriticalFailClosed)
 	pgReturned = true
 	return pg, nil
 }
