@@ -20,14 +20,12 @@ import (
 )
 
 const (
-	telemetryShutdownTimeout    = 5 * time.Second
-	startupBudget               = 30 * time.Second
-	startupReserveBudget        = 3 * time.Second
-	startupFailFastThreshold    = 150 * time.Millisecond
-	startupConfigLoadBudget     = 10 * time.Second
-	startupConfigValidateBudget = 2 * time.Second
-	startupProbeBudget          = 15 * time.Second
-	startupTelemetryBudget      = 2 * time.Second
+	telemetryShutdownTimeout = 5 * time.Second
+	startupBudget            = 30 * time.Second
+	startupReserveBudget     = 3 * time.Second
+	startupFailFastThreshold = 150 * time.Millisecond
+	startupProbeBudget       = 15 * time.Second
+	startupTelemetryBudget   = 2 * time.Second
 
 	postgresProbeBudget = 5 * time.Second
 
@@ -83,9 +81,6 @@ func Run(args []string) (runErr error) {
 	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupBudget)
 	defer startupCancel()
 
-	loadOptions.LoadBudget = startupConfigLoadBudget
-	loadOptions.ValidateBudget = startupConfigValidateBudget
-
 	bootstrap, err := bootstrapRuntime(startupCtx, loadOptions, metrics)
 	if err != nil {
 		return err
@@ -95,7 +90,7 @@ func Run(args []string) (runErr error) {
 
 	bootstrapCtx := startupBootstrapContext(startupCtx, bootstrap.bootstrapSpan)
 
-	probeOutcome, err := initStartupDependencies(startupCtx, bootstrapCtx, dependencyProbeRuntime{
+	probeOutcome, err := initStartupDependencies(startupCtx, bootstrapCtx, postgresStartupRuntime{
 		tracer:        bootstrap.tracer,
 		bootstrapSpan: bootstrap.bootstrapSpan,
 		cfg:           bootstrap.cfg,
@@ -111,27 +106,12 @@ func Run(args []string) (runErr error) {
 
 	healthSvc := health.New(probeOutcome.probes...)
 	startupAdmission := newStartupAdmissionController(bootstrapSpan)
-	// Runtime readiness re-checks the ingress policy so an exception lapsing
-	// while the process runs flips /health/ready without a redeploy.
-	ingressCheck := func(context.Context) error { return bootstrap.networkPolicy.EnforceIngress() }
-	readinessCheck := func(ctx context.Context) error {
-		if err := ingressCheck(ctx); err != nil {
-			return err
-		}
-		return healthSvc.Ready(ctx)
-	}
-	externalReadinessGate := func(ctx context.Context) error {
-		if err := startupAdmission.CheckReady(ctx); err != nil {
-			return err
-		}
-		return ingressCheck(ctx)
-	}
 
 	handler, err := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
 			Health:        healthSvc,
-			ReadinessGate: externalReadinessGate,
+			ReadinessGate: startupAdmission.CheckReady,
 		},
 		metrics,
 		httpx.RouterConfig{
@@ -159,7 +139,7 @@ func Run(args []string) (runErr error) {
 		log:            bootstrap.log,
 		healthSvc:      healthSvc,
 		srv:            srv,
-		readinessCheck: readinessCheck,
+		readinessCheck: healthSvc.Ready,
 		admission:      startupAdmission,
 		shutdownDelay:  bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 	})

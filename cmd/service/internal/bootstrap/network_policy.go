@@ -11,7 +11,6 @@ type networkPolicy struct {
 	ingressDeclarationRequired bool
 	egressAllowlist            []networkHostMatcher
 	egressAllowedSchemes       map[string]struct{}
-	ingressException           networkException
 	egressException            networkException
 }
 

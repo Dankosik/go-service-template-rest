@@ -3,9 +3,9 @@ package config
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
+// checkContext classifies caller cancellation during config loading.
 func checkContext(ctx context.Context) error {
 	return checkContextWithError(ctx, ErrLoad)
 }
@@ -22,13 +22,4 @@ func checkContextWithError(ctx context.Context, classification error) error {
 		return fmt.Errorf("%w: %w", classification, err)
 	}
 	return nil
-}
-
-// WithContextBudget bounds ctx by budget; a non-positive budget only adds
-// cancellation. Shared by config loading and bootstrap stage budgets.
-func WithContextBudget(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
-	if budget <= 0 {
-		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
-	}
-	return context.WithTimeout(parent, budget) // #nosec G118 -- cancel function is returned to caller.
 }

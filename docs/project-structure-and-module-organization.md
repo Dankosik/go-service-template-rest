@@ -31,6 +31,8 @@ shared technical adapters:
 ├── env/
 │   ├── config/
 │   └── docker-compose.yml
+├── examples/
+│   └── reference-service/
 ├── internal/
 │   ├── config/
 │   ├── health/
@@ -79,6 +81,7 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
 | `api/openapi/` | client-visible REST source of truth | generated Go or runtime handlers |
+| `examples/reference-service/` | isolated runnable feature-slice example and its own generated contract | production service routes or shared runtime ownership |
 | `migrations/` | ordered schema changes | query logic and sample placeholder schema |
 | `test/` | container/external-process integration proof | ordinary package unit tests |
 | `.agents/skills/<skill>/` | canonical agent skill | harness-specific copies |
@@ -214,6 +217,7 @@ that binary; file size alone is not a package boundary.
 | Source of truth | Generated/derived output | Proof |
 | --- | --- | --- |
 | `api/openapi/service.yaml` + `internal/openapi/oapi-codegen.yaml` | `internal/openapi/openapi.gen.go` | `make openapi-check` |
+| `examples/reference-service/api/openapi.yaml` + example generation config | `examples/reference-service/internal/openapi/openapi.gen.go` | `make openapi-check` |
 | `migrations/*.up.sql` + `internal/infra/postgres/queries/*.sql` | `internal/infra/postgres/sqlcgen/` | `make sqlc-check` |
 | `.agents/skills/` | harness adapters | `make template-init-check` where applicable |
 

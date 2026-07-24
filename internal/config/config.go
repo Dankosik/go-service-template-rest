@@ -17,8 +17,6 @@ type LoadOptions struct {
 	ConfigPath     string
 	ConfigOverlays []string
 	Strict         bool
-	LoadBudget     time.Duration
-	ValidateBudget time.Duration
 }
 
 type LoadReport struct {
@@ -42,11 +40,8 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, LoadReport{}, err
 	}
 
-	loadCtx, loadCancel := WithContextBudget(ctx, opts.LoadBudget)
-	defer loadCancel()
-
 	loadStarted := time.Now()
-	k, metadata, err := loadKoanf(loadCtx, opts)
+	k, metadata, err := loadKoanf(ctx, opts)
 	report := LoadReport{
 		LoadDuration: time.Since(loadStarted),
 		FailedStage:  metadata.failedStage,
@@ -57,7 +52,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		}
 		return Config{}, report, err
 	}
-	if err := checkContext(loadCtx); err != nil {
+	if err := checkContext(ctx); err != nil {
 		report.FailedStage = StageLoadEnv
 		return Config{}, report, err
 	}
@@ -67,22 +62,20 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		report.FailedStage = StageParse
 		return Config{}, report, err
 	}
-	if err := checkContext(loadCtx); err != nil {
+	if err := checkContext(ctx); err != nil {
 		report.FailedStage = StageParse
 		return Config{}, report, err
 	}
 
 	validateStarted := time.Now()
-	validateCtx, validateCancel := WithContextBudget(ctx, opts.ValidateBudget)
-	defer validateCancel()
-	if err := checkValidateContext(validateCtx); err != nil {
+	if err := checkValidateContext(ctx); err != nil {
 		report.ValidateDuration = time.Since(validateStarted)
 		report.FailedStage = StageValidate
 		return Config{}, report, err
 	}
 
 	unknownKeyWarnings, err := validateConfig(
-		validateCtx,
+		ctx,
 		&cfg,
 		opts.Strict,
 		append(unknownKeys, metadata.sectionScalarOverrideKeys...),

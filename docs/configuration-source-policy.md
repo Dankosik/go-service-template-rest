@@ -24,9 +24,10 @@ There is no YAML overlay or `APP__...` precedence chain for `NETWORK_*`: the eff
 
 Example key families:
 
-- `NETWORK_PUBLIC_INGRESS_ENABLED` declares whether public ingress is expected.
+- `NETWORK_PUBLIC_INGRESS_ENABLED` is an explicit private-ingress assertion;
+  `true` is rejected while metrics share the application listener.
 - `NETWORK_EGRESS_ALLOWLIST` and `NETWORK_EGRESS_ALLOWED_SCHEMES` constrain allowed outbound targets.
-- `NETWORK_INGRESS_EXCEPTION_*` and `NETWORK_EGRESS_EXCEPTION_*` carry temporary exception metadata such as owner, reason, scope, expiry, and rollback plan.
+- `NETWORK_EGRESS_EXCEPTION_*` carries temporary exception metadata such as owner, reason, scope, expiry, and rollback plan.
 
 Do not migrate new feature config into `NETWORK_*`. Use this channel only for bootstrap-owned network policy controls that must remain fail-closed and operator-controlled outside normal application config.
 
@@ -53,7 +54,7 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local en
 
 Postgres DSN driver parsing belongs to `internal/infra/postgres`. `internal/config` validates required presence and generic bounds, while bootstrap asks the Postgres adapter for a sanitized probe address before egress admission. A malformed `postgres.dsn` is therefore classified as dependency initialization during bootstrap address resolution, not as generic config validation, and adapter parse errors must not echo credentials.
 
-The baseline Postgres DSN contract is intentionally strict. The DSN must come from the typed `postgres.dsn` value, which in deployments means `APP__POSTGRES__DSN`, and it must use a `postgres://` or `postgresql://` URL with explicit host, port, database, user, non-empty password, and `sslmode`. Keyword/value DSNs are not accepted. The adapter rejects empty DSNs; any non-empty `PG*` environment input; `service`, `servicefile`, and `passfile`; caller-provided TLS file keys such as `sslcert`, `sslkey`, `sslrootcert`, and `sslpassword`; multi-host or fallback targets; default, `prefer`, or `allow` `sslmode`; and Unix socket hosts. Before calling pgx, the adapter also clears pgx's implicit passfile and TLS file defaults so `.pgpass` and `~/.postgresql/*` files cannot become side-effect config sources.
+The baseline Postgres DSN contract is intentionally strict. The DSN must come from the typed `postgres.dsn` value, which in deployments means `APP__POSTGRES__DSN`, and it must use a `postgres://` or `postgresql://` URL with explicit host, port, database, user, non-empty password, and `sslmode`. Keyword/value DSNs are not accepted. The adapter rejects empty DSNs; non-empty libpq/pgx PostgreSQL environment variables such as `PGHOST`, `PGOPTIONS`, and `PGTZ`; `service`, `servicefile`, and `passfile`; caller-provided TLS file keys such as `sslcert`, `sslkey`, `sslrootcert`, and `sslpassword`; multi-host or fallback targets; default, `prefer`, or `allow` `sslmode`; and Unix socket hosts. Unrelated process variables whose names merely begin with `PG`, such as `PGO_ENABLED`, do not affect parsing. Before calling pgx, the adapter also clears pgx's implicit passfile and TLS file defaults so `.pgpass` and `~/.postgresql/*` files cannot become side-effect config sources.
 
 ## Adding A Config Key
 

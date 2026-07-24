@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/example/go-service-template-rest/internal/config"
 )
 
 func withStageBudget(parent context.Context, stageBudget time.Duration) (context.Context, context.CancelFunc) {
-	return config.WithContextBudget(parent, stageBudget)
+	if stageBudget <= 0 {
+		return context.WithCancel(parent) // #nosec G118 -- cancel function is returned to caller.
+	}
+	return context.WithTimeout(parent, stageBudget) // #nosec G118 -- cancel function is returned to caller.
 }
 
 func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duration, stage string) error {

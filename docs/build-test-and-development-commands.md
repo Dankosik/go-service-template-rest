@@ -129,10 +129,11 @@ make sqlc-generate
 make sqlc-check
 ```
 
-`api/openapi/service.yaml`, `internal/openapi/oapi-codegen.yaml`, migrations,
-and SQL query sources are authoritative. The shared generated-drift script
-snapshots the current derived output, runs the canonical generator, and fails
-with a diff only when generation changes that output.
+`api/openapi/service.yaml`, the isolated reference service's OpenAPI document,
+their adjacent generation configs, migrations, and SQL query sources are
+authoritative. The shared generated-drift script snapshots the current derived
+output, runs the canonical generators, and fails with a diff only when
+generation changes that output.
 Uncommitted but already current generated files therefore pass; Git and CI own
 the separate question of whether those files were committed.
 

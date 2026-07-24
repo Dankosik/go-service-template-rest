@@ -142,6 +142,7 @@ internal/infra/httpclient/       bounded outbound HTTP transport
 internal/infra/postgres/         PostgreSQL adapters
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
+examples/reference-service/      isolated complete feature-slice example
 migrations/                      SQL migrations (when first owned)
 specs/                           durable task decisions when needed
 .agents/skills/                  canonical reusable skills

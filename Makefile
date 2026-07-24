@@ -300,7 +300,7 @@ sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
 
 openapi-generate:
-	go generate ./internal/openapi
+	go generate ./internal/openapi ./examples/reference-service/internal/openapi
 
 openapi-drift-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) openapi
@@ -312,9 +312,11 @@ openapi-runtime-contract-check:
 
 openapi-lint:
 	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILE)
+	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml examples/reference-service/api/openapi.yaml
 
 openapi-validate:
 	go tool validate -- $(OPENAPI_FILE)
+	go tool validate -- examples/reference-service/api/openapi.yaml
 
 OPENAPI_BREAKING_APPROVALS ?= api/openapi/breaking-changes-approvals.txt
 
@@ -327,7 +329,7 @@ openapi-breaking:
 	fi
 
 openapi-check: openapi-drift-check
-	go test ./internal/openapi
+	go test ./internal/openapi ./examples/reference-service/internal/openapi
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
 
 migration-validate:

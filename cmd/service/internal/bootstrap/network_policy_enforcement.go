@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// EnforceIngress validates the public-ingress declaration and exception state.
-// It is the single ingress gate for both startup admission and runtime readiness.
+// EnforceIngress validates the public-ingress declaration. Public exposure is
+// unsupported while operational metrics share the application listener.
 func (p networkPolicy) EnforceIngress() error {
 	if p.ingressDeclarationRequired && !p.ingressPublicExplicitValue {
 		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", errDependencyInit, envNetworkPublicIngressEnabled)
@@ -16,25 +16,12 @@ func (p networkPolicy) EnforceIngress() error {
 	if !p.ingressPublicEnabled {
 		return nil
 	}
-	if !p.ingressException.Active {
-		return fmt.Errorf("%w: public ingress denied without approved exception", errDependencyInit)
-	}
-	if p.isExceptionExpired(p.ingressException) {
-		return fmt.Errorf("%w: ingress exception is expired", errDependencyInit)
-	}
-	return nil
+	return fmt.Errorf("%w: public ingress is unsupported while operational metrics share the application listener", errDependencyInit)
 }
 
 func (p networkPolicy) withIngressExposure(env, addr string) networkPolicy {
 	p.ingressDeclarationRequired = requiresPublicIngressDeclaration(env, addr)
 	return p
-}
-
-func (p networkPolicy) ValidateOperationalMetricsExposure() error {
-	if !p.ingressPublicEnabled {
-		return nil
-	}
-	return fmt.Errorf("%w: operational metrics cannot be exposed on public ingress without a private or protected metrics path", errDependencyInit)
 }
 
 func requiresPublicIngressDeclaration(env, addr string) bool {

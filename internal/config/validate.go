@@ -23,10 +23,10 @@ func validateConfig(ctx context.Context, cfg *Config, strict bool, unknownKeys [
 		return unknownKeyWarnings, err
 	}
 
-	if err := validateAppConfig(cfg.App); err != nil {
+	if err := validateAppConfig(&cfg.App); err != nil {
 		return unknownKeyWarnings, err
 	}
-	if err := validateHTTPConfig(cfg.HTTP); err != nil {
+	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return unknownKeyWarnings, err
 	}
 	if err := checkValidateContext(ctx); err != nil {
@@ -43,25 +43,28 @@ func validateConfig(ctx context.Context, cfg *Config, strict bool, unknownKeys [
 		return unknownKeyWarnings, err
 	}
 
-	if err := validateObservabilityConfig(cfg.Observability); err != nil {
+	if err := validateObservabilityConfig(&cfg.Observability); err != nil {
 		return unknownKeyWarnings, err
 	}
 
 	return unknownKeyWarnings, nil
 }
 
-func validateAppConfig(cfg AppConfig) error {
-	if strings.TrimSpace(cfg.Env) == "" {
+func validateAppConfig(cfg *AppConfig) error {
+	cfg.Env = strings.TrimSpace(cfg.Env)
+	cfg.Version = strings.TrimSpace(cfg.Version)
+	if cfg.Env == "" {
 		return fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Version) == "" {
+	if cfg.Version == "" {
 		return fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
 	}
 	return nil
 }
 
-func validateHTTPConfig(cfg HTTPConfig) error {
-	if strings.TrimSpace(cfg.Addr) == "" {
+func validateHTTPConfig(cfg *HTTPConfig) error {
+	cfg.Addr = strings.TrimSpace(cfg.Addr)
+	if cfg.Addr == "" {
 		return fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
 	}
 	if err := validateDurationRange("http.shutdown_timeout", cfg.ShutdownTimeout, time.Second, 10*time.Minute); err != nil {
@@ -85,10 +88,10 @@ func validateHTTPConfig(cfg HTTPConfig) error {
 	if err := validateDurationRange("http.idle_timeout", cfg.IdleTimeout, 100*time.Millisecond, 24*time.Hour); err != nil {
 		return err
 	}
-	if err := validateHTTPReadinessWriteTimeout(cfg); err != nil {
+	if err := validateHTTPReadinessWriteTimeout(*cfg); err != nil {
 		return err
 	}
-	if err := validateHTTPShutdownBudget(cfg); err != nil {
+	if err := validateHTTPShutdownBudget(*cfg); err != nil {
 		return err
 	}
 	if cfg.MaxHeaderBytes <= 0 {
@@ -100,8 +103,11 @@ func validateHTTPConfig(cfg HTTPConfig) error {
 	return nil
 }
 
-func validateObservabilityConfig(cfg ObservabilityConfig) error {
-	if strings.TrimSpace(cfg.OTel.ServiceName) == "" {
+func validateObservabilityConfig(cfg *ObservabilityConfig) error {
+	cfg.OTel.ServiceName = strings.TrimSpace(cfg.OTel.ServiceName)
+	cfg.OTel.TracesSampler = strings.TrimSpace(cfg.OTel.TracesSampler)
+	cfg.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.OTel.Exporter.OTLPEndpoint)
+	if cfg.OTel.ServiceName == "" {
 		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
 	return validateSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg)

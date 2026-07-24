@@ -1,0 +1,108 @@
+openapi: 3.0.3
+info:
+  title: reference-article-service
+  version: 0.1.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: /
+    description: current service origin
+security: []
+tags:
+  - name: articles
+    description: Public read-only reference content.
+paths:
+  /api/v1/articles/{slug}:
+    get:
+      tags: [articles]
+      summary: Get an article
+      operationId: getArticle
+      x-security-decision:
+        exposure: public
+        rationale: read-only example content with no identity or private data
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: "^[a-z][a-z0-9-]*$"
+      responses:
+        "200":
+          description: article found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  schemas:
+    Article:
+      type: object
+      additionalProperties: false
+      required:
+        - slug
+        - title
+        - summary
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+    Problem:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - type
+        - title
+        - status
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          example: not_found
+        type:
+          type: string
+          format: uri-reference
+          description: Stable URI reference identifying the problem class.
+          example: https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5
+        title:
+          type: string
+          example: not found
+        status:
+          type: integer
+          format: int32
+          example: 404
+        detail:
+          type: string
+          example: article was not found
+  responses:
+    BadRequest:
+      description: request is malformed or invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: article was not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalServerError:
+      description: unexpected server failure
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

@@ -15,6 +15,7 @@ require (
 	github.com/knadh/koanf/providers/rawbytes v1.0.0
 	github.com/knadh/koanf/v2 v2.3.5
 	github.com/oapi-codegen/nethttp-middleware v1.2.0
+	github.com/oapi-codegen/runtime v1.6.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/otlptranslator v1.0.0
 	github.com/testcontainers/testcontainers-go v0.43.0
@@ -73,6 +74,7 @@ require (
 	github.com/andybalholm/brotli v1.1.2-0.20250424173009-453214e765f3 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.26.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ashanbrown/forbidigo/v2 v2.3.0 // indirect
 	github.com/ashanbrown/makezero/v2 v2.1.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
