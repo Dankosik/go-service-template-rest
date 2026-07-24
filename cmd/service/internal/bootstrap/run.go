@@ -24,7 +24,7 @@ const (
 	startupBudget            = 30 * time.Second
 	startupReserveBudget     = 3 * time.Second
 	startupFailFastThreshold = 150 * time.Millisecond
-	startupProbeBudget       = 15 * time.Second
+	postgresStartupBudget    = 15 * time.Second
 	startupTelemetryBudget   = 2 * time.Second
 
 	postgresProbeBudget = 5 * time.Second
@@ -90,21 +90,26 @@ func Run(args []string) (runErr error) {
 
 	bootstrapCtx := startupBootstrapContext(startupCtx, bootstrap.bootstrapSpan)
 
-	probeOutcome, err := initStartupDependencies(startupCtx, bootstrapCtx, postgresStartupRuntime{
+	postgresCtx, postgresCancel := withStageBudget(startupCtx, postgresStartupBudget)
+	pg, err := initPostgresDependency(bootstrapCtx, postgresCtx, postgresStartupRuntime{
 		tracer:        bootstrap.tracer,
 		bootstrapSpan: bootstrap.bootstrapSpan,
 		cfg:           bootstrap.cfg,
 		log:           bootstrap.log,
 		networkPolicy: bootstrap.networkPolicy,
 	})
+	postgresCancel()
 	if err != nil {
 		return err
 	}
-	if probeOutcome.postgresPool != nil {
-		defer probeOutcome.postgresPool.Close()
+	if pg != nil {
+		defer pg.Close()
 	}
 
-	healthSvc := health.New(probeOutcome.probes...)
+	healthSvc := health.New()
+	if pg != nil {
+		healthSvc = health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout))
+	}
 	startupAdmission := newStartupAdmissionController(bootstrapSpan)
 
 	handler, err := httpx.NewRouter(
@@ -146,12 +151,20 @@ func Run(args []string) (runErr error) {
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
+	var configPath string
 	var overlays []string
 
 	flags := flag.NewFlagSet("service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 
-	configPath := flags.String("config", "", "path to base config file")
+	flags.Func("config", "path to base config file", func(value string) error {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return fmt.Errorf("config path cannot be empty")
+		}
+		configPath = trimmed
+		return nil
+	})
 	flags.Func("config-overlay", "path to config overlay file (repeatable)", func(value string) error {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
@@ -170,7 +183,7 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	}
 
 	return config.LoadOptions{
-		ConfigPath:     strings.TrimSpace(*configPath),
+		ConfigPath:     configPath,
 		ConfigOverlays: overlays,
 		Strict:         *configStrict,
 	}, nil

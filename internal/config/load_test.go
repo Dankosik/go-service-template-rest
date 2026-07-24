@@ -178,6 +178,40 @@ unknown:
 	})
 }
 
+func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
+	testCases := []struct {
+		name string
+		opts LoadOptions
+	}{
+		{
+			name: "whitespace base path",
+			opts: LoadOptions{ConfigPath: " \t\n "},
+		},
+		{
+			name: "empty overlay path",
+			opts: LoadOptions{ConfigOverlays: []string{""}},
+		},
+		{
+			name: "whitespace overlay path",
+			opts: LoadOptions{ConfigOverlays: []string{" \t\n "}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+
+			_, report, err := LoadDetailed(tc.opts)
+			if !errors.Is(err, ErrLoad) {
+				t.Fatalf("LoadDetailed() error = %v, want ErrLoad", err)
+			}
+			if report.FailedStage != StageLoadFile {
+				t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageLoadFile)
+			}
+		})
+	}
+}
+
 func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
 	resetConfigEnv(t)
 

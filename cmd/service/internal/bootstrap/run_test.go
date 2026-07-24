@@ -43,6 +43,18 @@ func TestParseLoadOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("fails on empty base path", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := parseLoadOptions([]string{"--config", "   "})
+		if err == nil {
+			t.Fatal("parseLoadOptions() error = nil, want non-nil")
+		}
+		if !strings.Contains(err.Error(), "parse flags") {
+			t.Fatalf("parseLoadOptions() err = %v, want parse flags context", err)
+		}
+	})
+
 	t.Run("fails on unknown flag", func(t *testing.T) {
 		t.Parallel()
 

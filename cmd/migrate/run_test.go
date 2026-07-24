@@ -98,7 +98,10 @@ func TestResolveMigrationSourceUsesConfiguredPath(t *testing.T) { //nolint:paral
 	}
 	t.Setenv("MIGRATION_PATH", " custom/migrations ")
 
-	sourceFS, sourcePath, found := resolveMigrationSource()
+	sourceFS, sourcePath, found, err := resolveMigrationSource()
+	if err != nil {
+		t.Fatalf("resolveMigrationSource() error = %v, want nil", err)
+	}
 	if !found {
 		t.Fatal("resolveMigrationSource() found = false, want true for configured path")
 	}
@@ -123,7 +126,10 @@ func TestResolveMigrationSourceUsesLocalMigrationsWhenPresent(t *testing.T) { //
 	}
 
 	imagePath := filepath.Join(t.TempDir(), "image-migrations")
-	sourceFS, sourcePath, found := resolveMigrationSourceFrom(imagePath)
+	sourceFS, sourcePath, found, err := resolveMigrationSourceFrom(imagePath)
+	if err != nil {
+		t.Fatalf("resolveMigrationSourceFrom() error = %v, want nil", err)
+	}
 	if !found {
 		t.Fatal("resolveMigrationSourceFrom() found = false, want true")
 	}
@@ -148,7 +154,10 @@ func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) { //noli
 	if err := os.WriteFile(filepath.Join(imagePath, "000001_test.up.sql"), []byte("select 1;"), 0o600); err != nil {
 		t.Fatalf("create image migration: %v", err)
 	}
-	sourceFS, sourcePath, found := resolveMigrationSourceFrom(imagePath)
+	sourceFS, sourcePath, found, err := resolveMigrationSourceFrom(imagePath)
+	if err != nil {
+		t.Fatalf("resolveMigrationSourceFrom() error = %v, want nil", err)
+	}
 	if !found {
 		t.Fatal("resolveMigrationSourceFrom() found = false, want true")
 	}
@@ -163,12 +172,27 @@ func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) { //noli
 func TestResolveMigrationSourceReportsNoMigrations(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	sourceFS, sourcePath, found := resolveMigrationSourceFrom("image-migrations")
+	sourceFS, sourcePath, found, err := resolveMigrationSourceFrom("image-migrations")
+	if err != nil {
+		t.Fatalf("resolveMigrationSourceFrom() error = %v, want nil", err)
+	}
 	if found {
 		t.Fatal("resolveMigrationSourceFrom() found = true, want false")
 	}
 	if sourceFS != nil || sourcePath != "" {
 		t.Fatalf("resolveMigrationSourceFrom() = (%T, %q), want (nil, empty)", sourceFS, sourcePath)
+	}
+}
+
+func TestResolveMigrationSourcePropagatesDirectoryReadFailure(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	_, _, _, err := resolveMigrationSourceFrom("\x00")
+	if err == nil {
+		t.Fatal("resolveMigrationSourceFrom() error = nil, want directory read failure")
+	}
+	if !strings.Contains(err.Error(), "inspect image migration source") {
+		t.Fatalf("resolveMigrationSourceFrom() error = %q, want source context", err.Error())
 	}
 }
 

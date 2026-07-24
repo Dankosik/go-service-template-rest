@@ -15,13 +15,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
+func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	t.Parallel()
 
 	rootCause := errors.New("dial tcp 127.0.0.1:5432: connect refused")
-	err := dependencyInitFailure("postgres", rootCause)
+	err := postgresDependencyInitFailure(rootCause)
 	if err == nil {
-		t.Fatal("dependencyInitFailure() error = nil, want non-nil")
+		t.Fatal("postgresDependencyInitFailure() error = nil, want non-nil")
 	}
 	if !errors.Is(err, errDependencyInit) {
 		t.Fatalf("error = %v, want wrapped %v", err, errDependencyInit)
@@ -31,25 +31,25 @@ func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	}
 }
 
-func TestDependencyInitFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
+func TestPostgresDependencyInitFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
 	t.Parallel()
 
 	cause := fmt.Errorf("%w: dial failed", errDependencyInit)
-	err := dependencyInitFailure("postgres", cause)
+	err := postgresDependencyInitFailure(cause)
 	if err == nil {
-		t.Fatal("dependencyInitFailure() error = nil, want non-nil")
+		t.Fatal("postgresDependencyInitFailure() error = nil, want non-nil")
 	}
 	if !errors.Is(err, errDependencyInit) {
-		t.Fatalf("dependencyInitFailure() error = %v, want wrapped %v", err, errDependencyInit)
+		t.Fatalf("postgresDependencyInitFailure() error = %v, want wrapped %v", err, errDependencyInit)
 	}
 	if !errors.Is(err, cause) {
-		t.Fatalf("dependencyInitFailure() error = %v, want wrapped cause", err)
+		t.Fatalf("postgresDependencyInitFailure() error = %v, want wrapped cause", err)
 	}
 	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
-		t.Fatalf("dependencyInitFailure() error = %v, dependency init count = %d, want 1", err, count)
+		t.Fatalf("postgresDependencyInitFailure() error = %v, dependency init count = %d, want 1", err, count)
 	}
 	if !strings.Contains(err.Error(), "postgres init failed") {
-		t.Fatalf("dependencyInitFailure() error = %v, want dependency context", err)
+		t.Fatalf("postgresDependencyInitFailure() error = %v, want dependency context", err)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(
 	})
 }
 
-func TestInitStartupDependenciesAllDisabled(t *testing.T) {
+func TestInitPostgresDependencyDisabled(t *testing.T) {
 	t.Parallel()
 
 	runtime := postgresStartupRuntime{
@@ -157,15 +157,12 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 		networkPolicy: networkPolicy{},
 	}
 
-	outcome, err := initStartupDependencies(context.Background(), context.Background(), runtime)
+	pg, err := initPostgresDependency(context.Background(), context.Background(), runtime)
 	if err != nil {
-		t.Fatalf("initStartupDependencies() error = %v, want nil", err)
+		t.Fatalf("initPostgresDependency() error = %v, want nil", err)
 	}
-	if len(outcome.probes) != 0 {
-		t.Fatalf("probes len = %d, want 0", len(outcome.probes))
-	}
-	if outcome.postgresPool != nil {
-		t.Fatal("postgresPool != nil, want nil")
+	if pg != nil {
+		t.Fatal("initPostgresDependency() pool != nil, want nil")
 	}
 }
 

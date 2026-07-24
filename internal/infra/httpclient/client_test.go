@@ -80,11 +80,11 @@ func TestNewBuildsBoundedInstrumentedClient(t *testing.T) {
 	if got, want := client.BaseURL(), "https://example.com/provider/"; got != want {
 		t.Fatalf("BaseURL() = %q, want %q", got, want)
 	}
-	if got := client.HTTPClient().Timeout; got != cfg.RequestTimeout {
-		t.Fatalf("HTTPClient().Timeout = %s, want %s", got, cfg.RequestTimeout)
+	if got := client.httpClient.Timeout; got != cfg.RequestTimeout {
+		t.Fatalf("http client timeout = %s, want %s", got, cfg.RequestTimeout)
 	}
-	if _, ok := client.HTTPClient().Transport.(*otelhttp.Transport); !ok {
-		t.Fatalf("HTTPClient().Transport = %T, want *otelhttp.Transport", client.HTTPClient().Transport)
+	if _, ok := client.httpClient.Transport.(*otelhttp.Transport); !ok {
+		t.Fatalf("http client transport = %T, want *otelhttp.Transport", client.httpClient.Transport)
 	}
 	if client.transport.Proxy != nil {
 		t.Fatal("base transport proxy is enabled")
@@ -95,7 +95,7 @@ func TestNewBuildsBoundedInstrumentedClient(t *testing.T) {
 	if got := client.transport.MaxResponseHeaderBytes; got != cfg.MaxResponseHeaderBytes {
 		t.Fatalf("MaxResponseHeaderBytes = %d, want %d", got, cfg.MaxResponseHeaderBytes)
 	}
-	if err := client.HTTPClient().CheckRedirect(&http.Request{}, nil); !errors.Is(err, http.ErrUseLastResponse) {
+	if err := client.httpClient.CheckRedirect(&http.Request{}, nil); !errors.Is(err, http.ErrUseLastResponse) {
 		t.Fatalf("CheckRedirect() error = %v, want %v", err, http.ErrUseLastResponse)
 	}
 
@@ -283,7 +283,7 @@ func TestExternalClientRejectsPrivateDNSResolutionBeforeConnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, requestErr := client.HTTPClient().Do(request)
+	response, requestErr := client.Do(request)
 	if response != nil {
 		_ = response.Body.Close()
 	}
@@ -355,7 +355,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := client.HTTPClient().Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		t.Fatalf("Do(gzip) error = %v", err)
 	}
@@ -379,7 +379,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	redirectResponse, err := client.HTTPClient().Do(redirectRequest)
+	redirectResponse, err := client.Do(redirectRequest)
 	if err != nil {
 		t.Fatalf("Do(redirect) error = %v", err)
 	}

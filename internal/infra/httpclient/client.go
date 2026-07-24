@@ -137,9 +137,14 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	}, nil
 }
 
-// HTTPClient returns the reusable concrete client accepted by generated clients.
-func (c *Client) HTTPClient() *http.Client {
-	return c.httpClient
+// Do sends a request through the client's fixed target and resource bounds.
+func (c *Client) Do(request *http.Request) (*http.Response, error) {
+	// #nosec G704 -- authorityTransport rejects requests outside the configured scheme and authority before dialing.
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return response, fmt.Errorf("send outbound HTTP request: %w", err)
+	}
+	return response, nil
 }
 
 // BaseURL returns the validated immutable provider base URL.

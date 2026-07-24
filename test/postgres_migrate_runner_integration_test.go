@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -20,6 +21,8 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	migrationFS := fstest.MapFS{
 		"migrations/000001_integration.up.sql":   {Data: []byte("select 1;")},
 		"migrations/000001_integration.down.sql": {Data: []byte("select 1;")},
+		"migrations/000002_integration.up.sql":   {Data: []byte("select 1;")},
+		"migrations/000002_integration.down.sql": {Data: []byte("select 1;")},
 	}
 
 	firstRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
@@ -45,8 +48,8 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	if err := pool.QueryRow(ctx, "select version, dirty from schema_migrations").Scan(&version, &dirty); err != nil {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if version != 1 || dirty {
-		t.Fatalf("schema_migrations = version %d dirty %t, want version 1 dirty false", version, dirty)
+	if version != 2 || dirty {
+		t.Fatalf("schema_migrations = version %d dirty %t, want version 2 dirty false", version, dirty)
 	}
 
 	secondRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
@@ -72,7 +75,40 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	if err := pool.QueryRow(ctx, "select version, dirty from schema_migrations").Scan(&version, &dirty); err != nil {
 		t.Fatalf("query schema_migrations after validation: %v", err)
 	}
-	if version != 1 || dirty {
-		t.Fatalf("schema_migrations after validation = version %d dirty %t, want version 1 dirty false", version, dirty)
+	if version != 2 || dirty {
+		t.Fatalf("schema_migrations after validation = version %d dirty %t, want version 2 dirty false", version, dirty)
+	}
+}
+
+func TestValidateMigrationsExercisesEarlierDownMigration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+
+	dsn := integrationPostgresDSN(t)
+	migrationFS := fstest.MapFS{
+		"migrations/000001_integration.up.sql": {
+			Data: []byte("select 1;"),
+		},
+		"migrations/000001_integration.down.sql": {
+			Data: []byte("select * from migration_down_must_reach_missing_relation;"),
+		},
+		"migrations/000002_integration.up.sql": {
+			Data: []byte("select 1;"),
+		},
+		"migrations/000002_integration.down.sql": {
+			Data: []byte("select 1;"),
+		},
+	}
+
+	err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
+		DSN:        dsn,
+		SourceFS:   migrationFS,
+		SourcePath: "migrations",
+	})
+	if err == nil {
+		t.Fatal("ValidateMigrations() error = nil, want earlier down migration failure")
+	}
+	if !strings.Contains(err.Error(), "roll back all postgres migrations") {
+		t.Fatalf("ValidateMigrations() error = %q, want full rollback context", err.Error())
 	}
 }

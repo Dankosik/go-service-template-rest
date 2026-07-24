@@ -49,34 +49,23 @@ func rejectStartupForPolicyViolation(
 	return fmt.Errorf("%w: startup blocked by network policy: %w", errDependencyInit, err)
 }
 
-func rejectStartupForDependencyInit(
+func rejectPostgresStartupForDependencyInit(
 	ctx context.Context,
 	bootstrapSpan trace.Span,
 	log *slog.Logger,
-	dependency string,
-	stage string,
 	err error,
 ) error {
-	dep := strings.ToLower(strings.TrimSpace(dependency))
-	if dep == "" {
-		dep = "dependency"
-	}
-	failedStage := strings.TrimSpace(stage)
-	if failedStage == "" {
-		failedStage = "startup.resolve." + dep
-	}
-
-	rejectErr := dependencyInitFailure(dep, err)
-	recordStartupRejection(bootstrapSpan, "dependency_init", failedStage, rejectErr)
+	rejectErr := postgresDependencyInitFailure(err)
+	recordStartupRejection(bootstrapSpan, "dependency_init", startupPostgresResolveStage, rejectErr)
 	log.Error(
 		"startup_blocked",
 		startupLogArgs(
 			ctx,
 			startupLogComponentStartupProbes,
-			dep+"_config",
+			"postgres_config",
 			"error",
 			"error.type", "dependency_init",
-			"dependency", dep,
+			"dependency", startupDependencyPostgres,
 			"err", rejectErr,
 		)...,
 	)
