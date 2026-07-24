@@ -91,7 +91,7 @@ func postgresDisallowedDSNKeys() map[string]string {
 }
 
 func parsePoolConfig(rawDSN string) (*pgxpool.Config, error) {
-	normalizedDSN, err := preflightPostgresDSN(rawDSN)
+	normalizedDSN, err := NormalizeDSN(rawDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +104,12 @@ func parsePoolConfig(rawDSN string) (*pgxpool.Config, error) {
 		return nil, err
 	}
 	return config, nil
+}
+
+// NormalizeDSN validates the template's single-target PostgreSQL policy and
+// returns the normalized URL used by both runtime pools and migrations.
+func NormalizeDSN(rawDSN string) (string, error) {
+	return preflightPostgresDSN(rawDSN)
 }
 
 // ProbeAddress extracts a probe-ready host:port from a PostgreSQL DSN.

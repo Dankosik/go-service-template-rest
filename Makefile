@@ -1,9 +1,11 @@
 SERVICE_NAME := service
+SERVICE_CMD := ./cmd/service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
 GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
 REDOCLY_CLI_VERSION := 2.40.0
+GO_TOOL := bash ./scripts/run-go-tool.sh
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
@@ -27,6 +29,7 @@ BENCH_COMPARE_OUTPUT ?= .artifacts/bench/comparison.txt
 BENCH_PROFILE ?= cpu
 BENCH_PROFILE_DIR ?= .artifacts/bench/profiles
 BENCH_WORKLOAD_ID ?= go-benchmark
+# profile:database-postgres:start
 BENCH_DB_PACKAGE ?= ./test/...
 BENCH_DB_PATTERN ?= .
 BENCH_DB_OUTPUT ?= .artifacts/bench/db/current.txt
@@ -36,6 +39,7 @@ BENCH_DB_COMPARE_OUTPUT ?= .artifacts/bench/db/comparison.txt
 BENCH_DB_WORKLOAD_ID ?=
 BENCH_DB_SCHEMA_PATH := $(if $(wildcard migrations/*.up.sql),migrations,)
 POSTGRES_TEST_IMAGE := $(shell sed -n 's/^const postgresTestImage = "\(.*\)"$$/\1/p' test/postgres_integration_test.go)
+# profile:database-postgres:end
 HTTP_BENCH_SCRIPT ?= test/performance/http/single-flow.js
 HTTP_BENCH_ARTIFACT_DIR ?= .artifacts/bench/http
 HTTP_BENCH_ENV_FILE ?= .env.bench
@@ -47,6 +51,9 @@ GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
+# profile:database-postgres:start
+DATABASE_CI_TARGETS := sqlc-check
+# profile:database-postgres:end
 
 .DEFAULT_GOAL := help
 
@@ -70,7 +77,10 @@ help:
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
 	@echo "  make lint | lint-fast | go-security | secret-scan"
-	@echo "  make openapi-check | sqlc-check | migration-validate"
+	@echo "  make openapi-check"
+# profile:database-postgres:start
+	@echo "  make sqlc-check | migration-validate"
+# profile:database-postgres:end
 	@echo "  make docker-build | container-security"
 	@echo ""
 	@echo "Benchmarking:"
@@ -93,16 +103,18 @@ template-init-check:
 project-structure-check:
 	$(PROJECT_STRUCTURE_CHECK_SCRIPT)
 
+# profile:agent-workflow-full:start
 claude-skills-sync:
 	@mkdir -p .claude/skills
 	@find .claude/skills -maxdepth 1 -type l -delete
 	@set -e; for d in .agents/skills/*/; do n=$$(basename "$$d"); ln -s "../../.agents/skills/$$n" ".claude/skills/$$n"; done
 	@echo ".claude/skills: $$(ls .claude/skills | wc -l | tr -d ' ') skill links"
+# profile:agent-workflow-full:end
 
 check: project-structure-check fmt-check lint test
 
 ci-local:
-	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint test-race test-report sqlc-check openapi-check go-security secret-scan
+	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint test-race test-report $(DATABASE_CI_TARGETS) openapi-check go-security secret-scan
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
@@ -110,7 +122,9 @@ check-full:
 	$(MAKE) ci-local
 	REQUIRE_DOCKER=1 $(MAKE) test-integration
 	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):ci .
+# profile:database-postgres:start
 	$(MAKE) migration-validate RUNTIME_IMAGE=$(SERVICE_NAME):ci
+# profile:database-postgres:end
 	$(MAKE) container-security CONTAINER_IMAGE=$(SERVICE_NAME):ci
 
 pr-check:
@@ -129,22 +143,28 @@ tidy:
 	go mod tidy
 
 fmt:
-	go tool goimports -w $(GO_FILES)
-	go tool gofumpt -w $(GOFUMPT_FILES)
+	$(GO_TOOL) goimports -w $(GO_FILES)
+	$(GO_TOOL) gofumpt -w $(GOFUMPT_FILES)
 
 mod-check:
 	GOFLAGS= go mod tidy -diff
 	go mod verify
+	GOFLAGS= go -C tools mod tidy -diff
+	go -C tools mod verify
+	@test "$$(awk '/^go / {print $$2; exit}' go.mod)" = "$$(awk '/^go / {print $$2; exit}' tools/go.mod)" || { \
+		echo "go.mod and tools/go.mod must use the same Go version"; \
+		exit 1; \
+	}
 
 fmt-check:
-	@unformatted="$$(go tool goimports -l $(GO_FILES))"; \
+	@unformatted="$$( $(GO_TOOL) goimports -l $(GO_FILES) )"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \
 		echo "run 'make fmt'"; \
 		exit 1; \
 	fi
-	@gofumpt_unformatted="$$(go tool gofumpt -l $(GOFUMPT_FILES))"; \
+	@gofumpt_unformatted="$$( $(GO_TOOL) gofumpt -l $(GOFUMPT_FILES) )"; \
 	if [ -n "$$gofumpt_unformatted" ]; then \
 		echo "gofumpt required for:"; \
 		echo "$$gofumpt_unformatted"; \
@@ -153,12 +173,12 @@ fmt-check:
 	fi
 
 test:
-	go tool gotestsum --format=pkgname-and-test-fails -- ./...
+	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- ./...
 
 test-summary: test
 
 test-watch:
-	go tool gotestsum --watch --format=pkgname-and-test-fails
+	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails
 
 test-race:
 	go test -race ./...
@@ -169,7 +189,7 @@ test-cover:
 
 test-report:
 	@mkdir -p $(TEST_REPORT_DIR)
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go tool gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= $(GO_TOOL) gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 
@@ -229,6 +249,7 @@ bench-compare:
 bench-profile:
 	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_PROFILE="$(BENCH_PROFILE)" BENCH_PROFILE_DIR="$(BENCH_PROFILE_DIR)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) profile
 
+# profile:database-postgres:start
 bench-db:
 	@test -n "$(BENCH_DB_WORKLOAD_ID)" || { echo "BENCH_DB_WORKLOAD_ID is required, for example fixture-10k-warm"; exit 1; }
 	REQUIRE_DOCKER=1 BENCH_PACKAGE="$(BENCH_DB_PACKAGE)" BENCH_PATTERN="$(BENCH_DB_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS=integration BENCH_OUTPUT="$(BENCH_DB_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_DB_WORKLOAD_ID)" BENCH_DEPENDENCY_IMAGE="$(POSTGRES_TEST_IMAGE)" BENCH_SCHEMA_PATH="$(BENCH_DB_SCHEMA_PATH)" $(BENCHMARK_SCRIPT) run
@@ -238,6 +259,7 @@ bench-db-baseline:
 
 bench-db-compare:
 	BENCH_BASELINE="$(BENCH_DB_BASELINE)" BENCH_CURRENT="$(BENCH_DB_CURRENT)" BENCH_COMPARE_OUTPUT="$(BENCH_DB_COMPARE_OUTPUT)" $(BENCHMARK_SCRIPT) compare
+# profile:database-postgres:end
 
 bench-http:
 	HTTP_BENCH_SCRIPT="$(HTTP_BENCH_SCRIPT)" HTTP_BENCH_ARTIFACT_DIR="$(HTTP_BENCH_ARTIFACT_DIR)" HTTP_BENCH_ENV_FILE="$(HTTP_BENCH_ENV_FILE)" HTTP_BENCH_DOCKER_NETWORK="$(HTTP_BENCH_DOCKER_NETWORK)" HTTP_BENCH_RAW_SAMPLES="$(HTTP_BENCH_RAW_SAMPLES)" $(BENCHMARK_SCRIPT) http
@@ -255,49 +277,51 @@ benchmark-remote-image:
 	$(BENCHMARK_REMOTE_SCRIPT) image-build
 
 lint:
-	go tool golangci-lint run --allow-parallel-runners --timeout=3m
+	$(GO_TOOL) golangci-lint run --allow-parallel-runners --timeout=3m
 	$(MAKE) deadcode
 	$(MAKE) nilaway
 
 lint-fast:
-	go tool golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(GO_TOOL) golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 deadcode:
-	go tool deadcode -test -tags=integration ./...
+	$(GO_TOOL) deadcode -test -tags=integration ./...
 
 nilaway:
 	@module_path="$$(go list -m)"; \
-	printf 'go tool nilaway -include-pkgs=%s -test ./...\n' "$$module_path"; \
-	go tool nilaway -include-pkgs="$$module_path" -test ./...
+	printf '$(GO_TOOL) nilaway -include-pkgs=%s -test ./...\n' "$$module_path"; \
+	$(GO_TOOL) nilaway -include-pkgs="$$module_path" -test ./...
 
 modernize-check:
 	go fix -diff ./...
 
 test-parallelism-check:
-	go tool golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
+	$(GO_TOOL) golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
 
 govulncheck:
-	go tool govulncheck ./...
+	$(GO_TOOL) govulncheck ./...
 
 gosec:
 	@gosec_cache="$$(mktemp -d)"; \
 	trap 'rm -rf "$$gosec_cache"' EXIT; \
-	GOCACHE="$$gosec_cache" go tool gosec -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
+	GOCACHE="$$gosec_cache" $(GO_TOOL) gosec -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 go-security: govulncheck gosec
 
 secret-scan:
-	go tool gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
+	$(GO_TOOL) gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
 
+# profile:database-postgres:start
 sqlc-generate:
 	@if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then \
 		echo "no sqlc query sources; skipping sqlc generation"; \
 	else \
-		go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml; \
+		$(GO_TOOL) sqlc generate -f internal/infra/postgres/sqlc.yaml; \
 	fi
 
 sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
+# profile:database-postgres:end
 
 openapi-generate:
 	go generate ./internal/openapi ./examples/reference-service/internal/openapi
@@ -315,23 +339,24 @@ openapi-lint:
 	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml examples/reference-service/api/openapi.yaml
 
 openapi-validate:
-	go tool validate -- $(OPENAPI_FILE)
-	go tool validate -- examples/reference-service/api/openapi.yaml
+	$(GO_TOOL) validate -- $(OPENAPI_FILE)
+	$(GO_TOOL) validate -- examples/reference-service/api/openapi.yaml
 
 OPENAPI_BREAKING_APPROVALS ?= api/openapi/breaking-changes-approvals.txt
 
 openapi-breaking:
 	@test -n "$(BASE_OPENAPI)" || { echo "BASE_OPENAPI is required"; exit 1; }
 	@if [ -s "$(OPENAPI_BREAKING_APPROVALS)" ]; then \
-		go tool oasdiff breaking --fail-on ERR --err-ignore "$(OPENAPI_BREAKING_APPROVALS)" $(BASE_OPENAPI) $(OPENAPI_FILE); \
+		$(GO_TOOL) oasdiff breaking --fail-on ERR --err-ignore "$(OPENAPI_BREAKING_APPROVALS)" $(BASE_OPENAPI) $(OPENAPI_FILE); \
 	else \
-		go tool oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE); \
+		$(GO_TOOL) oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE); \
 	fi
 
 openapi-check: openapi-drift-check
 	go test ./internal/openapi ./examples/reference-service/internal/openapi
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
 
+# profile:database-postgres:start
 migration-validate:
 	@if [ -n "$(MIGRATION_DSN)" ]; then \
 		APP__POSTGRES__ENABLED=true \
@@ -395,6 +420,7 @@ migration-validate:
 		exit_code="$$(docker inspect -f '{{.State.ExitCode}}' "$$runtime")"; \
 		test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }; \
 	fi
+# profile:database-postgres:end
 
 container-security:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required"; exit 1; }
@@ -415,11 +441,11 @@ run:
 	@set -a; \
 	if [ -f .env ]; then . ./.env; fi; \
 	set +a; \
-	go run ./cmd/$(SERVICE_NAME)
+	go run $(SERVICE_CMD)
 
 build:
 	mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o $(BINARY) ./cmd/$(SERVICE_NAME)
+	CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o $(BINARY) $(SERVICE_CMD)
 
 docker-build:
 	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):local .

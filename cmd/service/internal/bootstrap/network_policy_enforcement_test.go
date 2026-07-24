@@ -134,7 +134,7 @@ func TestNetworkPolicyEnforceIngressAllowsMissingDeclarationForLocalWildcardBind
 	}
 }
 
-func TestNetworkPolicyEnforceIngressRejectsPublicIngress(t *testing.T) {
+func TestNetworkPolicyEnforceIngressAllowsExplicitPublicIngress(t *testing.T) {
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
 
 	policy, err := loadNetworkPolicyFromEnv()
@@ -142,12 +142,8 @@ func TestNetworkPolicyEnforceIngressRejectsPublicIngress(t *testing.T) {
 		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 	}
 
-	err = policy.EnforceIngress()
-	if err == nil {
-		t.Fatal("EnforceIngress() error = nil, want non-nil")
-	}
-	if !strings.Contains(err.Error(), "operational metrics share the application listener") {
-		t.Fatalf("EnforceIngress() error = %v, want shared metrics listener detail", err)
+	if err := policy.EnforceIngress(); err != nil {
+		t.Fatalf("EnforceIngress() error = %v, want nil", err)
 	}
 }
 

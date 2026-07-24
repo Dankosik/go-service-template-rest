@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-func TestBootstrapNetworkPolicyStageRejectsPublicIngress(t *testing.T) {
+func TestBootstrapNetworkPolicyStageAllowsDeclaredPublicIngress(t *testing.T) {
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
 
 	netPolicyResult := loadNetworkPolicy()
@@ -29,18 +29,8 @@ func TestBootstrapNetworkPolicyStageRejectsPublicIngress(t *testing.T) {
 		HTTP: config.HTTPConfig{Addr: ":8080"},
 	})
 	span.End()
-	if err == nil {
-		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want public ingress rejection")
-	}
-	if !errors.Is(err, errDependencyInit) {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
-	}
-	if !strings.Contains(err.Error(), "public ingress is unsupported") {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want public ingress detail", err)
-	}
-
-	if !strings.Contains(logBuffer.String(), `"dependency":"ingress_policy"`) {
-		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want ingress policy dependency", logBuffer.String())
+	if err != nil {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want nil", err)
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 	"syscall"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 )
 
 const (
@@ -49,7 +49,7 @@ func run(args []string, stdout io.Writer) error {
 		return nil
 	}
 	if validate {
-		if err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
+		if err := postgresmigrate.ValidateMigrations(ctx, postgresmigrate.MigrationOptions{
 			DSN:        cfg.Postgres.DSN,
 			SourceFS:   migrationSourceFS,
 			SourcePath: migrationSourcePath,
@@ -60,7 +60,7 @@ func run(args []string, stdout io.Writer) error {
 		return nil
 	}
 
-	changed, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+	changed, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
 		DSN:        cfg.Postgres.DSN,
 		SourceFS:   migrationSourceFS,
 		SourcePath: migrationSourcePath,

@@ -95,6 +95,9 @@ that the artifact is vulnerability-free or that a deployment is healthy.
 - Go vulnerability, source security, secret, dependency, and container scans
   remain separate because they inspect different authorities.
 - `.github/workflows/cd.yml` owns release preflight and GHCR publication.
+  Publication jobs are admitted only when the repository variable
+  `ENABLE_GHCR_PUBLISH` is exactly `true`; derived repositories otherwise
+  perform no registry login, push, signing, or attestation.
 - `railway.toml` owns only generic, non-secret Railway source-build policy.
 
 Timed-out, cancelled, missing, or failed required checks are not passing

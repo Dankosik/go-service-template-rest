@@ -147,11 +147,12 @@ linters:
           files:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
+            - "!**/internal/infra/postgresmigrate/*.go"
           deny:
             - pkg: database/sql
-              desc: database driver access belongs in infra persistence adapters.
+              desc: database driver access belongs in PostgreSQL runtime or migration adapters.
             - pkg: github.com/jackc/pgx/v5
-              desc: direct pgx usage belongs in internal/infra/postgres.
+              desc: direct pgx usage belongs in PostgreSQL runtime or migration adapters.
             - pkg: github.com/lib/pq
               desc: use the approved pgx-based Postgres adapter in internal/infra/postgres.
             - pkg: gorm.io/gorm

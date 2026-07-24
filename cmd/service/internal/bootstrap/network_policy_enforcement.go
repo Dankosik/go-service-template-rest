@@ -7,16 +7,13 @@ import (
 	"time"
 )
 
-// EnforceIngress validates the public-ingress declaration. Public exposure is
-// unsupported while operational metrics share the application listener.
+// EnforceIngress validates that non-local wildcard listeners have an explicit
+// public/private declaration.
 func (p networkPolicy) EnforceIngress() error {
 	if p.ingressDeclarationRequired && !p.ingressPublicExplicitValue {
 		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", errDependencyInit, envNetworkPublicIngressEnabled)
 	}
-	if !p.ingressPublicEnabled {
-		return nil
-	}
-	return fmt.Errorf("%w: public ingress is unsupported while operational metrics share the application listener", errDependencyInit)
+	return nil
 }
 
 func (p networkPolicy) withIngressExposure(env, addr string) networkPolicy {

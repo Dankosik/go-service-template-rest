@@ -235,6 +235,7 @@ jobs:
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
 
+  # profile:database-postgres:start
   migration-validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -308,6 +309,7 @@ jobs:
         if: steps.migration_changes.outputs.should_run != 'true'
         run: echo "no migration files changed"
 
+  # profile:database-postgres:end
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -393,7 +395,9 @@ jobs:
       - test-race
       - test-coverage
       - test-integration
+      # profile:database-postgres:start
       - migration-validate
+      # profile:database-postgres:end
       - dependency-review
       - go-security
       - secret-scan

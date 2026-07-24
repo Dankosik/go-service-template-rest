@@ -23,7 +23,8 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/<feature>/` | Feature-owned use cases, business types, ports, invariants, and domain errors. | HTTP details, driver details, runtime config, process lifecycle. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/httpclient/` | Shared outbound target validation, transport bounds, trace propagation, and idle-pool cleanup. | Provider authentication, operation budgets, retries, error mapping, or readiness policy. |
-| `internal/infra/postgres/` | Postgres connection/pool lifecycle and repository code. | Process lifecycle, HTTP behavior, config precedence rules. |
+| `internal/infra/postgres/` | Optional Postgres connection/pool lifecycle and repository code. | Process lifecycle, migrations, HTTP behavior, config precedence rules. |
+| `internal/infra/postgresmigrate/` | Optional migration execution used by `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup, Prometheus export, and native startup/config instruments. | Feature semantics or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
@@ -80,16 +81,26 @@ Stable direction rules:
 
 1. `cmd/service/internal/bootstrap.Run` builds the config snapshot, lifecycle logging, telemetry, dependency probes, feature services, router, and HTTP server.
 2. `internal/infra/http.NewRouter` validates or creates `X-Request-ID` at the HTTP boundary, extracts only W3C Trace Context, and wraps the root router with security headers, framing/body guards, panic recovery, access logging, route labeling, and OpenTelemetry HTTP instrumentation.
-3. `/metrics` is the documented operational root-router exception, served directly outside the client OpenAPI contract; route inventory guards it against accidental generated/manual overlap. API routes are handled through the generated strict OpenAPI server.
+3. The application router contains only the generated client API. `/metrics`
+   is served by a separate bootstrap-owned diagnostics listener and is never
+   mounted on the application listener.
 4. `internal/infra/http` maps the request into the generated OpenAPI handler interface and calls the feature package (`internal/<feature>`).
 5. The feature package returns domain/use-case results; the HTTP adapter turns them into contract-shaped responses or RFC 9457 problem responses whose stable `code`, type, title, and status come from one closed transport catalog.
 6. Transport observability is emitted at the edge: request logs, OpenTelemetry HTTP metrics exported through Prometheus, and OpenTelemetry spans use bounded route templates from the HTTP layer. HTTP metric server identity comes from configured service identity, never the caller-controlled `Host`; the OTel SDK cardinality cap remains explicit; native startup/config metrics share the same private Prometheus registry.
 
-Current runtime note: the shipped endpoints are intentionally small (liveness, readiness, metrics), and they are public system endpoints. New business endpoints must make a security decision before implementation: public by design, protected by real OpenAPI security plus auth middleware and 401/403 Problem responses, or blocked pending a security spec. Browser CORS remains fail-closed by default.
+Current runtime note: the shipped client API is intentionally health-only.
+New business endpoints must make a security decision before implementation:
+public by design, protected by real OpenAPI security plus auth middleware and
+401/403 Problem responses, or blocked pending a security spec. Browser CORS
+remains fail-closed by default.
 
-Operational exposure note: `/metrics` is not an ordinary public business API. Production deployments should expose it only on a private scrape path/network or add a real auth/internal-listener design before internet exposure.
+Operational exposure note: `/metrics` defaults to the loopback diagnostics
+address `127.0.0.1:9090`. A non-loopback diagnostics bind requires a private
+scrape network or a separate authenticated design.
 
-Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLIC_INGRESS_ENABLED` declaration. `false` is a private-ingress assertion by the operator. `true` is rejected while `/metrics` shares the application listener; reopen this policy only with a real private or authenticated metrics path.
+Public ingress note: non-local wildcard application binds require an explicit
+`NETWORK_PUBLIC_INGRESS_ENABLED` declaration. `false` asserts private ingress;
+`true` permits public application ingress because diagnostics are separate.
 
 ### Startup/Shutdown Path
 

@@ -75,22 +75,9 @@ func bootstrapReportStage(
 			"success",
 			"load.duration_ms", configReport.LoadDuration.Milliseconds(),
 			"validate.duration_ms", configReport.ValidateDuration.Milliseconds(),
-			"unknown_key_warnings", len(configReport.UnknownKeyWarnings),
 		)...,
 	)
 
-	for _, key := range configReport.UnknownKeyWarnings {
-		log.Warn(
-			"unknown config key ignored (strict mode disabled)",
-			startupLogArgs(
-				bootstrapCtx,
-				"config_validator",
-				"unknown_key",
-				"warning",
-				"key", key,
-			)...,
-		)
-	}
 	if telemetryInitErr != nil {
 		log.Warn(
 			"startup_dependency_degraded",
@@ -113,11 +100,11 @@ func bootstrapReportStage(
 			"config_loader",
 			"startup_summary",
 			"success",
-			"config.strict", loadOptions.Strict,
 			"config.file", loadOptions.ConfigPath,
 			"config.overlay_count", len(loadOptions.ConfigOverlays),
 			"app.env", cfg.App.Env,
 			"http.addr", cfg.HTTP.Addr,
+			"metrics.addr", cfg.Observability.Metrics.Addr,
 			"postgres.enabled", cfg.Postgres.Enabled,
 		)...,
 	)

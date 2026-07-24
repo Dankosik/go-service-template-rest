@@ -9,7 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,7 +25,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 		"migrations/000002_integration.down.sql": {Data: []byte("select 1;")},
 	}
 
-	firstRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+	firstRunChanged, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
 		DSN:        dsn,
 		SourceFS:   migrationFS,
 		SourcePath: "migrations",
@@ -52,7 +52,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 		t.Fatalf("schema_migrations = version %d dirty %t, want version 2 dirty false", version, dirty)
 	}
 
-	secondRunChanged, err := postgres.MigrateUp(ctx, postgres.MigrationOptions{
+	secondRunChanged, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
 		DSN:        dsn,
 		SourceFS:   migrationFS,
 		SourcePath: "migrations",
@@ -64,7 +64,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 		t.Fatal("MigrateUp(second) reported schema change, want no change")
 	}
 
-	if err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
+	if err := postgresmigrate.ValidateMigrations(ctx, postgresmigrate.MigrationOptions{
 		DSN:        dsn,
 		SourceFS:   migrationFS,
 		SourcePath: "migrations",
@@ -100,7 +100,7 @@ func TestValidateMigrationsExercisesEarlierDownMigration(t *testing.T) {
 		},
 	}
 
-	err := postgres.ValidateMigrations(ctx, postgres.MigrationOptions{
+	err := postgresmigrate.ValidateMigrations(ctx, postgresmigrate.MigrationOptions{
 		DSN:        dsn,
 		SourceFS:   migrationFS,
 		SourcePath: "migrations",

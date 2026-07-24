@@ -5,7 +5,7 @@
 <h1 align="center">Go REST API &amp; Microservice Template</h1>
 
 <p align="center">
-  An AI-native Golang backend boilerplate for developers and coding agents, with OpenAPI-first HTTP, PostgreSQL, sqlc, observability, and CI.
+  An OpenAPI-first Go service template with safe runtime defaults, optional PostgreSQL and agent-workflow profiles, observability, and CI.
 </p>
 
 <p align="center">
@@ -37,14 +37,16 @@ gh repo create my-service \
 cd my-service
 make template-init \
   MODULE=github.com/your-org/my-service \
-  CODEOWNER=@your-org/backend
+  CODEOWNER=@your-org/backend \
+  DATABASE=none \
+  AGENT_WORKFLOW=none
 make check
 make run
 ```
 
-Developers and coding agents can start immediately: Codex reads `AGENTS.md`,
-Claude Code reads `CLAUDE.md`, and Qwen Code reads `QWEN.md`. All three use the
-same repository rules, specialist agents, and reusable skills.
+The defaults create a small service with no database dependency and a compact
+`AGENTS.md`. Choose `DATABASE=postgres` and/or `AGENT_WORKFLOW=full` only when
+the service and team need those maintained surfaces.
 
 ## What You Get
 
@@ -52,14 +54,14 @@ same repository rules, specialist agents, and reusable skills.
 | --- | --- |
 | Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
-| Data | PostgreSQL 17, `pgx v5`, `golang-migrate v4`, and `sqlc` |
+| Data | No database by default; optional PostgreSQL 17, `pgx v5`, `golang-migrate v4`, and `sqlc` profile |
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
-| Testing | `testcontainers-go`, race detection, goroutine leak checks, and PostgreSQL integration tests |
-| Delivery | Docker, GHCR, Cosign signing, CycloneDX SBOMs, and GitHub Actions security gates |
-| Agent workflow | Codex, Claude Code, Qwen Code, specialist agents, risk-proportional artifacts |
+| Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
+| Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign and CycloneDX |
+| Agent workflow | Compact service-local rules by default; optional full Codex, Claude Code, and Qwen workflow |
 
-Major versions describe the supported stack; [`go.mod`](go.mod) is the source
-of truth for exact dependency versions.
+Major versions describe the supported stack. [`go.mod`](go.mod) owns runtime
+and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
 
 This is a working service scaffold, not only a prompt collection. The code,
 generated sources, database lifecycle, CI, and agent instructions share one
@@ -83,8 +85,8 @@ This template connects both sides:
 - OpenAPI, PostgreSQL, telemetry, tests, security, and delivery already wired;
 - completion claims tied to fresh evidence of the same scope.
 
-Before adding the first production feature, use the
-[production feature checklist](docs/project-structure-and-module-organization.md#first-production-feature-checklist).
+Before adding the first production feature, use the maintained
+[first production feature guide](docs/first-production-feature.md).
 
 ## How It Works
 
@@ -133,20 +135,20 @@ contract.
 
 ```text
 cmd/service/                     service entrypoint and bootstrap lifecycle
-cmd/migrate/                     migration entrypoint
+cmd/migrate/                     migration entrypoint (PostgreSQL profile)
 internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
 internal/infra/httpclient/       bounded outbound HTTP transport
-internal/infra/postgres/         PostgreSQL adapters
+internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
 examples/reference-service/      isolated complete feature-slice example
 migrations/                      SQL migrations (when first owned)
-specs/                           durable task decisions when needed
-.agents/skills/                  canonical reusable skills
-.codex/agents/                   Codex specialist agents
+specs/                           durable task decisions (full agent profile)
+.agents/skills/                  reusable skills (full agent profile)
+.codex/agents/                   Codex specialists (full agent profile)
 ```
 
 Use the [placement guide](docs/project-structure-and-module-organization.md)
@@ -161,9 +163,9 @@ before choosing packages or tests.
 | `make check-full` | Native checks plus Docker-backed integration and image gates |
 | `BASE_REF=origin/main make pr-check` | Pull-request checks and OpenAPI compatibility |
 | `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
-| `make sqlc-check` | SQL generation drift |
-| `make migration-validate` | Migration rehearsal |
-| `make test-integration` | PostgreSQL integration tests |
+| `make sqlc-check` | SQL generation drift (PostgreSQL profile) |
+| `make migration-validate` | Migration rehearsal (PostgreSQL profile) |
+| `make test-integration` | Container-backed integration tests when present |
 | `make go-security` | Go static security and vulnerability checks |
 
 Performance work uses the narrowest matching benchmark level. DigitalOcean is

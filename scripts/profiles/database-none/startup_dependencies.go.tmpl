@@ -1,0 +1,28 @@
+package bootstrap
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/example/go-service-template-rest/internal/health"
+)
+
+type runtimeDependencies struct {
+	health *health.Service
+}
+
+func (runtimeDependencies) Close() {}
+
+func initRuntimeDependencies(
+	_ context.Context,
+	_ context.Context,
+	bootstrap startupBootstrap,
+) (runtimeDependencies, error) {
+	if bootstrap.cfg.Postgres.Enabled {
+		return runtimeDependencies{}, fmt.Errorf(
+			"%w: postgres is not included in the DATABASE=none profile",
+			errDependencyInit,
+		)
+	}
+	return runtimeDependencies{health: health.New()}, nil
+}

@@ -3,51 +3,52 @@ package config
 import (
 	"context"
 	"fmt"
+	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 )
 
-func validateConfig(ctx context.Context, cfg *Config, strict bool, unknownKeys []string) ([]string, error) {
+func validateConfig(ctx context.Context, cfg *Config, unknownKeys []string) error {
 	if err := checkValidateContext(ctx); err != nil {
-		return nil, err
+		return err
 	}
 
-	unknownKeyWarnings := findUnknownKeys(unknownKeys)
-	if strict && len(unknownKeyWarnings) > 0 {
-		return nil, fmt.Errorf("%w: unknown keys: %s", ErrStrictUnknownKey, strings.Join(unknownKeyWarnings, ", "))
+	if unknown := findUnknownKeys(unknownKeys); len(unknown) > 0 {
+		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 
 	if err := validateAppConfig(&cfg.App); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 
 	if err := validatePostgres(cfg.Postgres); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 	if err := validatePostgresReadinessBudget(*cfg); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 	if err := checkValidateContext(ctx); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 
 	if err := validateObservabilityConfig(&cfg.Observability); err != nil {
-		return unknownKeyWarnings, err
+		return err
 	}
 
-	return unknownKeyWarnings, nil
+	return nil
 }
 
 func validateAppConfig(cfg *AppConfig) error {
@@ -104,6 +105,17 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 }
 
 func validateObservabilityConfig(cfg *ObservabilityConfig) error {
+	cfg.Metrics.Addr = strings.TrimSpace(cfg.Metrics.Addr)
+	if cfg.Metrics.Addr != "" {
+		_, rawPort, err := net.SplitHostPort(cfg.Metrics.Addr)
+		if err != nil {
+			return fmt.Errorf("%w: observability.metrics.addr must be host:port", ErrValidate)
+		}
+		port, err := strconv.ParseUint(rawPort, 10, 16)
+		if err != nil || port == 0 {
+			return fmt.Errorf("%w: observability.metrics.addr port must be in range [1,65535]", ErrValidate)
+		}
+	}
 	cfg.OTel.ServiceName = strings.TrimSpace(cfg.OTel.ServiceName)
 	cfg.OTel.TracesSampler = strings.TrimSpace(cfg.OTel.TracesSampler)
 	cfg.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.OTel.Exporter.OTLPEndpoint)

@@ -1,4 +1,4 @@
-package postgres
+package postgresmigrate
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	migrate "github.com/golang-migrate/migrate/v4"
 )
 
@@ -74,7 +75,7 @@ func TestMigrateUpRejectsInvalidInputsBeforeConnecting(t *testing.T) {
 				SourcePath: "migrations",
 			},
 			wantErr:     "postgres dsn is empty",
-			wantWrapped: ErrConfig,
+			wantWrapped: postgres.ErrConfig,
 		},
 		{
 			name: "missing source",
@@ -313,25 +314,5 @@ func TestCloseMigrationResources(t *testing.T) {
 
 	if err := closeMigrationResources(nil, nil); err != nil {
 		t.Fatalf("closeMigrationResources(nil, nil) error = %v, want nil", err)
-	}
-}
-
-func TestPoolNilAndZeroValueSafety(t *testing.T) {
-	t.Parallel()
-
-	var nilPool *Pool
-	nilPool.Close()
-	if err := nilPool.Check(context.Background()); err == nil {
-		t.Fatal("nil Pool Check() error = nil, want non-nil")
-	} else if !errors.Is(err, ErrHealthcheck) {
-		t.Fatalf("nil Pool Check() error = %v, want ErrHealthcheck", err)
-	}
-
-	zeroPool := &Pool{}
-	zeroPool.Close()
-	if err := zeroPool.Check(context.Background()); err == nil {
-		t.Fatal("zero Pool Check() error = nil, want non-nil")
-	} else if !errors.Is(err, ErrHealthcheck) {
-		t.Fatalf("zero Pool Check() error = %v, want ErrHealthcheck", err)
 	}
 }

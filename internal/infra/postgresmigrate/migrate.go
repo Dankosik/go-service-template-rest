@@ -1,4 +1,4 @@
-package postgres
+package postgresmigrate
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	pathpkg "path"
 	"strings"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	migrate "github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -44,9 +45,9 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 		return false, err
 	}
 
-	normalizedDSN, err := preflightPostgresDSN(opts.DSN)
+	normalizedDSN, err := postgres.NormalizeDSN(opts.DSN)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("validate postgres migration dsn: %w", err)
 	}
 
 	sourceFS := opts.SourceFS

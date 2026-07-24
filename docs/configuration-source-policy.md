@@ -6,7 +6,9 @@ This template uses a strict split between non-secret and secret configuration.
 
 - YAML (`env/config/*.yaml`) is for baseline non-secret defaults.
 - ENV (`APP__...`) is for per-environment overrides and all secret values.
-- CLI flags are loader controls today: `--config` selects the base file, `--config-overlay` adds ordered overlays, and `--config-strict` controls unknown-key handling. They do not provide arbitrary runtime config key overrides.
+- CLI flags are loader controls: `--config` selects the base file and
+  `--config-overlay` adds ordered overlays. They do not provide arbitrary
+  runtime config key overrides.
 
 Runtime config value precedence (last wins):
 1. code defaults
@@ -15,6 +17,8 @@ Runtime config value precedence (last wins):
 4. `APP__...` environment variables
 
 An empty `APP__...` value is still an explicit final override. Empty values for required keys are not treated as absent; they flow through parsing or validation and fail fast when the key cannot be empty.
+Unknown keys from files, overlays, or `APP__...` variables always fail
+validation; there is no permissive mode.
 
 ## Operational Network Policy Channel
 
@@ -24,12 +28,18 @@ There is no YAML overlay or `APP__...` precedence chain for `NETWORK_*`: the eff
 
 Example key families:
 
-- `NETWORK_PUBLIC_INGRESS_ENABLED` is an explicit private-ingress assertion;
-  `true` is rejected while metrics share the application listener.
+- `NETWORK_PUBLIC_INGRESS_ENABLED` declares whether a non-local wildcard
+  application listener is public (`true`) or private (`false`). Both values are
+  valid when explicit; Prometheus metrics use a separate diagnostics listener.
 - `NETWORK_EGRESS_ALLOWLIST` and `NETWORK_EGRESS_ALLOWED_SCHEMES` constrain allowed outbound targets.
 - `NETWORK_EGRESS_EXCEPTION_*` carries temporary exception metadata such as owner, reason, scope, expiry, and rollback plan.
 
 Do not migrate new feature config into `NETWORK_*`. Use this channel only for bootstrap-owned network policy controls that must remain fail-closed and operator-controlled outside normal application config.
+
+`observability.metrics.addr` owns the Prometheus diagnostics listener. It
+defaults to `127.0.0.1:9090`; an empty value disables HTTP exposition. Binding
+failure blocks startup. Do not use a non-loopback value without deployment
+network policy that keeps the listener private.
 
 ## Secret Rules
 

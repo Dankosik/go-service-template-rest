@@ -34,7 +34,6 @@ func bootstrapConfigStage(
 			"config_loader",
 			"load",
 			"started",
-			"config.strict", loadOptions.Strict,
 			"config.file", loadOptions.ConfigPath,
 			"config.overlay_count", len(loadOptions.ConfigOverlays),
 		)...,

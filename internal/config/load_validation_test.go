@@ -2,81 +2,51 @@ package config
 
 import (
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestStrictUnknownKeyRejects(t *testing.T) {
+func TestUnknownKeyRejects(t *testing.T) {
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
+unknown:
+  field: value
+`)
+
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err == nil {
+		t.Fatalf("LoadDetailed() expected unknown key error")
+	}
+	if !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("error = %v, want ErrUnknownKey", err)
+	}
+	if got := ErrorType(err); got != "unknown_key" {
+		t.Fatalf("ErrorType(error) = %q, want unknown_key", got)
+	}
+}
+
+func TestOverlayUnknownKeyRejects(t *testing.T) {
+	resetConfigEnv(t)
+
+	overlayPath := writeTempConfig(t, `
 unknown:
   field: value
 `)
 
 	_, _, err := LoadDetailed(LoadOptions{
-		ConfigPath: configPath,
-		Strict:     true,
+		ConfigOverlays: []string{overlayPath},
 	})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected strict unknown key error")
+		t.Fatalf("LoadDetailed() expected unknown overlay key error")
 	}
-	if !errors.Is(err, ErrStrictUnknownKey) {
-		t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
-	}
-	if got := ErrorType(err); got != "strict_unknown_key" {
-		t.Fatalf("ErrorType(error) = %q, want strict_unknown_key", got)
+	if !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("error = %v, want ErrUnknownKey", err)
 	}
 }
 
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestPermissiveUnknownKeyAllows(t *testing.T) {
-	resetConfigEnv(t)
-
-	configPath := writeTempConfig(t, `
-unknown:
-  field: value
-`)
-
-	_, report, err := LoadDetailed(LoadOptions{
-		ConfigPath: configPath,
-		Strict:     false,
-	})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if !slices.Contains(report.UnknownKeyWarnings, "unknown.field") {
-		t.Fatalf("UnknownKeyWarnings = %v, want unknown.field", report.UnknownKeyWarnings)
-	}
-}
-
-func TestPermissiveUnknownKeyWarningsPreservedOnValidationError(t *testing.T) {
-	resetConfigEnv(t)
-
-	configPath := writeTempConfig(t, `
-unknown:
-  field: value
-`)
-	t.Setenv("APP__HTTP__ADDR", "")
-
-	_, report, err := LoadDetailed(LoadOptions{
-		ConfigPath: configPath,
-		Strict:     false,
-	})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !slices.Contains(report.UnknownKeyWarnings, "unknown.field") {
-		t.Fatalf("UnknownKeyWarnings = %v, want unknown.field", report.UnknownKeyWarnings)
-	}
-}
-
-func TestStrictUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
+func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		envKey  string
@@ -89,12 +59,12 @@ func TestStrictUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv(tc.envKey, "oops")
 
-			_, report, err := LoadDetailed(LoadOptions{Strict: true})
+			_, report, err := LoadDetailed(LoadOptions{})
 			if err == nil {
-				t.Fatalf("LoadDetailed() expected strict unknown key error")
+				t.Fatalf("LoadDetailed() expected unknown key error")
 			}
-			if !errors.Is(err, ErrStrictUnknownKey) {
-				t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+			if !errors.Is(err, ErrUnknownKey) {
+				t.Fatalf("error = %v, want ErrUnknownKey", err)
 			}
 			if !strings.Contains(err.Error(), tc.wantKey) {
 				t.Fatalf("error = %v, want unknown section key %q", err, tc.wantKey)
@@ -107,27 +77,24 @@ func TestStrictUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestPermissiveUnknownKeyWarnsAndIgnoresScalarSectionKey(t *testing.T) {
+func TestScalarSectionRejects(t *testing.T) {
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
 http: oops
 `)
 
-	cfg, report, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	if err == nil {
+		t.Fatal("LoadDetailed() error = nil, want unknown key error")
 	}
-	if !slices.Contains(report.UnknownKeyWarnings, "http") {
-		t.Fatalf("UnknownKeyWarnings = %v, want http", report.UnknownKeyWarnings)
-	}
-	if cfg.HTTP.Addr != ":8080" {
-		t.Fatalf("HTTP.Addr = %q, want default :8080 after ignored section scalar", cfg.HTTP.Addr)
+	if !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("error = %v, want ErrUnknownKey", err)
 	}
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestRemovedObservabilityKeysRejectInStrictMode(t *testing.T) {
+func TestRemovedObservabilityKeysReject(t *testing.T) {
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -140,15 +107,12 @@ observability:
     cloud_otlp_endpoint: "https://example.invalid"
 `)
 
-	_, _, err := LoadDetailed(LoadOptions{
-		ConfigPath: configPath,
-		Strict:     true,
-	})
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected strict unknown key error")
+		t.Fatalf("LoadDetailed() expected unknown key error")
 	}
-	if !errors.Is(err, ErrStrictUnknownKey) {
-		t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+	if !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("error = %v, want ErrUnknownKey", err)
 	}
 }
 

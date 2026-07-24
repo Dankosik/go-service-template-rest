@@ -11,6 +11,17 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: "gomod"
+    directory: "/tools"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "tools"
+    groups:
+      go-tools:
+        patterns:
+          - "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -33,6 +44,7 @@ updates:
         patterns:
           - "*"
 
+  # profile:database-postgres:start
   - package-ecosystem: "docker-compose"
     directory: "/env"
     schedule:
@@ -43,3 +55,4 @@ updates:
       docker-compose:
         patterns:
           - "*"
+  # profile:database-postgres:end

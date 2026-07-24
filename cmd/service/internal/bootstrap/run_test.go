@@ -15,16 +15,12 @@ func TestParseLoadOptions(t *testing.T) {
 			"--config", "/tmp/base.yaml",
 			"--config-overlay", "  /tmp/o1.yaml  ",
 			"--config-overlay", "/tmp/o2.yaml",
-			"--config-strict",
 		})
 		if err != nil {
 			t.Fatalf("parseLoadOptions() error = %v, want nil", err)
 		}
 		if opts.ConfigPath != "/tmp/base.yaml" {
 			t.Fatalf("ConfigPath = %q, want %q", opts.ConfigPath, "/tmp/base.yaml")
-		}
-		if !opts.Strict {
-			t.Fatal("Strict = false, want true")
 		}
 		if len(opts.ConfigOverlays) != 2 || opts.ConfigOverlays[0] != "/tmp/o1.yaml" || opts.ConfigOverlays[1] != "/tmp/o2.yaml" {
 			t.Fatalf("ConfigOverlays = %v, want trimmed [/tmp/o1.yaml /tmp/o2.yaml]", opts.ConfigOverlays)
