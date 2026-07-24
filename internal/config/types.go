@@ -61,10 +61,13 @@ type OTelExporterConfig struct {
 }
 
 type PostgresConfig struct {
-	Enabled            bool          `koanf:"enabled"`
-	DSN                string        `koanf:"dsn"`
-	ConnectTimeout     time.Duration `koanf:"connect_timeout"`
-	HealthcheckTimeout time.Duration `koanf:"healthcheck_timeout"`
-	MaxOpenConns       int           `koanf:"max_open_conns"`
-	ConnMaxLifetime    time.Duration `koanf:"conn_max_lifetime"`
+	Enabled                   bool          `koanf:"enabled"`
+	DSN                       string        `koanf:"dsn"`
+	ConnectTimeout            time.Duration `koanf:"connect_timeout"`
+	HealthcheckTimeout        time.Duration `koanf:"healthcheck_timeout"`
+	MigrationTimeout          time.Duration `koanf:"migration_timeout"`
+	MigrationStatementTimeout time.Duration `koanf:"migration_statement_timeout"`
+	MigrationLockTimeout      time.Duration `koanf:"migration_lock_timeout"`
+	MaxOpenConns              int           `koanf:"max_open_conns"`
+	ConnMaxLifetime           time.Duration `koanf:"conn_max_lifetime"`
 }

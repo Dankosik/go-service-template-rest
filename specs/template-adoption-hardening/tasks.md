@@ -10,8 +10,8 @@ dependency; never expose metrics on the application listener. The current Codex
 session has no native managed-worktree Worker, so root owns sequential
 implementation and acceptance on `codex/template-adoption-hardening`.
 
-- [x] T1: Derived repositories receive complete identity and explicit minimal
-  database/agent profiles while the template source retains full capabilities.
+- [x] T1: Derived repositories receive complete identity and an explicit
+  database profile while every repository retains the complete agent workflow.
   - Source: `spec.md` Derived-service profiles; `design/overview.md`.
   - Owner/surface/resources: `scripts/init-module.sh`,
     `scripts/ci/template-init-check.sh`, profile transformations, README,

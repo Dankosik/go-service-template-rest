@@ -176,6 +176,10 @@ through a ruleset in one repository.
   and container security.
 - `make pr-check BASE_REF=origin/main` — full proof plus base-relative OpenAPI
   compatibility.
+- CI's `template-postgres-feature` job initializes a temporary PostgreSQL
+  service, generates its first POST contract and sqlc query, and proves valid,
+  rejected, commit, and rollback paths against the pinned PostgreSQL image.
+  The fixture is not shipped in the base runtime.
 
 Use the smallest command that proves the current change while iterating. Before
 claiming image, migration, or deployment readiness, use the Docker-backed gate

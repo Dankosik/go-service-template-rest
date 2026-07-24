@@ -34,9 +34,8 @@ transformations:
   generated, tool, and delivery surfaces; `postgres` retains them. The shared
   typed config vocabulary remains so upstream profile changes are reviewable,
   but enabling PostgreSQL without the profile fails startup explicitly.
-- `AGENT_WORKFLOW=none` removes reusable agent corpora, harness mirrors,
-  historical template specs, and template-only workflow prose, then writes a
-  compact service-local contract; `full` retains them.
+- Agent corpora, harness mirrors, specifications, and workflow instructions
+  are retained unchanged by initialization.
 
 The full-template CI creates complete temporary derived repositories for both
 profile combinations and runs their narrow build/configuration proof. No new

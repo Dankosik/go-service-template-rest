@@ -39,17 +39,15 @@ make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
-  OUTBOUND_HTTP=none \
-  AGENT_WORKFLOW=none
+  OUTBOUND_HTTP=none
 make check
 make run
 ```
 
-The defaults create a small service with no database dependency and a compact
-`AGENTS.md`. Choose `DATABASE=postgres` and/or `AGENT_WORKFLOW=full` only when
-the service and team need those maintained surfaces. Choose
-`OUTBOUND_HTTP=bounded` only when a shared fixed-authority client removes
-repeated provider code.
+The defaults create a service with no database dependency. The complete agent
+workflow is always retained. Choose `DATABASE=postgres` when the service owns
+PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
+fixed-authority client removes repeated provider code.
 
 ## What You Get
 

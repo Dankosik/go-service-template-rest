@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOUND_HTTP=none|bounded AGENT_WORKFLOW=none|full $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOUND_HTTP=none|bounded $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -133,20 +133,6 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 EOF
 }
 
-write_minimal_agents_contract() {
-	cat >AGENTS.md <<'EOF'
-# AGENTS.md
-
-- Keep production Go under `internal/` and composition under `cmd/`.
-- Treat `api/openapi/service.yaml` as canonical; never hand-edit generated Go.
-- Prefer the standard library and existing dependencies before adding code or
-  tools.
-- Preserve context, errors, resource cleanup, readiness, and bounded shutdown.
-- Run the narrowest focused test while iterating and `make check` before
-  publishing.
-EOF
-}
-
 if [[ $# -gt 1 ]]; then
 	usage
 	exit 1
@@ -166,15 +152,6 @@ case "${outbound_http}" in
 none | bounded) ;;
 *)
 	echo "OUTBOUND_HTTP must be one of: none, bounded"
-	exit 1
-	;;
-esac
-
-agent_workflow="${AGENT_WORKFLOW:-none}"
-case "${agent_workflow}" in
-none | full) ;;
-*)
-	echo "AGENT_WORKFLOW must be one of: none, full"
 	exit 1
 	;;
 esac
@@ -316,12 +293,6 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- internal/infra/httpclient
 	fi
 
-	if [[ "${agent_workflow}" == "none" ]]; then
-		remove_profile_blocks Makefile "agent-workflow-full"
-		rm -rf -- .agents .codex .claude .qwen specs
-		rm -f -- CLAUDE.md QWEN.md
-		write_minimal_agents_contract
-	fi
 fi
 
 go mod tidy
@@ -335,7 +306,6 @@ echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
 echo "  outbound HTTP: ${outbound_http}"
-echo "  agent workflow: ${agent_workflow}"
 if [[ -n "${codeowner}" ]]; then
 	echo "  codeowner: ${codeowner}"
 fi

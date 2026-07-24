@@ -83,6 +83,49 @@ Railway service ID.
   expand/migrate/verify/contract plan and an explicit recovery method.
 - A failed pre-deploy command blocks promotion. Fix the migration or
   configuration; do not move migration ownership into application startup.
+- The migrator owns explicit overall, statement, and lock budgets through
+  `APP__POSTGRES__MIGRATION_TIMEOUT`,
+  `APP__POSTGRES__MIGRATION_STATEMENT_TIMEOUT`, and
+  `APP__POSTGRES__MIGRATION_LOCK_TIMEOUT`. Railway documents that a failed
+  pre-deploy command blocks deployment and is not retried, but does not publish
+  a platform timeout for this command, so do not rely on an implicit provider
+  bound.
+
+### Dirty migration recovery
+
+A failed migration may leave `schema_migrations` dirty. Later runs stop and
+report the exact version; the template never forces a version automatically.
+
+1. Keep promotion blocked. Inspect the failed migration, PostgreSQL logs, and
+   the actual schema at the reported version.
+2. Choose and execute the migration's declared recovery: restore, complete the
+   intended change, or reverse its partial effects. Back up first when the
+   service's recovery policy requires it.
+3. Through an approved database console with exclusive migration ownership,
+   lock and inspect the version row:
+
+   ```sql
+   BEGIN;
+   LOCK TABLE schema_migrations IN ACCESS EXCLUSIVE MODE;
+   SELECT version, dirty FROM schema_migrations;
+   ```
+
+4. Only after the schema is verified to match a specific migration boundary,
+   set that verified version and clear dirty state in the same transaction:
+
+   ```sql
+   UPDATE schema_migrations
+   SET version = <verified_version>, dirty = false;
+   COMMIT;
+   ```
+
+5. Rerun `/migrate`, then verify readiness and the service's material durable
+   path. Roll back the transaction instead of committing if the inspection is
+   inconclusive.
+
+Do not paste a production DSN into shell history and do not clear `dirty`
+merely to unblock deployment. The version update records operator-verified
+state; it does not repair a partially applied migration.
 
 ## Operator-owned configuration
 

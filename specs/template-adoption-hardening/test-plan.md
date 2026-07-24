@@ -1,6 +1,6 @@
 # Adoption hardening proof
 
-TD-1 | derived identity/profile safety | initialize full repository with defaults and explicit full profiles | assert unique identity, no template links, minimal profile compiles, and full profile retains PostgreSQL/agents | `make template-init-check`
+TD-1 | derived identity/profile safety | initialize full repository with default and PostgreSQL profiles | assert unique identity, no template links, minimal database profile compiles, PostgreSQL profile remains complete, and workflow files are retained | `make template-init-check`
 
 TD-2 | metrics trust boundary | run client and diagnostics handlers separately | `/metrics` is 404 on the application handler and 200 only on diagnostics | focused HTTP/bootstrap tests
 
