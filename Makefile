@@ -2,6 +2,10 @@ SERVICE_NAME := service
 SERVICE_CMD := ./cmd/service
 BINARY := bin/$(SERVICE_NAME)
 OPENAPI_FILE := api/openapi/service.yaml
+REFERENCE_OPENAPI_FILE := $(wildcard examples/reference-service/api/openapi.yaml)
+REFERENCE_OPENAPI_PACKAGE := $(if $(REFERENCE_OPENAPI_FILE),./examples/reference-service/internal/openapi)
+OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE)
+OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE)
 GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
 REDOCLY_CLI_VERSION := 2.40.0
@@ -108,13 +112,11 @@ template-init-check:
 project-structure-check:
 	$(PROJECT_STRUCTURE_CHECK_SCRIPT)
 
-# profile:agent-workflow-full:start
 claude-skills-sync:
 	@mkdir -p .claude/skills
 	@find .claude/skills -maxdepth 1 -type l -delete
 	@set -e; for d in .agents/skills/*/; do n=$$(basename "$$d"); ln -s "../../.agents/skills/$$n" ".claude/skills/$$n"; done
 	@echo ".claude/skills: $$(ls .claude/skills | wc -l | tr -d ' ') skill links"
-# profile:agent-workflow-full:end
 
 check: project-structure-check fmt-check lint test
 
@@ -329,7 +331,7 @@ sqlc-check:
 # profile:database-postgres:end
 
 openapi-generate:
-	go generate ./internal/openapi ./examples/reference-service/internal/openapi
+	go generate $(OPENAPI_PACKAGES)
 
 openapi-drift-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) openapi
@@ -340,12 +342,10 @@ openapi-runtime-contract-check:
 	go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1
 
 openapi-lint:
-	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILE)
-	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml examples/reference-service/api/openapi.yaml
+	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILES)
 
 openapi-validate:
-	$(GO_TOOL) validate -- $(OPENAPI_FILE)
-	$(GO_TOOL) validate -- examples/reference-service/api/openapi.yaml
+	@set -e; for file in $(OPENAPI_FILES); do $(GO_TOOL) validate -- "$$file"; done
 
 OPENAPI_BREAKING_APPROVALS ?= api/openapi/breaking-changes-approvals.txt
 
@@ -358,7 +358,7 @@ openapi-breaking:
 	fi
 
 openapi-check: openapi-drift-check
-	go test ./internal/openapi ./examples/reference-service/internal/openapi
+	go test $(OPENAPI_PACKAGES)
 	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
 
 # profile:database-postgres:start

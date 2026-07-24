@@ -9,6 +9,7 @@ import (
 	"os"
 	pathpkg "path"
 	"strings"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	migrate "github.com/golang-migrate/migrate/v4"
@@ -18,9 +19,11 @@ import (
 )
 
 type MigrationOptions struct {
-	DSN        string
-	SourceFS   fs.FS
-	SourcePath string
+	DSN              string
+	SourceFS         fs.FS
+	SourcePath       string
+	StatementTimeout time.Duration
+	LockTimeout      time.Duration
 }
 
 type migrationExecutor interface {
@@ -42,6 +45,9 @@ func ValidateMigrations(ctx context.Context, opts MigrationOptions) error {
 func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse bool) (bool, error) {
 	normalizedSourcePath, err := normalizeMigrationSourcePath(opts.SourcePath)
 	if err != nil {
+		return false, err
+	}
+	if err := validateMigrationTimeouts(opts); err != nil {
 		return false, err
 	}
 
@@ -74,7 +80,9 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 
 	// The migration driver owns databaseHandle only after WithInstance
 	// succeeds; every failure path here must close it directly.
-	databaseDriver, err := pgxmigrate.WithInstance(databaseHandle, &pgxmigrate.Config{})
+	databaseDriver, err := pgxmigrate.WithInstance(databaseHandle, &pgxmigrate.Config{
+		StatementTimeout: opts.StatementTimeout,
+	})
 	if err != nil {
 		closeErr := closeMigrationResources(sourceDriver, databaseHandle)
 		if closeErr != nil {
@@ -97,15 +105,16 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 		}
 		return false, fmt.Errorf("build migration runner: %w", err)
 	}
+	runner.LockTimeout = opts.LockTimeout
 	stopSignals := make(chan bool, 1)
 	runner.GracefulStop = stopSignals
 	stopWatcher := context.AfterFunc(ctx, func() { stopSignals <- true })
 	defer stopWatcher()
 
-	return executeMigrations(runner, rehearse)
+	return executeMigrations(ctx, runner, rehearse)
 }
 
-func executeMigrations(runner migrationExecutor, rehearse bool) (changed bool, err error) {
+func executeMigrations(ctx context.Context, runner migrationExecutor, rehearse bool) (changed bool, err error) {
 	defer func() {
 		sourceErr, databaseErr := runner.Close()
 		if closeErr := errors.Join(sourceErr, databaseErr); closeErr != nil {
@@ -113,26 +122,73 @@ func executeMigrations(runner migrationExecutor, rehearse bool) (changed bool, e
 		}
 	}()
 
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("run postgres migrations canceled: %w", err)
+	}
+
 	changed = true
-	if err := runner.Up(); err != nil {
-		if errors.Is(err, migrate.ErrNoChange) {
+	upErr := runner.Up()
+	if contextErr := ctx.Err(); contextErr != nil {
+		return false, joinMigrationContextError("run postgres migrations", upErr, contextErr)
+	}
+	if upErr != nil {
+		if errors.Is(upErr, migrate.ErrNoChange) {
 			changed = false
 		} else {
-			return false, fmt.Errorf("run postgres migrations: %w", err)
+			return false, migrationOperationError("run postgres migrations", upErr)
 		}
 	}
 
 	if !rehearse {
 		return changed, nil
 	}
-	if err := runner.Down(); err != nil {
-		return false, fmt.Errorf("roll back all postgres migrations: %w", err)
+	downErr := runner.Down()
+	if contextErr := ctx.Err(); contextErr != nil {
+		return false, joinMigrationContextError("roll back all postgres migrations", downErr, contextErr)
 	}
-	if err := runner.Up(); err != nil {
-		return false, fmt.Errorf("reapply all postgres migrations: %w", err)
+	if downErr != nil {
+		return false, migrationOperationError("roll back all postgres migrations", downErr)
+	}
+	reapplyErr := runner.Up()
+	if contextErr := ctx.Err(); contextErr != nil {
+		return false, joinMigrationContextError("reapply all postgres migrations", reapplyErr, contextErr)
+	}
+	if reapplyErr != nil {
+		return false, migrationOperationError("reapply all postgres migrations", reapplyErr)
 	}
 
 	return changed, nil
+}
+
+func validateMigrationTimeouts(opts MigrationOptions) error {
+	if opts.StatementTimeout <= 0 {
+		return fmt.Errorf("postgres migration statement timeout must be > 0")
+	}
+	if opts.LockTimeout <= 0 {
+		return fmt.Errorf("postgres migration lock timeout must be > 0")
+	}
+	return nil
+}
+
+func joinMigrationContextError(operation string, operationErr, contextErr error) error {
+	canceled := fmt.Errorf("%s canceled: %w", operation, contextErr)
+	if operationErr == nil {
+		return canceled
+	}
+	return errors.Join(migrationOperationError(operation, operationErr), canceled)
+}
+
+func migrationOperationError(operation string, err error) error {
+	var dirty migrate.ErrDirty
+	if errors.As(err, &dirty) {
+		return fmt.Errorf(
+			"%s: postgres migration state is dirty at version %d; automatic force is disabled; repair and verify the schema, then follow docs/railway-deployment-profile.md: %w",
+			operation,
+			dirty.Version,
+			err,
+		)
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 func normalizeMigrationSourcePath(raw string) (string, error) {

@@ -154,6 +154,25 @@ func validatePostgres(cfg PostgresConfig) error {
 	if err := validateDurationRange("postgres.healthcheck_timeout", cfg.HealthcheckTimeout, 100*time.Millisecond, 10*time.Second); err != nil {
 		return err
 	}
+	if err := validateDurationRange("postgres.migration_timeout", cfg.MigrationTimeout, time.Second, time.Hour); err != nil {
+		return err
+	}
+	if err := validateDurationRange(
+		"postgres.migration_statement_timeout",
+		cfg.MigrationStatementTimeout,
+		100*time.Millisecond,
+		cfg.MigrationTimeout,
+	); err != nil {
+		return err
+	}
+	if err := validateDurationRange(
+		"postgres.migration_lock_timeout",
+		cfg.MigrationLockTimeout,
+		100*time.Millisecond,
+		cfg.MigrationTimeout,
+	); err != nil {
+		return err
+	}
 	if cfg.MaxOpenConns < 1 || cfg.MaxOpenConns > 500 {
 		return fmt.Errorf("%w: postgres.max_open_conns must be in range [1,500]", ErrValidate)
 	}

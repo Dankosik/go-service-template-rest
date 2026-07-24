@@ -26,9 +26,9 @@ brokers, caches, or public debug endpoints.
   it to the binary/image name, bootstrap logs, telemetry defaults, example
   environment, OpenAPI title, and derived README. Template repository badges
   and marketing do not survive initialization.
-- Derived repositories default to `DATABASE=none` and `AGENT_WORKFLOW=none`.
-  `DATABASE=postgres` and `AGENT_WORKFLOW=full` retain the corresponding
-  template capabilities.
+- Derived repositories default to `DATABASE=none`; `DATABASE=postgres` retains
+  the optional database capabilities. The complete agent workflow is retained
+  by every derived repository.
 - The application listener never serves `/metrics`. Prometheus exposition uses
   `observability.metrics.addr`, which defaults to `127.0.0.1:9090`; an empty
   address disables HTTP exposition. Explicit public application ingress is

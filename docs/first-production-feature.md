@@ -3,7 +3,9 @@
 This is the maintained path from the health-only scaffold to one useful
 vertical slice. The runnable code under `examples/reference-service` shows the
 package shape, but it is isolated demonstration code: do not import it into the
-production service or treat its in-memory repository as production-ready.
+production service or treat its in-memory repository as production-ready. A
+derived service may delete the complete example directory; service OpenAPI
+gates discover it only when present.
 
 ## 1. Close the behavior and trust decision
 

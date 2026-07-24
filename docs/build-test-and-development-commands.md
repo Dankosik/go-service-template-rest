@@ -23,8 +23,7 @@ are pinned at their owning command or test seam.
 make template-init \
   MODULE=github.com/acme/orders \
   CODEOWNER=@acme/backend \
-  DATABASE=none \
-  AGENT_WORKFLOW=none
+  DATABASE=none
 make template-init-check
 ```
 
@@ -33,8 +32,9 @@ owner, and profiles before editing; rewrites service identity, both Go module
 paths, Go/proto imports, lint configuration, CODEOWNERS, OpenAPI title, and the
 derived README; preserves an existing `.env`; and tidies both modules.
 `DATABASE=none` removes PostgreSQL runtime, migration, test, image, deployment,
-and tool surfaces. `DATABASE=postgres` retains them. `AGENT_WORKFLOW=none`
-keeps a compact `AGENTS.md`; `full` retains the complete multi-harness corpus.
+and tool surfaces. `DATABASE=postgres` retains them. The complete agent
+workflow and its harness files are always retained and are not an
+initialization profile.
 
 The template source checkout may run the command without arguments for normal
 local setup; it keeps the template module and CODEOWNERS unchanged while
@@ -135,11 +135,13 @@ make sqlc-generate
 make sqlc-check
 ```
 
-`api/openapi/service.yaml`, the isolated reference service's OpenAPI document,
-their adjacent generation configs, migrations, and SQL query sources are
-authoritative. The shared generated-drift script snapshots the current derived
-output, runs the canonical generators, and fails with a diff only when
-generation changes that output.
+`api/openapi/service.yaml`, its adjacent generation config, migrations, and SQL
+query sources are authoritative. When `examples/reference-service` exists, its
+OpenAPI document and generation config are checked too. A derived service may
+delete that example; service-owned generation, drift, package tests, lint, and
+validation continue without it. The shared generated-drift script snapshots
+the current derived output, runs the canonical generators, and fails with a
+diff only when generation changes that output.
 Uncommitted but already current generated files therefore pass; Git and CI own
 the separate question of whether those files were committed.
 
@@ -180,6 +182,11 @@ and creates an isolated Compose project on a dynamic host port; it never
 accepts an operator-supplied database because the rehearsal rolls back every
 migration. It exercises the host migration tool, then runs the runtime image's
 `/migrate` entrypoint on the Compose network.
+The migrator defaults to a `5m` overall budget, `2m` per statement, and `15s`
+for lock acquisition. Override the typed `APP__POSTGRES__MIGRATION_*` values
+only from rehearsal evidence. Dirty-state recovery is operator-controlled and
+documented in `docs/railway-deployment-profile.md`; normal execution never
+forces a migration version.
 It starts the same image with a read-only filesystem and dropped capabilities,
 waits for `/health/ready`, optionally checks `RUNTIME_EXPECTED_VERSION` in the
 startup log, and requires a clean SIGTERM exit. Cleanup is registered before

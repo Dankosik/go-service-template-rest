@@ -25,12 +25,15 @@ func defaultValues() map[string]any {
 
 		"observability.metrics.addr": "127.0.0.1:9090",
 
-		"postgres.enabled":             false,
-		"postgres.dsn":                 "",
-		"postgres.connect_timeout":     "3s",
-		"postgres.healthcheck_timeout": "3s",
-		"postgres.max_open_conns":      25,
-		"postgres.conn_max_lifetime":   "30m",
+		"postgres.enabled":                     false,
+		"postgres.dsn":                         "",
+		"postgres.connect_timeout":             "3s",
+		"postgres.healthcheck_timeout":         "3s",
+		"postgres.migration_timeout":           "5m",
+		"postgres.migration_statement_timeout": "2m",
+		"postgres.migration_lock_timeout":      "15s",
+		"postgres.max_open_conns":              25,
+		"postgres.conn_max_lifetime":           "30m",
 
 		"observability.otel.service_name":           "service",
 		"observability.otel.traces_sampler":         otelconfig.DefaultTracesSampler,

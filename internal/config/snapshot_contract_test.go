@@ -204,12 +204,15 @@ func sentinelConfigSourceValues() map[string]any {
 
 		"log.level": "warn",
 
-		"postgres.enabled":             true,
-		"postgres.dsn":                 "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.connect_timeout":     "17s",
-		"postgres.healthcheck_timeout": "18s",
-		"postgres.max_open_conns":      26,
-		"postgres.conn_max_lifetime":   "45m",
+		"postgres.enabled":                     true,
+		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
+		"postgres.connect_timeout":             "17s",
+		"postgres.healthcheck_timeout":         "18s",
+		"postgres.migration_timeout":           "19m",
+		"postgres.migration_statement_timeout": "3m",
+		"postgres.migration_lock_timeout":      "19s",
+		"postgres.max_open_conns":              26,
+		"postgres.conn_max_lifetime":           "45m",
 
 		"observability.metrics.addr":                "127.0.0.1:19090",
 		"observability.otel.service_name":           "snapshot-service",
@@ -238,12 +241,15 @@ func expectedSentinelSnapshotValues() map[string]any {
 
 		"log.level": slog.LevelWarn,
 
-		"postgres.enabled":             true,
-		"postgres.dsn":                 "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.connect_timeout":     17 * time.Second,
-		"postgres.healthcheck_timeout": 18 * time.Second,
-		"postgres.max_open_conns":      26,
-		"postgres.conn_max_lifetime":   45 * time.Minute,
+		"postgres.enabled":                     true,
+		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
+		"postgres.connect_timeout":             17 * time.Second,
+		"postgres.healthcheck_timeout":         18 * time.Second,
+		"postgres.migration_timeout":           19 * time.Minute,
+		"postgres.migration_statement_timeout": 3 * time.Minute,
+		"postgres.migration_lock_timeout":      19 * time.Second,
+		"postgres.max_open_conns":              26,
+		"postgres.conn_max_lifetime":           45 * time.Minute,
 
 		"observability.metrics.addr":                "127.0.0.1:19090",
 		"observability.otel.service_name":           "snapshot-service",

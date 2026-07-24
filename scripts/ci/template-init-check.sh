@@ -85,6 +85,35 @@ snapshot() {
 	)
 }
 
+workflow_snapshot() {
+	local root="$1"
+	(
+		cd "${root}"
+		{
+			for path in .agents .codex .claude .qwen specs; do
+				if [[ ! -e "${path}" && ! -L "${path}" ]]; then
+					printf 'missing %s\n' "${path}"
+					continue
+				fi
+				find "${path}" -type d -print | while IFS= read -r entry; do
+					printf 'directory %s\n' "${entry}"
+				done
+				find "${path}" -type l -print | while IFS= read -r entry; do
+					printf 'symlink %s -> %s\n' "${entry}" "$(readlink "${entry}")"
+				done
+				find "${path}" -type f -exec shasum -a 256 {} +
+			done
+			for path in AGENTS.md CLAUDE.md QWEN.md; do
+				if [[ -f "${path}" ]]; then
+					shasum -a 256 "${path}"
+				else
+					printf 'missing %s\n' "${path}"
+				fi
+			done
+		} | LC_ALL=C sort
+	)
+}
+
 copy_template_checkout() {
 	local name="$1"
 	local origin="$2"
@@ -125,6 +154,7 @@ expect_unchanged_failure() {
 
 derived="$(new_fixture derived git@github.com:acme/orders.git true)"
 env_before="$(shasum -a 256 "${derived}/.env")"
+derived_workflow_before="$(workflow_snapshot "${derived}")"
 (
 	cd "${derived}"
 	CODEOWNER=@acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
@@ -143,23 +173,19 @@ grep -Fq '"service.name", "orders"' "${derived}/cmd/service/internal/bootstrap/r
 grep -Fqx 'APP__OBSERVABILITY__OTEL__SERVICE_NAME=orders' "${derived}/env/.env.example"
 grep -Fq '# orders' "${derived}/README.md"
 ! grep -Fq 'https://github.com/Dankosik/go-service-template-rest/actions' "${derived}/README.md"
-grep -Fq 'Keep production Go under `internal/`' "${derived}/AGENTS.md"
-for removed in .agents .codex .claude .qwen specs CLAUDE.md QWEN.md; do
-	[[ ! -e "${derived}/${removed}" ]]
-done
+[[ "${derived_workflow_before}" == "$(workflow_snapshot "${derived}")" ]]
 [[ -f "${derived}/cmd/service/internal/bootstrap/startup_dependencies.go" ]]
 [[ ! -e "${derived}/scripts/profiles/database-none" ]]
 [[ "${env_before}" == "$(shasum -a 256 "${derived}/.env")" ]]
 
 full="$(new_fixture full git@github.com:acme/payments.git)"
+full_workflow_before="$(workflow_snapshot "${full}")"
 (
 	cd "${full}"
-	CODEOWNER=@acme/platform DATABASE=postgres AGENT_WORKFLOW=full \
+	CODEOWNER=@acme/platform DATABASE=postgres \
 		bash "${ROOT_DIR}/scripts/init-module.sh"
 )
-for retained in .agents .codex .claude .qwen specs CLAUDE.md QWEN.md; do
-	[[ -e "${full}/${retained}" ]]
-done
+[[ "${full_workflow_before}" == "$(workflow_snapshot "${full}")" ]]
 
 {
 	echo "package example"
@@ -206,9 +232,10 @@ expect_unchanged_failure "${malformed_owner}" \
 	env CODEOWNER=acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
 
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
+minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 (
 	cd "${minimal_checkout}"
-	CODEOWNER=@acme/platform DATABASE=none AGENT_WORKFLOW=none bash ./scripts/init-module.sh
+	CODEOWNER=@acme/platform DATABASE=none bash ./scripts/init-module.sh
 	go test ./...
 	go build ./cmd/service
 	make mod-check
@@ -219,6 +246,7 @@ minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feat
 		exit 1
 	fi
 )
+[[ "${minimal_workflow_before}" == "$(workflow_snapshot "${minimal_checkout}")" ]]
 grep -Fq 'postgres is not included in the DATABASE=none profile' "${TEMP_ROOT}/minimal-postgres.log"
 for removed in \
 	cmd/migrate \
@@ -250,15 +278,19 @@ fi
 	make openapi-lint openapi-validate
 	gofmt -w internal/greeting internal/infra/http cmd/service/internal/bootstrap/run.go
 	go test ./internal/greeting ./internal/infra/http ./cmd/service/internal/bootstrap
+	rm -rf -- examples/reference-service
+	make openapi-check
 )
 
 postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
+postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 (
 	cd "${postgres_checkout}"
-	CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded AGENT_WORKFLOW=full bash ./scripts/init-module.sh
+	CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded bash ./scripts/init-module.sh
 	go test ./...
 	go build ./cmd/service ./cmd/migrate
 )
+[[ "${postgres_workflow_before}" == "$(workflow_snapshot "${postgres_checkout}")" ]]
 for retained in \
 	cmd/migrate \
 	internal/infra/httpclient \
@@ -267,6 +299,25 @@ for retained in \
 	env/docker-compose.yml; do
 	[[ -e "${postgres_checkout}/${retained}" ]]
 done
+
+if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
+	(
+		cd "${postgres_checkout}"
+		git apply --recount "${ROOT_DIR}/scripts/ci/fixtures/postgres-post-feature.patch"
+		make openapi-generate sqlc-generate
+		gofmt -w \
+			internal/article \
+			internal/infra/http/article_handlers.go \
+			internal/infra/http/handlers.go \
+			internal/infra/postgres/article_repository.go \
+			cmd/service/internal/bootstrap/run.go \
+			test/postgres_article_feature_integration_test.go
+		go test ./internal/article ./internal/infra/http ./internal/infra/postgres
+		REQUIRE_DOCKER=1 go test -tags=integration ./test \
+			-run '^TestPostgresArticleVerticalSlice$' \
+			-count=1
+	)
+fi
 
 malformed_outbound="$(new_fixture malformed-outbound git@github.com:acme/malformed-outbound.git)"
 expect_unchanged_failure "${malformed_outbound}" \

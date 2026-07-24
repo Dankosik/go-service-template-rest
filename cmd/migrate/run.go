@@ -30,7 +30,7 @@ func run(args []string, stdout io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := config.Load()
+	cfg, _, err := config.LoadDetailedWithContext(ctx, config.LoadOptions{})
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -47,23 +47,24 @@ func run(args []string, stdout io.Writer) error {
 		_, _ = fmt.Fprintln(stdout, "no migration files found; skipping migrations")
 		return nil
 	}
+	migrationCtx, cancelMigration := context.WithTimeout(ctx, cfg.Postgres.MigrationTimeout)
+	defer cancelMigration()
+	options := postgresmigrate.MigrationOptions{
+		DSN:              cfg.Postgres.DSN,
+		SourceFS:         migrationSourceFS,
+		SourcePath:       migrationSourcePath,
+		StatementTimeout: cfg.Postgres.MigrationStatementTimeout,
+		LockTimeout:      cfg.Postgres.MigrationLockTimeout,
+	}
 	if validate {
-		if err := postgresmigrate.ValidateMigrations(ctx, postgresmigrate.MigrationOptions{
-			DSN:        cfg.Postgres.DSN,
-			SourceFS:   migrationSourceFS,
-			SourcePath: migrationSourcePath,
-		}); err != nil {
+		if err := postgresmigrate.ValidateMigrations(migrationCtx, options); err != nil {
 			return fmt.Errorf("validate postgres migrations: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "validated migrations from %s\n", migrationSourcePath)
 		return nil
 	}
 
-	changed, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
-		DSN:        cfg.Postgres.DSN,
-		SourceFS:   migrationSourceFS,
-		SourcePath: migrationSourcePath,
-	})
+	changed, err := postgresmigrate.MigrateUp(migrationCtx, options)
 	if err != nil {
 		return fmt.Errorf("apply postgres migrations: %w", err)
 	}

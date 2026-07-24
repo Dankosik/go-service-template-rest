@@ -10,11 +10,16 @@ usage() {
 check_openapi() (
 	local paths=(
 		"internal/openapi/openapi.gen.go"
-		"examples/reference-service/internal/openapi/openapi.gen.go"
 	)
+	local packages=("./internal/openapi")
 	local path
 	local snapshot
 	local drift=0
+
+	if [[ -f "${ROOT_DIR}/examples/reference-service/api/openapi.yaml" ]]; then
+		paths+=("examples/reference-service/internal/openapi/openapi.gen.go")
+		packages+=("./examples/reference-service/internal/openapi")
+	fi
 
 	snapshot="$(mktemp -d)"
 	trap 'rm -rf "${snapshot}"' EXIT
@@ -23,7 +28,7 @@ check_openapi() (
 		cp "${ROOT_DIR}/${path}" "${snapshot}/${path}"
 	done
 
-	(cd "${ROOT_DIR}" && go generate ./internal/openapi ./examples/reference-service/internal/openapi)
+	(cd "${ROOT_DIR}" && go generate "${packages[@]}")
 
 	for path in "${paths[@]}"; do
 		if cmp -s "${snapshot}/${path}" "${ROOT_DIR}/${path}"; then

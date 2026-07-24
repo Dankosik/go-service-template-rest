@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	migrate "github.com/golang-migrate/migrate/v4"
@@ -27,10 +28,14 @@ type migrationExecutorStub struct {
 	sourceCloseErr   error
 	databaseCloseErr error
 	calls            []string
+	onUp             func()
 }
 
 func (s *migrationExecutorStub) Up() error {
 	s.calls = append(s.calls, "up")
+	if s.onUp != nil {
+		s.onUp()
+	}
 	var err error
 	if s.upCalls < len(s.upErrs) {
 		err = s.upErrs[s.upCalls]
@@ -63,16 +68,20 @@ func TestMigrateUpRejectsInvalidInputsBeforeConnecting(t *testing.T) {
 		{
 			name: "empty source path",
 			opts: MigrationOptions{
-				DSN:        validDSN,
-				SourcePath: " \t\n",
+				DSN:              validDSN,
+				SourcePath:       " \t\n",
+				StatementTimeout: time.Minute,
+				LockTimeout:      time.Second,
 			},
 			wantErr: "migration source path is empty",
 		},
 		{
 			name: "empty dsn",
 			opts: MigrationOptions{
-				DSN:        " \t\n",
-				SourcePath: "migrations",
+				DSN:              " \t\n",
+				SourcePath:       "migrations",
+				StatementTimeout: time.Minute,
+				LockTimeout:      time.Second,
 			},
 			wantErr:     "postgres dsn is empty",
 			wantWrapped: postgres.ErrConfig,
@@ -80,9 +89,11 @@ func TestMigrateUpRejectsInvalidInputsBeforeConnecting(t *testing.T) {
 		{
 			name: "missing source",
 			opts: MigrationOptions{
-				DSN:        validDSN,
-				SourceFS:   fstest.MapFS{},
-				SourcePath: "migrations",
+				DSN:              validDSN,
+				SourceFS:         fstest.MapFS{},
+				SourcePath:       "migrations",
+				StatementTimeout: time.Minute,
+				LockTimeout:      time.Second,
 			},
 			wantErr: "open migration source",
 		},
@@ -119,9 +130,11 @@ func TestMigrateUpReportsRunFailureWithReadableSource(t *testing.T) {
 	}
 
 	_, err := MigrateUp(context.Background(), MigrationOptions{
-		DSN:        "postgres://user:pass@127.0.0.1:1/app?sslmode=disable",
-		SourceFS:   sourceFS,
-		SourcePath: "migrations",
+		DSN:              "postgres://user:pass@127.0.0.1:1/app?sslmode=disable",
+		SourceFS:         sourceFS,
+		SourcePath:       "migrations",
+		StatementTimeout: time.Minute,
+		LockTimeout:      time.Second,
 	})
 	if err == nil {
 		t.Fatal("MigrateUp() error = nil, want run failure")
@@ -210,7 +223,7 @@ func TestExecuteMigrations(t *testing.T) {
 				upErrs:  tc.upErrs,
 				downErr: tc.downErr,
 			}
-			changed, err := executeMigrations(runner, tc.rehearse)
+			changed, err := executeMigrations(context.Background(), runner, tc.rehearse)
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) {
 					t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, tc.wantErr)
@@ -243,7 +256,7 @@ func TestExecuteMigrationsJoinsOperationAndCloseFailures(t *testing.T) {
 		databaseCloseErr: databaseCloseErr,
 	}
 
-	_, err := executeMigrations(runner, false)
+	_, err := executeMigrations(context.Background(), runner, false)
 	for _, want := range []error{upErr, sourceCloseErr, databaseCloseErr} {
 		if !errors.Is(err, want) {
 			t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, want)
@@ -254,6 +267,73 @@ func TestExecuteMigrationsJoinsOperationAndCloseFailures(t *testing.T) {
 	}
 	if !slices.Equal(runner.calls, []string{"up", "close"}) {
 		t.Fatalf("executeMigrations() calls = %v, want [up close]", runner.calls)
+	}
+}
+
+func TestExecuteMigrationsReturnsCancellationAndClosesRunner(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runner := &migrationExecutorStub{onUp: cancel}
+
+	changed, err := executeMigrations(ctx, runner, false)
+	if changed {
+		t.Fatal("executeMigrations() changed = true, want false after cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("executeMigrations() error = %v, want context.Canceled", err)
+	}
+	if !slices.Equal(runner.calls, []string{"up", "close"}) {
+		t.Fatalf("executeMigrations() calls = %v, want [up close]", runner.calls)
+	}
+}
+
+func TestMigrationOperationErrorReportsDirtyVersionAndManualRecovery(t *testing.T) {
+	t.Parallel()
+
+	err := migrationOperationError("run postgres migrations", migrate.ErrDirty{Version: 42})
+	for _, want := range []string{
+		"dirty at version 42",
+		"automatic force is disabled",
+		"docs/railway-deployment-profile.md",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("migrationOperationError() = %q, want %q", err, want)
+		}
+	}
+	var dirty migrate.ErrDirty
+	if !errors.As(err, &dirty) || dirty.Version != 42 {
+		t.Fatalf("migrationOperationError() error = %v, want wrapped dirty version 42", err)
+	}
+}
+
+func TestValidateMigrationTimeouts(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		opts    MigrationOptions
+		wantErr string
+	}{
+		{
+			name:    "missing statement timeout",
+			opts:    MigrationOptions{LockTimeout: time.Second},
+			wantErr: "statement timeout",
+		},
+		{
+			name:    "missing lock timeout",
+			opts:    MigrationOptions{StatementTimeout: time.Second},
+			wantErr: "lock timeout",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateMigrationTimeouts(tc.opts)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("validateMigrationTimeouts() error = %v, want %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 
