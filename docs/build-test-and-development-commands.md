@@ -258,10 +258,11 @@ topology, host telemetry, recovery, and mandatory cleanup.
 
 ## CI and repository settings
 
-`.github/workflows/ci.yml` owns the current CI job graph and exact status
-context names. GitHub Rulesets or organization policy own merge admission and
-required checks. Review the workflow when configuring those settings; do not
-use a repository script to rewrite its own protection policy.
+`.github/workflows/ci.yml` owns the current CI job graph and its stable
+`ci-required` aggregate. GitHub Rulesets or organization policy own merge
+admission: require `ci-required` plus independently managed code-scanning
+evidence instead of coupling protection to every internal job name. Do not use
+a repository script to rewrite its own protection policy.
 
 `.github/workflows/cd.yml` owns release validation and runtime image
 publication. It reports an immutable digest and promotes mutable tags only

@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ["ci"]
     types: [completed]
+    branches: [main]
   push:
     tags:
       - "v*"
@@ -29,7 +30,7 @@ jobs:
       github.event.workflow_run.head_branch == github.event.repository.default_branch &&
       github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -55,6 +56,12 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Build image
         run: |
           docker build \
@@ -64,6 +71,12 @@ jobs:
             -f build/docker/Dockerfile \
             -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
             .
+
+      - name: Validate migrations and runtime image
+        run: |
+          make migration-validate \
+            RUNTIME_IMAGE="${{ steps.meta.outputs.primary_image }}" \
+            RUNTIME_EXPECTED_VERSION="${{ steps.meta.outputs.version }}"
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
@@ -91,12 +104,6 @@ jobs:
           DIGEST="$(docker image inspect "${{ steps.meta.outputs.primary_image }}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
           test -n "${DIGEST}"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
 
       - name: Install cosign
         run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.6.2
@@ -214,9 +221,6 @@ jobs:
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
 
-      - name: Migration validation
-        run: make migration-validate
-
       - name: OpenAPI contract checks
         run: make openapi-check
 
@@ -230,7 +234,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs: release-preflight
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -256,6 +260,12 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Build image
         run: |
           docker build \
@@ -265,6 +275,12 @@ jobs:
             -f build/docker/Dockerfile \
             -t "${{ steps.meta.outputs.primary_image }}" \
             .
+
+      - name: Validate migrations and runtime image
+        run: |
+          make migration-validate \
+            RUNTIME_IMAGE="${{ steps.meta.outputs.primary_image }}" \
+            RUNTIME_EXPECTED_VERSION="${{ steps.meta.outputs.version }}"
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
@@ -292,12 +308,6 @@ jobs:
           DIGEST="$(docker image inspect "${{ steps.meta.outputs.primary_image }}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
           test -n "${DIGEST}"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
 
       - name: Install cosign
         run: go install github.com/sigstore/cosign/v2/cmd/cosign@v2.6.2
