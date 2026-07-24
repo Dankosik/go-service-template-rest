@@ -20,18 +20,32 @@ func (f closeFunc) Close() error {
 }
 
 type migrationExecutorStub struct {
-	upErr     error
-	stepErrs  map[int]error
-	stepCalls []int
+	upErrs           []error
+	upCalls          int
+	downErr          error
+	sourceCloseErr   error
+	databaseCloseErr error
+	calls            []string
 }
 
 func (s *migrationExecutorStub) Up() error {
-	return s.upErr
+	s.calls = append(s.calls, "up")
+	var err error
+	if s.upCalls < len(s.upErrs) {
+		err = s.upErrs[s.upCalls]
+	}
+	s.upCalls++
+	return err
 }
 
-func (s *migrationExecutorStub) Steps(steps int) error {
-	s.stepCalls = append(s.stepCalls, steps)
-	return s.stepErrs[steps]
+func (s *migrationExecutorStub) Down() error {
+	s.calls = append(s.calls, "down")
+	return s.downErr
+}
+
+func (s *migrationExecutorStub) Close() (error, error) {
+	s.calls = append(s.calls, "close")
+	return s.sourceCloseErr, s.databaseCloseErr
 }
 
 func TestMigrateUpRejectsInvalidInputsBeforeConnecting(t *testing.T) {
@@ -136,52 +150,54 @@ func TestExecuteMigrations(t *testing.T) {
 	reapplyErr := errors.New("reapply failed")
 
 	testCases := []struct {
-		name          string
-		rehearse      bool
-		upErr         error
-		stepErrs      map[int]error
-		wantChanged   bool
-		wantStepCalls []int
-		wantErr       error
-		wantErrText   string
+		name        string
+		rehearse    bool
+		upErrs      []error
+		downErr     error
+		wantChanged bool
+		wantCalls   []string
+		wantErr     error
+		wantErrText string
 	}{
 		{
 			name:        "apply only",
 			wantChanged: true,
+			wantCalls:   []string{"up", "close"},
 		},
 		{
-			name:          "rehearse latest migration",
-			rehearse:      true,
-			wantChanged:   true,
-			wantStepCalls: []int{-1, 1},
+			name:        "rehearse full migration chain",
+			rehearse:    true,
+			wantChanged: true,
+			wantCalls:   []string{"up", "down", "up", "close"},
 		},
 		{
-			name:          "rehearse up-to-date schema",
-			rehearse:      true,
-			upErr:         migrate.ErrNoChange,
-			wantStepCalls: []int{-1, 1},
+			name:      "rehearse up-to-date schema",
+			rehearse:  true,
+			upErrs:    []error{migrate.ErrNoChange},
+			wantCalls: []string{"up", "down", "up", "close"},
 		},
 		{
 			name:        "apply failure",
-			upErr:       upErr,
+			upErrs:      []error{upErr},
+			wantCalls:   []string{"up", "close"},
 			wantErr:     upErr,
 			wantErrText: "run postgres migrations",
 		},
 		{
-			name:          "rollback failure",
-			rehearse:      true,
-			stepErrs:      map[int]error{-1: downErr},
-			wantStepCalls: []int{-1},
-			wantErr:       downErr,
-			wantErrText:   "roll back latest postgres migration",
+			name:        "rollback failure",
+			rehearse:    true,
+			downErr:     downErr,
+			wantCalls:   []string{"up", "down", "close"},
+			wantErr:     downErr,
+			wantErrText: "roll back all postgres migrations",
 		},
 		{
-			name:          "reapply failure",
-			rehearse:      true,
-			stepErrs:      map[int]error{1: reapplyErr},
-			wantStepCalls: []int{-1, 1},
-			wantErr:       reapplyErr,
-			wantErrText:   "reapply latest postgres migration",
+			name:        "reapply failure",
+			rehearse:    true,
+			upErrs:      []error{nil, reapplyErr},
+			wantCalls:   []string{"up", "down", "up", "close"},
+			wantErr:     reapplyErr,
+			wantErrText: "reapply all postgres migrations",
 		},
 	}
 
@@ -190,8 +206,8 @@ func TestExecuteMigrations(t *testing.T) {
 			t.Parallel()
 
 			runner := &migrationExecutorStub{
-				upErr:    tc.upErr,
-				stepErrs: tc.stepErrs,
+				upErrs:  tc.upErrs,
+				downErr: tc.downErr,
 			}
 			changed, err := executeMigrations(runner, tc.rehearse)
 			if tc.wantErr != nil {
@@ -207,10 +223,36 @@ func TestExecuteMigrations(t *testing.T) {
 			if changed != tc.wantChanged {
 				t.Fatalf("executeMigrations() changed = %t, want %t", changed, tc.wantChanged)
 			}
-			if !slices.Equal(runner.stepCalls, tc.wantStepCalls) {
-				t.Fatalf("executeMigrations() Steps calls = %v, want %v", runner.stepCalls, tc.wantStepCalls)
+			if !slices.Equal(runner.calls, tc.wantCalls) {
+				t.Fatalf("executeMigrations() calls = %v, want %v", runner.calls, tc.wantCalls)
 			}
 		})
+	}
+}
+
+func TestExecuteMigrationsJoinsOperationAndCloseFailures(t *testing.T) {
+	t.Parallel()
+
+	upErr := errors.New("up failed")
+	sourceCloseErr := errors.New("source close failed")
+	databaseCloseErr := errors.New("database close failed")
+	runner := &migrationExecutorStub{
+		upErrs:           []error{upErr},
+		sourceCloseErr:   sourceCloseErr,
+		databaseCloseErr: databaseCloseErr,
+	}
+
+	_, err := executeMigrations(runner, false)
+	for _, want := range []error{upErr, sourceCloseErr, databaseCloseErr} {
+		if !errors.Is(err, want) {
+			t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, want)
+		}
+	}
+	if !strings.Contains(err.Error(), "close migration runner") {
+		t.Fatalf("executeMigrations() error = %q, want close context", err.Error())
+	}
+	if !slices.Equal(runner.calls, []string{"up", "close"}) {
+		t.Fatalf("executeMigrations() calls = %v, want [up close]", runner.calls)
 	}
 }
 
@@ -252,14 +294,6 @@ func TestNormalizeMigrationSourcePath(t *testing.T) {
 				t.Fatalf("normalizeMigrationSourcePath() = %q, want %q", got, tc.want)
 			}
 		})
-	}
-}
-
-func TestCloseMigrationRunnerAllowsNil(t *testing.T) {
-	t.Parallel()
-
-	if err := closeMigrationRunner(nil); err != nil {
-		t.Fatalf("closeMigrationRunner(nil) error = %v, want nil", err)
 	}
 }
 

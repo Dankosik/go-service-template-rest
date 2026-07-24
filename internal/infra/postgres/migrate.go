@@ -24,7 +24,8 @@ type MigrationOptions struct {
 
 type migrationExecutor interface {
 	Up() error
-	Steps(int) error
+	Down() error
+	Close() (error, error)
 }
 
 // MigrateUp applies pending migrations and reports whether anything changed.
@@ -95,10 +96,6 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 		}
 		return false, fmt.Errorf("build migration runner: %w", err)
 	}
-	defer func() {
-		_ = closeMigrationRunner(runner)
-	}()
-
 	stopSignals := make(chan bool, 1)
 	runner.GracefulStop = stopSignals
 	stopWatcher := context.AfterFunc(ctx, func() { stopSignals <- true })
@@ -107,8 +104,15 @@ func runPostgresMigrations(ctx context.Context, opts MigrationOptions, rehearse 
 	return executeMigrations(runner, rehearse)
 }
 
-func executeMigrations(runner migrationExecutor, rehearse bool) (bool, error) {
-	changed := true
+func executeMigrations(runner migrationExecutor, rehearse bool) (changed bool, err error) {
+	defer func() {
+		sourceErr, databaseErr := runner.Close()
+		if closeErr := errors.Join(sourceErr, databaseErr); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close migration runner: %w", closeErr))
+		}
+	}()
+
+	changed = true
 	if err := runner.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			changed = false
@@ -120,11 +124,11 @@ func executeMigrations(runner migrationExecutor, rehearse bool) (bool, error) {
 	if !rehearse {
 		return changed, nil
 	}
-	if err := runner.Steps(-1); err != nil {
-		return false, fmt.Errorf("roll back latest postgres migration: %w", err)
+	if err := runner.Down(); err != nil {
+		return false, fmt.Errorf("roll back all postgres migrations: %w", err)
 	}
-	if err := runner.Steps(1); err != nil {
-		return false, fmt.Errorf("reapply latest postgres migration: %w", err)
+	if err := runner.Up(); err != nil {
+		return false, fmt.Errorf("reapply all postgres migrations: %w", err)
 	}
 
 	return changed, nil
@@ -146,15 +150,6 @@ func normalizeMigrationSourcePath(raw string) (string, error) {
 	}
 
 	return normalized, nil
-}
-
-func closeMigrationRunner(runner *migrate.Migrate) error {
-	if runner == nil {
-		return nil
-	}
-
-	sourceErr, databaseErr := runner.Close()
-	return errors.Join(sourceErr, databaseErr)
 }
 
 func closeMigrationResources(sourceCloser interface{ Close() error }, databaseCloser interface{ Close() error }) error {

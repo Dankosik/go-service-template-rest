@@ -123,11 +123,6 @@ func fullJitterDelay(attempt int) time.Duration {
 	return rand.N(backoff + 1) // #nosec G404 -- startup retry jitter is not security-sensitive.
 }
 
-type startupDependencies struct {
-	probes       []health.Probe
-	postgresPool *postgres.Pool
-}
-
 type postgresReadinessProbe struct {
 	probe  health.Probe
 	budget time.Duration
@@ -153,23 +148,6 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	return nil
 }
 
-func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime postgresStartupRuntime) (startupDependencies, error) {
-	dependencyCtx, dependencyCancel := withStageBudget(startupCtx, startupProbeBudget)
-	defer dependencyCancel()
-
-	outcome := startupDependencies{probes: make([]health.Probe, 0, 1)}
-	pg, err := initPostgresDependency(bootstrapCtx, dependencyCtx, runtime)
-	if err != nil {
-		return outcome, err
-	}
-	if pg != nil {
-		outcome.postgresPool = pg
-		outcome.probes = append(outcome.probes, newPostgresReadinessProbe(pg, runtime.cfg.Postgres.HealthcheckTimeout))
-	}
-
-	return outcome, nil
-}
-
 func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*postgres.Pool, error) {
 	if !runtime.cfg.Postgres.Enabled {
 		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no pool and no startup error.
@@ -177,12 +155,10 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 
 	postgresProbeAddress, addressErr := postgresStartupProbeAddress(runtime.cfg.Postgres)
 	if addressErr != nil {
-		return nil, rejectStartupForDependencyInit(
+		return nil, rejectPostgresStartupForDependencyInit(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.log,
-			startupDependencyPostgres,
-			startupPostgresResolveStage,
 			addressErr,
 		)
 	}
@@ -239,7 +215,7 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	}()
 
 	if probeErr != nil {
-		sanitizedErr := dependencyInitFailure(startupDependencyPostgres, probeErr)
+		sanitizedErr := postgresDependencyInitFailure(probeErr)
 		recordDependencyProbeRejection(bootstrapCtx, runtime, sanitizedErr)
 		return nil, sanitizedErr
 	}
@@ -248,12 +224,12 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	return pg, nil
 }
 
-func dependencyInitFailure(dep string, err error) error {
+func postgresDependencyInitFailure(err error) error {
 	if err == nil {
-		return fmt.Errorf("%w: %s init failed", errDependencyInit, dep)
+		return fmt.Errorf("%w: %s init failed", errDependencyInit, startupDependencyPostgres)
 	}
 	if errors.Is(err, errDependencyInit) {
-		return fmt.Errorf("%s init failed: %w", dep, err)
+		return fmt.Errorf("%s init failed: %w", startupDependencyPostgres, err)
 	}
-	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, dep, err)
+	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, startupDependencyPostgres, err)
 }
