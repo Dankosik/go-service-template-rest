@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -297,19 +296,13 @@ func TestBootstrapConfigStageReturnsConfigLoadFailure(t *testing.T) {
 	}
 }
 
-func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+func TestBootstrapNetworkPolicyStageRejectsPublicIngress(t *testing.T) {
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID":     "ex-ingress-metrics-bootstrap",
-		"REASON": "temporary-public-api",
-	})
 
 	netPolicyResult := loadNetworkPolicy()
 	if netPolicyResult.err != nil {
 		t.Fatalf("loadNetworkPolicy() error = %v", netPolicyResult.err)
 	}
-	netPolicyResult.policy.now = func() time.Time { return now }
 
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
@@ -321,17 +314,17 @@ func TestBootstrapNetworkPolicyStageRejectsPublicIngressForRootMetrics(t *testin
 	})
 	span.End()
 	if err == nil {
-		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want metrics exposure rejection")
+		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want public ingress rejection")
 	}
 	if !errors.Is(err, errDependencyInit) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
 	}
-	if !strings.Contains(err.Error(), "operational metrics") {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want operational metrics detail", err)
+	if !strings.Contains(err.Error(), "public ingress is unsupported") {
+		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want public ingress detail", err)
 	}
 
-	if !strings.Contains(logBuffer.String(), `"dependency":"metrics_exposure"`) {
-		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want metrics exposure dependency", logBuffer.String())
+	if !strings.Contains(logBuffer.String(), `"dependency":"ingress_policy"`) {
+		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want ingress policy dependency", logBuffer.String())
 	}
 }
 
@@ -365,7 +358,7 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "policy-log")
-	rootCause := errors.New("NETWORK_INGRESS_EXCEPTION_EXPIRY must be RFC3339")
+	rootCause := errors.New("NETWORK_EGRESS_EXCEPTION_EXPIRY must be RFC3339")
 	err := rejectStartupForPolicyViolation(
 		ctx,
 		span,
@@ -418,7 +411,7 @@ func TestRecordDependencyProbeRejectionLogsRootCause(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 	rootCause := errors.New("cache probe connection refused")
 	ctx, span := otel.Tracer("test").Start(context.Background(), "dependency-probe-log")
-	runtime := dependencyProbeRuntime{
+	runtime := postgresStartupRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: span,
 		log:           logger,
@@ -500,12 +493,12 @@ func TestRejectStartupForDependencyInitDoesNotDuplicateSentinel(t *testing.T) {
 }
 
 func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_REASON", "temporary-diagnostic")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_SCOPE", "example.internal")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_EXPIRY", "not-rfc3339")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-public-ingress")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-diagnostic")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", "example.internal")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", "not-rfc3339")
+	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
 
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
@@ -523,7 +516,7 @@ func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want original parse detail", err)
 	}
 	logLine := logBuffer.String()
-	if !strings.Contains(logLine, `"policy.class":"ingress"`) {
+	if !strings.Contains(logLine, `"policy.class":"egress"`) {
 		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want policy class", logLine)
 	}
 	if !strings.Contains(logLine, `"reason.class":"invalid_configuration"`) {

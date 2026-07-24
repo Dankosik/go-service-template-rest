@@ -8,21 +8,35 @@ usage() {
 }
 
 check_openapi() (
-	local path="internal/openapi/openapi.gen.go"
+	local paths=(
+		"internal/openapi/openapi.gen.go"
+		"examples/reference-service/internal/openapi/openapi.gen.go"
+	)
+	local path
 	local snapshot
+	local drift=0
 
-	snapshot="$(mktemp)"
-	trap 'rm -f "${snapshot}"' EXIT
-	cp "${ROOT_DIR}/${path}" "${snapshot}"
+	snapshot="$(mktemp -d)"
+	trap 'rm -rf "${snapshot}"' EXIT
+	for path in "${paths[@]}"; do
+		mkdir -p "${snapshot}/$(dirname "${path}")"
+		cp "${ROOT_DIR}/${path}" "${snapshot}/${path}"
+	done
 
-	(cd "${ROOT_DIR}" && go generate ./internal/openapi)
+	(cd "${ROOT_DIR}" && go generate ./internal/openapi ./examples/reference-service/internal/openapi)
 
-	if ! cmp -s "${snapshot}" "${ROOT_DIR}/${path}"; then
+	for path in "${paths[@]}"; do
+		if cmp -s "${snapshot}/${path}" "${ROOT_DIR}/${path}"; then
+			continue
+		fi
+		drift=1
 		echo "openapi codegen drift detected: generation changed ${path}"
 		diff -u \
 			--label "${path} (before generation)" \
 			--label "${path} (after generation)" \
-			"${snapshot}" "${ROOT_DIR}/${path}" || true
+			"${snapshot}/${path}" "${ROOT_DIR}/${path}" || true
+	done
+	if [[ "${drift}" -ne 0 ]]; then
 		echo "generated output was updated; review and commit it"
 		exit 1
 	fi

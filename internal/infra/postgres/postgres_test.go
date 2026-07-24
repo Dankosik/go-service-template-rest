@@ -27,9 +27,9 @@ func clearPostgresEnvForTests() func() {
 	}
 
 	var states []envState
-	for _, env := range os.Environ() {
-		name, value, ok := strings.Cut(env, "=")
-		if !ok || !strings.HasPrefix(name, "PG") {
+	for _, name := range ambientPostgresEnvNames {
+		value, ok := os.LookupEnv(name)
+		if !ok {
 			continue
 		}
 		states = append(states, envState{name: name, value: value})
@@ -232,6 +232,15 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 		requirePostgresConfigError(t, err, "postgres dsn is empty")
 		requireErrorDoesNotContain(t, err, "ambient-host")
 	})
+}
+
+func TestParsePoolConfigAllowsUnrelatedPGPrefixedEnv(t *testing.T) {
+	t.Setenv("PGO_ENABLED", "1")
+
+	const dsn = "postgres://user:pass@localhost:5432/app?sslmode=disable"
+	if _, err := parsePoolConfig(dsn); err != nil {
+		t.Fatalf("parsePoolConfig() error = %v, want nil", err)
+	}
 }
 
 func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *testing.T) {

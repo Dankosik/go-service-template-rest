@@ -29,10 +29,6 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 		return networkPolicy{}, err
 	}
 
-	ingressException, err := parseIngressNetworkExceptionFromEnv("NETWORK_INGRESS_EXCEPTION")
-	if err != nil {
-		return networkPolicy{}, err
-	}
 	egressException, err := parseEgressNetworkExceptionFromEnv("NETWORK_EGRESS_EXCEPTION")
 	if err != nil {
 		return networkPolicy{}, err
@@ -44,7 +40,6 @@ func loadNetworkPolicyFromEnv() (networkPolicy, error) {
 		ingressPublicExplicitValue: ingressExplicitValue,
 		egressAllowlist:            egressAllowlist,
 		egressAllowedSchemes:       egressSchemes,
-		ingressException:           ingressException,
 		egressException:            egressException,
 	}, nil
 }
@@ -129,10 +124,6 @@ func isSchemeToken(s string) bool {
 		}
 	}
 	return true
-}
-
-func parseIngressNetworkExceptionFromEnv(prefix string) (networkException, error) {
-	return parseNetworkExceptionMetadataFromEnv(prefix, "ingress")
 }
 
 func parseEgressNetworkExceptionFromEnv(prefix string) (networkException, error) {

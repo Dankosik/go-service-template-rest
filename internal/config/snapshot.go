@@ -39,7 +39,6 @@ func buildSnapshot(k *koanf.Koanf) (Config, []string, error) {
 		return Config{}, nil, fmt.Errorf("%w: %s", ErrParse, sanitizedSnapshotDecodeError(err))
 	}
 
-	normalizeConfigStrings(&cfg)
 	return cfg, expandUnusedConfigKeys(metadata.Unused, k.Keys()), nil
 }
 
@@ -134,13 +133,4 @@ func sanitizedSnapshotDecodeError(err error) string {
 		return fmt.Sprintf("%s has invalid value: %s", decodeErr.Name(), valueErr.detail)
 	}
 	return valueErr.detail
-}
-
-func normalizeConfigStrings(cfg *Config) {
-	cfg.App.Env = strings.TrimSpace(cfg.App.Env)
-	cfg.App.Version = strings.TrimSpace(cfg.App.Version)
-	cfg.HTTP.Addr = strings.TrimSpace(cfg.HTTP.Addr)
-	cfg.Observability.OTel.ServiceName = strings.TrimSpace(cfg.Observability.OTel.ServiceName)
-	cfg.Observability.OTel.TracesSampler = strings.TrimSpace(cfg.Observability.OTel.TracesSampler)
-	cfg.Observability.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.Observability.OTel.Exporter.OTLPEndpoint)
 }

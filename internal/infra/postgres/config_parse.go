@@ -47,6 +47,36 @@ var postgresFileDefaultDSNKeys = []postgresFileDefaultDSNKey{
 	{name: "sslpassword", validationMessage: postgresTLSFileDSNSourceError},
 }
 
+// ambientPostgresEnvNames mirrors the environment variables read by
+// pgx/pgconn.ParseConfig. An explicit DSN must remain the only connection
+// source, so non-empty values are rejected before pgx sees them.
+var ambientPostgresEnvNames = [...]string{
+	"PGHOST",
+	"PGPORT",
+	"PGDATABASE",
+	"PGUSER",
+	"PGPASSWORD",
+	"PGPASSFILE",
+	"PGAPPNAME",
+	"PGCONNECT_TIMEOUT",
+	"PGSSLMODE",
+	"PGSSLKEY",
+	"PGSSLCERT",
+	"PGSSLSNI",
+	"PGSSLROOTCERT",
+	"PGSSLPASSWORD",
+	"PGSSLNEGOTIATION",
+	"PGTARGETSESSIONATTRS",
+	"PGSERVICE",
+	"PGSERVICEFILE",
+	"PGTZ",
+	"PGOPTIONS",
+	"PGMINPROTOCOLVERSION",
+	"PGMAXPROTOCOLVERSION",
+	"PGCHANNELBINDING",
+	"PGREQUIREAUTH",
+}
+
 var disallowedPostgresDSNKeys = postgresDisallowedDSNKeys()
 
 func postgresDisallowedDSNKeys() map[string]string {
@@ -90,9 +120,8 @@ func preflightPostgresDSN(rawDSN string) (string, error) {
 	if dsn == "" {
 		return "", fmt.Errorf("%w: postgres dsn is empty", ErrConfig)
 	}
-	for _, env := range os.Environ() {
-		name, value, ok := strings.Cut(env, "=")
-		if ok && strings.HasPrefix(name, "PG") && value != "" {
+	for _, name := range ambientPostgresEnvNames {
+		if os.Getenv(name) != "" {
 			return "", fmt.Errorf("%w: postgres dsn uses unsupported ambient PG environment", ErrConfig)
 		}
 	}

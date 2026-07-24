@@ -83,7 +83,7 @@ func rejectStartupForDependencyInit(
 	return rejectErr
 }
 
-func recordDependencyProbeRejection(ctx context.Context, runtime dependencyProbeRuntime, err error) {
+func recordDependencyProbeRejection(ctx context.Context, runtime postgresStartupRuntime, err error) {
 	recordStartupRejection(runtime.bootstrapSpan, "dependency_init", startupPostgresProbeStage, err)
 	runtime.log.Error(
 		"startup_blocked",

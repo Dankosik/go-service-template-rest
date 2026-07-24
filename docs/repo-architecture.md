@@ -89,7 +89,7 @@ Current runtime note: the shipped endpoints are intentionally small (liveness, r
 
 Operational exposure note: `/metrics` is not an ordinary public business API. Production deployments should expose it only on a private scrape path/network or add a real auth/internal-listener design before internet exposure.
 
-Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLIC_INGRESS_ENABLED` declaration. `false` is a private-ingress assertion by the operator; `true` is a public-ingress exception and requires the reviewed ingress-exception metadata.
+Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLIC_INGRESS_ENABLED` declaration. `false` is a private-ingress assertion by the operator. `true` is rejected while `/metrics` shares the application listener; reopen this policy only with a real private or authenticated metrics path.
 
 ### Startup/Shutdown Path
 
@@ -97,8 +97,8 @@ Public ingress note: non-local wildcard binds require an explicit `NETWORK_PUBLI
 2. Bootstrap parses config flags, creates the signal-aware root context, initializes baseline metrics, and loads the immutable config snapshot through `internal/config`.
 3. Bootstrap reconfigures structured logging from the validated config, initializes local OTel-to-Prometheus metrics and optional tracing with one service resource in fail-open mode, applies startup network policy checks, and probes enabled dependencies.
 4. The HTTP runtime may begin serving while startup admission is still running, but external `/health/ready` stays not ready until startup admission marks the process ready.
-5. Readiness is guarded by startup admission, runtime ingress policy, and `internal/health.Service`, which runs enabled dependency probes sequentially under one readiness timeout.
-6. `/health/live` remains process-only; external dependency checks, startup admission, drain, and ingress-policy checks belong in readiness.
+5. Readiness is guarded by startup admission and `internal/health.Service`, which runs enabled dependency probes sequentially under one readiness timeout.
+6. `/health/live` remains process-only; external dependency checks, startup admission, and drain belong in readiness.
 7. On shutdown, bootstrap marks the service as draining, flips readiness off, waits the configured propagation delay, gracefully shuts down the HTTP server, and flushes telemetry inside the process-grace budget.
 
 The lifecycle baseline is: config and dependency validation happen before accepting traffic, and shutdown is coordinated from the bootstrap layer rather than from handlers or feature services.

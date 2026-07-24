@@ -5,7 +5,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-	"time"
 )
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
@@ -23,6 +22,38 @@ func TestLoadMatchesDetailedDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg, detailed) {
 		t.Fatalf("Load() = %+v, want LoadDetailed defaults %+v", cfg, detailed)
+	}
+}
+
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__APP__ENV", " local ")
+	t.Setenv("APP__APP__VERSION", " v1.2.3 ")
+	t.Setenv("APP__HTTP__ADDR", " :8081 ")
+	t.Setenv("APP__OBSERVABILITY__OTEL__SERVICE_NAME", " reference ")
+	t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER", " parentbased_traceidratio ")
+	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", " https://otel.example.com/v1/traces ")
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+
+	if cfg.App.Env != "local" || cfg.App.Version != "v1.2.3" {
+		t.Fatalf("App = %+v, want normalized strings", cfg.App)
+	}
+	if cfg.HTTP.Addr != ":8081" {
+		t.Fatalf("HTTP.Addr = %q, want %q", cfg.HTTP.Addr, ":8081")
+	}
+	if cfg.Observability.OTel.ServiceName != "reference" {
+		t.Fatalf("ServiceName = %q, want %q", cfg.Observability.OTel.ServiceName, "reference")
+	}
+	if cfg.Observability.OTel.TracesSampler != "parentbased_traceidratio" {
+		t.Fatalf("TracesSampler = %q, want normalized sampler", cfg.Observability.OTel.TracesSampler)
+	}
+	if cfg.Observability.OTel.Exporter.OTLPEndpoint != "https://otel.example.com/v1/traces" {
+		t.Fatalf("OTLPEndpoint = %q, want normalized endpoint", cfg.Observability.OTel.Exporter.OTLPEndpoint)
 	}
 }
 
@@ -143,28 +174,6 @@ unknown:
 		}
 		if report.FailedStage != StageLoadFile {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageLoadFile)
-		}
-	})
-
-	//nolint:paralleltest // Subtests reset process-wide configuration environment.
-	t.Run("validate_context_stage", func(t *testing.T) {
-		resetConfigEnv(t)
-
-		_, report, err := LoadDetailed(LoadOptions{ValidateBudget: time.Nanosecond})
-		if err == nil {
-			t.Fatalf("LoadDetailed() expected validate context deadline error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("error = %v, want context.DeadlineExceeded", err)
-		}
-		if got := ErrorType(err); got != "validate" {
-			t.Fatalf("ErrorType(error) = %q, want validate", got)
-		}
-		if report.FailedStage != StageValidate {
-			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)
 		}
 	})
 }

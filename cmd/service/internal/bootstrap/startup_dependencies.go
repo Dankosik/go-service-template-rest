@@ -28,7 +28,6 @@ const (
 	startupDependencyTelemetry       = "telemetry"
 	startupDependencyNetworkPolicy   = "network_policy"
 	startupDependencyIngressPolicy   = "ingress_policy"
-	startupDependencyMetricsExposure = "metrics_exposure"
 	startupDependencyEgressException = "egress_exception"
 	startupDependencyModeFeatureOff  = "feature_off"
 )
@@ -42,12 +41,12 @@ const (
 )
 
 type (
-	postgresConnectFunc func(context.Context, postgres.Options) (*postgres.Pool, error)
-	startupDelayFunc    func(int) time.Duration
-	startupSleepFunc    func(context.Context, time.Duration) error
+	postgresConnectFunc    func(context.Context, postgres.Options) (*postgres.Pool, error)
+	postgresRetryDelayFunc func(int) time.Duration
+	postgresRetrySleepFunc func(context.Context, time.Duration) error
 )
 
-type dependencyProbeRuntime struct {
+type postgresStartupRuntime struct {
 	tracer        trace.Tracer
 	bootstrapSpan trace.Span
 	cfg           config.Config
@@ -71,8 +70,8 @@ func initPostgresWithRetryFunc(
 	ctx context.Context,
 	cfg config.PostgresConfig,
 	connect postgresConnectFunc,
-	delayFor startupDelayFunc,
-	sleep startupSleepFunc,
+	delayFor postgresRetryDelayFunc,
+	sleep postgresRetrySleepFunc,
 ) (*postgres.Pool, error) {
 	options := postgres.Options{
 		DSN:                cfg.DSN,
@@ -124,7 +123,7 @@ func fullJitterDelay(attempt int) time.Duration {
 	return rand.N(backoff + 1) // #nosec G404 -- startup retry jitter is not security-sensitive.
 }
 
-type dependencyProbeOutcome struct {
+type startupDependencies struct {
 	probes       []health.Probe
 	postgresPool *postgres.Pool
 }
@@ -154,26 +153,12 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	return nil
 }
 
-type dependencyProbeSpec struct {
-	stage        string
-	dep          string
-	budget       time.Duration
-	minRemaining time.Duration
-	probe        func(context.Context) error
-}
+func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime postgresStartupRuntime) (startupDependencies, error) {
+	dependencyCtx, dependencyCancel := withStageBudget(startupCtx, startupProbeBudget)
+	defer dependencyCancel()
 
-type probeExecutionResult struct {
-	budgetBlocked bool
-	parentErr     error
-	err           error
-}
-
-func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Context, runtime dependencyProbeRuntime) (dependencyProbeOutcome, error) {
-	dependencyProbeCtx, dependencyProbeCancel := withStageBudget(startupCtx, startupProbeBudget)
-	defer dependencyProbeCancel()
-
-	outcome := dependencyProbeOutcome{probes: make([]health.Probe, 0, 1)}
-	pg, err := initPostgresDependency(bootstrapCtx, dependencyProbeCtx, runtime)
+	outcome := startupDependencies{probes: make([]health.Probe, 0, 1)}
+	pg, err := initPostgresDependency(bootstrapCtx, dependencyCtx, runtime)
 	if err != nil {
 		return outcome, err
 	}
@@ -185,7 +170,7 @@ func initStartupDependencies(startupCtx context.Context, bootstrapCtx context.Co
 	return outcome, nil
 }
 
-func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx context.Context, runtime dependencyProbeRuntime) (*postgres.Pool, error) {
+func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*postgres.Pool, error) {
 	if !runtime.cfg.Postgres.Enabled {
 		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no pool and no startup error.
 	}
@@ -211,63 +196,34 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyProbeCtx con
 		)
 	}
 
-	var pg *postgres.Pool
-	pgReturned := false
-	defer func() {
-		if !pgReturned && pg != nil {
-			pg.Close()
-		}
-	}()
-
-	probeResult := runDependencyProbe(dependencyProbeCtx, runtime.tracer, dependencyProbeSpec{
-		stage:        startupPostgresProbeStage,
-		dep:          startupDependencyPostgres,
-		budget:       postgresProbeBudget,
-		minRemaining: startupFailFastThreshold + startupReserveBudget,
-		probe: func(probeCtx context.Context) error {
-			var err error
-			pg, err = initPostgresWithRetry(probeCtx, runtime.cfg.Postgres)
-			return err
-		},
-	})
-	if probeResult.err != nil {
-		if probeResult.budgetBlocked {
-			rejectErr := dependencyInitAbortFailure(startupDependencyPostgres, probeResult)
-			recordDependencyProbeRejection(bootstrapCtx, runtime, rejectErr)
-			return nil, rejectErr
-		}
-
-		sanitizedErr := dependencyInitFailure(startupDependencyPostgres, probeResult.err)
-		recordDependencyProbeRejection(bootstrapCtx, runtime, sanitizedErr)
-		return nil, sanitizedErr
+	if err := ensureRemainingStartupBudget(
+		dependencyCtx,
+		startupFailFastThreshold+startupReserveBudget,
+		startupPostgresProbeStage,
+	); err != nil {
+		rejectErr := fmt.Errorf("%s init skipped: %w", startupDependencyPostgres, err)
+		recordDependencyProbeRejection(bootstrapCtx, runtime, rejectErr)
+		return nil, rejectErr
 	}
 
-	pgReturned = true
-	return pg, nil
-}
+	probeCtx, probeCancel := withStageBudget(dependencyCtx, postgresProbeBudget)
+	probeCtx, probeSpan := runtime.tracer.Start(probeCtx, startupPostgresProbeStage)
 
-func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer, spec dependencyProbeSpec) probeExecutionResult {
-	if err := ensureRemainingStartupBudget(dependencyProbeCtx, spec.minRemaining, spec.stage); err != nil {
-		return probeExecutionResult{budgetBlocked: true, parentErr: dependencyProbeCtx.Err(), err: err}
-	}
-
-	probeCtx, probeCancel := withStageBudget(dependencyProbeCtx, spec.budget)
-	probeCtx, probeSpan := tracer.Start(probeCtx, spec.stage)
-	err := spec.probe(probeCtx)
-	parentErr := dependencyProbeCtx.Err()
+	pg, probeErr := initPostgresWithRetry(probeCtx, runtime.cfg.Postgres)
+	parentErr := dependencyCtx.Err()
 	stageErr := probeCtx.Err()
-	if err == nil {
+	if probeErr == nil {
 		if parentErr != nil {
-			err = parentErr
+			probeErr = parentErr
 		} else if stageErr != nil {
-			err = stageErr
+			probeErr = stageErr
 		}
 	}
 	probeCancel()
 
-	attrs := []attribute.KeyValue{attribute.String("dep", spec.dep)}
-	if err != nil {
-		probeSpan.RecordError(err)
+	attrs := []attribute.KeyValue{attribute.String("dep", startupDependencyPostgres)}
+	if probeErr != nil {
+		probeSpan.RecordError(probeErr)
 		attrs = append(attrs, attribute.String("result", "error"))
 	} else {
 		attrs = append(attrs, attribute.String("result", "success"))
@@ -275,7 +231,21 @@ func runDependencyProbe(dependencyProbeCtx context.Context, tracer trace.Tracer,
 	probeSpan.SetAttributes(attrs...)
 	probeSpan.End()
 
-	return probeExecutionResult{budgetBlocked: false, parentErr: parentErr, err: err}
+	pgReturned := false
+	defer func() {
+		if !pgReturned && pg != nil {
+			pg.Close()
+		}
+	}()
+
+	if probeErr != nil {
+		sanitizedErr := dependencyInitFailure(startupDependencyPostgres, probeErr)
+		recordDependencyProbeRejection(bootstrapCtx, runtime, sanitizedErr)
+		return nil, sanitizedErr
+	}
+
+	pgReturned = true
+	return pg, nil
 }
 
 func dependencyInitFailure(dep string, err error) error {
@@ -286,14 +256,4 @@ func dependencyInitFailure(dep string, err error) error {
 		return fmt.Errorf("%s init failed: %w", dep, err)
 	}
 	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, dep, err)
-}
-
-func dependencyInitAbortFailure(dep string, result probeExecutionResult) error {
-	if result.budgetBlocked {
-		if errors.Is(result.err, errDependencyInit) {
-			return fmt.Errorf("%s init skipped: %w", dep, result.err)
-		}
-		return fmt.Errorf("%w: %s init skipped: %w", errDependencyInit, dep, result.err)
-	}
-	return dependencyInitFailure(dep, result.err)
 }

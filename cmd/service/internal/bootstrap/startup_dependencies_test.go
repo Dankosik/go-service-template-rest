@@ -15,126 +15,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func TestRunDependencyProbe(t *testing.T) {
-	t.Parallel()
-	tracer := otel.Tracer("test")
-
-	t.Run("budget blocked", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
-			stage:        "stage",
-			dep:          "dep",
-			budget:       time.Second,
-			minRemaining: time.Hour,
-			probe: func(context.Context) error {
-				return nil
-			},
-		})
-		if !res.budgetBlocked {
-			t.Fatal("budgetBlocked = false, want true")
-		}
-		if res.err == nil {
-			t.Fatal("err = nil, want budget error")
-		}
-		if res.parentErr != nil {
-			t.Fatalf("parentErr = %v, want nil for low remaining startup budget", res.parentErr)
-		}
-	})
-
-	t.Run("dependency local timeout keeps parent valid", func(t *testing.T) {
-		t.Parallel()
-
-		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
-			stage:        "stage",
-			dep:          "dep",
-			budget:       time.Second,
-			minRemaining: 0,
-			probe: func(context.Context) error {
-				return fmt.Errorf("dependency-local timeout: %w", context.DeadlineExceeded)
-			},
-		})
-		if res.budgetBlocked {
-			t.Fatal("budgetBlocked = true, want false")
-		}
-		if res.parentErr != nil {
-			t.Fatalf("parentErr = %v, want nil", res.parentErr)
-		}
-		if !errors.Is(res.err, context.DeadlineExceeded) {
-			t.Fatalf("err = %v, want wrapped %v", res.err, context.DeadlineExceeded)
-		}
-	})
-
-	t.Run("expired child deadline after nil probe result fails probe", func(t *testing.T) {
-		t.Parallel()
-
-		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
-			stage:        "stage",
-			dep:          "dep",
-			budget:       time.Millisecond,
-			minRemaining: 0,
-			probe: func(probeCtx context.Context) error {
-				<-probeCtx.Done()
-				return nil
-			},
-		})
-		if res.budgetBlocked {
-			t.Fatal("budgetBlocked = true, want false")
-		}
-		if res.parentErr != nil {
-			t.Fatalf("parentErr = %v, want nil", res.parentErr)
-		}
-		if !errors.Is(res.err, context.DeadlineExceeded) {
-			t.Fatalf("err = %v, want wrapped %v", res.err, context.DeadlineExceeded)
-		}
-	})
-
-	t.Run("parent cancellation during probe records parent error", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithCancel(context.Background())
-		res := runDependencyProbe(ctx, tracer, dependencyProbeSpec{
-			stage:        "stage",
-			dep:          "dep",
-			budget:       time.Second,
-			minRemaining: 0,
-			probe: func(probeCtx context.Context) error {
-				cancel()
-				<-probeCtx.Done()
-				return fmt.Errorf("parent canceled: %w", probeCtx.Err())
-			},
-		})
-		if res.budgetBlocked {
-			t.Fatal("budgetBlocked = true, want false")
-		}
-		if !errors.Is(res.parentErr, context.Canceled) {
-			t.Fatalf("parentErr = %v, want wrapped %v", res.parentErr, context.Canceled)
-		}
-		if !errors.Is(res.err, context.Canceled) {
-			t.Fatalf("err = %v, want wrapped %v", res.err, context.Canceled)
-		}
-	})
-
-	t.Run("probe success", func(t *testing.T) {
-		t.Parallel()
-
-		res := runDependencyProbe(context.Background(), tracer, dependencyProbeSpec{
-			stage:        "stage",
-			dep:          "dep",
-			budget:       time.Second,
-			minRemaining: 0,
-			probe: func(context.Context) error {
-				return nil
-			},
-		})
-		if res.budgetBlocked || res.err != nil {
-			t.Fatalf("unexpected result: %+v", res)
-		}
-	})
-}
-
 func TestDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	t.Parallel()
 
@@ -170,28 +50,6 @@ func TestDependencyInitFailureDoesNotDuplicateDependencyInitSentinel(t *testing.
 	}
 	if !strings.Contains(err.Error(), "postgres init failed") {
 		t.Fatalf("dependencyInitFailure() error = %v, want dependency context", err)
-	}
-}
-
-func TestDependencyInitAbortFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
-	t.Parallel()
-
-	cause := fmt.Errorf("%w: startup.probe.postgres aborted", errDependencyInit)
-	err := dependencyInitAbortFailure("postgres", probeExecutionResult{budgetBlocked: true, err: cause})
-	if err == nil {
-		t.Fatal("dependencyInitAbortFailure() error = nil, want non-nil")
-	}
-	if !errors.Is(err, errDependencyInit) {
-		t.Fatalf("dependencyInitAbortFailure() error = %v, want wrapped %v", err, errDependencyInit)
-	}
-	if !errors.Is(err, cause) {
-		t.Fatalf("dependencyInitAbortFailure() error = %v, want wrapped cause", err)
-	}
-	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
-		t.Fatalf("dependencyInitAbortFailure() error = %v, dependency init count = %d, want 1", err, count)
-	}
-	if !strings.Contains(err.Error(), "postgres init skipped") {
-		t.Fatalf("dependencyInitAbortFailure() error = %v, want skipped context", err)
 	}
 }
 
@@ -291,7 +149,7 @@ func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(
 func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	t.Parallel()
 
-	runtime := dependencyProbeRuntime{
+	runtime := postgresStartupRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{},
@@ -308,6 +166,37 @@ func TestInitStartupDependenciesAllDisabled(t *testing.T) {
 	}
 	if outcome.postgresPool != nil {
 		t.Fatal("postgresPool != nil, want nil")
+	}
+}
+
+func TestInitPostgresDependencyRejectsLowRemainingStartupBudget(t *testing.T) {
+	t.Parallel()
+
+	probeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	runtime := postgresStartupRuntime{
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		cfg: config.Config{Postgres: config.PostgresConfig{
+			Enabled: true,
+			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
+		}},
+		log: slog.New(slog.DiscardHandler),
+		networkPolicy: networkPolicy{
+			egressAllowedSchemes: map[string]struct{}{"tcp": {}},
+		},
+	}
+
+	_, err := initPostgresDependency(context.Background(), probeCtx, runtime)
+	if err == nil {
+		t.Fatal("initPostgresDependency() error = nil, want low-budget rejection")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("initPostgresDependency() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if !strings.Contains(err.Error(), "postgres init skipped") {
+		t.Fatalf("initPostgresDependency() error = %v, want skipped context", err)
 	}
 }
 

@@ -109,16 +109,6 @@ func bootstrapNetworkPolicyStage(
 		)
 	}
 
-	if metricsExposureErr := netPolicy.ValidateOperationalMetricsExposure(); metricsExposureErr != nil {
-		return networkPolicy{}, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			bootstrapSpan,
-			log,
-			startupDependencyMetricsExposure,
-			metricsExposureErr,
-		)
-	}
-
 	if egressErr := netPolicy.ValidateEgressExceptionState(); egressErr != nil {
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,

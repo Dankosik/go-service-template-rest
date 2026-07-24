@@ -9,23 +9,6 @@ import (
 	"time"
 )
 
-func TestLoadNetworkPolicyFromEnvRequiresExceptionMetadata(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	t.Setenv("NETWORK_INGRESS_EXCEPTION_ACTIVE", "true")
-
-	_, err := loadNetworkPolicyFromEnv()
-	if err == nil {
-		t.Fatal("loadNetworkPolicyFromEnv() error = nil, want non-nil")
-	}
-	policyClass, reasonClass := networkPolicyErrorLabels(err)
-	if policyClass != "ingress" {
-		t.Fatalf("policyClass = %q, want %q", policyClass, "ingress")
-	}
-	if reasonClass != "missing_metadata" {
-		t.Fatalf("reasonClass = %q, want %q", reasonClass, "missing_metadata")
-	}
-}
-
 func TestLoadNetworkPolicyFromEnvPublicIngressExplicitValue(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -151,7 +134,7 @@ func TestNetworkPolicyEnforceIngressAllowsMissingDeclarationForLocalWildcardBind
 	}
 }
 
-func TestNetworkPolicyEnforceIngressFailClosedWithoutException(t *testing.T) {
+func TestNetworkPolicyEnforceIngressRejectsPublicIngress(t *testing.T) {
 	t.Setenv(envNetworkPublicIngressEnabled, "true")
 
 	policy, err := loadNetworkPolicyFromEnv()
@@ -163,139 +146,8 @@ func TestNetworkPolicyEnforceIngressFailClosedWithoutException(t *testing.T) {
 	if err == nil {
 		t.Fatal("EnforceIngress() error = nil, want non-nil")
 	}
-}
-
-func TestNetworkPolicyEnforceIngressAllowsActiveException(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID":     "ex-ingress-1",
-		"REASON": "temporary-load-test",
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy.now = func() time.Time { return now }
-
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() error = %v, want nil", err)
-	}
-}
-
-func TestNetworkPolicyValidateOperationalMetricsExposureRejectsPublicIngressException(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID":     "ex-ingress-metrics",
-		"REASON": "temporary-public-api",
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy.now = func() time.Time { return now }
-	policy = policy.withIngressExposure("prod", ":8080")
-
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() error = %v, want nil before metrics exposure admission", err)
-	}
-	err = policy.ValidateOperationalMetricsExposure()
-	if err == nil {
-		t.Fatal("ValidateOperationalMetricsExposure() error = nil, want non-nil")
-	}
-	if !strings.Contains(err.Error(), "operational metrics") {
-		t.Fatalf("ValidateOperationalMetricsExposure() error = %v, want operational metrics detail", err)
-	}
-}
-
-func TestNetworkPolicyValidateOperationalMetricsExposureAllowsPrivateAndLocalIngress(t *testing.T) {
-	tests := []struct {
-		name  string
-		value string
-		env   string
-		addr  string
-	}{
-		{
-			name:  "private ingress assertion",
-			value: "false",
-			env:   "prod",
-			addr:  ":8080",
-		},
-		{
-			name: "local wildcard bind without declaration",
-			env:  "local",
-			addr: ":8080",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.value == "" {
-				unsetEnvForTest(t, envNetworkPublicIngressEnabled)
-			} else {
-				t.Setenv(envNetworkPublicIngressEnabled, tt.value)
-			}
-
-			policy, err := loadNetworkPolicyFromEnv()
-			if err != nil {
-				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-			}
-			policy = policy.withIngressExposure(tt.env, tt.addr)
-			if err := policy.EnforceIngress(); err != nil {
-				t.Fatalf("EnforceIngress() error = %v, want nil", err)
-			}
-			if err := policy.ValidateOperationalMetricsExposure(); err != nil {
-				t.Fatalf("ValidateOperationalMetricsExposure() error = %v, want nil", err)
-			}
-		})
-	}
-}
-
-func TestNetworkPolicyIngressExceptionScopeIsMetadataOnly(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID":    "ex-ingress-metadata-scope",
-		"SCOPE": ".",
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v, want nil for metadata-only ingress scope", err)
-	}
-	policy.now = func() time.Time { return now }
-
-	if got := policy.ingressException.Scope; got != "." {
-		t.Fatalf("ingress exception Scope = %q, want audit metadata", got)
-	}
-	if got := len(policy.ingressException.scopeMatcher); got != 0 {
-		t.Fatalf("ingress exception scopeMatcher len = %d, want 0", got)
-	}
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() error = %v, want nil", err)
-	}
-}
-
-func TestNetworkPolicyEnforceIngressRejectsExpiredException(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID":     "ex-ingress-expired",
-		"EXPIRY": now.Add(-5 * time.Minute).Format(time.RFC3339),
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy.now = func() time.Time { return now }
-
-	err = policy.EnforceIngress()
-	if err == nil {
-		t.Fatal("EnforceIngress() error = nil, want non-nil")
+	if !strings.Contains(err.Error(), "operational metrics share the application listener") {
+		t.Fatalf("EnforceIngress() error = %v, want shared metrics listener detail", err)
 	}
 }
 
@@ -480,31 +332,6 @@ func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *tes
 	}
 }
 
-func TestNetworkPolicyEnforceIngressAtRuntimeRejectsExceptionExpiry(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-	setValidIngressExceptionEnv(t, now, map[string]string{
-		"ID": "ex-ingress-admission-guard",
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	policy.now = func() time.Time { return now }
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() with active exception error = %v, want nil", err)
-	}
-
-	// The same check runs on every readiness poll: expiry while the process
-	// runs must flip ingress validation without a redeploy.
-	policy.now = func() time.Time { return now.Add(3 * time.Hour) }
-	if err := policy.EnforceIngress(); err == nil {
-		t.Fatal("EnforceIngress() with expired exception error = nil, want non-nil")
-	}
-}
-
 func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testing.T) {
 	t.Parallel()
 
@@ -529,20 +356,6 @@ func unsetEnvForTest(t *testing.T, name string) {
 	if err := os.Unsetenv(name); err != nil {
 		t.Fatalf("os.Unsetenv(%q) error = %v", name, err)
 	}
-}
-
-func setValidIngressExceptionEnv(t *testing.T, now time.Time, overrides map[string]string) {
-	t.Helper()
-
-	setValidNetworkExceptionEnv(t, "NETWORK_INGRESS_EXCEPTION", map[string]string{
-		"ACTIVE":        "true",
-		"ID":            "ex-ingress",
-		"OWNER":         "platform",
-		"REASON":        "temporary-diagnostic",
-		"SCOPE":         "example.internal",
-		"EXPIRY":        now.Add(2 * time.Hour).Format(time.RFC3339),
-		"ROLLBACK_PLAN": "disable-public-ingress",
-	}, overrides)
 }
 
 func setValidEgressExceptionEnv(t *testing.T, now time.Time, overrides map[string]string) {
