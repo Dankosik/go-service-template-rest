@@ -68,6 +68,10 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	if !strings.Contains(out.String(), `"request_id":"req-panic-123"`) {
 		t.Fatalf("panic log = %q, want request_id", out.String())
 	}
+	if !strings.Contains(out.String(), `"stack":"goroutine `) ||
+		!strings.Contains(out.String(), "middleware_recover.go") {
+		t.Fatalf("panic log = %q, want recovery stack", out.String())
+	}
 }
 
 func TestRecoverDoesNotWriteProblemAfterCommittedResponse(t *testing.T) {

@@ -44,6 +44,11 @@ network policy that keeps the listener private.
 ## Secret Rules
 
 - Do not place secrets in YAML.
+- Do not baseline a new or active secret-scanner finding. A historical
+  credential may remain in the gitleaks baseline only after its owner confirms
+  revocation or rotation and records the owner, date, and rationale in the
+  approving pull request. History rewriting is a separate repository-owner
+  decision and does not replace credential revocation.
 - Secret-like YAML keys may exist only as empty placeholders for schema/default visibility.
 - Non-empty secret-like YAML values are rejected at load time (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
 - In non-local environments, file-based config is hardened:

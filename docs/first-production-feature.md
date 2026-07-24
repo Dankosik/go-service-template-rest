@@ -40,7 +40,9 @@ make openapi-check
 Generated files under `internal/openapi` are derived output. Do not hand-edit
 them. Implement the generated strict-server operation in
 `internal/infra/http/<feature>_handlers.go`, map transport data to feature
-types, and map domain errors through the existing Problem response owner.
+types, and return the generated typed Problem response for domain errors.
+Framework-level transport failures continue to use the shared hand-written
+Problem catalog.
 Extend `httpx.Handlers` and wire the concrete feature in
 `cmd/service/internal/bootstrap`; do not register a parallel manual API route.
 

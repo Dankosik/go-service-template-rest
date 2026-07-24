@@ -13,7 +13,7 @@ Load this when test strategy must name local or CI validation commands, focused 
 - Use `make test-race` or focused `go test -race ...` only when the scenario executes the shared-state or goroutine path.
 - Use `make openapi-check` when OpenAPI, generated API, or runtime contract behavior changed.
 - Use `make test-integration` or `REQUIRE_DOCKER=1 make test-integration` when Docker-backed/runtime dependency behavior is the proof target; local skips are not CI-equivalent evidence.
-- Use `make sqlc-check` for SQL query/source drift and `make migration-validate` or `docker-migration-validate` when migrations changed.
+- Use `make sqlc-check` for SQL query/source drift and `make migration-validate` when migrations changed.
 - Use `make test-report COVERAGE_MIN=<value>` only for coverage threshold/artifact claims, not as a synonym for "tests passed."
 - Use `make test-fuzz-smoke FUZZ_TIME=<bounded>` only when fuzz targets exist or the skip is recorded honestly.
 

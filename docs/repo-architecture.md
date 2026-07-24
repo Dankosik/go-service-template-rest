@@ -25,7 +25,7 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/infra/httpclient/` | Shared outbound target validation, transport bounds, trace propagation, and idle-pool cleanup. | Provider authentication, operation budgets, retries, error mapping, or readiness policy. |
 | `internal/infra/postgres/` | Optional Postgres connection/pool lifecycle and repository code. | Process lifecycle, migrations, HTTP behavior, config precedence rules. |
 | `internal/infra/postgresmigrate/` | Optional migration execution used by `cmd/migrate`. | Runtime pool ownership or application startup. |
-| `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup, Prometheus export, and native startup/config instruments. | Feature semantics or request routing decisions. |
+| `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup and Prometheus export. | Feature semantics, startup logging, or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 

@@ -77,10 +77,9 @@ Effective filtered coverage is the merge gate; raw coverage is informational.
 The configured filter excludes generated OpenAPI and sqlc code, the
 test-support `internal/infra/telemetry/telemetrytest` package, and `cmd`
 composition roots. Integration-tag coverage is separate. Repository maintainers
-own `COVERAGE_MIN` changes and must record the rationale. Keep effective
-coverage at least one percentage point above `COVERAGE_MIN`; a gate operating
-at zero margin turns unrelated refactors and platform drift into false CI
-failures.
+own `COVERAGE_MIN` changes and must record the rationale. Treat
+`COVERAGE_MIN` as a floor rather than a target; add tests for meaningful risk,
+not to manufacture a fixed percentage-point margin.
 
 Use standard Go selection flags for focused local work; no wrapper targets are
 needed:
@@ -174,11 +173,12 @@ make compose-up
 make compose-down
 ```
 
-When owned migration files exist, `migration-validate` rehearses `up`, `down
-1`, and `up 1`. With no migrations, the host and image migration entrypoints
-return a successful explicit no-op. With `MIGRATION_DSN`, the command uses that
-database. Otherwise it creates an isolated Compose project on a dynamic host
-port, exercises the host migration tool, then runs the runtime image's
+When owned migration files exist, `migration-validate` rehearses `up all`,
+`down all`, and `up all`. With no migrations, the host and image migration
+entrypoints return a successful explicit no-op. The command requires Docker
+and creates an isolated Compose project on a dynamic host port; it never
+accepts an operator-supplied database because the rehearsal rolls back every
+migration. It exercises the host migration tool, then runs the runtime image's
 `/migrate` entrypoint on the Compose network.
 It starts the same image with a read-only filesystem and dropped capabilities,
 waits for `/health/ready`, optionally checks `RUNTIME_EXPECTED_VERSION` in the

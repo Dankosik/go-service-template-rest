@@ -8,19 +8,23 @@ Load for migration rehearsal, release sequencing, rollback class, mixed-version 
 
 ## Local Source Of Truth
 - `.github/workflows/ci.yml` runs `migration-validate` on ephemeral Postgres when `migrations/` changes.
-- `Makefile` exposes `migration-validate` and `docker-migration-validate`.
-- `scripts/dev/docker-tooling.sh` runs migration up, down one step, and up one step against temporary Postgres.
+- `Makefile` exposes `migration-validate`, which creates an isolated Compose
+  database and exercises both the host migrator and production image.
 - `railway.toml` records healthcheck, overlap, draining, restart policy, and replica baseline comments that affect rollout windows.
 
 ## Decision Rubric
-- Migration changes block merge unless CI proves `up -> down 1 -> up 1` on ephemeral Postgres, or an exception states why rollback rehearsal is impossible and what compensating proof replaces it.
+- Migration changes block merge unless CI proves `up all -> down all -> up all`
+  on ephemeral Postgres, or an exception states why rollback rehearsal is
+  impossible and what compensating proof replaces it.
 - Release specs must classify migrations as reversible, forward-only, or destructive; forward-only and destructive changes require explicit rollback/restore strategy.
 - Rolling or overlapping deploys require mixed-version compatibility across the overlap window. If compatibility is unknown, delivery is blocked and data/API ownership must decide.
 - Use one controlled migrator job/process for production execution. Do not run migrations opportunistically on every app pod or process startup unless the owning data spec proves idempotence and concurrency safety.
 - Phased schema release must name gates for expand, backfill/migrate, verify, and contract; do not mark contract release-safe until compatibility and rollback evidence exist.
 
 ## Imitate
-- "For migration PRs, require CI `migration-validate` with `MIGRATION_DSN` against ephemeral Postgres and evidence of `up -> down 1 -> up 1`." Copy the exact rehearsal sequence.
+- "For migration PRs, require CI `make migration-validate` against its
+  disposable Compose database and evidence of `up all -> down all -> up all`."
+  Copy the exact rehearsal sequence and isolation boundary.
 - "A destructive contract step is release-blocked until the data spec owns compatibility, restore, and verification; delivery records the blocker rather than approving the schema decision." Copy the handoff behavior.
 - "Backfill release requires budget, checkpoint, retry, and verification artifact before promotion." Copy the data-moving proof shape.
 
