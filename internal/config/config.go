@@ -16,14 +16,12 @@ const (
 type LoadOptions struct {
 	ConfigPath     string
 	ConfigOverlays []string
-	Strict         bool
 }
 
 type LoadReport struct {
-	LoadDuration       time.Duration
-	ValidateDuration   time.Duration
-	UnknownKeyWarnings []string
-	FailedStage        string
+	LoadDuration     time.Duration
+	ValidateDuration time.Duration
+	FailedStage      string
 }
 
 func Load() (Config, error) {
@@ -74,14 +72,12 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, report, err
 	}
 
-	unknownKeyWarnings, err := validateConfig(
+	err = validateConfig(
 		ctx,
 		&cfg,
-		opts.Strict,
 		append(unknownKeys, metadata.sectionScalarOverrideKeys...),
 	)
 	report.ValidateDuration = time.Since(validateStarted)
-	report.UnknownKeyWarnings = unknownKeyWarnings
 	if err != nil {
 		report.FailedStage = StageValidate
 		return Config{}, report, err

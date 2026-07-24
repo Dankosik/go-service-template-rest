@@ -15,29 +15,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var errDependencyInit = errors.New("dependency init")
-
 const (
 	startupDependencyPostgres     = "postgres"
 	startupPostgresProbeOperation = "postgres_probe"
 	startupPostgresResolveStage   = "startup.resolve.postgres"
 	startupPostgresProbeStage     = "startup.probe.postgres"
-)
-
-const (
-	startupDependencyTelemetry       = "telemetry"
-	startupDependencyNetworkPolicy   = "network_policy"
-	startupDependencyIngressPolicy   = "ingress_policy"
-	startupDependencyEgressException = "egress_exception"
-	startupDependencyModeFeatureOff  = "feature_off"
-)
-
-const (
-	startupLogComponentStartupProbes = "startup_probes"
-	startupLogComponentShutdown      = "shutdown"
-
-	startupOperationTelemetryInit  = "telemetry_init"
-	startupOperationTelemetryFlush = "telemetry_flush"
 )
 
 type (
@@ -52,6 +34,43 @@ type postgresStartupRuntime struct {
 	cfg           config.Config
 	log           *slog.Logger
 	networkPolicy networkPolicy
+}
+
+type runtimeDependencies struct {
+	health *health.Service
+	close  func()
+}
+
+func (d runtimeDependencies) Close() {
+	if d.close != nil {
+		d.close()
+	}
+}
+
+func initRuntimeDependencies(
+	bootstrapCtx context.Context,
+	startupCtx context.Context,
+	bootstrap startupBootstrap,
+) (runtimeDependencies, error) {
+	postgresCtx, postgresCancel := withStageBudget(startupCtx, postgresStartupBudget)
+	pg, err := initPostgresDependency(bootstrapCtx, postgresCtx, postgresStartupRuntime{
+		tracer:        bootstrap.tracer,
+		bootstrapSpan: bootstrap.bootstrapSpan,
+		cfg:           bootstrap.cfg,
+		log:           bootstrap.log,
+		networkPolicy: bootstrap.networkPolicy,
+	})
+	postgresCancel()
+	if err != nil {
+		return runtimeDependencies{}, err
+	}
+	if pg == nil {
+		return runtimeDependencies{health: health.New()}, nil
+	}
+	return runtimeDependencies{
+		health: health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout)),
+		close:  pg.Close,
+	}, nil
 }
 
 func postgresStartupProbeAddress(cfg config.PostgresConfig) (string, error) {
@@ -232,4 +251,43 @@ func postgresDependencyInitFailure(err error) error {
 		return fmt.Errorf("%s init failed: %w", startupDependencyPostgres, err)
 	}
 	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, startupDependencyPostgres, err)
+}
+
+func rejectPostgresStartupForDependencyInit(
+	ctx context.Context,
+	bootstrapSpan trace.Span,
+	log *slog.Logger,
+	err error,
+) error {
+	rejectErr := postgresDependencyInitFailure(err)
+	recordStartupRejection(bootstrapSpan, "dependency_init", startupPostgresResolveStage, rejectErr)
+	log.Error(
+		"startup_blocked",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			"postgres_config",
+			"error",
+			"error.type", "dependency_init",
+			"dependency", startupDependencyPostgres,
+			"err", rejectErr,
+		)...,
+	)
+	return rejectErr
+}
+
+func recordDependencyProbeRejection(ctx context.Context, runtime postgresStartupRuntime, err error) {
+	recordStartupRejection(runtime.bootstrapSpan, "dependency_init", startupPostgresProbeStage, err)
+	runtime.log.Error(
+		"startup_blocked",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			startupPostgresProbeOperation,
+			"error",
+			"error.type", "dependency_init",
+			"dependency", startupDependencyPostgres,
+			"err", err,
+		)...,
+	)
 }

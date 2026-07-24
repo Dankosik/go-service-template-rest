@@ -139,6 +139,36 @@ func TestDrainAndShutdownPropagatesContextCanceledError(t *testing.T) {
 	}
 }
 
+func TestDrainAndShutdownRemainsBoundedWhenServerIgnoresContext(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		var events []string
+		release := make(chan struct{})
+		srv := &fakeShutdownServer{
+			events: &events,
+			onCalled: func(context.Context) error {
+				<-release
+				return nil
+			},
+		}
+
+		err := drainAndShutdown(
+			context.Background(),
+			shutdownTestLogger(),
+			0,
+			20*time.Millisecond,
+			&fakeDrainer{events: &events},
+			srv,
+		)
+		close(release)
+
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("drainAndShutdown() error = %v, want context deadline", err)
+		}
+	})
+}
+
 func TestDrainAndShutdownWaitsForPropagationDelay(t *testing.T) {
 	t.Parallel()
 

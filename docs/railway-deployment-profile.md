@@ -25,9 +25,11 @@ commit plus Railway's build and deployment records.
 
 ### Published image
 
-The CD workflow publishes a signed GHCR image, CycloneDX SBOM, build provenance,
-and an immutable `image@sha256:...` reference. A derived repository may deploy
-that digest to Railway or another platform after verifying it.
+When repository variable `ENABLE_GHCR_PUBLISH=true`, the CD workflow publishes
+a signed GHCR image, CycloneDX SBOM, build provenance, and an immutable
+`image@sha256:...` reference. A derived repository may deploy that digest to
+Railway or another platform after verifying it. Publication is disabled by
+default.
 
 This is opt-in operator configuration. Neither `railway.toml` nor the workflow
 contains a Railway project identifier or changes a Railway service.
@@ -42,7 +44,7 @@ can read from the derived source repository:
 
 - `builder = "DOCKERFILE"`
 - `dockerfilePath = "build/docker/Dockerfile"`
-- `preDeployCommand = ["/migrate"]`
+- `preDeployCommand = ["/migrate"]` (PostgreSQL profile only)
 - `healthcheckPath = "/health/ready"`
 - `healthcheckTimeout = 180`
 - `restartPolicyType = "ON_FAILURE"`
@@ -89,7 +91,8 @@ The template deliberately does not choose these values:
 - Railway project, environment, service, branch, domain, or region;
 - secrets and database connection references;
 - replica count, CPU, memory, autoscaling, or spend;
-- public/private networking and access control for `/metrics`;
+- private reachability for the separate metrics listener when its default
+  loopback bind is changed;
 - alerting, continuous health monitoring, or an external uptime check;
 - release approval, rollback authority, and retention policy.
 

@@ -24,6 +24,7 @@ env:
 jobs:
   publish-main:
     if: >-
+      vars.ENABLE_GHCR_PUBLISH == 'true' &&
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -72,11 +73,13 @@ jobs:
             -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
             .
 
+      # profile:database-postgres:start
       - name: Validate migrations and runtime image
         run: |
           make migration-validate \
             RUNTIME_IMAGE="${{ steps.meta.outputs.primary_image }}" \
             RUNTIME_EXPECTED_VERSION="${{ steps.meta.outputs.version }}"
+      # profile:database-postgres:end
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
@@ -203,8 +206,10 @@ jobs:
       - name: Verify formatting drift
         run: make fmt-check
 
+      # profile:database-postgres:start
       - name: Verify sqlc generation drift
         run: make sqlc-check
+      # profile:database-postgres:end
 
       - name: Verify project structure
         run: make project-structure-check
@@ -231,7 +236,10 @@ jobs:
         run: make secret-scan
 
   publish-release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      vars.ENABLE_GHCR_PUBLISH == 'true' &&
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     needs: release-preflight
     timeout-minutes: 45
@@ -276,11 +284,13 @@ jobs:
             -t "${{ steps.meta.outputs.primary_image }}" \
             .
 
+      # profile:database-postgres:start
       - name: Validate migrations and runtime image
         run: |
           make migration-validate \
             RUNTIME_IMAGE="${{ steps.meta.outputs.primary_image }}" \
             RUNTIME_EXPECTED_VERSION="${{ steps.meta.outputs.version }}"
+      # profile:database-postgres:end
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2

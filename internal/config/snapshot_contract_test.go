@@ -211,6 +211,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.max_open_conns":      26,
 		"postgres.conn_max_lifetime":   "45m",
 
+		"observability.metrics.addr":                "127.0.0.1:19090",
 		"observability.otel.service_name":           "snapshot-service",
 		"observability.otel.traces_sampler":         "always_on",
 		"observability.otel.traces_sampler_arg":     0.25,
@@ -244,6 +245,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.max_open_conns":      26,
 		"postgres.conn_max_lifetime":   45 * time.Minute,
 
+		"observability.metrics.addr":                "127.0.0.1:19090",
 		"observability.otel.service_name":           "snapshot-service",
 		"observability.otel.traces_sampler":         "always_on",
 		"observability.otel.traces_sampler_arg":     0.25,

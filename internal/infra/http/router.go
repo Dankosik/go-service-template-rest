@@ -56,10 +56,8 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 
 	apiSubrouter := openapi.HandlerWithOptions(server, generatedChiServerOptions(log, requestValidator))
 
-	// Prometheus exposition is an operational protocol outside the client OpenAPI contract.
 	rootRouter := newRootRouter(
 		apiSubrouter,
-		metrics.Handler(),
 		otelMiddleware,
 		SecurityHeaders,
 		func(next http.Handler) http.Handler { return AccessLog(log, next) },
@@ -129,43 +127,15 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 	writeMalformedRequestProblem(w, r)
 }
 
-type manualRootRouteKey struct {
-	method string
-	path   string
-}
-
-type manualRootRoute struct {
-	key     manualRootRouteKey
-	handler http.Handler
-	reason  string
-}
-
 func newRootRouter(
 	apiSubrouter http.Handler,
-	metricsHandler http.Handler,
 	middlewares ...func(http.Handler) http.Handler,
 ) chi.Router {
 	root := chi.NewRouter()
 	root.Use(middlewares...)
-	for _, route := range manualRootRoutes(metricsHandler) {
-		root.Method(route.key.method, route.key.path, route.handler)
-	}
 	root.Mount("/", apiSubrouter)
 	applyHTTPPolicy(root)
 	return root
-}
-
-func manualRootRoutes(metricsHandler http.Handler) []manualRootRoute {
-	return []manualRootRoute{
-		{
-			key: manualRootRouteKey{
-				method: http.MethodGet,
-				path:   "/metrics",
-			},
-			handler: metricsHandler,
-			reason:  "Prometheus exposition is operational telemetry, not a client API operation",
-		},
-	}
 }
 
 func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {

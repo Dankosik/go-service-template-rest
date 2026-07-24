@@ -127,9 +127,11 @@ Use the first matching rule.
    `cmd/<worker>/internal/bootstrap/`. Reuse feature packages and adapters
    rather than duplicating them.
 8. Is it runtime configuration?
-   Add the field to `internal/config/types.go`, its default to `defaults.go`,
-   accepted key to `schema.go`, parsing in `parse.go`, validation in
-   `validate.go`, and the local example in `env/config/local.yaml`.
+   Add the typed field and `koanf` tag to `internal/config/types.go`, its
+   default to `defaults.go` when appropriate, validation in `validate.go`, and
+   the relevant example in `env/config/local.yaml` or `env/.env.example`.
+   Snapshot decoding and known-key discovery derive from the tagged type; add
+   manual parsing only for a genuinely custom value type.
 9. Is it telemetry?
    SDK/exporter setup belongs in `internal/infra/telemetry/`. Adapter-owned
    instruments belong in `internal/infra/<adapter>/metrics.go` or `tracing.go`.

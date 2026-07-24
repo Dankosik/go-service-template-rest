@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -41,8 +40,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Postgres.DSN != "" {
 		t.Fatalf("Postgres.DSN = %q, want empty", cfg.Postgres.DSN)
 	}
-	if cfg.Observability.OTel.ServiceName != "service" {
-		t.Fatalf("Observability.OTel.ServiceName = %q, want service", cfg.Observability.OTel.ServiceName)
+	if cfg.Observability.Metrics.Addr != "127.0.0.1:9090" {
+		t.Fatalf("Observability.Metrics.Addr = %q, want 127.0.0.1:9090", cfg.Observability.Metrics.Addr)
+	}
+	if cfg.Observability.OTel.ServiceName == "" {
+		t.Fatal("Observability.OTel.ServiceName is empty")
 	}
 	if cfg.Observability.OTel.TracesSampler != "parentbased_traceidratio" {
 		t.Fatalf("Observability.OTel.TracesSampler = %q, want parentbased_traceidratio", cfg.Observability.OTel.TracesSampler)
@@ -248,20 +250,17 @@ http:
 		ConfigOverlays: []string{overlayPath},
 	}
 
-	cfg1, report1, err := LoadDetailed(opts)
+	cfg1, _, err := LoadDetailed(opts)
 	if err != nil {
 		t.Fatalf("first LoadDetailed() error = %v", err)
 	}
-	cfg2, report2, err := LoadDetailed(opts)
+	cfg2, _, err := LoadDetailed(opts)
 	if err != nil {
 		t.Fatalf("second LoadDetailed() error = %v", err)
 	}
 
 	if cfg1 != cfg2 {
 		t.Fatalf("config snapshots differ between repeated loads: first=%+v second=%+v", cfg1, cfg2)
-	}
-	if !reflect.DeepEqual(report1.UnknownKeyWarnings, report2.UnknownKeyWarnings) {
-		t.Fatalf("UnknownKeyWarnings differs between repeated loads: first=%v second=%v", report1.UnknownKeyWarnings, report2.UnknownKeyWarnings)
 	}
 }
 

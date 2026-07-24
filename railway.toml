@@ -8,7 +8,9 @@ builder = "DOCKERFILE"
 dockerfilePath = "build/docker/Dockerfile"
 
 [deploy]
+# profile:database-postgres:start
 preDeployCommand = ["/migrate"]
+# profile:database-postgres:end
 healthcheckPath = "/health/ready"
 healthcheckTimeout = 180
 restartPolicyType = "ON_FAILURE"

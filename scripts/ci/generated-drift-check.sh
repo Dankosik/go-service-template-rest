@@ -52,7 +52,7 @@ check_sqlc() (
 	trap 'rm -rf "${snapshot}"' EXIT
 	cp -R "${ROOT_DIR}/${path}/." "${snapshot}/"
 
-	(cd "${ROOT_DIR}" && go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate -f internal/infra/postgres/sqlc.yaml)
+	(cd "${ROOT_DIR}" && bash ./scripts/run-go-tool.sh sqlc generate -f internal/infra/postgres/sqlc.yaml)
 
 	if ! diff -qr "${snapshot}" "${ROOT_DIR}/${path}" >/dev/null; then
 		echo "sqlc drift detected: generation changed ${path}"

@@ -16,7 +16,7 @@ type shutdownServer interface {
 	Shutdown(context.Context) error
 }
 
-func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, srv shutdownServer) error {
+func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, servers ...shutdownServer) error {
 	log.Info(
 		"shutdown_started",
 		startupLogArgs(
@@ -61,8 +61,25 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 		}
 	}
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+	resultCh := make(chan error, len(servers))
+	for _, server := range servers {
+		go func() {
+			resultCh <- server.Shutdown(shutdownCtx)
+		}()
+	}
+
+	var shutdownErr error
+	for completed := 0; completed < len(servers); completed++ {
+		select {
+		case err := <-resultCh:
+			shutdownErr = errors.Join(shutdownErr, err)
+		case <-shutdownCtx.Done():
+			shutdownErr = errors.Join(shutdownErr, shutdownCtx.Err())
+			completed = len(servers)
+		}
+	}
+	if shutdownErr != nil {
+		if errors.Is(shutdownErr, context.DeadlineExceeded) {
 			log.Error(
 				"shutdown_timeout",
 				startupLogArgs(
@@ -74,7 +91,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 				)...,
 			)
 		}
-		return fmt.Errorf("graceful shutdown failed: %w", err)
+		return fmt.Errorf("graceful shutdown failed: %w", shutdownErr)
 	}
 
 	log.Info(

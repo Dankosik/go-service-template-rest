@@ -23,6 +23,8 @@ func defaultValues() map[string]any {
 
 		"log.level": "info",
 
+		"observability.metrics.addr": "127.0.0.1:9090",
+
 		"postgres.enabled":             false,
 		"postgres.dsn":                 "",
 		"postgres.connect_timeout":     "3s",

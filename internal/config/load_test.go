@@ -31,6 +31,7 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	t.Setenv("APP__APP__ENV", " local ")
 	t.Setenv("APP__APP__VERSION", " v1.2.3 ")
 	t.Setenv("APP__HTTP__ADDR", " :8081 ")
+	t.Setenv("APP__OBSERVABILITY__METRICS__ADDR", " 127.0.0.1:9091 ")
 	t.Setenv("APP__OBSERVABILITY__OTEL__SERVICE_NAME", " reference ")
 	t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER", " parentbased_traceidratio ")
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", " https://otel.example.com/v1/traces ")
@@ -45,6 +46,9 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	}
 	if cfg.HTTP.Addr != ":8081" {
 		t.Fatalf("HTTP.Addr = %q, want %q", cfg.HTTP.Addr, ":8081")
+	}
+	if cfg.Observability.Metrics.Addr != "127.0.0.1:9091" {
+		t.Fatalf("Metrics.Addr = %q, want %q", cfg.Observability.Metrics.Addr, "127.0.0.1:9091")
 	}
 	if cfg.Observability.OTel.ServiceName != "reference" {
 		t.Fatalf("ServiceName = %q, want %q", cfg.Observability.OTel.ServiceName, "reference")
@@ -81,8 +85,8 @@ func TestErrorTypeMapping(t *testing.T) {
 	if got := ErrorType(nil); got != "" {
 		t.Fatalf("ErrorType(nil) = %q, want empty", got)
 	}
-	if got := ErrorType(ErrStrictUnknownKey); got != "strict_unknown_key" {
-		t.Fatalf("ErrorType(strict) = %q", got)
+	if got := ErrorType(ErrUnknownKey); got != "unknown_key" {
+		t.Fatalf("ErrorType(unknown_key) = %q", got)
 	}
 	if got := ErrorType(ErrSecretPolicy); got != "secret_policy" {
 		t.Fatalf("ErrorType(secret_policy) = %q", got)
@@ -145,15 +149,12 @@ unknown:
   field: value
 `)
 
-		_, report, err := LoadDetailed(LoadOptions{
-			ConfigPath: configPath,
-			Strict:     true,
-		})
+		_, report, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected strict unknown key error")
+			t.Fatalf("LoadDetailed() expected unknown key error")
 		}
-		if !errors.Is(err, ErrStrictUnknownKey) {
-			t.Fatalf("error = %v, want ErrStrictUnknownKey", err)
+		if !errors.Is(err, ErrUnknownKey) {
+			t.Fatalf("error = %v, want ErrUnknownKey", err)
 		}
 		if report.FailedStage != StageValidate {
 			t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageValidate)

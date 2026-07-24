@@ -7,5 +7,7 @@ http:
 log:
   level: debug
 
+# profile:database-postgres:start
 postgres:
   enabled: false
+# profile:database-postgres:end

@@ -260,9 +260,9 @@ compare_benchmarks() {
 
 	output_dir="$(dirname "${BENCH_COMPARE_OUTPUT}")"
 	mkdir -p "${output_dir}"
-	go tool benchstat -h >/dev/null 2>&1
+	bash "${ROOT_DIR}/scripts/run-go-tool.sh" benchstat -h >/dev/null 2>&1
 	temporary_output="$(mktemp "${output_dir}/.benchstat.XXXXXX")"
-	if ! go tool benchstat "${BENCH_BASELINE}" "${BENCH_CURRENT}" >"${temporary_output}" 2>&1; then
+	if ! bash "${ROOT_DIR}/scripts/run-go-tool.sh" benchstat "${BENCH_BASELINE}" "${BENCH_CURRENT}" >"${temporary_output}" 2>&1; then
 		rm -f "${temporary_output}"
 		exit 1
 	fi

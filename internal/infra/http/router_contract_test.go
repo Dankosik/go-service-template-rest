@@ -86,9 +86,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 
-		rootRouter := newRootRouter(apiSubrouter, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
+		rootRouter := newRootRouter(apiSubrouter)
 
 		resp := doRequest(rootRouter, http.MethodPost, "/trace-only")
 
@@ -331,7 +329,8 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	liveResp := httptest.NewRecorder()
 	h.ServeHTTP(liveResp, liveReq)
 
-	metricsResp := doRequest(h, http.MethodGet, "/metrics")
+	metricsResp := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(metricsResp, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 
 	if metricsResp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", metricsResp.Code, http.StatusOK)
@@ -351,52 +350,24 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 		t.Fatal("metrics output contains attacker-controlled authority labels")
 	}
 
-	// Scrape once more to include the previous /metrics request in histogram output.
-	metricsRespSecond := doRequest(h, http.MethodGet, "/metrics")
-	if metricsRespSecond.Code != http.StatusOK {
-		t.Fatalf("second metrics status = %d, want %d", metricsRespSecond.Code, http.StatusOK)
-	}
-	if !strings.Contains(metricsRespSecond.Body.String(), `http_route="/metrics"`) {
-		t.Fatalf("metrics output does not contain expected duration histogram labels for metrics endpoint")
+	appMetricsResp := doRequest(h, http.MethodGet, "/metrics")
+	if appMetricsResp.Code != http.StatusNotFound {
+		t.Fatalf("application /metrics status = %d, want %d", appMetricsResp.Code, http.StatusNotFound)
 	}
 }
 
-func TestOpenAPIRuntimeContractManualRootRouteExceptionsAreDocumented(t *testing.T) {
-	t.Parallel()
-
-	openAPIRoutes := openAPIOperationRoutes(t)
-	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	seen := make(map[manualRootRouteKey]struct{}, len(manualRoutes))
-
-	for _, route := range manualRoutes {
-		if strings.HasPrefix(route.key.path, "/api/") {
-			t.Fatalf("manual route %s %s uses API namespace; add it through OpenAPI instead", route.key.method, route.key.path)
-		}
-		if route.reason == "" {
-			t.Fatalf("manual route %s %s has an empty documented root exception reason", route.key.method, route.key.path)
-		}
-		if _, generated := openAPIRoutes[route.key]; generated {
-			t.Fatalf("manual route %s %s overlaps the generated OpenAPI surface", route.key.method, route.key.path)
-		}
-		if _, duplicate := seen[route.key]; duplicate {
-			t.Fatalf("manual route %s %s is registered more than once", route.key.method, route.key.path)
-		}
-		seen[route.key] = struct{}{}
-	}
+type rootRouteKey struct {
+	method string
+	path   string
 }
 
-func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRoutes(t *testing.T) {
+func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedRoutes(t *testing.T) {
 	t.Parallel()
 
 	openAPIRoutes := openAPIOperationRoutes(t)
-	manualRoutes := manualRootRoutes(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-
-	expectedCounts := make(map[manualRootRouteKey]int, len(openAPIRoutes)+len(manualRoutes))
+	expectedCounts := make(map[rootRouteKey]int, len(openAPIRoutes))
 	for key := range openAPIRoutes {
 		expectedCounts[key]++
-	}
-	for _, route := range manualRoutes {
-		expectedCounts[route.key]++
 	}
 
 	apiSubrouter := chi.NewRouter()
@@ -406,13 +377,11 @@ func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRou
 		}))
 	}
 
-	rootRouter := newRootRouter(apiSubrouter, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	rootRouter := newRootRouter(apiSubrouter)
 
-	seenCounts := make(map[manualRootRouteKey]int, len(expectedCounts))
+	seenCounts := make(map[rootRouteKey]int, len(expectedCounts))
 	err := chi.Walk(rootRouter, func(method string, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		key := manualRootRouteKey{method: method, path: route}
+		key := rootRouteKey{method: method, path: route}
 		seenCounts[key]++
 
 		if strings.HasPrefix(route, "/api/") {
@@ -437,7 +406,7 @@ func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedOrDocumentedRou
 	}
 }
 
-func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
+func openAPIOperationRoutes(t *testing.T) map[rootRouteKey]struct{} {
 	t.Helper()
 
 	swagger, err := openapi.GetSpec()
@@ -445,13 +414,13 @@ func openAPIOperationRoutes(t *testing.T) map[manualRootRouteKey]struct{} {
 		t.Fatalf("GetSpec() error = %v", err)
 	}
 
-	routes := make(map[manualRootRouteKey]struct{})
+	routes := make(map[rootRouteKey]struct{})
 	for path, item := range swagger.Paths.Map() {
 		if item == nil {
 			continue
 		}
 		for method := range item.Operations() {
-			routes[manualRootRouteKey{method: method, path: path}] = struct{}{}
+			routes[rootRouteKey{method: method, path: path}] = struct{}{}
 		}
 	}
 	return routes
@@ -472,8 +441,8 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	}
 
 	metricsResp := doRequest(h, http.MethodGet, "/metrics")
-	if metricsResp.Code != http.StatusOK {
-		t.Fatalf("metrics status = %d, want %d", metricsResp.Code, http.StatusOK)
+	if metricsResp.Code != http.StatusNotFound {
+		t.Fatalf("application /metrics status = %d, want %d", metricsResp.Code, http.StatusNotFound)
 	}
 
 	customMethodResp := doRequest(h, "BREW", "/health/live")
@@ -488,12 +457,12 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 
 	wantSpanNames := map[string]bool{
 		"GET /health/live": false,
-		"GET /metrics":     false,
+		"GET /*":           false,
 		"HTTP":             false,
 	}
 	wantHTTPRoutes := map[string]string{
 		"GET /health/live": "/health/live",
-		"GET /metrics":     "/metrics",
+		"GET /*":           "/*",
 	}
 
 	spanNames := make([]string, 0, len(spans))

@@ -37,7 +37,13 @@ type LogConfig struct {
 }
 
 type ObservabilityConfig struct {
-	OTel OTelConfig `koanf:"otel"`
+	Metrics MetricsConfig `koanf:"metrics"`
+	OTel    OTelConfig    `koanf:"otel"`
+}
+
+type MetricsConfig struct {
+	// Addr is the private Prometheus diagnostics listener. Empty disables HTTP exposition.
+	Addr string `koanf:"addr"`
 }
 
 type OTelConfig struct {

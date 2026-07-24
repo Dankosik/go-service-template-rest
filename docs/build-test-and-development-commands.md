@@ -11,23 +11,30 @@ that would be awkward or misleading inside a recipe.
   runtime-image build and scan, Compose, real-PostgreSQL benchmarks, and k6 HTTP
   benchmarks.
 
-Go tools are pinned through the `tool` block in `go.mod`. Container tools and
-test dependencies are digest-pinned at their owning command or test seam.
-There is no second containerized Go toolchain.
+Go tools are pinned through the `tool` block in `tools/go.mod` and invoked by
+`scripts/run-go-tool.sh` from the repository root. Runtime and test
+dependencies remain in the root `go.mod`. `make mod-check` verifies and checks
+Go-version consistency for both modules. Container tools and test dependencies
+are pinned at their owning command or test seam.
 
 ## Initialize a derived service
 
 ```bash
 make template-init \
   MODULE=github.com/acme/orders \
-  CODEOWNER=@acme/backend
+  CODEOWNER=@acme/backend \
+  DATABASE=none \
+  AGENT_WORKFLOW=none
 make template-init-check
 ```
 
-`template-init` is the only onboarding mutation. It validates the module and
-owner before editing, rewrites Go/proto imports and module-qualified lint
-configuration, updates CODEOWNERS, preserves an existing `.env`, and runs
-`go mod tidy`.
+`template-init` is the only onboarding mutation. It validates the module,
+owner, and profiles before editing; rewrites service identity, both Go module
+paths, Go/proto imports, lint configuration, CODEOWNERS, OpenAPI title, and the
+derived README; preserves an existing `.env`; and tidies both modules.
+`DATABASE=none` removes PostgreSQL runtime, migration, test, image, deployment,
+and tool surfaces. `DATABASE=postgres` retains them. `AGENT_WORKFLOW=none`
+keeps a compact `AGENTS.md`; `full` retains the complete multi-harness corpus.
 
 The template source checkout may run the command without arguments for normal
 local setup; it keeps the template module and CODEOWNERS unchanged while

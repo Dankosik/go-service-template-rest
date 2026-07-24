@@ -122,6 +122,101 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 	}
 }
 
+func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
+	t.Parallel()
+
+	occupied, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve metrics address: %v", err)
+	}
+	defer func() {
+		_ = occupied.Close()
+	}()
+
+	err = serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		cfg: config.Config{
+			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+			Observability: config.ObservabilityConfig{
+				Metrics: config.MetricsConfig{Addr: occupied.Addr().String()},
+			},
+		},
+		log:            slog.New(slog.DiscardHandler),
+		healthSvc:      health.New(),
+		srv:            newFakeRuntimeServer(),
+		metricsSrv:     newFakeRuntimeServer(),
+		readinessCheck: func(context.Context) error { return nil },
+		admission:      newTestStartupAdmissionController(),
+	})
+
+	if err == nil {
+		t.Fatal("serveHTTPRuntime() error = nil, want metrics listen failure")
+	}
+	if !strings.Contains(err.Error(), "listen metrics server") {
+		t.Fatalf("serveHTTPRuntime() err = %v, want metrics listen context", err)
+	}
+}
+
+func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T) {
+	t.Parallel()
+
+	appSrv := newFakeRuntimeServer()
+	metricsSrv := newFakeRuntimeServer()
+	admission := newTestStartupAdmissionController()
+	signalCtx, cancelSignal := context.WithCancel(context.Background())
+	defer cancelSignal()
+	bootstrapCtx := context.WithoutCancel(signalCtx)
+
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
+			bootstrapSpan: trace.SpanFromContext(bootstrapCtx),
+			cfg: config.Config{
+				App:  config.AppConfig{Env: "test"},
+				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+				Observability: config.ObservabilityConfig{
+					Metrics: config.MetricsConfig{Addr: "127.0.0.1:0"},
+				},
+			},
+			log:            slog.New(slog.DiscardHandler),
+			healthSvc:      health.New(),
+			srv:            appSrv,
+			metricsSrv:     metricsSrv,
+			readinessCheck: func(context.Context) error { return nil },
+			admission:      admission,
+		})
+	}()
+
+	for name, started := range map[string]<-chan struct{}{
+		"application": appSrv.serveStarted,
+		"metrics":     metricsSrv.serveStarted,
+	} {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatalf("%s server did not start", name)
+		}
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for !admission.Ready() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !admission.Ready() {
+		t.Fatal("startup admission was not marked ready")
+	}
+
+	cancelSignal()
+	select {
+	case err := <-runErrCh:
+		if err != nil {
+			t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("serveHTTPRuntime() did not stop both servers")
+	}
+}
+
 func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	t.Parallel()
 

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
@@ -90,26 +89,13 @@ func Run(args []string) (runErr error) {
 
 	bootstrapCtx := startupBootstrapContext(startupCtx, bootstrap.bootstrapSpan)
 
-	postgresCtx, postgresCancel := withStageBudget(startupCtx, postgresStartupBudget)
-	pg, err := initPostgresDependency(bootstrapCtx, postgresCtx, postgresStartupRuntime{
-		tracer:        bootstrap.tracer,
-		bootstrapSpan: bootstrap.bootstrapSpan,
-		cfg:           bootstrap.cfg,
-		log:           bootstrap.log,
-		networkPolicy: bootstrap.networkPolicy,
-	})
-	postgresCancel()
+	dependencies, err := initRuntimeDependencies(bootstrapCtx, startupCtx, bootstrap)
 	if err != nil {
 		return err
 	}
-	if pg != nil {
-		defer pg.Close()
-	}
+	defer dependencies.Close()
 
-	healthSvc := health.New()
-	if pg != nil {
-		healthSvc = health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout))
-	}
+	healthSvc := dependencies.health
 	startupAdmission := newStartupAdmissionController(bootstrapSpan)
 
 	handler, err := httpx.NewRouter(
@@ -138,12 +124,27 @@ func Run(args []string) (runErr error) {
 		MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
 	}
 
+	var metricsSrv runtimeServer
+	if bootstrap.cfg.Observability.Metrics.Addr != "" {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("GET /metrics", metrics.Handler())
+		metricsSrv = &http.Server{
+			Handler:           metricsMux,
+			ReadHeaderTimeout: bootstrap.cfg.HTTP.ReadHeaderTimeout,
+			ReadTimeout:       bootstrap.cfg.HTTP.ReadTimeout,
+			WriteTimeout:      bootstrap.cfg.HTTP.WriteTimeout,
+			IdleTimeout:       bootstrap.cfg.HTTP.IdleTimeout,
+			MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
+		}
+	}
+
 	return serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
 		bootstrapSpan:  bootstrap.bootstrapSpan,
 		cfg:            bootstrap.cfg,
 		log:            bootstrap.log,
 		healthSvc:      healthSvc,
 		srv:            srv,
+		metricsSrv:     metricsSrv,
 		readinessCheck: healthSvc.Ready,
 		admission:      startupAdmission,
 		shutdownDelay:  bootstrap.cfg.HTTP.ReadinessPropagationDelay,
@@ -173,8 +174,6 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 		overlays = append(overlays, trimmed)
 		return nil
 	})
-	configStrict := flags.Bool("config-strict", false, "enable strict unknown-key validation")
-
 	if err := flags.Parse(args); err != nil {
 		return config.LoadOptions{}, fmt.Errorf("parse flags: %w", err)
 	}
@@ -185,6 +184,5 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	return config.LoadOptions{
 		ConfigPath:     configPath,
 		ConfigOverlays: overlays,
-		Strict:         *configStrict,
 	}, nil
 }
