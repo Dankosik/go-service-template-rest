@@ -39,6 +39,7 @@ make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
+  OUTBOUND_HTTP=none \
   AGENT_WORKFLOW=none
 make check
 make run
@@ -46,7 +47,9 @@ make run
 
 The defaults create a small service with no database dependency and a compact
 `AGENTS.md`. Choose `DATABASE=postgres` and/or `AGENT_WORKFLOW=full` only when
-the service and team need those maintained surfaces.
+the service and team need those maintained surfaces. Choose
+`OUTBOUND_HTTP=bounded` only when a shared fixed-authority client removes
+repeated provider code.
 
 ## What You Get
 
@@ -55,6 +58,7 @@ the service and team need those maintained surfaces.
 | Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `golang-migrate v4`, and `sqlc` profile |
+| Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign and CycloneDX |
@@ -140,7 +144,7 @@ internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
-internal/infra/httpclient/       bounded outbound HTTP transport
+internal/infra/httpclient/       bounded outbound HTTP transport (optional profile)
 internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts

@@ -9,19 +9,23 @@ import (
 	"testing"
 )
 
-func TestRunSkipsMigrationsWhenPostgresDisabled(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+func TestRunRejectsDisabledPostgresProfile(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	clearAppEnvForTest(t)
 
 	t.Chdir(t.TempDir())
+	t.Setenv("APP__POSTGRES__ENABLED", "false")
 
 	var stdout bytes.Buffer
 
-	if err := run(nil, &stdout); err != nil {
-		t.Fatalf("run() error = %v, want nil", err)
+	err := run(nil, &stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want required-profile rejection")
 	}
-
-	if got := stdout.String(); got != "postgres is disabled; skipping migrations\n" {
-		t.Fatalf("run() stdout = %q, want disabled migration message", got)
+	if !strings.Contains(err.Error(), "required by the DATABASE=postgres profile") {
+		t.Fatalf("run() error = %q, want profile context", err)
+	}
+	if got := stdout.String(); got != "" {
+		t.Fatalf("run() stdout = %q, want empty", got)
 	}
 }
 

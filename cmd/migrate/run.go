@@ -36,8 +36,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	if !cfg.Postgres.Enabled {
-		_, _ = fmt.Fprintln(stdout, "postgres is disabled; skipping migrations")
-		return nil
+		return errors.New("postgres is required by the DATABASE=postgres profile")
 	}
 
 	migrationSourceFS, migrationSourcePath, found, err := resolveMigrationSource()

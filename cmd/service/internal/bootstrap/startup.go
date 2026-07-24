@@ -41,7 +41,7 @@ func bootstrapRuntime(
 
 	log := bootstrapLoggerStage(cfg)
 	netPolicyResult := loadNetworkPolicy()
-	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log, netPolicyResult)
+	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
 	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
 	spanOwnedByCaller := false
 	defer func() {
@@ -86,15 +86,14 @@ func bootstrapNetworkPolicyStage(
 	cfg config.Config,
 ) (networkPolicy, error) {
 	if netPolicyResult.err != nil {
-		policyClass, reasonClass := networkPolicyErrorLabels(netPolicyResult.err)
 		return networkPolicy{}, rejectStartupForPolicyViolation(
 			bootstrapCtx,
 			bootstrapSpan,
 			log,
 			startupDependencyNetworkPolicy,
 			fmt.Errorf("invalid network policy configuration: %w", netPolicyResult.err),
-			"policy.class", policyClass,
-			"reason.class", reasonClass,
+			"policy.class", "ingress",
+			"reason.class", "invalid_configuration",
 		)
 	}
 	netPolicy := netPolicyResult.policy.withIngressExposure(cfg.App.Env, cfg.HTTP.Addr)
@@ -106,16 +105,6 @@ func bootstrapNetworkPolicyStage(
 			log,
 			startupDependencyIngressPolicy,
 			ingressErr,
-		)
-	}
-
-	if egressErr := netPolicy.ValidateEgressExceptionState(); egressErr != nil {
-		return networkPolicy{}, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			bootstrapSpan,
-			log,
-			startupDependencyEgressException,
-			egressErr,
 		)
 	}
 

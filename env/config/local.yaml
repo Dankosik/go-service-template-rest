@@ -9,5 +9,5 @@ log:
 
 # profile:database-postgres:start
 postgres:
-  enabled: false
+  enabled: true
 # profile:database-postgres:end

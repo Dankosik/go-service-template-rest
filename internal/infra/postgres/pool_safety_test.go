@@ -11,6 +11,9 @@ func TestPoolNilAndZeroValueSafety(t *testing.T) {
 
 	var nilPool *Pool
 	nilPool.Close()
+	if nilPool.PGX() != nil {
+		t.Fatal("nil Pool PGX() != nil")
+	}
 	if err := nilPool.Check(context.Background()); err == nil {
 		t.Fatal("nil Pool Check() error = nil, want non-nil")
 	} else if !errors.Is(err, ErrHealthcheck) {
@@ -19,6 +22,9 @@ func TestPoolNilAndZeroValueSafety(t *testing.T) {
 
 	zeroPool := &Pool{}
 	zeroPool.Close()
+	if zeroPool.PGX() != nil {
+		t.Fatal("zero Pool PGX() != nil")
+	}
 	if err := zeroPool.Check(context.Background()); err == nil {
 		t.Fatal("zero Pool Check() error = nil, want non-nil")
 	} else if !errors.Is(err, ErrHealthcheck) {

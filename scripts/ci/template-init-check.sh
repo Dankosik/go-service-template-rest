@@ -205,7 +205,7 @@ malformed_owner="$(new_fixture malformed-owner git@github.com:acme/malformed-own
 expect_unchanged_failure "${malformed_owner}" \
 	env CODEOWNER=acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
 
-minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/minimal-service.git)"
+minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
 (
 	cd "${minimal_checkout}"
 	CODEOWNER=@acme/platform DATABASE=none AGENT_WORKFLOW=none bash ./scripts/init-module.sh
@@ -222,6 +222,7 @@ minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/mini
 grep -Fq 'postgres is not included in the DATABASE=none profile' "${TEMP_ROOT}/minimal-postgres.log"
 for removed in \
 	cmd/migrate \
+	internal/infra/httpclient \
 	internal/infra/postgres \
 	internal/infra/postgresmigrate \
 	env/docker-compose.yml \
@@ -229,6 +230,7 @@ for removed in \
 	test/postgres_migrate_runner_integration_test.go; do
 	[[ ! -e "${minimal_checkout}/${removed}" ]]
 done
+! make -C "${minimal_checkout}" help | grep -Fq 'bench-db'
 ! grep -Fq 'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
 ! grep -Fq '/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
 ! grep -Fq 'migration-validate:' "${minimal_checkout}/.github/workflows/ci.yml"
@@ -241,21 +243,34 @@ if (
 	echo "database-none profile retained PostgreSQL runtime dependencies"
 	exit 1
 fi
+(
+	cd "${minimal_checkout}"
+	git apply "${ROOT_DIR}/scripts/ci/fixtures/first-feature.patch"
+	make openapi-generate
+	make openapi-lint openapi-validate
+	gofmt -w internal/greeting internal/infra/http cmd/service/internal/bootstrap/run.go
+	go test ./internal/greeting ./internal/infra/http ./cmd/service/internal/bootstrap
+)
 
 postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
 (
 	cd "${postgres_checkout}"
-	CODEOWNER=@acme/platform DATABASE=postgres AGENT_WORKFLOW=full bash ./scripts/init-module.sh
+	CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded AGENT_WORKFLOW=full bash ./scripts/init-module.sh
 	go test ./...
 	go build ./cmd/service ./cmd/migrate
 )
 for retained in \
 	cmd/migrate \
+	internal/infra/httpclient \
 	internal/infra/postgres \
 	internal/infra/postgresmigrate \
 	env/docker-compose.yml; do
 	[[ -e "${postgres_checkout}/${retained}" ]]
 done
+
+malformed_outbound="$(new_fixture malformed-outbound git@github.com:acme/malformed-outbound.git)"
+expect_unchanged_failure "${malformed_outbound}" \
+	env CODEOWNER=@acme/platform OUTBOUND_HTTP=custom bash "${ROOT_DIR}/scripts/init-module.sh"
 if (
 	cd "${postgres_checkout}"
 	go list -deps ./cmd/service | grep -F 'github.com/golang-migrate/migrate'

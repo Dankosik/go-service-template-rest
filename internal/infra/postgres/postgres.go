@@ -97,6 +97,14 @@ func (p *Pool) Close() {
 	p.pool.Close()
 }
 
+// PGX returns the concrete pool for sqlc and transaction wiring at composition.
+func (p *Pool) PGX() *pgxpool.Pool {
+	if p == nil {
+		return nil
+	}
+	return p.pool
+}
+
 func (p *Pool) Name() string {
 	return poolName
 }

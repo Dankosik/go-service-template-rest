@@ -1,0 +1,176 @@
+diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
+index f450109..598dbe3 100644
+--- a/api/openapi/service.yaml
++++ b/api/openapi/service.yaml
+@@ -12,7 +12,38 @@ security: []
+ tags:
+   - name: system
+     description: Operational endpoints for liveness and readiness.
++  - name: greeting
++    description: Example business capability used by the template acceptance proof.
+ paths:
++  /greetings/{name}:
++    get:
++      tags: [greeting]
++      summary: Build a greeting
++      operationId: getGreeting
++      x-security-decision:
++        exposure: public
++        rationale: acceptance fixture with no private data or side effects
++      parameters:
++        - name: name
++          in: path
++          required: true
++          schema:
++            type: string
++            minLength: 1
++            maxLength: 80
++      responses:
++        "200":
++          description: greeting
++          content:
++            application/json:
++              schema:
++                $ref: "#/components/schemas/Greeting"
++        "400":
++          $ref: "#/components/responses/BadRequest"
++        "413":
++          $ref: "#/components/responses/RequestEntityTooLarge"
++        "500":
++          $ref: "#/components/responses/InternalServerError"
+   /health/live:
+     get:
+       tags: [system]
+@@ -66,6 +97,13 @@ paths:
+                 example: not ready
+ components:
+   schemas:
++    Greeting:
++      type: object
++      required:
++        - message
++      properties:
++        message:
++          type: string
+     Problem:
+       type: object
+       required:
+diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
+index 8bef02f..1e6c583 100644
+--- a/cmd/service/internal/bootstrap/run.go
++++ b/cmd/service/internal/bootstrap/run.go
+@@ -14,6 +14,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/acme/feature-proof/internal/config"
++	"github.com/acme/feature-proof/internal/greeting"
+ 	httpx "github.com/acme/feature-proof/internal/infra/http"
+ 	"github.com/acme/feature-proof/internal/infra/telemetry"
+ )
+@@ -101,6 +102,7 @@ func Run(args []string) (runErr error) {
+ 	handler, err := httpx.NewRouter(
+ 		bootstrap.log,
+ 		httpx.Handlers{
++			Greeting:      greeting.Service{},
+ 			Health:        healthSvc,
+ 			ReadinessGate: startupAdmission.CheckReady,
+ 		},
+diff --git a/internal/greeting/service.go b/internal/greeting/service.go
+new file mode 100644
+index 0000000..2df4efd
+--- /dev/null
++++ b/internal/greeting/service.go
+@@ -0,0 +1,7 @@
++package greeting
++
++type Service struct{}
++
++func (Service) Message(name string) string {
++	return "Hello, " + name + "!"
++}
+diff --git a/internal/infra/http/greeting_handlers.go b/internal/infra/http/greeting_handlers.go
+new file mode 100644
+index 0000000..be3ca59
+--- /dev/null
++++ b/internal/infra/http/greeting_handlers.go
+@@ -0,0 +1,13 @@
++package httpx
++
++import (
++	"context"
++
++	"github.com/acme/feature-proof/internal/openapi"
++)
++
++func (h strictHandlers) GetGreeting(_ context.Context, request openapi.GetGreetingRequestObject) (openapi.GetGreetingResponseObject, error) {
++	return openapi.GetGreeting200JSONResponse{
++		Message: h.greeting.Message(request.Name),
++	}, nil
++}
+diff --git a/internal/infra/http/greeting_handlers_test.go b/internal/infra/http/greeting_handlers_test.go
+new file mode 100644
+index 0000000..8bc082f
+--- /dev/null
++++ b/internal/infra/http/greeting_handlers_test.go
+@@ -0,0 +1,30 @@
++package httpx
++
++import (
++	"log/slog"
++	"net/http"
++	"strings"
++	"testing"
++
++	"github.com/acme/feature-proof/internal/greeting"
++	"github.com/acme/feature-proof/internal/health"
++	"github.com/acme/feature-proof/internal/infra/telemetry"
++)
++
++func TestGreetingEndpoint(t *testing.T) {
++	t.Parallel()
++
++	handler := mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{
++		Greeting: greeting.Service{},
++		Health:   health.New(),
++	}, telemetry.New(), RouterConfig{})
++
++	response := doRequest(handler, http.MethodGet, "/greetings/Go")
++
++	if response.Code != http.StatusOK {
++		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
++	}
++	if body := strings.TrimSpace(response.Body.String()); body != `{"message":"Hello, Go!"}` {
++		t.Fatalf("body = %q", body)
++	}
++}
+diff --git a/internal/infra/http/handlers.go b/internal/infra/http/handlers.go
+index 9dabd22..1eed339 100644
+--- a/internal/infra/http/handlers.go
++++ b/internal/infra/http/handlers.go
+@@ -5,15 +5,18 @@ import (
+ 	"fmt"
+ 	"time"
+ 
++	"github.com/acme/feature-proof/internal/greeting"
+ 	"github.com/acme/feature-proof/internal/health"
+ )
+ 
+ type Handlers struct {
++	Greeting      greeting.Service
+ 	Health        *health.Service
+ 	ReadinessGate func(context.Context) error
+ }
+ 
+ type strictHandlers struct {
++	greeting         greeting.Service
+ 	health           *health.Service
+ 	readinessGate    func(context.Context) error
+ 	readinessTimeout time.Duration
+@@ -31,6 +34,7 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
+ 	}
+ 
+ 	return strictHandlers{
++		greeting:         h.Greeting,
+ 		health:           h.Health,
+ 		readinessGate:    h.ReadinessGate,
+ 		readinessTimeout: readinessTimeout,

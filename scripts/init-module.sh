@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres AGENT_WORKFLOW=none|full $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOUND_HTTP=none|bounded AGENT_WORKFLOW=none|full $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -161,6 +161,15 @@ none | postgres) ;;
 	;;
 esac
 
+outbound_http="${OUTBOUND_HTTP:-none}"
+case "${outbound_http}" in
+none | bounded) ;;
+*)
+	echo "OUTBOUND_HTTP must be one of: none, bounded"
+	exit 1
+	;;
+esac
+
 agent_workflow="${AGENT_WORKFLOW:-none}"
 case "${agent_workflow}" in
 none | full) ;;
@@ -303,6 +312,10 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- scripts/profiles/database-none
 	fi
 
+	if [[ "${outbound_http}" == "none" ]]; then
+		rm -rf -- internal/infra/httpclient
+	fi
+
 	if [[ "${agent_workflow}" == "none" ]]; then
 		remove_profile_blocks Makefile "agent-workflow-full"
 		rm -rf -- .agents .codex .claude .qwen specs
@@ -321,6 +334,7 @@ fi
 echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
+echo "  outbound HTTP: ${outbound_http}"
 echo "  agent workflow: ${agent_workflow}"
 if [[ -n "${codeowner}" ]]; then
 	echo "  codeowner: ${codeowner}"

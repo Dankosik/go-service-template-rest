@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
 )
 
 // EnforceIngress validates that non-local wildcard listeners have an explicit
@@ -46,137 +45,10 @@ func isWildcardHTTPBind(addr string) bool {
 	return ip != nil && ip.IsUnspecified()
 }
 
-func (p networkPolicy) ValidateEgressExceptionState() error {
-	if !p.egressException.Active {
-		return nil
-	}
-	if p.isExceptionExpired(p.egressException) {
-		return fmt.Errorf("%w: egress exception is expired", errDependencyInit)
-	}
-
-	return nil
-}
-
-func (p networkPolicy) EnforceEgressTarget(target, scheme string) error {
-	normalizedScheme := strings.ToLower(strings.TrimSpace(scheme))
-	if !p.isSchemeAllowed(normalizedScheme) {
-		return fmt.Errorf("%w: egress scheme denied by policy", errDependencyInit)
-	}
-
-	host, err := extractHost(target)
-	if err != nil {
-		return fmt.Errorf("%w: invalid egress target: %w", errDependencyInit, err)
-	}
-
-	if !isPublicHost(host) {
-		return nil
-	}
-	if matchesHost(host, p.egressAllowlist) {
-		return nil
-	}
-
-	if p.egressException.Active && !p.isExceptionExpired(p.egressException) && matchesHost(host, p.egressException.scopeMatcher) {
-		return nil
-	}
-
-	if p.egressException.Active && p.isExceptionExpired(p.egressException) {
-		return fmt.Errorf("%w: egress exception is expired", errDependencyInit)
-	}
-
-	return fmt.Errorf("%w: egress target denied by policy", errDependencyInit)
-}
-
-func (p networkPolicy) isSchemeAllowed(scheme string) bool {
-	if scheme == "" {
-		return false
-	}
-	_, ok := p.egressAllowedSchemes[scheme]
-	return ok
-}
-
-func (p networkPolicy) isExceptionExpired(exception networkException) bool {
-	if p.now == nil {
-		return time.Now().After(exception.Expiry)
-	}
-	return p.now().After(exception.Expiry)
-}
-
-func matchesHost(host string, matchers []networkHostMatcher) bool {
-	normalized := normalizeHost(host)
-	if normalized == "" {
-		return false
-	}
-	for _, matcher := range matchers {
-		if matcher.exact != "" && normalized == matcher.exact {
-			return true
-		}
-		if matcher.suffix != "" {
-			base := strings.TrimPrefix(matcher.suffix, ".")
-			if (matcher.includeApex && normalized == base) || strings.HasSuffix(normalized, matcher.suffix) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func normalizeHost(raw string) string {
 	host := strings.ToLower(strings.TrimSpace(raw))
 	host = strings.TrimSuffix(host, ".")
 	host = strings.TrimPrefix(host, "[")
 	host = strings.TrimSuffix(host, "]")
 	return host
-}
-
-func isPublicHost(host string) bool {
-	normalized := normalizeHost(host)
-	if normalized == "" {
-		return true
-	}
-
-	if ip := net.ParseIP(normalized); ip != nil {
-		return !isPrivateIP(ip)
-	}
-
-	if normalized == "localhost" {
-		return false
-	}
-	if strings.HasSuffix(normalized, ".internal") ||
-		strings.HasSuffix(normalized, ".local") ||
-		strings.HasSuffix(normalized, ".svc") ||
-		strings.HasSuffix(normalized, ".cluster.local") {
-		return false
-	}
-
-	return true
-}
-
-func isPrivateIP(ip net.IP) bool {
-	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
-}
-
-func extractHost(target string) (string, error) {
-	trimmed := strings.TrimSpace(target)
-	if trimmed == "" {
-		return "", fmt.Errorf("target is empty")
-	}
-
-	host, _, err := net.SplitHostPort(trimmed)
-	if err == nil {
-		host = normalizeHost(host)
-		if host == "" {
-			return "", fmt.Errorf("host is empty")
-		}
-		return host, nil
-	}
-
-	if strings.Count(trimmed, ":") == 0 {
-		host = normalizeHost(trimmed)
-		if host == "" {
-			return "", fmt.Errorf("host is empty")
-		}
-		return host, nil
-	}
-
-	return "", fmt.Errorf("target must be host:port")
 }

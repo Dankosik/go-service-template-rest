@@ -34,38 +34,6 @@ func TestBootstrapNetworkPolicyStageAllowsDeclaredPublicIngress(t *testing.T) {
 	}
 }
 
-func TestBootstrapNetworkPolicyStagePreservesConfigCause(t *testing.T) {
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ACTIVE", "true")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_OWNER", "platform")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_REASON", "temporary-diagnostic")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_SCOPE", "example.internal")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_EXPIRY", "not-rfc3339")
-	t.Setenv("NETWORK_EGRESS_EXCEPTION_ROLLBACK_PLAN", "disable-egress-exception")
-
-	logBuffer := &bytes.Buffer{}
-	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
-
-	ctx, span := otel.Tracer("test").Start(context.Background(), "network-policy-stage")
-	_, err := bootstrapNetworkPolicyStage(ctx, span, logger, loadNetworkPolicy(), config.Config{})
-	span.End()
-	if err == nil {
-		t.Fatal("bootstrapNetworkPolicyStage() error = nil, want non-nil")
-	}
-	if !errors.Is(err, errDependencyInit) {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
-	}
-	if !strings.Contains(err.Error(), "RFC3339") {
-		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want original parse detail", err)
-	}
-	logLine := logBuffer.String()
-	if !strings.Contains(logLine, `"policy.class":"egress"`) {
-		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want policy class", logLine)
-	}
-	if !strings.Contains(logLine, `"reason.class":"invalid_configuration"`) {
-		t.Fatalf("bootstrapNetworkPolicyStage() log = %q, want reason class", logLine)
-	}
-}
-
 func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLocalWildcardBind(t *testing.T) {
 	t.Setenv(envNetworkPublicIngressEnabled, "")
 

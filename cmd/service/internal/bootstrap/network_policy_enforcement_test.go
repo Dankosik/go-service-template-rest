@@ -1,49 +1,29 @@
 package bootstrap
 
 import (
-	"errors"
-	"maps"
 	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestLoadNetworkPolicyFromEnvPublicIngressExplicitValue(t *testing.T) {
+func TestLoadNetworkPolicyFromEnvPublicIngressDeclaration(t *testing.T) {
 	tests := []struct {
-		name              string
-		value             string
-		set               bool
-		wantEnabled       bool
-		wantExplicitValue bool
-		wantErr           string
+		name         string
+		value        string
+		set          bool
+		wantExplicit bool
+		wantErr      string
 	}{
+		{name: "unset"},
+		{name: "empty", set: true},
+		{name: "explicit false", value: "false", set: true, wantExplicit: true},
+		{name: "explicit true", value: "true", set: true, wantExplicit: true},
 		{
-			name: "unset",
-		},
-		{
-			name: "empty",
-			set:  true,
-		},
-		{
-			name:              "explicit false",
-			value:             "false",
-			set:               true,
-			wantExplicitValue: true,
-		},
-		{
-			name:              "explicit true",
-			value:             "true",
-			set:               true,
-			wantEnabled:       true,
-			wantExplicitValue: true,
-		},
-		{
-			name:              "invalid",
-			value:             "sometimes",
-			set:               true,
-			wantExplicitValue: true,
-			wantErr:           "NETWORK_PUBLIC_INGRESS_ENABLED must be a boolean value",
+			name:         "invalid",
+			value:        "sometimes",
+			set:          true,
+			wantExplicit: true,
+			wantErr:      "NETWORK_PUBLIC_INGRESS_ENABLED must be a boolean value",
 		},
 	}
 
@@ -57,288 +37,54 @@ func TestLoadNetworkPolicyFromEnvPublicIngressExplicitValue(t *testing.T) {
 
 			policy, err := loadNetworkPolicyFromEnv()
 			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatal("loadNetworkPolicyFromEnv() error = nil, want non-nil")
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("loadNetworkPolicyFromEnv() error = %v, want %q detail", err, tt.wantErr)
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("loadNetworkPolicyFromEnv() error = %v, want %q", err, tt.wantErr)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 			}
-			if policy.ingressPublicExplicitValue != tt.wantExplicitValue {
-				t.Fatalf("ingressPublicExplicitValue = %v, want %v", policy.ingressPublicExplicitValue, tt.wantExplicitValue)
-			}
-			if policy.ingressPublicEnabled != tt.wantEnabled {
-				t.Fatalf("ingressPublicEnabled = %v, want %v", policy.ingressPublicEnabled, tt.wantEnabled)
+			if policy.ingressPublicExplicitValue != tt.wantExplicit {
+				t.Fatalf("ingressPublicExplicitValue = %v, want %v", policy.ingressPublicExplicitValue, tt.wantExplicit)
 			}
 		})
 	}
 }
 
-func TestNetworkPolicyEnforceIngressRequiresDeclarationForNonLocalWildcardBind(t *testing.T) {
-	wildcardAddrs := []string{
-		":8080",
-		"0.0.0.0:8080",
-		"[::]:8080",
+func TestNetworkPolicyEnforceIngress(t *testing.T) {
+	tests := []struct {
+		name      string
+		env       string
+		addr      string
+		declared  string
+		wantError bool
+	}{
+		{name: "local wildcard", env: "local", addr: ":8080"},
+		{name: "production loopback", env: "prod", addr: "127.0.0.1:8080"},
+		{name: "production public", env: "prod", addr: ":8080", declared: "true"},
+		{name: "production private", env: "prod", addr: "0.0.0.0:8080", declared: "false"},
+		{name: "production missing", env: "prod", addr: "[::]:8080", wantError: true},
 	}
 
-	for _, addr := range wildcardAddrs {
-		t.Run(addr, func(t *testing.T) {
-			t.Setenv(envNetworkPublicIngressEnabled, "")
-
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(envNetworkPublicIngressEnabled, tt.declared)
 			policy, err := loadNetworkPolicyFromEnv()
 			if err != nil {
 				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 			}
-			policy = policy.withIngressExposure("prod", addr)
-
-			err = policy.EnforceIngress()
-			if err == nil {
-				t.Fatal("EnforceIngress() error = nil, want non-nil")
+			err = policy.withIngressExposure(tt.env, tt.addr).EnforceIngress()
+			if tt.wantError {
+				if err == nil || !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
+					t.Fatalf("EnforceIngress() error = %v, want missing declaration", err)
+				}
+				return
 			}
-			if !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
-				t.Fatalf("EnforceIngress() error = %v, want %s detail", err, envNetworkPublicIngressEnabled)
-			}
-		})
-	}
-}
-
-func TestNetworkPolicyEnforceIngressAllowsExplicitPrivateIngressAssertion(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "false")
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy = policy.withIngressExposure("prod", ":8080")
-
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() error = %v, want nil", err)
-	}
-}
-
-func TestNetworkPolicyEnforceIngressAllowsMissingDeclarationForLocalWildcardBind(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "")
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy = policy.withIngressExposure("local", ":8080")
-
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() error = %v, want nil", err)
-	}
-}
-
-func TestNetworkPolicyEnforceIngressAllowsExplicitPublicIngress(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	if err := policy.EnforceIngress(); err != nil {
-		t.Fatalf("EnforceIngress() error = %v, want nil", err)
-	}
-}
-
-func TestNetworkPolicyEnforceEgressTargetDeniesPublicHost(t *testing.T) {
-	t.Parallel()
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	err = policy.EnforceEgressTarget("api.example.com:443", "tcp")
-	if err == nil {
-		t.Fatal("EnforceEgressTarget() error = nil, want non-nil")
-	}
-}
-
-func TestNetworkPolicyEnforceEgressTargetAllowsPrivateAndAllowlistedHosts(t *testing.T) {
-	t.Setenv(envNetworkEgressAllowlist, "api.example.com,*.allowed.example")
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	privateTargetErr := policy.EnforceEgressTarget("10.0.0.12:5432", "tcp")
-	if privateTargetErr != nil {
-		t.Fatalf("EnforceEgressTarget(private) error = %v, want nil", privateTargetErr)
-	}
-	allowlistedErr := policy.EnforceEgressTarget("api.example.com:443", "tcp")
-	if allowlistedErr != nil {
-		t.Fatalf("EnforceEgressTarget(allowlisted exact) error = %v, want nil", allowlistedErr)
-	}
-	allowlistedSuffixErr := policy.EnforceEgressTarget("service.allowed.example:443", "tcp")
-	if allowlistedSuffixErr != nil {
-		t.Fatalf("EnforceEgressTarget(allowlisted suffix) error = %v, want nil", allowlistedSuffixErr)
-	}
-	allowlistedApexErr := policy.EnforceEgressTarget("allowed.example:443", "tcp")
-	if allowlistedApexErr == nil {
-		t.Fatal("EnforceEgressTarget(wildcard apex) error = nil, want non-nil")
-	}
-}
-
-func TestNetworkPolicyEnforceEgressTargetLeadingDotMatchesApexAndSubdomain(t *testing.T) {
-	t.Setenv(envNetworkEgressAllowlist, ".allowed.example")
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	if err := policy.EnforceEgressTarget("allowed.example:443", "tcp"); err != nil {
-		t.Fatalf("EnforceEgressTarget(leading-dot apex) error = %v, want nil", err)
-	}
-	if err := policy.EnforceEgressTarget("service.allowed.example:443", "tcp"); err != nil {
-		t.Fatalf("EnforceEgressTarget(leading-dot subdomain) error = %v, want nil", err)
-	}
-}
-
-func TestNetworkPolicyEnforceEgressTargetDeniesSchemeOutsideAllowlist(t *testing.T) {
-	t.Parallel()
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	err = policy.EnforceEgressTarget("10.0.0.12:5432", "udp")
-	if err == nil {
-		t.Fatal("EnforceEgressTarget() error = nil, want non-nil")
-	}
-}
-
-func TestNetworkPolicyEnforceEgressTargetInvalidTargetPreservesLocalReason(t *testing.T) {
-	t.Setenv(envNetworkEgressAllowedSchemes, "tcp")
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	tests := []struct {
-		name       string
-		target     string
-		wantReason string
-	}{
-		{
-			name:       "empty target",
-			wantReason: "target is empty",
-		},
-		{
-			name:       "empty host",
-			target:     ":443",
-			wantReason: "host is empty",
-		},
-		{
-			name:       "malformed host port",
-			target:     "api.example.com:443:extra",
-			wantReason: "target must be host:port",
-		},
-	}
-
-	//nolint:paralleltest // Parent test configures process-wide network policy env once for the shared policy instance.
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := policy.EnforceEgressTarget(tt.target, "tcp")
-			if err == nil {
-				t.Fatal("EnforceEgressTarget() error = nil, want non-nil")
-			}
-			if !errors.Is(err, errDependencyInit) {
-				t.Fatalf("EnforceEgressTarget() error = %v, want wrapped %v", err, errDependencyInit)
-			}
-			if !errorChainContainsExactMessage(err, tt.wantReason) {
-				t.Fatalf("EnforceEgressTarget() error chain = %v, want wrapped %q", err, tt.wantReason)
+			if err != nil {
+				t.Fatalf("EnforceIngress() error = %v", err)
 			}
 		})
-	}
-}
-
-//nolint:paralleltest // Loads egress exception state from process-wide environment.
-func TestNetworkPolicyEgressExceptionScopeMatchesPublicTarget(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	setValidEgressExceptionEnv(t, now, map[string]string{
-		"ID":    "ex-egress-scope",
-		"SCOPE": "api.exception.example",
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy.now = func() time.Time { return now }
-
-	if got := len(policy.egressException.scopeMatcher); got == 0 {
-		t.Fatal("egress exception scopeMatcher len = 0, want host matcher")
-	}
-	if err := policy.EnforceEgressTarget("api.exception.example:443", "tcp"); err != nil {
-		t.Fatalf("EnforceEgressTarget(exception scope) error = %v, want nil", err)
-	}
-	if err := policy.EnforceEgressTarget("api.other.example:443", "tcp"); err == nil {
-		t.Fatal("EnforceEgressTarget(outside exception scope) error = nil, want non-nil")
-	}
-}
-
-//nolint:paralleltest // Loads egress exception state from process-wide environment.
-func TestNetworkPolicyEgressExceptionRejectsInvalidScopeMatcher(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	setValidEgressExceptionEnv(t, now, map[string]string{
-		"ID":    "ex-egress-invalid-scope",
-		"SCOPE": ".",
-	})
-
-	_, err := loadNetworkPolicyFromEnv()
-	if err == nil {
-		t.Fatal("loadNetworkPolicyFromEnv() error = nil, want invalid egress exception scope")
-	}
-	policyClass, reasonClass := networkPolicyErrorLabels(err)
-	if policyClass != "egress" {
-		t.Fatalf("policyClass = %q, want %q", policyClass, "egress")
-	}
-	if reasonClass != "invalid_configuration" {
-		t.Fatalf("reasonClass = %q, want %q", reasonClass, "invalid_configuration")
-	}
-}
-
-//nolint:paralleltest // Loads egress exception state from process-wide environment.
-func TestNetworkPolicyValidateEgressExceptionStateRejectsExpiredException(t *testing.T) {
-	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
-	setValidEgressExceptionEnv(t, now, map[string]string{
-		"ID":     "ex-egress-expired",
-		"SCOPE":  "api.example.com",
-		"EXPIRY": now.Add(-5 * time.Minute).Format(time.RFC3339),
-	})
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-	policy.now = func() time.Time { return now }
-
-	err = policy.ValidateEgressExceptionState()
-	if err == nil {
-		t.Fatal("ValidateEgressExceptionState() error = nil, want non-nil")
-	}
-}
-
-func TestNetworkPolicyEnforceEgressTargetDeniesSingleLabelHostByDefault(t *testing.T) {
-	t.Parallel()
-
-	policy, err := loadNetworkPolicyFromEnv()
-	if err != nil {
-		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
-	}
-
-	err = policy.EnforceEgressTarget("cache:6379", "tcp")
-	if err == nil {
-		t.Fatal("EnforceEgressTarget(single label) error = nil, want non-nil")
 	}
 }
 
@@ -352,54 +98,4 @@ func unsetEnvForTest(t *testing.T, name string) {
 	if err := os.Unsetenv(name); err != nil {
 		t.Fatalf("os.Unsetenv(%q) error = %v", name, err)
 	}
-}
-
-func setValidEgressExceptionEnv(t *testing.T, now time.Time, overrides map[string]string) {
-	t.Helper()
-
-	setValidNetworkExceptionEnv(t, "NETWORK_EGRESS_EXCEPTION", map[string]string{
-		"ACTIVE":        "true",
-		"ID":            "ex-egress",
-		"OWNER":         "platform",
-		"REASON":        "temporary-upstream-debug",
-		"SCOPE":         "api.example.com",
-		"EXPIRY":        now.Add(2 * time.Hour).Format(time.RFC3339),
-		"ROLLBACK_PLAN": "disable-egress-exception",
-	}, overrides)
-}
-
-func setValidNetworkExceptionEnv(t *testing.T, prefix string, values map[string]string, overrides map[string]string) {
-	t.Helper()
-
-	maps.Copy(values, overrides)
-	for key, value := range values {
-		t.Setenv(prefix+"_"+key, value)
-	}
-}
-
-func errorChainContainsExactMessage(err error, want string) bool {
-	if err == nil {
-		return false
-	}
-	if err.Error() == want {
-		return true
-	}
-	type multiUnwrapper interface {
-		Unwrap() []error
-	}
-	if wrapped, ok := err.(multiUnwrapper); ok {
-		for _, child := range wrapped.Unwrap() {
-			if errorChainContainsExactMessage(child, want) {
-				return true
-			}
-		}
-		return false
-	}
-	type singleUnwrapper interface {
-		Unwrap() error
-	}
-	if wrapped, ok := err.(singleUnwrapper); ok {
-		return errorChainContainsExactMessage(wrapped.Unwrap(), want)
-	}
-	return false
 }
