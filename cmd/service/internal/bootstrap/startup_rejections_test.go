@@ -42,7 +42,7 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "policy-log")
-	rootCause := errors.New("NETWORK_EGRESS_EXCEPTION_EXPIRY must be RFC3339")
+	rootCause := errors.New("NETWORK_PUBLIC_INGRESS_ENABLED must be a boolean value")
 	err := rejectStartupForPolicyViolation(
 		ctx,
 		span,
@@ -54,7 +54,7 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	if err == nil {
 		t.Fatal("rejectStartupForPolicyViolation() error = nil, want non-nil")
 	}
-	if !strings.Contains(logBuffer.String(), "RFC3339") {
+	if !strings.Contains(logBuffer.String(), "boolean value") {
 		t.Fatalf("policy violation log does not contain root cause:\n%s", logBuffer.String())
 	}
 }

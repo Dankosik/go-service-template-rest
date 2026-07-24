@@ -22,19 +22,15 @@ validation; there is no permissive mode.
 
 ## Operational Network Policy Channel
 
-`NETWORK_*` variables are a separate operator policy channel owned by bootstrap, not ordinary app runtime config. Bootstrap reads them directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.
+`NETWORK_PUBLIC_INGRESS_ENABLED` is a separate operator policy value owned by bootstrap, not ordinary app runtime config. Bootstrap reads it directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.
 
-There is no YAML overlay or `APP__...` precedence chain for `NETWORK_*`: the effective value is the process environment value visible to the service at startup. These variables are intended for deployment/network admission controls where explicit declaration matters. For example, missing `NETWORK_PUBLIC_INGRESS_ENABLED` is not the same as setting it to `false`; in non-local wildcard-bind deployments, missing public-ingress declaration fails closed.
+There is no YAML overlay or `APP__...` precedence chain for this value: the effective value is the process environment value visible to the service at startup. It exists because explicit declaration matters for public ingress. Missing `NETWORK_PUBLIC_INGRESS_ENABLED` is not the same as setting it to `false`; in non-local wildcard-bind deployments, missing public-ingress declaration fails closed.
 
-Example key families:
-
-- `NETWORK_PUBLIC_INGRESS_ENABLED` declares whether a non-local wildcard
+`NETWORK_PUBLIC_INGRESS_ENABLED` declares whether a non-local wildcard
   application listener is public (`true`) or private (`false`). Both values are
   valid when explicit; Prometheus metrics use a separate diagnostics listener.
-- `NETWORK_EGRESS_ALLOWLIST` and `NETWORK_EGRESS_ALLOWED_SCHEMES` constrain allowed outbound targets.
-- `NETWORK_EGRESS_EXCEPTION_*` carries temporary exception metadata such as owner, reason, scope, expiry, and rollback plan.
 
-Do not migrate new feature config into `NETWORK_*`. Use this channel only for bootstrap-owned network policy controls that must remain fail-closed and operator-controlled outside normal application config.
+Do not migrate feature config into `NETWORK_*`. Outbound network admission belongs to the deployment platform (firewall, network policy, service mesh, or equivalent), where all connection attempts can actually be enforced. Application-specific allowlists, provider authentication, retries, and error mapping belong to the individual service. Go HTTP clients and the OTLP HTTP exporter use the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment conventions when a proxy is required.
 
 `observability.metrics.addr` owns the Prometheus diagnostics listener. It
 defaults to `127.0.0.1:9090`; an empty value disables HTTP exposition. Binding

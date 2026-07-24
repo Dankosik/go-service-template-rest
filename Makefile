@@ -59,10 +59,13 @@ DATABASE_CI_TARGETS := sqlc-check
 
 .PHONY: help template-init template-init-check project-structure-check check check-full pr-check \
 	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
-	bench bench-baseline bench-compare bench-profile bench-db bench-db-baseline bench-db-compare bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
+	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
-	sqlc-generate sqlc-check openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	migration-validate container-security run build docker-build docker-run compose-up compose-down vendor claude-skills-sync
+	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
+	container-security run build docker-build docker-run vendor claude-skills-sync
+# profile:database-postgres:start
+.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate sqlc-check migration-validate compose-up compose-down
+# profile:database-postgres:end
 
 help:
 	@echo "Setup and everyday development:"
@@ -85,7 +88,9 @@ help:
 	@echo ""
 	@echo "Benchmarking:"
 	@echo "  make bench | bench-baseline | bench-compare | bench-profile"
+# profile:database-postgres:start
 	@echo "  make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state> | bench-db-baseline | bench-db-compare"
+# profile:database-postgres:end
 	@echo "  make bench-http | bench-http-inspect | benchmark-infra-check | benchmark-remote-check | benchmark-remote-image"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
@@ -390,7 +395,6 @@ migration-validate:
 		--read-only \
 		--cap-drop=ALL \
 		--security-opt=no-new-privileges \
-		-e NETWORK_EGRESS_ALLOWLIST=postgres \
 		-e APP__POSTGRES__ENABLED=true \
 		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
 		"$$image" >/dev/null; \

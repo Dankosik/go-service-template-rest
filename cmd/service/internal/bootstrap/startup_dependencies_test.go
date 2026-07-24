@@ -146,7 +146,7 @@ func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(
 	})
 }
 
-func TestInitPostgresDependencyDisabled(t *testing.T) {
+func TestInitPostgresDependencyRejectsDisabledProfile(t *testing.T) {
 	t.Parallel()
 
 	runtime := postgresStartupRuntime{
@@ -154,15 +154,51 @@ func TestInitPostgresDependencyDisabled(t *testing.T) {
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg:           config.Config{},
 		log:           slog.New(slog.DiscardHandler),
-		networkPolicy: networkPolicy{},
 	}
 
 	pg, err := initPostgresDependency(context.Background(), context.Background(), runtime)
-	if err != nil {
-		t.Fatalf("initPostgresDependency() error = %v, want nil", err)
+	if err == nil {
+		t.Fatal("initPostgresDependency() error = nil, want required-profile rejection")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("initPostgresDependency() error = %v, want wrapped %v", err, errDependencyInit)
+	}
+	if !strings.Contains(err.Error(), "required by the DATABASE=postgres profile") {
+		t.Fatalf("initPostgresDependency() error = %v, want profile context", err)
 	}
 	if pg != nil {
 		t.Fatal("initPostgresDependency() pool != nil, want nil")
+	}
+}
+
+func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
+	t.Parallel()
+
+	startupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	dependencies, err := initRuntimeDependencies(context.Background(), startupCtx, startupBootstrap{
+		tracer:        otel.Tracer("test"),
+		bootstrapSpan: trace.SpanFromContext(context.Background()),
+		cfg: config.Config{
+			Postgres: config.PostgresConfig{
+				Enabled:            true,
+				DSN:                "postgres://app:app@127.0.0.1:1/app?sslmode=disable",
+				ConnectTimeout:     10 * time.Millisecond,
+				HealthcheckTimeout: 10 * time.Millisecond,
+				MaxOpenConns:       1,
+				ConnMaxLifetime:    time.Minute,
+			},
+		},
+		log: slog.New(slog.DiscardHandler),
+	})
+	dependencies.Close()
+
+	if err == nil {
+		t.Fatal("initRuntimeDependencies() error = nil, want unavailable PostgreSQL rejection")
+	}
+	if !errors.Is(err, errDependencyInit) {
+		t.Fatalf("initRuntimeDependencies() error = %v, want wrapped %v", err, errDependencyInit)
 	}
 }
 
@@ -180,9 +216,6 @@ func TestInitPostgresDependencyRejectsLowRemainingStartupBudget(t *testing.T) {
 			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
 		}},
 		log: slog.New(slog.DiscardHandler),
-		networkPolicy: networkPolicy{
-			egressAllowedSchemes: map[string]struct{}{"tcp": {}},
-		},
 	}
 
 	_, err := initPostgresDependency(context.Background(), probeCtx, runtime)

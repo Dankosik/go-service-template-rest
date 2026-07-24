@@ -33,18 +33,15 @@ type postgresStartupRuntime struct {
 	bootstrapSpan trace.Span
 	cfg           config.Config
 	log           *slog.Logger
-	networkPolicy networkPolicy
 }
 
 type runtimeDependencies struct {
-	health *health.Service
-	close  func()
+	health   *health.Service
+	postgres *postgres.Pool
 }
 
 func (d runtimeDependencies) Close() {
-	if d.close != nil {
-		d.close()
-	}
+	d.postgres.Close()
 }
 
 func initRuntimeDependencies(
@@ -58,27 +55,15 @@ func initRuntimeDependencies(
 		bootstrapSpan: bootstrap.bootstrapSpan,
 		cfg:           bootstrap.cfg,
 		log:           bootstrap.log,
-		networkPolicy: bootstrap.networkPolicy,
 	})
 	postgresCancel()
 	if err != nil {
 		return runtimeDependencies{}, err
 	}
-	if pg == nil {
-		return runtimeDependencies{health: health.New()}, nil
-	}
 	return runtimeDependencies{
-		health: health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout)),
-		close:  pg.Close,
+		health:   health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout)),
+		postgres: pg,
 	}, nil
-}
-
-func postgresStartupProbeAddress(cfg config.PostgresConfig) (string, error) {
-	address, err := postgres.ProbeAddress(cfg.DSN)
-	if err != nil {
-		return "", fmt.Errorf("%w: resolve postgres probe address: %w", errDependencyInit, err)
-	}
-	return address, nil
 }
 
 func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
@@ -169,25 +154,11 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 
 func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*postgres.Pool, error) {
 	if !runtime.cfg.Postgres.Enabled {
-		return nil, nil //nolint:nilnil // Disabled dependency intentionally has no pool and no startup error.
-	}
-
-	postgresProbeAddress, addressErr := postgresStartupProbeAddress(runtime.cfg.Postgres)
-	if addressErr != nil {
 		return nil, rejectPostgresStartupForDependencyInit(
 			bootstrapCtx,
 			runtime.bootstrapSpan,
 			runtime.log,
-			addressErr,
-		)
-	}
-	if err := runtime.networkPolicy.EnforceEgressTarget(postgresProbeAddress, "tcp"); err != nil {
-		return nil, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			runtime.bootstrapSpan,
-			runtime.log,
-			startupDependencyPostgres,
-			err,
+			errors.New("postgres is required by the DATABASE=postgres profile"),
 		)
 	}
 

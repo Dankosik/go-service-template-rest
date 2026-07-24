@@ -5,11 +5,10 @@ import "errors"
 var errDependencyInit = errors.New("dependency init")
 
 const (
-	startupDependencyTelemetry       = "telemetry"
-	startupDependencyNetworkPolicy   = "network_policy"
-	startupDependencyIngressPolicy   = "ingress_policy"
-	startupDependencyEgressException = "egress_exception"
-	startupDependencyModeFeatureOff  = "feature_off"
+	startupDependencyTelemetry      = "telemetry"
+	startupDependencyNetworkPolicy  = "network_policy"
+	startupDependencyIngressPolicy  = "ingress_policy"
+	startupDependencyModeFeatureOff = "feature_off"
 )
 
 const (

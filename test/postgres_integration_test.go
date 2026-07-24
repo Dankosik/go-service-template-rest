@@ -47,6 +47,9 @@ func TestPostgresPool(t *testing.T) {
 		t.Fatalf("create postgres pool: %v", err)
 	}
 	t.Cleanup(pool.Close)
+	if pool.PGX() == nil {
+		t.Fatal("postgres PGX() = nil, want initialized pool")
+	}
 
 	t.Run("readiness probe", func(t *testing.T) {
 		traceCtx, traceSpan := otel.Tracer("postgres-integration-test").Start(t.Context(), "postgres readiness")

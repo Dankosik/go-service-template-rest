@@ -29,29 +29,11 @@ type TraceExporterConfig struct {
 	OTLPHeaders  string
 }
 
-// TraceExporterTarget describes the explicit application-configured OTLP trace exporter target.
-type TraceExporterTarget struct {
-	Configured bool
-	Target     string
-	Scheme     string
-}
-
 type traceOTLPEndpoint struct {
 	endpointURL string
-	target      string
-	scheme      string
 }
 
 var otelSetupMu sync.Mutex
-
-var unsupportedOTLPProxyEnvVars = []string{
-	"HTTP_PROXY",
-	"HTTPS_PROXY",
-	"NO_PROXY",
-	"http_proxy",
-	"https_proxy",
-	"no_proxy",
-}
 
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
@@ -106,11 +88,6 @@ func rejectUnsupportedAmbientTraceExporterEnv() error {
 		}
 	}
 
-	for _, name := range unsupportedOTLPProxyEnvVars {
-		if os.Getenv(name) != "" {
-			return fmt.Errorf("unsupported ambient otlp proxy environment: proxy variables are not supported for otlp exporter")
-		}
-	}
 	return nil
 }
 
@@ -193,23 +170,6 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 	return options, true, nil
 }
 
-// DescribeTraceExporterTarget returns the explicit OTLP trace exporter network target, if configured.
-func DescribeTraceExporterTarget(cfg TraceExporterConfig) (TraceExporterTarget, error) {
-	endpoint, configured, err := traceExporterOTLPEndpoint(cfg)
-	if err != nil {
-		return TraceExporterTarget{}, err
-	}
-	if !configured {
-		return TraceExporterTarget{}, nil
-	}
-
-	return TraceExporterTarget{
-		Configured: true,
-		Target:     endpoint.target,
-		Scheme:     endpoint.scheme,
-	}, nil
-}
-
 func traceExporterOTLPEndpoint(cfg TraceExporterConfig) (traceOTLPEndpoint, bool, error) {
 	raw := strings.TrimSpace(cfg.OTLPEndpoint)
 	if raw == "" {
@@ -255,8 +215,6 @@ func parseTraceOTLPEndpoint(raw string) (traceOTLPEndpoint, error) {
 
 	return traceOTLPEndpoint{
 		endpointURL: parsedURL.String(),
-		target:      parsedURL.Host,
-		scheme:      scheme,
 	}, nil
 }
 

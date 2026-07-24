@@ -17,7 +17,6 @@ func bootstrapTelemetryStage(
 	cfg config.Config,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-	netPolicyResult networkPolicyLoadResult,
 ) (func(context.Context), error) {
 	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	metricsShutdown, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
@@ -32,14 +31,6 @@ func bootstrapTelemetryStage(
 	cleanup := newTelemetryCleanup(log, metricsShutdown)
 
 	exporterCfg := traceExporterConfig(cfg)
-	skipTracing, telemetryInitErr := admitTelemetryExporterTarget(exporterCfg, netPolicyResult)
-	if telemetryInitErr != nil {
-		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
-	}
-	if skipTracing {
-		return cleanup, nil
-	}
-
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
 		ServiceName:      cfg.Observability.OTel.ServiceName,
@@ -111,28 +102,6 @@ func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
 		OTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
 		OTLPHeaders:  cfg.Observability.OTel.Exporter.OTLPHeaders,
 	}
-}
-
-// admitTelemetryExporterTarget reports whether optional tracing setup must be
-// skipped: an invalid network policy defers the exporter fail-open to the later
-// mandatory policy enforcement stage instead of blocking startup here.
-func admitTelemetryExporterTarget(cfg telemetry.TraceExporterConfig, netPolicyResult networkPolicyLoadResult) (bool, error) {
-	target, err := telemetry.DescribeTraceExporterTarget(cfg)
-	if err != nil {
-		return false, fmt.Errorf("describe trace exporter target: %w", err)
-	}
-	if !target.Configured {
-		return false, nil
-	}
-
-	if netPolicyResult.err != nil {
-		//nolint:nilerr // Invalid network policy defers optional telemetry admission fail-open.
-		return true, nil
-	}
-	if err := netPolicyResult.policy.EnforceEgressTarget(target.Target, target.Scheme); err != nil {
-		return false, fmt.Errorf("telemetry egress target denied: %w", err)
-	}
-	return false, nil
 }
 
 // bootstrapTraceStage transfers bootstrapSpan ownership to bootstrapRuntime.

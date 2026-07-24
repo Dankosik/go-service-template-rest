@@ -76,6 +76,14 @@ transaction-scoped repository explicitly rather than hiding transaction state
 in context. `internal/infra/postgresmigrate` belongs only to `cmd/migrate` and
 must not enter the service dependency graph.
 
+The PostgreSQL profile is required, not a degraded mode:
+`APP__POSTGRES__ENABLED` must remain `true` and the DSN must be configured
+before either the service or migrator starts. Bootstrap retains the initialized
+`postgres.Pool`; feature composition uses its concrete `PGX()` pool with the
+generated sqlc constructor. For a transaction, call `Begin(ctx)`, pass
+`queries.WithTx(tx)` to the transaction-scoped repository, and commit or roll
+back at the use-case boundary. Do not add query delegates to `postgres.Pool`.
+
 For a service initialized with `DATABASE=none`, re-derive from the template or
 bring in the PostgreSQL profile deliberately; do not copy only a pool file and
 omit migrations, CI, image, and deployment ownership.
@@ -83,12 +91,15 @@ omit migrations, CI, image, and deployment ownership.
 ## 6. Call an external HTTP service
 
 Create a provider adapter under `internal/infra/<provider>`. Reuse
+`net/http` directly for an ordinary provider-specific client. If the repository
+was initialized with `OUTBOUND_HTTP=bounded`, reuse
 `internal/infra/httpclient` for fixed-authority URL validation, transport
 bounds, trace propagation, response-size limits, and idle-connection cleanup.
 Keep provider authentication, per-operation timeout, retry eligibility,
-provider error mapping, and generated client ownership in the adapter. Add
-tests for timeout/cancellation, oversized responses, redirects, error bodies,
-and cleanup. Dynamic or user-controlled URLs require a separate SSRF design.
+provider error mapping, and generated client ownership in the adapter. Let the
+deployment platform enforce network egress. Add tests for
+timeout/cancellation, oversized responses, redirects, error bodies, and
+cleanup. Dynamic or user-controlled URLs require a separate SSRF design.
 
 ## 7. Wire, observe, and prove
 
