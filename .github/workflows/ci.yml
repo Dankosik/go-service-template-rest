@@ -379,3 +379,40 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
+  ci-required:
+    name: ci-required
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - repo-integrity
+      - lint
+      - openapi-contract
+      - openapi-breaking
+      - test-race
+      - test-coverage
+      - test-integration
+      - migration-validate
+      - dependency-review
+      - go-security
+      - secret-scan
+      - container-security
+    steps:
+      - name: Require every applicable CI job
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e --arg event "$EVENT_NAME" '
+            all(
+              to_entries[];
+              if (
+                (.key == "openapi-breaking" or .key == "dependency-review") and
+                $event != "pull_request"
+              )
+              then .value.result == "skipped"
+              else .value.result == "success"
+              end
+            )
+          ' <<<"$RESULTS"

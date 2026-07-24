@@ -18,8 +18,8 @@ Confirm that:
 - the template module no longer appears in Go imports or `.golangci.yml`;
 - `.github/CODEOWNERS` names real owners;
 - secrets remain in the chosen platform or secret manager;
-- GitHub Rulesets require the current blocking jobs from
-  `.github/workflows/ci.yml`;
+- GitHub Rulesets require the stable `ci-required` job from
+  `.github/workflows/ci.yml` and the repository's code-scanning gate;
 - critical workflow, Dockerfile, migration, and deployment changes require an
   appropriate owner review;
 - creation, update, and deletion of release tags such as `v*` are protected.
@@ -42,10 +42,10 @@ post-deploy checks. A GHCR attestation does not certify this independent build.
 
 ### Published image
 
-`.github/workflows/cd.yml` builds one image, scans it, generates its SBOM, pushes
-an immutable build tag to obtain the registry digest, signs and attests that
-digest, verifies the evidence, and only then promotes `main`, version, or
-`latest` tags.
+`.github/workflows/cd.yml` builds one image, validates migrations and runtime
+behavior against that image, scans it, generates its SBOM, pushes an immutable
+build tag to obtain the registry digest, signs and attests that digest, verifies
+the evidence, and only then promotes `main`, version, or `latest` tags.
 
 The workflow writes the immutable `image@sha256:...` reference to the job
 summary. Deploy that digest rather than resolving a mutable tag later.
@@ -83,6 +83,9 @@ that the artifact is vulnerability-free or that a deployment is healthy.
 - `.github/workflows/ci.yml` owns pull-request and push validation.
 - Dependency Review blocks newly introduced runtime vulnerabilities at high or
   critical severity.
+- `ci-required` is the stable merge-admission context. It fails unless every
+  applicable local CI job succeeds and accepts PR-only jobs as skipped only
+  outside pull requests.
 - Coverage owns ordinary suite execution; race and integration remain separate
   because they prove different risks.
 - OpenAPI and SQLC sources own generated output and drift checks.
@@ -98,6 +101,67 @@ Timed-out, cancelled, missing, or failed required checks are not passing
 evidence. An intentionally skipped migration job is acceptable only when its
 path detector reports that no migration, runtime-image, startup, dependency, or
 workflow owner changed.
+
+## GitHub merge and release governance
+
+Add `ci-required` to a ruleset only after it has reported successfully in the
+repository. Keep the existing required contexts during that first run, require
+both old and new contexts for one pull request, then retire the individual
+local CI contexts. Keep an independently managed code-scanning context such as
+`Analyze (go)` required because a job in `ci.yml` cannot aggregate a different
+workflow.
+
+For `main`, require pull requests, strict up-to-date checks, resolved
+conversations, and block deletion and force-push. A single-maintainer public
+template may use zero required approvals because authors cannot approve their
+own pull requests. Organization-owned production services should normally
+require one approval and code-owner approval for critical paths.
+
+Protect `v*` tags with a separate tag ruleset. Restrict creation, update, and
+deletion to a named release actor; do not enable the creation restriction until
+that actor and its emergency recovery path are proven.
+
+Rulesets are external administrative state. The template documents the policy
+but does not ship a credentialed script that rewrites repository settings.
+Enable the repository setting that requires full commit SHAs for third-party
+actions. It does not enforce reusable-workflow pins, so keep those full-SHA
+references reviewable and Dependabot-managed.
+
+## Optional organization profile
+
+The public template remains complete and must not call an original
+organization's workflows. An organization may later replace only two stable
+policy boundaries with full-SHA-pinned reusable workflows:
+
+- `go-policy.yml`: no inputs or secrets; dependency review plus
+  `make go-security` and `make secret-scan`; read-only permissions and one
+  final `required` job;
+- `sign-attest-image.yml`: one validated
+  `ghcr.io/<organization>/<service>@sha256:...` input; scan, CycloneDX SBOM,
+  keyless signing, provenance and SBOM attestations, and verification for that
+  digest.
+
+Service tests, OpenAPI and migration policy, Docker context, image build and
+tags, triggers, concurrency, environments, deployment, and rollback stay in
+the service repository. `go-policy.yml` needs only `contents: read`.
+`sign-attest-image.yml` and its caller grant only `contents: read`,
+`packages: write`, `id-token: write`, and `attestations: write`; a called
+workflow cannot elevate caller permissions. Do not use `secrets: inherit`.
+Constrain OIDC trust to the caller organization or repository and the exact
+central workflow path and SHA.
+
+Publish reusable workflow releases with immutable component tags for operators,
+but callers reference the corresponding full commit SHA and retain the tag in a
+comment. The existing GitHub Actions Dependabot configuration can propose pin
+updates. Test a new pin on public, private, fork, Dependabot, main-push, release,
+and permission-denial fixtures before canary adoption.
+
+Organization ruleset-required workflows are an optional later enforcement
+layer, not a template prerequisite. Enable them only after plan and visibility
+eligibility, check naming, repository creation, merge-group behavior, and
+ruleset-pin rollback are proven in Evaluate mode.
+Do not both call the policy workflow explicitly and require the same workflow
+through a ruleset in one repository.
 
 ## Local and CI checks
 
