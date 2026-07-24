@@ -358,68 +358,62 @@ openapi-check: openapi-drift-check
 
 # profile:database-postgres:start
 migration-validate:
-	@if [ -n "$(MIGRATION_DSN)" ]; then \
-		APP__POSTGRES__ENABLED=true \
-			APP__POSTGRES__DSN="$(MIGRATION_DSN)" \
-			go run ./cmd/migrate validate; \
-	else \
-		command -v docker >/dev/null 2>&1 || { echo "MIGRATION_DSN or Docker is required"; exit 1; }; \
-		docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }; \
-		project="$${MIGRATION_PROJECT:-service-migration-$$(date +%s)-$$$$}"; \
-		runtime=""; \
-		compose() { POSTGRES_PORT=0 docker compose -p "$$project" -f env/docker-compose.yml "$$@"; }; \
-		cleanup() { \
-			if [ -n "$$runtime" ]; then docker rm -f "$$runtime" >/dev/null 2>&1 || true; fi; \
-			compose down -v --remove-orphans >/dev/null 2>&1 || true; \
-		}; \
-		trap cleanup EXIT INT TERM; \
-		compose up -d --wait postgres; \
-		address="$$(compose port postgres 5432)"; \
-		port="$${address##*:}"; \
-		test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
-		dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
-		APP__POSTGRES__ENABLED=true \
-			APP__POSTGRES__DSN="$$dsn" \
-			go run ./cmd/migrate validate; \
-		image="$(RUNTIME_IMAGE)"; \
-		if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
-		docker run --rm --network "$${project}_default" \
-			-e APP__POSTGRES__ENABLED=true \
-			-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
-			--entrypoint /migrate "$$image"; \
-		command -v curl >/dev/null 2>&1 || { echo "curl is required for runtime image readiness validation"; exit 1; }; \
-		runtime="$${project}-runtime"; \
-		docker run -d --name "$$runtime" \
-			--network "$${project}_default" \
-			-p 127.0.0.1::8080 \
-			--read-only \
-			--cap-drop=ALL \
-			--security-opt=no-new-privileges \
-			-e NETWORK_EGRESS_ALLOWLIST=postgres \
-			-e APP__POSTGRES__ENABLED=true \
-			-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
-			"$$image" >/dev/null; \
-		address="$$(docker port "$$runtime" 8080/tcp | head -n 1)"; \
-		port="$${address##*:}"; \
-		test -n "$$port" || { echo "failed to resolve runtime service port"; docker logs "$$runtime"; exit 1; }; \
-		ready=false; \
-		attempt=0; \
-		while [ "$$attempt" -lt 45 ]; do \
-			if curl -fs --max-time 2 "http://127.0.0.1:$$port/health/ready" >/dev/null; then ready=true; break; fi; \
-			if [ "$$(docker inspect -f '{{.State.Running}}' "$$runtime")" != "true" ]; then break; fi; \
-			attempt=$$((attempt + 1)); \
-			sleep 1; \
-		done; \
-		if [ "$$ready" != "true" ]; then echo "runtime image did not become ready"; docker logs "$$runtime"; exit 1; fi; \
-		if [ -n "$(RUNTIME_EXPECTED_VERSION)" ] && ! docker logs "$$runtime" 2>&1 | grep -Fq "\"service.version\":\"$(RUNTIME_EXPECTED_VERSION)\""; then \
-			echo "runtime image did not report expected version $(RUNTIME_EXPECTED_VERSION)"; \
-			docker logs "$$runtime"; \
-			exit 1; \
-		fi; \
-		docker stop --time 45 "$$runtime" >/dev/null; \
-		exit_code="$$(docker inspect -f '{{.State.ExitCode}}' "$$runtime")"; \
-		test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }; \
-	fi
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required"; exit 1; }; \
+	docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }; \
+	project="service-migration-$$(date +%s)-$$$$"; \
+	runtime=""; \
+	compose() { POSTGRES_PORT=0 docker compose -p "$$project" -f env/docker-compose.yml "$$@"; }; \
+	cleanup() { \
+		if [ -n "$$runtime" ]; then docker rm -f "$$runtime" >/dev/null 2>&1 || true; fi; \
+		compose down -v --remove-orphans >/dev/null 2>&1 || true; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	compose up -d --wait postgres; \
+	address="$$(compose port postgres 5432)"; \
+	port="$${address##*:}"; \
+	test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
+	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
+	APP__POSTGRES__ENABLED=true \
+		APP__POSTGRES__DSN="$$dsn" \
+		go run ./cmd/migrate validate; \
+	image="$(RUNTIME_IMAGE)"; \
+	if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
+	docker run --rm --network "$${project}_default" \
+		-e APP__POSTGRES__ENABLED=true \
+		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
+		--entrypoint /migrate "$$image"; \
+	command -v curl >/dev/null 2>&1 || { echo "curl is required for runtime image readiness validation"; exit 1; }; \
+	runtime="$${project}-runtime"; \
+	docker run -d --name "$$runtime" \
+		--network "$${project}_default" \
+		-p 127.0.0.1::8080 \
+		--read-only \
+		--cap-drop=ALL \
+		--security-opt=no-new-privileges \
+		-e NETWORK_EGRESS_ALLOWLIST=postgres \
+		-e APP__POSTGRES__ENABLED=true \
+		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
+		"$$image" >/dev/null; \
+	address="$$(docker port "$$runtime" 8080/tcp | head -n 1)"; \
+	port="$${address##*:}"; \
+	test -n "$$port" || { echo "failed to resolve runtime service port"; docker logs "$$runtime"; exit 1; }; \
+	ready=false; \
+	attempt=0; \
+	while [ "$$attempt" -lt 45 ]; do \
+		if curl -fs --max-time 2 "http://127.0.0.1:$$port/health/ready" >/dev/null; then ready=true; break; fi; \
+		if [ "$$(docker inspect -f '{{.State.Running}}' "$$runtime")" != "true" ]; then break; fi; \
+		attempt=$$((attempt + 1)); \
+		sleep 1; \
+	done; \
+	if [ "$$ready" != "true" ]; then echo "runtime image did not become ready"; docker logs "$$runtime"; exit 1; fi; \
+	if [ -n "$(RUNTIME_EXPECTED_VERSION)" ] && ! docker logs "$$runtime" 2>&1 | grep -Fq "\"service.version\":\"$(RUNTIME_EXPECTED_VERSION)\""; then \
+		echo "runtime image did not report expected version $(RUNTIME_EXPECTED_VERSION)"; \
+		docker logs "$$runtime"; \
+		exit 1; \
+	fi; \
+	docker stop --time 45 "$$runtime" >/dev/null; \
+	exit_code="$$(docker inspect -f '{{.State.ExitCode}}' "$$runtime")"; \
+	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }
 # profile:database-postgres:end
 
 container-security:

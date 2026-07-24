@@ -9,7 +9,6 @@ Load for OpenAPI/codegen verification, sqlc drift, local/CI parity for generated
 ## Local Source Of Truth
 - `Makefile` exposes `openapi-generate`, `openapi-drift-check`, `openapi-runtime-contract-check`, `openapi-lint`, `openapi-validate`, `openapi-breaking`, `openapi-check`, and `sqlc-check`.
 - `.github/workflows/ci.yml` runs OpenAPI generation/drift checks, runtime contract checks, schema validation, linting, PR breaking-change checks, and SQLC checks through `repo-integrity`.
-- `scripts/dev/docker-tooling.sh` mirrors drift checks for zero-setup Docker execution.
 
 ## Decision Rubric
 - Generated artifacts must be regenerated from canonical source and committed in the same change; tracked or untracked drift after generation is blocking.

@@ -75,9 +75,9 @@ Railway service ID.
   empty until the first owned migration and the migrator then exits as an
   explicit successful no-op.
 - Application startup does not run migrations.
-- When migrations exist, CI rehearses `up -> down 1 -> up 1`. It always runs
-  the image's migrator, starts the production image against the database,
-  checks readiness, and sends SIGTERM.
+- When migrations exist, CI rehearses `up all -> down all -> up all` on a
+  disposable Compose database. It always runs the image's migrator, starts the
+  production image against the database, checks readiness, and sends SIGTERM.
 - Overlapping releases require mixed-version-compatible schema changes.
 - Destructive or forward-only changes require a staged
   expand/migrate/verify/contract plan and an explicit recovery method.

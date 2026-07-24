@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime"
+	"runtime/debug"
 
 	"github.com/felixge/httpsnoop"
 )
@@ -56,6 +57,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 					"request_id", requestIDFromContext(ctx),
 					"trace_id", traceID,
 					"span_id", spanID,
+					"stack", string(debug.Stack()),
 				)
 				if committed {
 					return

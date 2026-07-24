@@ -27,8 +27,8 @@ Use this shape for a missing or skipped command:
 
 ```text
 Not verified: migration rehearsal did not run.
-Signal: `make migration-validate` reported that `MIGRATION_DSN` was empty and Docker was unavailable, so it skipped migration validation.
-Next verification action: provide `MIGRATION_DSN` or start Docker, then rerun `make migration-validate`.
+Signal: `make migration-validate` reported that Docker was unavailable.
+Next verification action: start Docker, then rerun `make migration-validate`.
 ```
 
 Use this shape for weaker evidence:
