@@ -111,7 +111,9 @@ func bootstrapReportStage(
 			"http.addr", cfg.HTTP.Addr,
 			"metrics.addr", cfg.Observability.Metrics.Addr,
 			"tracing.exporter", traceExporterState(cfg, telemetryInitErr),
+			// profile:database-postgres:start
 			"postgres.enabled", cfg.Postgres.Enabled,
+			// profile:database-postgres:end
 		)...,
 	)
 }

@@ -251,7 +251,25 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	fi
 )
 [[ "${minimal_workflow_before}" == "$(workflow_snapshot "${minimal_checkout}")" ]]
-grep -Fq 'postgres is not included in the DATABASE=none profile' "${TEMP_ROOT}/minimal-postgres.log"
+# This profile carries no PostgreSQL configuration at all, so an APP__POSTGRES__*
+# variable is an unknown key rather than a runtime feature check. That is the
+# stronger rejection: it names every key it refused and it happens before any
+# dependency wiring runs.
+grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-postgres.log"
+grep -Fq 'postgres.enabled' "${TEMP_ROOT}/minimal-postgres.log"
+grep -Fq 'postgres.dsn' "${TEMP_ROOT}/minimal-postgres.log"
+# No PostgreSQL configuration surface survives in the generated Go sources.
+if grep -rn 'Postgres\b' "${minimal_checkout}/internal/config" "${minimal_checkout}/cmd" --include='*.go'; then
+	echo "database-none profile retained PostgreSQL configuration"
+	exit 1
+fi
+if grep -rn 'profile:database-postgres' \
+	"${minimal_checkout}/cmd" "${minimal_checkout}/internal" "${minimal_checkout}/env" \
+	"${minimal_checkout}/.github" "${minimal_checkout}/build" \
+	"${minimal_checkout}/Makefile" "${minimal_checkout}/railway.toml" 2>/dev/null; then
+	echo "database-none profile left profile markers behind"
+	exit 1
+fi
 for removed in \
 	cmd/migrate \
 	internal/infra/httpclient \

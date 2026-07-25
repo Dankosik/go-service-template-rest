@@ -11,7 +11,9 @@ type Config struct {
 	HTTP          HTTPConfig          `koanf:"http"`
 	Log           LogConfig           `koanf:"log"`
 	Observability ObservabilityConfig `koanf:"observability"`
-	Postgres      PostgresConfig      `koanf:"postgres"`
+	// profile:database-postgres:start
+	Postgres PostgresConfig `koanf:"postgres"`
+	// profile:database-postgres:end
 }
 
 type AppConfig struct {
@@ -64,6 +66,7 @@ type OTelExporterConfig struct {
 	OTLPHeaders  string `koanf:"otlp_headers"`
 }
 
+// profile:database-postgres:start
 type PostgresConfig struct {
 	Enabled                   bool          `koanf:"enabled"`
 	DSN                       string        `koanf:"dsn"`
@@ -75,3 +78,5 @@ type PostgresConfig struct {
 	MaxOpenConns              int           `koanf:"max_open_conns"`
 	ConnMaxLifetime           time.Duration `koanf:"conn_max_lifetime"`
 }
+
+// profile:database-postgres:end

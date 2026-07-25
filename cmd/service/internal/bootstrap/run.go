@@ -34,18 +34,6 @@ const (
 	telemetryShutdownTimeout = 5 * time.Second
 	startupBudget            = 30 * time.Second
 	startupTelemetryBudget   = 2 * time.Second
-
-	// postgresProbeBudget bounds the pool open and first ping. It is also the
-	// ceiling that config compatibility validation enforces on
-	// postgres.connect_timeout and postgres.healthcheck_timeout, so a
-	// configured timeout can never exceed the stage that runs it.
-	postgresProbeBudget = 5 * time.Second
-
-	// startupReadinessHeadroom is the margin config compatibility validation
-	// requires between a dependency health-check budget and
-	// http.readiness_timeout, so a probe that spends its whole budget still
-	// leaves room to answer the request.
-	startupReadinessHeadroom = 150 * time.Millisecond
 )
 
 func Run(args []string) (runErr error) {

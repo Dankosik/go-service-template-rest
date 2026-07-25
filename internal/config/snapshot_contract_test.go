@@ -205,6 +205,7 @@ func sentinelConfigSourceValues() map[string]any {
 
 		"log.level": "warn",
 
+		// profile:database-postgres:start
 		"postgres.enabled":                     true,
 		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
 		"postgres.connect_timeout":             "17s",
@@ -214,6 +215,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.migration_lock_timeout":      "19s",
 		"postgres.max_open_conns":              26,
 		"postgres.conn_max_lifetime":           "45m",
+		// profile:database-postgres:end
 
 		"observability.metrics.addr":                "127.0.0.1:19090",
 		"observability.otel.service_name":           "snapshot-service",
@@ -243,6 +245,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 
 		"log.level": slog.LevelWarn,
 
+		// profile:database-postgres:start
 		"postgres.enabled":                     true,
 		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
 		"postgres.connect_timeout":             17 * time.Second,
@@ -252,6 +255,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.migration_lock_timeout":      19 * time.Second,
 		"postgres.max_open_conns":              26,
 		"postgres.conn_max_lifetime":           45 * time.Minute,
+		// profile:database-postgres:end
 
 		"observability.metrics.addr":                "127.0.0.1:19090",
 		"observability.otel.service_name":           "snapshot-service",

@@ -61,6 +61,8 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:start
+//
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 	resetConfigEnv(t)
@@ -78,6 +80,8 @@ func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 		t.Fatalf("Postgres.DSN = %q, want empty when only flat key is set", cfg.Postgres.DSN)
 	}
 }
+
+// profile:database-postgres:end
 
 func TestErrorTypeMapping(t *testing.T) {
 	t.Parallel()

@@ -2,27 +2,38 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
 )
 
+// runtimeDependencies is the DATABASE=none profile's dependency set. Readiness
+// has nothing to probe beyond startup admission and the process itself.
+//
+// This profile carries no PostgreSQL configuration at all, so an
+// APP__POSTGRES__* variable is rejected by config validation as an unknown key
+// rather than by a runtime check here.
 type runtimeDependencies struct {
 	health *health.Service
 }
 
 func (runtimeDependencies) Close() {}
 
+// The error result exists because the PostgreSQL profile's implementation of
+// this signature can fail; this profile has nothing that can.
+//
+//nolint:unparam // Profile-shared signature; the PostgreSQL profile returns errors here.
 func initRuntimeDependencies(
 	_ context.Context,
 	_ context.Context,
-	bootstrap startupBootstrap,
+	_ startupBootstrap,
 ) (runtimeDependencies, error) {
-	if bootstrap.cfg.Postgres.Enabled {
-		return runtimeDependencies{}, fmt.Errorf(
-			"%w: postgres is not included in the DATABASE=none profile",
-			errDependencyInit,
-		)
-	}
 	return runtimeDependencies{health: health.New()}, nil
+}
+
+// validateStartupBudgetCompatibility relates configured dependency budgets to
+// the startup stage that runs them. This profile has no dependencies, so there
+// is nothing to relate.
+func validateStartupBudgetCompatibility(_ config.Config) error {
+	return nil
 }

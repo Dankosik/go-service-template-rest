@@ -115,6 +115,7 @@ observability:
 	}
 }
 
+// profile:database-postgres:start
 func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -129,6 +130,9 @@ func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:end
+
+// profile:database-postgres:start
 func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 	t.Run("postgres_enabled_without_dsn_rejected", func(t *testing.T) {
 		resetConfigEnv(t)
@@ -161,5 +165,7 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 		}
 	})
 }
+
+// profile:database-postgres:end
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.

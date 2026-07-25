@@ -21,9 +21,27 @@ const (
 	startupPostgresProbeStage     = "startup.probe.postgres"
 )
 
-// Budget owned by the PostgreSQL startup stage. It lives here so the
-// DATABASE=none profile removes it together with this file.
-const postgresStartupBudget = 15 * time.Second
+// Budgets owned by the PostgreSQL startup stage. They live here so the
+// DATABASE=none profile removes them together with this file.
+const (
+	postgresStartupBudget = 15 * time.Second
+
+	// postgresProbeBudget bounds the pool open and first ping, and is the
+	// ceiling validateStartupBudgetCompatibility enforces on
+	// postgres.connect_timeout and postgres.healthcheck_timeout, so a
+	// configured timeout can never exceed the stage that runs it.
+	postgresProbeBudget = 5 * time.Second
+
+	// startupReadinessHeadroom is the margin required between the health-check
+	// budget and http.readiness_timeout, so a probe that spends its whole
+	// budget still leaves room to answer the request.
+	startupReadinessHeadroom = 150 * time.Millisecond
+)
+
+// errDependencyInit classifies a failure to bring up a runtime dependency. It
+// belongs to this file because dependencies are what it describes: the
+// DATABASE=none profile has none, so its stub declares no sentinel.
+var errDependencyInit = errors.New("dependency init")
 
 type postgresStartupRuntime struct {
 	tracer        trace.Tracer
@@ -81,6 +99,48 @@ func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Poo
 		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
 	}
 	return pg, nil
+}
+
+func validateStartupBudgetCompatibility(cfg config.Config) error {
+	if cfg.Postgres.Enabled {
+		if err := validateStartupTimeoutBudget("postgres.connect_timeout", cfg.Postgres.ConnectTimeout, postgresProbeBudget); err != nil {
+			return err
+		}
+		if err := validateStartupTimeoutBudget("postgres.healthcheck_timeout", cfg.Postgres.HealthcheckTimeout, postgresProbeBudget); err != nil {
+			return err
+		}
+	}
+	return validateStartupReadinessHeadroom(cfg)
+}
+
+func validateStartupTimeoutBudget(name string, value time.Duration, budget time.Duration) error {
+	if value <= budget {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: %s must be <= startup probe budget %s",
+		config.ErrValidate,
+		name,
+		budget,
+	)
+}
+
+func validateStartupReadinessHeadroom(cfg config.Config) error {
+	if !cfg.Postgres.Enabled {
+		return nil
+	}
+
+	required := cfg.Postgres.HealthcheckTimeout + startupReadinessHeadroom
+	if cfg.HTTP.ReadinessTimeout >= required {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: http.readiness_timeout must be >= postgres.healthcheck_timeout readiness budget plus startup headroom (%s + %s = %s)",
+		config.ErrValidate,
+		cfg.Postgres.HealthcheckTimeout,
+		startupReadinessHeadroom,
+		required,
+	)
 }
 
 type postgresReadinessProbe struct {

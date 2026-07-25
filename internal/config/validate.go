@@ -34,9 +34,11 @@ func validateConfig(ctx context.Context, cfg *Config, unknownKeys []string) erro
 		return err
 	}
 
+	// profile:database-postgres:start
 	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
+	// profile:database-postgres:end
 	if err := checkValidateContext(ctx); err != nil {
 		return err
 	}
@@ -140,6 +142,7 @@ func findUnknownKeys(keys []string) []string {
 	return unknown
 }
 
+// profile:database-postgres:start
 func validatePostgres(cfg PostgresConfig) error {
 	if cfg.Enabled && strings.TrimSpace(cfg.DSN) == "" {
 		return fmt.Errorf("%w: postgres.dsn is required when postgres.enabled=true", ErrSecretPolicy)
@@ -179,6 +182,8 @@ func validatePostgres(cfg PostgresConfig) error {
 
 	return nil
 }
+
+// profile:database-postgres:end
 
 func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 	effectiveDrainBudget := cfg.ShutdownTimeout - cfg.ReadinessPropagationDelay
