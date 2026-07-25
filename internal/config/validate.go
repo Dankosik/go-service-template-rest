@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sort"
@@ -12,16 +11,12 @@ import (
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 )
 
-func validateConfig(ctx context.Context, cfg *Config, unknownKeys []string) error {
-	if err := checkValidateContext(ctx); err != nil {
-		return err
-	}
-
+// validateConfig is pure computation over an in-memory snapshot: no I/O, and it
+// measures at 0ms in the startup log. Cancellation is observed once by the
+// caller before this runs rather than between every rule.
+func validateConfig(cfg *Config, unknownKeys []string) error {
 	if unknown := findUnknownKeys(unknownKeys); len(unknown) > 0 {
 		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
-	}
-	if err := checkValidateContext(ctx); err != nil {
-		return err
 	}
 
 	if err := validateAppConfig(&cfg.App); err != nil {
@@ -30,24 +25,14 @@ func validateConfig(ctx context.Context, cfg *Config, unknownKeys []string) erro
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
-	if err := checkValidateContext(ctx); err != nil {
-		return err
-	}
 
 	// profile:database-postgres:start
 	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
 	// profile:database-postgres:end
-	if err := checkValidateContext(ctx); err != nil {
-		return err
-	}
 
-	if err := validateObservabilityConfig(&cfg.Observability); err != nil {
-		return err
-	}
-
-	return nil
+	return validateObservabilityConfig(&cfg.Observability)
 }
 
 func validateAppConfig(cfg *AppConfig) error {

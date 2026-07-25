@@ -51,10 +51,12 @@ const (
 	PrivateHTTP
 )
 
-// DefaultPrivateHostSuffix is the private DNS zone assumed when
-// Config.PrivateHostSuffix is empty. Deployments on other platforms set their
-// own zone, for example ".internal" or ".svc.cluster.local".
-const DefaultPrivateHostSuffix = ".railway.internal"
+// There is deliberately no default private DNS zone. A platform-specific
+// default in an otherwise platform-neutral package is how a "generic" component
+// quietly becomes single-platform: it silently succeeds on the platform it was
+// written for and fails with a confusing message everywhere else. The caller
+// names its own zone, for example ".railway.internal", ".svc.cluster.local", or
+// ".internal".
 
 // Config defines the required safety bounds for one provider authority.
 type Config struct {
@@ -62,8 +64,7 @@ type Config struct {
 	BaseURL        string
 	TargetClass    TargetClass
 	// PrivateHostSuffix is the required hostname suffix for PrivateHTTP
-	// targets. Empty means DefaultPrivateHostSuffix. It is ignored for
-	// ExternalHTTPS.
+	// targets, and is required for them. It is ignored for ExternalHTTPS.
 	PrivateHostSuffix      string
 	RequestTimeout         time.Duration
 	ResponseHeaderTimeout  time.Duration
@@ -217,12 +218,12 @@ func validateBounds(cfg Config) error {
 	return nil
 }
 
-// privateHostSuffix normalizes the configured private DNS zone and applies the
-// platform default when unset.
+// privateHostSuffix normalizes the configured private DNS zone. An empty zone
+// stays empty so validateTarget rejects it.
 func privateHostSuffix(configured string) string {
 	suffix := strings.ToLower(strings.TrimSpace(configured))
 	if suffix == "" {
-		return DefaultPrivateHostSuffix
+		return ""
 	}
 	if !strings.HasPrefix(suffix, ".") {
 		suffix = "." + suffix
@@ -241,7 +242,10 @@ func validateTarget(baseURL *url.URL, targetClass TargetClass, requiredPrivateSu
 		}
 	case PrivateHTTP:
 		if requiredPrivateSuffix == "." || requiredPrivateSuffix == "" {
-			return errors.New("build outbound HTTP client: private target requires a private host suffix")
+			return errors.New(
+				"build outbound HTTP client: private target requires Config.PrivateHostSuffix, " +
+					"the deployment platform's private DNS zone",
+			)
 		}
 		if !strings.EqualFold(baseURL.Scheme, "http") {
 			return errors.New("build outbound HTTP client: private target requires HTTP")

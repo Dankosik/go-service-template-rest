@@ -10,9 +10,15 @@ func defaultValues() map[string]any {
 		"app.env":     "local",
 		"app.version": buildVersion,
 
-		"http.addr":                        ":8080",
-		"http.shutdown_timeout":            "30s",
-		"http.readiness_timeout":           "4s",
+		"http.addr":              ":8080",
+		"http.shutdown_timeout":  "30s",
+		"http.readiness_timeout": "4s",
+		// readiness_propagation_delay holds the drain open long enough for a load
+		// balancer to notice /health/ready failing before connections stop being
+		// accepted. It is production-shaped on purpose, so running the binary
+		// directly waits it out on SIGTERM; env/.env.example sets 0s for local
+		// iteration, and docs/railway-deployment-profile.md does the arithmetic
+		// against the platform's draining window.
 		"http.readiness_propagation_delay": "15s",
 		"http.read_header_timeout":         "5s",
 		"http.read_timeout":                "5s",

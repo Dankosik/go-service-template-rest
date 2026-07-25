@@ -104,9 +104,11 @@ was initialized with `OUTBOUND_HTTP=bounded`, reuse
 `internal/infra/httpclient` for fixed-authority URL validation, transport
 bounds, trace propagation, response-size limits, and idle-connection cleanup.
 Select `TargetClass: ExternalHTTPS` for public providers, or `PrivateHTTP` for
-a service reachable only on the platform's private network; set
-`PrivateHostSuffix` to that platform's private DNS zone, which defaults to
-`railway.internal` and is `svc.cluster.local` on Kubernetes. The bounded client
+a service reachable only on the platform's private network. `PrivateHTTP`
+requires `PrivateHostSuffix`, your platform's private DNS zone — for example
+`railway.internal`, or `svc.cluster.local` on Kubernetes. There is no default
+on purpose: a platform-specific default would succeed silently on one platform
+and fail confusingly everywhere else. The bounded client
 ignores `HTTP_PROXY`/`HTTPS_PROXY` on purpose, because a proxy would dial on
 the client's behalf and bypass the post-DNS address gate; a provider that must
 be reached through a mandatory egress proxy uses a plain `net/http` client.

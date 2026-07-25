@@ -98,7 +98,12 @@ func normalizeRoutePathTemplate(method, pattern string) string {
 	if method != "" && strings.HasPrefix(pattern, method+" ") {
 		pattern = strings.TrimSpace(strings.TrimPrefix(pattern, method+" "))
 	}
-	if pattern == "/" {
+	// "/" and "/*" are the root mount's own patterns, reported when nothing
+	// matched or the path matched under a different method. Neither is a route
+	// template: OpenTelemetry expects http.route to carry the matched route or
+	// be absent, and collapsing 404s and 405s into per-method wildcards hides
+	// which path was actually asked for.
+	if pattern == "/" || pattern == "/*" {
 		return ""
 	}
 	return pattern
