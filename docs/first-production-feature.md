@@ -93,6 +93,15 @@ validator := oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddlewar
 })
 ```
 
+Leaving `AuthenticationFunc` unset is fail-closed on this path:
+`openapi3filter.ValidateRequest` returns `ErrAuthenticationServiceMissing`, so a
+protected operation is refused rather than admitted. Keep it that way. Do not
+"fix" that error by installing `openapi3filter.NoopAuthenticationFunc` — it
+returns success unconditionally, and the same default is what
+[GHSA-r277-6w6q-xmqw](https://github.com/advisories/GHSA-r277-6w6q-xmqw) reported
+as an authentication bypass in `ValidationHandler.Load()`, which this repository
+does not use.
+
 Two things this does not decide for you. Compare presented credentials in
 constant time (`crypto/subtle.ConstantTimeCompare`), and add `unauthorized` and
 any `forbidden` entries to the Problem catalog in `internal/infra/http/problem.go`
