@@ -22,11 +22,14 @@ func defaultValues() map[string]any {
 		"http.readiness_propagation_delay": "15s",
 		"http.read_header_timeout":         "5s",
 		"http.read_timeout":                "5s",
-		"http.write_timeout":               "10s",
-		"http.idle_timeout":                "60s",
-		"http.max_header_bytes":            16 << 10,
-		"http.max_body_bytes":              int64(1 << 20),
-		"http.access_log_health_probes":    false,
+		// request_timeout stays below write_timeout so the budget expires while
+		// the connection can still carry the 504 that reports it.
+		"http.request_timeout":          "8s",
+		"http.write_timeout":            "10s",
+		"http.idle_timeout":             "60s",
+		"http.max_header_bytes":         16 << 10,
+		"http.max_body_bytes":           int64(1 << 20),
+		"http.access_log_health_probes": false,
 
 		"log.level": "info",
 

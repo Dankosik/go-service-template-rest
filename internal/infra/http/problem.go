@@ -25,6 +25,7 @@ const (
 	problemCodeMethodNotAllowed      problemCode = "method_not_allowed"
 	problemCodeRequestEntityTooLarge problemCode = "request_entity_too_large"
 	problemCodeInternalError         problemCode = "internal_error"
+	problemCodeGatewayTimeout        problemCode = "gateway_timeout"
 )
 
 type problemDefinition struct {
@@ -94,6 +95,12 @@ func problemDefinitionFor(code problemCode) (problemCode, problemDefinition) {
 			status:  http.StatusInternalServerError,
 			title:   "internal server error",
 			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1",
+		}
+	case problemCodeGatewayTimeout:
+		return code, problemDefinition{
+			status:  http.StatusGatewayTimeout,
+			title:   "gateway timeout",
+			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.5",
 		}
 	default:
 		return problemDefinitionFor(problemCodeInternalError)

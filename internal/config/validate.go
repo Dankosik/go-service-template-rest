@@ -67,6 +67,9 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 	if err := validateDurationRange("http.read_timeout", cfg.ReadTimeout, 100*time.Millisecond, 5*time.Minute); err != nil {
 		return err
 	}
+	if err := validateDurationRange("http.request_timeout", cfg.RequestTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
+		return err
+	}
 	if err := validateDurationRange("http.write_timeout", cfg.WriteTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
 		return err
 	}
@@ -74,6 +77,9 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 		return err
 	}
 	if err := validateHTTPReadinessWriteTimeout(*cfg); err != nil {
+		return err
+	}
+	if err := validateHTTPRequestWriteTimeout(*cfg); err != nil {
 		return err
 	}
 	if err := validateHTTPShutdownBudget(*cfg); err != nil {
@@ -188,6 +194,17 @@ func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 func validateHTTPReadinessWriteTimeout(cfg HTTPConfig) error {
 	if cfg.ReadinessTimeout > cfg.WriteTimeout {
 		return fmt.Errorf("%w: http.readiness_timeout must be <= http.write_timeout", ErrValidate)
+	}
+	return nil
+}
+
+// validateHTTPRequestWriteTimeout keeps the handler budget inside the response
+// write deadline. A request budget larger than http.write_timeout expires only
+// after the connection can no longer carry a response, so the timeout would be
+// reported to the client as a dropped connection instead of a 504.
+func validateHTTPRequestWriteTimeout(cfg HTTPConfig) error {
+	if cfg.RequestTimeout > cfg.WriteTimeout {
+		return fmt.Errorf("%w: http.request_timeout must be <= http.write_timeout", ErrValidate)
 	}
 	return nil
 }

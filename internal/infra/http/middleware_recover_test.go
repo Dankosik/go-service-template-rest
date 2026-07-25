@@ -151,3 +151,56 @@ func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
 		t.Fatalf("body = %q, want empty after committed flush", body)
 	}
 }
+
+// http.ErrAbortHandler must reach net/http unchanged. Recovering it here would
+// log a stack trace and attempt a 500 on every deliberate abort — for example
+// every one httputil.ReverseProxy raises.
+func TestRecoverRepanicsErrAbortHandler(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&logs, nil))
+	handler := Recover(log, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		panic(http.ErrAbortHandler)
+	}))
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/abort", nil)
+
+	func() {
+		defer func() {
+			rec := recover()
+			if rec == nil {
+				t.Fatal("Recover() swallowed http.ErrAbortHandler, want it re-panicked")
+			}
+			if err, ok := rec.(error); !ok || !errors.Is(err, http.ErrAbortHandler) {
+				t.Fatalf("re-panicked value = %v, want http.ErrAbortHandler", rec)
+			}
+		}()
+		handler.ServeHTTP(resp, req)
+	}()
+
+	if logs.Len() != 0 {
+		t.Fatalf("Recover() logged %q, want nothing for a deliberate abort", logs.String())
+	}
+	if resp.Body.Len() != 0 {
+		t.Fatalf("Recover() wrote %q, want no response body", resp.Body.String())
+	}
+}
+
+// A panic that merely wraps ErrAbortHandler is still a deliberate abort, and a
+// plain error panic must keep the recovering behavior.
+func TestRecoverDistinguishesAbortFromOrdinaryPanics(t *testing.T) {
+	t.Parallel()
+
+	handler := Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		panic(errors.New("ordinary failure"))
+	}))
+
+	resp := doRequest(handler, http.MethodGet, "/boom")
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)
+	}
+	assertProblemCode(t, resp, problemCodeInternalError)
+}

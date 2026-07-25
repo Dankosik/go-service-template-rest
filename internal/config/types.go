@@ -28,10 +28,15 @@ type HTTPConfig struct {
 	ReadinessPropagationDelay time.Duration `koanf:"readiness_propagation_delay"`
 	ReadHeaderTimeout         time.Duration `koanf:"read_header_timeout"`
 	ReadTimeout               time.Duration `koanf:"read_timeout"`
-	WriteTimeout              time.Duration `koanf:"write_timeout"`
-	IdleTimeout               time.Duration `koanf:"idle_timeout"`
-	MaxHeaderBytes            int           `koanf:"max_header_bytes"`
-	MaxBodyBytes              int64         `koanf:"max_body_bytes"`
+	// RequestTimeout is the per-request handler budget. The net/http server
+	// timeouts are connection deadlines that never cancel the request context,
+	// so this is the only bound on how long one handler may hold a goroutine
+	// and its pooled resources.
+	RequestTimeout time.Duration `koanf:"request_timeout"`
+	WriteTimeout   time.Duration `koanf:"write_timeout"`
+	IdleTimeout    time.Duration `koanf:"idle_timeout"`
+	MaxHeaderBytes int           `koanf:"max_header_bytes"`
+	MaxBodyBytes   int64         `koanf:"max_body_bytes"`
 	// AccessLogHealthProbes re-enables access logging for /health/live and
 	// /health/ready. It defaults to false because orchestrator probes generate
 	// continuous no-signal log volume.

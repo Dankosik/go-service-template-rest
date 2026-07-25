@@ -173,6 +173,32 @@ reference_example = "${reference_example}"
 EOF
 }
 
+# rebase_coverage_floor turns the template's own coverage gate into a starting
+# ratchet the new service can actually move.
+#
+# The gate measures effective coverage across the whole module, and on day one
+# that denominator is almost entirely template code sitting near 82%. Against an
+# 80.0 floor a team can add only about forty uncovered statements — one handler
+# and a repository method — before CI goes red for a structural reason they did
+# not create, in the week they are least equipped to debug it. The usual reaction
+# is to raise the floor or switch it off, which is the wrong lesson to learn on
+# day three.
+#
+# 70.0 leaves roughly two hundred and forty statements of runway while still
+# failing on wholesale untested code. Raise it as the service's own tests land.
+rebase_coverage_floor() {
+	local workflow
+
+	[[ -f Makefile ]] && replace_literal Makefile "COVERAGE_MIN ?= 80.0" "COVERAGE_MIN ?= 70.0"
+
+	# CI passes the floor on the command line, which overrides the Makefile
+	# default, so the workflows carry the same number or the gate does not move.
+	for workflow in .github/workflows/ci.yml .github/workflows/cd.yml; do
+		[[ -f "${workflow}" ]] || continue
+		replace_literal "${workflow}" 'COVERAGE_MIN: "80.0"' 'COVERAGE_MIN: "70.0"'
+	done
+}
+
 replace_codeowner_rules() {
 	local owner="$1"
 	local temporary
@@ -344,6 +370,7 @@ if [[ "${source_checkout}" != true ]]; then
 		"title: \"${TEMPLATE_API_TITLE}\"" \
 		"title: \"${service_name}\""
 	write_derived_readme "${service_name}" "${new_module}"
+	rebase_coverage_floor
 
 	if [[ "${database}" == "none" ]]; then
 		rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate
@@ -373,6 +400,14 @@ if [[ "${source_checkout}" != true ]]; then
 	# Profile sources are the generator's own inputs. Every profile has consumed
 	# what it needs by now, so no generated service keeps them.
 	rm -rf -- scripts/profiles
+
+	# The template's own closed spec bundles are decisions about developing the
+	# template, not about this service. specs/README.md already says a completed
+	# bundle is deleted rather than kept as an example, and AGENTS.md tells every
+	# harness that task-local artifacts own accepted task decisions — so shipping
+	# them would hand a new service authoritative-looking records that describe a
+	# repository it does not have. They stay readable upstream.
+	rm -rf -- specs
 
 	# Upstream project furniture. The hero image is referenced only by the README
 	# initialization overwrites, and the issue forms route bug reports for the

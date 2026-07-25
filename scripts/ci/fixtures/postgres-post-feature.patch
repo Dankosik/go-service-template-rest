@@ -336,6 +336,7 @@ new file mode 100644
 +		httpx.RouterConfig{
 +			MaxBodyBytes:     1 << 20,
 +			ReadinessTimeout: time.Second,
++			RequestTimeout:   5 * time.Second,
 +			OTelServerName:   "postgres-feature-proof",
 +		},
 +	)

@@ -129,6 +129,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	t.Run("greater readiness timeout rejects", func(t *testing.T) {
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
+		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "5s")
 		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
 
 		_, _, err := LoadDetailed(LoadOptions{})
@@ -154,6 +155,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__READINESS_TIMEOUT", tc.readinessTimeout)
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.writeTimeout)
 			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -223,4 +225,72 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 		t.Fatalf("Postgres.ConnMaxLifetime = %s, want 30m", cfg.Postgres.ConnMaxLifetime)
 	}
 	// profile:database-postgres:end
+}
+
+// The request budget must expire while the connection can still carry the 504
+// that reports it, so it may not outlast the response write deadline.
+func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
+	t.Run("greater request timeout rejects", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "6s")
+		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
+
+		_, _, err := LoadDetailed(LoadOptions{})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected validation error for request timeout beyond write timeout")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		if !strings.Contains(err.Error(), "http.request_timeout must be <= http.write_timeout") {
+			t.Fatalf("error = %v, want request/write timeout compatibility policy", err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name           string
+		requestTimeout string
+		writeTimeout   string
+	}{
+		{name: "equal timeout allows", requestTimeout: "5s", writeTimeout: "5s"},
+		{name: "lower request timeout allows", requestTimeout: "4s", writeTimeout: "5s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__HTTP__READINESS_TIMEOUT", "1s")
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
+			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRequestTimeoutRejectsOutOfRangeValues(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{name: "below lower bound", value: "50ms"},
+		{name: "above upper bound", value: "11m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.value)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatalf("LoadDetailed() expected validation error for http.request_timeout = %q", tc.value)
+			}
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+			if !strings.Contains(err.Error(), "http.request_timeout must be in range") {
+				t.Fatalf("error = %v, want request timeout range policy", err)
+			}
+		})
+	}
 }

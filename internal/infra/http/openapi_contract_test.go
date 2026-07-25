@@ -170,7 +170,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing health",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second, RequestTimeout: time.Second},
 			handlers: Handlers{
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -180,7 +180,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing readiness gate",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second, RequestTimeout: time.Second},
 			handlers: Handlers{
 				Health: health.New(),
 			},
@@ -200,7 +200,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing readiness timeout",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, RequestTimeout: time.Second},
 			handlers: Handlers{
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
@@ -211,12 +211,23 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing max body bytes",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{ReadinessTimeout: time.Second},
+			cfg:     RouterConfig{ReadinessTimeout: time.Second, RequestTimeout: time.Second},
 			handlers: Handlers{
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
 			wantErr: "max body bytes must be > 0",
+		},
+		{
+			name:    "missing request timeout",
+			log:     log,
+			metrics: telemetry.New(),
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes, ReadinessTimeout: time.Second},
+			handlers: Handlers{
+				Health:        health.New(),
+				ReadinessGate: func(context.Context) error { return nil },
+			},
+			wantErr: "request timeout must be > 0",
 		},
 	}
 

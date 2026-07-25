@@ -109,6 +109,7 @@ func Run(args []string) (runErr error) {
 		httpx.RouterConfig{
 			MaxBodyBytes:     bootstrap.cfg.HTTP.MaxBodyBytes,
 			ReadinessTimeout: bootstrap.cfg.HTTP.ReadinessTimeout,
+			RequestTimeout:   bootstrap.cfg.HTTP.RequestTimeout,
 			OTelServerName:   bootstrap.cfg.Observability.OTel.ServiceName,
 			LogHealthProbes:  bootstrap.cfg.HTTP.AccessLogHealthProbes,
 		},
