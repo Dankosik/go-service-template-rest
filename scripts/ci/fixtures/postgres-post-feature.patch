@@ -69,7 +69,7 @@ index 9a1993f..2f2d827 100644
        type: object
        required:
 diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
-index d5ddc8c..a406768 100644
+index fd91ca9..293c87a 100644
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
 @@ -14,9 +14,11 @@ import (
@@ -84,7 +84,7 @@ index d5ddc8c..a406768 100644
  	"github.com/acme/postgres-service/internal/infra/telemetry"
  )
  
-@@ -122,6 +124,11 @@ func Run(args []string) (runErr error) {
+@@ -125,6 +127,11 @@ func Run(args []string) (runErr error) {
  	// telemetry flush and after background work has been joined.
  	defer dependencies.Close(dependencyCloseContext(signalCtx))
  
@@ -94,9 +94,9 @@ index d5ddc8c..a406768 100644
 +	}
 +
  	healthSvc := dependencies.health
- 	startupAdmission := newStartupAdmissionController(bootstrapSpan)
+ 	startupAdmission := newStartupAdmissionController()
  
-@@ -142,6 +149,7 @@ func Run(args []string) (runErr error) {
+@@ -150,6 +157,7 @@ func Run(args []string) (runErr error) {
  	handler, err := httpx.NewRouter(
  		bootstrap.log,
  		httpx.Handlers{
