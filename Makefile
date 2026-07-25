@@ -64,7 +64,7 @@ DATABASE_CI_TARGETS := sqlc-check
 .PHONY: help template-init template-init-check project-structure-check check check-full pr-check \
 	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
-	lint lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
+	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	container-security run build docker-build docker-run vendor claude-skills-sync
 # profile:database-postgres:start
@@ -83,7 +83,7 @@ help:
 	@echo ""
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
-	@echo "  make lint | lint-fast | go-security | secret-scan"
+	@echo "  make lint | lint-deep | lint-fast | go-security | secret-scan"
 	@echo "  make openapi-check"
 # profile:database-postgres:start
 	@echo "  make sqlc-check | migration-validate"
@@ -121,7 +121,7 @@ claude-skills-sync:
 check: project-structure-check fmt-check lint test
 
 ci-local:
-	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint test-race test-report $(DATABASE_CI_TARGETS) openapi-check go-security secret-scan
+	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint lint-deep test-race test-report $(DATABASE_CI_TARGETS) openapi-check go-security secret-scan
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
@@ -283,10 +283,13 @@ benchmark-remote-check:
 benchmark-remote-image:
 	$(BENCHMARK_REMOTE_SCRIPT) image-build
 
+# lint is the gate `make check` runs, so it stays fast enough to run before every
+# commit. deadcode and nilaway are whole-program analyses that dominate its wall
+# clock; they live in lint-deep, which ci-local and the CI lint job run.
 lint:
 	$(GO_TOOL) golangci-lint run --allow-parallel-runners --timeout=3m
-	$(MAKE) deadcode
-	$(MAKE) nilaway
+
+lint-deep: deadcode nilaway
 
 lint-fast:
 	$(GO_TOOL) golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
