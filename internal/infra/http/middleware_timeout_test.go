@@ -121,8 +121,7 @@ func TestRequestTimeoutDisabledWhenNotPositive(t *testing.T) {
 // The budget must reach handlers through the assembled router, not only when
 // the middleware is applied directly. The readiness gate is the one hook that
 // observes the request context from inside a generated operation, so it is what
-// proves the deadline arrived — and that the request budget, not the much larger
-// readiness timeout, is the binding constraint.
+// proves the deadline arrived, and that the request budget is what set it.
 func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 	t.Parallel()
 
@@ -136,8 +135,7 @@ func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 			return nil
 		},
 	}, nil, RouterConfig{
-		RequestTimeout:   requestBudget,
-		ReadinessTimeout: time.Hour,
+		RequestTimeout: requestBudget,
 	})
 
 	before := time.Now()
@@ -152,9 +150,8 @@ func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 			t.Fatal("handler context has no deadline, want the request budget")
 		}
 		// The deadline is set a moment after `before`, so it lands just past the
-		// budget. The claim under test is which timeout bound it: anything near
-		// requestBudget proves the request budget won over the hour-long
-		// readiness timeout.
+		// budget. Anything near requestBudget proves the request budget is what
+		// installed it rather than some unrelated timeout.
 		if budget := deadline.Sub(before); budget > 2*requestBudget {
 			t.Fatalf("handler deadline is %s away, want the %s request budget to bind", budget, requestBudget)
 		}
@@ -170,7 +167,7 @@ func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 func TestGeneratedResponseErrorHandlerMapsExpiredBudget(t *testing.T) {
 	t.Parallel()
 
-	options := generatedStrictServerOptions(slog.New(slog.DiscardHandler))
+	options := generatedStrictServerOptions(handleGeneratedRequestError(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge))
 
 	for _, tc := range []struct {
 		name       string

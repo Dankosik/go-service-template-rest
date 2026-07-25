@@ -202,9 +202,15 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.idle_timeout":                "61s",
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
+		"http.max_in_flight":               512,
 		"http.access_log_health_probes":    true,
 
+		"health.refresh_interval":  "3s",
+		"health.failure_threshold": 5,
+
 		"log.level": "warn",
+
+		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
 		"postgres.enabled":                     true,
@@ -216,9 +222,11 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.migration_lock_timeout":      "19s",
 		"postgres.max_open_conns":              26,
 		"postgres.conn_max_lifetime":           "45m",
+		"postgres.statement_timeout":           "7s",
 		// profile:database-postgres:end
 
 		"observability.metrics.addr":                "127.0.0.1:19090",
+		"observability.pprof.enabled":               true,
 		"observability.otel.service_name":           "snapshot-service",
 		"observability.otel.traces_sampler":         "always_on",
 		"observability.otel.traces_sampler_arg":     0.25,
@@ -243,9 +251,15 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.idle_timeout":                61 * time.Second,
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
+		"http.max_in_flight":               512,
 		"http.access_log_health_probes":    true,
 
+		"health.refresh_interval":  3 * time.Second,
+		"health.failure_threshold": 5,
+
 		"log.level": slog.LevelWarn,
+
+		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
 		"postgres.enabled":                     true,
@@ -257,9 +271,11 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.migration_lock_timeout":      19 * time.Second,
 		"postgres.max_open_conns":              26,
 		"postgres.conn_max_lifetime":           45 * time.Minute,
+		"postgres.statement_timeout":           7 * time.Second,
 		// profile:database-postgres:end
 
 		"observability.metrics.addr":                "127.0.0.1:19090",
+		"observability.pprof.enabled":               true,
 		"observability.otel.service_name":           "snapshot-service",
 		"observability.otel.traces_sampler":         "always_on",
 		"observability.otel.traces_sampler_arg":     0.25,

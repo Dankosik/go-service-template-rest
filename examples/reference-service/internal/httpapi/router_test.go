@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article/memory"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/getkin/kin-openapi/openapi3filter"
 )
 
 const testWriteToken = "reference-write-token"
@@ -27,10 +29,7 @@ func TestRouterGetArticle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
-	router, err := NewRouter(service, testWriteToken)
-	if err != nil {
-		t.Fatalf("NewRouter() error = %v", err)
-	}
+	router := mustNewRouter(t, service)
 
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/"+want.Slug, nil))
@@ -58,10 +57,7 @@ func TestRouterMapsMissingArticleToProblem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
-	router, err := NewRouter(service, testWriteToken)
-	if err != nil {
-		t.Fatalf("NewRouter() error = %v", err)
-	}
+	router := mustNewRouter(t, service)
 
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/missing", nil))
@@ -86,10 +82,7 @@ func TestRouterRejectsInvalidSlugBeforeUseCase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
-	router, err := NewRouter(service, testWriteToken)
-	if err != nil {
-		t.Fatalf("NewRouter() error = %v", err)
-	}
+	router := mustNewRouter(t, service)
 
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/INVALID", nil))
@@ -128,11 +121,53 @@ func newTestRouter(t *testing.T, seed ...article.Article) http.Handler {
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
-	router, err := NewRouter(service, testWriteToken)
+	return mustNewRouter(t, service)
+}
+
+// mustNewRouter builds the example router with the same hardened chain the binary
+// serves, so these tests exercise the middleware a reader inherits by copying it.
+// mustNewRouter builds the API handler this package owns.
+//
+// The reject mappers are local test doubles rather than the shared ones from the
+// transport adapter: a feature package must not import that adapter, so the real
+// mapping is proved at the composition root instead. See
+// TestReferenceRouterInheritsHardenedChain in the reference binary's tests.
+func mustNewRouter(tb testing.TB, service *article.Service) http.Handler {
+	tb.Helper()
+
+	handler, err := NewAPIHandler(service, Options{
+		WriteToken:     testWriteToken,
+		RejectRequest:  testRejectRequest,
+		RejectResponse: testRejectResponse,
+	})
 	if err != nil {
-		t.Fatalf("NewRouter() error = %v", err)
+		tb.Fatalf("NewAPIHandler() error = %v", err)
 	}
-	return router
+	return handler
+}
+
+func testRejectRequest(w http.ResponseWriter, _ *http.Request, err error) {
+	var securityErr *openapi3filter.SecurityRequirementsError
+	if errors.As(err, &securityErr) {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeTestProblem(w, problem("unauthorized", "unauthorized", http.StatusUnauthorized, "credentials are missing or invalid"))
+		return
+	}
+	writeTestProblem(w, problem("bad_request", "bad request", http.StatusBadRequest, "request is malformed or invalid"))
+}
+
+func testRejectResponse(w http.ResponseWriter, _ *http.Request, _ error) {
+	writeTestProblem(w, problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"))
+}
+
+func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(int(body.Status))
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return
+	}
+	_, _ = w.Write(encoded)
 }
 
 func postArticle(t *testing.T, router http.Handler, token, body string) *httptest.ResponseRecorder {
@@ -253,10 +288,7 @@ func TestRouterRejectsMalformedCreateBodyBeforeUseCase(t *testing.T) {
 			if err != nil {
 				t.Fatalf("article.NewService() error = %v", err)
 			}
-			router, err := NewRouter(service, testWriteToken)
-			if err != nil {
-				t.Fatalf("NewRouter() error = %v", err)
-			}
+			router := mustNewRouter(t, service)
 
 			response := postArticle(t, router, testWriteToken, tt.body)
 			if response.Code != http.StatusBadRequest {
@@ -281,7 +313,15 @@ func TestNewRouterRejectsEmptyWriteToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
-	if _, err := NewRouter(service, "   "); err == nil {
-		t.Fatal("NewRouter() error = nil, want rejection of an empty write token")
+	_, err = NewAPIHandler(service, Options{
+		WriteToken:     "   ",
+		RejectRequest:  testRejectRequest,
+		RejectResponse: testRejectResponse,
+	})
+	if err == nil {
+		t.Fatal("NewAPIHandler() error = nil, want rejection of an empty write token")
+	}
+	if _, err := NewAPIHandler(service, Options{WriteToken: testWriteToken}); err == nil {
+		t.Fatal("NewAPIHandler() error = nil, want rejection of missing reject mappers")
 	}
 }

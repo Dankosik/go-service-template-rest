@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"sort"
 	"strconv"
@@ -25,6 +26,12 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
+	if err := validateHealthConfig(cfg.Health); err != nil {
+		return err
+	}
+	if err := validateRuntimeConfig(cfg.Runtime); err != nil {
+		return err
+	}
 
 	// profile:database-postgres:start
 	if err := validatePostgres(cfg.Postgres); err != nil {
@@ -32,7 +39,70 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	}
 	// profile:database-postgres:end
 
-	return validateObservabilityConfig(&cfg.Observability)
+	if err := validateObservabilityConfig(&cfg.Observability); err != nil {
+		return err
+	}
+	return validateCrossSectionBudgets(*cfg)
+}
+
+// validateCrossSectionBudgets rejects settings that are each individually legal
+// but incoherent together. A budget that only holds inside one section is not a
+// budget: it is a number that happens to look like one.
+func validateCrossSectionBudgets(cfg Config) error {
+	// profile:database-postgres:start
+	if cfg.Postgres.Enabled {
+		if cfg.Postgres.StatementTimeout > cfg.HTTP.RequestTimeout {
+			return fmt.Errorf(
+				"%w: postgres.statement_timeout must be <= http.request_timeout (%s)",
+				ErrValidate,
+				cfg.HTTP.RequestTimeout,
+			)
+		}
+		if cfg.HTTP.MaxInFlight > 0 && cfg.HTTP.MaxInFlight < cfg.Postgres.MaxOpenConns {
+			return fmt.Errorf(
+				"%w: http.max_in_flight must be >= postgres.max_open_conns (%d) so shedding cannot be tighter than the pool it protects",
+				ErrValidate,
+				cfg.Postgres.MaxOpenConns,
+			)
+		}
+	}
+	// profile:database-postgres:end
+
+	// There is deliberately no rule tying health.refresh_interval to
+	// http.readiness_timeout. The readiness handler answers from cached state and
+	// performs no I/O, so its budget bounds nothing the refresher does; the
+	// interval only has to be small relative to the orchestrator's own probe
+	// period, which this service cannot see.
+	if !cfg.Observability.Pprof.Enabled {
+		return nil
+	}
+	if cfg.Observability.Metrics.Addr == "" {
+		return fmt.Errorf(
+			"%w: observability.pprof.enabled requires observability.metrics.addr, which serves the diagnostics listener",
+			ErrValidate,
+		)
+	}
+	return nil
+}
+
+func validateHealthConfig(cfg HealthConfig) error {
+	if err := validateDurationRange("health.refresh_interval", cfg.RefreshInterval, 100*time.Millisecond, time.Minute); err != nil {
+		return err
+	}
+	if cfg.FailureThreshold < 1 || cfg.FailureThreshold > 100 {
+		return fmt.Errorf("%w: health.failure_threshold must be in range [1,100]", ErrValidate)
+	}
+	return nil
+}
+
+func validateRuntimeConfig(cfg RuntimeConfig) error {
+	if math.IsNaN(cfg.MemoryLimitRatio) || math.IsInf(cfg.MemoryLimitRatio, 0) {
+		return fmt.Errorf("%w: runtime.memory_limit_ratio must be finite", ErrValidate)
+	}
+	if cfg.MemoryLimitRatio < 0 || cfg.MemoryLimitRatio > 1 {
+		return fmt.Errorf("%w: runtime.memory_limit_ratio must be in range [0,1]", ErrValidate)
+	}
+	return nil
 }
 
 func validateAppConfig(cfg *AppConfig) error {
@@ -91,6 +161,9 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 	if cfg.MaxBodyBytes <= 0 {
 		return fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
 	}
+	if cfg.MaxInFlight < 0 || cfg.MaxInFlight > 100_000 {
+		return fmt.Errorf("%w: http.max_in_flight must be in range [0,100000]", ErrValidate)
+	}
 	return nil
 }
 
@@ -112,7 +185,16 @@ func validateObservabilityConfig(cfg *ObservabilityConfig) error {
 	if cfg.OTel.ServiceName == "" {
 		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
-	return validateSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg)
+	return validateObservabilitySampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg)
+}
+
+// validateObservabilitySampler prefixes the shared sampler rules with the
+// section that owns them, so a rejection names the setting an operator can edit.
+func validateObservabilitySampler(sampler string, samplerArg float64) error {
+	if err := otelconfig.ValidateTraceSampler(sampler, samplerArg); err != nil {
+		return fmt.Errorf("%w: observability.otel.%w", ErrValidate, err)
+	}
+	return nil
 }
 
 func findUnknownKeys(keys []string) []string {
@@ -170,6 +252,9 @@ func validatePostgres(cfg PostgresConfig) error {
 	if err := validateDurationRange("postgres.conn_max_lifetime", cfg.ConnMaxLifetime, time.Minute, 24*time.Hour); err != nil {
 		return err
 	}
+	if err := validateDurationRange("postgres.statement_timeout", cfg.StatementTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -205,20 +290,6 @@ func validateHTTPReadinessWriteTimeout(cfg HTTPConfig) error {
 func validateHTTPRequestWriteTimeout(cfg HTTPConfig) error {
 	if cfg.RequestTimeout > cfg.WriteTimeout {
 		return fmt.Errorf("%w: http.request_timeout must be <= http.write_timeout", ErrValidate)
-	}
-	return nil
-}
-
-func validateSampler(sampler string, samplerArg float64) error {
-	if !otelconfig.TraceSamplerSupported(sampler) {
-		return fmt.Errorf("%w: observability.otel.traces_sampler is unsupported", ErrValidate)
-	}
-
-	if !otelconfig.TraceSamplerArgFinite(samplerArg) {
-		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be finite", ErrValidate)
-	}
-	if !otelconfig.TraceSamplerArgInRange(samplerArg) {
-		return fmt.Errorf("%w: observability.otel.traces_sampler_arg must be in range [0,1]", ErrValidate)
 	}
 	return nil
 }

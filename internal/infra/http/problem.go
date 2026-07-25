@@ -21,10 +21,13 @@ type problemCode string
 
 const (
 	problemCodeBadRequest            problemCode = "bad_request"
+	problemCodeUnauthorized          problemCode = "unauthorized"
+	problemCodeForbidden             problemCode = "forbidden"
 	problemCodeNotFound              problemCode = "not_found"
 	problemCodeMethodNotAllowed      problemCode = "method_not_allowed"
 	problemCodeRequestEntityTooLarge problemCode = "request_entity_too_large"
 	problemCodeInternalError         problemCode = "internal_error"
+	problemCodeServiceUnavailable    problemCode = "service_unavailable"
 	problemCodeGatewayTimeout        problemCode = "gateway_timeout"
 )
 
@@ -72,6 +75,18 @@ func problemDefinitionFor(code problemCode) (problemCode, problemDefinition) {
 			title:   "bad request",
 			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1",
 		}
+	case problemCodeUnauthorized:
+		return code, problemDefinition{
+			status:  http.StatusUnauthorized,
+			title:   "unauthorized",
+			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2",
+		}
+	case problemCodeForbidden:
+		return code, problemDefinition{
+			status:  http.StatusForbidden,
+			title:   "forbidden",
+			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.4",
+		}
 	case problemCodeNotFound:
 		return code, problemDefinition{
 			status:  http.StatusNotFound,
@@ -95,6 +110,12 @@ func problemDefinitionFor(code problemCode) (problemCode, problemDefinition) {
 			status:  http.StatusInternalServerError,
 			title:   "internal server error",
 			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1",
+		}
+	case problemCodeServiceUnavailable:
+		return code, problemDefinition{
+			status:  http.StatusServiceUnavailable,
+			title:   "service unavailable",
+			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
 		}
 	case problemCodeGatewayTimeout:
 		return code, problemDefinition{

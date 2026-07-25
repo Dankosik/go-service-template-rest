@@ -189,11 +189,12 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 				HealthcheckTimeout: 10 * time.Millisecond,
 				MaxOpenConns:       1,
 				ConnMaxLifetime:    time.Minute,
+				StatementTimeout:   time.Second,
 			},
 		},
 		log: slog.New(slog.DiscardHandler),
 	})
-	dependencies.Close()
+	dependencies.Close(context.Background())
 
 	if err == nil {
 		t.Fatal("initRuntimeDependencies() error = nil, want unavailable PostgreSQL rejection")
@@ -222,6 +223,7 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 			HealthcheckTimeout: time.Second,
 			MaxOpenConns:       1,
 			ConnMaxLifetime:    time.Minute,
+			StatementTimeout:   time.Second,
 		}},
 		log: slog.New(slog.DiscardHandler),
 	}

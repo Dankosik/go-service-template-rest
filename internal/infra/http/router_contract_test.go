@@ -78,7 +78,33 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
-	t.Run("method not allowed allow header includes trace when route exists", func(t *testing.T) {
+	// The Allow header must enumerate whatever methods the route actually has,
+	// not just the ones the platform probes use.
+	t.Run("method not allowed allow header enumerates the route's own methods", func(t *testing.T) {
+		t.Parallel()
+
+		apiSubrouter := chi.NewRouter()
+		noContent := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+		apiSubrouter.Delete("/mutable", noContent)
+		apiSubrouter.Patch("/mutable", noContent)
+
+		rootRouter := newRootRouter(apiSubrouter)
+
+		resp := doRequest(rootRouter, http.MethodPost, "/mutable")
+
+		if resp.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
+		}
+		// Matched methods keep boundedHTTPMethods order; OPTIONS is appended last
+		// because the route does not declare it.
+		assertAllowHeader(t, resp.Header(), "DELETE, PATCH, OPTIONS")
+	})
+
+	// CONNECT and TRACE are not probed for the Allow header. A route that only
+	// answers one of them therefore reads as absent, which is deliberate: chi
+	// cannot route CONNECT from an ordinary handler, and advertising TRACE is a
+	// scanner finding.
+	t.Run("trace only route is not advertised", func(t *testing.T) {
 		t.Parallel()
 
 		apiSubrouter := chi.NewRouter()
@@ -90,10 +116,12 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 
 		resp := doRequest(rootRouter, http.MethodPost, "/trace-only")
 
-		if resp.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 		}
-		assertAllowHeader(t, resp.Header(), "TRACE, OPTIONS")
+		if got := resp.Header().Get("Allow"); got != "" {
+			t.Fatalf("Allow = %q, want empty", got)
+		}
 	})
 
 	t.Run("options for known path returns no content with allow", func(t *testing.T) {
@@ -152,7 +180,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedStrictServerOptions(log)
+	options := generatedStrictServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
 	if options.RequestErrorHandlerFunc == nil {
 		t.Fatalf("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
 	}
@@ -208,7 +236,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&out, nil))
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedChiServerOptions(log)
+	options := generatedChiServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
 	if options.ErrorHandlerFunc == nil {
 		t.Fatalf("generatedChiServerOptions() ErrorHandlerFunc = nil")
 	}
@@ -491,5 +519,32 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		if !found {
 			t.Fatalf("span name %q not found; got %v", wantName, spanNames)
 		}
+	}
+}
+
+// TestPublicRouterDoesNotServeDiagnostics keeps the profile and metrics endpoints
+// off the public listener.
+//
+// This matters because net/http/pprof registers itself on http.DefaultServeMux
+// from its own init, so any handler that falls back to that mux exposes heap
+// contents and process arguments. The public router must answer these as
+// ordinary unknown paths.
+func TestPublicRouterDoesNotServeDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	h := mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{}, nil, RouterConfig{})
+
+	for _, path := range []string{
+		"/debug/pprof/",
+		"/debug/pprof/heap",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/metrics",
+	} {
+		resp := doRequest(h, http.MethodGet, path)
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("%s status = %d, want %d on the public router", path, resp.Code, http.StatusNotFound)
+		}
+		assertProblemContentType(t, resp.Header())
 	}
 }

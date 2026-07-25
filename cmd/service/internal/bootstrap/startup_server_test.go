@@ -44,6 +44,15 @@ func (f *fakeRuntimeServer) Serve(listener net.Listener) error {
 	return nil
 }
 
+func (f *fakeRuntimeServer) Close() error {
+	if f.stopServe != nil {
+		f.stopServeOnce.Do(func() {
+			close(f.stopServe)
+		})
+	}
+	return nil
+}
+
 func (f *fakeRuntimeServer) Shutdown(ctx context.Context) error {
 	if f.stopServe != nil {
 		f.stopServeOnce.Do(func() {

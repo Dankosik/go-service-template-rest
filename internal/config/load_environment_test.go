@@ -42,8 +42,11 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("Postgres.DSN = %q, want empty", cfg.Postgres.DSN)
 	}
 	// profile:database-postgres:end
-	if cfg.Observability.Metrics.Addr != "127.0.0.1:9090" {
-		t.Fatalf("Observability.Metrics.Addr = %q, want 127.0.0.1:9090", cfg.Observability.Metrics.Addr)
+	if cfg.Observability.Metrics.Addr != ":9090" {
+		t.Fatalf("Observability.Metrics.Addr = %q, want :9090", cfg.Observability.Metrics.Addr)
+	}
+	if cfg.Observability.Pprof.Enabled {
+		t.Fatal("Observability.Pprof.Enabled = true, want false by default")
 	}
 	if cfg.Observability.OTel.ServiceName == "" {
 		t.Fatal("Observability.OTel.ServiceName is empty")

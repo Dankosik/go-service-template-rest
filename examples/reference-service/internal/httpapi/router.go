@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,69 +14,81 @@ import (
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
-// NewRouter wires the generated contract to the reference feature.
+// RejectFunc writes a transport-level rejection. The composition root supplies
+// these so this package maps the feature onto its contract without importing an
+// infra adapter to do it; see the reference binary for what it passes.
+type RejectFunc func(http.ResponseWriter, *http.Request, error)
+
+// Options carries what the composition root owns.
+type Options struct {
+	// WriteToken is the credential accepted for protected operations. It is a
+	// deliberately minimal stand-in so the example can demonstrate how a
+	// spec-declared security scheme becomes a runtime check; it is NOT an
+	// authentication design. A real service owns identity, key rotation,
+	// authorization, and audit — see docs/first-production-feature.md.
+	WriteToken string
+	// RejectRequest maps a validator failure onto a response: an oversized body
+	// to 413, a failed security requirement to 401 with a WWW-Authenticate
+	// challenge, everything else to a sanitized 400.
+	RejectRequest RejectFunc
+	// RejectResponse maps a generated strict-server response failure: a spent
+	// request budget to 504, anything else to 500.
+	RejectResponse RejectFunc
+}
+
+// NewAPIHandler wires the generated contract to the reference feature.
 //
-// writeToken is the credential accepted for protected operations. It is a
-// deliberately minimal stand-in so the example can demonstrate how a
-// spec-declared security scheme becomes a runtime check; it is NOT an
-// authentication design. A real service owns identity, key rotation,
-// authorization, and audit — see docs/first-production-feature.md.
-func NewRouter(articles *article.Service, writeToken string) (http.Handler, error) {
+// It returns the API handler only — not a server-ready router. The middleware
+// chain that makes it safe to expose (correlation, tracing, access logging, body
+// limits, the request budget, load shedding, panic recovery) is applied by the
+// composition root through httpx.Harden, because a feature package must not
+// import concrete infra adapters. The important part is that the chain is applied
+// by the shared code rather than rebuilt here: a second hand-built chain is how a
+// service ends up with none of those protections while believing it inherited all
+// of them.
+func NewAPIHandler(articles *article.Service, opts Options) (http.Handler, error) {
 	if articles == nil {
-		return nil, errors.New("reference router: article service is required")
+		return nil, errors.New("reference api: article service is required")
 	}
-	if strings.TrimSpace(writeToken) == "" {
-		return nil, errors.New("reference router: write token is required")
+	if strings.TrimSpace(opts.WriteToken) == "" {
+		return nil, errors.New("reference api: write token is required")
+	}
+	if opts.RejectRequest == nil || opts.RejectResponse == nil {
+		return nil, errors.New("reference api: request and response rejection mappers are required")
 	}
 	spec, err := openapi.GetSpec()
 	if err != nil {
-		return nil, fmt.Errorf("reference router: load OpenAPI spec: %w", err)
+		return nil, fmt.Errorf("reference api: load OpenAPI spec: %w", err)
 	}
 
-	writeBadRequest := func(w http.ResponseWriter) {
-		writeProblem(w, problem("bad_request", "bad request", http.StatusBadRequest, "request is malformed or invalid"))
-	}
 	validator := oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
 		DoNotValidateServers: true,
 		// The spec's securitySchemes drive this call, so an operation marked
 		// protected cannot reach a handler without passing the check.
 		Options: openapi3filter.Options{
 			AuthenticationFunc: func(_ context.Context, input *openapi3filter.AuthenticationInput) error {
-				return authenticateBearer(input, writeToken)
+				return authenticateBearer(input, opts.WriteToken)
 			},
 		},
 		ErrorHandlerWithOpts: func(
 			_ context.Context,
 			err error,
 			w http.ResponseWriter,
-			_ *http.Request,
+			r *http.Request,
 			_ oapimiddleware.ErrorHandlerOpts,
 		) {
-			// A failed security requirement is 401, not 400: the request was
-			// well formed and the credential was the problem.
-			var securityErr *openapi3filter.SecurityRequirementsError
-			if errors.As(err, &securityErr) {
-				w.Header().Set("WWW-Authenticate", "Bearer")
-				writeProblem(w, problem("unauthorized", "unauthorized", http.StatusUnauthorized, "credentials are missing or invalid"))
-				return
-			}
-			writeBadRequest(w)
-		},
-	})
-	strict := openapi.NewStrictHandlerWithOptions(&handler{articles: articles}, nil, openapi.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			writeBadRequest(w)
-		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			writeProblem(w, problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"))
+			opts.RejectRequest(w, r, err)
 		},
 	})
 
+	strict := openapi.NewStrictHandlerWithOptions(&handler{articles: articles}, nil, openapi.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  opts.RejectRequest,
+		ResponseErrorHandlerFunc: opts.RejectResponse,
+	})
+
 	return openapi.HandlerWithOptions(strict, openapi.ChiServerOptions{
-		Middlewares: []openapi.MiddlewareFunc{validator},
-		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			writeBadRequest(w)
-		},
+		Middlewares:      []openapi.MiddlewareFunc{validator},
+		ErrorHandlerFunc: opts.RejectRequest,
 	}), nil
 }
 
@@ -102,13 +113,4 @@ func authenticateBearer(input *openapi3filter.AuthenticationInput, expected stri
 		return errors.New("bearer credential is invalid")
 	}
 	return nil
-}
-
-func writeProblem(w http.ResponseWriter, body openapi.Problem) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(int(body.Status))
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		// The response status is already committed; the caller cannot recover.
-		return
-	}
 }
