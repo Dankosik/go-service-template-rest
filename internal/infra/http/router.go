@@ -22,7 +22,10 @@ import (
 type RouterConfig struct {
 	MaxBodyBytes     int64
 	ReadinessTimeout time.Duration
-	OTelServerName   string
+	// RequestTimeout bounds every handler. See RequestTimeout in
+	// middleware_timeout.go for why the net/http server timeouts do not.
+	RequestTimeout time.Duration
+	OTelServerName string
 	// LogHealthProbes re-enables access logging for platform probe routes,
 	// which are excluded by default.
 	LogHealthProbes bool
@@ -38,6 +41,9 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		return nil, fmt.Errorf("http router: max body bytes must be > 0")
+	}
+	if cfg.RequestTimeout <= 0 {
+		return nil, fmt.Errorf("http router: request timeout must be > 0")
 	}
 	strict, err := newStrictHandlers(h, cfg.ReadinessTimeout)
 	if err != nil {
@@ -65,6 +71,10 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		SecurityHeaders,
 		func(next http.Handler) http.Handler { return AccessLog(log, cfg.LogHealthProbes, next) },
 		func(next http.Handler) http.Handler { return RequestBodyLimit(cfg.MaxBodyBytes, next) },
+		// The budget sits inside the access log, so a timed-out request is still
+		// recorded with its duration, and outside Recover, so a recovered panic
+		// has already committed its response before the budget is inspected.
+		func(next http.Handler) http.Handler { return RequestTimeout(cfg.RequestTimeout, next) },
 		func(next http.Handler) http.Handler { return Recover(log, next) },
 	)
 
@@ -105,7 +115,19 @@ func generatedStrictServerOptions(log *slog.Logger) openapi.StrictHTTPServerOpti
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			handleMalformedGeneratedRequest(log, w, r, err)
 		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			// A handler that returns its expired context is reporting a spent
+			// request budget, not an internal fault, and this is the path most
+			// timeouts actually take: the generated wrapper commits a response
+			// here, so RequestTimeout never sees an uncommitted one. Reporting
+			// it as 500 would hide every slow dependency inside the error rate.
+			if errors.Is(err, context.DeadlineExceeded) {
+				writeProblem(w, r, problemResponse{
+					code:   problemCodeGatewayTimeout,
+					detail: "request exceeded its time budget",
+				})
+				return
+			}
 			writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
 		},
 	}

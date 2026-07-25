@@ -2,14 +2,12 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"runtime"
 	"runtime/debug"
-
-	"github.com/felixge/httpsnoop"
 )
 
 func Recover(log *slog.Logger, next http.Handler) http.Handler {
@@ -18,52 +16,38 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		committed := false
-		trackedWriter := httpsnoop.Wrap(w, httpsnoop.Hooks{
-			WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
-				return func(code int) {
-					committed = true
-					next(code)
-				}
-			},
-			Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
-				return func(b []byte) (int, error) {
-					committed = true
-					return next(b)
-				}
-			},
-			Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc {
-				return func() {
-					committed = true
-					next()
-				}
-			},
-			ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
-				return func(src io.Reader) (int64, error) {
-					committed = true
-					return next(src)
-				}
-			},
-		})
+		trackedWriter, committed := trackResponseCommit(w)
 		defer func(ctx context.Context, method, path string) {
-			if rec := recover(); rec != nil {
-				traceID, spanID := traceIDsFromContext(ctx)
-				log.Error(
-					"panic recovered",
-					"panic_class", panicClass(rec),
-					"panic_type", fmt.Sprintf("%T", rec),
-					"method", method,
-					"path", path,
-					"request_id", requestIDFromContext(ctx),
-					"trace_id", traceID,
-					"span_id", spanID,
-					"stack", string(debug.Stack()),
-				)
-				if committed {
-					return
-				}
-				writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
+			rec := recover()
+			if rec == nil {
+				return
 			}
+			// http.ErrAbortHandler is the standard way to abandon a response on
+			// purpose: net/http's own recovery suppresses it, and
+			// httputil.ReverseProxy raises it. Re-panicking hands it back to the
+			// server unchanged. Recovering it here instead would turn every
+			// deliberate abort into an ERROR log with a full stack trace and a
+			// spurious 500 attempt, at traffic volume.
+			if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+				panic(rec)
+			}
+
+			traceID, spanID := traceIDsFromContext(ctx)
+			log.Error(
+				"panic recovered",
+				"panic_class", panicClass(rec),
+				"panic_type", fmt.Sprintf("%T", rec),
+				"method", method,
+				"path", path,
+				"request_id", requestIDFromContext(ctx),
+				"trace_id", traceID,
+				"span_id", spanID,
+				"stack", string(debug.Stack()),
+			)
+			if committed() {
+				return
+			}
+			writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
 		}(r.Context(), r.Method, r.URL.Path)
 		next.ServeHTTP(trackedWriter, r)
 	})

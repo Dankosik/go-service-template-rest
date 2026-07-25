@@ -18,7 +18,10 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
 
-const testRouterMaxBodyBytes int64 = 1 << 20
+const (
+	testRouterMaxBodyBytes   int64 = 1 << 20
+	testRouterRequestTimeout       = 5 * time.Second
+)
 
 func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
 	tb.Helper()
@@ -37,6 +40,9 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		cfg.MaxBodyBytes = testRouterMaxBodyBytes
+	}
+	if cfg.RequestTimeout <= 0 {
+		cfg.RequestTimeout = testRouterRequestTimeout
 	}
 	if cfg.OTelServerName == "" {
 		cfg.OTelServerName = "router-test"

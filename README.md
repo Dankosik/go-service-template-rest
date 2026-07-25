@@ -78,17 +78,21 @@ it. Be deliberate about that, because a generated service owns all of it:
 
 | Inherited | Size |
 | --- | --- |
-| `.agents/skills/` | 39 skills, 317 files, ~17,200 lines, 2.1 MB |
+| `.agents/skills/` | 39 skills, 358 files, ~20,600 lines, 2.1 MB |
 | `.codex/agents/`, `.claude/agents/`, `.qwen/agents/` | 18 specialist definitions each |
-| `specs/` | this template's own closed decision records |
-| `docs/` | 25 files, ~3,300 lines |
+| `docs/` | 25 files, ~3,400 lines |
 
-Across the repository that is roughly 409 Markdown files and 23,600 lines of
-prose against about 15,100 lines of Go. If your team is going to drive changes
+Across the repository that is roughly 409 Markdown files and 23,700 lines of
+prose against about 17,900 lines of Go. If your team is going to drive changes
 through Codex, Claude Code, or Qwen, that content is the point of this template
 and the largest thing it gives you. If not, plan to delete it: keep
 [`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
-`.claude/`, `.qwen/`, and `specs/`.
+`.claude/`, and `.qwen/`.
+
+`specs/` is not in that table because initialization deletes it. Those bundles
+record decisions about building this template, and a generated service that kept
+them would be handing its agents authoritative-looking records for a repository
+it does not have.
 
 This is a working service scaffold, not only a prompt collection. The code,
 generated sources, database lifecycle, CI, and agent instructions share one
@@ -172,8 +176,8 @@ internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
 examples/reference-service/      worked feature-slice example (upstream only)
-migrations/                      SQL migrations (when first owned)
-specs/                           durable task decisions
+migrations/                      SQL migrations (PostgreSQL profile)
+specs/                           durable task decisions (upstream only)
 .agents/skills/                  reusable skills
 .codex/agents/                   Codex specialists
 ```

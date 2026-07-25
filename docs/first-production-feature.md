@@ -110,6 +110,34 @@ are declared rather than incidental. Identity, key rotation, authorization, and
 audit remain your service's design. `examples/reference-service`, upstream or
 kept, has a working end-to-end version of exactly this wiring.
 
+### What a rejected request tells the client
+
+Every rejection from the request validator collapses to one response: `400` with
+`code: bad_request` and the detail `request is malformed or invalid`. A bad
+enum, a missing required field, and an over-length string are indistinguishable
+to the caller. That is deliberate — a validation message echoes attacker-supplied
+input back out — but it moves integration debugging from the client's screen into
+your logs, and consumers will ask.
+
+Naming the failing field is safe; echoing its value is not. `kin-openapi` already
+carries the location, so the opt-in is to widen the Problem schema with an
+`errors` array and fill it from the pointer only:
+
+```go
+var schemaErr *openapi3.SchemaError
+if errors.As(err, &schemaErr) {
+    // JSONPointer() is the field path, for example ["name"]. schemaErr.Value is
+    // the rejected input: never copy it into the response.
+    field := strings.Join(schemaErr.JSONPointer(), "/")
+    _ = field
+}
+```
+
+Add the matching `errors` property to the `Problem` schema in
+`api/openapi/service.yaml`, regenerate, and extend `writeProblem` in
+`internal/infra/http/problem.go`. Keep the framework-level problems — `404`,
+`405`, `413`, `504` — detail-free; they carry no field to name.
+
 Add boundary tests for the happy path, malformed path/query/body input,
 unknown JSON fields, every documented failure status, and the chosen
 authentication policy.
@@ -125,7 +153,32 @@ a misspelled deployment variable cannot silently fall back to a default.
 ## 5. Add PostgreSQL only when selected
 
 Initialize the service with `DATABASE=postgres` before building a persistence
-feature. Add paired deterministic migrations under `migrations/`, SQL query
+feature. Neither `migrations/` nor `internal/infra/postgres/queries/` exists yet:
+`project-structure-check` rejects both until they hold real content, so you
+create each one with its first file rather than inheriting an empty placeholder.
+
+`golang-migrate` applies migrations in filename order, and every change is a
+pair:
+
+```text
+migrations/0001_create_orders.up.sql
+migrations/0001_create_orders.down.sql
+```
+
+Keep one logical change per pair with a `down` that genuinely reverses `up`, go
+additive first — add a column nullable, backfill, constrain it in a later pair —
+so a rollback never strands rows, and keep `CREATE INDEX CONCURRENTLY` out of the
+transaction the runner opens. `sqlc.yaml` reads `migrations/*.up.sql` as the
+schema, so a new table reaches generation only once its `up` file exists.
+
+Each query file names itself and its result shape:
+
+```sql
+-- name: GetOrder :one
+SELECT id, customer_id, total_cents FROM orders WHERE id = $1;
+```
+
+Add paired deterministic migrations under `migrations/`, SQL query
 sources under `internal/infra/postgres/queries`, and regenerate with:
 
 ```bash
