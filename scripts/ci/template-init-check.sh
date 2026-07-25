@@ -2,6 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# This check drives scripts/init-module.sh against fixtures, so it only means
+# anything in the template source checkout. Initialization consumes and removes
+# scripts/profiles/, so a generated service inherits a CI step with no generator
+# left to verify. Say so and succeed: a service that owns no generator has not
+# broken the generator contract, and failing here would make the first push of
+# every generated repository red.
+if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
+	echo "template initialization contract is upstream-only; scripts/profiles/ is absent, so this checkout is a generated service"
+	exit 0
+fi
+
 TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
 export GOCACHE="${GOCACHE:-${ROOT_DIR}/.cache/go-build}"
 export GOLANGCI_LINT_CACHE="${GOLANGCI_LINT_CACHE:-${ROOT_DIR}/.cache/golangci-lint}"
@@ -128,6 +140,11 @@ copy_template_checkout() {
 
 	git -C "${root}" init -q
 	git -C "${root}" remote add origin "${origin}"
+	# A repository created from the template has history, and initialization
+	# records the revision it derived from. An empty commit gives the fixture a
+	# HEAD to resolve without paying to stage the whole tree.
+	git -C "${root}" -c user.email=template-init-check@example.com -c user.name=template-init-check \
+		commit -q --allow-empty -m "template checkout"
 	printf '%s\n' "${root}"
 }
 
@@ -277,9 +294,25 @@ for removed in \
 	internal/infra/postgresmigrate \
 	env/docker-compose.yml \
 	test/postgres_integration_test.go \
-	test/postgres_migrate_runner_integration_test.go; do
+	test/postgres_migrate_runner_integration_test.go \
+	.github/assets \
+	.github/ISSUE_TEMPLATE; do
 	[[ ! -e "${minimal_checkout}/${removed}" ]]
 done
+# The generated service must record where it came from, or a later upstream fix
+# has no revision to be reviewed against.
+grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
+grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
+grep -Eq '^source_revision = "[0-9a-f]{40}"$' "${minimal_checkout}/template.lock"
+# A generated service owns no generator, so the initialization contract check
+# reports that and succeeds instead of failing the first push of every service.
+(
+	cd "${minimal_checkout}"
+	make template-init-check | grep -Fq 'upstream-only'
+	# CI runs this unconditionally; the target must survive DATABASE=none.
+	make sqlc-check
+	make project-structure-check
+)
 ! make -C "${minimal_checkout}" help | grep -Fq 'bench-db'
 ! grep -Fq 'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
 ! grep -Fq '/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
@@ -333,6 +366,22 @@ for retained in \
 	env/docker-compose.yml; do
 	[[ -e "${postgres_checkout}/${retained}" ]]
 done
+# A resolved profile leaves no markers in either direction. They are generator
+# inputs, and a retained profile has consumed them just as a removed one has.
+if grep -rn 'profile:database-postgres' \
+	"${postgres_checkout}/cmd" "${postgres_checkout}/internal" "${postgres_checkout}/env" \
+	"${postgres_checkout}/.github" "${postgres_checkout}/build" \
+	"${postgres_checkout}/Makefile" "${postgres_checkout}/railway.toml" 2>/dev/null; then
+	echo "database-postgres profile left profile markers behind"
+	exit 1
+fi
+grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
+grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
+(
+	cd "${postgres_checkout}"
+	make template-init-check | grep -Fq 'upstream-only'
+	make project-structure-check
+)
 
 if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
 	(

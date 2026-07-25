@@ -55,9 +55,6 @@ GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
-# profile:database-postgres:start
-DATABASE_CI_TARGETS := sqlc-check
-# profile:database-postgres:end
 
 .DEFAULT_GOAL := help
 
@@ -66,9 +63,9 @@ DATABASE_CI_TARGETS := sqlc-check
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	container-security run build docker-build docker-run vendor claude-skills-sync
+	sqlc-check container-security run build docker-build docker-run vendor claude-skills-sync
 # profile:database-postgres:start
-.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate sqlc-check migration-validate compose-up compose-down
+.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate migration-validate compose-up compose-down
 # profile:database-postgres:end
 
 help:
@@ -121,7 +118,7 @@ claude-skills-sync:
 check: project-structure-check fmt-check lint test
 
 ci-local:
-	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint lint-deep test-race test-report $(DATABASE_CI_TARGETS) openapi-check go-security secret-scan
+	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint lint-deep test-race test-report sqlc-check openapi-check go-security secret-scan
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
@@ -328,10 +325,14 @@ sqlc-generate:
 	else \
 		$(GO_TOOL) sqlc generate -f internal/infra/postgres/sqlc.yaml; \
 	fi
+# profile:database-postgres:end
 
+# sqlc-check stays outside the database profile because CI runs it unconditionally.
+# Without query sources it reports that there is nothing to generate and also
+# fails on generated output left behind without them, which is the drift a
+# profile-less service can still have.
 sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
-# profile:database-postgres:end
 
 openapi-generate:
 	go generate $(OPENAPI_PACKAGES)
@@ -381,7 +382,8 @@ migration-validate:
 	port="$${address##*:}"; \
 	test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
 	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
-	APP__POSTGRES__ENABLED=true \
+	MIGRATION_REHEARSAL=1 \
+		APP__POSTGRES__ENABLED=true \
 		APP__POSTGRES__DSN="$$dsn" \
 		go run ./cmd/migrate validate; \
 	image="$(RUNTIME_IMAGE)"; \

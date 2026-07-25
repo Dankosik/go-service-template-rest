@@ -105,7 +105,7 @@ func TestExporterOptionTypeCompatibility(t *testing.T) {
 func setupTracingForEnvPolicyTest(t *testing.T, exporter TraceExporterConfig) error {
 	t.Helper()
 
-	shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(exporter))
+	_, shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(exporter))
 	if err == nil {
 		if shutdownErr := shutdown(context.Background()); shutdownErr != nil {
 			t.Fatalf("shutdown tracing after unexpected setup success: %v", shutdownErr)

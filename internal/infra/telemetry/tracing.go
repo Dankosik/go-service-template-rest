@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +15,19 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
+
+const (
+	// TraceExporterConfigKey is this service's own exporter endpoint setting.
+	TraceExporterConfigKey = "observability.otel.exporter.otlp_endpoint"
+
+	// The standard OpenTelemetry endpoint variables. The signal-specific one is
+	// already a complete traces endpoint; the signal-agnostic one is a root that
+	// OTLP defines the traces path relative to.
+	otelExporterTracesEndpointEnv = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
+	otelExporterEndpointEnv       = "OTEL_EXPORTER_OTLP_ENDPOINT"
+
+	otlpTracesPath = "/v1/traces"
 )
 
 type TracingConfig struct {
@@ -34,24 +48,50 @@ type traceOTLPEndpoint struct {
 	endpointURL string
 }
 
+// TraceExporterEndpoint is the resolved OTLP traces endpoint and the setting
+// that supplied it.
+type TraceExporterEndpoint struct {
+	// URL is the full OTLP HTTP traces endpoint. Empty when nothing named one.
+	URL string
+	// Source is the configuration key or environment variable URL came from, so
+	// an operator can tell a platform-injected endpoint from this service's own.
+	// Empty when URL is empty.
+	Source string
+}
+
+// Configured reports whether a trace exporter should be built.
+func (e TraceExporterEndpoint) Configured() bool {
+	return e.URL != ""
+}
+
+// fromConfig reports whether this service, rather than the platform, named the
+// destination. It decides whether ambient credential and trust material is a
+// conflict: material this service cannot verify must not travel to an endpoint
+// this service chose.
+func (e TraceExporterEndpoint) fromConfig() bool {
+	return e.Source == TraceExporterConfigKey
+}
+
 var otelSetupMu sync.Mutex
 
-func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
+// SetupTracing installs the tracer provider and reports which OTLP endpoint the
+// exporter resolved to, so the caller can record and log that decision.
+func SetupTracing(ctx context.Context, cfg TracingConfig) (TraceExporterEndpoint, func(context.Context) error, error) {
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
 	if err != nil {
-		return nil, err
+		return TraceExporterEndpoint{}, nil, err
 	}
 
 	res, err := newResource(ctx, cfg.ServiceName, cfg.ServiceVersion, cfg.DeploymentEnv)
 	if err != nil {
-		return nil, err
+		return TraceExporterEndpoint{}, nil, err
 	}
 
-	exporterOptions, exporterConfigured, err := buildTraceExporterOptions(cfg.Exporter)
+	exporterOptions, endpoint, err := buildTraceExporterOptions(cfg.Exporter)
 	if err != nil {
-		return nil, err
+		return TraceExporterEndpoint{}, nil, err
 	}
-	if !exporterConfigured {
+	if !endpoint.Configured() {
 		// Keep valid trace IDs for propagation and log correlation without recording spans that cannot be exported.
 		sampler = sdktrace.NeverSample()
 	}
@@ -60,13 +100,15 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sampler),
 	}
-	if exporterConfigured {
-		if err := rejectConflictingTraceExporterEnv(); err != nil {
-			return nil, err
+	if endpoint.Configured() {
+		if endpoint.fromConfig() {
+			if err := rejectConflictingTraceExporterEnv(); err != nil {
+				return endpoint, nil, err
+			}
 		}
 		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
 		if err != nil {
-			return nil, fmt.Errorf("create otlp trace exporter: %w", err)
+			return endpoint, nil, fmt.Errorf("create otlp trace exporter: %w", err)
 		}
 		options = append(options, sdktrace.WithBatcher(exporter))
 	}
@@ -78,14 +120,14 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	otel.SetTracerProvider(provider)
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
-	return provider.Shutdown, nil
+	return endpoint, provider.Shutdown, nil
 }
 
 // AmbientOTLPExporterEnv returns the sorted names of non-empty
-// OTEL_EXPORTER_OTLP_* process variables. This repository configures the trace
-// exporter from observability.otel.exporter.* only, so these standard
-// OpenTelemetry variables are never read. Callers report them instead of
-// letting an injected collector endpoint look effective when it is not.
+// OTEL_EXPORTER_OTLP_* process variables. The endpoint variables among them are
+// honored when this service names no endpoint of its own; the rest are not read.
+// Callers subtract whatever supplied the endpoint and report the remainder, so
+// an injected setting never looks effective when it is not.
 func AmbientOTLPExporterEnv() []string {
 	var names []string
 	for _, entry := range os.Environ() {
@@ -104,11 +146,17 @@ func AmbientOTLPExporterEnv() []string {
 // otlptracehttp applies ambient environment first and explicit options second,
 // so an explicit option wins for everything it covers. WithEndpointURL covers
 // the endpoint, the URL path, and the TLS scheme, which makes an injected
-// ENDPOINT, TRACES_ENDPOINT, or INSECURE harmless — and those are exactly what
-// a platform collector injects. Credential and trust material is different:
-// this service never sets client certificates or a root CA pool, and it sets
-// headers only when observability.otel.exporter.otlp_headers is non-empty, so
-// these variables would silently travel to the collector unverified.
+// ENDPOINT, TRACES_ENDPOINT, or INSECURE harmless. Credential and trust material
+// is different: this service never sets client certificates or a root CA pool,
+// and it sets headers only when observability.otel.exporter.otlp_headers is
+// non-empty, so these variables would silently travel to the collector
+// unverified.
+//
+// This applies only when observability.otel.exporter.otlp_endpoint named the
+// destination. When the endpoint itself came from the platform's own variables,
+// the platform owns the whole exporter configuration and its credentials belong
+// to the collector it also named; rejecting them there would refuse the ordinary
+// injected-collector deployment for no gain.
 //
 // Kept sorted so reported output is stable.
 var traceExporterEnvConflicts = []string{
@@ -205,74 +253,139 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 	}
 }
 
-func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, bool, error) {
+func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, TraceExporterEndpoint, error) {
 	options := make([]otlptracehttp.Option, 0, 2)
-	endpoint, configured, err := traceExporterOTLPEndpoint(cfg)
+	endpoint, err := ResolveTraceExporterEndpoint(cfg)
 	if err != nil {
-		return nil, false, err
+		return nil, TraceExporterEndpoint{}, err
 	}
-	if !configured {
-		return options, false, nil
+	if !endpoint.Configured() {
+		return options, endpoint, nil
 	}
 
-	options = append(options, otlptracehttp.WithEndpointURL(endpoint.endpointURL))
+	options = append(options, otlptracehttp.WithEndpointURL(endpoint.URL))
 	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
 		parsedHeaders, err := parseOTLPHeaders(headers)
 		if err != nil {
-			return nil, false, err
+			return nil, TraceExporterEndpoint{}, err
 		}
 		options = append(options, otlptracehttp.WithHeaders(parsedHeaders))
 	}
 
-	return options, true, nil
+	return options, endpoint, nil
 }
 
-func traceExporterOTLPEndpoint(cfg TraceExporterConfig) (traceOTLPEndpoint, bool, error) {
-	raw := strings.TrimSpace(cfg.OTLPEndpoint)
-	if raw == "" {
-		return traceOTLPEndpoint{}, false, nil
+// ResolveTraceExporterEndpoint reports which OTLP traces endpoint the exporter
+// will use, and which setting supplied it.
+//
+// observability.otel.exporter.otlp_endpoint is this service's own setting and
+// wins. When it names nothing, the standard OpenTelemetry endpoint variables are
+// honored: they are what a platform collector injects, and a service that
+// ignored them would report healthy, answer every request, and export no trace.
+//
+// Configured headers are a credential, so they pin the destination. When this
+// service names headers but no endpoint there is no fallback, because sending
+// the service's own credentials to an endpoint it never named is the one
+// outcome this resolution must not create.
+func ResolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
+	if raw := strings.TrimSpace(cfg.OTLPEndpoint); raw != "" {
+		endpoint, err := parseTraceOTLPEndpoint(raw)
+		if err != nil {
+			return TraceExporterEndpoint{}, err
+		}
+		return TraceExporterEndpoint{URL: endpoint.endpointURL, Source: TraceExporterConfigKey}, nil
+	}
+	if strings.TrimSpace(cfg.OTLPHeaders) != "" {
+		return TraceExporterEndpoint{}, nil
 	}
 
-	endpoint, err := parseTraceOTLPEndpoint(raw)
-	if err != nil {
-		return traceOTLPEndpoint{}, false, err
+	if raw, ok := nonEmptyEnv(otelExporterTracesEndpointEnv); ok {
+		endpoint, err := parseTraceOTLPEndpoint(raw)
+		if err != nil {
+			return TraceExporterEndpoint{}, fmt.Errorf("%s: %w", otelExporterTracesEndpointEnv, err)
+		}
+		return TraceExporterEndpoint{URL: endpoint.endpointURL, Source: otelExporterTracesEndpointEnv}, nil
 	}
-	return endpoint, true, nil
+	if raw, ok := nonEmptyEnv(otelExporterEndpointEnv); ok {
+		endpoint, err := parseTraceOTLPBaseEndpoint(raw)
+		if err != nil {
+			return TraceExporterEndpoint{}, fmt.Errorf("%s: %w", otelExporterEndpointEnv, err)
+		}
+		return TraceExporterEndpoint{URL: endpoint.endpointURL, Source: otelExporterEndpointEnv}, nil
+	}
+
+	return TraceExporterEndpoint{}, nil
 }
 
-// parseTraceOTLPEndpoint validates the configured exporter URL fail-closed:
-// explicit http/https scheme, non-empty host, no userinfo/query/fragment.
-// A missing path defaults to the OTLP HTTP traces path /v1/traces.
+func nonEmptyEnv(name string) (string, bool) {
+	value := strings.TrimSpace(os.Getenv(name))
+	return value, value != ""
+}
+
+// parseTraceOTLPEndpoint validates a complete OTLP traces endpoint. A missing
+// path defaults to the OTLP HTTP traces path; any other path is used exactly as
+// given, because a signal-specific endpoint names its own route.
 func parseTraceOTLPEndpoint(raw string) (traceOTLPEndpoint, error) {
-	parsedURL, err := url.Parse(raw)
+	parsedURL, err := parseTraceOTLPURL(raw)
 	if err != nil {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: invalid endpoint")
-	}
-
-	scheme := strings.ToLower(parsedURL.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: unsupported scheme")
-	}
-	if parsedURL.User != nil {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: userinfo is not supported")
-	}
-	if strings.TrimSpace(parsedURL.Hostname()) == "" {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: empty host")
-	}
-	if parsedURL.RawQuery != "" {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: query is not supported")
-	}
-	if parsedURL.Fragment != "" {
-		return traceOTLPEndpoint{}, fmt.Errorf("parse otlp endpoint: fragment is not supported")
+		return traceOTLPEndpoint{}, err
 	}
 
 	if path := strings.TrimSpace(parsedURL.EscapedPath()); path == "" || path == "/" {
-		parsedURL.Path = "/v1/traces"
+		parsedURL.Path = otlpTracesPath
+		parsedURL.RawPath = ""
 	}
 
 	return traceOTLPEndpoint{
 		endpointURL: parsedURL.String(),
 	}, nil
+}
+
+// parseTraceOTLPBaseEndpoint validates a signal-agnostic OTLP root and appends
+// the traces path, which is what OTLP defines OTEL_EXPORTER_OTLP_ENDPOINT to
+// mean. A root carrying a path prefix keeps it, so a collector mounted under a
+// sub-path still resolves.
+func parseTraceOTLPBaseEndpoint(raw string) (traceOTLPEndpoint, error) {
+	parsedURL, err := parseTraceOTLPURL(raw)
+	if err != nil {
+		return traceOTLPEndpoint{}, err
+	}
+
+	parsedURL.Path = pathpkg.Join("/", parsedURL.Path, otlpTracesPath)
+	parsedURL.RawPath = ""
+
+	return traceOTLPEndpoint{
+		endpointURL: parsedURL.String(),
+	}, nil
+}
+
+// parseTraceOTLPURL validates an exporter URL fail-closed: explicit http/https
+// scheme, non-empty host, no userinfo/query/fragment. Errors never echo the raw
+// value, which can carry a credential.
+func parseTraceOTLPURL(raw string) (*url.URL, error) {
+	parsedURL, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse otlp endpoint: invalid endpoint")
+	}
+
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return nil, fmt.Errorf("parse otlp endpoint: unsupported scheme")
+	}
+	if parsedURL.User != nil {
+		return nil, fmt.Errorf("parse otlp endpoint: userinfo is not supported")
+	}
+	if strings.TrimSpace(parsedURL.Hostname()) == "" {
+		return nil, fmt.Errorf("parse otlp endpoint: empty host")
+	}
+	if parsedURL.RawQuery != "" {
+		return nil, fmt.Errorf("parse otlp endpoint: query is not supported")
+	}
+	if parsedURL.Fragment != "" {
+		return nil, fmt.Errorf("parse otlp endpoint: fragment is not supported")
+	}
+
+	return parsedURL, nil
 }
 
 func parseOTLPHeaders(raw string) (map[string]string, error) {
