@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -46,10 +47,15 @@ func TestRunReturnsConfigLoadError(t *testing.T) {
 	}
 }
 
-func TestRunSkipsWhenNoMigrationFilesExist(t *testing.T) {
+// TestRunSkipsWhenMigrationDirectoryIsEmpty is the legitimate half of the old
+// skip: a service that has not written its first migration yet still deploys.
+func TestRunSkipsWhenMigrationDirectoryIsEmpty(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	clearAppEnvForTest(t)
 
 	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(localMigrationSourcePath, 0o755); err != nil {
+		t.Fatalf("create empty migrations dir: %v", err)
+	}
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
 
@@ -58,18 +64,70 @@ func TestRunSkipsWhenNoMigrationFilesExist(t *testing.T) {
 	if err := run(nil, &stdout); err != nil {
 		t.Fatalf("run() error = %v, want nil", err)
 	}
-	if got := stdout.String(); got != "no migration files found; skipping migrations\n" {
-		t.Fatalf("run() stdout = %q, want no-migrations message", got)
+	if !strings.Contains(stdout.String(), "is empty; no migrations to apply") {
+		t.Fatalf("run() stdout = %q, want the empty-directory message", stdout.String())
 	}
 }
 
-func TestRunReturnsMigrationApplyError(t *testing.T) {
+// TestRunRejectsAbsentMigrationDirectory is the regression anchor for the defect
+// this replaced: an absent directory reported "no migration files found" and exited
+// 0, so a packaging mistake produced a green migration step and a service that
+// answered 500s at the first query against a schema nobody created.
+func TestRunRejectsAbsentMigrationDirectory(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+	clearAppEnvForTest(t)
+
+	t.Chdir(t.TempDir())
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
+
+	var stdout bytes.Buffer
+
+	err := run(nil, &stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want a missing migration source to fail")
+	}
+	if !errors.Is(err, errMigrationSourceMissing) {
+		t.Fatalf("run() error = %v, want %v", err, errMigrationSourceMissing)
+	}
+	if got := stdout.String(); got != "" {
+		t.Fatalf("run() stdout = %q, want empty", got)
+	}
+}
+
+// TestRunRejectsAbsentConfiguredMigrationPath keeps the explicit path strict: an
+// operator who named a directory said where the migrations are.
+func TestRunRejectsAbsentConfiguredMigrationPath(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+	clearAppEnvForTest(t)
+
+	t.Chdir(t.TempDir())
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
+	t.Setenv(migrationPathEnv, "nowhere/migrations")
+
+	var stdout bytes.Buffer
+
+	err := run(nil, &stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want a missing configured path to fail")
+	}
+	if !errors.Is(err, errMigrationSourceMissing) {
+		t.Fatalf("run() error = %v, want %v", err, errMigrationSourceMissing)
+	}
+}
+
+func TestRunReturnsMigrationApplyError(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	clearAppEnvForTest(t)
 
 	t.Chdir(t.TempDir())
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "not-a-postgres-dsn")
-	t.Setenv("MIGRATION_PATH", "missing-migrations")
+	if err := os.MkdirAll("some-migrations", 0o755); err != nil {
+		t.Fatalf("create migrations dir: %v", err)
+	}
+	if err := os.WriteFile("some-migrations/000001_test.up.sql", []byte("select 1;"), 0o600); err != nil {
+		t.Fatalf("create migration: %v", err)
+	}
+	t.Setenv(migrationPathEnv, "some-migrations")
 
 	var stdout bytes.Buffer
 
@@ -90,56 +148,8 @@ func TestRunRejectsUnexpectedArguments(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() error = nil, want usage error")
 	}
-	if !strings.Contains(err.Error(), "usage: migrate [validate]") {
+	if !strings.Contains(err.Error(), "usage: migrate (no arguments)") {
 		t.Fatalf("run() error = %q, want usage", err.Error())
-	}
-}
-
-// The rehearsal drops every table. This binary ships in the production image
-// beside the entrypoint that applies migrations and reads the same DSN, so the
-// refusal has to happen before any database work, not after.
-func TestRunRefusesValidateWithoutRehearsalAcknowledgement(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
-	clearAppEnvForTest(t)
-
-	t.Chdir(t.TempDir())
-	t.Setenv(rehearsalAcknowledgementEnv, "")
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
-
-	var stdout bytes.Buffer
-
-	err := run([]string{"validate"}, &stdout)
-	if err == nil {
-		t.Fatal("run() error = nil, want rehearsal acknowledgement rejection")
-	}
-	if !strings.Contains(err.Error(), "destroys all data") {
-		t.Fatalf("run() error = %q, want the destructive consequence named", err.Error())
-	}
-	if !strings.Contains(err.Error(), rehearsalAcknowledgementEnv) {
-		t.Fatalf("run() error = %q, want the acknowledgement variable named", err.Error())
-	}
-	if got := stdout.String(); got != "" {
-		t.Fatalf("run() stdout = %q, want empty", got)
-	}
-}
-
-// An acknowledged rehearsal reaches the ordinary migration path, so the guard
-// gates the command without changing what it does.
-func TestRunAllowsValidateWithRehearsalAcknowledgement(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
-	clearAppEnvForTest(t)
-
-	t.Chdir(t.TempDir())
-	t.Setenv(rehearsalAcknowledgementEnv, rehearsalAcknowledgementValue)
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
-
-	var stdout bytes.Buffer
-
-	if err := run([]string{"validate"}, &stdout); err != nil {
-		t.Fatalf("run() error = %v, want nil", err)
-	}
-	if got := stdout.String(); got != "no migration files found; skipping migrations\n" {
-		t.Fatalf("run() stdout = %q, want no-migrations message", got)
 	}
 }
 
@@ -148,7 +158,10 @@ func TestResolveMigrationSourceUsesConfiguredPath(t *testing.T) { //nolint:paral
 	if err := os.MkdirAll("custom/migrations", 0o755); err != nil {
 		t.Fatalf("create configured migrations dir: %v", err)
 	}
-	t.Setenv("MIGRATION_PATH", " custom/migrations ")
+	if err := os.WriteFile("custom/migrations/000001_test.up.sql", []byte("select 1;"), 0o600); err != nil {
+		t.Fatalf("create configured migration: %v", err)
+	}
+	t.Setenv(migrationPathEnv, " custom/migrations ")
 
 	sourceFS, sourcePath, found, err := resolveMigrationSource()
 	if err != nil {
@@ -221,29 +234,49 @@ func TestResolveMigrationSourceFallsBackToImageMigrations(t *testing.T) { //noli
 	}
 }
 
-func TestResolveMigrationSourceReportsNoMigrations(t *testing.T) {
+// TestResolveMigrationSourceReportsEmptyDirectory keeps the two conditions apart:
+// a directory that exists and holds nothing is found=false with no error, and only
+// an absent one is a failure.
+func TestResolveMigrationSourceReportsEmptyDirectory(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(localMigrationSourcePath, 0o755); err != nil {
+		t.Fatalf("create empty migrations dir: %v", err)
+	}
 
 	sourceFS, sourcePath, found, err := resolveMigrationSourceFrom("image-migrations")
 	if err != nil {
 		t.Fatalf("resolveMigrationSourceFrom() error = %v, want nil", err)
 	}
 	if found {
-		t.Fatal("resolveMigrationSourceFrom() found = true, want false")
+		t.Fatal("resolveMigrationSourceFrom() found = true, want false for an empty directory")
 	}
-	if sourceFS != nil || sourcePath != "" {
-		t.Fatalf("resolveMigrationSourceFrom() = (%T, %q), want (nil, empty)", sourceFS, sourcePath)
+	if sourceFS == nil || sourcePath != localMigrationSourcePath {
+		t.Fatalf("resolveMigrationSourceFrom() = (%T, %q), want the local fs and path", sourceFS, sourcePath)
 	}
 }
 
-func TestResolveMigrationSourcePropagatesDirectoryReadFailure(t *testing.T) {
+func TestResolveMigrationSourceReportsAbsentDirectories(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+	t.Chdir(t.TempDir())
+
+	_, _, _, err := resolveMigrationSourceFrom("image-migrations")
+	if !errors.Is(err, errMigrationSourceMissing) {
+		t.Fatalf("resolveMigrationSourceFrom() error = %v, want %v", err, errMigrationSourceMissing)
+	}
+	for _, want := range []string{"image-migrations", localMigrationSourcePath} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("resolveMigrationSourceFrom() error = %q, want it to name %q", err, want)
+		}
+	}
+}
+
+func TestResolveMigrationSourcePropagatesDirectoryReadFailure(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
 
 	_, _, _, err := resolveMigrationSourceFrom("\x00")
 	if err == nil {
 		t.Fatal("resolveMigrationSourceFrom() error = nil, want directory read failure")
 	}
-	if !strings.Contains(err.Error(), "inspect image migration source") {
+	if !strings.Contains(err.Error(), "read migration directory") {
 		t.Fatalf("resolveMigrationSourceFrom() error = %q, want source context", err.Error())
 	}
 }

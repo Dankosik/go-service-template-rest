@@ -39,7 +39,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	if !authenticated || !principal.HasScope(ArticleWriteScope) {
 		return openapi.CreateArticle403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: openapi.ForbiddenApplicationProblemPlusJSONResponse(
-				problem("forbidden", "forbidden", http.StatusForbidden, "credentials do not permit this operation"),
+				newProblem(ctx, http.StatusForbidden, "credentials do not permit this operation"),
 			),
 		}, nil
 	}
@@ -47,7 +47,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	if request.Body == nil {
 		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem("bad_request", "bad request", http.StatusBadRequest, "request body is required"),
+				newProblem(ctx, http.StatusBadRequest, "request body is required"),
 			),
 		}, nil
 	}
@@ -61,7 +61,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	case errors.Is(err, article.ErrAlreadyExists):
 		return openapi.CreateArticle409ApplicationProblemPlusJSONResponse{
 			ConflictApplicationProblemPlusJSONResponse: openapi.ConflictApplicationProblemPlusJSONResponse(
-				problem("conflict", "conflict", http.StatusConflict, "an article with this slug already exists"),
+				newProblem(ctx, http.StatusConflict, "an article with this slug already exists"),
 			),
 		}, nil
 	case errors.Is(err, article.ErrInvalid):
@@ -69,14 +69,14 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 		// input, so echoing it cannot reflect attacker-controlled content.
 		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem("bad_request", "bad request", http.StatusBadRequest, "request is malformed or invalid"),
+				newProblem(ctx, http.StatusBadRequest, "request is malformed or invalid"),
 			),
 		}, nil
 	case err != nil:
 		//nolint:nilerr // A handled domain failure is a valid typed HTTP response.
 		return openapi.CreateArticle500ApplicationProblemPlusJSONResponse{
 			InternalServerErrorApplicationProblemPlusJSONResponse: openapi.InternalServerErrorApplicationProblemPlusJSONResponse(
-				problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"),
+				newProblem(ctx, http.StatusInternalServerError, "request failed"),
 			),
 		}, nil
 	}
@@ -98,7 +98,7 @@ func (h *handler) GetArticle(ctx context.Context, request openapi.GetArticleRequ
 	if errors.Is(err, article.ErrNotFound) {
 		return openapi.GetArticle404ApplicationProblemPlusJSONResponse{
 			NotFoundApplicationProblemPlusJSONResponse: openapi.NotFoundApplicationProblemPlusJSONResponse(
-				problem("not_found", "not found", http.StatusNotFound, "article was not found"),
+				newProblem(ctx, http.StatusNotFound, "article was not found"),
 			),
 		}, nil
 	}
@@ -108,7 +108,7 @@ func (h *handler) GetArticle(ctx context.Context, request openapi.GetArticleRequ
 		//nolint:nilerr // A handled domain failure is a valid typed HTTP response.
 		return openapi.GetArticle500ApplicationProblemPlusJSONResponse{
 			InternalServerErrorApplicationProblemPlusJSONResponse: openapi.InternalServerErrorApplicationProblemPlusJSONResponse(
-				problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"),
+				newProblem(ctx, http.StatusInternalServerError, "request failed"),
 			),
 		}, nil
 	}

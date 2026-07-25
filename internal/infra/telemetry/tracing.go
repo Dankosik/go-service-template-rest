@@ -21,12 +21,16 @@ const (
 )
 
 type TracingConfig struct {
-	ServiceName      string
-	ServiceVersion   string
-	DeploymentEnv    string
-	TracesSampler    string
-	TracesSamplerArg float64
-	Exporter         TraceExporterConfig
+	ServiceName    string
+	ServiceVersion string
+	// ServiceInstanceID identifies this replica. Resolve it once per process with
+	// ResolveInstanceID and pass the same value to SetupMetrics; see
+	// resourceIdentity for what an absent instance identity costs.
+	ServiceInstanceID string
+	DeploymentEnv     string
+	TracesSampler     string
+	TracesSamplerArg  float64
+	Exporter          TraceExporterConfig
 }
 
 type TraceExporterConfig struct {
@@ -57,7 +61,12 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (TraceExporterEndpoint
 		return TraceExporterEndpoint{}, nil, err
 	}
 
-	res, err := newResource(ctx, cfg.ServiceName, cfg.ServiceVersion, cfg.DeploymentEnv)
+	res, err := newResource(ctx, resourceIdentity{
+		serviceName:    cfg.ServiceName,
+		serviceVersion: cfg.ServiceVersion,
+		instanceID:     cfg.ServiceInstanceID,
+		deploymentEnv:  cfg.DeploymentEnv,
+	})
 	if err != nil {
 		return TraceExporterEndpoint{}, nil, err
 	}
@@ -174,34 +183,7 @@ func rejectConflictingTraceExporterEnv() error {
 func newTracerProvider(options ...sdktrace.TracerProviderOption) *sdktrace.TracerProvider {
 	// OTel SDK v1.40 merges resource.Environment() inside sdktrace.WithResource.
 	// Clear only the resource env keys while the provider is built so config remains the sole resource source.
-	restore := withoutOTELResourceEnv()
-	defer restore()
 	return sdktrace.NewTracerProvider(options...)
-}
-
-func withoutOTELResourceEnv() func() {
-	const (
-		otelResourceAttributesEnv = "OTEL_RESOURCE_ATTRIBUTES"
-		otelServiceNameEnv        = "OTEL_SERVICE_NAME"
-	)
-
-	resourceAttrs, hadResourceAttrs := os.LookupEnv(otelResourceAttributesEnv)
-	serviceName, hadServiceName := os.LookupEnv(otelServiceNameEnv)
-	_ = os.Unsetenv(otelResourceAttributesEnv)
-	_ = os.Unsetenv(otelServiceNameEnv)
-
-	return func() {
-		if hadResourceAttrs {
-			_ = os.Setenv(otelResourceAttributesEnv, resourceAttrs)
-		} else {
-			_ = os.Unsetenv(otelResourceAttributesEnv)
-		}
-		if hadServiceName {
-			_ = os.Setenv(otelServiceNameEnv, serviceName)
-		} else {
-			_ = os.Unsetenv(otelServiceNameEnv)
-		}
-	}
 }
 
 func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {

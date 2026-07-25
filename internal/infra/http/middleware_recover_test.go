@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func TestPanicClassClassifiesRecoveredValues(t *testing.T) {
@@ -40,7 +42,7 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	const secretValue = "secret-value"
 
 	handler := RequestCorrelation(Recover(log, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -55,7 +57,7 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)
 	}
-	assertProblemCode(t, resp, problemCodeInternalError)
+	assertProblemCode(t, resp, problem.CodeInternalError)
 	if strings.Contains(out.String(), secretValue) {
 		t.Fatalf("panic log leaks raw recovered value: %q", out.String())
 	}
@@ -159,7 +161,7 @@ func TestRecoverRepanicsErrAbortHandler(t *testing.T) {
 	t.Parallel()
 
 	var logs bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&logs, nil))
+	log := newTestServiceLogger(&logs)
 	handler := Recover(log, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		panic(http.ErrAbortHandler)
 	}))
@@ -202,5 +204,5 @@ func TestRecoverDistinguishesAbortFromOrdinaryPanics(t *testing.T) {
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)
 	}
-	assertProblemCode(t, resp, problemCodeInternalError)
+	assertProblemCode(t, resp, problem.CodeInternalError)
 }

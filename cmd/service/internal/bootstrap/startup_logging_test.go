@@ -1,41 +1,66 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
-	"strings"
+	"encoding/json"
+	"log/slog"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel"
 )
 
+// TestProcessLoggerCorrelatesRecords proves the wiring rather than the decorator,
+// which internal/observability/logctx already covers on its own. What can regress
+// here is newProcessLogger being rebuilt from a bare JSONHandler: the records look
+// identical minus the two keys that join a startup failure to its span, and no
+// other test would notice.
+//
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
-func TestStartupLogArgsIncludesTraceIDs(t *testing.T) {
-	spanRecorder := telemetrytest.InstallSpanRecorder(t)
+func TestProcessLoggerCorrelatesRecords(t *testing.T) {
+	telemetrytest.InstallSpanRecorder(t)
+
+	var out bytes.Buffer
+	log := newProcessLogger(&out, slog.LevelInfo)
+
 	ctx, span := otel.Tracer("test").Start(context.Background(), "startup-log-test")
-	args := startupLogArgs(ctx, "c", "o", "ok", "k", "v")
+	log.InfoContext(ctx, "startup_stage", startupLogArgs("c", "o", "ok", "k", "v")...)
 	span.End()
-	if len(spanRecorder.Ended()) == 0 {
-		t.Fatal("expected ended span")
+
+	var record map[string]any
+	if err := json.Unmarshal(out.Bytes(), &record); err != nil {
+		t.Fatalf("unmarshal record %q: %v", out.String(), err)
 	}
 
-	foundTrace := false
-	foundSpan := false
+	for _, key := range []string{"trace_id", "span_id"} {
+		value, ok := record[key].(string)
+		if !ok || value == "" {
+			t.Fatalf("record %v is missing %s", record, key)
+		}
+	}
+	for key, want := range map[string]any{"component": "c", "operation": "o", "outcome": "ok", "k": "v"} {
+		if got := record[key]; got != want {
+			t.Fatalf("record %s = %v, want %v", key, got, want)
+		}
+	}
+}
+
+// TestStartupLogArgsCarriesNoCorrelation pins the deduplication: the helper builds
+// stage attributes only, and the logger owns correlation. Adding trace keys back
+// here would emit each one twice on every startup record.
+func TestStartupLogArgsCarriesNoCorrelation(t *testing.T) {
+	t.Parallel()
+
+	args := startupLogArgs("c", "o", "ok", "k", "v")
 	for i := 0; i < len(args)-1; i += 2 {
-		k, ok := args[i].(string)
+		key, ok := args[i].(string)
 		if !ok {
 			continue
 		}
-		if k == "trace_id" {
-			v, _ := args[i+1].(string)
-			foundTrace = strings.TrimSpace(v) != ""
+		switch key {
+		case "trace_id", "span_id", "request_id":
+			t.Fatalf("startupLogArgs published %q, which the logger already adds", key)
 		}
-		if k == "span_id" {
-			v, _ := args[i+1].(string)
-			foundSpan = strings.TrimSpace(v) != ""
-		}
-	}
-	if !foundTrace || !foundSpan {
-		t.Fatalf("trace/span ids not found in args: %#v", args)
 	}
 }

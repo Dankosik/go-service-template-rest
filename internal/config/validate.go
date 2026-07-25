@@ -119,6 +119,7 @@ func validateRuntimeConfig(cfg RuntimeConfig) error {
 func validateAppConfig(cfg *AppConfig) error {
 	cfg.Env = strings.TrimSpace(cfg.Env)
 	cfg.Version = strings.TrimSpace(cfg.Version)
+	cfg.InstanceID = strings.TrimSpace(cfg.InstanceID)
 	if cfg.Env == "" {
 		return fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
 	}
@@ -175,7 +176,33 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 	if cfg.MaxInFlight < 0 || cfg.MaxInFlight > 100_000 {
 		return fmt.Errorf("%w: http.max_in_flight must be in range [0,100000]", ErrValidate)
 	}
-	return nil
+	if err := validateDurationRange(
+		"http.idempotency_outcome_timeout",
+		cfg.IdempotencyOutcomeTimeout,
+		10*time.Millisecond,
+		30*time.Second,
+	); err != nil {
+		return err
+	}
+	return validateHTTPIdempotencyShutdownBudget(*cfg)
+}
+
+// validateHTTPIdempotencyShutdownBudget keeps the outcome bound inside the drain.
+//
+// A request admitted just before SIGTERM can be inside the outcome call when the
+// drain starts, and http.Server.Shutdown waits for it. A bound larger than the
+// whole shutdown budget would mean the drain gives up, force-closes the
+// connection, and the process then waits on a goroutine that is still writing to a
+// store — which is the shutdown this budget exists to keep orderly.
+func validateHTTPIdempotencyShutdownBudget(cfg HTTPConfig) error {
+	if cfg.IdempotencyOutcomeTimeout <= cfg.ShutdownTimeout {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: http.idempotency_outcome_timeout must be <= http.shutdown_timeout (%s)",
+		ErrValidate,
+		cfg.ShutdownTimeout,
+	)
 }
 
 func validateObservabilityConfig(cfg *ObservabilityConfig) error {
@@ -275,6 +302,17 @@ func validatePostgres(cfg PostgresConfig) error {
 		return err
 	}
 	if err := validateDurationRange("postgres.statement_timeout", cfg.StatementTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
+		return err
+	}
+	if err := validateDurationRange("postgres.idempotency_retention", cfg.IdempotencyRetention, time.Minute, 30*24*time.Hour); err != nil {
+		return err
+	}
+	if err := validateDurationRange(
+		"postgres.idempotency_sweep_interval",
+		cfg.IdempotencySweepInterval,
+		time.Second,
+		cfg.IdempotencyRetention,
+	); err != nil {
 		return err
 	}
 

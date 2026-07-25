@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -54,17 +53,19 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 			route = "<unmatched>"
 		}
 
-		traceID, spanID := traceIDsFromContext(r.Context())
-		log.Info(
+		// Correlation is not listed here. The process logger publishes
+		// request_id, trace_id, and span_id from the context every record is
+		// logged with; see internal/observability/logctx. A logger built without
+		// that decorator loses them, which is what the wiring test in
+		// cmd/service/internal/bootstrap exists to catch.
+		log.InfoContext(
+			r.Context(),
 			"request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"route", route,
 			"status", captured.Code,
 			"duration_ms", captured.Duration.Milliseconds(),
-			"request_id", requestIDFromContext(r.Context()),
-			"trace_id", traceID,
-			"span_id", spanID,
 		)
 	})
 }
@@ -129,10 +130,7 @@ func joinMethodAndPattern(method, pattern string) string {
 	return method + " " + pattern
 }
 
-func traceIDsFromContext(ctx context.Context) (string, string) {
-	spanContext := trace.SpanContextFromContext(ctx)
-	if !spanContext.IsValid() {
-		return "", ""
-	}
-	return spanContext.TraceID().String(), spanContext.SpanID().String()
-}
+// Reading trace identifiers off the context is deliberately absent from this
+// package. internal/observability/logctx publishes them on every record from the
+// context it was logged with, so a helper here would only let one of the two
+// copies drift.

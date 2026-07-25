@@ -86,6 +86,13 @@ linters:
         linters:
           - unparam
   settings:
+    sloglint:
+      # Correlation is published by internal/observability/logctx from the context
+      # a record is logged with, so a call that drops the context it already holds
+      # silently drops request_id, trace_id, and span_id. "scope" enforces the
+      # context-accepting method exactly where a context exists, rather than
+      # forcing context.Background() into records that genuinely have none.
+      context: scope
     iface:
       enable:
         - identical

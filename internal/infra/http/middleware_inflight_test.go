@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 // TestMaxInFlightShedsPastLimitWithoutQueueing is the property the middleware
@@ -51,7 +53,7 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 			t.Fatalf("Retry-After = %q, want %q", got, "1")
 		}
 		assertProblemContentType(t, resp.Header())
-		assertProblemCode(t, resp, problemCodeServiceUnavailable)
+		assertProblemCode(t, resp, problem.CodeServiceUnavailable)
 	case <-time.After(2 * time.Second):
 		t.Fatal("second request queued instead of being shed")
 	}
@@ -187,7 +189,7 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 	t.Parallel()
 
 	var logged bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&logged, nil))
+	log := newTestServiceLogger(&logged)
 
 	release := make(chan struct{})
 	defer close(release)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/prometheus/otlptranslator"
+	otelruntime "go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	otlpmetrichttp "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
@@ -32,8 +33,11 @@ const (
 type MetricsConfig struct {
 	ServiceName    string
 	ServiceVersion string
-	DeploymentEnv  string
-	Exporter       MetricExporterConfig
+	// ServiceInstanceID identifies this replica, and must be the same value
+	// SetupTracing was given; see resourceIdentity.
+	ServiceInstanceID string
+	DeploymentEnv     string
+	Exporter          MetricExporterConfig
 }
 
 // MetricExporterConfig names where metrics are pushed, in addition to the
@@ -86,7 +90,12 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (fun
 		return nil, ExporterEndpoint{}, fmt.Errorf("setup metrics: registry is required")
 	}
 
-	res, err := newResource(ctx, cfg.ServiceName, cfg.ServiceVersion, cfg.DeploymentEnv)
+	res, err := newResource(ctx, resourceIdentity{
+		serviceName:    cfg.ServiceName,
+		serviceVersion: cfg.ServiceVersion,
+		instanceID:     cfg.ServiceInstanceID,
+		deploymentEnv:  cfg.DeploymentEnv,
+	})
 	if err != nil {
 		return nil, ExporterEndpoint{}, err
 	}
@@ -127,6 +136,24 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (fun
 	// Shutdown flushes every reader the provider owns, so the periodic reader's
 	// last interval is exported rather than dropped on exit.
 	provider := newMeterProvider(options...)
+
+	// Runtime metrics are registered on the provider rather than on the Prometheus
+	// registry, so they reach both readers.
+	//
+	// The version this replaced used the Prometheus client's Go collector, which
+	// only the /metrics handler reads. A service that pushes to a collector — the
+	// deployment this file's OTLP reader exists for, on a port the container image
+	// does not publish — therefore exported request and pool metrics and no
+	// goroutine, heap, or GC series at all. The first symptom of a leaked goroutine
+	// was the OOM kill, and pprof is off by default, so the evidence was gone by
+	// the time anyone could look.
+	//
+	// This registers observable instruments and a callback; it starts no goroutine
+	// and no timer, which is what keeps the package's goleak check meaningful.
+	if err := otelruntime.Start(otelruntime.WithMeterProvider(provider)); err != nil {
+		return nil, endpoint, fmt.Errorf("start go runtime metrics: %w", err)
+	}
+
 	metrics.meterProvider = provider
 	otel.SetMeterProvider(provider)
 
@@ -229,8 +256,6 @@ func ConflictingMetricExporterEnv() []string {
 }
 
 func newMeterProvider(options ...sdkmetric.Option) *sdkmetric.MeterProvider {
-	restore := withoutOTELResourceEnv()
-	defer restore()
 	return sdkmetric.NewMeterProvider(options...)
 }
 

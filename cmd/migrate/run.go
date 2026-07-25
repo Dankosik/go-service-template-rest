@@ -20,27 +20,31 @@ const (
 	imageMigrationSourcePath = "/migrations"
 	localMigrationSourcePath = "migrations"
 
-	// rehearsalAcknowledgementEnv gates the validate subcommand.
-	//
-	// validate applies every migration, rolls all of them back, and applies them
-	// again. That is the point on a throwaway database and a schema drop
-	// anywhere else — and this binary ships in the production image next to the
-	// entrypoint that applies migrations, reading the same APP__POSTGRES__DSN.
-	// One mistyped argument is the whole difference, so the destructive path
-	// requires a variable no production environment sets.
-	rehearsalAcknowledgementEnv   = "MIGRATION_REHEARSAL"
-	rehearsalAcknowledgementValue = "1"
+	// migrationPathEnv overrides where migrations are read from. A path named here
+	// must exist: the operator said where they are.
+	migrationPathEnv = "MIGRATION_PATH"
 )
 
+// errMigrationSourceMissing reports that no migration directory exists where one
+// was expected.
+//
+// The distinction it carries is the whole point. A directory that exists and holds
+// no *.sql is a service that has not written its first migration yet, which is a
+// normal state. A directory that does not exist at all, in an image whose build
+// always creates it, means the migrations were not packaged — and the version this
+// replaced reported both as "no migration files found; skipping migrations" and
+// exited 0. So a Dockerfile edit, a wrong MIGRATION_PATH, or a pre-deploy hook
+// running from the wrong directory produced a green migration step, a service that
+// started, a readiness probe that passed, and 500s at the first query against a
+// schema that was never created.
+var errMigrationSourceMissing = errors.New("migration source directory does not exist")
+
 func run(args []string, stdout io.Writer) error {
-	validate, err := parseMigrationCommand(args)
-	if err != nil {
-		return err
-	}
-	if validate {
-		if err := requireRehearsalAcknowledgement(); err != nil {
-			return err
-		}
+	if len(args) > 0 {
+		// There is deliberately no subcommand. This binary applies migrations and
+		// nothing else; see postgresmigrate.MigrateDown for where the rollback
+		// rehearsal went and why it is not reachable from here.
+		return fmt.Errorf("usage: migrate (no arguments)")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -60,27 +64,19 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("resolve migration source: %w", err)
 	}
 	if !found {
-		_, _ = fmt.Fprintln(stdout, "no migration files found; skipping migrations")
+		_, _ = fmt.Fprintf(stdout, "migration directory %s is empty; no migrations to apply\n", migrationSourcePath)
 		return nil
 	}
 	migrationCtx, cancelMigration := context.WithTimeout(ctx, cfg.Postgres.MigrationTimeout)
 	defer cancelMigration()
-	options := postgresmigrate.MigrationOptions{
+
+	changed, err := postgresmigrate.MigrateUp(migrationCtx, postgresmigrate.MigrationOptions{
 		DSN:              cfg.Postgres.DSN,
 		SourceFS:         migrationSourceFS,
 		SourcePath:       migrationSourcePath,
 		StatementTimeout: cfg.Postgres.MigrationStatementTimeout,
 		LockTimeout:      cfg.Postgres.MigrationLockTimeout,
-	}
-	if validate {
-		if err := postgresmigrate.ValidateMigrations(migrationCtx, options); err != nil {
-			return fmt.Errorf("validate postgres migrations: %w", err)
-		}
-		_, _ = fmt.Fprintf(stdout, "validated migrations from %s\n", migrationSourcePath)
-		return nil
-	}
-
-	changed, err := postgresmigrate.MigrateUp(migrationCtx, options)
+	})
 	if err != nil {
 		return fmt.Errorf("apply postgres migrations: %w", err)
 	}
@@ -94,68 +90,60 @@ func run(args []string, stdout io.Writer) error {
 	return nil
 }
 
+// resolveMigrationSource reports where migrations are, and whether there are any.
+//
+// found is false only for a directory that exists and holds no migration files. An
+// absent directory is an error; see errMigrationSourceMissing.
 func resolveMigrationSource() (fs.FS, string, bool, error) {
-	if configuredPath := strings.TrimSpace(os.Getenv("MIGRATION_PATH")); configuredPath != "" {
-		if path.IsAbs(configuredPath) {
-			return nil, path.Clean(configuredPath), true, nil
+	if configuredPath := strings.TrimSpace(os.Getenv(migrationPathEnv)); configuredPath != "" {
+		cleaned := path.Clean(configuredPath)
+		found, err := hasMigrationFiles(cleaned)
+		if err != nil {
+			return nil, "", false, err
 		}
-		return os.DirFS("."), path.Clean(configuredPath), true, nil
+		if path.IsAbs(cleaned) {
+			return nil, cleaned, found, nil
+		}
+		return os.DirFS("."), cleaned, found, nil
 	}
 	return resolveMigrationSourceFrom(imageMigrationSourcePath)
 }
 
-func parseMigrationCommand(args []string) (bool, error) {
-	switch len(args) {
-	case 0:
-		return false, nil
-	case 1:
-		if args[0] == "validate" {
-			return true, nil
-		}
+// resolveMigrationSourceFrom prefers the image path and falls back to the working
+// directory, which is how one binary serves a container and a developer shell. Only
+// when neither exists is it the packaging failure.
+func resolveMigrationSourceFrom(imagePath string) (fs.FS, string, bool, error) {
+	imageFound, imageErr := hasMigrationFiles(imagePath)
+	if imageErr == nil {
+		return nil, imagePath, imageFound, nil
 	}
-	return false, fmt.Errorf("usage: migrate [validate]")
-}
+	if !errors.Is(imageErr, errMigrationSourceMissing) {
+		return nil, "", false, imageErr
+	}
 
-// requireRehearsalAcknowledgement refuses the rehearsal unless the caller said
-// out loud that the target database is disposable. The message names the
-// consequence, because "validate" reads as a read-only check and is not one.
-func requireRehearsalAcknowledgement() error {
-	if os.Getenv(rehearsalAcknowledgementEnv) == rehearsalAcknowledgementValue {
-		return nil
+	localFound, localErr := hasMigrationFiles(localMigrationSourcePath)
+	if localErr == nil {
+		return os.DirFS("."), localMigrationSourcePath, localFound, nil
 	}
-	return fmt.Errorf(
-		"migrate validate rehearses down-migrations and destroys all data in the target database; "+
-			"set %s=%s to confirm the target is disposable",
-		rehearsalAcknowledgementEnv,
-		rehearsalAcknowledgementValue,
+	if !errors.Is(localErr, errMigrationSourceMissing) {
+		return nil, "", false, localErr
+	}
+
+	return nil, "", false, fmt.Errorf(
+		"%w: looked in %q and %q",
+		errMigrationSourceMissing,
+		imagePath,
+		localMigrationSourcePath,
 	)
 }
 
-func resolveMigrationSourceFrom(imagePath string) (fs.FS, string, bool, error) {
-	found, err := hasMigrationFiles(imagePath)
-	if err != nil {
-		return nil, "", false, fmt.Errorf("inspect image migration source %q: %w", imagePath, err)
-	}
-	if found {
-		return nil, imagePath, true, nil
-	}
-
-	found, err = hasMigrationFiles(localMigrationSourcePath)
-	if err != nil {
-		return nil, "", false, fmt.Errorf("inspect local migration source %q: %w", localMigrationSourcePath, err)
-	}
-	if found {
-		return os.DirFS("."), localMigrationSourcePath, true, nil
-	}
-
-	return nil, "", false, nil
-}
-
+// hasMigrationFiles reports whether directory holds any migration file, and returns
+// errMigrationSourceMissing when the directory itself is absent.
 func hasMigrationFiles(directory string) (bool, error) {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
+			return false, fmt.Errorf("%w: %q", errMigrationSourceMissing, directory)
 		}
 		return false, fmt.Errorf("read migration directory %q: %w", directory, err)
 	}

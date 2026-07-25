@@ -26,10 +26,10 @@ func bootstrapConfigStage(
 	startupCtx context.Context,
 	loadOptions config.LoadOptions,
 ) (config.Config, config.LoadReport, error) {
-	slog.Info(
+	slog.InfoContext(
+		startupCtx,
 		"config_load_started",
 		startupLogArgs(
-			startupCtx,
 			"config_loader",
 			"load",
 			"started",
@@ -42,10 +42,10 @@ func bootstrapConfigStage(
 	if err != nil {
 		failedStage := failedConfigStage(configReport)
 		errorType := config.ErrorType(err)
-		slog.Error(
+		slog.ErrorContext(
+			startupCtx,
 			"config_load_failed",
 			startupLogArgs(
-				startupCtx,
 				"config_loader",
 				"load",
 				"error",
@@ -58,10 +58,10 @@ func bootstrapConfigStage(
 
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		errorType := startupConfigCompatibilityReason
-		slog.Error(
+		slog.ErrorContext(
+			startupCtx,
 			"config_load_failed",
 			startupLogArgs(
-				startupCtx,
 				"config_loader",
 				"startup_compatibility",
 				"error",

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
@@ -85,7 +86,7 @@ func TestAuthenticatedRejectionKeepsUnauthorizedMapping(t *testing.T) {
 	if reached {
 		t.Fatal("operation ran for a rejected credential")
 	}
-	assertProblemCode(t, resp, problemCodeUnauthorized)
+	assertProblemCode(t, resp, problem.CodeUnauthorized)
 }
 
 // TestAuthenticatedNilResolverStaysFailClosed keeps the unwired default the same

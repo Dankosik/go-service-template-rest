@@ -68,25 +68,45 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 		t.Fatal("MigrateUp(second) reported schema change, want no change")
 	}
 
-	if err := postgresmigrate.ValidateMigrations(ctx, postgresmigrate.MigrationOptions{
+	// The up/down/up rehearsal that used to be a `validate` subcommand of the
+	// production migrate binary. It belongs here: a throwaway database proves the
+	// same property without shipping a schema-dropping command in the image that
+	// runs migrations against production.
+	options := postgresmigrate.MigrationOptions{
 		DSN:              dsn,
 		SourceFS:         migrationFS,
 		SourcePath:       "migrations",
 		StatementTimeout: time.Minute,
 		LockTimeout:      15 * time.Second,
-	}); err != nil {
-		t.Fatalf("ValidateMigrations() error: %v", err)
+	}
+	if err := postgresmigrate.MigrateDown(ctx, options); err != nil {
+		t.Fatalf("MigrateDown() error: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "select count(*) from schema_migrations").Scan(&version); err != nil {
+		t.Fatalf("query schema_migrations after rollback: %v", err)
+	}
+	if version != 0 {
+		t.Fatalf("schema_migrations after full rollback holds %d rows, want 0", version)
 	}
 
+	reappliedChanged, err := postgresmigrate.MigrateUp(ctx, options)
+	if err != nil {
+		t.Fatalf("MigrateUp(reapply) error: %v", err)
+	}
+	if !reappliedChanged {
+		t.Fatal("MigrateUp(reapply) reported no change, want the migrations applied again")
+	}
 	if err := pool.QueryRow(ctx, "select version, dirty from schema_migrations").Scan(&version, &dirty); err != nil {
-		t.Fatalf("query schema_migrations after validation: %v", err)
+		t.Fatalf("query schema_migrations after reapply: %v", err)
 	}
 	if version != 2 || dirty {
-		t.Fatalf("schema_migrations after validation = version %d dirty %t, want version 2 dirty false", version, dirty)
+		t.Fatalf("schema_migrations after reapply = version %d dirty %t, want version 2 dirty false", version, dirty)
 	}
 }
 
-func TestValidateMigrationsExercisesEarlierDownMigration(t *testing.T) {
+// TestMigrateDownExercisesEveryDownMigration is what the rehearsal was for: a down
+// migration that is never run is a rollback plan nobody has tested.
+func TestMigrateDownExercisesEveryDownMigration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -106,18 +126,23 @@ func TestValidateMigrationsExercisesEarlierDownMigration(t *testing.T) {
 		},
 	}
 
-	err := postgresmigrate.ValidateMigrations(ctx, postgresmigrate.MigrationOptions{
+	options := postgresmigrate.MigrationOptions{
 		DSN:              dsn,
 		SourceFS:         migrationFS,
 		SourcePath:       "migrations",
 		StatementTimeout: time.Minute,
 		LockTimeout:      15 * time.Second,
-	})
+	}
+	if _, err := postgresmigrate.MigrateUp(ctx, options); err != nil {
+		t.Fatalf("MigrateUp() error: %v", err)
+	}
+
+	err := postgresmigrate.MigrateDown(ctx, options)
 	if err == nil {
-		t.Fatal("ValidateMigrations() error = nil, want earlier down migration failure")
+		t.Fatal("MigrateDown() error = nil, want the earlier down migration to fail")
 	}
 	if !strings.Contains(err.Error(), "roll back all postgres migrations") {
-		t.Fatalf("ValidateMigrations() error = %q, want full rollback context", err.Error())
+		t.Fatalf("MigrateDown() error = %q, want full rollback context", err.Error())
 	}
 }
 

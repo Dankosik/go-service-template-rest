@@ -18,12 +18,17 @@ func bootstrapTelemetryStage(
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
 ) (func(context.Context), telemetry.TraceExporterEndpoint, error) {
+	// Resolved once, then shared by both signals: a second resolution could pick a
+	// different fallback identifier and split one replica's traces from its metrics.
+	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
+
 	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	metricsShutdown, metricEndpoint, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
-		ServiceName:    cfg.Observability.OTel.ServiceName,
-		ServiceVersion: cfg.App.Version,
-		DeploymentEnv:  cfg.App.Env,
-		Exporter:       metricExporterConfig(cfg),
+		ServiceName:       cfg.Observability.OTel.ServiceName,
+		ServiceVersion:    cfg.App.Version,
+		ServiceInstanceID: instanceID,
+		DeploymentEnv:     cfg.App.Env,
+		Exporter:          metricExporterConfig(cfg),
 	})
 	metricsCancel()
 	if telemetryInitErr != nil {
@@ -35,12 +40,13 @@ func bootstrapTelemetryStage(
 	exporterCfg := traceExporterConfig(cfg)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	traceEndpoint, tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
-		ServiceName:      cfg.Observability.OTel.ServiceName,
-		ServiceVersion:   cfg.App.Version,
-		DeploymentEnv:    cfg.App.Env,
-		TracesSampler:    cfg.Observability.OTel.TracesSampler,
-		TracesSamplerArg: cfg.Observability.OTel.TracesSamplerArg,
-		Exporter:         exporterCfg,
+		ServiceName:       cfg.Observability.OTel.ServiceName,
+		ServiceVersion:    cfg.App.Version,
+		ServiceInstanceID: instanceID,
+		DeploymentEnv:     cfg.App.Env,
+		TracesSampler:     cfg.Observability.OTel.TracesSampler,
+		TracesSamplerArg:  cfg.Observability.OTel.TracesSamplerArg,
+		Exporter:          exporterCfg,
 	})
 	telemetryCancel()
 	// Reporting follows setup because only setup knows which setting supplied
@@ -67,10 +73,10 @@ func recordTraceExporterState(
 ) {
 	active := telemetryInitErr == nil && endpoint.Configured()
 	if err := metrics.RecordTraceExporterState(ctx, active); err != nil {
-		log.Warn(
+		log.WarnContext(
+			ctx,
 			"telemetry_state_metric_unavailable",
 			startupLogArgs(
-				ctx,
 				startupLogComponentStartupProbes,
 				startupOperationTelemetryInit,
 				"degraded",
@@ -83,10 +89,10 @@ func recordTraceExporterState(
 
 func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
 	return func(shutdownBaseCtx context.Context) {
-		log.Info(
+		log.InfoContext(
+			shutdownBaseCtx,
 			"telemetry_flush_started",
 			startupLogArgs(
-				shutdownBaseCtx,
 				startupLogComponentShutdown,
 				startupOperationTelemetryFlush,
 				"started",
@@ -105,10 +111,10 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 			}
 		}
 		if shutdownErr := errors.Join(shutdownErrors...); shutdownErr != nil {
-			log.Error(
+			log.ErrorContext(
+				shutdownBaseCtx,
 				"telemetry shutdown failed",
 				startupLogArgs(
-					shutdownBaseCtx,
 					startupLogComponentShutdown,
 					startupOperationTelemetryFlush,
 					"error",
@@ -118,10 +124,10 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 			)
 			return
 		}
-		log.Info(
+		log.InfoContext(
+			shutdownBaseCtx,
 			"telemetry_flush_completed",
 			startupLogArgs(
-				shutdownBaseCtx,
 				startupLogComponentShutdown,
 				startupOperationTelemetryFlush,
 				"success",
@@ -160,10 +166,10 @@ func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, endpoint
 		mode = startupDependencyModeConfigured
 	}
 
-	log.Warn(
+	log.WarnContext(
+		ctx,
 		"telemetry_ambient_env_ignored",
 		startupLogArgs(
-			ctx,
 			startupLogComponentStartupProbes,
 			startupOperationTelemetryInit,
 			"degraded",
@@ -197,10 +203,10 @@ func metricExporterConfig(cfg config.Config) telemetry.MetricExporterConfig {
 // whether anything is being pushed, and where.
 func reportMetricExporterState(ctx context.Context, log *slog.Logger, endpoint telemetry.ExporterEndpoint) {
 	if !endpoint.Configured() {
-		log.Info(
+		log.InfoContext(
+			ctx,
 			"metrics_exporter_scrape_only",
 			startupLogArgs(
-				ctx,
 				startupLogComponentStartupProbes,
 				startupOperationTelemetryInit,
 				"success",
@@ -211,10 +217,10 @@ func reportMetricExporterState(ctx context.Context, log *slog.Logger, endpoint t
 		return
 	}
 
-	log.Info(
+	log.InfoContext(
+		ctx,
 		"metrics_exporter_configured",
 		startupLogArgs(
-			ctx,
 			startupLogComponentStartupProbes,
 			startupOperationTelemetryInit,
 			"success",

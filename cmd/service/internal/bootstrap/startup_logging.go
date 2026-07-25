@@ -3,12 +3,13 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 const (
@@ -17,7 +18,11 @@ const (
 	telemetryFailureReasonCanceled         = "canceled"
 )
 
-func startupLogArgs(ctx context.Context, component, operation, outcome string, extra ...any) []any {
+// startupLogArgs builds the stage attributes every startup and shutdown record
+// carries. Trace correlation is deliberately absent: the logger installed by
+// bootstrapLoggerStage adds it from the context passed to the logging call, so
+// adding it here too would duplicate the keys on every record.
+func startupLogArgs(component, operation, outcome string, extra ...any) []any {
 	args := make([]any, 0, 6+len(extra))
 	args = append(args,
 		"component", component,
@@ -25,16 +30,7 @@ func startupLogArgs(ctx context.Context, component, operation, outcome string, e
 		"outcome", outcome,
 	)
 
-	spanCtx := trace.SpanContextFromContext(ctx)
-	if spanCtx.IsValid() {
-		args = append(args,
-			"trace_id", spanCtx.TraceID().String(),
-			"span_id", spanCtx.SpanID().String(),
-		)
-	}
-
-	args = append(args, extra...)
-	return args
+	return append(args, extra...)
 }
 
 func telemetryInitFailureReason(err error) string {
@@ -48,9 +44,22 @@ func telemetryInitFailureReason(err error) string {
 	}
 }
 
+// newProcessLogger builds the logger every record in this process goes through.
+//
+// The logctx decorator is the reason this is one function rather than two
+// literals: it publishes request and trace correlation from the context a record
+// was logged with, so a service's own handlers get it without adding the
+// attributes themselves. A logger built without it looks identical and silently
+// drops the only keys that join an application error to its trace.
+//
+// The writer is a parameter so a test can prove the decorator is installed.
+// Nothing in production varies it.
+func newProcessLogger(out io.Writer, level slog.Level) *slog.Logger {
+	return slog.New(logctx.New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})))
+}
+
 func bootstrapLoggerStage(cfg config.Config) *slog.Logger {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.Log.Level}))
-	log = log.With(
+	log := newProcessLogger(os.Stdout, cfg.Log.Level).With(
 		"service.name", cfg.Observability.OTel.ServiceName,
 		"service.version", cfg.App.Version,
 		"deployment.environment.name", cfg.App.Env,
@@ -68,10 +77,10 @@ func bootstrapReportStage(
 	traceEndpoint telemetry.TraceExporterEndpoint,
 	telemetryInitErr error,
 ) {
-	log.Info(
+	log.InfoContext(
+		bootstrapCtx,
 		"config_validated",
 		startupLogArgs(
-			bootstrapCtx,
 			"config_validator",
 			"validate",
 			"success",
@@ -84,10 +93,10 @@ func bootstrapReportStage(
 		// The cause belongs in the record: telemetry setup errors name
 		// configuration keys and environment variables, never secret values,
 		// and an operator cannot act on a bare reason class.
-		log.Warn(
+		log.WarnContext(
+			bootstrapCtx,
 			"startup_dependency_degraded",
 			startupLogArgs(
-				bootstrapCtx,
 				startupLogComponentStartupProbes,
 				startupOperationTelemetryInit,
 				"degraded",
@@ -99,10 +108,10 @@ func bootstrapReportStage(
 		)
 	}
 
-	log.Info(
+	log.InfoContext(
+		bootstrapCtx,
 		"startup config summary",
 		startupLogArgs(
-			bootstrapCtx,
 			"config_loader",
 			"startup_summary",
 			"success",

@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
@@ -116,14 +119,14 @@ func assertProblemContentType(t *testing.T, header http.Header) {
 	}
 }
 
-func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode problemCode) {
+func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode problem.Code) {
 	t.Helper()
 
-	var problem openapi.Problem
-	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+	var decoded openapi.Problem
+	if err := json.Unmarshal(resp.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal problem: %v", err)
 	}
-	if got := problem.Code; got != string(wantCode) {
+	if got := decoded.Code; got != string(wantCode) {
 		t.Fatalf("problem code = %q, want %q", got, wantCode)
 	}
 }
@@ -139,4 +142,14 @@ func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode p
 // does exercise an operation passes a real implementation instead.
 type unimplementedAPI struct {
 	openapi.StrictServerInterface
+}
+
+// newTestServiceLogger builds a logger with the same shape a service runs with:
+// the correlation decorator over a JSON handler. Tests that assert on log content
+// need it, because this package no longer assembles request_id, trace_id, and
+// span_id per call site — the decorator publishes them from the context. A test
+// that logged through a bare handler would assert that correlation is absent and
+// pass whether or not the wiring is right.
+func newTestServiceLogger(out io.Writer) *slog.Logger {
+	return slog.New(logctx.New(slog.NewJSONHandler(out, nil)))
 }

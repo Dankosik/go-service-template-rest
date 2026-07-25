@@ -165,18 +165,18 @@ func testAuthenticate(scopes ...string) openapi3filter.AuthenticationFunc {
 	}
 }
 
-func testRejectRequest(w http.ResponseWriter, _ *http.Request, err error) {
+func testRejectRequest(w http.ResponseWriter, r *http.Request, err error) {
 	var securityErr *openapi3filter.SecurityRequirementsError
 	if errors.As(err, &securityErr) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeTestProblem(w, problem("unauthorized", "unauthorized", http.StatusUnauthorized, "credentials are missing or invalid"))
+		writeTestProblem(w, newProblem(r.Context(), http.StatusUnauthorized, "credentials are missing or invalid"))
 		return
 	}
-	writeTestProblem(w, problem("bad_request", "bad request", http.StatusBadRequest, "request is malformed or invalid"))
+	writeTestProblem(w, newProblem(r.Context(), http.StatusBadRequest, "request is malformed or invalid"))
 }
 
-func testRejectResponse(w http.ResponseWriter, _ *http.Request, _ error) {
-	writeTestProblem(w, problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"))
+func testRejectResponse(w http.ResponseWriter, r *http.Request, _ error) {
+	writeTestProblem(w, newProblem(r.Context(), http.StatusInternalServerError, "request failed"))
 }
 
 func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {

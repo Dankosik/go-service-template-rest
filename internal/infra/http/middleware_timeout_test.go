@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func TestRequestTimeoutCancelsHandlerContext(t *testing.T) {
@@ -34,7 +36,7 @@ func TestRequestTimeoutCancelsHandlerContext(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusGatewayTimeout)
 	}
 	assertProblemContentType(t, resp.Header())
-	assertProblemCode(t, resp, problemCodeGatewayTimeout)
+	assertProblemCode(t, resp, problem.CodeGatewayTimeout)
 }
 
 func TestRequestTimeoutLeavesCommittedResponseAlone(t *testing.T) {
@@ -173,25 +175,25 @@ func TestGeneratedResponseErrorHandlerMapsExpiredBudget(t *testing.T) {
 		name       string
 		err        error
 		wantStatus int
-		wantCode   problemCode
+		wantCode   problem.Code
 	}{
 		{
 			name:       "expired budget",
 			err:        context.DeadlineExceeded,
 			wantStatus: http.StatusGatewayTimeout,
-			wantCode:   problemCodeGatewayTimeout,
+			wantCode:   problem.CodeGatewayTimeout,
 		},
 		{
 			name:       "wrapped expired budget",
 			err:        fmt.Errorf("load order: %w", context.DeadlineExceeded),
 			wantStatus: http.StatusGatewayTimeout,
-			wantCode:   problemCodeGatewayTimeout,
+			wantCode:   problem.CodeGatewayTimeout,
 		},
 		{
 			name:       "ordinary failure",
 			err:        errors.New("boom"),
 			wantStatus: http.StatusInternalServerError,
-			wantCode:   problemCodeInternalError,
+			wantCode:   problem.CodeInternalError,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

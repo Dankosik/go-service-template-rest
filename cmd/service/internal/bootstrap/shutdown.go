@@ -19,29 +19,29 @@ type shutdownServer interface {
 }
 
 func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, servers ...shutdownServer) error {
-	log.Info(
+	log.InfoContext(
+		ctx,
 		"shutdown_started",
 		startupLogArgs(
-			ctx,
 			"shutdown",
 			"shutdown",
 			"started",
 		)...,
 	)
-	log.Info(
+	log.InfoContext(
+		ctx,
 		"drain_started",
 		startupLogArgs(
-			ctx,
 			"shutdown",
 			"drain",
 			"started",
 		)...,
 	)
 	drainer.StartDrain()
-	log.Info(
+	log.InfoContext(
+		ctx,
 		"readiness_disabled",
 		startupLogArgs(
-			ctx,
 			"shutdown",
 			"readiness",
 			"success",
@@ -82,10 +82,10 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 	}
 	if shutdownErr != nil {
 		if errors.Is(shutdownErr, context.DeadlineExceeded) {
-			log.Error(
+			log.ErrorContext(
+				ctx,
 				"shutdown_timeout",
 				startupLogArgs(
-					ctx,
 					"shutdown",
 					"drain",
 					"error",
@@ -104,10 +104,10 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 		return fmt.Errorf("graceful shutdown failed: %w", shutdownErr)
 	}
 
-	log.Info(
+	log.InfoContext(
+		ctx,
 		"drain_completed",
 		startupLogArgs(
-			ctx,
 			"shutdown",
 			"drain",
 			"success",
@@ -128,10 +128,10 @@ func forceCloseServers(ctx context.Context, log *slog.Logger, servers ...shutdow
 		}
 	}
 
-	log.Warn(
+	log.WarnContext(
+		ctx,
 		"shutdown_forced",
 		startupLogArgs(
-			ctx,
 			"shutdown",
 			"drain",
 			"degraded",

@@ -9,13 +9,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	handler := AccessLog(log, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -44,7 +46,7 @@ func TestAccessLogSkipsHealthProbesByDefault(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{})
 
 	for _, path := range []string{"/health/live", "/health/ready"} {
@@ -62,7 +64,7 @@ func TestAccessLogRecordsHealthProbesWhenEnabled(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{
 		LogHealthProbes: true,
 	})
@@ -79,7 +81,7 @@ func TestAccessLogRecordsUnmatchedHealthLookalikePath(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{})
 
 	// The skip is route-based, so a path that only looks like a probe is still
@@ -102,7 +104,7 @@ func TestAccessLogLabelsWrongMethodAsUnmatched(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{})
 
 	if resp := doRequest(handler, http.MethodDelete, "/health/live"); resp.Code != http.StatusMethodNotAllowed {
@@ -150,8 +152,7 @@ func BenchmarkAccessLog(b *testing.B) {
 		{name: "disabled", level: slog.LevelWarn},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
-			//nolint:sloglint // This benchmark needs a level-selectable handler.
-			log := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level}))
+			log := slog.New(logctx.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level})))
 			handler := AccessLog(log, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
 			}))

@@ -19,6 +19,7 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/httpapi"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
@@ -61,7 +62,10 @@ func main() {
 }
 
 func realMain() int {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// logctx is what makes a handler's own records joinable to the access log line
+	// and the trace for the same request. A logger built from a bare JSONHandler
+	// looks identical and silently carries none of that correlation.
+	log := slog.New(logctx.New(slog.NewJSONHandler(os.Stdout, nil)))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -130,7 +134,7 @@ func run(ctx context.Context, log *slog.Logger) error {
 		_ = listener.Close()
 	}()
 
-	log.Info("reference_service_started", "http.addr", listener.Addr().String())
+	log.InfoContext(ctx, "reference_service_started", "http.addr", listener.Addr().String())
 	return serve(ctx, log, listener, handler)
 }
 

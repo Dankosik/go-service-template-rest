@@ -15,6 +15,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -36,7 +37,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNotFound)
 		}
 		assertProblemContentType(t, resp.Header())
-		assertProblemCode(t, resp, problemCodeNotFound)
+		assertProblemCode(t, resp, problem.CodeNotFound)
 	})
 
 	t.Run("unknown method on missing path returns not found", func(t *testing.T) {
@@ -62,7 +63,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
 		}
 		assertProblemContentType(t, resp.Header())
-		assertProblemCode(t, resp, problemCodeMethodNotAllowed)
+		assertProblemCode(t, resp, problem.CodeMethodNotAllowed)
 		assertAllowHeader(t, resp.Header(), "GET, OPTIONS")
 	})
 
@@ -177,7 +178,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
 	options := generatedStrictServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
@@ -200,11 +201,11 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
 	}
-	var problem map[string]any
-	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+	var decoded map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal problem: %v", err)
 	}
-	if got := problem["detail"]; got != malformedRequestProblemDetail {
+	if got := decoded["detail"]; got != malformedRequestProblemDetail {
 		t.Fatalf("detail = %v, want %q", got, malformedRequestProblemDetail)
 	}
 	if strings.Contains(resp.Body.String(), attackerDetail) {
@@ -233,7 +234,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
 	options := generatedChiServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
@@ -257,11 +258,11 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
 	}
 	assertProblemContentType(t, resp.Header())
-	var problem map[string]any
-	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+	var decoded map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal problem: %v", err)
 	}
-	if got := problem["detail"]; got != malformedRequestProblemDetail {
+	if got := decoded["detail"]; got != malformedRequestProblemDetail {
 		t.Fatalf("detail = %v, want %q", got, malformedRequestProblemDetail)
 	}
 	if strings.Contains(resp.Body.String(), attackerDetail) {
@@ -290,7 +291,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(slog.NewJSONHandler(&out, nil))
+	log := newTestServiceLogger(&out)
 	// Health probes are excluded from the access log by default; this test is
 	// about route labelling and correlation fields, so it opts back in.
 	h := mustNewRouter(t, log, Handlers{

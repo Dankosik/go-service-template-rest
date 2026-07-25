@@ -12,6 +12,10 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/idempotency"
+	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/felixge/httpsnoop"
 )
 
 // IdempotencyKeyHeader is the request header this middleware keys on.
@@ -28,47 +32,29 @@ const idempotencyRetryAfter = time.Second
 // exact bytes must not give up on that.
 const maxIdempotentResponseBytes = 1 << 20
 
-var (
-	// ErrIdempotencyInFlight reports that another attempt with the same key has
-	// not finished. The caller retries; it must not be told the work conflicts.
-	ErrIdempotencyInFlight = errors.New("idempotency key is in flight")
-
-	// ErrIdempotencyKeyReused reports that the key was already spent on a
-	// different request. This is a client defect — the same key must identify the
-	// same intent — and it is the one case where replay would be dangerous.
-	ErrIdempotencyKeyReused = errors.New("idempotency key was used for a different request")
-)
-
-// StoredResponse is a completed response held for replay.
-type StoredResponse struct {
-	Status int
-	Header http.Header
-	Body   []byte
-	// Replayable is false when the response was too large to hold. A repeat then
-	// learns the key is spent instead of re-running the work.
-	Replayable bool
-}
-
 // IdempotencyStore holds one outcome per key.
 //
-// A correct implementation is the part that cannot be written here, because it
-// depends on storage this template does not choose. Two properties are not
-// negotiable. Reserve must be a single atomic claim — for PostgreSQL, an
-// INSERT ... ON CONFLICT DO NOTHING against a primary key, so two concurrent
-// attempts cannot both win — and entries must expire, or the table grows for the
-// life of the service. An in-memory map satisfies neither the moment a second
-// replica exists, which is the version this seam is here to prevent.
+// It is declared here, by the consumer, so an adapter satisfies it structurally
+// rather than by importing this package. internal/infra/postgres.IdempotencyStore
+// is the implementation this repository ships.
+//
+// Two properties are not negotiable, and both are storage decisions. Reserve must
+// be a single atomic claim, so two concurrent attempts cannot both win — for
+// PostgreSQL that is INSERT ... ON CONFLICT DO NOTHING against a primary key. And
+// entries must expire, or the table grows for the life of the service. An
+// in-memory map satisfies neither the moment a second replica exists, which is the
+// version this seam exists to prevent.
 type IdempotencyStore interface {
 	// Reserve claims key for this attempt.
 	//
 	// It returns a stored response when a previous attempt with the same
-	// fingerprint completed, ErrIdempotencyInFlight when another attempt holds
-	// the key, and ErrIdempotencyKeyReused when the key was spent on a different
+	// fingerprint completed, idempotency.ErrInFlight when another attempt holds
+	// the key, and idempotency.ErrKeyReused when the key was spent on a different
 	// request. A nil response with a nil error means this attempt owns the key.
-	Reserve(ctx context.Context, key, fingerprint string) (*StoredResponse, error)
+	Reserve(ctx context.Context, key, fingerprint string) (*idempotency.StoredResponse, error)
 
 	// Complete records the outcome for replay.
-	Complete(ctx context.Context, key string, response StoredResponse) error
+	Complete(ctx context.Context, key string, response idempotency.StoredResponse) error
 
 	// Release abandons a reservation whose attempt produced no final answer, so a
 	// retry is not refused for work that never happened.
@@ -91,7 +77,10 @@ type IdempotencyStore interface {
 // A 5xx is never stored. A server fault is the one outcome a client should be
 // free to retry, and holding it would turn one bad minute into a key that
 // answers 500 until it expires.
-func Idempotent(store IdempotencyStore, log *slog.Logger, next http.Handler) http.Handler {
+//
+// outcomeTimeout bounds recording the outcome after the client has been answered;
+// see idempotencyOutcomeContext for why that call needs a bound of its own.
+func Idempotent(store IdempotencyStore, outcomeTimeout time.Duration, log *slog.Logger, next http.Handler) http.Handler {
 	if store == nil {
 		return next
 	}
@@ -107,7 +96,7 @@ func Idempotent(store IdempotencyStore, log *slog.Logger, next http.Handler) htt
 		}
 		if !validRequestID(key) {
 			writeProblem(w, r, problemResponse{
-				code:   problemCodeBadRequest,
+				code:   problem.CodeBadRequest,
 				detail: "idempotency key must be 1..128 unreserved characters",
 			})
 			return
@@ -117,7 +106,7 @@ func Idempotent(store IdempotencyStore, log *slog.Logger, next http.Handler) htt
 		if err != nil {
 			var maxBytesError *http.MaxBytesError
 			if errors.As(err, &maxBytesError) {
-				writeProblem(w, r, problemResponse{code: problemCodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+				writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
 				return
 			}
 			writeMalformedRequestProblem(w, r)
@@ -134,9 +123,8 @@ func Idempotent(store IdempotencyStore, log *slog.Logger, next http.Handler) htt
 			return
 		}
 
-		// Detached from the request: the outcome has to be recorded, or released,
-		// even when the budget that admitted the request has since expired.
-		outcomeCtx := context.WithoutCancel(r.Context())
+		outcomeCtx, cancelOutcome := idempotencyOutcomeContext(r.Context(), outcomeTimeout)
+		defer cancelOutcome()
 
 		recorder := newIdempotentRecorder(w)
 		completed := false
@@ -148,11 +136,11 @@ func Idempotent(store IdempotencyStore, log *slog.Logger, next http.Handler) htt
 				return
 			}
 			if releaseErr := store.Release(outcomeCtx, key); releaseErr != nil {
-				log.Error("idempotency_release_failed", "err", releaseErr)
+				log.ErrorContext(outcomeCtx, "idempotency_release_failed", "err", releaseErr)
 			}
 		}()
 
-		next.ServeHTTP(recorder, r)
+		next.ServeHTTP(recorder.writer, r)
 
 		if recorder.status >= http.StatusInternalServerError || recorder.status == 0 {
 			return
@@ -162,11 +150,36 @@ func Idempotent(store IdempotencyStore, log *slog.Logger, next http.Handler) htt
 			// request. It is logged because it means a retry will re-run work
 			// that already happened, which is the exact outcome this exists to
 			// prevent and an operator has to be able to see it.
-			log.Error("idempotency_complete_failed", "err", completeErr)
+			log.ErrorContext(outcomeCtx, "idempotency_complete_failed", "err", completeErr)
 			return
 		}
 		completed = true
 	})
+}
+
+// idempotencyOutcomeContext bounds recording or releasing a reservation after the
+// handler has answered.
+//
+// Detached from the request, because the outcome has to be recorded even when the
+// budget that admitted the request has since expired — and bounded, because
+// context.WithoutCancel returns a context with no deadline at all. Without the
+// bound these were the only two calls in the request path with no time limit: a
+// store whose row lock was held, or whose connection was wedged mid-retransmit,
+// blocked the handler goroutine here forever, after the client had already been
+// answered. With http.max_in_flight at its default, 256 such requests exhaust the
+// shedding semaphore permanently, so the service answers 503 to everything —
+// including requests that touch no store — while readiness keeps reporting ok,
+// because a cached PostgreSQL ping still succeeds. Nothing recovers it but a
+// restart.
+//
+// A spent budget here costs one duplicated unit of work on a retry, and says so in
+// the log. That is the cheaper failure by a wide margin.
+func idempotencyOutcomeContext(base context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	detached := context.WithoutCancel(base)
+	if timeout <= 0 {
+		return context.WithCancel(detached)
+	}
+	return context.WithTimeout(detached, timeout)
 }
 
 func idempotentMethod(method string) bool {
@@ -175,27 +188,27 @@ func idempotentMethod(method string) bool {
 
 func rejectIdempotencyReservation(w http.ResponseWriter, r *http.Request, log *slog.Logger, err error) {
 	switch {
-	case errors.Is(err, ErrIdempotencyInFlight):
+	case errors.Is(err, idempotency.ErrInFlight):
 		w.Header().Set("Retry-After", strconv.Itoa(int(idempotencyRetryAfter.Seconds())))
 		writeProblem(w, r, problemResponse{
-			code:   problemCodeConflict,
+			code:   problem.CodeConflict,
 			detail: "a request with this idempotency key is still being processed",
 		})
-	case errors.Is(err, ErrIdempotencyKeyReused):
+	case errors.Is(err, idempotency.ErrKeyReused):
 		writeProblem(w, r, problemResponse{
-			code:   problemCodeConflict,
+			code:   problem.CodeConflict,
 			detail: "this idempotency key was already used for a different request",
 		})
 	default:
-		log.Error("idempotency_reserve_failed", "err", err)
-		writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
+		log.ErrorContext(r.Context(), "idempotency_reserve_failed", "err", err)
+		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
 	}
 }
 
-func replayStoredResponse(w http.ResponseWriter, r *http.Request, stored StoredResponse) {
+func replayStoredResponse(w http.ResponseWriter, r *http.Request, stored idempotency.StoredResponse) {
 	if !stored.Replayable {
 		writeProblem(w, r, problemResponse{
-			code:   problemCodeConflict,
+			code:   problem.CodeConflict,
 			detail: "this idempotency key was already used and its response is no longer available",
 		})
 		return
@@ -246,48 +259,93 @@ func requestFingerprint(r *http.Request) (string, error) {
 
 // idempotentRecorder captures a response while passing it through, so the client
 // is answered at handler speed rather than after a store round trip.
+//
+// The capture is built on httpsnoop rather than by embedding http.ResponseWriter
+// in a struct. Embedding the interface promotes only its three methods, so the
+// handler beneath received a writer that was not an http.Flusher, not an
+// http.Hijacker, and opaque to http.ResponseController — meaning enabling
+// idempotency silently broke every streamed response and every SetWriteDeadline
+// in the service, on a deploy that changed no handler. httpsnoop composes the
+// wrapper from the interfaces the underlying writer actually implements, which is
+// why it is already a dependency here: trackResponseCommit needs the same
+// property.
 type idempotentRecorder struct {
-	http.ResponseWriter
+	writer     http.ResponseWriter
 	status     int
 	body       bytes.Buffer
 	overflowed bool
 }
 
 func newIdempotentRecorder(w http.ResponseWriter) *idempotentRecorder {
-	return &idempotentRecorder{ResponseWriter: w}
+	recorder := &idempotentRecorder{}
+	recorder.writer = httpsnoop.Wrap(w, httpsnoop.Hooks{
+		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(status int) {
+				if recorder.status == 0 {
+					recorder.status = status
+				}
+				next(status)
+			}
+		},
+		Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
+			return func(b []byte) (int, error) {
+				recorder.observeImplicitStatus()
+				recorder.capture(b)
+				return next(b)
+			}
+		},
+		ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+			return func(src io.Reader) (int64, error) {
+				// A handler that hands the writer a reader — io.Copy, or
+				// http.ServeContent — bypasses Write entirely. Without this hook
+				// the recorder would store an empty body while still reporting it
+				// replayable, so the retry would be answered 200 with nothing in
+				// it. Teeing keeps the capture honest under the same cap.
+				recorder.observeImplicitStatus()
+				return next(io.TeeReader(src, captureWriter{recorder: recorder}))
+			}
+		},
+	})
+	return recorder
 }
 
-func (r *idempotentRecorder) WriteHeader(status int) {
-	if r.status == 0 {
-		r.status = status
-	}
-	r.ResponseWriter.WriteHeader(status)
-}
-
-func (r *idempotentRecorder) Write(b []byte) (int, error) {
+// observeImplicitStatus records the status net/http will send for a body write
+// that was not preceded by WriteHeader.
+func (r *idempotentRecorder) observeImplicitStatus() {
 	if r.status == 0 {
 		r.status = http.StatusOK
 	}
-	if !r.overflowed {
-		if r.body.Len()+len(b) > maxIdempotentResponseBytes {
-			r.overflowed = true
-			r.body.Reset()
-		} else {
-			r.body.Write(b)
-		}
-	}
-	written, err := r.ResponseWriter.Write(b)
-	if err != nil {
-		return written, err //nolint:wrapcheck // Passing the writer's own error through unchanged is the contract.
-	}
-	return written, nil
 }
 
-func (r *idempotentRecorder) stored() StoredResponse {
-	return StoredResponse{
+func (r *idempotentRecorder) capture(b []byte) {
+	if r.overflowed {
+		return
+	}
+	if r.body.Len()+len(b) > maxIdempotentResponseBytes {
+		r.overflowed = true
+		r.body.Reset()
+		return
+	}
+	r.body.Write(b)
+}
+
+func (r *idempotentRecorder) stored() idempotency.StoredResponse {
+	return idempotency.StoredResponse{
 		Status:     r.status,
-		Header:     r.Header().Clone(),
+		Header:     r.writer.Header().Clone(),
 		Body:       slices.Clone(r.body.Bytes()),
 		Replayable: !r.overflowed,
 	}
+}
+
+// captureWriter adapts the recorder's capture to io.Writer for the ReadFrom tee.
+// It never fails: a capture that cannot hold the bytes marks the response
+// unreplayable rather than breaking the response the client is receiving.
+type captureWriter struct {
+	recorder *idempotentRecorder
+}
+
+func (w captureWriter) Write(b []byte) (int, error) {
+	w.recorder.capture(b)
+	return len(b), nil
 }

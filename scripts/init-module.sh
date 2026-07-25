@@ -387,7 +387,9 @@ if [[ "${source_checkout}" != true ]]; then
 	rebase_coverage_floor
 
 	if [[ "${database}" == "none" ]]; then
-		rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate
+		# migrations goes with the runner. The only migration the template ships
+		# creates the idempotency table, which this profile has no store for.
+		rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate migrations
 		# Matched rather than listed. Every test/postgres_*_test.go is PostgreSQL
 		# integration proof by construction, and a new one that a hand-written list
 		# missed leaves an import of a package this profile just deleted — which
